@@ -1,0 +1,950 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+
+
+
+\Volume{17}
+\Number{4}
+\Month{July}
+\Year{2010}
+
+\received{2009}{9}{3}
+\revised{2010}{1}{17}
+\accepted{2010}{2}{9}
+
+\setcounter{page}{23}
+
+\jtitle{単語グループに基づくWeb文書クラスタリング}
+
+\jauthor{仁科　朋也\affiref{Author_1} \and 内海　　彰\affiref{Author_2}}
+
+\jabstract{
+サーチエンジンの検索結果などのWebページ集合をクラスタリングする手法として，
+抽出された各重要語を含むWebページ集合をひとつのクラスタとする手法が広く
+用いられている．
+しかし，従来の研究では重要語間の類似度を考慮していないために，
+類似した話題を表す語句が重要語として抽出されると，話題が類似するクラスタ
+が複数出力されてしまうという欠点がある．
+そこで本研究では，この問題点を解消するために，単語間の類似度を
+考慮したWeb文書クラスタリング手法を提案する．
+本手法は，サーチエンジンが返すタイトルとスニペットの単語分布情報から，
+互いに類似していない重要語を抽出する．
+次に，どのクラスタにも属さないWebページをできるだけ減らすために，
+重要語から直接Webページのクラスタを生成せずに，
+各重要語に類似したWebページ集合に含まれる単語集合として単語グループを生成し，
+それらの単語グループのそれぞれに対応するWebページクラスタを生成する．
+そして，実際に人手で分類した正解データを用いて
+従来手法（語句間の類似度を考慮しない方法）との比較評価を行い，
+本手法のほうがクラスタリング性能が高く，かつ類似したクラスタを生成
+してしまうという従来手法の問題点が解消できることを示す．}
+
+\jkeywords{Webページクラスタリング，文書クラスタリング，単語グループ，スニペット，検索結果}
+
+\etitle{Web Document Clustering Based on the Clusters \\
+	of Topic Words}
+
+\eauthor{Tomoya Nishina\affiref{Author_1} \and Akira Utsumi\affiref{Author_2}} 
+
+\eabstract{
+  Many Web page clustering systems construct clusters in such a way that, 
+  for each of the extracted keywords, one cluster is constructed to contain all the pages 
+  that contain this keyword. However, these systems suffer from one serious problem 
+  that similar clusters (i.e., clusters that share many Web pages) are likely
+  to be generated from similar keywords, because their clustering method fails to 
+  take into account the topical similarity between keywords.
+  
+  To overcome this problem, this study proposes a new Web page clustering method that
+  uses the topical similarity between words. The proposed method first extracts keywords 
+  that are dissimilar to each other using distributional statistics 
+  of word occurrence in snippets and titles of search results. 
+  After that, in order to reduce the number of unclassified Web pages, 
+  the method generates word groups each of which is 
+  a set of words similar to each extracted keyword, and then constructs
+  Web page clusters using the word groups, 
+  rather than directly generating Web page clusters from keywords.
+  
+  This study also conducts an evaluation experiment in which our method is
+  compared with the existing method that ignores the similarity of keywords
+  using the handmade test data. 
+  The result is that our system achieves better performance
+  and can overcome the problem of multiple similar clusters.
+}
+\ekeywords{Web page clustering, Document clustering, Word group, Snippet, Search \mbox{results}}
+
+\headauthor{仁科，内海}
+\headtitle{単語グループに基づくWeb文書クラスタリング}
+
+\affilabel{Author_1}{電気通信大学大学院電気通信学研究科システム工学専攻}{Department of Systems Engineering, The University of Electro Communications}
+\affilabel{Author_2}{電気通信大学大学院情報理工学研究科総合情報学専攻}{Department of Informatics, The University of Electro Communications}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに} \label{sec:intro}
+
+今日，Webからユーザーの望む情報を得る手段としてGoogleなどのサーチエンジンが
+一般的に利用される．しかし，ユーザーの検索要求に合致しないWebページも多数表示
+されるため，各ページがユーザーの望む情報を含むかどうかを判断するのに時間と労力
+を割かなければならない．
+このような負担を軽減するための検索支援手法として，検索結果をクラスタに分類して
+表示するWeb文書クラスタリングが挙げられる．
+Webページのクラスタリング手法として，
+WebページのHTMLタグの構造\cite{Orihara08}やWebページ間のリンク関係\cite{Ohno06,Wang02}など
+Webページに特有の情報を用いた手法も提案されているが，
+Webページの内容（Webページに含まれるテキスト・文章）に基づく手法が
+一般的であり，多くの手法が提案されている
+\cite<e.g.,>{Eguchi99,Ferragina05,Hearst96,Hirao06,Narita03,Zamir98}．
+
+Webページの内容に基づくクラスタリング手法は，
+{\bf Webページ間の類似度に基づく手法}と{\bf 共通する語句に基づく手法}に大別できる\cite{Fung03}．
+前者は，ベクトル空間モデルなどを用いて各文書間の（非）類似度を計算し，
+k-means法などのクラスタリングアルゴリズムを適用する手法である．
+例えば，最初のWebページクラスタリングシステムと言われている
+Scatter/Gather \cite{Hearst96}や江口らのシステム\cite{Eguchi99}は
+この手法を用いている．
+類似度に基づく手法は文書クラスタリング手法として広く用いられている\cite{Kishida03}が，
+実時間性が要求される検索結果のクラスタリングにはあまり適していない．
+Webページ間の類似度を適切に計算するためには，Webページそのものを取得する
+必要があるが，その取得時間がかかるとともに，文書規模が大きくなると
+類似度計算にも時間がかかる．
+
+よって，サーチエンジンの検索結果をクラスタリングする手法として，
+Webページ（スニペット）集合に共通して出現する語句に基づく手法が
+多く用いられている\cite{Ferragina05,Fung03,Hirao06,Narita03,Zamir98}．
+この手法では，検索結果として得られるページタイトルやスニペットから
+何らかの方法を用いて基準となる語句を抽出し，
+それらの語句を含む文書集合をひとつのクラスタとする．
+一般的に，ひとつのWebページ（スニペット）には複数の頻出語句が含まれるため，
+この手法は本質的に非排他的なクラスタリング（ひとつの文書を複数のクラスタに
+割り振ることを許すクラスタリング）を行うことになる．
+この手法は，タイトルやスニペットの情報のみを用いるために情報の取得時間
+が短く，文書間の類似度を計算する必要がないために処理時間も短く，
+ノイズとなる単語が混ざりにくいなどの利点がある．
+さらに，\citeA{Zamir98}は，スニペットのみの情報を用いたクラスタリングの性能は
+Webページ全体を用いる場合に比べて遜色ないこと，共通語句に基づくクラス
+タリング手法がWebページ間の類似度に基づく手法よりも高性能であることを
+実験的に示している．
+
+共通語句に基づく手法で重要となるのが，クラスタのベースとなる語句の抽出手法である．
+既存研究では，文書頻度\cite{Hirao06,Osinski05,Zamir98}，
+tfidf \cite{Ferragina05,Zeng04}，検索結果のランキング\cite{Narita03}，
+語句の長さ\cite{Zamir98,Zeng04}などの情報を用いて語句をランク付けし，
+上位の語句を選択するという手法が用いられている．
+しかし，この抽出方法では語句間の意味的な類似関係を考慮していないので，
+クラスタのベースとなる語句どうしが類似した話題を表していると，
+同じ文書を多く含む類似したクラスタを出力してしまうという欠点がある．
+特に，検索結果のWebページ集合には共通する話題が多いことを考えると，
+この問題点は深刻である．
+抽出語句からクラスタを作成した後に重複の大きいクラスタをマージする
+手法\cite<e.g.,>{Zamir98}も考えられているが，話題が似ているからクラスタが
+重複する場合（ひとつのクラスタとすべきである場合）と，
+複数の異なる話題が共通しているから重複する場合（別々のクラスタに
+すべきである場合）かの区別はできない．
+
+この問題に対して，本研究では，
+語句間の意味関係を考慮してクラスタのベースとなる語句を選択することによって，
+類似したクラスタをできるだけ出力せずにWebページを分類できると考える．
+さらに，作成されるクラスタに含まれる文書数はその語句の文書頻度と同じで
+あるため，文書頻度が低い語句が重要語として多く選択される場合には，
+どのクラスタにも属さない文書の数が多くなってしまう．
+そこで抽出語句を基準にWebページ集合に含まれる単語のクラスタを作成し，
+単語グループから文書クラスタを作成することによって，
+どのクラスタにも属さないWebページを減らすことができると考えられる．
+
+本論文では，以上の考え方に基づいて，検索結果のスニペットとタイトルから
+互いに話題が類似しない重要語を抽出し，それらを核とした単語グループを生成し，
+単語グループに基づいてWebページをクラスタリングする手法を提案する．
+そして，実際に人手で分類したWebページ群を用いて
+従来手法（語句間の類似度を考慮しない方法）との比較評価を行い，
+本手法のほうがクラスタリング性能が高く，かつ類似したクラスタを生成
+してしまうという従来手法の問題点が解消できることを示す．
+
+
+
+\section{単語グループに基づくWeb検索結果のクラスタリング手法} \label{sec:method}
+
+\subsection{概要}\label{subsec:overview}
+
+提案する手法の概要は以下の通りである．
+
+\begin{enumerate}
+\item ユーザの入力したクエリを受け取り，Googleによる検索結果の
+  タイトルとスニペットを文書として取得する．
+  本論文の以下では，各ページのタイトルとスニペットを
+  ひとつの「文書」と呼ぶ．
+
+\item 各文書に対して，茶筌 (http://chasen-legacy.sourceforge.jp/) を用いて形態素解析を行う．
+  
+\item 形態素解析で名詞・英字と判断された単語から，複合名詞を含む名詞を抽出する．
+
+\item 抽出した名詞から，クラスタの話題を表すと考えられる
+  互いに類似していない重要語を，指定された文書クラスタ数だけ抽出する．
+        
+\item 手順(3)で抽出されたすべての単語に対して，各重要語から単語グループを生成する．
+
+\item 単語グループを用いて，文書クラスタを生成する．
+\end{enumerate}
+
+以下の\ref{sec_WM}節から\ref{sec_bun}節では，
+上記の手順(3)から(6)の各処理の詳細を述べる．
+
+
+
+\subsection{形態素解析結果からの名詞抽出} \label{sec_WM}
+
+まず形態素解析により名詞及び英字と判断された単語を抽出する．
+この際に，非自立の名詞や代名詞などは除き，英字の連続はひとつの名詞とする．
+また，各単語$w_i$の文書頻度$df(w_i)$（$w_{i}$を含む文書数）を
+検索結果の文書集合全体から計算し，一定値$C_W$以下の単語を除外する．
+さらにクエリ及びクエリの一部となる単語は，ほぼ全ての文書に出現するため，
+手順(4)の重要語の抽出に大きな影響を及ぼすので除外する．
+
+次に，これらの単語から構成される名詞の$n$グラム（複合名詞）を，
+重要語候補として抽出すべきかどうかを判断する．
+例えば，文書集合中で「情報」や「検索」という名詞が，ほぼ「情報検索」という
+複合名詞でしか用いられていない場合には，「情報検索」をひとつの単位
+として抽出すべきである．
+また，形態素解析が固有名詞と認識できないために不適切に分解されて
+しまう固有名詞（例：「エースコック」）を適切に抽出することも意図
+している．
+
+以下の手法により，重要語の候補として抽出すべき（複合名詞を含む）名詞を決定する．
+\begin{enumerate}
+\item $\Sigma_1\leftarrow$（すべての単語の集合），$n \leftarrow 1$とする．
+
+\item $\Sigma_{n+1} \leftarrow \phi$ とする．
+
+\item 集合$\bigcup_{i=1}^n \Sigma_i$中の単語$w_{i}$と，集合$\Sigma_n$中の単語$w_{j}$の
+  すべての組み合わせ（ただし$w_i\neq{w_j}$）に対して，以下の処理を行う．
+  \begin{enumerate}
+  \item 2つの単語をつなぎ合わせた語句$w_{i}w_{j}$，$w_{j}w_{i}$のうちで，
+    全文書における出現頻度が高い方を合成候補$Str$とする．
+    ただし，一方の単語がもう一方の単語を部分文字列として含む場合には，
+    合成はせずに長いほうの単語を$Str$とする．
+
+  \item 全文書における$w_{i}$，$w_{j}$及び$Str$の出現頻度
+    （\ref{sec_weight}節の式(\ref{eqn:tf})で定義される）を
+    それぞれ$tf(w_i)$，$tf(w_i)$，$tf(Str)$としたとき，
+    次式で定義される値$WM$を計算する．
+    \[
+    WM = \frac{tf(Str)}{\max(tf(w_i)，tf(w_j))}
+    \]
+  \item 上記で計算した$WM$が閾値$C_{WM}(>0.5)$以上ならば，
+    $\Sigma_{n+1} \leftarrow \Sigma_{n+1}\cup\{Str\}$，
+    $\Sigma_1 \leftarrow \Sigma_1 - \{w_i\}$，
+    $\Sigma_n \leftarrow \Sigma_n - \{w_j\}$とする．
+    つまり，$w_{i}$，$w_{j}$の代わりに$Str$を複合名詞として用いることになる．
+  \end{enumerate}
+
+\item $\Sigma_{n+1}=\phi$ならば，$\Sigma = \bigcup_{i=1}^n \Sigma_i$を複合名詞
+  （重要語候補）の集合として終了する．
+  $\Sigma_{n+1}\neq\phi$ならば，$n$を1増やしてから手順(2)に戻る．
+\end{enumerate}
+閾値$C_{WM}$を適切に（0.5より大きく）設定することによって，
+$w_{i}$や$w_{j}$が単独で出現するよりも複合名詞$Str$として
+出現することが多い場合に，複合名詞として抽出することができる．
+
+なお，本論文の以下では，複合名詞を含む重要語候補（$\Sigma$の要素）のことを
+単に「名詞」や「単語」と表記する．
+
+
+
+\subsection{重要語の抽出} \label{sec_weight}
+
+前節で得られた名詞集合$\Sigma$から，
+以下の手順を用いて，重要語を抽出する．
+\begin{enumerate}
+\item 抽出されたすべての名詞に対して，
+  \ref{subsubsec:weight}節で述べる重み付け手法を用いて，ランク付けする．
+  結果として得られた名詞のランク付きリストを$S$とする．
+\item リスト$S$の中でランクの最上位にある名詞を取り出して，重要語とする．
+\item 抽出した重要語との類似度（\ref{subsubsec:cosine}節参照）が
+  基準値$C$以上のすべての名詞をリスト$S$から取り除く．
+  なお，\ref{subsubsec:threshold}節で述べるように，
+  基準値$C$は文書集合に応じて自動的に決定する．
+\item 重要語の個数が指定されたクラスタ数 $n$ に満たない場合には，手順(2)に戻る．
+\end{enumerate}
+上記の手順(3)において，抽出された重要語と話題が類似する名詞を
+重要語（クラスタのベースとなる語）としないことによって，
+本手法は重要語どうしの類似度が低くなるように重要語を抽出する．
+なお，\ref{sec:intro}章で述べた従来の手法は，手順(1)で得られるリスト$S$
+のランク上位 $n$ 個をクラスタのベースとなる重要語として抽出することに
+相当する．
+
+
+\subsubsection{名詞の重み付け}\label{subsubsec:weight}
+
+上記の手順(1)における名詞の重み付け手法としては，以下の基準が考えられる．
+なお，\ref{sec:evaluation}章で述べる評価実験では，これらのどの基準を
+用いても本手法のほうが優れていることを示す．
+
+\begin{description}
+\item[文書頻度 df] 名詞$w_i$の出現する文書数である$df(w_i)$の値が大きいほど，
+  その名詞が重要であると考える．
+  なお，計算に用いる文書は検索結果の文書集合全体である．
+\item[出現頻度 tf] 次式で計算される文書集合中の総出現頻度$tf(w_i)$が高い名詞が
+  重要であると考える．
+  \begin{equation}
+    tf(w_i) = \sum_{j=1}^{N} tf(w_i,d_j) \label{eqn:tf}
+  \end{equation}
+  
+  ただし，$tf(w_i,d_j)$は文書$d_j$における単語$w_i$の出現数，
+  $N$は文書数をそれぞれ表す．
+
+\item[tfidf] 次式で定義される tfidf 値が高い（特定の文書に多く出現する）
+  名詞が重要であると考える．
+  \begin{align}
+    tfidf(w_{i}) &= tf(w_i) \times idf(w_i)\\
+    idf(w_i) &= log_{2} \left( \frac{N}{df(w_{i})} \right) + 1
+  \end{align}
+
+\item[SP, LP \cite{Narita03}] 次式で定義される$SP(w_i)$もしくは$LP(w_i)$が高い，
+  つまり検索結果のランキング上位の文書に多く含まれる名詞ほど重要であるとする
+  指標である．
+  \begin{align}
+    SP(w_{i}) &= \sum_{j=1}^{N} 
+    \left[
+      tf(w_{i},d_{j}) \times sin\left({\frac{\pi}{1+\sqrt{j}}}\right)
+    \right] \times idf(w_{i}) \\
+    LP(w_{i}) &= \sum_{j=1}^{N} 
+    \left[
+      tf(w_{i},d_{j}) \times log_{N}\left(\frac{N}{j}\right)
+    \right] \times idf(w_{i})
+  \end{align}
+  
+  ただし，$d_j$はサーチエンジン（本研究ではgoogle）の検索結果のランキングが$j$番目の文書を表す．
+
+\item[TR \cite{Gelgi07}] $TR(w_i)$は単語をノード，共起の有無をエッジとするグラフの
+  PageRankのように計算される値であり，$TR(w_i)$が高い（つまり重要な）単語と多く
+  共起している単語は重要であると考える指標である．
+  
+  \begin{equation} 
+    TR^{(t+1)}(w_i) = 
+    \sum_{j = 0}^{N} \frac{TR^{(t)}(w_{j}) corres(w_i,w_j)}{\sum_{k = 0}^{N} corres(w_k,w_j)} 
+    \label{eq:TR}
+  \end{equation}
+  
+  ただし，{$corres(w_i,w_j)$}は{$w_i$}と{$w_j$}の共起回数，{$t$}は繰り返し計算回数を表し，
+  {$TR^{(0)}(w_i)=tf(w_i)$}である．
+
+\end{description}
+
+
+\subsubsection{名詞どうしの類似度の計算}\label{subsubsec:cosine}
+
+上記の手順(3)において，名詞どうしの類似度$sim(w_i,w_j)$
+（抽出された重要語とリスト$S$に含まれる名詞との類似度）
+には，次式のコサイン (cos) 類似度を用いる．
+\begin{equation}
+sim(w_i,w_j) = cos(V_{i},V_{j}) = 
+\frac{\sum_{k=1}^{N} {tf(w_i,d_k) \cdot tf(w_j,d_k)}}
+{\sqrt{\sum_{k=1}^{N} tf(w_i,d_k)^2} \sqrt{\sum_{k=1}^{N} tf(w_j,d_k)^2}} \label{eqn:cosine}
+\end{equation}
+つまり，名詞$w_i$を，文書$d_k$における出現頻度$tf(w_i,d_k)$を要素とする$N$次元ベクトル
+で表現したときのコサイン類似度に相当する．
+
+
+\subsubsection{基準値$C$の設定}\label{subsubsec:threshold}
+
+基準値$C$が0.05〜0.5（0.05刻み）のいずれかの値をとるものとして，
+それぞれの値で実際に文書クラスタリングを行い，最も多くの文書を分類できる
+（つまりどのクラスタにも属さない文書が最も少ない）値を基準値$C$として採用する．
+ただし抽出した重要語が指定したクラスタ数に満たなかった場合\footnote{
+  \ref{sec_weight}節の手順(3)において，
+  重要語と類似しているとして多くの単語が取り除かれる場合に，
+  このようが現象が生じるときがある．}
+には，指定したクラスタ数に最も近いものの中での最適値を基準値とする．
+
+なお，この判定に用いる文書クラスタリング手法は，
+\ref{subsec:word_clustering}節で述べる単語グループを用いた方法ではなく，
+本節で述べた方法で抽出した重要語を含む文書をクラスタとする方法である．
+
+
+\subsection{単語クラスタリング} \label{subsec:word_clustering}
+
+前節の方法で得られた重要語に対して，以下のアルゴリズムを用いて
+単語グループを生成する．
+\begin{enumerate}
+\item 各重要語$x_i$に対応する単語グループ$WG_i$を以下の方法で生成する．
+  \begin{enumerate}
+  \item 重要語$x_i$とのcos類似度（(\ref{eqn:cosine})式）が基準値$C'$以上
+    の名詞（重要語は除く）をリスト$S$からすべて抽出する．
+  \item 抽出した名詞集合に対し，重要語$x_i$とのcos類似度の平均値$M$を求める．
+  \item 重要語$x_i$とのcos類似度が平均値$M$以上の名詞のみを，その重要語を
+    核とした単語グループ$WG_i$に含める．
+  \end{enumerate}
+\item 複数の単語グループに含まれる名詞を，すべての単語グループから取り除く．
+\end{enumerate}
+基準値$C'$は0.05〜0.5（0.05刻み）のいずれかの値をとるものとし，
+それぞれの値で実際に文書クラスタリングを行い，最も多くの文書を
+分類できる値を基準値$C'$として採用する．
+この判別に用いる文書クラスタリング手法は，\ref{sec_bun}節で述べる手法を用いる．
+
+
+\subsection{単語グループからの文書クラスタリング} \label{sec_bun}
+
+以下のアルゴリズムを用いて，単語グループから文書クラスタを生成する．
+\begin{enumerate}
+\item 単語グループ$WG_i\,(i=1,\cdots,n)$に対応する空の文書クラスタ
+  $DC_i=\phi$を生成する．
+\item 以下の方法で，各文書$d_j\,(j=1,\cdots,N)$がどの文書クラスタに
+  含まれるかを決定する．
+  \begin{enumerate}
+  \item 文書$d_j$が単語グループ$WG_i$の核となった重要語$x_i$を含んでいれば，
+    文書$d_j$を単語グループに対応する文書クラスタ$DC_i$に含める．
+    （複数の重要語$x_i$を含んでいれば，複数の文書クラスタに属することになる．）
+
+  \item 全ての単語グループ$WG_i$に対し，以下の式で定義される$S_i(d_j)$を計算する．
+    
+    \begin{align}
+      S_i(d_j) &= \frac {\sum_{w_k\in{WG_i}}\delta(w_k,d_j)} {|WG_i|} \\
+      \delta(w_k,d_j) &= \begin{cases}
+        1 & \text{（名詞$w_k$が文書$d_j$に出現する場合）}\\
+        0 & \text{（名詞$w_k$が文書$d_j$に出現しない場合）}
+	\end{cases}  \nonumber 
+    \end{align}
+    
+    そして，$S_i(d_j)$の値が以下の不等式を満たすならば，文書$d_j$を文書クラスタ$DC_i$に含める．
+    \begin{equation}
+      S_i(d_j) \geq \frac{1}{2}\sum_{k=1}^n S_k(d_j) > 0
+    \end{equation}
+    
+    直観的に言うと，文書$d_j$が他の単語グループよりも単語グループ$CW_i$の単語を
+    多く含んでいれば，その文書は$CW_i$に対応する文書クラスタ$DC_i$に分類される
+    ことになる．
+  \end{enumerate}
+\end{enumerate}
+
+
+
+\section{評価実験} \label{sec:evaluation}
+
+
+\subsection{評価データ}
+
+Googleの検索結果を人手により分類したものを評価用の正解データとして用いた．
+正解データ作成にあたり20代の男女10人に協力を頼んだ．
+協力者が自由にクエリを入力して，
+Googleの検索結果上位30件を
+タイトルとスニペットのみから分類してもらい，
+15セットの正解データ
+（平均クラスタ数 3.6，最大クラスタ数 5，最小クラスタ数 2，
+クラスタに含まれる文書数の平均 9.040）を得た．
+正解データ作成のために協力者が選んだクエリを表{\ref{tab:query}に示す．
+検索結果を30件としたのは，検索エンジンのユーザの54\%が上位10件以内，
+73\%が上位20件以内の検索結果しか閲覧しないという調査結果\cite{Jansen03}から，
+検索結果30件をクラスタリングすることで十分な情報をユーザに与えられると
+考えたためである．
+なお，情報の少なさや内容の曖昧さから協力者が分類できないと判断した文書や
+文書数が1であるクラスタは正解データから除外した．
+
+
+\begin{table}[t]
+    \caption{評価に用いたクエリ} \label{tab:query}
+\input{03table01.txt}
+\end{table}
+
+
+\subsection{評価方法}
+
+本研究の手法と比較手法のそれぞれを用いて，15セットの評価データの
+クラスタリングを行い，その性能を比較した．
+比較手法は，名詞の重み上位順に（\ref{sec_weight}節の概要の(1)のリスト$S$の順に）
+指定されたクラスタ数だけ重要語を抽出し，重要語を含む文書集合を文書クラスタとするという，
+\ref{sec:intro}章で述べた従来手法\cite<e.g.,>{Hirao06,Narita03,Zamir98}とした．
+
+両手法において，名詞の重み付けには\ref{subsubsec:weight}節の手法を用いた．
+また，システムが出力するクラスタ（以下，システムクラスタと呼ぶ）
+の数$n$は各正解データセットのクラスタ数とした．
+なお，正解クラスタ数より少ない重要語しか抽出できなかった場合には，
+空のクラスタを出力したとみなして評価を行った．
+さらに，提案手法によるクラスタリングにおいて，
+\ref{sec_WM}節における閾値を$C_W=2$，$C_{WM}=0.6$と設定した．
+
+
+\subsection{評価基準}
+
+評価基準として，F値，CR (clustering ratio), OR (overlapping ratio) を用いる．
+これらの値はすべて各データセットごとに計算する．
+
+クラスタリングの精度を表すF値は以下の手順で求めることができる\cite{Orihara08}．
+まず，システムクラスタ$SC_i\ (1 \leq i \leq n)$と正解クラスタ$AC_j\ (1 \leq j \leq n)$
+のすべての対に対して，F値$F(SCi,ACj)$を次式で計算する．
+\begin{align}
+F(SC_i, AC_j) &= \frac{2 \times R(SC_i, AC_j) \times P(SC_i, AC_j)}{R(SC_i, AC_j) + P(SC_i, AC_j)}\\
+R(SC_i, AC_j) &= \frac{|SC_i \cap AC_j|}{|AC_j|}\\
+P(SC_i, AC_j) &= \frac{|SC_i \cap AC_j|}{|SC_i|}
+\end{align}
+次に，次式の$F(M)$が最大となるようなシステムクラスタと正解クラスタの一対一対応$M$を求め，
+そのときの値をこのシステムクラスタの F 値とする．
+\begin{equation}
+  F(M) = \sum_{(SC_i,AC_j)\in{M}} \frac{|AC_j|}{\sum_{k=1}^n |AC_k|}\ F(SC_i,AC_j)
+\end{equation}
+これは，システムクラスタと正解クラスタを2つの頂点集合として，
+それらの間の枝の重みを$\frac{|AC_j|}{\sum_{k=1}^n |AC_k|}F(SC_i, AC_j)$とする
+二部グラフの最大マッチング問題を解くことに相当する．
+
+CRは文書集合のうちのどれだけの割合の文書をクラスタに分類できるかを
+表しており，次式で計算される\cite{Narita03}．
+なお，{$N$}は検索結果の文書数である．
+\begin{equation}
+CR = \frac{\displaystyle\left|\bigcup_{i=1}^n SC_i\right|}{N}
+\end{equation}
+本研究で扱っている共通の語句に基づくクラスタリング手法では，
+どのクラスタにも属さない文書が生じてしまう可能性がある．
+したがってCRが高い（1に近い）ほうが望ましい結果であると言える．
+
+ORはクラスタ間で文書が重複する割合の平均であり，次式で計算される．
+\begin{equation}
+OR = \frac{1}{{ }_n{C}_2} \sum_{i=1}^n \sum_{j=i+1}^n \frac{|SC_i \cap SC_j|}{|SC_i \cup SC_j|}
+\end{equation}
+この値は単純に低いほど（もしくは高いほど）望ましいというわけではなく，
+正解クラスタのOR値に近いほうが望ましい結果であると言える．
+
+
+
+\section{評価結果と考察}
+
+本章では，\ref{sec:evaluation}章で述べた評価実験について，
+以下の観点から評価結果を述べるとともに，考察を行う．
+
+\begin{itemize}
+\item クラスタリングの精度：正しい分類をしているか
+\item クラスタリングの被覆度：どのくらいの文書をクラスタリングできるか
+\item システムクラスタ間の類似度：過度に類似したクラスタを出力していないか
+\item 単語グループの必要性：互いに類似していない重要語を抽出するだけでは不十分か
+\item 複合名詞の抽出手法：\ref{sec_WM}節における複合名詞抽出はどの程度影響があるか
+\end{itemize}
+
+なお，以下で示す評価値はすべて各セットごとに求めた値の平均値を用いている．
+
+
+
+\subsection{クラスタリング精度} \label{subsec:F}
+
+クラスタリングの精度を示す評価基準であるF値の結果（全セットの平均値）を表\ref{tab_F}に示す．
+なお，表\ref{tab_F}（およびこれ以降の表）において，
+「本手法」の値として「単語グループ無」と「単語グループ有」の2種類の値が
+示されている．「単語グループ有」の値は，\ref{sec:method}章で述べた
+提案手法による評価結果を示している．一方，「単語グループ無」の値は
+「\ref{subsec:overview}節の概要の手順(5)の単語クラスタリング
+（\ref{subsec:word_clustering}節）を行わず，
+手順(4)で抽出した重要語を含む文書の集合を文書クラスタとする方法」
+による評価結果である．
+つまり，本研究の提案手法と従来手法の中間に位置する手法と言える．
+単語グループを用いずに文書クラスタリングを行った場合の評価結果を示したのは，
+\ref{subsec:necessity}節で単語グループの必要性（類似していない重要語の抽出だけで十分かどうか）
+を検証するためである．
+
+\begin{table}[t]
+\caption{各手法におけるF値} \label{tab_F}
+\input{03table02.txt}
+\end{table}
+
+表\ref{tab_F}より，全ての重み付け手法において，本手法のF値は従来手法よりも高くなった．
+また従来手法と本手法（単語グループ有）間で平均値の差の検定を行ったところ，
+df，tf以外での重み付け手法において有意差が見られた ({$p<0.05$})．
+df と tf についても平均値の差は有意傾向 (df：{$p=0.061$}，tf：{$p=0.067$})となった．
+この結果から，本手法は従来手法よりもクラスタリング精度が高い（人手に近いクラスタリン
+グを行うのに有効である）と言える．
+さらに，単語グループを考慮しなくても従来手法より性能が高いことから，
+\ref{sec_weight}節の重要語の抽出手法そのものも有効であると言える．
+
+特に，TRは検索結果を分類するのに有用な (discriminative) 単語が
+上位にランクされやすい指標である\cite{Gelgi07}ので，TRに従来手法を
+適用しただけで意味的に類似したクラスタを生成しにくくなる可能性がある．
+しかし，従来手法のTRのF値（0.511）は本手法よりも有意に低い値である
+ことから，この可能性は排除できる．つまり，表\ref{tab_F}の結果は，
+本研究の手法に基づいて重要語を抽出するほうがTRによるランキングに
+基づく手法よりも性能が高いことを示している．
+
+
+
+\subsection{クラスタリングの被覆度} \label{subsec:CR}
+
+クラスタの被覆度（クラスタに含まれる文書の割合）を表す評価基準である
+CRの結果（全セットの平均値）を表\ref{tab_CR}に示す．
+表\ref{tab_CR}より，全ての重み付け手法において，本手法のCRは従来手法
+よりも高くなった．
+また従来手法と本手法（単語グループ有）間で平均値の差の検定を行ったところ，
+全ての重み付け手法において有意差が見られた ({$p<0.05$})．
+この結果から，本手法は従来手法よりも多くの文書を
+分類できると言える．
+さらに，単語グループを考慮しなくても従来手法よりCRが高いことから，
+互いに意味的に類似しない単語のみを抽出する本研究の重要語抽出手法
+そのものがより多くの文書を分類するのに有効であると言える．
+
+\begin{table}[t]
+    \caption{各手法におけるCR} \label{tab_CR}
+\input{03table03.txt}
+\end{table}
+\begin{table}[t]
+    \caption{各手法における平均クラスタサイズ} \label{tab_Size}
+\input{03table04.txt}
+\end{table}
+
+
+しかし，本研究では非排他的クラスタリングを行っているので，単純に
+より多くの文書をひとつのクラスタに含めてしまえば，つまり，クラスタ
+のサイズを大きくしてしまえば，不適切にCRを高くすることが可能である．
+そこで，適切なクラスタサイズを保ちつつ本手法のCRが高くなっているか
+どうかを調べるために，表\ref{tab_Size}に平均クラスタサイズ
+（各クラスタに含まれる文書数の平均）を示す．
+表\ref{tab_Size}を見ると，本手法（単語グループ有）のクラスタサイズは
+従来手法よりは大きくなっているものの，正解データの平均クラスタサイズ
+である 9.040 を大幅に越えるものはない．
+（重み付け手法がdfの場合にクラスタサイズが大きくなっているが，
+これは従来手法と本手法に共通した現象であり，本手法だけが不当に
+クラスタサイズを大きくしているわけではない．）
+さらに，単語グループを考慮しない場合には従来手法よりもクラスタサイズ
+が小さくなっている．
+よって，本手法は，不当にクラスタサイズを大きくせずに，より多くの
+文書を分類することができると結論づけられる．
+
+
+\subsection{クラスタ間の類似度}
+
+\ref{sec:intro}章で述べた，不適切に類似したクラスタを出力してしまう
+という従来手法の問題点が本手法で解決されているかどうかを評価するために，
+クラスタ間の重複割合の平均値であるORの結果（全セットの平均値）を
+表\ref{tab_OR}に示す．
+全ての重み付け手法において，本手法のORは従来手法よりも低い値であり，
+正解クラスタの値（0.029）にかなり近くなっている．
+したがって，本手法は従来手法よりも類似したクラスタを出力しにくく，
+従来手法の問題点を解決していると言える．
+
+\begin{table}[t]
+    \caption{各手法におけるOR} \label{tab_OR}
+\input{03table05.txt}
+\vspace{-1\baselineskip}
+\end{table}
+
+
+\subsection{単語グループの必要性} \label{subsec:necessity}
+
+本節では，本手法において単語グループを用いる場合と用いない場合の評価結果を
+比較することによって，単語グループを用いてクラスタリングすること
+の必要性を検証する．
+
+表\ref{tab_F}と表\ref{tab_CR}から，重み付け手法に関係なく，
+単語グループを用いたほうが用いないよりもF値，CRともに高い
+ことがわかる．
+この結果は，単語グループの必要性を支持している．
+
+表\ref{tab_Size}のクラスタサイズに注目すると，単語グループを
+用いない場合には，正解データのクラスタサイズである 9.040 より
+かなり小さいサイズになっている．これは，本研究の重要語抽出方法が
+出現頻度が低い名詞を抽出しやすいためである．
+一方，単語グループを用いた本手法のクラスタサイズは正解データの
+サイズ 9.040 と同程度である．
+したがって，出現頻度が低い単語が重要語として抽出された場合でも，
+単語グループを用いることによって適切なクラスタサイズの文書クラ
+スタを生成できると言える．
+つまり，クラスタサイズの点からも単語グループが必要であると結論できる．
+
+なお，表\ref{tab_OR}のクラスタ間の類似度 OR は単語グループの
+有無による差はほぼなく，単語グループを用いることは類似した
+クラスタを出力しないという利点そのものには貢献していない．
+しかし，単語グループを用いない場合と同程度のクラスタ類似度の
+ままで性能（F値，CR）を向上させていることになり，総合的に
+単語グループの必要性を示しているといえる．
+
+
+\subsection{複合名詞の抽出手法の評価} \label{subsec:marge}
+
+本節では，{\ref{sec_WM}}節で述べた複合名詞の抽出手法の性能を評価するために，
+この抽出手法を用いる場合と用いない場合の評価結果の比較を行う．
+
+まず，{\ref{sec_WM}}節の単語合成手法で実際に抽出された複合名詞の例を表{\ref{tab:exe_WN}}に示す．
+{\ref{sec_WM}}節で意図したように，「情報」や「限定」などの一般的な単語に代わり，
+「店舗情報」，「限定発売」などの具体的な話題を表す複合名詞が抽出されている．
+また，形態素解析では複数の名詞に分割されてしまう「綿陽」のような地名や
+「ブロードバンド」のような専門用語も正しく抽出されている．
+
+\begin{table}[b]
+\caption{単語合成手法で抽出された複合名詞の例（括弧内は形態素解析による区切りを表す）} 
+\label{tab:exe_WN}
+\input{03table06.txt}
+\end{table}
+\begin{table}[b]
+    \caption{複合名詞抽出の有無によるF値の比較} \label{tab:nomarge_F}
+\input{03table07.txt}
+\end{table}
+\begin{table}[b]
+    \caption{複合名詞抽出の有無によるCRの比較} \label{tab:nomarge_CR}
+\input{03table08.txt}
+\end{table}
+
+次に，複合名詞抽出を行う場合と行わない場合のF値，CR，ORをそれぞれ表{\ref{tab:nomarge_F}}，
+表{\ref{tab:nomarge_CR}}，表{\ref{tab:nomarge_OR}}に示す．
+表{\ref{tab:nomarge_F}}より，本手法では全ての重み付け手法で複合名詞抽出を行うほうが
+行わないよりもF値が高いことがわかる．
+一方，従来手法では，重み付け手法がLP，TRのときに複合名詞抽出を行うほうがF値が
+高くなるものの，その他の重み付け手法では同じ値となった．
+また表{\ref{tab_CR}}と表{\ref{tab_OR}}より，CRとORは従来手法，本手法の
+全ての重み付け手法においてほぼ同じ結果となった．
+以上の結果から，複合名詞抽出はクラスタリングの被覆度やクラスタ間の類似度には
+あまり影響を与えないが，本手法のクラスタリング精度を向上させる効果があると結論できる．
+また，語句間の類似度を考慮しない従来方法に対しては，複合名詞抽出はほとんど効果が
+ないと言える．
+
+
+\begin{table}[b]
+    \caption{複合名詞抽出の有無によるORの比較} \label{tab:nomarge_OR}
+\input{03table09.txt}
+\end{table}
+\begin{table}[b]
+    \caption{クエリ「伊右衛門」における重要語，単語グループ，文書クラスタ} \label{tab:exe_iemon}
+\input{03table10.txt}
+\end{table}
+
+
+\subsection{生成されたクラスタについて} \label{subsec:qualty}
+
+本節では，評価に用いたデータセットに対するクラスタリング結果の実例を
+示すことによって，本手法を定性的に考察する．
+表{\ref{tab:exe_iemon}}〜{\ref{tab:exe_choco}}に，
+いくつかのクエリによる検索結果を
+本手法でクラスタリングした結果（重要語，単語グループ，文書クラスタ）を示す．
+
+表{\ref{tab:exe_iemon}}のクエリ「伊右衛門」による検索結果のクラスタリング例では，
+3種類のクラスタ
+（サントリーから発売されている緑茶「伊右衛門」，京極夏彦の小説「嗤う伊右衛門」，
+「伊右衛門」をタイトルに含むブログ）が生成されているが，これらのクラスタは正解
+クラスタと一致する．
+一方，従来手法では，どの重み付け手法でも「ブログ」に関する単語
+（表{\ref{tab:exe_iemon}}では「日記」）が重要語として抽出されず，
+代わりに緑茶に関する単語（サントリー，飲料，緑茶など）が重複して
+重要語として抽出されてしまう．
+
+\begin{table}[t]
+    \caption{クエリ「四川」における重要語，単語グループ，文書クラスタ} \label{tab:exe_shisen}
+\input{03table11.txt}
+\end{table}
+\begin{table}[t]
+  \begin{center}
+\caption{クエリ「チョコボール」における重要語，単語グループ，文書クラスタの例} 
+\label{tab:exe_choco}
+\input{03table12.txt}
+\end{table}
+
+表{\ref{tab:exe_shisen}}や表{\ref{tab:exe_choco}}の例を見ても，
+表{\ref{tab:exe_iemon}}と同様に，類似する単語が重要語として選ばれておらず，
+それらの重要語を核とする単語グループには，
+同じ話題を表す同義語や関連語
+（例えば，表{\ref{tab:exe_shisen}}の「地震」から「震源」や「ニュース」）
+が適切に分類されている．
+また，表{\ref{tab:exe_choco}}において，
+重要語「エンゼル」から「金」，「銀」，「確率」といった単語が選ばれ，
+「金（または銀）のエンゼルが当たる確率に関するページ集合」というように，
+文書クラスタの内容が推測しやすくなる単語グループも見られる．
+しかし，「商品」や「サイト」といった広い意味を持つ一般的な単語が
+単語グループに含まれてしまうために，結果的に
+文書クラスタの精度が下がってしまう例
+（表{\ref{tab:exe_shisen}}の「ゲーム」における「サイト」）
+も見受けられる．
+
+
+
+\section{おわりに} 
+
+本研究では，サーチエンジンの検索結果としてのWebページ集合を
+クラスタリングするために，検索結果のスニペットとタイトルから
+互いに類似していない話題（トピック）を表す重要語を抽出し，
+それらの重要語を元に文書中の単語をクラスタリングして，
+それらの単語グループから文書クラスタを生成する手法を提案した．
+そして，評価実験を通して，重みによるランク上位の単語を単純に
+取り出してその単語を含む文書をクラスタとする従来手法に比べて，
+提案手法はクラスタリングの精度，被覆度ともに優れていることを
+示した．
+さらに，提案手法によって生成されるクラスタのサイズや重複割合
+も適切であることを明らかにした．
+これらの結果は，本研究の提案手法の有効性を示すものである．
+
+今後の課題としては，検索支援という観点からは検索結果を階層的
+にクラスタリングすることが望ましいので，本手法を階層的クラス
+タリングに応用することである．
+ひとつの適用方法としては，本手法を用いて生成したクラスタから
+出発して，それらを凝集もしくは分割していき，階層を生成するこ
+とが考えられる．
+また，これに関係して，適切な（初期）クラスタ数をどのように
+自動に決めるかという課題も残されている．
+さらに，検索支援の観点からは，生成されたクラスタの内容が
+何かを示すことも重要であり，そのためのラベル付けや説明文の
+生成なども興味深い課題である．
+
+
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{江口\JBA 伊藤\JBA 隈元\JBA 金田}{江口 \Jetal
+  }{1999}]{Eguchi99}
+江口浩二\JBA 伊藤秀隆\JBA 隈元昭\JBA 金田彌吉 \BBOP 1999\BBCP.
+\newblock \JBOQ
+  漸次的に拡張されたクエリを用いた適応的文書クラスタリング法\JBCQ\
+\newblock \Jem{電子情報通信学会論文誌}, {\Bbf J82-D-I}  (1), \mbox{\BPGS\
+  140--149}.
+
+\bibitem[\protect\BCAY{Ferragina \BBA\ Gulli}{Ferragina \BBA\
+  Gulli}{2005}]{Ferragina05}
+Ferragina, P.\BBACOMMA\ \BBA\ Gulli, A. \BBOP 2005\BBCP.
+\newblock \BBOQ A Personalized Search Engine Based on {W}eb-Snippet
+  Hierarchical Clustering.\BBCQ\
+\newblock In {\Bem Proceedings of the 14th International World Wide Web
+  Conference (WWW'05)}, \mbox{\BPGS\ 801--810}.
+
+\bibitem[\protect\BCAY{Fung, Wang, \BBA\ Ester}{Fung et~al.}{2003}]{Fung03}
+Fung, B., Wang, K., \BBA\ Ester, M. \BBOP 2003\BBCP.
+\newblock \BBOQ Hierarchical Document Clustering Using Frequent Itemsets.\BBCQ\
+\newblock In {\Bem Proceedings of the 2003 SIAM International Conference on
+  Data Mining}, \mbox{\BPGS\ 59--70}.
+
+\bibitem[\protect\BCAY{Gelgi, Davulcu, \BBA\ Vadrevu}{Gelgi
+  et~al.}{2007}]{Gelgi07}
+Gelgi, F., Davulcu, F., \BBA\ Vadrevu, S. \BBOP 2007\BBCP.
+\newblock \BBOQ Term Ranking for Clustering Web Search Results.\BBCQ\
+\newblock In {\Bem Proceedings of the 10th International Workshop on Web and
+  Databases (WebDB 2007)}.
+
+\bibitem[\protect\BCAY{Hearst \BBA\ Pedersen}{Hearst \BBA\
+  Pedersen}{1996}]{Hearst96}
+Hearst, M.\BBACOMMA\ \BBA\ Pedersen, J. \BBOP 1996\BBCP.
+\newblock \BBOQ Reexamining the Cluster Hypothesus: Scatter/Gather on Retrieval
+  Results.\BBCQ\
+\newblock In {\Bem Proceedings of the 19th Annual International ACM SIGIR
+  Conference on Research and Development in Information Retrieval (SIGIR'96)},
+  \mbox{\BPGS\ 76--84}.
+
+\bibitem[\protect\BCAY{Jansen \BBA\ Spink}{Jansen \BBA\ Spink}{2003}]{Jansen03}
+Jansen, B.\BBACOMMA\ \BBA\ Spink, A. \BBOP 2003\BBCP.
+\newblock \BBOQ An Analysis of Web Documents Retrieved and Viewed.\BBCQ\
+\newblock In {\Bem Proceedings of the 4th International Conference on Internet
+  Computing}, \mbox{\BPGS\ 65--69}.
+
+\bibitem[\protect\BCAY{岸田}{岸田}{2003}]{Kishida03}
+岸田和明 \BBOP 2003\BBCP.
+\newblock \JBOQ 文書クラスタリングの技法：文献レビュー.\JBCQ\
+\newblock {\Bem Library and Information Science}, {\Bbf 49}, \mbox{\BPGS\
+  33--75}.
+
+\bibitem[\protect\BCAY{成田\JBA 太田\JBA 片山\JBA 石川}{成田 \Jetal
+  }{2003}]{Narita03}
+成田宏和\JBA 太田学\JBA 片山薫\JBA 石川博 \BBOP 2003\BBCP.
+\newblock \JBOQ Web文書の非排他的クラスタリング手法及びその評価手法.\JBCQ\
+\newblock \Jem{データベースと Web 情報システムに関するシンポジウム
+  (DBWeb2003)論文集}, \mbox{\BPGS\ 85--92}.
+
+\bibitem[\protect\BCAY{大野\JBA 渡辺\JBA 片山\JBA 石川\JBA 太田}{大野 \Jetal
+  }{2006}]{Ohno06}
+大野成義\JBA 渡辺匡\JBA 片山薫\JBA 石川博\JBA 太田学 \BBOP 2006\BBCP.
+\newblock \JBOQ
+  MaxFlowアルゴリズムを用いたWebページのクラスタリング方法とその評価.\JBCQ\
+\newblock \Jem{情報処理学会論文誌：データベース}, {\Bbf 47}  (SIG4(TOD29)),
+  \mbox{\BPGS\ 65--75}.
+
+\bibitem[\protect\BCAY{折原\JBA 内海}{折原\JBA 内海}{2008}]{Orihara08}
+折原大\JBA 内海彰 \BBOP 2008\BBCP.
+\newblock \JBOQ HTMLタグを用いたWebページのクラスタリング手法.\JBCQ\
+\newblock \Jem{情報処理学会論文誌}, {\Bbf 49}  (8), \mbox{\BPGS\ 2910--2921}.
+
+\bibitem[\protect\BCAY{Osi\'nski \BBA\ Weiss}{Osi\'nski \BBA\
+  Weiss}{2005}]{Osinski05}
+Osi\'nski, S.\BBACOMMA\ \BBA\ Weiss, D. \BBOP 2005\BBCP.
+\newblock \BBOQ A concept-driven algorithm for clustering search results\BBCQ\
+\newblock {\Bem IEEE Intelligent Systems}, {\Bbf 20}  (3), \mbox{\BPGS\
+  48--54}.
+
+\bibitem[\protect\BCAY{Wang \BBA\ Kitsuregawa}{Wang \BBA\
+  Kitsuregawa}{2002}]{Wang02}
+Wang, Y.\BBACOMMA\ \BBA\ Kitsuregawa, M. \BBOP 2002\BBCP.
+\newblock \BBOQ Evaluating Contents-link Coupled {W}eb Page Clustering for
+  {W}eb Search Results.\BBCQ\
+\newblock In {\Bem Proceedings of the 11th {ACM} International Conference on
+  Information and Knowledge Management (CIKM'02)}, \mbox{\BPGS\ 499--506}.
+
+\bibitem[\protect\BCAY{Zamir \BBA\ Etzioni}{Zamir \BBA\
+  Etzioni}{1998}]{Zamir98}
+Zamir, O.\BBACOMMA\ \BBA\ Etzioni, O. \BBOP 1998\BBCP.
+\newblock \BBOQ Web Cocument Clustering: A Feasibility Demonstration.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st Annual International ACM SIGIR
+  Conference on Research and Development in Information Retrieval (SIGIR'98)},
+  \mbox{\BPGS\ 46--54}.
+
+\bibitem[\protect\BCAY{Zeng, He, Chen, Ma, \BBA\ Ma}{Zeng
+  et~al.}{2004}]{Zeng04}
+Zeng, H., He, Q., Chen, Z., Ma, W., \BBA\ Ma, J. \BBOP 2004\BBCP.
+\newblock \BBOQ Learning to Cluster {W}eb Search Results.\BBCQ\
+\newblock In {\Bem Proceedings of the 27th Annual International ACM SIGIR
+  Conference on Research and Development in Information Retrieval (SIGIR'04)},
+  \mbox{\BPGS\ 210--217}.
+
+\bibitem[\protect\BCAY{平尾\JBA 竹内}{平尾\JBA 竹内}{2006}]{Hirao06}
+平尾一樹\JBA 竹内孔一 \BBOP 2006\BBCP.
+\newblock \JBOQ 複合名詞に着目したWeb検索結果のクラスタリング.\JBCQ\
+\newblock \Jem{情報処理学会研究報告}, {\Bbf 2006--NL--175}, \mbox{\BPGS\
+  35--42}.
+
+\end{thebibliography}
+
+
+\begin{biography}
+\bioauthor{仁科　朋也}{
+2008年電気通信大学電気通信学部システム工学科卒業．
+2010年同大学院電気通信学研究科システム工学専攻博士前期課程修了．
+在学中は自然言語処理の研究に従事．}
+
+\bioauthor{内海　　彰}{
+1988年東京大学工学部反応化学科卒業．
+1993年東京大学大学院工学系研究科情報工学専攻博士課程修了．博士（工学）．
+東京工業大学大学院総合理工学研究科システム科学専攻助手，
+同研究科知能システム科学専攻専任講師を経て，
+2000年から電気通信大学電気通信学部システム工学科助教授，
+2010年より同大学院情報理工学研究科総合情報学専攻准教授となり，
+現在に至る．
+言語を中心とした認知科学，認知修辞学，言語情報処理の研究に従事．
+日本認知科学会，情報処理学会，言語処理学会，人工知能学会，
+Cognitive Science Society等各会員．}
+\end{biography}
+
+
+\biodate
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+\end{document}
+
+
+

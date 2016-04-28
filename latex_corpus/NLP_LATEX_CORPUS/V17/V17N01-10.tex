@@ -1,0 +1,1402 @@
+    \documentclass[english]{jnlp_1.4}
+
+\usepackage{jnlpbbl_1.2}
+\usepackage[dvips]{graphicx}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+
+\newcommand{\wire}[1]{}
+    \usepackage{lingmacros_crlf}
+    \input{macros_re}
+
+
+\Volume{17}
+\Number{1}
+\Month{January}
+\Year{2010}
+
+\received{2009}{7}{29}
+\revised{2009}{9}{16}
+\accepted{2009}{9}{24}
+
+\setcounter{page}{221}
+
+
+\etitle{Resolving Direct and Indirect Anaphora for Japanese Definite Noun Phrases}
+\eauthor{Naoya Inoue\affiref{Author_1} \and Ryu Iida\affiref{Author_2}
+	\and Kentaro Inui\affiref{Author_1} \and Yuji Matsumoto\affiref{Author_1}} 
+\eabstract{
+  An anaphoric relation can be either direct or indirect. In some
+  cases, the antecedent being referred to lies outside of the
+  discourse its anaphor belongs to. Therefore, an anaphora resolution
+  model needs to consider the following two decisions in parallel:
+  \emph{antecedent selection}--selecting the antecedent itself, and
+  \emph{anaphora type classification}--classifying an anaphor into
+  direct anaphora, indirect anaphora or exophora. However, there are
+  non-trivial issues for taking these decisions into account in
+  anaphora resolution models since the anaphora type classification
+  has received little attention in the literature. In this paper, we
+  address three non-trivial issues: (i) how the antecedent selection
+  model should be designed, \wire{(ii) what information helps with
+    anaphora type classification, (iii) how the antecedent selection
+    and anaphora type classification should be carried out}, taking
+  Japanese as our target language. Our findings are: \wire{first, an
+    antecedent selection model should be trained separately for each
+    anaphora type using the information useful for identifying its
+    antecedent.} Second, the best candidate antecedent selected by an
+  antecedent selection model provides contextual information useful
+  for anaphora type classification. Finally, the antecedent selection
+  should be carried out before anaphora type classification.
+}
+\ekeywords{Anaphora resolution, antecedent selection, anaphora type classification, direct anaphora, indirect anaphora, exophora}
+
+\headauthor{Inoue et al.}
+\headtitle{Anaphora Resolution for Japanese Definite Noun Phrases}
+
+\affilabel{Author_1}{}{Graduate School of Information Science, Nara Institute of Science and Technology}
+\affilabel{Author_2}{}{Department of Computer Science, Tokyo Institute of Technology}
+
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+Anaphora resolution has been studied intensively in recent years
+because of its significance in many natural language processing (NLP)
+applications such as information extraction and machine
+translation. In nominal anaphora, an anaphor (typically a definite
+noun phrase) and its antecedent in the preceding discourse holds
+either a \emph{direct} anaphoric relation (e.g. coreference) or an
+\emph{indirect} relation (e.g., bridging reference
+~\shortcite{Clark77bridging}). \emph{Direct anaphoric relation} refers
+to a link in which an anaphor and an antecedent are in such a relation as
+\emph{synonymy} and \emph{hypernymy/hyponymy}, as in
+\emph{house}--\emph{building}. \emph{Indirect anaphoric relation}, on
+the other hand, refers to a link in which an anaphor and an antecedent
+have such relations as \emph{meronymy/holonymy} and
+\emph{attribute/value} as in \emph{ticket}--\emph{price}. For the
+other case, a noun phrase occasionally holds an \emph{exophoric} relation
+to an antecedent that lies outside the discourse that the noun
+phrase presents. Recent studies in anaphora resolution have 
+proposed the resolution frameworks for each direct and indirect
+anaphoric case
+respectively~\shortcite{soon01_coref,iida05_coref,poesio04_lbd}, placing
+the main focus on the \emph{direct} anaphoric case. The identification of
+exophoric relations, in contrast, has been paid little attention in
+the literature. Anaphoricity determination, which is the task of
+determining whether an anaphor has an antecedent in the preceding
+discourse or not, is related to identifying exophoric relations, but
+the methods for anaphoricity determination are not designed to
+explicitly capture exophoric relations because they are tuned for
+finding NP coreference chains in discourse.
+
+However, for the practical use of anaphora resolution, we need to
+solve the following non-trivial problem: in a real text, anaphors such
+as definite noun phrases can occur as either direct anaphoric,
+indirect anaphoric or exophoric relations, which is not easy to 
+disambiguate from its surface expression. That is, in anaphora
+resolution, it is necessary to judge what kind of anaphoric relation
+is used to tie an anaphor and its (potential) antecedent (henceforth,
+we call this task \emph{anaphora type classification}). In fact, our
+corpus analysis (detailed in Section \ref{sec:dataset}) shows that
+more than 50\% of noun phrases modified by a definiteness modifier
+have non-trivial ambiguity in terms of the anaphora types that have
+to be classified for each given text. Given these issues, we decompose
+the task of nominal anaphora resolution as a combination of two
+distinct but arguably interdependent subtasks.
+\begin{itemize}
+\item \emph{Antecedent selection}: the task of identifying the
+  antecedent of a given anaphor, and
+\item \emph{Anaphora type classification}: the task of judging what
+  kind of \emph{anaphora type} is used for a given anaphor, i.e.,
+  classifying a given anaphor into \emph{direct anaphoric},
+  \emph{indirect anaphoric} or \emph{exophoric}.
+\end{itemize}
+Given this task decomposition, three unexplored issues immediately come up:
+\begin{description}
+\item[ Issue 1.]Whether the model for antecedent selection should be designed
+  and trained separately for direct anaphora and indirect anaphora or
+  whether it can be trained as a single common model;
+\item[ Issue 2.]\wire{What contextual information is useful for determining each
+  anaphora type;}
+\item[ Issue 3.]\wire{How the two subtasks can be best combined (e.g. which subtask
+  should be carried out first).}
+\end{description}
+In this paper, we explore these issues taking Japanese as our target
+language. Specifically, we focus on anaphora resolution for noun
+phrases modified by a definiteness modifier, as detailed in
+the next section.
+
+This paper is organized as follows. In the next section, we describe
+our motivation for this work more specifically. In Section 3, we
+review previous work of antecedent selection and anaphora type
+classification. In Section 4, we give a detailed explanation of our
+investigations. In Section 5, the dataset for our experiments is
+described. We then show the experimental setup and results of our
+investigations and discussion in Section 6. \wire{Finally, the
+  conclusion is presented along with future work.}
+
+
+
+\section{Motivation for our approach} 
+\label{sec:motivation}
+
+As mentioned, an anaphor can hold a direct or indirect relation
+with its antecedent. Occasionally, an anaphor refers to an antecedent
+that is not in the same discourse. The terms \emph{direct anaphora} and
+\emph{indirect anaphora} have been used to denote some different
+anaphoric phenomena in previous works, e.g. \emph{direct anaphora} in
+~\shortcite{vieira00_defdesc} indicates only the reference that an
+anaphor and its antecedent have identical head words, whereas
+\emph{direct anaphora} in~\shortcite{mitkov00_ana} includes a
+synonymous or generalization/specialization link of an anaphor and its
+antecedent. As a result, we redefine the following three \emph{anaphora types}
+to denote the use of anaphoric expressions in our classification task:
+
+\begin{itemize}
+\item \emph{direct anaphora}: An anaphor refers to its antecedent
+  directly. In example (\ref{ex:direct_anaphora}), \emph{The CD}
+  refers to \emph{the new album} directly.
+  \EX{ex:direct_anaphora}{ \emph{\underline{Her new album} was
+      released yesterday.  I want to get \underline{the CD} as soon as
+      possible. }} 
+
+\item \emph{indirect anaphora}: An anaphor has an antecedent related
+  with the anaphor rather than referred to, as in example
+  (\ref{ex:indirect_anaphora}).
+  \EX{ex:indirect_anaphora}{ \emph{ The artist announced
+      \underline{\mbox{her new song}}. I want to get \underline{the CD} as
+      soon as possible. }}
+  \emph{The CD} refers to \emph{her new song} indirectly. The
+  discourse entity that directly corresponds to \emph{the CD} is not
+  in the preceding sentence; \wire{ instead \emph{her new song} is
+  considered as an antecedent of \emph{the CD} because it is
+  associated with \emph{the CD}. }
+
+\item \emph{exophora}: An anaphor that has no antecedent in a text is
+  regarded as exophoric. An exophoric expression is typically used in
+ newspaper articles; for instance, \emph{the day} refers to the
+  date of the post.
+\end{itemize}
+For our target language, Japanese, noun phrases (NP) behave similarly
+to those in English; that is, a definite NP may bear a direct
+anaphoric relation but may also bear an indirect anaphoric relation to
+its antecedent as shown in examples (\ref{ex:jp_direct}) and
+(\ref{ex:jp_indirect}).
+
+\EX{ex:jp_direct}{ \underline{新しいミニバン}$_{(i')}$が発売され
+  た。\underline{この新型車}$_{(i)}$は燃費が非常によい。\\
+  \emph{\underline{A new minivan}$_{(i')}$ was released. \underline{The
+      vehicle}$_{(i)}$ has good gas mileage. }}
+\EX{ex:jp_indirect}{ 家
+  具屋で\underline{机}$_{(i')}$を見た。\underline{そのデザ
+    イン}$_{(i)}$ は素晴らしかった。\\
+  \emph{I saw \underline{a desk}$_{(i')}$ in a furniture
+    shop. \underline{\mbox{The design}}$_{(i)}$ was marvelous. }}
+``この新型車(\textit{the vehicle})'' refers to ``新しいミニバン(\textit{a
+  new minivan})'' directly in (\ref{ex:jp_direct}), while ``そのデザイ
+ン(\textit{the design})'' refers to ``机(\textit{a desk})'' indirectly
+in (\ref{ex:jp_indirect}). As seen from the above examples
+\NUM{ex:direct_anaphora}, \NUM{ex:indirect_anaphora} and reported in
+Section 1, the anaphora type can be different for a unique
+expression. In other words, the anaphora type has to be disambiguated
+taking its appearing context into account.
+
+In Japanese, however, the problem can be even more complex because a
+definite NP is not always marked by a definiteness modifier, such as
+\emph{this}（この），\emph{the}（その），or \emph{that}（あの）．For example,
+bare NP 大統領 (\textit{president}) refers to \textit{韓国大統
+  領} (\textit{Korean President}) in text \NUM{ex:japanese}.
+
+\EX{ex:japanese}{ 今月4日、\underline{韓国大統領}$_{(i')}$が来日し
+  た。\underline{大統領}$_{(i)}$は翌日の記者会見で新プランの詳細を語っ
+  た。\\ \emph{\underline{Korean President}$_{(i')}$ visited Japan on the
+    4th this month. \underline{\mbox{{\upshape (}The{\upshape )} president}}$_{(i)}$ talked about the
+    details of his new plan at the news conference next day.}}
+For this reason, it is sometimes difficult even for human annotators
+to determine the definiteness of a bare NP. As the first step toward
+complete understanding of Japanese NP anaphora, we focus on anaphora
+resolution for NPs marked with either \emph{this NP}（この+NP），
+\emph{the NP}（その+NP） or \emph{that NP}（あの+NP），which account for
+a large proportion of occurrences of nominal anaphora in Japanese
+texts.
+
+
+
+\section{Related work}
+
+In this section, we review previous research on anaphora resolution
+for antecedent selection and anaphora type classification
+respectively. In Section \ref{sec:related_as}, we look over how the
+previous work had taken the approaches to antecedent selection for
+direct anaphora and indirect anaphora. In Section
+    \ref{sec:related_atc}, we discuss Vieira and Poesio's work
+and Nakaiwa's work on anaphora type
+classification.
+
+
+\subsection{Antecedent selection} \label{sec:related_as}
+
+A wide range of approaches to anaphora resolution has been proposed in
+earlier work. There exist two main approaches: rule-based
+approaches and machine learning-based approaches. In contrast to the
+rule-based approaches such as
+~\shortcite{Brennan,Lappin,Baldwin,Nakaiwa,Okumura,Mitkov}, empirical,
+or machine learning-based approaches have been shown to be a cost-efficient
+solution achieving performance that is comparable to the best
+performing rule-based
+systems \cite[etc.]{McCarthy,Ge:98,soon01_coref,1073102,Strube:03,iida05_coref,1075119}. Most
+of these studies focus only on the coreference resolution
+task, particularly in the context of evaluation-oriented research
+programs such as Message Understanding Conference
+(MUC)\footnote{http://www-nlpir.nist.gov/related\_projects/muc/index.html}
+and Automatic Content Extraction
+(ACE)\footnote{http://www.nist.gov/speech/tests/ace/}. To the
+contrary, the methods for indirect anaphora resolution have been
+relatively unexplored compared with direct anaphora. Those works are
+implemented by rule-based
+approaches~\shortcite[etc.]{poesio97_bd,murata99_xnoy,razvan03_asocweb}
+and learning-based approaches~\shortcite{poesio04_lbd}, encoding the
+centering theory~\shortcite{grosz95_centering}, lexical resources such
+as WordNet~\shortcite{fellbaum98_wn} and web-based knowledge. In
+comparison to direct anaphora, the resolution of indirect anaphora is
+still a much more difficult task because it is required to capture the
+wide variety of semantic relations (e.g. \emph{store}--\emph{the
+  discount}, \emph{drilling}--\emph{the activity}). For example,
+\shortcite{poesio02_aclex} proposed acquiring the lexical knowledge of
+the meronymy relations for resolving bridging descriptions by using
+syntactic patterns such as \emph{the NP of NP} and \emph{NP's NP}.
+
+Recall that these works are based on the assumption that the system
+knows that the given anaphor is direct anaphora or indirect anaphora,
+which motivates us to explore the design of the antecedent selection
+model.
+
+
+
+\subsection{Anaphora type classification} \label{sec:related_atc}
+
+As mentioned in Section 1, there has been little attention paid to the
+issue of anaphora type classification. Exceptions can be seen in
+~\shortcite{nakaiwa95_extra} and
+~\shortcite{vieira00_defdesc}. Nakaiwa's work focuses on the
+extra-sentential resolution of Japanese zero pronouns in machine
+translation. They identify zero pronouns whose referent is the
+extra-sentential element such as \emph{I, we} and \emph{you} by using
+the semantic constraints such as modal expressions, verbal semantic
+attributes. In their classification, the verbs depended on by pronouns
+are important clues, whereas the contextual information is important in
+anaphora type classification as mentioned in Section
+\ref{sec:motivation}.
+
+    Vieira and Poesio's work (2000) is motivated by corpus
+study for the use of definite descriptions\footnote{Noun phrases with
+  the definite article \emph{the}.}. Their system does not only find
+an antecedent but classifies a given definite description into the
+following three categories.
+
+\begin{itemize}
+\item \emph{direct anaphora}: subsequent-mention definite descriptions that
+  refer to an antecedent with the same head noun as the description;
+\item \emph{bridging descriptions}: definite descriptions that either
+  (i) have an antecedent denoting the same discourse entity, but using
+  a different head noun (as in \emph{house} ... \emph{building}), or
+  (ii) are related by a relation other than identity to an entity
+  already introduced in the discourse;
+\item \emph{discourse-new}: first-mention definite descriptions that denote
+  objects not related by shared associative knowledge to entities
+  already introduced in the discourse.
+\end{itemize}
+Compared with our taxonomy, their definition of \emph{direct anaphora}
+is restricted to the case where an anaphor and its antecedent have an
+identical head. Therefore, the other cases (e.g. a pair of \emph{new
+  album} and \emph{the CD}) are not regarded as direct anaphora but
+such cases are classified into bridging descriptions. The definition
+of \emph{discourse-new}, on the other hand, refers to the same notion
+as our definition of \emph{exophora} except that the generic use of
+the definite article \emph{the} as in \emph{play \underline{the}
+  piano} is classified into \emph{discourse-new}. Note that Japanese
+definiteness modifiers are not used in such a way.
+
+In their work, the system chooses the correct anaphora type of a given
+definite NP and if possible, finds its antecedent following a set
+of hand-coded rules on the basis of the lexical and syntactic
+features. The process can be regarded as four notable steps.
+
+\begin{enumerate}
+\renewcommand{\labelenumi}{}
+\item The system applies some heuristics exploiting lexical and
+  syntactic features based on \shortcite{hawkins78} to detect
+  non-anaphoric cases (`unfamiliar use' or `larger situation use'
+      in Hawkins's work) to an anaphor. If the test
+  succeeds, it interprets the anaphor as discourse-new.
+\item The system tries to find a same-head antecedent (i.e., an
+  antecedent as direct anaphora) from a set of potential candidates
+  appearing in the preceding discourse. If a suitable candidate is
+  found, the system classifies an anaphor as \emph{direct anaphora}
+  and returns the candidate as its antecedent.
+\item The rules to recognize discourse-new, such as `pre-modifier use'
+  and `proper noun use' (e.g. \emph{the United States}), are applied
+  to an anaphor. If the test succeeds, the anaphor is classified as
+  discourse-new.
+\item The system tries to find an NP associated with an anaphor (which
+  is called \emph{an anchor} in their work) in the preceding
+  discourse. If such an NP is found, the anaphor is classified as
+  bridging description and judges the NP as its anchor. Otherwise, the
+  system does not output anymore.
+\end{enumerate}
+
+The heuristics to detect non-anaphoric or discourse-new anaphors are
+based on the syntactic and lexical features, while the rules for
+direct anaphora and bridging descriptions simply try to find an
+antecedent. Consequently, their work can be said to focus on
+detecting discourse-new descriptions compared to our work. They
+reported their system achieved 57\% recall and 70\% precision in their
+empirical evaluation.
+
+
+Note that their system carries out anaphora type classification before
+antecedent selection. However, it remains unexplored how to integrate
+antecedent identification and anaphora type classification into
+anaphora resolution, which is to be investigated as \emph{issue 2}
+and \emph{issue 3}, which we addressed in Section 1.
+
+
+
+\section{Model}
+
+The purpose of our work is to investigate the three unexplored issues
+shown in Section 1. First of all, we explain our learning-based
+antecedent selection models and anaphora type classification models.
+
+
+\subsection{Antecedent selection} \label{sec:antecedent_selection}
+
+One issue to explore in antecedent selection is whether a single
+common model should be built for both direct and indirect anaphora or
+a separate model should be built for each. In this section, in order
+to explore \emph{issue 1}, we design two different models for
+selecting antecedents.
+
+From the point of view in which we consider both anaphora types in parallel
+in an antecedent identification, we can consider the following two
+strategies.
+\begin{itemize}
+\item \emph{Single model}: Designing the model for the resolution of
+  both direct and indirect anaphora. The information to capture an
+  direct-anaphoric antecedent and indirect-anaphoric antecedent is
+  jointly incorporated into a single common model. The model is trained
+  with labeled examples of both direct and indirect anaphora.
+\item \emph{Separate model}: Preparing two distinct models for each
+  anaphora type separately; i.e., the selection model for direct
+  anaphora and the model for indirect anaphora. Unlike the
+  \emph{single model}, each model incorporates the information to
+  capture an antecedent for each anaphora type separately. In the
+  \emph{direct antecedent selection model}, only the information that
+  captures a direct-anaphoric antecedent is used. In the \emph{indirect
+    antecedent selection model}, on the other hand, only the
+  information for the indirect-anaphoric antecedent is used. For the
+  training, labeled examples of direct anaphora are only used in the
+  \emph{direct antecedent selection model} and labeled examples of
+  indirect anaphora are only used in the \emph{indirect antecedent
+    selection model}.
+\end{itemize}
+
+The separate model approach is expected to be advantageous because
+useful information for detecting direct-anaphoric antecedents is
+different from one for indirect-anaphoric antecedents. For example,
+synonymous relations between anaphor and antecedent are
+important for selecting direct-anaphoric antecedents. In example
+(\ref{ex:direct_anaphora}), an antecedent selection model has to know
+that \textit{ CD} and \textit{album} are synonymous. For indirect
+anaphora, on the other hand, it is required to recognize such semantic
+relations as \emph{part-whole} and \emph{attribute-value} as shown in
+example (\ref{ex:indirect_anaphora}), where it is essential that
+\emph{CD} is semantically related with \emph{song}.
+
+There are a variety of existing machine learning-based methods
+designed for coreference resolution ranging from classification-based
+models~\shortcite[etc.]{soon01_coref} and preference-based
+models~\shortcite[etc.]{1073102} to comparison-based
+models~\shortcite[etc.]{iida05_coref,1075119}. Among them, we adopt a
+state-of-the-art model for coreference resolution in
+Japanese~\shortcite{iida05_coref}, called the \emph{tournament model}
+because it achieved the best performance for coreference resolution in
+Japanese. The tournament model selects the best candidate antecedent
+by conducting one-on-one games in a step-ladder tournament. More
+specifically, the model conducts a tournament consisting of a series
+of games in which candidate antecedents compete with each other and
+selects the winner of the tournament as the best candidate
+antecedent. The model is trained with instances, each created from an
+antecedent paired with one other competing candidate.
+
+
+
+\subsection{Anaphora type classification}
+\label{sec:anaphora_type_classification}
+
+In this section, we elaborate \emph{issue 2} and \emph{issue 3} for
+anaphora type classification. An interesting question for this subtask
+is whether anaphora type classification should be carried out before
+antecedent selection or after because the available information
+differs depending on the order of those two subtasks. To reflect this,
+we consider two kinds of configurations: \emph{Classify-then-Select}
+and \emph{Select-then-Classify} as follows. The difference between the
+clues that each classifier uses is summarized in Table
+\ref{tb:info_model}. The classifiers are trained in a supervised
+fashion.
+
+\begin{table}[b]
+\caption{Summary of the information used in each anaphora type classifier}
+\label{tb:info_model}
+\input{11table01.txt}
+\end{table}
+
+
+\subsubsection{Classify-then-Select (C/S) model}
+
+Given an anaphor, an anaphora type classifier first determines whether
+\pagebreak
+the anaphor bears either direct anaphora, indirect anaphora or
+exophora. \wire{If the anaphora type is judged as direct anaphora,
+  then the direct antecedent selection model is called. If the
+  anaphora type is judged as indirect anaphora, on the other hand,
+  then \wire{the indirect antecedent selection model is called}. There
+  is no antecedent selection model called if exophora is selected.}
+
+By altering the choice of information used in anaphora type
+classification, the following two alternative models are available for
+the Classify-then-Select configuration, each of which is illustrated
+in Figure \ref{fig:cs_models}.
+\begin{itemize}
+\item \emph{a-Classify-then-Select (aC/S) Model}: Classify anaphora
+  type of a given anaphor by using the anaphor and its properties
+  before selecting the antecedent.
+\item \emph{c-Classify-then-Select (cC/S) Model}: Classify anaphora
+  type of a given anaphor by using the anaphor, its properties and the
+  lexical and syntactic information from all potential antecedents
+  before selecting the antecedent.
+\end{itemize}
+By comparing the cC/S model with the aC/S model, we can see the effect
+of using contextual information in anaphora type classification. The
+feature set used in the models is detailed in Section
+\ref{sec:feature_set}.
+
+\begin{figure}[b]
+\begin{center}
+  \includegraphics{17-1ia11f1.eps}
+\end{center}
+\vspace{0.5zw}
+  \hangcaption{Classify-then-Select Anaphora Resolution Models. $ASM$
+    denotes Antecedent Selection Model and $ATC$ denotes Anaphora
+    Type Classifier. $ant_d$ and $ant_i$ denote an antecedent
+    selected by Direct-ASM and Indirect-ASM respectively}
+\label{fig:cs_models}
+\end{figure}
+
+
+\subsubsection{Select-then-Classify (S/C) model} 
+\label{sec:sc_models}
+
+Given an anaphor, an antecedent selection model first selects the most
+likely antecedent and an anaphora type classifier determines the
+anaphora type by utilizing information from both the anaphor and the
+selected candidate antecedent(s). This way of configuration has an
+advantage over the Classify-then-Select models in that it determines
+the anaphora type of a given anaphor taking into account the
+information of its most likely candidate antecedent. The candidate
+antecedent selected in the first step can be expected to provide
+contextual information useful for anaphora type classification: for
+example, if \emph{her new song} is selected as the best candidate
+antecedent in example \NUM{ex:atc_sample}, the anaphora type will be
+easily identified by using the lexical knowledge that \emph{CD} is
+the semantically related object of \emph{song}.
+
+\EX{ex:atc_sample}{\emph{
+The artist announced
+      \underline{\mbox{her new song}}. I want to get \underline{the CD} as
+      soon as possible. }
+}
+
+\begin{figure}[b]
+\vspace{-0.5\baselineskip}
+\begin{center}
+\includegraphics{17-1ia11f2.eps}
+\end{center}
+\vspace{0.5zw}
+ \hangcaption{Select-then-Classify Anaphora Resolution Models. $ASM$
+   denotes Antecedent Selection Model and $ATC$ denotes Anaphora
+   Type Classifier. $ant_s$, $ant_d$ and $ant_i$ denote an
+   antecedent selected by Single-ASM, Direct-ASM and Indirect-ASM
+   respectively}
+ \label{fig:sc_models}
+\end{figure}
+
+Since we have two choices of antecedent selection models (i.e., the
+single and separate models) as shown in
+\ref{sec:antecedent_selection}, finally at least the following four
+models are available for anaphora type classification, each of which
+is illustrated in Figure \ref{fig:sc_models}.
+\begin{itemize}
+\item \emph{s-Select-then-Classify (sS/C) Model}: Select the best
+  candidate antecedent with the single model and then classify the
+  anaphora type.
+\item \emph{d-Select-then-Classify (dS/C) Model}: Select the best
+  candidate antecedent by the direct anaphora model and then classify
+  the anaphora type. If the candidate is classified as indirect
+  anaphora, search for the antecedent with the indirect anaphora
+  model.
+\item \emph{i-Select-then-Classify (iS/C) Model}: Analogous to the 
+  d-Select-then-Classify (dS/C) model with the steps reversed.
+\item \emph{p-Select-then-Classify (pS/C) Model}: Call the direct
+  anaphora and indirect anaphora models in parallel to select the
+  best candidate antecedent for each case and then classify the
+  anaphora type referring to both candidates. 
+\end{itemize}
+The pS/C configuration provides richer contextual information for
+classifying anaphora type than any other configuration because it can
+always refer to the most likely candidate antecedents of direct
+anaphora and indirect anaphora, which may be useful for determining
+anaphora type.
+
+We adopt the \emph{one-versus-rest} method for the three-way
+classification in our experiments. In other words, we recast the
+multi-class classification problem as combinations of a binary
+classification. Given an anaphor, each anaphora type classifier
+outputs a score that represents the likelihood of its anaphora
+type. According to these three scores, we select the anaphora type that
+achieves the maximum score.
+
+The training procedure of each model depends on which kinds of
+information is needed. To exemplify how to create training instances,
+assume that we have the following text to create training instances.
+
+\EX{training_example}{\texttt{ \underline{\mbox{Mariah Carey}}$_{(3')}$ is an
+    artist who comes from \underline{the USA}$_{(1)}$. \\ She
+    announced \underline{\mbox{her new song}}$_{(2')}$ yesterday. \\I'm
+    looking forward to hearing \underline{\mbox{the new song}}$_{(2)}$. \\\underline{The beautiful voice}$_{(3)}$ will
+    attract me.}
+
+  with annotated as the following:
+
+  \texttt{the USA}$_{(1)}$ :: exophora \\
+  \texttt{the new song}$_{(2)}$ --  \texttt{her new song}$_{(2')}$ :: direct anaphora \\
+  \texttt{the beautiful voice}$_{(3)}$ --  \texttt{Mariah Carey}$_{(3')}$ :: indirect anaphora
+}
+In the aC/S model, the information of an anaphor is needed to determine
+anaphora type. Since there are three instances in
+\NUM{training_example}, the classifier is trained with \texttt{the
+  USA}$_{(1)}$ as exophoric instance, \texttt{the new song}$_{(2)}$ as
+direct-anaphoric instance and \texttt{the beautiful voice}$_{(3)}$ as
+indirect-anaphoric instance. For the cC/S configuration, in addition
+to the anaphor information, the classifier takes all the potential
+antecedents. More specifically, the classifier is trained with the
+pair of the anaphor and its potential antecedents, hence,
+\{\texttt{the USA}$_{(1)}$, (\texttt{Mariah Carey}, \texttt{an
+  artist})\} as exophoric instance, \{\texttt{the new song}$_{(1)}$,
+(\texttt{Mariah Carey, an artist, the USA, she, her new song,
+  yesterday, I})\} as direct-anaphoric instance and \{\texttt{the
+  beautiful voice}$_{(3)}$, (\texttt{Mariah Carey, an artist, the USA,
+  she, her new song, yesterday, I, the new song})\} as
+\linebreak
+indirect-anaphoric instance\footnote{ We enumerated only noun phrases
+  as the potential antecedents for convenience. In our
+  evaluations, we include verbal predicates in the list of potential
+  antecedents for such cases as \emph{...we calculate the value in
+    advance.} -- \emph{The precomputation ...}. }.
+
+For the S/C configuration, we use the pair of an anaphor and annotated
+antecedent or \emph{pseudo}-antecedent as a training instance. It
+depends on the anaphora type of interested anaphor and the type of
+antecedent selection model that \wire{the classifier utilizes to
+determine} whether it is annotated antecedent or
+\emph{pseudo}-antecedent. At first, in the sS/C configuration, the
+classifier selects \emph{pseudo}-antecedent of \texttt{the
+  USA}$_{(1)}$ using the single model since there is no annotated
+antecedent in the training set. Suppose \texttt{an artist} is
+selected; we create a training instance of exophora from \texttt{the
+  USA}$_{(1)}$ paired with \texttt{an artist}. For direct-anaphoric
+and indirect-anaphoric instances, we simply take the anaphor and the
+annotated antecedent, i.e. $\langle$\texttt{the new song$_{(2)}$},
+\texttt{her new song$_{(2')}$}$\rangle$ and $\langle$\texttt{the
+  beautiful voice}$_{(3)}$, \texttt{Mariah Carey$_{(3')}$}$\rangle$ as
+each training instance.
+
+
+Second, the case of the dS/C configuration is slightly more
+complex. Analogously to the sS/C model, for \texttt{the USA}$_{(1)}$,
+we obtain the \emph{pseudo}-antecedent using the direct antecedent
+selection model. Suppose \texttt{an artist} is selected; the pair
+$\langle$\texttt{the USA}$_{(1)}$, \texttt{an artist}$\rangle$ is used
+as an exophoric instance. For \texttt{the new song$_{(2)}$}, we use
+the pair $\langle$\texttt{the new song$_{(2)}$}, \texttt{her new
+  song$_{(2')}$}$\rangle$ as direct-anaphoric instance. For
+\texttt{the beautiful voice$_{(3)}$}, however, since the annotated
+antecedent \texttt{Mariah Carey$_{(3')}$} is unlikely to be selected
+as the best candidate of \texttt{the beautiful voice$_{(3)}$} by the
+\emph{direct} antecedent selection model, the classifier does not use
+the annotated example. In dS/C anaphora type classification fashion,
+it is required to classify \texttt{the beautiful voice$_{(3)}$} paired
+with the \emph{pseudo}-best candidate selected by the \emph{direct} antecedent
+selection model as the \emph{indirect} anaphora. We therefore run the
+\emph{direct} antecedent selection model to select the
+\emph{pseudo}-best candidate. Suppose \texttt{yesterday} is selected;
+we create a training instance of indirect anaphora from \texttt{the
+  beautiful voice}$_{(3)}$ paired with \texttt{yesterday}.
+
+An analogous method applies also to the iS/C configuration; that is, we
+run the \emph{indirect} antecedent selection model to select the
+\emph{pseudo}-best candidate except for the indirect-anaphoric instance
+\texttt{the beautiful voice}$_{(3)}$. We assume that \texttt{Mariah
+  Carey} is selected as the \emph{pseudo}-best candidate for
+\texttt{the USA$_{(1)}$} and \texttt{an artist} for \texttt{the new
+  song$_{(2)}$}. We create the following training instances:
+$\langle$\texttt{the USA$_{(1)}$}, \texttt{Mariah Carey}$\rangle$ as
+exophora, $\langle$\texttt{the new song$_{(2)}$} \texttt{an
+  artist}$\rangle$ as direct anaphora, $\langle$\texttt{the beautiful
+  voice}$_{(3)}$, \texttt{Mariah Carey$_{(3')}$}$\rangle$ as indirect
+anaphora.
+
+Finally, in the pS/C configuration, we need \emph{triplets}
+$\langle$an anaphor, a direct-anaphoric antecedent, an
+indirect-anaphoric antecedent$\rangle$. For \texttt{the USA$_{(1)}$},
+since we have no annotated antecedents for direct and indirect
+anaphora, we run both the direct and indirect antecedent selection
+model to select \emph{pseudo}-best candidates of \texttt{the
+  USA$_{(1)}$}. Supposing that \texttt{an artist} is selected by the
+\emph{direct} antecedent selection model and \texttt{Mariah Carey} is
+selected by the \emph{indirect} model, we create a training instance
+of exophora from $\langle$\texttt{the USA$_{(1)}$}, \texttt{an
+  artist}, \texttt{Mariah Carey}$\rangle$. For \texttt{the new
+  song$_{(2)}$}, since we have no annotated antecedent for
+\emph{indirect} anaphora, the indirect antecedent selection model is
+chosen to select the \emph{pseudo}-best candidate. Suppose \texttt{an
+  artist} is selected; we create a direct-anaphoric training instance
+$\langle$\texttt{the new song$_{(2)}$}, \texttt{her new
+  song$_{(2')}$}, \texttt{an artist}$\rangle$. For \texttt{the
+  beautiful voice}$_{(3)}$, analogous to \texttt{the new
+  song$_{(2)}$}, supposing \texttt{yesterday} is selected by the
+direct antecedent selection model, we create an indirect-anaphoric
+training instance $\langle$\texttt{the beautiful voice$_{(3)}$},
+\texttt{yesterday}, \texttt{Mariah Carey$_{(3')}$}$\rangle$.
+
+
+
+\section{Dataset} \label{sec:dataset}
+
+For training and testing our models, we created an annotated corpus
+that contains 2,929 newspaper articles consisting of 19,669 sentences
+for 2,320 broadcasts, 18,714 sentences for 609 editorials, which is
+the same articles as in the NAIST Text Corpus~\shortcite{iida07_ntc}. The
+NAIST Text Corpus also contains anaphoric relations of noun phrases,
+but they are strictly restricted as coreference relations (i.e. two NPs
+must refer to the same entity in the world). For this reason, most NPs
+marked with a definiteness modifier that we need are not annotated
+even when two NPs have a direct-anaphoric relation. Therefore, we
+re-annotated (i) direct anaphoric relations, (ii) indirect anaphoric
+relations and (iii) exophoric noun phrases of noun phrases marked by
+one of the three definiteness modifiers, that is \emph{this}（この），
+\emph{the}（その），and \emph{that}（あの）．In the specification of our
+corpus, not only noun phrases but verb phrases are chosen as
+antecedents. For example, the verbal predicate \emph{calculates in
+  advance} is selected as an antecedent of \emph{the precomputation}
+in example \NUM{verbal}.
+
+\EX{verbal}{システムは前もって値を\underline{計算する}$_{(i')}$。
+    \underline{その前計算}$_{(i)}$はシステムの性能を大幅に向上させている。\\
+    \emph{
+    The system \underline{calculates}$_{(i')}$ the value in
+    advance. \underline{\mbox{The precomputation}}$_{(i)}$ significantly improves its
+    performance. }}
+We also annotated anaphoric relations in the case where an anaphor is
+anaphoric with more than two antecedents. For example, we label
+anaphoric relations for the two pairs of NPs \emph{mouse devices--the
+  other items} and \emph{keyboards--the other items} as seen in
+example \NUM{multiple_antecedent}.
+
+\EX{multiple_antecedent}{
+    ABCコンピュータは\underline{マウス}$_{(i')}$と\underline{キーボード}$_{(j')}$の値下げを発表した。
+    \underline{その他の商品}$_{(i,j)}$については値下げをしないと主張した。\\
+    \emph{ ABC computer announced that they
+    reduced the price of \underline{mouse devices}$_{(i')}$ and
+    \underline{\mbox{keyboards}}$_{(j')}$. They claimed that they would not cut the
+    price of \underline{the other items}$_{(i,j)}$. }}
+
+\begin{table}[b]
+\caption{Distribution of anaphoric relations in the annotated corpus}
+\label{tb:result_annotation}
+\input{11table02.txt}
+\end{table}
+
+Finally, we obtained 1,264 instances of direct anaphora, 2,345
+instances of indirect anaphora, and 470 instances of exophora. The
+detailed statistics are shown in Table~\ref{tb:result_annotation}.  To
+assess the reliability of the annotation, we estimated its agreement
+rate with the two annotators from 418 examples\footnote{These examples
+  are randomly sampled from our corpus, and account for 10\% of all
+  the examples.} in terms of $K$
+statistics~\shortcite{siegel88_kappa}. It resulted in $K$ = 0.73,
+which indicates good reliability. For measuring the agreement ratio of
+antecedent selection, we used 322 examples (109 for direct anaphora
+and 213 for indirect anaphora) whose anaphora types are identically
+identified by both two annotators. The agreement ratio was
+calculated\footnote{ \wire{We regarded the matching of the rightmost
+    offset} as the agreement. When multiple antecedents are annotated,
+  the criterion of matching is that one of the antecedents is at least
+  identical with one of the antecedents annotated by the other
+  annotator.}  according to the following equation:
+$$ Agreement = \frac{\mbox{\# of instances which both two annotators
+    identified the same antecedent}}{\mbox{\# of all instances}}.$$
+The agreement ratio for annotating direct-anaphoric relation obtained
+80.7\% (88/109). However, for 21 examples whose antecedents are not
+identically selected by the annotators, our analysis revealed that
+52.4\% (11/21) of these examples are cases where the antecedents
+annotated by the two annotators are different but in anaphoric
+relation, which should be regarded as an agreement. Therefore, the
+inter-annotator agreement ratio of direct-anaphoric relation achieves
+90.8\% (99/109), which indicates good reliability but it is required
+to consider anaphoric chains in the annotation procedure. The
+agreement ratio of indirect-anaphoric relation, on the other hand,
+obtained a comparatively lower ratio of 62.9\% (134/213). One of the
+typically non-matching cases is shown in example
+\NUM{ex:unmatched_indirect}.
+
+
+\EX{ex:unmatched_indirect}{\underline{政府}$_{(i)}$は明日まで
+  に\underline{委員}$_{(j)}$を決める方針だ。\underline{その人選}$_{(k)}$は
+  我々にも影響が及ぶだろう。\\
+  \emph{\underline{\mbox{The government}}$_{(i)}$ is going to determine
+    \underline{\mbox{the member of the committee}}$_{(j)}$ by tomorrow.\\
+    Probably \underline{the election}$_{(k)}$ will also affect us. }
+}
+In this example, both \emph{the government} and \emph{the member
+  of the committee} are considered to be associated objects of
+\emph{the election}, which indicates that multiple discourse elements
+are often associated with one anaphor in various semantic relations in
+indirect anaphora. We should reflect on such problems when the
+annotation scheme and task definition of indirect anaphora resolution
+are argued, including bridging reference resolution.
+
+
+\section{Evaluation} \label{sec:evaluation}
+
+We conduct empirical evaluations in order to investigate the three
+issues shown in Section 1. First, we compare two antecedent selection
+models, the single and separate models described in Section
+\ref{sec:antecedent_selection} in order to find out \emph{issue 1},
+i.e., whether an antecedent selection model should be trained
+separately for direct anaphora and indirect anaphora. Second, the
+anaphora type classification models described in Section
+\ref{sec:anaphora_type_classification} are evaluated to explore what
+information helps with the anaphora type classification (\emph{issue
+  2}). Finally, we evaluate the overall accuracy of the entire
+anaphora resolution task to explore how the models can be best
+configured (\emph{issue 3}).
+
+\wire{ In our experiments, we used anaphors whose antecedent is a head
+  of NP that appears in the preceding context of the anaphor (i.e.,
+  cataphora is ignored), only taking articles in the broadcast domain
+  into account. Therefore, we used 572 instances of direct anaphora,
+  878 instances of indirect anaphora and 248 instances of
+  exophora. The evaluation was carried out by 10-fold
+  cross-validation. In our evaluation of antecedent selection, if a
+  selected antecedent is in the same direct-anaphoric chain as the
+  labeled antecedent, this selected antecedent is evaluated as
+  correct\footnote{\wire{We manually checked our results because of the lack
+    of annotation of anaphoric chains as noted in Section
+    \ref{sec:dataset}. Due to the cost of this manual
+      checking, we took only the broadcast articles into account in
+      our experiments, leaving the editorials out.} }. }
+
+
+For creating binary classifiers used in antecedent selection and
+anaphora type classification, we adopted Support Vector
+Machines~\shortcite{vapnik95_svm}\footnote{$SVM^{light}$
+  http://svmlight.joachims.org/}, with a polynomial kernel of degree 2
+and its default parameters.
+
+
+\subsection{Feature set} \label{sec:feature_set}
+
+\begin{table}[b]
+\caption{Feature set for antecedent selection and the S/C models}
+ \label{tb:features_antident}
+\input{11table03.txt}
+\end{table}
+
+The feature set for antecedent selection is designed based on the
+\pagebreak
+literature of coreference
+resolution~\shortcite[etc.]{iida05_coref,1073102,soon01_coref,denis-baldridge:2008:EMNLP,1075119}
+as summarized in Table~\ref{tb:features_antident}. In addition, we
+introduce the following lexical semantic features:
+
+\begin{itemize}
+\item WN\_SEMANTIC\_RELATION: In order to capture various semantic
+  relations between an anaphor and its antecedent, we incorporate the
+  binary features that represent the semantic relation found in the
+  Japanese WordNet
+  0.9~\shortcite{isahara08_wnja}\footnote{http://nlpwww.nict.go.jp/wn-ja/}.
+\item SYNONYMOUS and IS\_HYPONYM\_OF\_ANAPHOR: We recognize synonymous
+  and hyper-hyponym relations by using a very large amount of synonym
+  and hypernym-hyponym relations (about three million hypernymy
+  relations and two hundred thousand synonymy relations)
+  automatically created from Web texts and
+  Wikipedia~\shortcite{sumi08_hypowiki}.
+\item BGH\_ID, BGH\_COMMON\_ANC: We incorporate the lexical
+  information obtained from the \textit{Bunrui Goi Hyo}
+  thesaurus~\shortcite{nlsi64_bgh}. We encode the information as two
+  types: (i) binary features that represent the semantic class ID,
+  and (ii) a real-valued feature that indicates the depth of the lowest
+  common ancestor of an anaphor and its candidate.
+\item SIMILARITY: To robustly estimate semantic similarities between
+  an anaphor and its candidate antecedent, we adopt the cosine
+  similarity between an anaphor and candidate antecedent, which is
+  calculated from a cooccurrence matrix of $(n, \bracket{c,v})$, where
+  $n$ is a noun phrase appearing in an argument position of a verb $v$
+  marked by a case particle $c$. \wire{The cooccurrences are counted from
+  two decades worth of news paper articles, and their distribution
+  $P(n,\bracket{c,v})$ is estimated by pLSI~\shortcite{hofmann99_plsi}
+  with 1,000 hidden topic classes to overcome the data sparseness
+  problem. }
+\item PMI: The degree of indirect-anaphoric association between an
+  anaphor \emph{ANA} and candidate \emph{CND} is calculated
+  differently depending on whether \emph{CND} is a noun or
+  predicate. For the case of a noun, we follow the literature of
+  indirect anaphora
+  resolution~\shortcite[etc.]{poesio04_lbd,murata99_xnoy} to capture
+  such semantic relations as \emph{part-whole}. The associativeness is
+  calculated from the cooccurrences of \emph{ANA} and \emph{CND} in
+  the pattern of ``\emph{CND} の \emph{ANA} (\emph{ANA of
+    CND})''. Frequencies of cooccurrence counts are obtained from the
+  Web Japanese N-gram Version 1~\shortcite{kudo07_gng}.  For the case
+  of a predicate, on the other hand, the associativeness is calculated
+  from the cooccurrences of \emph{ANA} and \emph{CND} in the pattern
+  where \emph{CND} syntactically depends on (i.e. modifies) \emph{ANA}
+  (in English, the pattern like ``\textit{ANA that \textup{(}subj\textup{)} CND}''). If we
+  find many occurrences of, for example, ``闘う (\emph{to fight})''
+  modifying ``夢 (\emph{a dream})'' in a corpus, then ``夢 (\emph{a
+    dream})'' is likely to refer to an event referred to by
+  ``闘う (\emph{to fight})'' as in \NUM{dream}.
+  \EX{dream}{
+    チャンピオンと\ul{闘い}$_{(i')}$たい。\ul{その夢}$_{(i)}$は実現する
+    と信じている。\\
+    \emph{I want to \ul{\mbox{fight}}$_{(i')}$ the champion. I believe
+    \ul{the dream}$_{(i)}$ will come true.}}
+\end{itemize}
+
+For anaphora type classification, we use a different feature set
+depending on the configuration described in
+\ref{sec:anaphora_type_classification}. For the Classify-then-Select
+configuration, as summarized in Table~\ref{tb:features_prior}, it
+includes such features as HAS\_SYNONYM\_OF\_ANAPHOR and
+HAS\_STRING\_MATCHED, which capture contextual information encoded from
+all potential antecedents,  based on the
+literature~\shortcite[etc.]{vieira00_defdesc}. For the
+Select-then-Classify configurations, on the other hand, an anaphora
+type classifier uses the best candidate(s) selected in antecedent
+selection phase as its contextual information, instead of the
+information encoded from all the potential antecedents. This sort of
+information is encoded as features analogous to that for antecedent
+selection as summarized in Table~\ref{tb:features_antident}.
+
+\begin{table}[t]
+\caption{Feature set for the C/S models}
+\label{tb:features_prior}
+\input{11table04.txt}
+\end{table}
+
+
+
+\subsection{Results of antecedent selection} \label{sec:result_as}
+
+The results of antecedent selection are shown in Table
+\ref{tb:result_as}. The results\footnote{The accuracy of the separate
+  model is better than the single model with statistical significance
+  ($p<0.01$, McNemar test).} indicate that the Separate Model
+outperforms the Single Model on two anaphora types. As for \emph{issue
+  1}, we conclude that the information used for antecedent selection
+should be separated for each anaphora type and the selection models
+should be trained for each anaphora type. We therefore discard the
+Single Model for the further experiments (i.e. discarding sS/C model).
+
+\begin{table}[b]
+\vspace{-0.5\baselineskip}
+  \caption{Results of antecedent selection}
+ \label{tb:result_as}
+\input{11table05.txt}
+\end{table}
+\begin{figure}[b]
+\vspace{0.5\baselineskip}
+\begin{center}
+\includegraphics{17-1ia11f3.eps}
+\end{center}
+\caption{Learning curve for Separate Models} 
+\label{fig:learning_curve_as}
+\end{figure}
+
+We also illustrate the learning curves of each model, shown in Figure
+\ref{fig:learning_curve_as}. Reducing the training data to 50\%, 25\%,
+12.5\%, 6.25\% and 3.13\%, we conducted the evaluation over three
+random trials for each size and averaged the accuracies. Figure
+\ref{fig:learning_curve_as} indicates that in the direct antecedent
+selection model the accuracy becomes better as the training data
+increase, whereas the increase of the indirect one looks difficult to
+improve although our data set included more instances for indirect
+anaphora than for the direct one. These results support the finding in
+previous work that an indirect anaphora is harder to resolve than
+direct anaphora and suggest that we need a more sophisticated
+antecedent selection model for indirect anaphora.
+
+Our error analysis revealed that a majority (about 60\%) of errors in
+direct anaphora were caused by the fact that both correct and incorrect
+candidates belong to the same semantic category. Example \NUM{d_error}
+shows a typical selection error:
+\EX{d_error}{
+  私は\ul{映画}$_{(j)}$の知識がないが、\ul{『フランケンシュタイ
+    ン』}$_{(i')}$ぐらいは知っている。\\\ul{この映画}$_{(i)}$は、本当に名作だ。\\
+  \emph{I don't have good knowledge of \ul{movies}$_{(j)}$ but still know
+    of \ul{``Frankenstein''}$_{(i')}$.\\I think \ul{this movie}$_{(i)}$ is
+    indeed a great masterpiece.}}
+where the wrong candidate ``映画$_{(j)}$ (\emph{movies$_{(j)}$})'' was
+selected as the antecedent of ``この映画$_{(i)}$ (\emph{this
+  movie$_{(i)}$})''\footnote{In Japanese, the plural form of a noun
+  is not morphologically distinguished from its singular form.}.  As
+can be imagined from this example, there is still room for
+improvement by carefully taking into account this kind of error using
+other clues such as information from salience. For indirect anaphora,
+we analyzed our resource to capture the associativeness between an
+anaphor and its antecedent, encoded as PMI in the feature set. Our
+analysis indicated that about half of the pattern `$ANT$ of $ANA$',
+which occurred in the test data, had been assigned a minus value, i.e., no
+positive association found between an anaphor and its antecedent for
+the resource when applying PMI. To evaluate the contribution to our
+model, we conducted an evaluation where the PMI feature set was
+disabled. As a result of this additional evaluation, the model
+obtained 51.4\% (451/878), which is no significant difference compared
+with the original accuracy. We need to find more useful clues to
+capture the associativeness between an anaphor and the related object
+in indirect anaphora. The low quality of our annotating data of
+indirect-anaphoric relation, as mentioned in
+Section~\ref{sec:dataset}, might be also one of the reasons for the
+low accuracy of indirect anaphora resolution.
+
+
+\subsection{Results of anaphora type classification}
+
+\begin{table}[b]
+\caption{Results of anaphora type classification}
+  \label{tb:result_tc}
+\input{11table06.txt}
+\end{table}
+
+Now, we move on to \emph{issue 2} and \emph{issue 3}. The results of
+anaphora type classification are shown in Table
+\ref{tb:result_tc}. The cC/S model obtained the lowest accuracy of
+73.6\%, which indicates that contextual information features proposed
+in the literature~\shortcite[etc.]{vieira00_defdesc}, such as
+HAS\_STRING\_MATCHED, were not actually informative. Note that the
+performance of the cC/S model is lower than the aC/S
+model\footnote{\wire{The difference is statistically significant
+    ($p<0.06$, McNemar test).}}, which identifies an anaphora type by
+using only the information of an anaphor. On the other hand, the dS/C
+model successfully improved its performance by using the information
+of selected candidate antecedent as the contextual information. The
+dS/C model achieved the best accuracy of 78.7\%, which indicates that
+the selected best candidate antecedent provides useful contextual
+information for anaphora type classification\footnote{\wire{The dS/C
+    model outperformed the aC/S, cC/S models with statistical
+    significance using $p<0.03$, $p<0.01$, as McNemar test parameters
+    respectively.}}. The iS/C and pS/C models, however, do not improve
+their performance as well as the dS/C model although it uses the
+selected best candidate(s) information. It is considered that the
+fundamental reason is the poor performance of the \emph{indirect}
+antecedent selection model as shown in Table \ref{tb:result_as}, i.e.,
+the \emph{indirect} antecedent selection model does not provide
+correct contextual information to anaphora type classification.  It is
+expected that all the S/C models get better performance when the
+antecedent selection model improves.
+
+\begin{table}[b]
+\caption{The majority of misclassified-exophoric instances}
+  \label{tb:misclassified}
+\input{11table07.txt}
+\end{table}
+
+The identification of exophora is a more difficult task than the other
+anaphora types as shown in the low F-measure and recall in Table
+\ref{tb:result_tc}. Our analysis for the exophoric instances
+misclassified by the dS/C model revealed that the typical errors were
+temporal expressions such as 年 (\emph{year}), 日 (\emph{day})
+and 時期 (\emph{period}). We observed that such expressions occurred
+as not only exophora but also as the other anaphora types many times,
+as summarized in Table \ref{tb:misclassified}, which indicates that
+the interpretation of temporal expression is also important for
+identifying the other anaphora types. In our current framework,
+however, it is hard to recognize such expressions accurately since the
+precise recognition of temporal expressions is required to identify a
+relation between an event specified by the expression and the other
+events. \wire{We consider integrating the framework of temporal
+  relation identification, which has been proposed in the
+  evaluation-oriented studies such as
+  TempEval\footnote{http://www.timeml.org/tempeval/}, with anaphora
+  type classification framework, which will be our future work}.
+
+
+\subsection{Results of overall anaphora resolution}
+
+Finally, we evaluated the overall accuracy of the entire anaphora
+resolution task given by:
+$$ Accuracy = \frac{\mbox{\# of instances whose antecedent and anaphora type is identified correctly}}{\mbox{\# of all instances}}.$$
+The results are shown in Table~\ref{tb:result_overall}. Again, the
+dS/C model achieved the best accuracy, which is significantly better
+than the Classify-then-Select models.
+
+\begin{table}[t]
+\caption{Overall results of anaphora resolution}
+ \label{tb:result_overall}
+\input{11table08.txt}
+\end{table}
+
+
+
+\section{Conclusion}
+
+We have addressed the three issues of nominal anaphora resolution for
+Japanese NPs marked by a definiteness modifier under two subtasks,
+i.e., \emph{antecedent selection} and \emph{anaphora type
+  classification}. The issues we addressed were: (i) how the
+antecedent selection model should be designed, \wire{(ii) what
+  information helps anaphora type classification, and (iii) how the
+  antecedent selection and anaphora type classification should be
+  carried out.} Our empirical evaluations showed that the separate
+model achieved better accuracy than the single model, and the
+d-Select-then-Classify and p-Select-then-Classify models give the best
+results. We have made several findings through the evaluations: (i) an
+antecedent selection model should be trained separately for each
+anaphora type using the information useful for identifying its
+antecedent, (ii) the best candidate antecedent selected by an
+antecedent selection model provides contextual information useful for
+anaphora type classification, \wire{and (iii) the antecedent selection
+  should be carried out before anaphora type classification.}
+
+However, there is still considerable room for improvement in both
+subtasks. Our error analysis for antecedent selection reveals that
+the wrong antecedent, which belongs to the same semantic category as
+correct antecedent, is likely to be selected while selecting
+direct-anaphoric antecedent, and the association measure of
+indirect-anaphoric relatedness does not contribute to selecting
+the indirect-anaphoric antecedent. We will incorporate the information
+that captures salience and various noun-noun relatedness into
+antecedent selection in future work. For anaphora type
+classification, our analysis reveals that temporal expressions
+typically cause error in the identification of exophora. To recognize
+such expressions precisely, we will consider integrating temporal
+relation identification with anaphora type classification. Our future
+work also includes taking general noun phrases into account in
+anaphora resolution.
+
+
+
+
+
+\acknowledgment
+
+I would like to thank the reviewers of this
+  paper for their helpful comments.
+
+\bibliographystyle{jnlpbbl_1.4}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Baldwin}{Baldwin}{1995}]{Baldwin}
+Baldwin, F.~B. \BBOP 1995\BBCP.
+\newblock {\Bem Cogniac: a discourse processing engine}.
+\newblock Ph.D.\ thesis.
+
+\bibitem[\protect\BCAY{Brennan, Friedman, \BBA\ Pollard}{Brennan
+  et~al.}{1987}]{Brennan}
+Brennan, S.~E., Friedman, M.~W., \BBA\ Pollard, C.~J. \BBOP 1987\BBCP.
+\newblock \BBOQ A centering approach to pronouns.\BBCQ\
+\newblock In {\Bem Proceedings of the 25th annual meeting on Association for
+  Computational Linguistics}, \mbox{\BPGS\ 155--162}.
+
+\bibitem[\protect\BCAY{Bunescu}{Bunescu}{2003}]{razvan03_asocweb}
+Bunescu, R. \BBOP 2003\BBCP.
+\newblock \BBOQ Associative anaphora resolution: A web-based approach.\BBCQ\
+\newblock In {\Bem Proceedings of the EACL 2003 Workshop on The Computational
+  Treatment of Anaphora}, \mbox{\BPGS\ 47--52}.
+
+\bibitem[\protect\BCAY{Clark}{Clark}{1977}]{Clark77bridging}
+Clark, H.~H. \BBOP 1977\BBCP.
+\newblock \BBOQ Bridging.\BBCQ\
+\newblock In {\Bem Thinking: Readings in Cognitive Science}.
+
+\bibitem[\protect\BCAY{Denis \BBA\ Baldridge}{Denis \BBA\
+  Baldridge}{2008}]{denis-baldridge:2008:EMNLP}
+Denis, P.\BBACOMMA\ \BBA\ Baldridge, J. \BBOP 2008\BBCP.
+\newblock \BBOQ Specialized Models and Ranking for Coreference
+  Resolution.\BBCQ\
+\newblock In {\Bem Proceedings of Empirical Methods in Natural Language
+  Processing}, \mbox{\BPGS\ 660--669.}\ Honolulu, Hawaii. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Fellbaum}{Fellbaum}{1998}]{fellbaum98_wn}
+Fellbaum, C. \BBOP 1998\BBCP.
+\newblock {\Bem WordNet: An Electronic Lexical Database}.
+\newblock MIT Press.
+
+\bibitem[\protect\BCAY{Ge, Hale, \BBA\ Charniak}{Ge et~al.}{1998}]{Ge:98}
+Ge, N., Hale, J., \BBA\ Charniak, E. \BBOP 1998\BBCP.
+\newblock \BBOQ A statistical approach to anaphora resolution.\BBCQ\
+\newblock In {\Bem Proceedings of the 6th Workshop on Very Large Corpora},
+  \mbox{\BPGS\ 161--170}.
+
+\bibitem[\protect\BCAY{Grosz, Weinstein, \BBA\ Joshi}{Grosz
+  et~al.}{1995}]{grosz95_centering}
+Grosz, B.~J., Weinstein, S., \BBA\ Joshi, A.~K. \BBOP 1995\BBCP.
+\newblock \BBOQ Centering: a framework for modeling the local coherence of
+  discourse.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 21}  (2), \mbox{\BPGS\
+  203--226}.
+
+\bibitem[\protect\BCAY{Hawkins}{Hawkins}{1978}]{hawkins78}
+Hawkins, J.~A. \BBOP 1978\BBCP.
+\newblock {\Bem Definiteness and Indefiniteness: A Study in Reference and
+  Grammaticality Prediction}.
+\newblock Croom Helm Linguistic Series. Taylor \& Francis.
+
+\bibitem[\protect\BCAY{Hofmann}{Hofmann}{1999}]{hofmann99_plsi}
+Hofmann, T. \BBOP 1999\BBCP.
+\newblock \BBOQ Probabilistic Latent Semantic Indexing.\BBCQ\
+\newblock In {\Bem Proceedings of the Twenty Second Annual International SIGIR
+  Conference on Research and Development in Information Retrieval},
+  \mbox{\BPGS\ 50--57}.
+
+\bibitem[\protect\BCAY{Iida, Inui, Matsumoto, \BBA\ Sekine}{Iida
+  et~al.}{2005}]{iida05_coref}
+Iida, R., Inui, K., Matsumoto, Y., \BBA\ Sekine, S. \BBOP 2005\BBCP.
+\newblock \BBOQ Noun Phrase Coreference Resolution in Japanese based on Most
+  Likely Candidate Antecedents Noun Phrase Coreference Resolution in Japanese
+  Based on Most Likely Antecedent Candidates.\BBCQ\
+\newblock In {\Bem Journal of Information Processing Society of Japan},
+  \mbox{\BPGS\ 831--844}.
+
+\bibitem[\protect\BCAY{Iida, Komachi, Inui, \BBA\ Matsumoto}{Iida
+  et~al.}{2007}]{iida07_ntc}
+Iida, R., Komachi, M., Inui, K., \BBA\ Matsumoto, Y. \BBOP 2007\BBCP.
+\newblock \BBOQ Annotating a Japanese Text Corpus with Predicate-Argument and
+  Coreference Relations.\BBCQ\
+\newblock In {\Bem Proceedings of the ACL 2007 Workshop on Linguistic
+  Annotation Workshop}, \mbox{\BPGS\ 132--139}.
+
+\bibitem[\protect\BCAY{Isahara, Bond, Uchimoto, Utiyama, \BBA\ Kanzaki}{Isahara
+  et~al.}{2008}]{isahara08_wnja}
+Isahara, H., Bond, F., Uchimoto, K., Utiyama, M., \BBA\ Kanzaki, K. \BBOP
+  2008\BBCP.
+\newblock \BBOQ Development of the Japanese WordNet.\BBCQ\
+\newblock In {\Bem Proceedings of the 6th International Language Resources and
+  Evaluation}.
+
+\bibitem[\protect\BCAY{Kudo \BBA\ Kazawa}{Kudo \BBA\ Kazawa}{2007}]{kudo07_gng}
+Kudo, T.\BBACOMMA\ \BBA\ Kazawa, H. \BBOP 2007\BBCP.
+\newblock {\Bem Web Japanese N-gram Version 1}.
+\newblock Gengo Shigen Kyokai.
+
+\bibitem[\protect\BCAY{Mccarthy \BBA\ Lehnert}{Mccarthy \BBA\
+  Lehnert}{1995}]{McCarthy}
+Mccarthy, J.~F.\BBACOMMA\ \BBA\ Lehnert, W. \BBOP 1995\BBCP.
+\newblock \BBOQ Using decision trees for coreference resolution.\BBCQ\
+\newblock In {\Bem Proceedings of the 14th International Joint Conference on
+  Artificial Intelligence}, \mbox{\BPGS\ 1050--1555}.
+
+\bibitem[\protect\BCAY{Mitkov}{Mitkov}{1997}]{Mitkov}
+Mitkov, R. \BBOP 1997\BBCP.
+\newblock \BBOQ Factors in anaphora resolution: they are not the only things
+  that matter. A case study based on two different approaches.\BBCQ\
+\newblock In {\Bem Proceedings of the 36th Annual Meeting of the Association
+  for Computational Linguistics and the 8th Conference of the European Chapter
+  of the Association for Computational Linguistics Workshop on Operational
+  Factors in Practical}.
+
+\bibitem[\protect\BCAY{Mitkov, Evans, Orasan, Barbu, Jones, \BBA\
+  Sotirova}{Mitkov et~al.}{2000}]{mitkov00_ana}
+Mitkov, R., Evans, R., Orasan, C., Barbu, C., Jones, L., \BBA\ Sotirova, V.
+  \BBOP 2000\BBCP.
+\newblock \BBOQ Coreference and anaphora: developing annotating tools,
+  annotated resources and annotation strategies.\BBCQ\
+\newblock In {\Bem Proceedings of the Discourse Anaphora and Anaphora
+  Resolution Colloquium}.
+
+\bibitem[\protect\BCAY{Murata, Isahara, \BBA\ Nagao}{Murata
+  et~al.}{1999}]{murata99_xnoy}
+Murata, M., Isahara, H., \BBA\ Nagao, M. \BBOP 1999\BBCP.
+\newblock \BBOQ Resolution of Indirect Anaphora in Japanese Sentences Using
+  Examples ``XnoY(Yof X)''.\BBCQ\
+\newblock In {\Bem Proceedings of the ACL 1999 Workshop on Coreference and Its
+  Applications}.
+
+\bibitem[\protect\BCAY{Nakaiwa, Shirai, Ikehara, \BBA\ Kawaoka}{Nakaiwa
+  et~al.}{1995a}]{Nakaiwa}
+Nakaiwa, H., Shirai, S., Ikehara, S., \BBA\ Kawaoka, T. \BBOP 1995a\BBCP.
+\newblock \BBOQ Extrasentential Resolution of {Japanese} Zero Pronouns using
+  Semantic and Pragmatic Constraints.\BBCQ\
+\newblock In {\Bem Proceedings of AAAI 1995 Spring Symposium Series, Empirical
+  Methods in Discourse Interpretation and Generation}. AAAI.
+
+\bibitem[\protect\BCAY{Nakaiwa, Shirai, Ikehara, \BBA\ Kawaoka}{Nakaiwa
+  et~al.}{1995b}]{nakaiwa95_extra}
+Nakaiwa, H., Shirai, S., Ikehara, S., \BBA\ Kawaoka, T. \BBOP 1995b\BBCP.
+\newblock \BBOQ Extrasentential Resolution of {Japanese} Zero Pronouns using
+  Semantic and Pragmatic Constraints.\BBCQ\
+\newblock In {\Bem Proceedings of AAAI 1995 Spring Symposium Series, Empirical
+  Methods in Discourse Interpretation and Generation}. AAAI.
+
+\bibitem[\protect\BCAY{Ng \BBA\ Cardie}{Ng \BBA\ Cardie}{2001}]{1073102}
+Ng, V.\BBACOMMA\ \BBA\ Cardie, C. \BBOP 2001\BBCP.
+\newblock \BBOQ Improving machine learning approaches to coreference
+  resolution.\BBCQ\
+\newblock In {\Bem Proceedings of the 40th Annual Meeting on Association for
+  Computational Linguistics}, \mbox{\BPGS\ 104--111}.
+
+\bibitem[\protect\BCAY{NLRI}{NLRI}{1964}]{nlsi64_bgh}
+NLRI\BED\ \BBOP 1964\BBCP.
+\newblock {\Bem Bunrui Goi Hyo (in Japanese)}.
+\newblock Shuei Shuppan.
+
+\bibitem[\protect\BCAY{Okumura \BBA\ Tamura}{Okumura \BBA\
+  Tamura}{1996}]{Okumura}
+Okumura, M.\BBACOMMA\ \BBA\ Tamura, K. \BBOP 1996\BBCP.
+\newblock \BBOQ Zero pronoun resolution in Japanese discourse based on
+  centering theory.\BBCQ\
+\newblock In {\Bem Proceedings of the 16th conference on Computational
+  linguistics}, \mbox{\BPGS\ 871--876}.
+
+\bibitem[\protect\BCAY{Poesio, Ishikawa, Walde, Vieira, \BBA\ Sinos}{Poesio
+  et~al.}{2002}]{poesio02_aclex}
+Poesio, M., Ishikawa, T., Walde, S. S.~I., Vieira, R., \BBA\ Sinos, R. \BBOP
+  2002\BBCP.
+\newblock \BBOQ Acquiring lexical knowledge for anaphora resolution.\BBCQ\
+\newblock In {\Bem Proceedings of the 3rd Conference on Language Resources and
+  Evaluation}, \mbox{\BPGS\ 1220--1224}.
+
+\bibitem[\protect\BCAY{Poesio, Mehta, Maroudas, \BBA\ Hitzeman}{Poesio
+  et~al.}{2004}]{poesio04_lbd}
+Poesio, M., Mehta, R., Maroudas, A., \BBA\ Hitzeman, J. \BBOP 2004\BBCP.
+\newblock \BBOQ Learning to resolve bridging references.\BBCQ\
+\newblock In {\Bem Proceedings of the 42nd Annual Meeting on Association for
+  Computational Linguistics}, \mbox{\BPGS\ 144--151}.
+
+\bibitem[\protect\BCAY{Poesio, Vieira, \BBA\ Teufel}{Poesio
+  et~al.}{1997}]{poesio97_bd}
+Poesio, M., Vieira, R., \BBA\ Teufel, S. \BBOP 1997\BBCP.
+\newblock \BBOQ Resolving bridging references in unresricted text.\BBCQ\
+\newblock In {\Bem Proceedings of the 42nd Annual Meeting on Association for
+  Computational Linguistics}, \mbox{\BPGS\ 1--6}.
+
+\bibitem[\protect\BCAY{Shalom \BBA\ J.}{Shalom \BBA\ J.}{1994}]{Lappin}
+Shalom, L.\BBACOMMA\ \BBA\ J., L.~H. \BBOP 1994\BBCP.
+\newblock \BBOQ An algorithm for pronominal anaphora resolution.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 20}  (4), \mbox{\BPGS\
+  535--561}.
+
+\bibitem[\protect\BCAY{Sidney \BBA\ Castellan}{Sidney \BBA\
+  Castellan}{1988}]{siegel88_kappa}
+Sidney, S.\BBACOMMA\ \BBA\ Castellan, N.~J. \BBOP 1988\BBCP.
+\newblock {\Bem Nonparametric statistics for the Behavioral Sciences}.
+\newblock McGraw Hill.
+
+\bibitem[\protect\BCAY{Soon, Ng, \BBA\ Lim}{Soon et~al.}{2001}]{soon01_coref}
+Soon, W.~M., Ng, H.~T., \BBA\ Lim, C.~Y. \BBOP 2001\BBCP.
+\newblock \BBOQ A Machine Learning Approach to Coreference Resolution of Noun
+  Phrases.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 27}  (4), \mbox{\BPGS\
+  521--544}.
+
+\bibitem[\protect\BCAY{Strube \BBA\ Muller}{Strube \BBA\
+  Muller}{2003}]{Strube:03}
+Strube, M.\BBACOMMA\ \BBA\ Muller, C. \BBOP 2003\BBCP.
+\newblock \BBOQ A machine learning approach to pronoun resolution in spoken
+  dialogue.\BBCQ\
+\newblock In {\Bem Proceedings of the 41st Annual Meeting on Association for
+  Computational Linguistics}, \mbox{\BPGS\ 168--175}.
+
+\bibitem[\protect\BCAY{Sumida, Yoshinaga, \BBA\ Torisawa}{Sumida
+  et~al.}{2008}]{sumi08_hypowiki}
+Sumida, A., Yoshinaga, N., \BBA\ Torisawa, K. \BBOP 2008\BBCP.
+\newblock \BBOQ Boosting Precision and Recall of Hyponymy Relation Acquisition
+  from Hierarchical Layouts in Wikipedia.\BBCQ\
+\newblock In {\Bem Proceedings of the 6th Language Resources and Evaluation
+  Conference}.
+
+\bibitem[\protect\BCAY{Vapnik}{Vapnik}{1995}]{vapnik95_svm}
+Vapnik, V.~N. \BBOP 1995\BBCP.
+\newblock {\Bem The Nature of Statistical Learning Theory}.
+\newblock Wiley.
+
+\bibitem[\protect\BCAY{Vieira \BBA\ Poesio}{Vieira \BBA\
+  Poesio}{2000}]{vieira00_defdesc}
+Vieira, R.\BBACOMMA\ \BBA\ Poesio, M. \BBOP 2000\BBCP.
+\newblock \BBOQ An Empirically Based System for Processing Definite
+  Descriptions.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 26}  (4), \mbox{\BPGS\
+  539--593}.
+
+\bibitem[\protect\BCAY{Yang, Zhou, Su, \BBA\ Tan}{Yang et~al.}{2003}]{1075119}
+Yang, X., Zhou, G., Su, J., \BBA\ Tan, C.~L. \BBOP 2003\BBCP.
+\newblock \BBOQ Coreference resolution using competition learning
+  approach.\BBCQ\
+\newblock In {\Bem Proceedings of the 41st Annual Meeting on Association for
+  Computational Linguistics}, \mbox{\BPGS\ 176--183}.
+
+\end{thebibliography}
+
+\begin{biography}
+
+  \bioauthor[:]{Naoya Inoue}{
+    He received his bachelor's in economics from Musashi University in
+    2008. He is currently a student in the Graduate School of
+    Information Science at Nara Institute of Science and
+    Technology. His research interests are in anaphora resolution,
+    discourse understanding and spoken dialogue systems. }
+
+\bioauthor[:]{Ryu Iida}{
+  He received his master and Ph.D degrees of engineering from Nara
+  Institute of Science and Technology in 2004 and in 2007.  He is
+  currently an assistant professor in the School of Information
+  Science and Engineering at Tokyo Institute of Technology. His
+  research interests include anaphora resolution and information
+  extraction.  }
+
+\bioauthor[:]{Kentaro Inui}{
+  He received his doctoral degree of engineering from Tokyo Institute
+  of Technology in 1995. Having experienced Assistant Professor at
+  Tokyo Institute of Technology and Associate Professor at Kyushu
+  Institute of Technology, he has been Associate Professor of Graduate
+  School of Information Science at Nara Institute of Science and
+  Technology since 2002. His research interests include natural
+  language understanding and knowledge engineering.  }
+
+\bioauthor[:]{Yuji Matsumoto}{
+  He is currently a Professor of Information Science, Nara Institute
+  of Science and Technology.  He received his M.S. and Ph.D. degrees
+  in information science from Kyoto University in 1979 and in 1989.
+  He joined Machine Inference Section of Electrotechnical Laboratory
+  in 1979.  He has then experienced an academic visitor at Imperial
+  College of Science and Technology, a deputy chief of First
+  Laboratory at ICOT, and an associate professor at Kyoto University.
+  His main research interests are natural language understanding and
+  machine learning.  }
+
+\end{biography}
+
+\biodate
+
+
+
+
+\end{document}

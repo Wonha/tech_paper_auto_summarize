@@ -1,0 +1,953 @@
+\documentstyle[graphicx,jnlpbbl,fleqn]{jnlp_j_b5_2e}
+\def\argmax{}
+\newtheorem{definition_raw}{}
+\newtheorem{algorithm_raw}{}
+\newtheorem{thesis_raw}{}
+\newenvironment{definition}[1]{}{}
+\newenvironment{thesis}[1]{}{}
+\newenvironment{algorithm}[1]{}{}
+\def\tfrac#1#2{}
+\setcounter{page}{3}
+\setcounter{巻数}{8}
+\setcounter{号数}{3}
+\setcounter{年}{2001}
+\setcounter{月}{7}
+\受付{2000}{7}{14}
+\採録{2001}{4}{13}
+
+\setcounter{secnumdepth}{2}
+
+\title{文節重要度と係り受け整合度に基づく日本語文簡約アルゴリズム}
+\author{小黒 玲\affiref{UEC}
+   \and 尾関 和彦\affiref{UEC}
+   \and 張 玉潔\affiref{ATR}
+   \and 高木 一幸\affiref{UEC}
+}
+
+\headauthor{小黒 玲・尾関 和彦・張 玉潔・高木 一幸}
+\headtitle{文節重要度と係り受け整合度に基づく日本語文簡約アルゴリズム}
+
+\affilabel{UEC}{電気通信大学 電気通信学研究科}
+{Graduate School of Electro-Communications,
+ The University of Electro-Communications}
+\affilabel{ATR}{ATR音声言語通信研究所}
+{ATR Spoken Language Tanslation Research Laboratories}
+
+\jabstract{
+これまで主に検討されてきた文書要約手法は，文集合から重要文を抽出するもの
+である．
+この方法によれば，段落などを要約した結果として誤りのない文の
+集合が得られる．
+しかし，目的によっては更に要約率を上げるため，または段落などの単位での要
+約が不適当であるときなど，一文毎の簡約が必要となる場合がある．
+このような文書要約手法では，簡約文が日本語として自然な文であることが重要
+ppである．
+そこで本論文では，文の簡約を「原文から，文節重要度と文節間係り受け整合度
+の総和が最大になる部分文節列を選択する」問題として定式化し，それを解くた
+めの効率の良いアルゴリズムを提案する．
+本稿の定式化では簡約文の評価に文節間の係り受け整合度が用いられていること
+から，簡約結果は適切な係り受け構造を持つことが期待できる．
+したがって本手法を用いることにより，自然で正確な簡約文を高速に生成できる
+可能性がある．
+このアルゴリズムを実用するには，文節重要度と係り受け整合度の適切な設定が
+不可欠であるが，本稿ではこれらについては議論せず，アルゴリズムの導出と計
+算効率，実装法などに重点を置いて報告する．
+}
+
+\jkeywords{文書要約，構文解析，係り受け構造，文節重要度，文簡約}
+
+\etitle{
+A Japanese Sentence Compaction Algorithm Based on Phrase \\
+Significance and Inter-Phrase Dependency
+}
+\eauthor{Rei Oguro\affiref{UEC}
+    \and Kazuhiko Ozeki\affiref{UEC}
+    \and Yujie Zhang\affiref{ATR}
+    \and Kazuyuki Takagi\affiref{UEC}
+}
+
+\eabstract{
+Conventional methods for text summarization are mostly based 
+ on the idea of selecting important sentences from a set of 
+ given sentences such as a paragraph or a whole text. 
+Those methods have a merit that each selected sentence remains 
+ unchanged and is thus correct. 
+However, it is sometimes necessary to shorten each sentence, 
+ when a higher compaction rate is required, or when a 
+ paragraph-by-paragraph summarization is not adequate. 
+In such sentence compaction, it is important that a 
+ shortened sentence is natural as a Japanese sentence. 
+In this paper, the sentence compaction problem is formulated as 
+ ``a problem of selecting a subsequence of phrases from a given sentence 
+ that maximizes the sum of phrase significance scores and inter-phrase 
+ dependency scores.''
+Then, an efficient algorithm to solve this problem is proposed.
+Since this method takes inter-phrase dependency into account, 
+ a shortened sentence is expected to be grammatically correct 
+ and natural.
+This paper is focused on the derivation, computational complexity, 
+ and implementation issues of the algorithm, and will not discuss 
+ the matter of how to define the phrase significance score and the 
+ inter-phrase dependency score, though it will be a crucially important 
+ matter in practical applications.
+}
+
+\ekeywords{text summarization, parsing, dependency structure, 
+phrase significance, sentence compaction}
+
+\begin{document}
+\maketitle
+
+\section{はじめに}
+電子化テキストの爆発的増加に伴って文書要約技術の必要性が高まり，
+この分野の研究が盛んになっている\cite{okumura}．
+自動要約技術を使うことにより，読み手の負担を軽減し，短時間で必要な情報を
+獲得できる可能性があるからである．
+従来の要約技術は，文書全体もしくは段落のような複数の文の中から，重要度の
+高い文を抽出することにより文書全体の要約を行うものが多い．
+このような方法で出力される個々の文は，原文書中の文そのものであるため，文
+間の結束性に関してはともかく，各文の正しさが問題になることはない．
+しかし，選択された文の中には冗長語や不要語が含まれることも
+あり，またそうでなくとも目的によっては個々の文を簡約することが必要になる．
+そのため，特にニュース字幕作成を目的として，表層文字列の変換
+\cite{tao,kato}を行ない，1文の文字数を減らすなどの研究が行われている．
+また，重要度の低い文節や単語を削除することによって文を簡約する手法も研究
+されており，単語重要度と言語的な尤度の総和が最大となる部分単語列を動的計
+画法によって求める方法\cite{hori}が提案されている．
+しかし，この方法では trigram に基づいた局所的な言語制約しか用いていない
+ので，得られた簡約文が構造的に不自然となる可能性がある．
+削除文節の選択に係り受け関係を考慮することで，原文の部分的な係り受け構造
+の保存を図る方法\cite{mikami}も研究されているが，この方法ではまず一文全
+体の係り受け解析を行い，次に得られた構文木の中の冗長と考えられる枝を刈り
+取るという，二段階の処理が必要である．
+そのため，一つの文の係り受け解析が終了しなければ枝刈りが開始できず，
+枝刈りの際に多くの情報を用いて複雑な処理を行うと，文の入力が終了して
+から簡約された文が出力されるまでの遅延時間が長くなる可能性がある．
+
+本論文では，文の簡約を「原文から, 文節重要度と文節間係り受け整合度の総和
+が最大になる部分文節列を選択する」問題として定式化し，それを解くための効
+率の良いアルゴリズムを提案する．
+この問題は，原理的には枚挙法で解くことが可能であるが，計算量の点で実現が
+困難である．
+本論文ではこの問題を動的計画法によって効率よく解くことができることを示す
+\cite{oguro,oguro2}．
+
+文の簡約は，与えられた文から何らかの意味で``良い''部分単語列あるいは部分
+文節列を選択することに尽きる．
+そのとき，削除/選択の単位として何を選ぶか，選ばれる部分単語列あるいは部
+分文節列の``良さ''をどのように定義するか，そして実際の計算をどのように行
+うか，などの違いにより，種々の方式が考えられる．
+本論文では，削除/選択の単位として文節を採用している．
+この点は，三上らの方法と同じであるが，一文を文末まで構文解析した後で枝刈
+りを行うという考え方ではなく，部分文節列の``良さ''を定量的に計るための評
+価関数を予め定義しておき，その基準の下で最適な部分文節列を選択するという
+考え方を採る．
+その点では堀らの方法に近いが，削除/選択の単位がそれとは異なる．
+また評価関数の中に二文節間の係り受け整合度が含まれているので，実際の計算
+は係り受け解析に近いものになり，その点で堀らの方法とは非常に異なったもの
+となる．
+さらに，このアルゴリズムでは文頭から係り受け解析と部分文節列の選択が同時
+に進行するので，一つの文の入力が終了してから，その文の簡約文が出力される
+までの遅延時間を非常に短くできる可能性がある．
+オンラインの字幕生成のような応用では，この遅延時間はできるだけ短い方が良
+い．
+
+以下では，あらためて文簡約問題の定式化を行い，それを解くための再帰式とア
+ルゴリズム，および計算量について述べる．
+そして，最後に文の簡約例を掲げ，このアルゴリズムによって自然な簡約文が得
+られることを示す．
+
+\section{問題の定式化}
+
+文節を削除/選択の単位として行う文の簡約は，原文からできるだけ``良い''
+部分文節列を選択することであると考えることができる．
+この問題を明確に定式化するためには，文節列の``良さ''を計る評価関数が必要
+である．
+このような評価関数は，理想的には，文脈を考慮した上で原文の意味を理解し，
+その意味を部分文節列がどの程度保つかという観点から定められるべきものであ
+ろう．
+しかし，そのような評価関数を構成することは現時点では困難である．
+そもそも，文の``意味''とは何かということさえ，現時点で明確に定義づけるこ
+とは困難と思われる．
+そこで，本研究では，各文節の重要度と二文節間の係り受け整合度という限られ
+た情報のみを用いて，現実的に定義や計算ができるようなアプローチを採る．
+すなわち，文の簡約においては，
+
+\begin{itemize}
+\item[a)] 簡約された文が原文の持つ重要な情報をできるだけ保つこと，
+\item[b)] 簡約された文ができるだけ文法的に良い構造を持つこと．
+\end{itemize}
+\noindent
+の２つが重要であることを考慮し，ここでは，部分文節列の``良さ"を計る評価
+関数を，a),b) に対応した２つの評価関数の和として以下のように定義する．
+
+まず，原文を文節列として $w_{0}w_{1}\cdots w_{M-1}$ と表し，
+その中の長さ $l\/$ の部分文節列 $w_{k_{0}}w_{k_{1}}\cdots w_{k_{l-1}}$ 
+を考える．
+もし，各文節 $w_{m}$ の重要度を表す関数 $q(m)$ が与えられているとすると，
+この部分文節列の重要度はそれらの総和 $\sum_{i=0}^{l-1}q(k_i)$ で計ること
+ができよう．
+もちろん，他の定義も可能であるが，ここでは，これを部分文節列の重要度を計
+る評価関数として採用する．
+また，文節 $w_{m}$ が文節 $w_{n}$ に係るときの係り受け整合度 $p(m,n)$ が
+与えられているとすると，このような係り受け整合度の総和が大きい値となる係
+り受け構造が存在するような文節列は，日本語文として見たとき，
+文法的に``良い''文節列であると考えられる．
+文節列 $w_{k_{0}}w_{k_{1}}\cdots w_{k_{l-1}}$ 上の係り受け構造は，
+係り文節番号を受け文節番号に対応させる写像
+
+\begin{displaymath}
+c: \{k_{0}, k_{1}, \cdots , k_{l-2}\} \longrightarrow
+   \{k_{1}, k_{2}, \cdots , k_{l-1}\}
+\end{displaymath}
+によって表される．
+ただし $c$ は
+\begin{itemize}
+\item[(1)]後方単一性: $k_{m} < c(k_{m})$
+\item[(2)]非交差性: $m < n$ ならば 
+	  $[c(k_m) \leq k_n \mbox{または} c(k_n) \leq c(k_m)]$
+\end{itemize}
+を満たす必要がある．
+本研究では，写像 $c$ を用いて，
+文節列 $w_{k_{0}}w_{k_{1}} \cdots w_{k_{l-1}}$
+の文法的な``良さ''を $\max _{c} \sum_{i=0}^{l-2}p(k_{i}, c(k_{i}))$
+で定義することとする．
+ここで，最大化は可能な全ての係り受け構造に対して行う．
+以上のことから，本論文では文節列 $w_{k_{0}}w_{k_{1}}\cdots w_{k_{l-1}}$ 
+の``良さ''を計る評価関数 $g$ を次のように定義する:
+
+\begin{displaymath}
+g(k_{0},k_{1},...,k_{l-1}) 
+\stackrel{\triangle}{=} \left\{
+  \begin{array}{l}
+   q(k_0) ,\ l=1のとき \\
+   \max_c \sum_{i=0}^{l-2}p(k_i,c(k_i))+\sum_{i=0}^{l-1}q(k_i) ,
+    2 \leq l\ のとき
+  \end{array}
+  \right.
+\end{displaymath}
+\noindent
+評価関数 $g$ を用いると，$M$ 文節からなる原文を $N$ 文節から
+なる文に簡約する問題は次のように述べることができる．
+
+\bigskip
+\noindent
+{\bf 文簡約問題\\}
+文節列  $w_{0}w_{1}\cdots w_{M-1}$ の部分文節列
+ $w_{k_{0}}w_{k_{1}}\cdots w_{k_{N-1}}$
+ $(0\leq k_{0} < k_{1} < \cdots < k_{N-1} \leq M-1 )$
+の中で，関数 $g(k_{0},k_{1},\cdots,k_{N-1})$
+が最大になるものを求めよ．
+\bigskip
+
+与えられた原文の部分文節列の総数は有限である．
+また，各部分文節列上の係り受け構造の総数も有限である．
+したがって，上の文簡約問題は，原理的には枚挙法で解くことができるが，計算
+量の点で現実的でない．
+本論文では，動的計画法の原理に基づき，この問題を効率的に解くアルゴリズム
+を導出する．
+
+評価関数 $g$ の定義には，文節重要度 $q$ と係り受け整合度 $p$ 
+の２つの関数が含まれている．
+これらの関数をどのように定義するかは実際の応用においては重要な問題である
+が，本論文ではこれについては議論しない．
+しかし，文節重要度 $q$ の定め方については，例えば\cite{hori}のような方法
+が考えられ，係り受け整合度 $p$ の定め方については係り受け解析の分野で研
+究されている\cite{ehara,zhang}などの方法が利用できると考えられる．
+{\bf 3}節で導かれるアルゴリズムは，これらの関数の定義には依らない．
+
+二文節間の係り受け整合度の総和は，従来，係り受け解析にも用いられている評
+価関数であり，その意味で本手法による簡約文は，係り受け整合度 $p$ が適切
+に設定されていれば，原文の部分的な係り受け構造を保った自然な係り受け構造
+を持つことが期待できる．
+しかし，それにより原文の意味がどの程度保たれるかについては，最終的には人
+間の簡約結果と比較するなどの評価が必要となる．
+本論文では，そこまでは立ち入らず，上のような評価関数を用いて問題を定式化
+したとき，それを現実的な計算量で解くアルゴリズムが構成できることを示すこ
+とに重点を置いている．
+
+\section{再帰式とアルゴリズム}
+\subsection{再帰式}
+ 文簡約問題，すなわち関数 $g(k_0,k_1,{\cdots},k_{N-1})$ の最大化問題を解
+くために，その ``部分解とそれらの間の関係'' を考える．
+まず，先頭文節を$w_m$ に，末尾文節を$w_n$ に，文節列長を$l\/$ に
+固定したときの最大化を考え，その最大値を表す関数$f$ を以下のように定義す
+る．
+
+\begin{definition}{最大値関数$f$} \hfill
+\[
+ \textstyle
+ f(m,n,l) \stackrel{\triangle}{=}
+  \max_{m=k_0<k_1<{\cdots}<k_{l-1}=n}g(k_0,k_1,{\cdots},k_{l-1})
+\]
+\end{definition}
+
+\noindent
+そうすると $f(m,n,l)$ は次の再帰式を満たすことが示される．
+証明は付録とする．
+
+\begin{thesis}{再帰式} \label{def:recursion} \hfill
+\begin{itemize}
+ \item[1.] $m=n$のとき: ( $l\ $の動く範囲: $l=1$のみ)
+  \begin{equation}
+   f(m,n,l)=q(m)
+    \label{eqn:eqn1}
+  \end{equation}
+ \item[2.] $m<n$のとき: ( $l\ $の動く範囲: $2 \leq l \leq n-m+1$)
+ \item[i.] $l=2$のとき
+  \begin{equation}
+	f(m,n,l)=f(m,m,1)+f(n,n,1)+p(m,n)
+	 \label{eqn:eqn2}
+  \end{equation}\vspace*{1zh}
+ \item[ii.] $l=3$のとき
+       \begin{eqnarray*}
+	\lefteqn{
+	 f(m,n,l)=
+	 \max
+	 \left\{
+	  \begin{array}{l}
+	    f(m,m,1)+\max_{m{\!<\!}m'{\!<\!}n}\{f(m',n,2)\}+p(m,n); 
+	    \hspace*{3.5zw}\hfill (\arabic{equation}\rm a)\\
+	    \max_{m{\!<\!}n'{\!<\!}n}\{f(m,n',2)+p(n',n)\}+f(n,n,1)
+	    \hfill (\arabic{equation}\rm b)
+	  \end{array}
+	\right. } \label{eqn:eqn3}
+       \end{eqnarray*} \addtocounter{equation}{1}
+       \vspace*{1zh}
+
+ \item[iii.] $l \geq 4$のとき
+       \begin{eqnarray*}
+	\lefteqn{
+	 f(m,n,l)=}\\
+	&&
+	 \max
+	 \left\{
+	  \begin{array}{l}
+	    f(m,m,1)+\max_{m{\!<\!}m'<n-l+3}\{f(m',n,l-1)\}+p(m,n);
+	    \hspace*{3.0zw} \hfill (\arabic{equation}\rm a) \\
+	   \\
+	   \max_{1{\!<\!}l'{\!<\!}l-1,{\,}m+l'-2{<}n'{\!<\!}m'{<}n-l+l'+2}\\
+	    \{f(m,n',l')+f(m',n,l-l')+p(n',n)\};
+	    \hfill (\arabic{equation}\rm b)\\
+	    \\
+	    \max_{m+l-3{<}n'{\!<\!}n}\{f(m,n',l-1)+p(n',n)\}+f(n,n,1)
+	    \hfill (\arabic{equation}\rm c)
+	  \end{array}
+	\right. \label{eqn:common}
+       \end{eqnarray*} \addtocounter{equation}{1}
+ \end{itemize}
+\end{thesis}
+
+\subsection{アルゴリズムの構成}
+ 再帰式は$2{\;\leq\;}l\/$ のとき，$l'{<\,}l\/$ となる$f(m, \cdot , l')$
+と $f(\cdot, n, l-l')$ の全てが既に計算されていれば，高々3つの変数に関す
+る最大化問題を解くことにより$f(m,n,l)$ が計算できることを表している．
+
+すなわち式(\ref{eqn:eqn1})より， $f(\cdot,\cdot,1)$ は，入力文節の重要度
+から直接計算できる．
+また，式(\ref{eqn:eqn2})より2文節の重要度とその間の係り受け整合度の和か
+ら，$f(\cdot,\cdot,2)$が計算できる．
+これらから始めて，$l=3$ のときは $f(\cdot,\cdot,3)$ を2変数$m',n'$ が制
+約条件を満たす範囲で最大化を行ない，$4 \leq l\ $では3変数
+$m',n',l'\/$ が制約条件を満たす範囲で最大化を行なうという再帰的な処理に
+よって，$f(m,n,l)$を計算することができる．
+
+
+\begin{figure}[hbtp]
+ \begin{center}
+\includegraphics[width=70mm,clip]{table2.ps}
+  \caption{$f(m,n,l)$ を計算するとき参照される領域}
+  \label{fig:region}
+ \end{center}
+\end{figure}
+
+以上の事実に注意すると，計算済の $f(\cdot,\cdot,\cdot)$ の値を
+図\ref{fig:region} のようなテーブルの升目に順次埋めていくアルゴリズムが
+構成できる．
+図\ref{fig:region} には $f(m,n,l)$ を埋める場合を示した．
+再帰式 によると，$f(m,n,l)$ の計算は，その左の領域 $f(m,\ast,1)
+\sim f(m,\ast,l-1)$ から $f(m,n',l')$ を，その下の領域 $f(\ast,n,1)
+\sim f(\ast,n,l-1)$ から $f(m',n,l-l')$ を選択する組合わせの中から，そ
+れぞれの持つ$f$ の値と両者の係り受け構造間の係り受け整合度の総和が最大と
+なるような $m',n',l'\/$ を探索することで行なわれていく．
+このとき，係り文節$w_m$ は必ず受け文節$w_n$ より文頭側にあること，
+文節列$w_mw_{m+1}{\cdots}w_n$を簡約する場合，簡約後の部分文節列の長さは
+原文節の長さより大きくなることがないことから，変数には以下のような
+制約が課せられる．
+\begin{itemize}
+ \item $m{\;\leq\;}n$
+ \item $m=n$のとき$l=1$
+ \item $m<n$のとき$1<l{\;\leq\;}n-m+1$
+\end{itemize}
+これを図示したものが図\ref{fig:region2} である．
+また，ここでは $1 \leq N \leq M$ を満たす任意の $N$ に対して最適解が探索
+できる領域を考えているが，$N$ の最大値 $N_{max}$ があらかじめ定まってい
+るときは，$l\/$ の動く範囲を $1 \leq l \leq \min\{n-m+1,{\,}N_{max}\}$ 
+に制限できる．
+したがって $N_{max} < M$ の場合には探索領域はさらに小さくてすみ，計算量
+と記憶量を減らすことができる．
+
+\begin{figure}[hbtp]
+\vspace{-3mm}
+ \begin{center}
+\includegraphics[width=70mm,clip]{table3.ps}
+  \caption{制約条件を満たさない領域}
+  \label{fig:region2}
+ \end{center}
+\end{figure}
+
+ 図\ref{fig:region} のテーブルの升目を埋める順序については，
+$f(m, n, l)$ を計算する際に $f(m, n', l')$ と $f(m', n, l-l')$
+が制約条件の範囲で全て計算済であるという条件さえ満たしていればよいので，
+その順序には大きな自由度がある．
+変数 $l,m,n$ を動かすとき，アルゴリズム\ref{alg:recursion} のように最外
+ループを $n$ に関するループとすると，入力文節に同期した処理が可能なアル
+ゴリズムとなる．
+すなわち，文頭文節からある文節までが入力されたとき，そこまでの情報に基づ
+いてできる計算は，それより後の文節に関係なく済ませることができる．
+そして，もし必要ならば，その時点で{\bf 3.3}に述べるバックトレースを行い，
+そこまでの入力に対する簡約文を出力することができる．
+また，最外ループを $l\/$ に関するループとすれば，そのループの第 $l$ ステッ
+プの処理が終わった時点で，$N=l$としてバックトレースが可能になるので，文
+節数$1$から順に求めたい文節数までの簡約文を出力するアルゴリズムが構成で
+きる．
+
+\begin{algorithm}{再帰式の実行} \label{alg:recursion}
+ \rm
+ \begin{tabbing}
+  \hspace*{5mm} \= \hspace*{3mm} \= \hspace*{3mm} \= \hspace*{3mm} \=
+  \hspace*{3mm} \= \hspace*{3mm} \= \hspace*{3mm} \+ \kill
+
+ {\bf for} $n:= 0$ {\bf to} $M-1$ {\do} \+ \\
+   {\bf begin}\\
+   {\bf for} $m:= n$ {\bf downto} $0$ {\bf do} \+ \\
+     {\bf begin}\\
+     {\bf if} ($m= n$) {\bf then} $f(m, m, 1):= q(m)$;
+                         \` \makebox[10zw]{\dotfill 式(\ref{eqn:eqn1})}\\
+     {\bf else} \+ \\
+       {\bf begin}\\
+       {\bf for} $l:= 2$ {\bf to} $n-m+1$ {\bf do} \+ \\
+         {\bf begin}\\
+         {\bf if} ($l= 2$) {\bf then} $f(m, n, l):=$ ...;
+                         \` \makebox[10zw]{\dotfill 式(\ref{eqn:eqn2})}\\
+         {\bf else} {\bf if}($l= 3$) {\bf then} $f(m, n, l):=$ ...;
+                         \` \makebox[10zw]
+                         {\dotfill 式(\ref{eqn:eqn3}a,\ref{eqn:eqn3}b)}\\
+         {\bf else} $f(m, n, l):=$ ...;
+                         \`  \makebox[10zw]
+                         {\dotfill 式(\ref{eqn:common}a,
+                                      \ref{eqn:common}b,
+                                      \ref{eqn:common}c)}\\
+        {\bf end}; \- \\
+      {\bf end}; \- \\
+    {\bf end}; \- \\
+  {\bf end};
+ \end{tabbing}
+\end{algorithm}
+
+\subsection{バックトレース}
+
+アルゴリズム１の計算結果から最適部分文節列を構成することを，ここでは「バッ
+クトレース」という．
+ここで用いるバックトレースの方法は\cite{ozeki}の手法に類似したものであり，
+形式的な証明も可能であるが，ここでは，考え方の概略とアルゴリズムを示すに
+とどめる．
+
+まず「係り受け構造の分解」について述べる．
+$v_{1}v_{2}\cdots v_{K}$ を文節列とし，その上の係り受け構造 $c$ を考える．
+$c$ において，末尾の文節 $v_{K}$ に係る最も文頭側の文節を $v_{k}$ とする
+と，$c$ は $v_{1}v_{2}\cdots v_{k}$ 上の係り受け構造と
+$v_{k+1}v_{2}\cdots v_{K}$ 上の係り受け構造に分解できる．
+ただし，$v_{k}$ が $v_{K}$ に係るという情報を加えておく必要がある
+\cite{ozeki}．
+付録の証明から明らかなように，$f(m, n, l)$ に対する再帰式の導出において
+は，この事実が以下のように利用されている．
+$f(m, n, l)$ を計算するためには，$w_{m}$ から始まり，$w_{n}$ で終わる長
+さ $l$ の部分文節列上の係り受け構造を考慮する必要がある．
+上に述べたことから，そのような係り受け構造は，$w_{n}$ に係る最も文頭側の
+文節を $w_{n^{\prime}}$ とするとき，$w_{n}$ から始まり $w_{n^{\prime}}$ 
+で終わる長さ $l^{\prime}$ の部分文節列上の係り受け構造と，
+ある文節 $w_{m^{\prime}}$ から始まり $w_{n}$ で終わる長さ $l-l^{\prime}$ 
+の部分文節列上の係り受け構造に分解できる．
+ただし，$w_{n^{\prime}}$ が $w_{n}$ に係るという情報を加えておく必要があ
+る．
+さて，再帰式の証明が示すように，$f(m, n, l)$ を求めるためには，評価関数 
+$g$ を，上のように分解した部分文節列，および係り受け構造に関して最大化す
+ればよい．
+それは，
+\begin{displaymath}
+f(m, n^{\prime}, l^{\prime})+f(m^{\prime}, n, l-l^{\prime})
++p(n^{\prime}, n) 
+\end{displaymath}
+を，$l^{\prime}$，$m^{\prime}$，$n^{\prime}$ に関して最大化することに帰
+着する．
+最大値を与えるこれらの変数の値を再び $l^{\prime}$，$m^{\prime}$，
+$n^{\prime}$ と表せば，以上のことから，$f(m, n, l)$ を与える最適部分文節
+列 $A$ は $f(m, n^{\prime}, l^{\prime})$ を与える最適部分文節列 $B$ と 
+$f(m^{\prime}, n, l-l^{\prime})$ を与える最適部分文節列 $C$ の連接で与え
+られること，また $A$ 上の最適係り受け構造は $B$ 上の最適係り受け構造と 
+$C$ 上の最適係り受け構造を併せたものに，$w_{n^{\prime}}$ が $w_{n}$ に係
+るという情報を加えたものになることが分かる．
+また，$m=n$ の場合は $l=1$ しか許されず，$f(m, n, l)$ を与える最適部分文
+節列は``$w_{m}$''となる．
+したがって，アルゴリズム\ref{alg:recursion} の各ステップで最大値を与える
+$l^{\prime}$，$m^{\prime}$，$n^{\prime}$ の値(最適分割点)を記憶しておけ
+ば，アルゴリズム\ref{alg:recursion} の終了後，任意の長さの簡約文と，必要
+ならばその上の係り受け構造を再帰的に得ることができる．
+最適分割点はバックトレースのための，いわゆるバックポインタの役割を果たす．
+
+実際の計算では，アルゴリズム\ref{alg:recursion} の各ステップにおいて最適
+分割点を記憶するための変数 $bp[m, n, l]$ を用意する．
+最適分割点は再帰式中の場合に応じて，次のように設定される．
+$m',n',l'\/$ は再帰式の中で最大値を与えるそれらの変数の値を表す．
+\begin{definition}{最適分割点} \label{def:opt_point} \hfill\\
+\begin{itemize}
+ \item[a)] $m=n$の場合 \\
+	何も記憶する必要がない．
+ \item[b)] $m<n$の場合 \\
+       \begin{tabular}{rlll}
+       {\rm (\ref{eqn:eqn2})}の場合
+	& $bp[m,n,l].lp=1,  $ & $bp[m,n,l].np=m, $ & $bp[m,n,l].mp=n$ \\
+       {\rm (\ref{eqn:eqn3}a)}の場合
+	& $bp[m,n,l].lp=1,  $ & $bp[m,n,l].np=m, $ & $bp[m,n,l].mp=m'$ \\
+       {\rm (\ref{eqn:eqn3}b)}の場合
+	& $bp[m,n,l].lp=l-1,$ & $bp[m,n,l].np=n',$ & $bp[m,n,l].mp=n$ \\
+       {\rm (\ref{eqn:common}a)}の場合
+	& $bp[m,n,l].lp=1,  $ & $bp[m,n,l].np = m ,$ & $bp[m,n,l].mp = m'$ \\
+       {\rm (\ref{eqn:common}b)}の場合
+	& $bp[m,n,l].lp=l', $ & $bp[m,n,l].np = n',$ & $bp[m,n,l].mp = m'$ \\
+       {\rm (\ref{eqn:common}c)}の場合
+	& $bp[m,n,l].lp=l-1,$ & $bp[m,n,l].np = n',$ & $bp[m,n,l].mp = n $
+       \end{tabular}
+ \end{itemize}
+\end{definition}
+
+与えられた文節列から $1 \leq N \leq M$ の範囲で任意に指定した長さ $N$ の
+最適部分文節列を探索するには，まず，最も評価値の高い $f(m_o,n_o,N)$ を見
+つけることから始める．
+そして，この $m_o, n_o, N$ を出発点として，
+アルゴリズム\ref{alg:backtrace} で示す再帰関数を用いて最適部分文節列が得
+られる:
+\begin{eqnarray*}
+  (m_o,n_o) & := & \textstyle \argmax_{m,n}f(m,n,N); \\
+  最適部分文節列 & := & out(m_o,n_o,N)
+\end{eqnarray*}
+\noindent
+ここでは，最適分割点が一意に定まる場合を考えているが，これが複数
+個存在する場合には，その全てを記憶し，そのそれぞれに対して最適部分文節列
+を求めればよい．
+異なる最適分割点から，同じ最適部分文節列が得られる可能性があるが，
+この場合，これらの最適部分文節列上には複数の最適係り受け構造が存在してい
+る．
+
+\begin{algorithm}{バックトレース}\label{alg:backtrace}
+ \rm
+ ($\oplus$ は文字列の連接を表す)
+ \begin{tabbing}
+  \hspace*{5mm} \= \hspace*{3mm} \= \hspace*{3mm} \= \hspace*{3mm} \=
+  \hspace*{3mm} \= \hspace*{3mm} \= \hspace*{3mm} \+ \kill
+    {\bf function}\ $out(m, n, l)$: char string; \+ \\
+      {\bf begin}\\
+      {\bf if}\ ($m=n$) {\bf then} $out:= $``$w_{m}$'';\\
+      {\bf else}\\
+      {\bf begin} \+ \\
+         $l^{\prime}:= bp[m, n, l].lp$;\\
+         $n^{\prime}:= bp[m, n, l].np$;\\
+         $m^{\prime}:= bp[m, n, l].mp$;\\
+         $out:=out(m, n',l') \oplus out(m', n, l-l')$; \- \\
+     {\bf end}; \- \\  
+     {\bf end}.
+\end{tabbing}
+\end{algorithm}
+
+ここで，本アルゴリズムにおける最適分割点と簡約文の係り受け構造の対応につ
+いて述べる．
+$bp[m,n,l]$ は文節列 $w_m \cdots w_n$ を長さ $l\/$ に簡約するときの最適
+分割点であるが，再帰式の証明(付録)からわかるように，$ n'= bp[m,n,l].np$ 
+は簡約結果において$w_n$ に係る文節の中で最も文頭側にあるものの番号である．
+したがって，$w_{n'}$ は $w_n$ に係ることがわかる．
+これを再帰的に繰り返せば，簡約文中の全ての文節の係り先がわかる．
+すなわち，アルゴリズム\ref{alg:backtrace} を用いてバックトレースを行なう
+とき，$n'=bp[m,n,l].np$ ならば $c(n')=n$ であることを記憶し，まとめて出
+力すれば，簡約文中の全ての文節に対する $c$ の値，つまり係り受け構造を知
+ることができる．
+
+\subsection{計算量}
+
+まず，アルゴリズム\ref{alg:recursion} における加算回数について考察する．
+計算ステップ $m, n, l$ における加算回数を $F(m, n, l)$ とすると $f(m, n,
+l)$ に対する再帰式より，次のことが容易に分かる．
+
+\renewcommand{\baselinestretch}{} \tiny \normalsize
+\begin{itemize}
+ \item[a)] $l=1$ のとき:
+	 \begin{eqnarray*}
+	  F(m, n, 1) & = & 0 \makebox[10zw]{\hfill (式(1)より)}
+	 \end{eqnarray*}
+
+ \item[b)] $l=2$ のとき:
+	 \begin{eqnarray*}
+	  F(m, n, 2) & = & 2 \makebox[10zw]{\hfill (式(2)より)}
+	 \end{eqnarray*}
+
+ \item[c)] $l=3$ のとき:
+	 \begin{eqnarray*}
+	  F(m, n, 3)&=&2  \makebox[18zw]{\hfill (式(3a)より)}\\
+	  & & {} + (n-m-1)+1 \makebox[10zw]{\hfill (式(3b)より)}\\
+	  &=& n-m+2
+	 \end{eqnarray*}
+ \item[d)] $l\geq 4$ のとき：
+	 \begin{eqnarray*}
+	  F(m, n, l)&=&2 \makebox[23.5zw]{\hfill (式(4a)より)}\\
+	  & & {} + 2(l-3)\left (
+	   \begin{tabular}{c}
+	    {$n-m-l+3$}\\
+	    2
+	   \end{tabular}
+	  \right ) \makebox[10zw]{\hfill (式(4b)より)}\\
+	  & & {} + (n-m-l+2)+1 \makebox[14zw]{\hfill (式(4c)より)}\\
+	  &=& (l-3)(n-m-l+3)(n-m-l+2)+(n-m-l+5)
+	 \end{eqnarray*}
+\end{itemize}
+\renewcommand{\baselinestretch}{} \tiny \normalsize
+
+総加算回数 $A(M)$ は $F(m, n, l)$ を $0\leq m \leq n\leq M-1$，
+$1\leq l \leq n-m+1$ について加え合わせたものになるが，
+$m=n$ のときは $l=1$ であり，そのとき $F(m, n, l)=0$ であるから，
+\begin{eqnarray*}
+ A(M) & = & \sum_{0\leq m< n\leq M-1} \; \sum_{2\leq l\leq n-m+1} F(m, n, l)
+\end{eqnarray*}
+となる．
+詳細は省略するが，この右辺を計算すると，
+\begin{eqnarray*}
+  A(M)& = & \tfrac{1}{360}{\times}(M-3)(M-2)(M-1)M(M+1)(M+2) \nonumber\\
+      &   &  +\ \tfrac{1}{24}{\times}(M-4)(M-3)(M-2)(M-1) \nonumber\\
+      &   &  +\ \tfrac{2}{3}{\times}(M-3)(M-2)(M-1) \nonumber\\
+      &   &  +\ \tfrac{1}{6}{\times}(M-1)(M-2)(M+9) \nonumber\\
+      &   &  +\ (M-1)M
+ \nonumber
+\end{eqnarray*}
+が得られる．
+
+同様の計算により，総比較演算回数 $C(M)$ は
+\begin{eqnarray*}
+ C(M) & = & \tfrac{1}{720}{\times}(M-3)(M-2)(M-1)M(M+1)(M+2) \nonumber\\
+      &   & +\ \tfrac{1}{12}{\times}(M-4)(M-3)(M-2)(M-1) \nonumber\\
+      &   & +\ \tfrac{1}{2}{\times}(M-2)(M-2)(M-1)
+\end{eqnarray*}
+で与えられる．
+
+\begin{table}[hntb]
+\center
+\caption{原文文節数$M$に対する加算回数$A(M)$と比較演算回数$C(M)$}
+\label{tbl:order}
+\begin{tabular}{rrr}
+ $M$ & $A(M)$ & $C(M)$ \\
+ \hline
+ 5 & 79 & 27 \\
+ 10 & 2628 & 1464 \\
+ 20 & 159011 & 85443 \\
+ 40 & 10624042 & 5438446 \\
+\end{tabular}
+\end{table}
+
+\hspace{-11pt}
+したがって計算量のオーダは $A(M)$,$C(M)$ 共に $O(M^6)$となる．
+これはかなり大きな計算量のように見えるが，最高次の係数が小さいことと
+$M$は高々40程度までを考えておけばよいことから，計算が困難なほど大きな値
+にはならない．
+実際，$M=40$の場合，加算回数と比較演算回数は表\ref{tbl:order}で示したよ
+うに，$A(40){\approx}1.1{\times}10^7,C(40){\approx}5.4{\times}10^6$であ
+り，アルゴリズム\ref{alg:recursion} をCで実装しUltraSPARC-IIi(270MHz)上で
+処理したときの処理時間は，1秒以内である．
+また，アルゴリズム\ref{alg:backtrace} の実行時間は，これに比べて無視でき
+る程度である．
+\vspace{-3mm}
+\section{簡約例}
+本手法の評価は今後の課題であるが，アルゴリズムの動作を示すため，文節重要
+度と係り受け整合度を仮に与えて実行した例を2つ示す．
+簡約文の係り受け構造も\cite{ozeki}による括弧表記を用いて示している．
+
+\begin{footnotesize}
+\bigskip
+\begin{minipage}{50zw}
+\begin{verbatim}
+文節数: 簡約結果
+例1
+　  原文 <<また><<<<<袖や>袖口>ポケット口などが><油汚れで><変色を>おこす>ことも>あります>
+　　8 : < 　　 <<<<<袖や>袖口>ポケット口などが><油汚れで><変色を>おこす>ことも>あります>
+　　7 : < 　　 <<<<<袖や>袖口>ポケット口などが> 　　　　 <変色を>おこす>ことも>あります>
+　　6 :   　　 <<<<<袖や>袖口>ポケット口などが> 　　　　 <変色を>おこす>ことも>
+　　5 :   　　  <<<<袖や>袖口>ポケット口などが> 　　　　 <変色を>おこす>
+　　4 :  　　   <<< 　　 袖口>ポケット口などが> 　　　　 <変色を>おこす>
+　　3 :   　　 <<   　　 　　 　　　　　　　　  　　　　 <変色を>おこす>ことも>
+　　2 :   　　  <   　　 　　 　　　　　　　　  　　　　 <変色を>おこす>
+例2
+　 原文 <<<年齢は><まだ>十四だが>
+        <<数えきれぬほど><<日本の>舞台を>踏んだので><日本語は>ぺらぺらだそうだ>
+　　8 : <<<年齢は><まだ>十四だが>
+        < 　　　  　　　 <<日本の>舞台を>踏んだので><日本語は>ぺらぺらだそうだ>
+　　7 : <<<年齢は> 　　 十四だが>
+        < 　　　　　　　 <<日本の>舞台を>踏んだので><日本語は>ぺらぺらだそうだ>
+　　6 : << 　　　  　　 十四だが>
+        < 　　　　　　　 <<日本の>舞台を>踏んだので><日本語は>ぺらぺらだそうだ>
+　　5 : <<　　　　　　　 <<日本の>舞台を>踏んだので><日本語は>ぺらぺらだそうだ>
+　　4 : <<　　　　　　　 < 　　　 舞台を>踏んだので><日本語は>ぺらぺらだそうだ>
+　　3 : <<　　　　　　　   　　　 　　　 踏んだので><日本語は>ぺらぺらだそうだ>
+　　2 : < 　　　　　　　   　　　 　　　 　　　　　 <日本語は>ぺらぺらだそうだ>
+\end{verbatim}
+\end{minipage} \\
+\bigskip \\
+\end{footnotesize}
+　
+本アルゴリズムで必要とされる係り受け整合度は，\cite{zhang}の係り受けペナ
+ルティに $-1$ を乗じたものとした．
+ここで定義されているペナルティ関数は学習コーパス中の係り受け距離の頻度分
+布を元に作成されている．
+また文節重要度は，
+\begin{itemize}
+ \item 主部/述部や名詞/動詞を含む文節に形容詞や動作の程度や目的を表す文
+       節より大きい値
+ \item 文末の動詞には大きな値
+ \item 形式名詞には小さな値
+\end{itemize}
+を人手で設定した．
+この例における具体的な値を表\ref{tbl:example} に示す．
+
+\begin{table}[hntbp] \label{tbl:example}
+ \caption{例文における係り受け整合度$p$と重要度$q$の設定値}
+ \label{tbl:example}
+\vspace*{-1zh}
+\begin{footnotesize}
+\begin{center}
+\begin{tabular}{lrl}
+ 単語 & 重要度 & 係り受け整合度(係り先の単語) これ以外は$-10000$\\
+\hline \hline
+ (0)また & 0.0 & -5000(6), -26.3906(8) \\
+ (1)袖や & 10.0 & -1.8232(2), -23.0259(3), -5000(4),\\
+         &      & -5000(5), -5000(6), -5000(7), -5000(8) \\
+ (2)袖口 & 10.0 & -7.2887(3) \\
+ (3)ポケット口などが & 35.0 & -38.0221(6) \\
+ (4)油汚れで & 2.0 & -18.9712(6), -32.8341(8) \\
+ (5)変色を & 40.0 & -4.9419(6), -41.5261(8) \\
+ (6)おこす & 20.0 & -17.869(7) \\
+ (7)ことも & 0.0 & 0.0(8) \\
+ (8)あります & 0.0 & \\
+\hline
+ (0)年齢は           & 20.0 & -24.7498(2), -29.0142(3), -5000(6), -42.2318(8) \\
+ (1)まだ             &  2.0 & -10.7264(2), -19.3284(3), -5000(6), -43.3073(8) \\
+ (2)十四だが         & 10.0 & -5000(3), -5000(6), -28.3321(8) \\
+ (3)数えきれぬほど   &  2.0 & -21.9722(6), -5000(8) \\
+ (4)日本の           & 12.0 & -1.3933(5), -30.7385(6), -51.5329(7), -5000(8) \\
+ (5)舞台を           & 10.0 & -4.9419(6) \\
+ (6)踏んだので       & 10.0 & -8.4730(8) \\
+ (7)日本語は         & 22.0 & -0.0000(8) \\
+ (8)ぺらぺらだそうだ & 20.0 & \\
+\hline
+\end{tabular}
+\end{center}
+\end{footnotesize}
+\end{table}
+
+例にあげた文は\cite{zhang}の手法で正しく係り受け解析できたものである．
+簡約文の文節数$N$ を原文の文節数$M$ に等しく設定すると簡約文は原文そのも
+のしかあり得ない．
+したがって，その場合には本アルゴリズムは原文の係り受け解析のみを行なうこ
+とになり，その結果は\cite{zhang}の手法によるものと一致する．
+
+実際に簡約文を出力するためには，その長さ $N$ を指定する必要がある．
+これは，現実の場面で文章全体をどの程度に圧縮したいかという要求と簡約文の
+品質を考え合わせて決めるものであるが，本手法を人が文を簡約するときの支援
+システムとして使用する場合には $N$ の値を順次変化させ，それに応じて得ら
+れる簡約文の中から人が適切なものを選ぶという使い方も考えられる．
+また，評価関数の値を利用して，「できるだけ短く」と「できるだけ情報を保つ」
+という相反する要求のバランスを自動的に取ることも考えられるが，それは今後
+の問題である．
+
+\section{おわりに}
+ 文節重要度と係り受け整合度に基づいて，効率的に文の簡約を行なうアルゴリ
+ズムを提案した．
+このアルゴリズムは簡約文の係り受け構造も同時に出力できるので，簡約文を引
+き続き他言語に翻訳するときなどにも有用である．
+計算量は原文文節数の6乗のオーダとなるが，各変数の制約条件のために現実的
+な文節数に対して実行可能なものとなっている．
+また，最外ループを制御する変数の選び方には自由度があるため，即答性が求め
+られる場合には文節の入力と同期して計算を進めるようにアルゴリズムを構成す
+ることが可能である．
+
+ 今後は，文節重要度や係り受け整合度の設定の仕方が簡約結果に与える影響や，
+文節重要度から定まる評価関数値と係り受け整合度から定まる評価関数値の適切
+な重み付けなどについて検討し，簡約手法としての評価を行なう予定である．
+
+
+\bibliographystyle{jnlpbbl}
+\bibliography{v08n3_01}
+
+
+\begin{appendix}
+\section{再帰式の証明}
+最も一般的な式(\ref{eqn:common}a)$\sim$(\ref{eqn:common}c)の場合について
+証明する．
+他の場合については，より容易に証明できる．
+  \begin{eqnarray*}
+   \lefteqn{f(m, n, l)} \nonumber\\
+   &=& \textstyle \max_{m= k_{0}< k_{1}< \cdots < k_{l-1}= n}
+    g(k_{0}, k_{1}, \cdots ,k_{l-1}) \nonumber\\
+   &=& \textstyle \max_{m= k_{0}< k_{1}< \cdots < k_{l-1}= n}
+    \{ \max_{c} \sum_{i=0}^{l-2} p(k_{i}, c(k_{i}))
+    + \sum_{i=0}^{l-1} q(k_{i})\} \nonumber\\
+   &=& \textstyle \max_{m= k_{0}< k_{1}< \cdots < k_{l-1}= n} \nonumber\\
+   & & \max
+    \left \{
+     \begin{tabular}{l}
+      $ \max_{c} \sum_{i=1}^{l-2} p(k_{i}, c(k_{i}))
+      +p(k_{0}, k_{l-1})+ \sum_{i=0}^{l-1} q(k_{i})$;\\
+      \\
+      $ \max_{1< l^{\prime} < l-1}
+      \{\max_{c}\sum_{i=0}^{l'-2} p(k_{i}, c(k_{i}))
+      +\max_{c}\sum_{i=l'}^{l-2} p(k_{i}, c(k_{i}))$\\
+      $+p(k_{l'-1}, k_{l-1})
+      +\sum_{i=0}^{l-1} q(k_{i})\}$;\\
+      \\
+      $ \max_{c} \sum_{i=0}^{l-3} p(k_{i}, c(k_{i}))
+      +p(k_{l-2}, k_{l-1})+ \sum_{i=0}^{l-1} q(k_{i})$
+     \end{tabular}
+      \right . \nonumber\\
+   && \mbox{(係り受け構造 $c$ を末尾の文節 $x_{k_{l-1}}$ に係る文節
+		 の中で最も左にあるもの} \nonumber \\
+   && \mbox{の位置により分類)} \nonumber \\
+   \mathstrut \\
+   &=& \max
+    \left \{
+     \begin{tabular}{l}
+      $\max_{m= k_{0}< k_{1}< \cdots < k_{l-1}= n}$\\
+      $\{\max_{c} \sum_{i=1}^{l-2} p(k_{i}, c(k_{i}))
+      +p(k_{0}, k_{l-1})+ \sum_{i=0}^{l-1} q(k_{i})\}$;\\
+      \\
+      $\max_{1< l' < l-1}$\\
+      $[\max_{m= k_{0}< k_{1}< \cdots < k_{l-1}= n}$\\
+      $\{\max_{c}\sum_{i=0}^{l'-2} p(k_{i}, c(k_{i}))
+      +\max_{c}\sum_{i=l'}^{l-2} p(k_{i}, c(k_{i}))$\\
+      $+p(k_{l'-1},k_{l-1})
+      +\sum_{i=0}^{l-1} q(k_{i})\}]$;\\
+      \\
+      $\max_{m= k_{0}< k_{1}< \cdots < k_{l-1}= n}$\\
+      $\{\max_{c} \sum_{i=0}^{l-3} p(k_{i}, c(k_{i}))
+      +p(k_{l-2}, k_{l-1})+ \sum_{i=0}^{l-1} q(k_{i})\}$
+     \end{tabular}
+      \right . \nonumber\\
+   \mathstrut \\
+   &=& \max
+    \left \{
+     \begin{tabular}{l}
+      $\max_{m=k_{0}<k_{1}=m'}
+      \max_{m'=k_{1}< \cdots < k_{l-1}= n}$\\
+      $\{\max_{c} \sum_{i=1}^{l-2} p(k_{i}, c(k_{i}))
+      +p(k_{0}, k_{l-1})+ \sum_{i=1}^{l-1} q(k_{i})\}
+      +q(k_{0})$;\\
+      \\
+      $\max_{1< l' < l-1}$\\
+      $[\max_{m= k_{0}< \cdots < k_{l'-1}=n'},
+      \max_{n'=k_{l'-1}<
+p      k_{l'}=m'},
+      \max_{m'= k_{l'}< \cdots < k_{l-1}=n}$\\
+      $\{\max_{c}\sum_{i=0}^{l'-2} p(k_{i}, c(k_{i}))
+      +\max_{c}\sum_{i=l'}^{l-2} p(k_{i}, c(k_{i}))$\\
+      $+p(k_{l'-1}, k_{l-1})+\sum_{i=0}^{l-1} q(k_{i})\}]$;\\
+      \\
+      $\max_{m= k_{0}< k_{1}< \cdots < k_{l-2}= n'} 
+      \max_{n'=k_{l-2} < k_{l-1}=n}$\\
+      $\{\max_{c} \sum_{i=0}^{l-3} p(k_{i}, c(k_{i}))
+      +p(k_{l-2}, k_{l-1})+ \sum_{i=0}^{l-2} q(k_{i})
+      +q(k_{l-1})\}$
+     \end{tabular}
+    \right . \nonumber\\
+   \mathstrut \\
+   &=& \max
+    \left \{
+     \begin{tabular}{l}
+      $\max_{m< m'}$\\
+      $\{\max_{m'=k_{1}< \cdots < k_{l-1}= n}$\\
+      $[\max_{c} \sum_{i=1}^{l-2} p(k_{i}, c(k_{i}))
+      + \sum_{i=1}^{l-1} q(k_{i})]
+      +p(m, n)+ q(m)\}$;\\
+      \\
+      $\max_{1< l' < l-1},\ \max_{n'<m'}$\\
+      $[\max_{m= k_{0}< \cdots < k_{l'-1}=n'} 
+      \{\max_{c}\sum_{i=0}^{l'-2} p(k_{i}, c(k_{i}))
+      +\sum_{i=0}^{l'-1} q(k_{i})\}$\\
+      $+\max_{m'= k_{l'}< \cdots < k_{l-1}=n}$
+      $\{\max_{c}\sum_{i=l'}^{l-2} p(k_{i}, c(k_{i}))
+      +\sum_{i=l'}^{l-1} q(k_{i})\}$\\
+      $ +p(n', n)]$;\\
+      \\
+      $\max_{n'< n}$\\
+      $\{\max_{m= k_{0}< k_{1}< \cdots < k_{l-2}= n'}$\\
+      $[\max_{c} \sum_{i=0}^{l-3} p(k_{i}, c(k_{i}))
+      +\sum_{i=0}^{l-2} q(k_{i})]
+      +p(n', n)+ q(n)\}$
+     \end{tabular}
+    \right . \nonumber\\
+   \mathstrut \\
+   &=& \max
+    \left \{
+     \begin{tabular}{l}
+      $f(m, m, 1)+\max_{m< m'<n-l+3} \{f(m', n, l-1)\}
+      + p(m, n)$;\\
+      \\
+      $\max_{1< l' < l-1,\ m+l'-2<n'< m'< n-l+l'+2}$\\
+      $\{f(m, n',l')
+      + f(m', n, l-l')
+      + p(n', n)\}$;\\
+      \\
+      $\max_{m+l-3 < n'< n}
+      \{f(m, n', l-1) + p(n', n)\}
+      + f(n, n, 1)$
+     \end{tabular}
+      \right . 
+  \end{eqnarray*}
+
+\end{appendix}
+
+
+\begin{biography}
+\biotitle{略歴}
+\bioauthor{小黒 玲}{
+1996年電気通信大学電気通信学部情報工学科卒業．
+1998年同大学院博士前期課程修了．
+現在，同博士後期課程在学中．
+自動音声認識，自然言語処理に興味がある．
+日本音響学会会員．
+}
+\bioauthor{尾関 和彦}{
+1965年東京大学工学部電気工学科卒業．
+同年NHK入社．
+1968年より1年間エジンバラ大学客員研究員．
+音声言語処理，パターン認識などの研究に従事．
+電子通信学会第41回論文賞受賞．
+現在，電気通信大学情報通信工学科教授．
+工学博士．
+電子情報通信学会，情報処理学会，日本音響学会，IEEE各会員．
+}
+\bioauthor{張 玉潔}{
+1999年電気通信大学情報工学専攻博士後期課程修了．
+博士(工学)．
+同年，電気通信大学情報通信工学科助手．
+2000年ATR 音声言語通信研究所客員研究員，現在に至る．
+日本語及び中国語処理の研究に従事．
+}
+\bioauthor{高木 一幸}{
+1989年筑波大学大学院修士課程理工学研究科修了．
+同年日本アイ・ビー・エム(株)入社．
+1992年筑波大学大学院工学研究科博士課程入学．
+1995年同課程修了．
+博士(工学)．
+現在，電気通信大学電気通信学部情報通信工学科助手．
+日本音響学会，電子情報通信学会，情報処理学会，人工知能学会各会員．
+}
+
+\bioreceived{受付}
+\bioaccepted{採録}
+\end{biography}
+
+\end{document}

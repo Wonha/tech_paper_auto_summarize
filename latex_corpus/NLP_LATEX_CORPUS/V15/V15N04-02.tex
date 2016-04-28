@@ -1,0 +1,1269 @@
+    \documentclass[english]{jnlp_1.4}
+
+\usepackage{jnlpbbl_1.1}
+\usepackage[dvips]{graphicx}
+
+\Volume{15}
+\Number{4}
+\Month{September}
+\Year{2008}
+\received{2007}{10}{10}
+\revised{2008}{1}{25}
+\accepted{2008}{3}{18}
+
+\setcounter{page}{19}
+
+\etitle{Effective Use of Indirect Dependency \\
+	for Distributional Similarity}
+\eauthor{Masato Hagiwara\affiref{Authors} \and Yasuhiro Ogawa\affiref{Authors} 
+	\and Katsuhiko Toyama\affiref{Authors}} 
+\eabstract{
+  Distributional similarity is a widely adopted concept to compute
+  lexical semantic relatedness of words. Whereas the calculation is
+  based on the {\it distributional hypothesis} and utilizes contextual
+  clues of words, little attention has been paid to what kind of
+  contextual information is effective for the purpose. As one of the
+  ways to extend contextual information, we pay attention to the use
+  of {\it indirect dependency}, where two or more words are related
+  via several contiguous dependency relations. We have investigated
+  the effect of indirect dependency using automatic synonym
+  acquisition task, and shown that the performance can be improved by
+  using indirect dependency in addition to normal direct dependency.
+  We have also verified its effectiveness under various experimental
+  settings including weight functions, similarity measures, and
+  context representations, and shown that context representations
+  which incorporate richer syntactic information are more effective. 
+}
+\ekeywords{Indirect Dependency, Context Representation, Contextual Information, \\
+	Distributional Similarity, Synonym Acquistion}
+
+\headauthor{Hagiwara et al.}
+\headtitle{Effective Use of Indirect Dependency for Distributional Similairty}
+
+\affilabel{Authors}{}{Graduate School of Information Science, Nagoya University}
+
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+
+Lexical knowledge is one of the most fundamental but important
+resources for natural language processing. Among various kinds of
+lexical relations, synonym relation is frequently used as the basis in
+a broad range of applications such as query expansion and indexing
+techniques for information retrieval \cite{Crouch:92,Jing:94}, and
+automatic thesaurus construction \cite{Kojima:95,Grefenstette:94}.  It
+also plays an important role in constructing linguistic ontologies
+because the core techniques of ontology construction---relation
+assignment and taxonomy construction---would be almost impossible
+without synonym detection techniques. However, the extraction,
+construction, and maintenance of lexical knowledge by hand are
+difficult and costly tasks, thus various methods
+\cite{Hindle:90,Lin:98} have been proposed for similarity calculation
+and synonym acquisition.
+
+Most of the acquisition methods can be regarded as the combination of
+all or some of these three steps: (1) context extraction, (2)
+similarity calculation, and (3) word clustering. Firstly, the methods
+extract useful contextual information of words to ``feature'' the
+target words from large corpora. The contexts to be extracted vary
+from very naive ones such as surrounding words captured by a window to
+sophisticated ones such as dependency structure. Regardless of
+contexts in use, the key assumption on acquiring word similarity is
+the so-called {\it distributional hypothesis} \cite{Harris:85}, which
+states that semantically similar words share similar contexts. It
+means, in other words, the more similar the contexts of words are, the
+more likely the words are semantically related, and similarity can be
+obtained by comparing the contexts the target words have. The
+similarity obtained in this way is called {\em distributional
+similarity}, which is also referred as {\em second-order
+co-occurrence} in some cases \cite{Picard:99}.
+
+In the second step, {\em similarity}, which is equivalently referred
+as {\em semantic relatedness} in this paper, is calculated based on
+the commonality of words' contexts. Various similarity measures and
+weight functions have been proposed for this purpose, but these
+roughly fall into two mainstreams: vector- and probability-based
+similarities. The former includes the traditional tf.idf weighting and
+cosine similarity, and the latter is represented by mutual information
+(MI) and Kullbuck-Leibler (KL) divergence. These similarity measures
+and weight functions have been well compared and discussed so far
+\cite{Chung:01,Curran:02:improvements}.
+
+As the third step, word clustering is optionally conducted based on
+the similarity or distance calculated in the previous step to create
+clusters of semantically related words. Again, a wide variety of
+clustering methods are proposed \cite{Pereira:95,Sakaki:07}, although
+this issue is not within the scope of this paper.
+
+As shown above, whereas there have been many methods which employ the
+context-based similarity calculation, the importance of the first
+step, i.e., the choice of contextual information to adopt has been
+considerably underestimated, and almost no attention has been paid to
+what kind of contextual information, or their combinations, is useful
+for distributional similarity. However, as
+\cite{Curran:02:scaling,Hagiwara:06} have pointed out, the choice of
+useful contextual information is considered to have a critical impact
+on the performance of any methods utilizing distributional
+similarity. Therefore, further investigations on which types of
+contexts are essentially contributing are strongly required.
+
+
+So far, {\em word-based context} and {\em dependency} are the most
+widely adopted contextual categories. Many studies have shown that
+dependency relation is more effective for lexical knowledge
+acquisition compared to word-based context. However, dependency
+relations are usually limited to two words sharing direct dependency
+between them, and it sometimes misses important word relations.  In
+response to this problem, we propose the use of {\em indirect
+dependency}---the extension of normal {\em direct} dependency---as
+one of the general ways to enhance contextual information for
+distributional similarity to improve performance. This study
+investigates its effect to the performance and various parameter
+settings when applying it to actual tasks. More specifically, we
+firstly formalize the context which incorporates indirect dependency,
+composed from two or more contiguous dependency relations, and then
+show its effectiveness to the performance when compared to the
+conventional {\em direct dependency} for the synonym acquisition
+task. The performance evaluation of synonym acquisition is based on
+these two measures: average precision (AP) and correlation coefficient
+(CC), both of which are calculated using reference sets created from a
+few existing thesauri such as WordNet \cite{Fellbaum:98}. We then pay
+attention to the context representation of indirect dependency, which
+has been underestimated in the previous studies but is one of the
+important parameters when constructing semantic spaces, and compare
+the individual performance.
+
+
+This paper is organized as follows: in Section 2 we review previous
+studies concerning the use of contextual information for lexical
+knowledge acquisition and distributional similarity, and clarify the
+position of this paper.  In the succeeding Section 3, we mention the
+background of how we come up with the idea of indirect dependency, and
+formalize it.  Section 4 describes the synonym acquisition model we
+used, especially weight functions and similarity measures, and in the
+following Section 5, the evaluation method we employed is detailed,
+which consists of two evaluation measures: average precision (AP) and
+correlation coefficient (CC). Section 6 provides the experimental
+conditions and results, with the first part regarding the
+effectiveness of indirect dependency, and the second part being about
+the four kinds of context representation for indirect dependency:
+terminal word (\verb|TW|), word path (\verb|WP|), syntactic path
+(\verb|SP|), and full path (\verb|FP|). Section 7 concludes this
+paper.
+
+\section{Previous Studies}
+
+
+So far, various kinds of contextual information have been used to
+acquire lexical relations based on the distributional hypothesis. One
+of the most fundamental yet well-performing ones is {\em word-based
+context} \cite{Curran:02:scaling}, which considers words surrounding a
+target word as contexts. It has been extensively used in various
+applications including word sense disambiguation \cite{Ng:96}, word
+priming in cognitive science field \cite{Lowe:00}, and synonym
+acquisition/thesaurus construction \cite{Hagiwara:06}. The window size
+to capture contexts ranges from a few words on both sides to the
+entire paragraph or document, upon which the acquisition performance
+greatly depends. Although word-based context is simple and effective,
+it has some drawbacks, especially the data size problem. The method
+can easily include a large amount of non-relevant contexts and inflate
+the context size, making the similarity calculation computationally
+expensive \cite{Hagiwara:06}. This is one of the biggest reasons why
+it is gradually taken over by much richer kind of contexts.
+
+
+On the other hand, more sophisticated and efficient context, {\em
+  syntax-based context} \cite{Pado:07}, has been employed in many
+lexical knowledge acquisition tasks. It uses words which have
+syntactic relation (mostly dependency structure) with the target word
+as contexts, sometimes along with their relation labels. For example,
+Hindle used subject and object relations to acquire synonyms
+automatically in his landmark paper in the field \cite{Hindle:90}.
+This study accompanied a great deal of follow-ups in his wake---including
+\cite{Pereira:95}, where word clustering is conducted based on verbs
+and their objective nouns, and \cite{Gamallo:01}, where they
+investigated the difference of syntax-based contexts, and showed that
+the fine grained attributes improved the performance. Compared to
+word-based context, the effectiveness (or cost-effectiveness) of
+syntax-based context was shown by many studies
+\cite{Curran:02:scaling,Hagiwara:06,Pado:07}. For example, Curran and
+Moens \cite{Curran:02:scaling} showed that syntax-based context could
+achieve the accuracy of more than 5 points higher with only two thirds
+of the original semantic space, compared to word-based context. These
+results show that syntax-based context is capable of choosing highly
+effective contexts. As such, some forms of extensions of syntax-based
+context are naturally worth consideration.
+
+
+Syntax-based context is extended so that it includes not only words
+with direct relations but also ones with indirect relations, whose
+underlying ideas are essentially the same as the indirect dependency
+described in this paper. Lin and Pantel \cite{Lin:01}, for example,
+described the system which used {\em dependency path} to represent
+word relationships and extended the distributional hypothesis to
+extract equivalent paths for inference rule extraction of question
+answering task. However, their application is rather limited and its
+effect on distributional similarity and other kinds of tasks should be
+investigated. In this paper, the effect of indirect dependency is
+evaluated using one of the most popular applications for
+distributional similarity: automatic synonym acquisition. Pado and
+Lapata \cite{Pado:07} proposed a general framework to represent the
+variations of semantic space which incorporates indirect syntactic
+relations of words. Although they separated and formalized various
+parameter settings when constructing semantic spaces, they dealt with
+only one form of context representations (terminal word), i.e., how
+dependency paths are mapped to basis in the semantic space, which we
+believe has critical impact on the performance and will be fully
+discussed in this paper. Hagiwara, Ogawa, and Toyama
+\cite{Hagiwara:07} also pointed out the effectiveness of indirect
+dependency for synonym acquisition task. However, their evaluation
+experiments are too much dependent on specific parameter settings and
+small corpora. We re-investigate the effectiveness of indirect
+dependency using much broader settings and a larger corpus in this
+paper.
+
+
+
+
+
+\section{Indirect Dependency}
+
+In this section, we firstly describe the limitation of normal direct
+dependency and how we came up with the idea that the extension of
+direct dependency can be beneficial. Next, the formalization of
+indirect dependency, which is used throughout this paper, is
+described.
+
+\subsection{Limitation of Direct Dependency}
+
+
+Although previous studies have shown that syntax-based context is
+capable of choosing highly effective contexts, we notice that the
+coverage of syntax-based context is rather limited, which can be
+problematic when fully utilizing the contexts. To confirm this, we
+conducted a simple preliminary experiment, where we compared the
+performances of word-based context {\tt wbc} and syntactic-based
+context (we call this as {\tt dep} in the following, since we used
+dependency structure as syntax-based context). The result showed,
+while {\tt dep} certainly outperformed {\tt wbc}, there is only a
+slight performance difference between them. We suspect that this is
+because {\tt dep} only covers two words with direct dependency, and it
+can miss a large portion of important word relations, causing the
+performance loss.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{15-4ia2f1.eps}
+\caption{Examples of indirectly related words}
+\label{fig_id_example}
+\end{center}
+\end{figure}
+
+We show this using very simple examples illustrated in Fig.~\ref{fig_id_example}. 
+It is obvious that there is a strong semantic
+relation between the words {\em koala} and {\em eucalyptus}, although
+this relation cannot be obtained using {\tt dep} in neither the
+sentence (a) nor (b), while {\tt wbc} easily represents it as the
+relation {\em koala--eucalyptus}.
+
+The problem here is that these two words, {\em koala} and {\em
+eucalyptus}, are related only {\em indirectly} via two (in the
+sentence (a)) or three (in the sentence (b)) dependency
+relations. Such kinds of indirect relations are included in {\tt wbc}
+with the window radius of 3 but not in {\tt dep}, and we suspect that
+this kind of difference caused the performance loss for {\tt dep}. To
+overcome this problem, we came up with the idea to include these {\em
+indirect dependency} relations, i.e., words that can be reached by
+following two or more dependency relations, and enhance the contextual
+information for distributional similarity to improve the performance.
+The detailed method for this extension is described in the following
+section.
+
+\subsection{Formalization}
+
+As dependency is often represented as relations, it is useful and
+straightforward to formalize indirect dependency as the composition of
+relations, which is used throughout this paper. Here we consider the
+dependency relations in a certain sentence $s$ as a binary relation
+$D$ over $W = \{w_1, ..., w_n\}$ i.e. $D \subseteq W \times W$, where
+$w_1,...,w_n$ are the word occurrences in the sentence $s$. 
+
+Dependency relations generally have labels such as \verb|subj| and
+\verb|dobj| which specify what kind of syntactic relations head and
+modifier possess. We encode this information as equivalence classes of
+$D$, which means that $D$ is partitioned into the equivalence classes
+$D_{r_i}$ such that $D = \bigcup_{i=1}^k D_{r_i}, D_{r_i} \cap D_{r_j}
+= \phi\ \mathrm{if}\ i \neq j$, based on the labels $r_1, ...,
+r_k$. Note that both of the head-modifier (e.g. \verb|ncsubj|) and the
+corresponding modifier-head (e.g. \verb|ncsubj-of|) relationships are
+included in $D$ and the direction information of dependency is
+incorporated into the labels.
+
+
+As the next step, we define the composition of dependency $D^2 = D
+\circ D$ as {\em indirect dependency} where two words are related via
+two dependency relation edges. When an indirect dependency relation $d
+= (w_i, w_j) \in D^2$ is composed from an edge $(w_i, w_m) \in
+D_{r_i}$ and another one $(w_m, w_j) \in D_{r_j}$, the label of $d$,
+i.e., which equivalence class $d$ belongs to, is also composed as
+$r_i:w_m:r_j$. In other words, the labels are the concatenations of
+all the labels and words on the way from $w_i$ to $w_j$. We also
+define multiple composition of dependency recursively: $D^1 = D,
+\forall l > 1.\ D^l = D^{l-1} \circ D$. These are also indirect
+dependency relations in a broad sense. Notice here that $D^l\ (l > 1)$
+can generally include reflexive relations, but it is clear that such
+relations don't serve as useful word features, so we re-define the
+composition operation so that the composed relation doesn't include
+any reflexive edges, i.e., $D \circ D - \{(w, w) | w \in W\}$. The
+contexts for indirect dependency $D^1, D^2, ...$ are referred as
+\verb|dep1|, \verb|dep2|, and so on.
+
+Some examples of indirect dependency are shown below the sentence in
+Fig.~\ref{fig_dd_example}. By composing $({\it attack}, {\it of}) \in
+D_{\rm dobj}$ and $({\it of}, {\it motive}) \in D_{\rm iobj}$, we
+obtain an indirect dependency $({\it attack}, {\it motive}) \in D_{\rm
+  dobj:of:iobj} \subseteq D^2$, which we consider as a semantically
+important lexical relation in the sentence. Similarly, the composition
+of four contiguous dependency edges between word {\em witnesses} and
+{\em investigators} gives $({\it witnesses}, {\it investigators}) \in
+D_{\rm conj:and:dobj:for:iobj:looking:ncsubj-of} \subseteq D^4$, as shown in
+Fig. \ref{fig_dd_example}.
+
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{15-4ia2f2.eps}
+\caption{Example of Direct and Indirect Dependency}
+\label{fig_dd_example}
+\end{center}
+\end{figure}
+
+\section{Synonym Acquisition Method}
+
+Although the purpose of the current study is to investigate the
+effectiveness of indirect dependency, not the acquisition method
+itself, we have to confirm the effect of indirect dependency using
+various parameter settings including weight functions and similarity
+measures described below. In the following, the numbers of unique
+words and contexts are denoted as $n$ and $m$, respectively, and let
+$N(w, c)$ be the number of co-occurrences of the word $w$ and the
+context $c$.
+
+The overall framework for synonym acquisition is quite
+simple. Firstly, we construct a vector ${\bf w}_i$ for each word $w_i$
+as:
+\[
+{\bf w}_i = {}^t[\mbox{wgt}(w_i, c_1)\ \mbox{wgt}(w_i, c_2)\  ...\ \mbox{wgt}(w_i, c_m)],
+\]
+where $\mbox{wgt}(w, c)$ is one of the weight functions described in
+Section 4.1. The similarity between word $w_i$ and $w_j$, i.e.,
+$sim(w_i, w_j)$, is then obtained as the similarity between the
+corresponding vectors ${\bf w}_i$ and ${\bf w}_j$, calculated using
+some similarity measures described in Section 4.2.
+
+\subsection{Weight Functions}
+
+Here we pay attention to these four weight functions listed below: \verb|tf|,
+\verb|tfidf|, \verb|pmi|, and \verb|ttest|.
+
+\paragraph{Raw Frequency (tf)} \quad
+
+The raw co-occurrence frequency of word and context is used as it is:
+\[
+\mbox{wgt}(w, c) = N(w, c).
+\]
+Note that, although the terms {\em tf} and {\em idf} are based on
+information retrieval task setting, the modeling is essentially the
+same as distributional similarity and we still use the terms {\em tf}
+and {\em idf} in this paper.
+
+\paragraph{tf.idf Weighting (tfidf)} \quad
+
+The raw frequency \verb|tf| is weighted by idf:
+\[
+  \mbox{wgt}(w, c) = N(w, c) \cdot \mbox{idf}(c), \quad \mbox{idf}(c) = \log \frac{n}{\mbox{df}(c)},
+\]
+where $\mbox{df}(c)$ is the number of unique words with which the
+context $c$ co-occurs, i.e., $\mbox{df}(c) = |\{ w | N(w, c) >
+0\}|$. In the experiments, the idf values are normalized so that the
+maximum equals to 1.
+
+\paragraph{Pointwise Mutual Information (pmi)} \quad
+
+The amount of information that appearances of $w$ and $c$ have is
+defined as their pointwise mutual information (\verb|pmi|):
+\[
+  \mbox{wgt}(w, c) = \log \frac{p(w,c)}{p(w)p(c)},
+\]
+where the probabilities are calculated empirically, e.g. $p(w, c) =
+N(w, c) / \sum_{w', c'} N(w', c')$.
+
+\paragraph{t-statistic (ttest)} \quad
+
+t-statistic, used to test whether the appearances of a word $w$ and
+a context $c$ are independent, is used as a weight function:
+\[
+  \mbox{wgt}(w,c) = \frac{p(w, c) - p(w)p(c)}{\sqrt{p(w)p(c)}}.
+\]
+Whereas t-statistic is usually employed to discover collocations from
+corpora, Curran and Moens \cite{Curran:02:improvements} proposed using
+it as a weight function and showed that it achieved higher performance
+compared to the others.
+
+
+\subsection{Similarity Measures}
+
+The similarity measures we employed to calculate the inter-vector
+similarity are listed below: \verb|cosine|, \verb|jaccard-s|,
+\verb|jaccard-v|. In the following, let $C(w)$ be the set of all the
+contexts the word $w$ co-occurs, i.e., $C(w) = \{c | N(w, c) > 0\}$.
+
+\paragraph{Cosine} \quad
+
+One of the most commonly used similarity functions, especially for
+information retrieval, along with vector space model is cosine
+similarity:
+\[
+ sim(w_1, w_2) = \frac{\sum_{c \in C(w_1)\cap C(w_2)} \mbox{wgt}(w_1, c) \times \mbox{wgt}(w_2, c)}{\sqrt{\sum_{c\in C(w_1)} \mbox{wgt}(w_1, c)^2 \times \sum_{c \in C(w_2)} \mbox{wgt}(w_2, c)^2}},
+\]
+which is the inner product of two vectors ${\bf w}_1$ and ${\bf w}_2$,
+normalized by the vector lengths.
+
+\paragraph{Set-based Jaccard coefficient (jaccard-s)} \quad
+
+Jaccard coefficient, originally used to measure the commonality of two
+sets, is extended and used for distributional similarity. In the most
+naive form, it only uses the number of elements in sets, but here the
+weights are also taken into consideration:
+\[
+ sim(w_1, w_2) = \frac{\sum_{c \in C(w_1)\cap C(w_2)} \min(\mbox{wgt}(w_1, c), \mbox{wgt}(w_2, c))}{\sum_{c \in C(w_1)\cup C(w_2)}\max(\mbox{wgt}(w_1, c), \mbox{wgt}(w_2, c))}.
+\]
+
+\paragraph{Vector-based Jaccard coefficient (jaccard-v)} \quad
+
+There is another extension of Jaccard coefficient which is based on
+the commonality of two vectors:
+\begin{eqnarray*}
+  \lefteqn{sim(w_1, w_2)} \\
+  & = & \frac{\sum_{c \in C(w_1)\cap C(w_2)} \mbox{wgt}(w_1, c) \times \mbox{wgt}(w_2, c)}{\sum_{c\in C(w_1)}\mbox{wgt}(w_1, c)^2 + \sum_{c\in C(w_2)}\mbox{wgt}(w_2, c)^2 -\sum_{c \in C(w_1)\cap C(w_2)} \mbox{wgt}(w_1, c) \times \mbox{wgt}(w_2, c)}.
+\end{eqnarray*}
+
+Note that we still have {\em Dice coefficient}, which is also
+widely-adopted in many similarity-based tasks. However, we omitted it
+from choice this time, because it is shown that Dice and Jaccard
+coefficient are monotonic in each other \cite{Weeds:04}, yielding
+exactly the same results.
+
+As listed above, there are too many weight functions and similarity
+measures to handle, let alone their combinations. Because the purpose
+of this paper is the investigation of the indirect dependency
+effectiveness, we limit the target, instead of adopting all these
+combinations, and selected only a few practical combinations of
+weights and measures, that is: \verb|tfidf+cosine|,
+\verb|pmi+jaccard-s|, and \verb|ttest+jaccard-v|. We chose {\tt
+tfidf+cosine} because it is the most widely adopted combination of
+weight and measure function for information retrieval. The second one,
+{\tt pmi+jaccard-s} is also common for similarity-based task
+\cite{Weeds:04}, and individual effectiveness of PMI and Jaccard
+coefficient has been shown \cite{Curran:02:improvements}. The weight
+{\tt ttest} and the metric {\tt jaccard-v} are also shown to be one of
+the best performing in \cite{Curran:02:improvements}, thus the last
+combination {\tt ttest+jaccard-v} was chosen for the diversity.  We
+call these three combinations {\em calculation parameters} in the
+following.
+
+\section{Evaluation}
+
+This section describes the two evaluation methods we employed to
+evaluate the automatically acquired synonyms---average precision
+(AP) and correlation coefficient (CC).
+
+\subsection{Average Precision}
+
+The first evaluation measure, {\em average precision} (AP), is a common
+evaluation scheme mainly adopted for information retrieval, which
+evaluates how accurately the method under evaluation is able to
+extract synonyms.
+
+To calculate AP, we firstly prepare a set of {\em query words}, for
+which synonyms are obtained to evaluate the precision. We adopted the
+Longman Defining Vocabulary (LDV)
+\footnote{http://www.cs.utexas.edu/users/kbarker/working\_notes/ldoce-vocab.html},
+originally consisted of 2,194 entries, as the candidate set of query
+words. Secondly, for each entry in LDV, three existing thesauri are
+consulted: Roget's Thesaurus \cite{Roget:95}, Collins COBUILD
+Thesaurus \cite{Collins:02}, and WordNet \cite{Fellbaum:98}. The union
+of synonyms obtained when the LDV word is looked up as a noun is used
+as the {\em reference set}, except for words marked as ``idiom,''
+``informal,'' ``slang'' and phrases comprised of two or more
+words. Notice that most of LDV entries have more than two senses in
+WordNet, in which case the union of synonyms found in all synsets of
+the entry was used as the reference set, since the synonym acquisition
+model described in this paper is not capable of treating multiple
+senses of a single word. The LDV words for which no noun synonyms are
+found in any of the reference thesauri are omitted.
+
+Finally, from the remaining 771 LDV words, 100 query words are
+randomly chosen, which are listed in Appendix. For each of them, the
+eleven precision values at 0\%, 10\%, ..., and 100\% recall levels are
+averaged to calculate the final AP value.
+
+\subsection{Correlation Coefficient}
+
+The second evaluation measure is {\em correlation coefficient} (CC)
+between the target similarity and the {\em reference similarity},
+i.e., the gold standard of similarity for word pairs. The CC value is
+calculated so that it becomes larger when the obtained similarity is
+more precise approximation of the reference similarity.
+
+The reference similarity is calculated based on the closeness of two
+words in the tree structure of WordNet, and this method is essentially
+the same as Wu and Palmer's \cite{Wu:94}. More specifically, the
+similarity between a word $w$ with senses $w_1, ..., w_{m_1}$ and a word
+$v$ with senses $v_1, ..., v_{m_2}$ is obtained as follows. Let the
+depth of node $w_i$ and $v_j$ be $d_i$ and $d_j$, and the depth of the
+deepest common ancestors of both nodes be $d_{\mathrm{dca}}$. The
+similarity is then calculated as the maximum over all the sense
+combinations, as done in \cite{Lin:98}:
+\[
+  sim(w, v) = \max_{i, j} sim(w_i, v_j) = \max_{i, j} \frac{2\cdot d_{\mathrm{dca}}}{d_i
+  + d_j}.
+\]
+
+Here we have to note that, the reference similarity calculation based
+on WordNet path length is such a naive method that it sometimes causes
+problems, especially the discreteness of the obtained similarity
+\cite{Budanitsky:06}. However, we conducted a preliminary experiment
+and verified that the different values of CC calculated using various
+calculation techniques including the one mentioned above and
+\cite{Jiang:97,Hirst:98}, are highly correlated and the choice does
+not essentially affects the overall evaluation.
+
+Then, the value of CC is calculated as the correlation coefficient of
+reference similarities $\vec r = (r_1, r_2, ..., r_n)$ and target
+similarities $\vec s = (s_1, s_2, ..., s_n)$ over the word pairs in
+the sample set $P_s$, which is created by choosing the most similar 2,000
+word pairs from 4,000 randomly created pairs from LDV. To avoid test
+set dependency, all the CC values in this paper are calculated as the
+average of 10 executions using independently created test sets.
+
+
+\section{Experiments}
+
+Now we describe the evaluation results for indirect dependency, and
+the detailed comparison of the acquisition and context parameters in
+this section.
+
+\subsection{Condition}
+
+We extracted contextual information from the corpus: the
+``story''-type documents of New York Times articles (1994) in English
+Gigaword\footnote{http://www.ldc.upenn.edu/Catalog/CatalogEntry.jsp?catalogId=LDC2003T05},
+consisting of 45,830 documents and approx. 30 million words. As the
+extraction of accurate and comprehensive syntactic relations is in
+itself a difficult task, the sophisticated parser RASP Toolkit ver. 2
+(RASP2) \cite{Briscoe:06} was utilized to extract dependency
+relations. RASP2 analyzes input sentences and provides a wide variety of
+grammatical information such as POS tags, dependency structure, and
+parsed trees as output, among which we employed the dependency
+structure called grammatical relations (GRs), which we converted to
+the dependency relation $D$. According to \cite{Briscoe:06}, the RASP2
+system achieves a micro-averaged $F_1$ score of 76.3\% for relation
+assignment. Even when the parser makes some errors, we suppose the
+influence would not be serious---the wrongly assigned relations act
+as less precise contexts, still working better than the naive
+word-based context.
+
+As the basis of the semantic space, the second component of every
+indirect relation, i.e., $w_j$ in $(w_i, w_j) \in D^n$, was used.  For
+example, \verb|motive| was used as the context for the word {\it
+  attack} in $({\it attack}, {\it motive}) \in D_{\rm dobj:of:iobj}
+\subseteq D^2$.
+
+Since our purpose here is the automatic extraction of synonymous
+nouns, only the contexts for nouns are extracted. To distinguish
+nouns, using POS tags annotated by RASP2, any words with POS tags APP,
+ND, NN, NP, PN, and PP, were labeled as nouns.
+
+We also set {\em cut-off frequencies} $\theta_w$ and $\theta_c$, i.e.,
+thresholds on occurrence frequency to filter out words or contexts
+with low frequency, respectively, and to reduce computational
+cost. More specifically, any words {\it w} such that $\sum_c N(w, c) <
+\theta_w$ and any contexts {\it c} such that $\sum_w N(w, c) <
+\theta_c$ were removed from the co-occurrence data. Special attention
+is required to fix the values of $\theta_f$ and $\theta_c$ because
+they can directly affect the size of constructed semantic spaces
+and/or the performance. Our strategy to fix them is to investigate
+their effect separately.
+
+The first one, the word cut-off frequency $\theta_w$, is relatively
+easier to handle, because it affects the number of unique words
+contained in the semantic space almost exclusively. Assuming the
+Zipf's law, the number of the remaining word types is inversely
+proportional to $\theta_w$, which we confirmed through a preliminary
+experiment. When fixing $\theta_w$, what we should consider is the
+trade-off between the remaining word types and the computational cost---the 
+threshold must be high enough to make it computationally
+practical, and low enough to keep as much proportion of the original
+word types as possible. We finally adopted $\theta_w = 100$ because it
+can keep more than half of the originally extracted word types for all
+of the context categories, while greatly reducing the cost. Also, the
+cut-off frequency $\theta_f$ does effect AP, but not CC, because it
+works as a filter to eliminate low-frequency words from the ranking,
+most of which are irrelevant to the query word. The experiment showed
+the performance of synonym acquisition increases with $\theta_w$
+almost monotonically. However, since the increase range is not great
+(at most 20\%) and this performance increase equally happens to all
+the context categories, the influence can be ignored.
+
+The second one, the context cut-off frequency $\theta_c$, is less easy
+to handle, because it affects both the semantic space size and the
+performance (AP and CC). Although the number of the remaining context
+types can be easily estimated using Zipf's law, similarly to
+$\theta_w$, we have no other ways to know the performance change but
+to empirically investigate it. Figure \ref{fig_cutoff_res} shows the
+performance change on increasing $\theta_c$, for {\tt dep3-FP}. The
+{\tt dep3-FP} context, detail of which is later described in Section
+6.4, is one of the context categories which is the most sensitive to
+$\theta_c$. The result indicates the performance decreases almost
+linearly v.s. $\theta_c$, making it difficult to fix a clear
+threshold. We set $\theta_c = 100$ as well, where the performance loss
+can be kept within 15\% range while the context types are cut-down by
+more than 95\% in number.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{15-4ia2f3.eps}
+\caption{The Context Cut-off Frequency $\theta_c$ and the Performance Change}
+\label{fig_cutoff_res}
+\end{center}
+\end{figure}
+
+\subsection{Effect of Indirect Dependency}
+
+Now we compare the performances of direct and indirect dependency
+contexts. Figure \ref{fig_exp1_tw} shows the performances of synonym
+acquisition when the calculation parameter is \verb|tfidf+cosine|,
+\verb|pmi+jaccard-s|, and \verb|ttest+jaccard-v|. They compare the
+five \verb|dep| categories and combinations: $C^1$(\verb|dep1|),
+$C^2$(\verb|dep2|), $C^3$(\verb|dep3|), $C^1\cup C^2$(\verb|dep12|),
+and $C^1\cup C^2\cup C^3$(\verb|dep123|), where $C^n$ is the set of
+contexts extracted from $D^n$. 
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{15-4ia2f4.eps}
+\caption{Comparison of Direct and Indirect Dependency Performance}
+\label{fig_exp1_tw}
+\end{center}
+\end{figure}
+
+The overall observation is that adding the indirect dependency
+\verb|dep2| to the conventional direct dependency \verb|dep1|,
+i.e., \verb|dep12|, increased the performance in some cases, and in
+most cases \verb|dep2| didn't outperform \verb|dep1| by itself. More
+specifically, this tendency is dependent on the calculation 
+parameters---for \verb|ttest+jaccard-v| the performance increased whenever
+\verb|dep2| was added to \verb|dep1|. For \verb|tfidf+cosine|,
+\verb|dep2| had negative effects on CC values, but the absolute value
+of performance was low (around 0.04) in the first place, and this
+effect can be ignored.
+
+\begin{table}[b]
+\caption{Examples of Acquired Synonyms for dep1 and dep12}
+\label{table_synonyms}
+\begin{center}
+\input{02table01.txt}
+\end{center}
+\end{table}
+
+To look further into the effect of indirect dependency, we list some
+specific examples of the acquired synonyms in Table
+\ref{table_synonyms}, in the descending order of similarity. The table
+also compares the cases when \verb|dep1| and \verb|dep12| were used as
+context. The shown result is the case when the acquisition was
+conducted using \verb|ttest+jaccard-v| as calculation parameter. The
+overall results of the top-ranked relevant words looked quite
+encouraging, showing a small number of totally irrelevant words in the
+list, which are marked by asterisk marks based on subjective
+judgement. Furthermore, some of the irrelevant words appearing in the
+\verb|dep1| lists disappeared and were replaced by more relevant words
+to the target words in the \verb|dep12| list, as {\em mussel} and {\em
+  nudity} for the target word {\em language}, as well as {\em
+  centimeter} and {\em convenience} for the target word {\em jewelry}
+show. We can grasp the general tendency that \verb|dep12| improves the
+quality of acquired synonyms from the list.
+
+Some of the comparisons, including the one mentioned above, shows
+partial effectiveness of indirect dependency, but the overall result
+does not look encouraging. More specifically, 3 out of 6 (two
+evaluation measures and three calculation parameters) comparisons
+showed the negative effect of \verb|dep12| over \verb|dep1|, and the
+result is much dependent on the choice of calculation parameters.
+
+Now remember that we used the {\em terminal word} positioned at the
+end of each dependency path as the contexts, i.e., bases of the
+constructed semantic space. However, we suspect that this kind of
+context representation is too coarse to fully represent the detailed
+difference of syntactical relation of words. Get back to the example
+illustrated in Fig.~\ref{fig_id_example}, and take the sentence (a)
+for example. When the relation: $({\it koala}, {\it eucalyptus}) \in
+D_{\rm ncsubj:eat:dobj-of} \subseteq D^2$ in this sentence is used, the
+context for {\it koala} will be \verb|eucalyptus|. However, it is
+considered to be important that the relation is not ``Koalas {\em
+  grow} eucalyptuses'', nor ``Koalas {\em hate} eucalyptuses'', but
+``Koalas {\em eat} eucalyptuses'', and this kind of word relation
+cannot be encoded in this {\em terminal word} representation. The
+mediating word {\em eat} should also be included in this
+case. Furthermore, there is a big discrepancy in the meaning between
+the sentences ``Koalas eat eucalyptuses'' and ``Eucalyptuses eat
+koalas''. These relations are degenerated into an identical relation
+\verb|koalas - eat - eucalyptus| even if the mediating word {\em eat}
+is included, unless syntactic relations of words are taken into
+consideration. Thus we suppose that much richer context
+representations which incorporate mediating words and syntactic
+relations have positive effects on the acquisition performance, and
+will discuss this issue in the following sections.
+
+\subsection{Context Representations}
+
+In this section, we consider four kinds of context representations
+when converting indirect dependency formalized in Section 3.2 to
+contexts.  This representation corresponds to the {\em basis mapping
+  function} $\mu$ which maps dependency paths into dimensions in
+semantic space described in \cite{Pado:07}, although the function and
+its effect have not been discussed so far.
+
+\begin{table}[b]
+\caption{Context Representations for Direct and Indirect Dependency}
+\label{tab_contex_repr}
+\begin{center}
+\input{02table02.txt}
+\par
+Examples of context representations are for the word {\em attack} in $({\it attack}, {\it motive}) \in D_{\rm dobj:of:iobj} \subseteq D^2$.
+\end{center}
+\end{table}
+
+The four context representations considered are summarized in Table
+\ref{tab_contex_repr}. In the following, suppose an indirect
+dependency $(w_0, w_l) \in D_{r} \subseteq D^l$, where the label $r =
+r_1:w_1:r_2:...:w_{l-1}:r_l$. Here we define the sequence of words
+$w_0, w_1, ..., w_l$ as {\em dependency path} and $l$ as the length of
+the path.  We call $w_0$ as {\em target word}, whose contexts are to
+be obtained, and $w_l$, i.e., the word positioned at the end of the
+path, as {\em terminal word}.
+
+\paragraph{Terminal Word (TW)} \quad
+
+This is the simplest context representation which has been used so
+far, where an indirect dependency is represented by the terminal word
+$w_l$. For example, from the indirect dependency example: $({\it
+  attack}, {\it motive}) \in D_{\rm dobj:of:iobj} \subseteq D^2$, the
+context for the target word {\em attack} is \verb|motive| and vice
+varsa, regardless of the syntactic relations these two words
+have. Because the context is represented only by the terminal word no
+matter how long the dependency path is, this is the coarsest context
+representation of the four, and is the same as the one adopted in
+\cite{Pado:07}, where it's referred as {\em word-based basis mapping}.
+
+\paragraph{Word Path (WP)} \quad
+
+In addition to the terminal word (\verb|TW|), this representation,
+word path (\verb|WP|), takes into account all the mediating words
+along the dependency path. The context for the target word $w_0$ is
+represented as $w_1:w_2:...:w_{l-1}:w_l$ (\verb|of:motive| for the
+example shown above). Notice that this \verb|WP| representation is an
+equivalence partitioning of \verb|TW| based on the concatenation of
+mediating words.
+
+\paragraph{Syntactic Path (SP)} \quad
+
+This representation takes into account the terminal word and the
+syntactic relations the two words have. Here the context for the
+target word $w_0$ is represented as $r_1:r_2:...:r_l:w_l$. For
+example, the context for the target word {\em attack} is represented
+as: \verb|dobj:iobj:motive|. In turn, the context for {\em motive} is
+\verb|iobj-of:dobj-of:attack| and the direction of the path is
+completely opposite. Notice that this \verb|SP| representation is
+another equivalence partitioning of \verb|TW| based on the
+concatenation of syntactic relations.
+
+\paragraph{Full Path (FP)} \quad
+
+The finest representation of context is full path (\verb|FP|), where
+the mediating words of indirect dependency are also considered in
+addition to the syntactic relations and the terminal word. More
+specifically, the context for the target word $w_0$ is represented as
+$r_1:w_1:r_2:w_2:...:w_{l-1}:r_l:w_l$ (\verb|dobj:of:iobj:motive| for
+the example shown above). Notice that this \verb|FP| representation is
+the equivalence partitioning of both \verb|WP| and \verb|SP|.
+
+\subsection{Comparison of Context Representations}
+
+
+\subsubsection{Extracted Semantic Spaces}
+
+Before moving on to the result for context representations, 
+\pagebreak
+in Table \ref{table_data_size} we show the statistics, i.e., the numbers of
+unique words, contexts, and co-occurrences, of the constructed
+semantic spaces using three kinds of contextual categories, three
+steps of indirect dependency, and four forms of context
+representations. It is shown that incorporating indirect dependency
+greatly increases the variation of both contexts and co-occurrences
+(compare \verb|dep1-WP| and \verb|dep2-WP|, for instance). On the
+other hand, when the indirect dependency was extended to \verb|dep3|,
+for some of the context representations (\verb|WP| and \verb|FP|), the
+numbers of unique contexts and co-occurrences actually decreased. We
+attribute this to the context representation granularity---these two
+representations are so fine-grained that most of the contexts were
+removed because they occurred less than $\theta_c$ times, causing the
+decreases in the semantic space sizes. As for the \verb|wbc|, we
+observe the data size problem here too---the size of \verb|wbc|
+contexts is greater than most of the context settings, although the
+performance of \verb|wbc| does not exceed \verb|dep|'s, as the
+previous experiment showed.
+
+
+\begin{table}[t]
+\caption{Statistics of the Constructed Semantic Spaces}
+\label{table_data_size}
+\begin{center}
+\input{02table03.txt}
+\end{center}
+\end{table}
+
+\subsubsection{Context Representations}
+
+Now we compare the individual performance of context
+representations. Figs.~\ref{fig_exp_tfidf}, \ref{fig_exp_pmi}, and
+\ref{fig_exp_ttest} show the comparisons of direct and indirect
+dependency when the calculation parameter is \verb|tfidf+cosine|,
+\verb|pmi+jaccard-s|, and \verb|ttest+jaccard-v|, respectively.
+Notice that the representations \verb|TW| and \verb|WP|, as well as
+\verb|SP| and \verb|FP| for \verb|dep1| are the same, thus the
+corresponding performances are also identical.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{15-4ia2f5.eps}
+\caption{Comparison of Direct and Indirect Dependency for tfidf+cosine}
+\label{fig_exp_tfidf}
+\end{center}
+\end{figure}
+\begin{figure}[t]
+\begin{center}
+\includegraphics{15-4ia2f6.eps}
+\caption{Comparison of Direct and Indirect Dependency for pmi+jaccard-s}
+\label{fig_exp_pmi}
+\end{center}
+\end{figure}
+\begin{figure}[t]
+\begin{center}
+\includegraphics{15-4ia2f7.eps}
+\caption{Comparison of Direct and Indirect Dependency for ttest+jaccard-v}
+\label{fig_exp_ttest}
+\end{center}
+\vspace{-1\baselineskip}
+\end{figure}
+
+We can tell from the result that context representation is such an
+important factor that it greatly influences the performances and the
+effectiveness of indirect dependency. More specifically, for the two
+complex context representations, i.e., \verb|WP| and \verb|FP|,
+\verb|dep2| gave positive effect and increased performance in as many
+as 10 out of 12 comparisons between \verb|dep1| and
+\verb|dep12|. However, other two simpler context representations,
+i.e., \verb|TW| and \verb|SP|, the performance increase was observed
+for 8 out of 12 comparisons. This result is summarized as this: the
+finer the representation of indirect dependency is, the better the
+result is likely to be. This tendency is especially salient for the AP
+values of \verb|pmi+jaccard-s|, where the performances for \verb|TW|
+and \verb|SP| decreased while that of \verb|WP| and \verb|FP|
+increased by adding indirect dependency \verb|dep2|.
+
+This provides us with an important suggestion that, in order to make
+the most of indirect dependency, it is preferable to use more complex
+and richer forms of context representations such as \verb|WP| and
+\verb|FP| in constructing the basis for semantic space. Furthermore,
+the data size comparison showed that finer representations don't
+always increase the semantic space size (Table \ref{table_data_size}),
+thus there is little need to consider the trade-offs between data size
+and performance.
+
+Considering the whole experiment, we observe that the order of
+well-performed representations was FP $>$ WP $>$ SP $>$ TW, by
+comparing each group of four bars with the same parameters in the
+graphs. There are only a few exceptions to this, including AP values
+for \verb|tfidf+cosine|, where simpler representations such as
+\verb|TW| and \verb|SP| often performed better than more complex
+ones. It is interesting that this order is exactly the same as the
+granularity scale, i.e., the complexity or the richness of
+representation. This result also confirms the superiority of
+fine-grained context representations in general.
+
+\subsection{Comparisons of Other Parameters}
+
+\subsubsection{Effect of Multiple Steps of Indirect Dependency}
+
+We confirmed the performance improvement for 18 out of 24 comparisons
+(2 performance measures, 3 parameter settings, and 4 context
+representations) of before and after the \verb|dep2| addition, thus we
+can conclude that incorporating indirect dependency is effective on
+the whole for synonym acquisition tasks. However, extending the
+dependency to \verb|dep3| worsened the performance for most cases, and
+adding \verb|dep3| to \verb|dep12|, i.e. \verb|dep123|, didn't further
+improve the result, either. This result suggests that extending and
+augmenting direct dependency just one step is sufficient in practice.
+
+\subsubsection{Calculation Parameters}
+
+Lastly, we briefly mention the effect of calculation parameter, which
+turned out to be another important factor when acquiring synonyms
+automatically. While \verb|pmi+jaccard-s| performed the best for AP,
+CC values for \verb|pmi+jaccard-s| were exceptionally ``sensitive'' to
+the performance differences. It is known that the weight function
+\verb|pmi| has the tendency to detect interesting and rare results
+\cite{Curran:02:improvements}, and we suspect that this property
+affected negatively in this case. The parameter
+\verb|ttest+jaccard-s|, on the contrary, showed stable and relatively
+good performance. On the whole, the comparison of
+Figs. \ref{fig_exp_tfidf}, \ref{fig_exp_pmi}, and
+\ref{fig_exp_ttest} suggests that \verb|pmi+jaccard-s| and
+\verb|ttest+jaccard-v| were the best choices, and this result goes
+roughly along with Curran and Moens' comparative study
+\cite{Curran:02:improvements}.
+
+\section{Conclusion}
+
+
+In this paper, we extended the normal direct dependency to cover
+indirectly related words and enhance the contextual information for
+distributional similarity. Word dependency was defined as a binary
+relation over the sentence words, and this indirect dependency was
+formalized as the composition of the dependency relation. We also
+proposed four kinds of context representations, which have been
+underestimated in the previous studies utilizing dependency-based
+contexts.
+
+We investigated the effectiveness of indirect dependency using
+automatic synonym acquisition task under various parameter settings
+including weight functions and similarity measures. The acquisition
+performance was evaluated based on two evaluation measures, AP and CC,
+both of which are based on the existing thesauri including WordNet.
+The experiment showed that incorporating indirect dependency in
+addition to direct dependency was effective for the acquisition
+performance. The improvement was especially clear when fine-grained
+context representations, namely \verb|WP| and \verb|FP|, were used.
+
+When compared to the conventional word-based context, much higher
+performance was achieved by dependency-based context with much smaller
+data size, which means that the indirect context is effective in terms
+of quality as well as computational cost. The use of indirect
+dependency, along with the fine-grained context representations, is a
+very efficient way to increase the contextual information variety,
+taking into consideration the fact that the diversity of the contexts
+is likely to be essential to the acquisition performance.
+
+
+
+To note, several methods which utilize latent analysis techniques such
+as SVD \cite{Deerwester:90} to compress the original dimensionality of
+semantic space were proposed and shown effective. The extension of
+context proposed in this paper does not conflict with these
+techniques. Rather, they can be incorporated and may result in even
+better outcome, which should be investigated in the near future.
+
+In this study, we treated all the contexts equally, but we suppose
+that there are effective contexts as well as useless ones, and
+different weights should be assigned to different contexts. Pado and
+Lapata \cite{Pado:07} tackle this issue by introducing {\em path value
+  function}, which assigns different weights to the paths using such
+parameters as path length and word relations. Optimal settings for
+this path weighting should be further investigated and addressed in
+another article in the future.
+
+As the future work, the effectiveness of our methods and context
+representations should be confirmed using other kinds of applications
+and word relations other than synonyms. Also, because where we started
+from this time is the ``difference'' of word-based contexts and
+dependency-based contexts, the investigation of other kinds of useful
+contextual information and their comparison should be conducted as the
+future work.
+
+\section*{Appendix: List of the 100 Chosen LDV Words}
+
+\begin{verbatim}
+accident, activity, amount, art, attention, bill, burst, business, care
+civilization, claim, club, contract, cost, crack, creature, criminal, deal
+death, decay, difference, discovery, double, dream, drop, end, establishment
+evil, explanation, eye, factory, faint, fellow, figure, flash, flood, flower
+form, fortune, freedom, hair, heaven, hold, horizon, host, hurry, ill, image
+improvement, job, joke, key, limit, line, lot, mass, matter, minister, mistake
+mix, moral, national, need, nothing, offer, opponent, plant, pot, present,
+probability, proof, property, relative, report, reward, ride, rule, rush, second
+spite, sport, spread, stick, sum, sweep, swell, swing, team, test, thing, threat
+tourist, treat, tribe, universe, victory, voice, vote, wedding, win
+\end{verbatim}
+
+
+\bibliographystyle{jnlpbbl_1.3}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Briscoe, Carroll, \BBA\ Watson}{Briscoe
+  et~al.}{2006}]{Briscoe:06}
+Briscoe, T., Carroll, J., \BBA\ Watson, R. \BBOP 2006\BBCP.
+\newblock \BBOQ The Second Release of the RASP System\BBCQ\
+\newblock In {\Bem Proc. of the COLING/ACL 2006 Interactive Presentation
+  Sessions}, \mbox{\BPGS\ 77--80}.
+
+\bibitem[\protect\BCAY{Budanitsky \BBA\ Hirst}{Budanitsky \BBA\
+  Hirst}{2006}]{Budanitsky:06}
+Budanitsky, A.\BBACOMMA\ \BBA\ Hirst, G. \BBOP 2006\BBCP.
+\newblock \BBOQ Evaluating WordNet-based Measures of Lexical Semantic
+  Relatedness\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 32}, \mbox{\BPGS\ 13--47}.
+
+\bibitem[\protect\BCAY{Chung \BBA\ Lee}{Chung \BBA\ Lee}{2001}]{Chung:01}
+Chung, Y.~M.\BBACOMMA\ \BBA\ Lee, J.~Y. \BBOP 2001\BBCP.
+\newblock \BBOQ A corpus-based approach to comparative evaluation of
+  statistical term association measures\BBCQ\
+\newblock {\Bem Journal of the American Society for Information Science and
+  Technology}, {\Bbf 52}, \mbox{\BPGS\ 283--296}.
+
+\bibitem[\protect\BCAY{Collins}{Collins}{2002}]{Collins:02}
+Collins \BBOP 2002\BBCP.
+\newblock {\Bem Collins Cobuild Major New Edition CD-ROM}.
+\newblock HarperCollins Publishers.
+
+\bibitem[\protect\BCAY{Crouch \BBA\ Yang}{Crouch \BBA\ Yang}{1992}]{Crouch:92}
+Crouch, C.~J.\BBACOMMA\ \BBA\ Yang, B. \BBOP 1992\BBCP.
+\newblock \BBOQ Experiments in Automatic Statistical Thesaurus
+  Construction\BBCQ\
+\newblock In {\Bem Proc. of the 15th annual international ACM SIGIR conference
+  on Research and development in information retrieval}, \mbox{\BPGS\ 77--88}.
+
+\bibitem[\protect\BCAY{Curran \BBA\ Moens}{Curran \BBA\
+  Moens}{2002a}]{Curran:02:improvements}
+Curran, J.~R.\BBACOMMA\ \BBA\ Moens, M. \BBOP 2002a\BBCP.
+\newblock \BBOQ Improvements in automatic thesaurus extraction\BBCQ\
+ In Workshop on
+  Unsupervised Lexical Acquisition.\
+\newblock In {\Bem Proc. of ACL SIGLEX}, \mbox{\BPGS\ 231--238}.
+
+\bibitem[\protect\BCAY{Curran \BBA\ Moens}{Curran \BBA\
+  Moens}{2002b}]{Curran:02:scaling}
+Curran, J.~R.\BBACOMMA\ \BBA\ Moens, M. \BBOP 2002b\BBCP.
+\newblock \BBOQ Scaling Context Space\BBCQ\
+\newblock In {\Bem Proc. of ACL 2002}, \mbox{\BPGS\ 231--238}.
+
+\bibitem[\protect\BCAY{Deerwester, Dumais, Furnas, Landauer, \BBA\
+  Harshman}{Deerwester et~al.}{1990}]{Deerwester:90}
+Deerwester, S., Dumais, S.~T., Furnas, G.~W., Landauer, T.~K., \BBA\ Harshman,
+  R. \BBOP 1990\BBCP.
+\newblock \BBOQ Indexing by Latent Semantic Analysis\BBCQ\
+\newblock {\Bem Journal of the American Society for Information Science}, {\Bbf
+  41}  (6), \mbox{\BPGS\ 391--407}.
+
+\bibitem[\protect\BCAY{Roget}{Roget}{1995}]{Roget:95}
+Editors of~the American Heritage~Dictionary, E. \BBOP 1995\BBCP.
+\newblock {\Bem Roget's II: The New Thesaurus, 3rd ed.}
+\newblock Houghton Mifflin.
+
+\bibitem[\protect\BCAY{Fellbaum}{Fellbaum}{1998}]{Fellbaum:98}
+Fellbaum, C. \BBOP 1998\BBCP.
+\newblock {\Bem WordNet: an electronic lexical database}.
+\newblock MIT Press.
+
+\bibitem[\protect\BCAY{Gamallo, Gasperin, Agustini, \BBA\ Lopes}{Gamallo
+  et~al.}{2001}]{Gamallo:01}
+Gamallo, P., Gasperin, C., Agustini, A., \BBA\ Lopes, G.~P. \BBOP 2001\BBCP.
+\newblock \BBOQ Syntactic-Based Methods for Measuring Word Similarity\BBCQ\
+\newblock {\Bem Text, Speech, and Discourse (TSD-2001), Lecture Notes in
+  Computer Science}, {\Bbf 2166}, \mbox{\BPGS\ 116--125}.
+
+\bibitem[\protect\BCAY{Grefenstette}{Grefenstette}{1994}]{Grefenstette:94}
+Grefenstette, G. \BBOP 1994\BBCP.
+\newblock {\Bem Explorations in Automatic Thesuarus Discovery}.
+\newblock Kluwer Academic Publisher.
+
+\bibitem[\protect\BCAY{Hagiwara, Ogawa, \BBA\ Toyama}{Hagiwara
+  et~al.}{2006}]{Hagiwara:06}
+Hagiwara, M., Ogawa, Y., \BBA\ Toyama, K. \BBOP 2006\BBCP.
+\newblock \BBOQ Selection of Effective Contextual Information for Automatic
+  Synonym Acquisition\BBCQ\
+\newblock In {\Bem Proc. of COLING/ACL 2006}, \mbox{\BPGS\ 353--360}.
+
+\bibitem[\protect\BCAY{Hagiwara, Ogawa, \BBA\ Toyama}{Hagiwara
+  et~al.}{2007}]{Hagiwara:07}
+Hagiwara, M., Ogawa, Y., \BBA\ Toyama, K. \BBOP 2007\BBCP.
+\newblock \BBOQ Effectiveness of Indirect Dependency for Automatic Synonym
+  Acquisition\BBCQ\
+\newblock In {\Bem Proc. of CoSMo 2007}, \mbox{\BPGS\ 1--8}.
+
+\bibitem[\protect\BCAY{Harris}{Harris}{1985}]{Harris:85}
+Harris, Z.\BBACOMMA\ \BBA\ Katz, J.~J. (ed.) \BBOP 1985\BBCP.
+\newblock {\Bem The Philosophy of Linguistics}, \mbox{\BPGS\ 26--47}.
+\newblock Oxford University Press.
+
+\bibitem[\protect\BCAY{Hindle}{Hindle}{1990}]{Hindle:90}
+Hindle, D. \BBOP 1990\BBCP.
+\newblock \BBOQ Noun classification from predicate-argument structures\BBCQ\
+\newblock In {\Bem Proc. of ACL 1990}, \mbox{\BPGS\ 268--275}.
+
+\bibitem[\protect\BCAY{Hirst \BBA\ St-Onge}{Hirst \BBA\
+  St-Onge}{1998}]{Hirst:98}
+Hirst, G.\BBACOMMA\ \BBA\ St-Onge, D. \BBOP 1998\BBCP.
+\newblock \BBOQ Lexical chains as representations of context for the detection
+  and correction of malapropisms\BBCQ\
+\newblock In Christiane Fellbaum (ed.) {\Bem WordNet: An electronic lexical
+  database}, \mbox{\BPGS\ 305--332}. MIT Press.
+
+\bibitem[\protect\BCAY{Jiang \BBA\ Conrath}{Jiang \BBA\
+  Conrath}{1997}]{Jiang:97}
+Jiang, J.~J.\BBACOMMA\ \BBA\ Conrath, D.~W. \BBOP 1997\BBCP.
+\newblock \BBOQ Semantic similarity based on corpus statistics and lexical
+  taxonomy\BBCQ\
+\newblock In {\Bem Proc. of International Conference on Research in
+  Computational Linguistics}, \mbox{\BPGS\ 19--33}.
+
+\bibitem[\protect\BCAY{Jing \BBA\ Croft}{Jing \BBA\ Croft}{1994}]{Jing:94}
+Jing, Y.\BBACOMMA\ \BBA\ Croft, B. \BBOP 1994\BBCP.
+\newblock \BBOQ An Association Thesaurus for Information Retrieval\BBCQ\
+\newblock In {\Bem Proc. of RIAO(Recherche d'Informations Assist\'{e}e par
+  Ordinateur) 1994}, \mbox{\BPGS\ 146--160}.
+
+\bibitem[\protect\BCAY{Kojima \BBA\ Ito}{Kojima \BBA\ Ito}{1995}]{Kojima:95}
+Kojima, H.\BBACOMMA\ \BBA\ Ito, A. \BBOP 1995\BBCP.
+\newblock \BBOQ Adaptive Scaling of a Semantic Space\BBCQ\
+\newblock In {\Bem IPSJ SIGNotes Natural Language, NL108-13}, \mbox{\BPGS\
+  81--88}.
+
+\bibitem[\protect\BCAY{Lin}{Lin}{1998}]{Lin:98}
+Lin, D. \BBOP 1998\BBCP.
+\newblock \BBOQ Automatic retrieval and clustering of similar words\BBCQ\
+\newblock In {\Bem Proc. of COLING/ACL 1998}, \mbox{\BPGS\ 786--774}.
+
+\bibitem[\protect\BCAY{Lin \BBA\ Pantel}{Lin \BBA\ Pantel}{2001}]{Lin:01}
+Lin, D.\BBACOMMA\ \BBA\ Pantel, P. \BBOP 2001\BBCP.
+\newblock \BBOQ Discovery of inference rules for question answering\BBCQ\
+\newblock {\Bem Natural Language Engineering}, {\Bbf 7}  (4), \mbox{\BPGS\
+  343--360}.
+
+\bibitem[\protect\BCAY{Lowe \BBA\ McDonald}{Lowe \BBA\
+  McDonald}{2000}]{Lowe:00}
+Lowe, W.\BBACOMMA\ \BBA\ McDonald, S. \BBOP 2000\BBCP.
+\newblock \BBOQ The direct route: Mediated priming in semantic space\BBCQ\
+\newblock In {\Bem Proc. of the 22nd Annual Conference of the Cognitive Science
+  Society}, \mbox{\BPGS\ 675--680}.
+
+\bibitem[\protect\BCAY{Ng \BBA\ Lee}{Ng \BBA\ Lee}{1996}]{Ng:96}
+Ng, H.~T.\BBACOMMA\ \BBA\ Lee, H.~B. \BBOP 1996\BBCP.
+\newblock \BBOQ Integrating Multiple Knowledge Sources to Disambiguate Word
+  Sense: An Exemplar-Based Approach\BBCQ\
+\newblock In {\Bem Proc. of ACL 1996}, \mbox{\BPGS\ 40--47}.
+
+
+
+\bibitem[\protect\BCAY{Pado \BBA\ Lapata}{Pado \BBA\ Lapata}{2007}]{Pado:07}
+Pado, S.\BBACOMMA\ \BBA\ Lapata, M. \BBOP 2007\BBCP.
+\newblock \BBOQ Dependency-Based Construction of Semantic Space Models\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 33}  (2), \mbox{\BPGS\
+  161--199}.
+
+\bibitem[\protect\BCAY{Pereira, Tishby, \BBA\ Lee}{Pereira
+  et~al.}{1993}]{Pereira:95}
+Pereira, F., Tishby, N., \BBA\ Lee, L. \BBOP 1993\BBCP.
+\newblock \BBOQ Distributional Clustering of English Word\BBCQ\
+\newblock In {\Bem Proc. of ACL 1993}, \mbox{\BPGS\ 183--190}.
+
+\bibitem[\protect\BCAY{Picard}{Picard}{1999}]{Picard:99}
+Picard, J. \BBOP 1999\BBCP.
+\newblock \BBOQ Finding content-bearing terms using term similarities\BBCQ\
+\newblock In {\Bem Proc. of EACL 1999}, \mbox{\BPGS\ 241--244}.
+
+\bibitem[\protect\BCAY{Sakaki, Matsuo, Uchiyama, \BBA\ Ishizuka}{Sakaki
+  et~al.}{2007}]{Sakaki:07}
+Sakaki, T., Matsuo, Y., Uchiyama, K., \BBA\ Ishizuka, M. \BBOP 2007\BBCP.
+\newblock \BBOQ Construction of Related Terms Thesauri from the Web\BBCQ\
+\newblock {\Bem Journal of Natural Language Procesing}, {\Bbf 14}  (2),
+  \mbox{\BPGS\ 3--31}.
+
+\bibitem[\protect\BCAY{Weeds, Weir, \BBA\ McCarthy}{Weeds
+  et~al.}{2004}]{Weeds:04}
+Weeds, J., Weir, D., \BBA\ McCarthy, D. \BBOP 2004\BBCP.
+\newblock \BBOQ Characterising Measures of Lexical Distributional
+  Similarity\BBCQ\
+\newblock In {\Bem Proc. of COLING 2004}, \mbox{\BPGS\ 1015--1021}.
+
+\bibitem[\protect\BCAY{Wu \BBA\ Palmer}{Wu \BBA\ Palmer}{1994}]{Wu:94}
+Wu, Z.\BBACOMMA\ \BBA\ Palmer, M. \BBOP 1994\BBCP.
+\newblock \BBOQ Verb Semantics and Lexical Selection\BBCQ\
+\newblock In {\Bem Proc. of ACL 1994}, \mbox{\BPGS\ 133--138}.
+
+\end{thebibliography}
+
+\begin{biography}
+
+\bioauthor[:]{Masato Hagiwara}{
+Masto Hagiwara received his Master's Degree of Information Science
+from Nagoya University in 2006, after skipping his fourth year of
+undergraduate.  He is currently a Ph.D candidate, and his research
+interests include statistical natural language processing, especially
+lexical knowledge acquisition and automatic thesaurus construction.  }
+
+\bioauthor[:]{Yasuhiro Ogawa}{
+Yasuhiro Ogawa received his Bachelor's Degree, Master's Degree, and
+Ph. D. Degree of Engineering in 1995, 1997, and 2000, respectively.
+He is currently an assistant professor in the Graduate School of Information
+Science at Nagoya University. His research interests include Japanese
+morphological analysis, Japanese-Uighur machine translation, 
+legal informatics, and e-legislation.
+}
+
+\bioauthor[:]{Katsuhiko Toyama}{
+ Katsuhiko Toyama received his Bachelor's Degree, Master's Degree, and
+ Ph. D. Degree of Engineering in 1984, 1986, and 1989, respectively.
+ He is currently an associate professor in the Graduate School of
+ Information Science at Nagoya University. His research interests
+ include natural language processing, especially legal informatics and
+ e-legislation, as well as logical knowledge representation.
+ 
+}
+\end{biography}
+
+\biodate
+
+\clearpage
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+\end{document}
+

@@ -1,0 +1,1530 @@
+    \documentclass[english]{jnlp_1.4}
+
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{hangcaption_jnlp}
+\usepackage{array}
+\usepackage{amsmath}
+\usepackage[multi]{otf}
+\usepackage{biodateX}
+
+
+\Volume{22}
+\Number{3}
+\Month{September}
+\Year{2015}
+
+\received{2014}{10}{9}
+\revised{2014}{12}{30}
+\rerevisedX{April 7, 2015; May 15, 2015}
+\accepted{2015}{6}{3}
+
+\setcounter{page}{139}
+
+\etitle{Parallel Sentence Extraction Based on Unsupervised Bilingual Lexicon Extraction from Comparable Corpora}
+\eauthor{Chenhui Chu\affiref{Author_1}\affiref{Author_2} \and Toshiaki Nakazawa\affiref{Author_2} \and Sadao Kurohashi\affiref{Author_3}}
+\eabstract{
+Parallel corpora are crucial for statistical machine translation (SMT); however, they are 
+quite scarce for most language pairs and domains. As comparable corpora are far more available,
+many studies have been conducted to extract parallel sentences from them for SMT. 
+Parallel sentence extraction relies highly on bilingual lexicons that are also very scarce. 
+We propose an unsupervised bilingual lexicon extraction based parallel sentence extraction system
+that first extracts bilingual lexicons from comparable corpora and then extracts parallel sentences
+using the lexicons. Our bilingual lexicon extraction method is based on a combination of topic model and context 
+based methods in an iterative process. The proposed method does not rely on any prior knowledge,
+and the performance can be improved iteratively. 
+The parallel sentence extraction method uses a binary classifier for parallel 
+sentence identification. The extracted bilingual lexicons are used for the classifier to improve
+the performance of parallel sentence extraction.
+Experiments conducted with the Wikipedia data indicate
+that the proposed bilingual lexicon extraction method greatly outperforms existing 
+methods, and the extracted bilingual lexicons significantly improve the performance of parallel 
+sentence extraction for SMT.
+}
+
+\ekeywords{Bilingual Lexicon Extraction, Parallel Sentence Extraction, Comparable \linebreak Corpora}
+
+\headauthor{Chu, Nakazawa, Kurohashi}
+\headtitle{Parallel Sentence Extraction Based on Bilingual Lexicon Extraction}
+
+\affilabel{Author_1}{Chenhui Chu}{This work was done when the first author was a Japan Society for the Promotion of Science Research Fellow.}
+\affilabel{Author_2}{Toshiaki Nakazawa}{Japan Science and Technology Agency}
+\affilabel{Author_3}{Sadao Kurohashi}{Kyoto University}
+
+
+\begin{document}
+
+\maketitle
+
+
+
+\section{Introduction}
+In statistical machine translation (SMT) \cite{brown-EtAl:1993,Och:2003:SCV:778822.778824,Koehn:2010:SMT:1734086}, 
+translation knowledge is acquired from parallel corpora (sentence-aligned bilingual texts);
+therefore, the quality and quantity of
+parallel corpora are crucial. However, high quality parallel corpora of sufficient size are currently
+available only for a few language pairs such as languages paired with English and several 
+European language pairs. Moreover, even for these language pairs, the available domains are 
+limited. For the rest, comprising the majority of language pairs and domains, only a few or no parallel 
+corpora are available. This scarceness of parallel corpora has become the major bottleneck for SMT.
+
+Comparable corpora are a set of monolingual corpora that roughly describe the same 
+topic in different languages but are not exact translation equivalents. 
+Exploiting comparable corpora for SMT is the key to addressing the 
+scarceness of parallel corpora because
+comparable corpora are far more available than parallel corpora, and 
+there is a large amount of parallel data contained in comparable texts.
+Figure \ref{fig:wiki} shows an example of Japanese-Chinese comparable texts 
+from Wikipedia describing the French city S\`ete that contain parallel sentences 
+and bilingual lexicons.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-3ia1f1.eps}
+\end{center}
+\hangcaption{Example of Japanese-Chinese comparable texts describing the French city S\`ete from Wikipedia (parallel sentences are linked with solid lines: bilingual lexicons are linked with dashed lines)}
+\label{fig:wiki}
+\end{figure}
+
+Many studies have been conducted to extract parallel sentences from 
+comparable corpora for SMT. Parallel sentence extraction depends highly on bilingual
+lexicons because the word overlap between a sentence pair is a crucial
+criterion to identify truly parallel sentences from erroneous ones, and bilingual 
+lexicons are required to calculate this. Previous studies have used either manually created lexicons 
+\cite{utiyama-isahara:2003:ACL,fung-cheung:2004:COLING,Adafre:2006:EACL,Lu:2010:LREC}
+or lexicons generated from a seed parallel corpus 
+\cite{zhao:2002:IEEE,Munteanu:2005,tillmann:2009:Short,smith-quirk-toutanova:2010:NAACLHLT,Abdul-RaufS11,Stefanescu:2012:EAMT,Stefanescu:2013:CICLing,ling-EtAl:2013:ACL2013}
+to identify parallel sentences.
+However, manual construction of bilingual lexicons is very expensive and
+time-consuming, and high quality seed parallel corpora of sufficient size are only available for
+limited language pairs and domains. A more desirable method is extracting 
+bilingual lexicons from comparable corpora automatically, and using them for parallel sentence extraction.
+
+Here, we propose an unsupervised bilingual lexicon extraction based
+parallel sentence extraction system. We first extract bilingual lexicons from comparable 
+corpora in an unsupervised manner. We then use them for parallel sentence extraction. 
+The proposed system consists of two major components:
+\begin{itemize} 
+\item Bilingual lexicon extraction: This is motivated by a method proposed in a previous study \cite{chu-nakazawa-kurohashi:2014:CICLing}
+  and is used to extract bilingual lexicons from comparable corpora. Chu et al. \citeyear{chu-nakazawa-kurohashi:2014:CICLing} only evaluated 
+  the accuracy of the lexicons without showing their application. In this study, we apply the 
+  extracted lexicons to parallel sentence extraction. Our bilingual lexicon extraction method is based on a 
+  combination of the topic model based method (TMBM) \cite{vulic-desmet-moens:2011:ACL-HLT2011} and 
+  the context based method (CBM) \cite{rapp:1999:ACL} in an iterative process. TMBM and CBM are two main categories of methods 
+  proposed for bilingual lexicon extraction from comparable corpora.
+  The proposed method maintains the advantages of TMBM, which does not require any prior knowledge, and can iteratively 
+  improve the accuracy of bilingual lexicon extraction through combination CBM.
+\item Parallel sentence extraction: This procedure is inspired by a previous study \cite{chu:2014:LREC}, 
+  and is used to identify parallel sentences from comparable corpora. Chu et al. \citeyear{chu:2014:LREC} used
+  bilingual lexicons generated from a seed parallel corpus to identify parallel sentences. In 
+  this study, we extract bilingual lexicons from comparable corpora for parallel sentence extraction. 
+  Our parallel sentence extraction method uses a binary classifier for parallel sentence identification following 
+  \cite{Munteanu:2005}. We use the extracted lexicons to calculate the word overlap features for 
+  the classifier to improve performance.
+\end{itemize} 
+
+We conduct bilingual lexicon extraction experiments with Chinese-English, Japanese-English, and 
+Japanese-Chinese Wikipedia data, and bilingual lexicon extraction based parallel sentence 
+extraction experiments with Japanese-Chinese Wikipedia data. The experimental 
+results show that the proposed bilingual lexicon extraction method considerable outperforms 
+previously reported methods, and the extracted bilingual lexicons significantly improve the performance of parallel 
+sentence extraction for SMT. The proposed system is language independent 
+because it does not depend on language specific knowledge.
+This system can also be applied to comparable corpora other than Wikipedia
+in which article alignment has been established.
+
+
+\section{Related Work}
+
+Here, we review the literature of bilingual lexicon extraction and parallel sentence extraction 
+separately. We then describe work related to bilingual lexicon extraction for parallel sentence extraction.
+
+
+\subsection{Bilingual Lexicon Extraction}
+
+\subsubsection{Topic model based methods}
+
+The TMBM uses the distributional hypothesis on topics, stating
+that two words are potential translation candidates if they are frequent
+in the same cross-lingual topics and not observed in other
+cross-lingual topics \cite{vulic-desmet-moens:2011:ACL-HLT2011}.
+TMBM trains a bilingual latent Dirichlet allocation (BiLDA) topic model on
+document-aligned comparable corpora and identifies word translations
+relying on word-topic distributions from the trained topic model. This
+method is attractive as it does not require any prior knowledge.
+
+Vuli\'{c} et al. \citeyear{vulic-desmet-moens:2011:ACL-HLT2011}
+first proposed this method. Later, Vuli\'{c} and Moens
+\citeyear{vulic-moens:2012:EACL2012} extended this method to detect
+highly confident word translations using a symmetrization
+process and one-to-one constraints. They demonstrated a
+way to build a high quality seed dictionary using both BiLDA and
+cognates. \citeA{liu-duh-matsumoto:2013:CoNLL-2013}
+developed this method by converting document-aligned comparable corpora
+into a parallel topic-aligned corpus using BiLDA topic models and 
+identifying word translations with the help of word alignment. \citeA{richardson-nakazawa-kurohashi:2013:IJCNLP} exploited this method in a
+transliteration task. Vuli\'{c} and Moens \citeyear{vulic-moens:2013:NAACL-HLT} 
+improved this method using BiLDA to learn the semantic word responses of 
+words and identify word translations using the semantic word response vectors.
+
+Our study differs from previous studies in that it uses a combination of TMBM and CBM.
+Vuli\'{c} and Moens \citeyear{vulic-moens:2013:EMNLP} also proposed
+a combination method that obtains an initial seed dictionary with a variant of TMBM.
+Their method increases the size of the seed dictionary iteratively using only CBM.
+Our method differs from the method proposed by \cite{vulic-moens:2013:EMNLP} in
+that it produces an initial seed dictionary for all source words in the vocabulary with TMBM
+and iteratively improves the quality using a combination of TMBM and CBM. 
+We demonstrate that this combination outperforms both TMBM and CBM. In addition, 
+Vuli\'{c} and Moens \citeyear{vulic-moens:2013:EMNLP} compared the effects
+of the size of the initial seed dictionary and showed that using all bilingual 
+lexicons obtained by TMBM demonstrated the best or comparable performance relative to the best performing
+method, which is similar to our method as it iterates using a seed dictionary for all source words.
+
+
+\subsubsection{Context based methods}
+
+From the pioneering work of \cite{rapp:1995:ACL} and \cite{fung:1995},
+various studies have been conducted on CBM for
+extracting bilingual lexicons from comparable corpora. CBM
+is based on the distributional hypothesis on context, stating
+that words with similar meaning appear in similar contexts across
+languages. It usually consists of three steps: context vector modeling,
+vector similarity calculation, and translation identification that
+considers a candidate with higher similarity score as a more confident
+translation. \citeA{gaussier-EtAl:2004:ACL} presented a geometric view of this process.
+Previous studies have used different definitions of context
+such as window-based context
+\cite{fung:1995,rapp:1999:ACL,koehn-knight:2002:ACL02-ULA,haghighi-EtAl:2008:ACLMain,prochasson-fung:2011:ACL-HLT2011,tamura-watanabe-sumita:2012:EMNLP-CoNLL},
+sentence-based context \cite{fung-yee:1998:ACLCOLING}, and
+syntax-based context
+\cite{garera-callisonburch-yarowsky:2009:CoNLL,yu-tsujii:2009:NAACLHLT09-Short,qian-EtAl:2012:PAPERS}. 
+To quantify the strength of the association between a word and its context word,
+different association measures have been used, such as log likelihood ratio
+\cite{rapp:1999:ACL}, term frequency - inverse document
+frequency (TF-IDF) \cite{fung-yee:1998:ACLCOLING} and pointwise mutual information \cite{andrade-nasukawa-tsujii:2010:PAPERS}.
+Previous studies have also used different measures to compute the
+similarity between the vectors, such as cosine similarity
+\cite{fung-yee:1998:ACLCOLING,garera-callisonburch-yarowsky:2009:CoNLL,prochasson-fung:2011:ACL-HLT2011,tamura-watanabe-sumita:2012:EMNLP-CoNLL},
+Euclidean distance \cite{fung:1995,yu-tsujii:2009:NAACLHLT09-Short},
+the city-block metric \cite{rapp:1999:ACL}, and
+Spearman rank order \cite{koehn-knight:2002:ACL02-ULA}.
+Laroche and Langlais \citeyear{laroche-langlais:2010:PAPERS} conducted a systematic study 
+using different association and similarity measures for CBM.
+
+Essentially, CBM requires a seed dictionary to project
+the source vector onto the vector space of the target language, which is
+one of the main concerns of the proposed method. In previous studies, a seed
+dictionary was usually created manually
+\cite{rapp:1999:ACL,garera-callisonburch-yarowsky:2009:CoNLL} and
+sometimes complemented with bilingual lexicons extracted
+from a parallel corpus
+\cite{fung-yee:1998:ACLCOLING,tamura-watanabe-sumita:2012:EMNLP-CoNLL},
+parallel sentences mined from comparable corpora \cite{morin-prochasson:2011:BUCC},
+or the Web \cite{prochasson-fung:2011:ACL-HLT2011}.
+In addition, some studies have attempted to create a seed dictionary using
+cognates \cite{koehn-knight:2002:ACL02-ULA,haghighi-EtAl:2008:ACLMain};
+however, this cannot be applied to distant language pairs that do not
+share cognates, such as Chinese-English and Japanese-English.
+There are also some studies that have not required a seed dictionary
+\cite{rapp:1995:ACL,fung:1995,yu-tsujii:2009:NAACLHLT09-Short}. However,
+these studies show lower accuracy compared to conventional methods
+that do use a seed dictionary.
+
+Our study differs from previous studies in that it uses a seed dictionary learned 
+from comparable corpora in an unsupervised manner that is acquired automatically 
+without prior knowledge.
+
+\subsection{Parallel Sentence Extraction}
+
+As parallel sentences tend to appear in similar article pairs, many
+studies first conduct article alignment from comparable corpora and then
+identify parallel sentences from aligned article pairs.
+Cross-lingual information retrieval technology is commonly used for article alignment
+\cite{utiyama-isahara:2003:ACL,fung-cheung:2004:COLING,Munteanu:2005}.
+Large-scale article alignment from the Web has also been studied
+\cite{Resnik:2003:WPC:964751.964753,uszkoreit-EtAl:2010:PAPERS}.
+Our study extracts parallel sentences from Wikipedia, which is a
+special type of comparable corpora because article alignment is
+established via interlanguage links. Approaches without article
+alignment have also been proposed
+\cite{tillmann:2009:Short,Abdul-RaufS11,Stefanescu:2012:EAMT,ling-EtAl:2013:ACL2013}.
+These studies retrieve candidate sentence pairs directly and select
+parallel sentences using various filtering methods. 
+
+Parallel sentence identification methods can be classified into two
+different approaches, binary classification
+\cite{Munteanu:2005,tillmann:2009:Short,smith-quirk-toutanova:2010:NAACLHLT,Stefanescu:2012:EAMT}
+and translation similarity measures
+\cite{utiyama-isahara:2003:ACL,fung-cheung:2004:COLING,Abdul-RaufS11}.
+Similar features such as word overlap and sentence length based features 
+are used in both approaches. We believe that a machine learning 
+approach can be more discriminative with respect to the features; thus, we adopt the binary 
+classification approach.
+
+Previous studies have extracted parallel sentences from various types of comparable corpora, 
+such as bilingual news articles 
+\cite{zhao:2002:IEEE,utiyama-isahara:2003:ACL,Munteanu:2005,tillmann:2009:Short,do:2010:EAMT,Abdul-RaufS11},
+patent data \cite{utiyama:2007:MTS,Lu:2010:LREC}, social media \cite{ling-EtAl:2013:ACL2013},
+and the Web \cite{Resnik:2003:WPC:964751.964753,jiang-EtAl:2009:ACLIJCNLP,hong-EtAl:2010:PAPERS}. 
+Recently, several studies have also been conducted to extract parallel sentences from
+Wikipedia \cite{Adafre:2006:EACL,smith-quirk-toutanova:2010:NAACLHLT,Stefanescu:2013:CICLing}.
+
+
+\subsection{Bilingual Lexicon Extraction for Parallel Sentence Extraction}
+
+We are aware of only one previous study that uses bilingual lexicon extraction for
+parallel sentence extraction \cite{smith-quirk-toutanova:2010:NAACLHLT}.
+Smith et al. \citeyear{smith-quirk-toutanova:2010:NAACLHLT} extracted
+bilingual lexicons from aligned Wikipedia articles on the basis of a supervised method. 
+One drawback of their method is that manually created language specific training data, 
+which is difficult to obtain, is required to achieve satisfactory results. Our study differs 
+in that it uses an unsupervised bilingual lexicon extraction method that does not require manual efforts.
+
+
+\section{Bilingual Lexicon Extraction Based Parallel Sentence Extraction System}
+
+This study extracts bilingual lexicons and parallel sentences from Wikipedia.
+The overview of our bilingual lexicon extraction based parallel sentence extraction 
+system is presented in Figure~\ref{overview}. We first align articles on the same topic 
+in Wikipedia via the interlanguage links. Next, we extract bilingual lexicons from
+the aligned articles. From the same aligned articles, we generate all possible sentence pairs
+using the Cartesian product and discard pairs that do not pass a filter that reduces 
+candidate pairs by keeping more reliable sentences.
+Sentence length ratio, dictionary-based word overlap \cite{Munteanu:2005},
+and cognate overlap conditions \cite{chu:2014:LREC} have been proposed for this filter.
+However, we simply use a sentence length ratio based filter.
+Finally, we use a classifier trained with a small number of parallel
+sentences from a seed parallel corpus to identify the parallel 
+sentence from the candidates. 
+{We generate bilingual lexicons from the seed parallel corpus on the basis of
+the sequential word-based statistical 
+alignment model of the IBM models \cite{brown-EtAl:1993}.
+The generated lexicons and} the bilingual lexicons extracted by the proposed method are combined to a 
+bilingual dictionary used for the classifier to extract parallel sentences.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{22-3ia1f2.eps}
+\end{center}
+\caption{Bilingual lexicon extraction based parallel sentence extraction system}
+\label{overview}
+\end{figure}
+
+The details of the proposed bilingual lexicon extraction method and classifier are further 
+described in Sections \ref{lexicon_sec:classification} and \ref{sentence_sec:classification}, respectively.
+
+
+\subsection{Proposed Bilingual Lexicon Extraction Method}
+\label{lexicon_sec:classification}
+
+An overview of the proposed bilingual lexicon extraction method is
+presented in Figure~\ref{lexicon_fig:method}. We first apply TMBM to obtain
+bilingual lexicons from the aligned articles, which we
+call topical bilingual lexicons. The topical bilingual lexicons contain
+a list of translation candidates for a source word $w_i^S$, where a
+target word $w_j^T$ in the list has a topical similarity score $Sim_{Topic}(w_i^S,w_j^T)$.
+Then, using the topical bilingual lexicons as an initial seed dictionary,
+we apply CBM to obtain bilingual lexicons, which we
+refer to as contextual bilingual lexicons. The contextual bilingual lexicons
+also contain a list of translation candidates for a source word, where
+each candidate has a contextual similarity score
+$Sim_{Context}(w_i^S,w_j^T)$. We then combine the topical bilingual
+lexicons with the contextual bilingual lexicons to obtain combined
+bilingual lexicons. The combination is achieved by calculating a combined
+similarity score $Sim_{Comb}(w_i^S,w_j^T)$ using the
+$Sim_{Topic}(w_i^S,w_j^T)$ and $Sim_{Context}(w_i^S,w_j^T)$
+scores. After combination, the quality of the lexicons can be
+higher, i.e., the correct translation in the candidate list
+is assigned a high score and ranked higher.
+Therefore, we iteratively use the combined bilingual lexicons as
+the seed dictionary for CBM and perform
+combination to improve the contextual bilingual lexicons and further
+enhance the combined bilingual lexicons.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{22-3ia1f3.eps}
+\end{center}
+\caption{Proposed bilingual lexicon extraction method}
+\label{lexicon_fig:method}
+\end{figure}
+
+The proposed method not only retains the advantage of TMBM (i.e., it does not require 
+any prior knowledge) but can also iteratively improve accuracy by a combination with CBM. 
+The details of TMBM, CBM, and the combination method are further described in Sections
+\ref{lexicon_sec:bilda}, \ref{lexicon_sec:context}, and \ref{lexicon_sec:combination}, respectively.
+
+
+\subsubsection{Topic model based method}
+\label{lexicon_sec:bilda}
+
+In this section, we describe the TMBM used to calculate the topical similarity score $Sim_{Topic}$
+$(w_i^S,w_j^T)$.
+We first train a BiLDA topic model \cite{mimno-EtAl:2009:EMNLP},
+which is an extension of the standard LDA model
+\cite{Blei03latentdirichlet}. Figure \ref{lexicon_fig:bilda} shows the plate
+model for BiLDA, with $D$ document pairs, $K$ topics, and hyper-parameters
+$\alpha, \beta$. Topics for each document are sampled from a single
+variable $\theta$, which contains the topic distribution and is
+language-independent. Words of the two languages are sampled from
+$\theta$ in conjunction with the word-topic distributions $\phi$ (for
+source language S) and $\psi$ (for target language T).
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{22-3ia1f4.eps}
+\end{center}
+\caption{BiLDA topic model}
+\label{lexicon_fig:bilda}
+\vspace{-1\Cvs}
+\end{figure}
+
+Once the BiLDA topic model is trained and the associated word-topic
+distributions are obtained for both source and target corpora, we
+calculate the similarity of word-topic distributions to
+identify word translations. For similarity calculation, we use the
+{\it TI+Cue} measure \cite{vulic-desmet-moens:2011:ACL-HLT2011},
+which has demonstrated the best performance for identifying word translations.
+The {\it TI+Cue} measure is a linear combination of the {\it TI}
+and {\it Cue} measures, defined as follows,
+\begin{equation}
+\mathit{Sim}_\mathit{TI+Cue}(w_i^S, w_j^T)=\lambda\mathit{Sim}_\mathit{TI}(w_i^S,
+w_j^T)+(1-\lambda) \mathit{Sim}_\mathit{Cue}(w_i^S, w_j^T)
+\end{equation}
+{\it TI} and {\it Cue} measures interpret and exploit the word-topic
+distributions in different ways; thus, combining them leads to
+better results.
+
+The {\it TI} measure is the similarity calculated from source and target word
+vectors constructed over a shared space of cross-lingual topics. Each
+dimension of the vectors is a term frequency - inverse topic frequency score
+({\it TF-ITF}). The {\it TF-ITF} score is computed in a word-topic space,
+which is similar to the {\it TF-IDF} score that is computed in a word-document
+space. {\it TF} measures the importance of a word $w_i$ within a
+particular topic $z_k$, whereas the {\it ITF} of a word $w_i$ measures the
+importance of $w_i$ across all topics. Here, $n_k^{(w_i)}$ is the
+number of times word $w_i$ is associated with topic $z_k$, $W$
+denotes the vocabulary, and $K$ denotes the number of topics. 
+Thus, we obtain the following.
+\begin{gather}
+TF_{i,k}=\frac{n_k^{(w_i)}}{\sum_{w_j\in{W}} n_k^{(w_j)}} \\[0.5\Cvs]
+ITF_i=\log\frac{K}{1+|\{k:n_k^{(w_i)}>0\}|}
+\end{gather}
+The {\it TF-ITF} score is the product of $TF_{i,k}$ and $ITF_i$. Then,
+the {\it TI} measure is
+obtained by calculating the cosine similarity of the $K$-dimensional
+source and target vectors. Let $S^i$ be the source vector for
+a source word $w_i^S$ and $T^j$ be the target vector for a target word
+$w_j^T$. Then, the cosine similarity is defined as follows.
+\begin{equation} \label{lexicon_eq:consine}
+Cos(w_i^S, w_j^T)=\frac{\sum_{k=1}^{K}S_k^i\times{T_k^j}}{\sqrt{\sum_{k=1}^{K}(S_k^i)^2}\times\sqrt{\sum_{k=1}^{K}(T_k^j)^2}}
+\end{equation}
+The {\it Cue} measure is the probability $P(w_j^T|w_i^S)$, where $w_j^T$
+and $w_i^S$ are linked via the shared topic space, defined as:
+\begin{equation}
+P(w_j^T|w_i^S)=\sum_{k=1}^{K}\psi_{k,j}\frac{\phi_{k,i}}{Norm_{\phi}},
+\end{equation}
+where 
+\begin{equation}
+\phi_{k,i}=\frac{n_k^{(w_i)}+\beta}{\sum_{w_j\in{W}} n_k^{(w_j)}+W\beta}
+\end{equation}
+and $\psi_{k,j}$ is similarly defined, and
+$Norm_{\phi}$ denotes the normalization factor given by 
+$Norm_{\phi}=\sum_{k=1}^{K}\phi_{k, i}$ for a word $w_i$.
+
+
+\subsubsection{Context based method}
+\label{lexicon_sec:context}
+
+Here, we describe the CBM used to calculate
+the contextual similarity score 
+\linebreak
+$Sim_{Context}(w_i^S,w_j^T)$.
+We use a window-based context and leave the comparison of different
+definitions of context as future work. Given a word, we count all its immediate
+context words with a window size of four (two preceding words and two following words). We build a
+context by collecting the counts in a bag of words
+fashion, i.e., we do not distinguish the positions at which the context
+words appear. The number of dimensions of the constructed vector is equal to the
+vocabulary size. We reweight each component in the vector
+by multiplying the {\it IDF} score
+\cite{garera-callisonburch-yarowsky:2009:CoNLL}, which is defined as follows.
+\begin{equation}
+IDF(t, D)=\log\frac{|D|}{1+|\{d\in{D}:t\in{d}\}|}
+\end{equation}
+Here, $|D|$ is the total number of documents in the corpus and
+$|\{d\in{D}:t\in{d}\}|$ denotes the number of documents wherein the term $t$
+appears. We model the source and target vectors using the method
+described above and project the source vector onto the vector space of
+the target language using a seed dictionary. The similarity of the
+vectors is computed using the cosine similarity (Equation \ref{lexicon_eq:consine}).
+
+Initially, we use the extracted topical bilingual lexicons (Section
+\ref{lexicon_sec:bilda}) as the seed dictionary. Note that the topical bilingual lexicons
+are noisy, especially for rare words \cite{vulic-moens:2012:EACL2012}.
+However, they provide
+comprehensible and useful contextual information in the target
+language for the source word \cite{vulic-desmet-moens:2011:ACL-HLT2011};
+thus, it is effective to use the lexicons as a seed dictionary for CBM.
+
+Once contextual bilingual lexicons are extracted, we
+combine them with the topical bilingual lexicons. After combination, the
+quality of the lexicons can be improved. Therefore, we further use
+the combined lexicons as the seed dictionary for CBM, which
+can produce better contextual bilingual lexicons. Again, we combine the
+better contextual bilingual lexicons with the topical bilingual lexicons.
+By repeating these steps, both the contextual bilingual lexicons and combined 
+bilingual lexicons can be improved iteratively.
+
+Applying CBM and the combination once is defined as a single iteration. 
+At iteration one, the topical bilingual lexicons are used as the seed dictionary for CBM. 
+From the second iteration, the combined lexicons are used as the seed dictionary. In all 
+iterations, we produce a seed dictionary for all source words in the vocabulary and use 
+the top candidate to project the source context vector to the target language. We stop 
+the iteration when a predefined number of iterations have been executed.
+
+
+\subsubsection{Combination}
+\label{lexicon_sec:combination}
+
+The TMBM measures the distributional similarity of two words on cross-lingual 
+topics, whereas CBM measures the distributional similarity on contexts across 
+languages. A combination of these methods can exploit both topical and contextual 
+knowledge to measure distributional similarity, thereby making bilingual lexicon 
+extraction more reliable and accurate. Here, we use a linear combination of the 
+two methods to calculate a combined similarity score, which is defined as follows.
+\begin{equation}
+Sim_{Comb}(w_i^S, w_j^T)=\gamma{Sim_{Topic}(w_i^S, w_j^T)}+(1-\gamma){Sim_{Context}(w_i^S, w_j^T)}
+\end{equation}
+To reduce computational complexity, we only keep the top N translation
+candidates for a source word during all the steps in the proposed method. We
+first produce a top N candidate list for a source word using TMBM. We then
+apply CBM to calculate the similarity only for the candidates in the
+list. Finally, we conduct
+combination. Thus, the combination process is a type of re-ranking
+of candidates produced by TMBM. Note that
+both $Sim_{Topic}(w_i^S, w_j^T)$ and $Sim_{Context}(w_i^S, w_j^T)$ are
+normalized before combination, where the normalization is given by
+\begin{equation}
+Sim_{Norm}(w_i^S, w_j^T)=\frac{Sim(w_i^S, w_j^T)}{\sum_{n=1}^{N}Sim(w_i^S, w_n^T)},
+\end{equation}
+where $N$ is the number of translation candidates for a source word.
+
+
+\subsection{Parallel Sentence Identification by Binary Classification}
+\label{sentence_sec:classification}
+
+The quality of the extracted sentences is determined by the accuracy of the classifier; 
+therefore, the classifier becomes the core component of the extraction system. Here, we 
+first describe the training process and then introduce the features used for the classifier.
+
+
+\subsubsection{Training}
+
+We use a support vector machine classifier \cite{CC01a}. Training
+instances for the classifier are created following a previously reported method
+\cite{Munteanu:2005}. We use a small number of parallel
+sentences from a seed parallel corpus as positive instances.
+Negative instances are generated by the Cartesian product of the 
+positive instances excluding the original positive instances. These
+are filtered by the same filtering method used for parallel sentence candidate
+generation in the proposed system.
+Moreover, we randomly discard some negative instances for training when
+necessary to guarantee that the ratio
+of negative to positive instances is less than five for the performance
+of the classifier. Figure~\ref{sentence_fig:classifier} illustrates this process.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-3ia1f5.eps}
+\end{center}
+\caption{Parallel sentence classifier}
+\label{sentence_fig:classifier}
+\end{figure}
+
+
+\subsubsection{Features}
+\label{sentence_sec:features}
+
+In this study, we reuse the features proposed by Munteanu and Marcu \citeyear{Munteanu:2005}
+and Chu et al. \citeyear{chu:2014:LREC}. We divide the features to word overlap features 
+that are related to bilingual lexicon extraction and other features.
+
+\noindent {\bf Word Overlap Features.} The word overlap feature proposed 
+by Munteanu and Marcu \citeyear{Munteanu:2005} has a problem, meaning that function and content
+words are handled in the same manner. Function words often have a
+translation on the other side; thus, erroneous parallel sentence pairs
+with a few content word translations are often produced by the classifier.
+Therefore, we add the content word overlap following Chu et al. \citeyear{chu:2014:LREC}
+and the following features.
+\begin{itemize}
+\item Percentage of words on each side that have a
+      translation on the other side (according to the bilingual
+      dictionary)
+\item Percentage of words that are content words on each side
+\item Percentage of content words on each side that have a translation
+      on the other side (according to the bilingual dictionary)
+\end{itemize}
+We determine a word as a content or function word using predefined
+part-of-speech (POS) tag sets of function words.
+
+\noindent {\bf Other Features.} In addition to the word overlap features,
+the following features are used.
+\begin{itemize}
+\item Sentence length, length difference, and length ratio\footnote{In our 
+experiments, sentence length was calculated based on the number of words in a sentence.}
+\item Alignment features
+\begin{itemize}
+\item Percentage and number of words that have no connection on each side
+\item Top three largest fertilities\footnote{Fertility defines the number of words that a word 
+is connected to in an alignment \cite{brown-EtAl:1993}.}
+\item Length of the longest contiguous connected span
+\item Length of the longest unconnected substring
+\end{itemize}
+The alignment features are extracted from the alignment results of the 
+parallel and non-parallel sentences used as instances for the classifier. 
+Note that alignment features may be unreliable when the quantity of
+non-parallel sentences is significantly larger than that of parallel sentences.
+\item Same word features. Parallel sentences often contain the same words, 
+such as abbreviations and numbers. Such same words can be helpful clues to identify parallel sentences.
+We use the following features.
+\begin{itemize}
+\item Percentage and number of words that are the same on each side
+\end{itemize}
+\end{itemize}
+
+
+\section{Experiments}
+
+We conducted bilingual lexicon extraction experiments and bilingual lexicon extraction 
+based parallel sentence extraction experiments. We evaluated the proposed bilingual lexicon 
+extraction method with the Chinese-English, Japanese-English, and Japanese-Chinese Wikipedia 
+data. Bilingual lexicon extraction based parallel sentence extraction experiments were conducted 
+with the Japanese-Chinese Wikipedia data.
+
+
+\subsection{Bilingual Lexicon Extraction Experiments}
+\label{lexicon_sec:experiments}
+
+\subsubsection{Data}
+\label{lexicon_sec:data}
+
+We downloaded Chinese\footnote{http://dumps.wikimedia.org/zhwiki}
+(2012/09/21), Japanese\footnote{http://dumps.wikimedia.org/jawiki}
+(2012/09/16), and English\footnote{http://dumps.wikimedia.org/enwiki}
+(2012/10/01) Wikipedia database dumps. We used an open-source Python
+script\footnote{http://code.google.com/p/recommend-2011/source/browse/Ass4/WikiExtractor.py}
+to extract and clean the text.
+Because the Chinese dump is a mixture of traditional and simplified Chinese,
+we converted all traditional Chinese to simplified Chinese using a
+conversion table published by
+Wikipedia.\footnote{http://svn.wikimedia.org/svnroot/mediawiki/branches/REL1\_12/phase3/includes/ZhConversion.php}
+We aligned the articles on the same topics in Chinese-English,
+Japanese-English, and Japanese-Chinese Wikipedia data via the interlanguage links. 
+From the aligned articles, we selected $10k$ Chinese-English, Japanese-English, and Japanese-Chinese
+pairs as our training corpora. For Japanese-Chinese, we also conducted experiments using all aligned articles
+($162k$ pairs). Using all aligned articles for Japanese-Chinese facilitates investigation of the effect of the size of the training 
+data for the proposed method. In addition, we used the extracted bilingual lexicons for parallel sentence extraction 
+performed on all aligned articles (\ref{sentence_sec:experiments}).
+
+We preprocessed the Chinese and Japanese corpora using a tool proposed by \citeA{chu:2012:EAMT}
+and the JUMAN morphological analyzer \cite{kurohashi--EtAl:1994}, respectively, for segmentation 
+and POS tagging. The English corpora were POS tagged using the Lookahead POS Tagger \cite{tsuruoka-miyao-kazama:2011:CoNLL}. 
+To reduce data sparsity and computational complexity, we retained only lemmatized noun forms. 
+The Chinese-English data contained 112,682 Chinese and 179,058 English nouns. The Japanese-English 
+data contained 47,911 Japanese and 188,480 English nouns. The Japanese-Chinese data contained 51,823 
+Japanese and 114,256 Chinese nouns for the $10k$ article pairs and 104,461 Japanese and 772,433 Chinese 
+nouns for all article pairs. The Japanese vocabulary was smaller than the Chinese and English vocabularies 
+because we retained only common, sahen (verbal) and proper nouns, and place, person, and organization 
+names among all sub POS tags of nouns in JUMAN.
+
+
+\subsubsection{Experimental settings}
+
+For BiLDA topic model training, we used the PolyLDA++ implementation proposed by 
+Richardson et
+al. \citeyear{richardson-nakazawa-kurohashi:2013:IJCNLP}.\footnote{https://bitbucket.org/trickytoforget/polylda}
+We set the hyper-parameters $\alpha$ and $\beta$ to $50/K$ and $0.01$, respectively, following
+Vuli\'{c} et al. \citeyear{vulic-desmet-moens:2011:ACL-HLT2011}, where $K$ denotes the number
+of topics. We trained the BiLDA topic model using Gibbs sampling with $1k$
+iterations. For the combined {\it TI+Cue} method, 
+we employed the Bilingual Lexicon Extractor using Topic Models toolkit created by
+Vuli\'{c} et
+al. \citeyear{vulic-desmet-moens:2011:ACL-HLT2011}.\footnote{http://people.cs.kuleuven.be/\~{}ivan.vulic/software/BLETMv1.0wExamples.zip}
+Following their study, we set the linear interpolation parameter $\lambda = 0.1$.
+For the proposed method, we empirically set the linear interpolation
+parameter $\gamma = 0.8$\footnote{Because we did not have a held-out data set, we determined $\gamma$ 
+  based on the Chinese-English test set. We compared the effects of different 
+  $\gamma$ from $0.1$ to $0.9$ in intervals of $0.1$; $0.8$ showed the best 
+  performance. We applied the same parameter to the Japanese-English and 
+  Japanese-Chinese tasks. We recognize that determining all the parameters using held-out data 
+  is preferable; however, we leave that for future work.} and performed $20$ iterations.\footnote{
+  This iteration number was also determined empirically using the Chinese-English test set. Based 
+  on the experimental results (Figure \ref{lexicon_fig:results}), the accuracy of the proposed method 
+  greatly improves in the first few iterations, and then the performance becomes stable. We believe 
+  that accuracy would not improve with further iterations; therefore, we terminated our process at iteration $20$.}
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{22-3ia1f6.eps}
+\end{center}
+\hangcaption{Bilingual lexicon extraction results for Chinese-English, Japanese-English, and Japanese-Chinese on the test sets}
+\label{lexicon_fig:results}
+\end{figure}
+
+
+\subsubsection{Evaluation criterion}
+
+We manually created Chinese-English, Japanese-English, and Japanese-Chinese test sets for
+the most frequent $1k$ source nouns\footnote{For Japanese-Chinese,
+the test sets were created for the most frequent $1k$ Japanese nouns that are limited to the sub POS tags
+listed in Section \ref{lexicon_sec:data} in all article pairs.}
+in the experimental data with the 
+help of Google Translate.\footnote{http://translate.google.com} 
+For each source noun, if Google Translate provided correct translation, we 
+used them. Otherwise, we performed manual translations. 
+Note that some source nouns could have multiple translations, and we attempted to include all 
+possible translations to the best of our knowledge. However, the test sets could be still incomplete, 
+i.e., some translations of source words might be not registered. 
+Following Vuli\'{c} et al. \citeyear{vulic-desmet-moens:2011:ACL-HLT2011}, we used 
+the two metrics shown below to evaluate accuracy.
+\begin{itemize}
+\item Precision@1: Percentage of words where the top word from the
+      list of translation candidates is the correct translation.
+\item Mean Reciprocal Rank (MRR) \cite{Voorhees-MRR:1999}: Here, $w$
+      is a source word, $rank_w$ denotes the rank of its correct
+      translation within the list of translation candidates, and $V$ denotes
+      the set of words used for evaluation. Then, MRR is defined as follows.
+\begin{equation}
+MRR=\frac{1}{|V|}\sum_{w\in{V}}\frac{1}{rank_w}
+\end{equation}
+We only used the top $20$ candidates from the ranked list
+to calculate MRR. Note that for some source words, the correct translation 
+  might be not included in the list of top 20 candidates. In this case, we assume $rank_w$
+  to be infinity; thus, $\frac{1}{rank_w}$ is 0. We did not discard these
+  source words when calculating MRR, i.e., $V$ is always $1k$. Moreover, if a 
+  source word has multiple translations in the test set and more than two are 
+  included in the candidate list, we used the most highly ranked translation to calculate MRR.
+\end{itemize}
+
+
+\subsubsection{Results}
+\label{lexicon_sec:results}
+
+The bilingual lexicon extraction results for the Chinese-English, 
+Japanese-English, and Japan-
+ese-Chinese test sets
+are shown in Figure \ref{lexicon_fig:results}, where ``Topic'' denotes the
+lexicons extracted using only TMBM (Section \ref{lexicon_sec:bilda}),
+``Context'' denotes the lexicons extracted using only CBM
+(Section \ref{lexicon_sec:context}), ``Combination'' denotes the
+lexicons obtained after applying the combination method
+(Section \ref{lexicon_sec:combination}), ``$K$'' denotes the number of topics,
+``$N$'' denotes the number of translation candidates for a word
+compared in the experiments, and ``10k'' and ``all'' denote using 10k and all 
+article pairs as training data, respectively. For Chinese-English, Japanese-English,
+and the $10k$ Japanese-Chinese data, we used $K=200$ and $K=2000$\footnote{
+Vuli\'{c} et al. \citeyear{vulic-desmet-moens:2011:ACL-HLT2011} studied the effect of the 
+number of topics $K$ on the performance of TMBM empirically. In our experiments, we compared 
+$2k$ topics, which showed the best performance in \cite{vulic-desmet-moens:2011:ACL-HLT2011}, 
+to a small number of topics ($200$).}
+and $N=20$ and $N=50$,\footnote{
+We used $20$ candidates to calculate MRR; thus, we did not examine using a number less than $20$. 
+On the other hand, because increasing it to $50$ showed worse performance in our experiments, we 
+believe that further increasing $N$ to a number larger than $20$ is not helpful.}
+For the Japanese-Chinese data that used all the articles,
+we used only $K=200$\footnote{The reason for this is that
+$2k$ is not scalable for this large data set.} and $N=20$.
+
+Generally, it is evident that the proposed method can improve accuracy in both 
+Precision@1 and MRR metrics compared with TMBM. CBM outperforms TMBM, which 
+verifies the effectiveness of using the lexicons extracted by TMBM as a seed 
+dictionary for CBM. The combination method performs better than both TMBM and CBM, 
+which verifies the effectiveness of using both topical and contextual knowledge for 
+bilingual lexicon extraction. Moreover, iteration can further improve the accuracy, 
+especially in the first few iterations.
+
+Regarding the different parameters used in our experiments, $2k$ topics is considerably 
+better 
+\linebreak
+than $200$ topics for both TMBM and the proposed method, which is similar to the 
+results reported by Vuli\'{c} et al. \citeyear{vulic-desmet-moens:2011:ACL-HLT2011}. 
+However, increasing the topic number can lead 
+to higher computational complexity, which is not scalable for a large data set such as 
+the Japanese-Chinese article data used in our experiments. Using $50$ candidates decreases 
+performance slightly than when using $20$ 
+\linebreak
+candidates. Although using more candidates may 
+increase the percentage of words where the \mbox{correct} translation is contained within the top 
+N word list of translation candidates 
+\linebreak
+(Precision@N), it also increases the number of noisy 
+pairs and thus decreases performance.
+
+In our experiments, we compared two different sizes of Japanese-Chinese training data, 
+i.e., $10k$ and all article pairs. As can be seen in Figure \ref{lexicon_fig:results}, the TMBM performance obtained 
+using all article pairs is much better than that obtained using $10k$ pairs, regardless of the 
+number of topics used. This indicates that using more training data can improve the accuracy 
+of TMBM. Relative to the proposed combination method, the improvements over TMBM and CBM are 
+greater when using all article pairs than using $10k$ pairs, indicating that using more training 
+data can also improve effectiveness.
+
+Relative to the performance obtained with three language pairs, the performance of 
+TMBM and the absolute values of improvement for the proposed method differ owing to 
+the different characteristics of the data; however, the improvement curves are similar. 
+This indicates that language independence of the proposed method.
+
+We investigated the improved lexicons to examine the reasons for the performance improvement. 
+We found that most improvements occurred for the case in which the $Sim_{Topic}$ scores were similar, 
+whereas the $Sim_{Context}$ scores are easy to distinguish. With the help of the $Sim_{Context}$ scores, 
+the proposed method can find the correct translation. The left side of Table \ref{lexicon_table:improved} shows an improved 
+example of this type. Although TMBM can find topic related translations, it lacks the ability to 
+distinguish candidates with highly similar word-topic distributions to the source word. This 
+weakness can be solved with CBM. Moreover, a small number of improvements occur for the case 
+in which both $Sim_{Topic}$ and $Sim_{Context}$ scores are indistinguishable. The combination of the 
+two methods successfully finds the correct translation, although this could be by chance. 
+The right side of Table \ref{lexicon_table:improved} shows such an improved example.
+
+\begin{table}[b]
+\caption{Improved lexicon examples of ``開発 (development)'' (left) and ``攻撃 (attack)'' (right)}
+\label{lexicon_table:improved}
+\input{01table01.txt}
+\end{table}
+
+We also investigated the erroneous lexicons. We found that most errors occur when the 
+correct translation is not included in the top N candidate list produced by TMBM.
+There are also some errors for words with correct translation that are included in the list; 
+however, the proposed method fails to identify the translation. According to our investigation, 
+most failures occur when either TMBM or CBM gives a significantly lower score to the correct 
+translation than the scores given to the incorrect translations, whereas the other gives the 
+highest or nearly highest score to the correct translation. In this case, a simple linear 
+combination of the two scores is not sufficiently discriminative, and incorporating both 
+scores as features in a machine learning manner may be more effective.
+
+
+\subsection{Bilingual Lexicon Extraction Based Parallel Sentence Extraction Experiments}
+\label{sentence_sec:experiments}
+
+We conducted parallel sentence extraction and translation experiments to verify the effectiveness of the proposed system.
+
+
+\subsubsection{Data}
+\label{sentence_sec:data}
+
+Parallel sentence extraction experiments were conducted using all aligned articles in the Japanese-Chinese 
+Wikipedia data (Section \ref{lexicon_sec:data}), containing $162k$ article pairs ($2.1M$ Chinese and $3.5M$ 
+Japanese sentences).
+
+We used the Japanese-Chinese section of the Asian Scientific Paper Excerpt Corpus as the seed 
+parallel corpus.\footnote{http://lotus.kuee.kyoto-u.ac.jp/ASPEC} 
+This corpus is a scientific domain corpus provided by the Japan Science and Technology 
+Agency\footnote{http://www.jst.go.jp} and the National Institute of Information and Communications 
+Technology.\footnote{http://www.nict.go.jp} This corpus was created by the
+Japanese ``Development and Research of Japanese-Chinese Natural
+Language Processing Technology'' project and contains $680k$ sentences ($18.2M$
+Chinese and $21.8M$ Japanese tokens).
+
+
+\subsubsection{Experimental settings}
+
+We used a sentence length ratio threshold of two as the filtering condition,
+i.e., the sentence pairs with sentence length ratio greater than two were discarded and not
+passed to the classifier. 
+We used the LIBSVM toolkit \cite{CC01a}\footnote{http://www.csie.ntu.edu.tw/\~{}cjlin/libsvm} 
+with five-fold cross-validation and a radial basis function kernel for the support vector machine classifier.
+The classification probability threshold was set to $0.9$, i.e., we treated
+the sentence pairs with classification probability $\geq 0.9$ as parallel sentences.\footnote{
+  In our experiments, we compared the effects of different thresholds from $0.5$ to $0.9$ 
+  in intervals of $0.1$; $0.9$ showed the best performance. We suspect the reason for 
+  this is that lowering the threshold extracted additional sentences that contain noise, 
+  thereby affecting the SMT performance negatively.}
+We used the GIZA++\footnote{http://code.google.com/p/giza-pp} word alignment tool,
+which implements the sequential word-based statistical alignment model of
+the IBM models \cite{brown-EtAl:1993} to generate bilingual lexicons using the parallel
+sentences from the seed parallel corpus (hereafter referred to as seed parallel sentences) and calculate the alignment features.
+We compared {four} different settings for lexicon generation to investigate
+the effect of the number of seed parallel sentences on the proposed system:
+\begin{itemize}
+\item {Baseline ($0k$): no parallel sentences were used in the seed parallel corpus, 
+i.e., we did not use generated lexicons in the experiments.}
+\item Baseline ($5k$): {$5k$ parallel sentences from the seed parallel corpus were used.\footnote{They 
+were selected from the $10k$ sentences used as seed parallel sentences in the setting Baseline ($10k$).}}
+\item Baseline ($10k$): $10k$ parallel sentences from the seed parallel corpus were used.
+\item Baseline ($680k$): all parallel sentences ($680k$) in the seed parallel corpus were used.
+\end{itemize}
+For the generated lexicons, we kept the top five translations with translation probability 
+greater than $0.1$ for each source word following Munteanu and Marcu \citeyear{Munteanu:2005}.\footnote{Note 
+    that the dictionary might contain noisy translation pairs and further cleaning might be 
+    helpful for our task \cite{AKER14.803.L14-1623}; however, we leave this as future work.}
+For the bilingual lexicon extraction based experiments, we compared the Japanese-Chinese 
+bilingual lexicons extracted by TMBM (labeled ``lexicon (TMBM)'') and our best performing method 
+(i.e., the combination method at iteration $17$) shown in Figure \ref{lexicon_fig:results} (labeled ``lexicon (proposed)'')
+to show the effect of bilingual lexicon extraction accuracy
+on parallel sentence extraction. To show the effect of the number of extracted 
+bilingual lexicons on parallel sentence extraction, we empirically compared the 
+following thresholds.\footnote{Other combinations are also possible;
+however, we leave this as future work.}
+\begin{itemize}
+\item Freq100Top1: kept the lexicons for the source (Japanese) words whose frequencies
+were not less than $100$ and the top candidate for each source word ($18,775$ lexicons).
+\item Freq100Top3: kept the lexicons for the source (Japanese) words whose frequencies were 
+not less than $100$ and the top three candidates for each source word ($56,325$ lexicons).
+\item Freq10Top1: kept the lexicons for the source (Japanese) words whose frequencies
+were not less than $10$ and the top candidate for each source word ($52,357$ lexicons).
+\item Freq10Top3: kept the lexicons for the source (Japanese) words whose frequencies
+were not less than $10$ and the top three candidates for each source word ($157,071$ lexicons).
+\end{itemize}
+We combined the lexicons generated from the seed parallel sentences
+with the extracted bilingual lexicons, further obtaining
+different dictionary settings (labeled ``Baseline + lexicon'').
+The word overlap features were calculated according to the above mentioned different dictionary settings, 
+thereby obtaining different classifiers that estimate the word overlap features using the different dictionaries 
+while the other settings were the same. As using different parallel sentences for training the classifier might 
+demonstrate different performance, we further compared the following settings.
+\begin{itemize} 
+\item $5k$ Seed: used the same $5k$ parallel sentences from the seed parallel corpus as that used in the setting Baseline ($5k$).
+Note that the domain of these sentences differs from the Wikipedia data.
+\item $5k$ Extraction: used {the} $5k$ sentences {with the highest classification probabilities} 
+  selected from the sentences extracted using the classifier trained
+  with $5k$ Seed. The domain of these sentences is the same as the Wikipedia data.\footnote{It would be straightforward 
+    if we had in-domain parallel sentences beforehand, however they are not always available. In the case of Japanese-Chinese
+    Wikipedia domain, we did not have any parallel sentences available.}
+\item $2.5k$ Seed + $2.5k$ Extraction: used $2.5k$ sentences from $5k$ Seed and {the} $2.5k$ sentences
+  {with the highest classification probabilities} from $5k$ Extraction.
+\end{itemize}
+
+In our experiments, we first compared the effect of bilingual lexicon extraction accuracy and number 
+on parallel sentence extraction depending on Baseline ($0k$) and $5k$ Seed. We then compared the effect 
+of the seed parallel sentence number on the basis of the best setting of the lexicons. Finally, we 
+compared the effect of different parallel sentences for training the classifier.
+
+We extracted parallel sentences from Wikipedia using the different classifiers and evaluated
+the Chinese-to-Japanese SMT performance using the extracted sentences
+as training data. For decoding, we
+used the state-of-the-art phrase-based SMT toolkit Moses
+\cite{koehn-EtAl:2007:PosterDemo} with the default options,
+except for the distortion limit ($6\rightarrow20$).
+We trained a 5-gram language model on the Japanese Wikipedia data ($10.7M$ sentences) using the SRILM
+toolkit\footnote{http://www.speech.sri.com/projects/srilm}
+with interpolated Kneser-Ney discounting.\footnote{Note that the Japanese sentences in the
+    tuning and testing sets were not discarded from the data used for training the language model. 
+    Therefore, the n-grams with frequency $1$ contained in the tuning and testing sets were also used
+    for training the language model.}
+For tuning and testing, we used two distinct sets of $198$ parallel sentences
+with 1 reference in \cite{chu:2014:LREC}.\footnote{http://lotus.kuee.kyoto-u.ac.jp/\~{}chu/resource/wiki\_zh\_ja.tgz}
+These sentences were randomly selected from the sentence pairs extracted from 
+the same Japanese-Chinese Wikipedia data using different methods proposed by
+Chu et al. \citeyear{chu:2014:LREC}.\footnote{For more details of the different methods, 
+    we recommend the interested readers to refer to the original paper.}
+The erroneous parallel sentences were discarded manually because the tuning and testing sets for SMT require
+truly parallel sentences.
+Note that for training, we kept all the sentences extracted by different methods
+except for the sentences duplicated in the tuning and testing sets.
+Tuning was performed by minimum error rate training \cite{och:2003:ACL},
+which was re-run for every experiment.
+
+
+\subsubsection{Results}
+
+Parallel sentence extraction and translation results obtained using different methods are shown in
+Tables \ref{sentence_table:ble-acc-num-res}, \ref{sentence_table:sen-num-res}, and \ref{sentence_table:training-sen-res}.
+Here, we report the Chinese-to-Japanese translation results 
+on the test set using the BLEU-4 score \cite{papineni-EtAl:2002:ACL}. 
+In the tables, ``\# dictionary entries'' denotes the number of dictionary entries for different methods and
+``\# Sentences'' denotes the number of sentences extracted by different methods
+after discarding the sentences duplicated in the tuning and testing sets, which 
+were used as training data for SMT.
+For comparison, we conducted translation experiments using the seed parallel sentences
+used for lexicon generation as SMT training data
+(labeled ``Seed ($5k$),'' ``Seed ($10k$),'' and ``Seed ($680k$)'').
+A significance test was performed using the bootstrap resampling 
+method proposed by Koehn \citeyear{koehn:2004:EMNLP}.
+
+\begin{table}[b]
+\hangcaption{Effect of bilingual lexicon extraction 
+  number on parallel sentence extraction and translation results
+  (``$\dag$'' and ``$\ddag$'' indicate that the result is 
+  significantly better than ``Baseline'' and ``Baseline + lexicon (TMBM),''
+  respectively, at $p < 0.05$)}
+\label{sentence_table:ble-acc-num-res}
+\input{01table02.txt}
+\end{table}
+
+Table \ref{sentence_table:ble-acc-num-res} shows the effect of bilingual lexicon extraction number 
+on bilingual lexicon extraction based parallel sentence extraction. As can be seen, the proposed 
+method outperforms TMBM. The reason being that the lexicons extracted by the proposed method are 
+more accurate than TMBM, which extracts more parallel sentences, leading to reduced out of 
+vocabulary (OOV) word rates. Freq100 and Freq10 show comparable performance when we keep the 
+same number of candidates. Although lowering the frequency can maintain more lexicons, it also 
+introduces more noise because the extraction results are noisy for words with low frequencies, 
+which leads to comparable results. Note that Top3 shows better performance than Top1. This could 
+be because more correct lexicons are contained by keeping the top three candidates. However, 
+increasing the number of candidates also introduces more noise; therefore, further increasing 
+the number of candidates might decrease performance. Determining the best combination of frequency 
+and number of candidates is planned for future work. Among all settings, Baseline + lexicon (proposed) 
+with the threshold of Freq100Top3 demonstrates the best MT performance. Therefore, we adopted it 
+for further bilingual lexicon extraction based experiments.
+
+\begin{table}[t]
+\hangcaption{Effect of seed parallel sentence number
+  on bilingual lexicon extraction based parallel sentence extraction and translation results 
+  (The threshold used for the extracted lexicons was ``Freq100Top3'', ``$\dag$'' and ``$\ddag$''
+  indicate that the result is significantly better than ``Seed'' and ``Baseline,''
+  respectively, at $p < 0.05$)}
+\label{sentence_table:sen-num-res}
+\input{01table03.txt}
+\end{table}
+
+\begin{table}[t]
+\hangcaption{Effect of parallel sentences used for training the classifier
+  on bilingual lexicon extraction based parallel sentence extraction and translation results 
+  (experiments are based on Baseline ($0k$) + lexicon (proposed); ``$\dag$'' and ``$\ddag$''
+  indicate that the result is significantly better than ``$5k$ Extraction'' and 
+  ``$2.5k$ Seed + $2.5k$ Extraction,'' respectively, at $p < 0.05$)}
+\label{sentence_table:training-sen-res}
+\input{01table04.txt}
+\end{table}
+
+Table \ref{sentence_table:sen-num-res} shows the effect of seed parallel sentence number on bilingual 
+lexicon extraction based parallel sentence extraction. Generally, the Seed systems do not perform 
+well because they are trained on the parallel sentences from the seed parallel corpus that belong to 
+the scientific domain. These differ from the tuning and testing sets, which are open domain data 
+extracted from Wikipedia, leading to OOV word rates. The systems trained on the parallel sentences 
+extracted from Wikipedia data perform significantly better than Seed because they consist of the 
+same domain data as the tuning and testing sets, and the OOV word rates are significantly lower 
+than Seed. The Baseline + lexicon systems outperform the Baseline systems because combining the 
+extracted bilingual lexicons to the Baseline dictionaries can help extract more parallel sentences, 
+which leads to lower OOV word rates and thus higher SMT performance.
+
+Focusing on the Baseline systems, we see that using a small number of parallel sentences (i.e., 
+Baseline ($5k$) and Baseline ($10k$)) for lexicon generation is even worse than that without using 
+it (i.e., Baseline ($0k$)), whereas using a larger number of sentences (i.e., Baseline ($680k$)) does 
+help. The reason for the poor performance obtained using a small number of parallel sentences may 
+be attributed to the word overlap feature gap between the sentences used for training the classifier 
+and the Wikipedia data based on the generated lexicons. For Baseline ($5k$) and Baseline ($10k$), the 
+sentences used for training the classifier have very high word overlap on the basis of generated 
+lexicons because the lexicons are generated from the same sentences. However, the Wikipedia data 
+have very low word overlap owing to the small size and domain difference of the generated lexicons. 
+This leads to only a small number of sentences being extracted compared with the other settings. 
+Baseline ($0k$) does not demonstrate this gap problem, thereby leading to the highest number of sentences 
+extracted and better performance than Baseline ($5k$) and Baseline ($10k$). However, the quality of the 
+extracted sentences is lower than the other settings because it does not use the word overlap features. 
+The lexicon size of Baseline ($680k$) is larger, which can address the gap problem and guarantee the quality 
+of the extracted sentences. Therefore, it shows the best performance.
+
+The Baseline + lexicon (proposed) systems show better performance than Baseline systems, indicating 
+the effectiveness of the proposed method. However, Baseline ($680k$) + lexicon (proposed) does not 
+demonstrate significant difference over Baseline ($680k$). The reason for this could be that the ratio 
+of the number of extracted lexicons to the number of lexicons in the Baseline dictionary is much 
+smaller than the other settings, leading to a smaller ratio of newly extracted sentences that does 
+not result in a significant difference in MT. Baseline ($5k$) + lexicon (proposed) and Baseline ($10k$) 
++ lexicon (proposed) do not show good performance compared with Baseline ($0k$) and Baseline ($680k$) 
+for the same reasons. The performance of Baseline ($0k$) + lexicon (proposed) is only slightly lower 
+than that of Baseline ($680k$), indicating that only a small number of seed parallel sentences are 
+required for the proposed method to show good performance (e.g., $5k$ sentences for training the classifier).
+This is the main advantage of the proposed method compared with previous methods that require a 
+large number of seed parallel sentences (several hundreds of thousands to millions
+\cite{zhao:2002:IEEE,Munteanu:2005,tillmann:2009:Short,smith-quirk-toutanova:2010:NAACLHLT,Abdul-RaufS11,Stefanescu:2012:EAMT,Stefanescu:2013:CICLing,ling-EtAl:2013:ACL2013}).
+
+Focusing on the difference in the number of dictionary entries between the Baseline and Baseline + 
+lexicon systems, we can see that there are only a few overlaps between the extracted lexicons and 
+Baseline dictionary, even when we use all parallel sentences ($680k$) in the seed parallel corpus for 
+lexicon generation. The reason for this is the domain difference between the seed parallel corpus 
+and Wikipedia data. The proposed method can extract in-domain lexicons from comparable corpora; 
+therefore, it does not require an in-domain seed parallel corpus, which is another advantage of the proposed method.
+
+Figure \ref{sentence_fig:examples} shows examples of sentences additionally extracted by combining 
+the extracted bilingual lexicons with Baseline ($10k$). The Baseline system cannot extract these sentence 
+pairs due to the low word overlap between them based on the Baseline generated dictionary. Combining 
+the extracted bilingual lexicons increases the word overlap, thereby resulting in these sentences being 
+extracted. Based on our investigation, approximately two-thirds of the additionally extracted sentences 
+are truly parallel sentences. The remaining erroneous parallel sentences are extracted due to the noise 
+contained in the extracted bilingual lexicons. Example 3 in Figure \ref{sentence_fig:examples} shows an erroneous parallel sentence 
+pair that is extracted due to the noisy lexicons ``州 (state), 西部 (west)'' and ``路易斯安那州 (Louisiana), 
+オレゴン (Oregon).'' One possible way to address this problem is further discarding noisy lexicon pairs by 
+setting stricter filtering threshold; however, this may decrease the coverage of the lexicon.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{22-3ia1f7.eps}
+\end{center}
+\hangcaption{
+Example sentences additionally extracted by combining the extracted bilingual lexicons with the Baseline 
+(example 1 and 2 are truly parallel sentences; example 3 is an erroneous parallel sentence pair). The lexicon 
+pairs that do not exist in the Baseline generated dictionary but were extracted by the proposed bilingual 
+lexicon extraction method are linked (correct lexicon pairs are linked with solid lines; incorrect lexicon 
+pairs are linked with dashed lines).}
+\label{sentence_fig:examples}
+\end{figure}
+
+Table \ref{sentence_table:training-sen-res} shows the effect of parallel sentences 
+used for training the classifier on bilingual lexicon extraction based parallel sentence 
+extraction. The experiments were conducted depending on Baseline ($0k$) + lexicon (proposed),
+owing to its good performance (Table \ref{sentence_table:sen-num-res}). 
+The $5k$ Seed demonstrates the best performance, and $2.5k$ Seed + $2.5k$ Extraction outperforms $5k$ Extraction.
+$5k$ Extraction significantly decreases the number of extracted sentences. We suspect that there are
+two reasons for this.  First, the selected sentences have high classification probabilities; thus, they tend to have 
+large word overlap depending on the lexicon, which differs from the other extracted sentences and educes the likelihood 
+they will be extracted. Second, although we selected sentences with the highest classification probabilities, they
+still contain noise. The $2.5k$ Seed + $2.5k$ Extraction combines two different sets of sentences, resulting in a greater number of
+sentences being extracted compared with $5k$ Extraction. To make the comparison fairer, we also lowered the 
+classification probability threshold, thereby making the number of extracted sentences the same as that of $5k$ Seed (labeled 
+``$5k$ Extraction (same)'' and ``$2.5k$ Seed + $2.5k$ Extraction (same)'').\footnote{For $5k$ Extraction (same) the threshold 
+was 0.32; for $2.5k$ Seed + $2.5k$ Extraction (same) the threshold was 0.28.} 
+Although the OOV word rates become the same level, they also show worse translation results compared with the 
+results obtained with $5k$ Seed. This is because a greater number of noisy sentences are produced after lowering the threshold.
+
+
+\section{Conclusion}
+
+Extracting parallel sentences from comparable corpora is an effective way to solve the scarceness 
+of parallel corpora that SMT suffers. Parallel sentence extraction relies highly on bilingual 
+lexicons that are also very scarce. We proposed an unsupervised bilingual lexicon extraction 
+based parallel sentence extraction system. We first extract bilingual lexicons from comparable 
+corpora, and then extract parallel sentences using the extracted lexicons. Our bilingual lexicon 
+extraction method is based on a combination of TMBM and CBM in an iterative process. Our parallel 
+sentence extraction method uses a binary classifier for parallel sentence identification. The 
+extracted bilingual lexicons are used to calculate the word overlap features for the classifier. 
+Experiments conducted on Wikipedia data have verified the effectiveness of the proposed system and methods.
+
+In this study, we only performed bilingual lexicon extraction based parallel sentence extraction 
+experiments with the Japanese-Chinese language pair. In future, we plan to perform experiments with 
+other language pairs such as Chinese-English and Japanese-English. Moreover, we only conducted experiments 
+using Wikipedia data. The proposed system is expected to work well with other comparable corpora 
+wherein article alignment is required beforehand, such as bilingual news articles, social media, 
+and the Web. We also plan to perform experiments on such comparable corpora to construct a large 
+parallel corpus for various domains.
+
+
+\acknowledgment
+
+This work was supported by the Japan Society for the Promotion of Science (JSPS) 
+Grant-in-Aid for JSPS Fellows. We thank the anonymous reviewers for their 
+valuable comments.
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Abdul-Rauf \BBA\ Schwenk}{Abdul-Rauf \BBA\
+  Schwenk}{2011}]{Abdul-RaufS11}
+Abdul-Rauf, S.\BBACOMMA\ \BBA\ Schwenk, H. \BBOP 2011\BBCP.
+\newblock \BBOQ Parallel Sentence Generation from Comparable Corpora for
+  Improved SMT.\BBCQ\
+\newblock {\Bem Machine Translation}, {\Bbf 25}  (4), \mbox{\BPGS\ 341--375}.
+
+\bibitem[\protect\BCAY{Adafre \BBA\ de~Rijke}{Adafre \BBA\
+  de~Rijke}{2006}]{Adafre:2006:EACL}
+Adafre, S.~F.\BBACOMMA\ \BBA\ de~Rijke, M. \BBOP 2006\BBCP.
+\newblock \BBOQ Finding Similar Sentences across Multiple Languages in
+  Wikipedia.\BBCQ\
+\newblock In {\Bem Proceedings of the Workshop on NEW TEXT Wikis and Blogs and
+  Other Dynamic Text Sources}, \mbox{\BPGS\ 62--69}.
+
+\bibitem[\protect\BCAY{Aker, Paramita, Pinnis, \BBA\ Gaizauskas}{Aker
+  et~al.}{2014}]{AKER14.803.L14-1623}
+Aker, A., Paramita, M., Pinnis, M., \BBA\ Gaizauskas, R. \BBOP 2014\BBCP.
+\newblock \BBOQ Bilingual Dictionaries for All EU Languages.\BBCQ\
+\newblock In {\Bem Proceedings of LREC 2014}, \mbox{\BPGS\ 2839--2845}.
+\newblock ACL Anthology Identifier: L14-1623.
+
+\bibitem[\protect\BCAY{Andrade, Nasukawa, \BBA\ Tsujii}{Andrade
+  et~al.}{2010}]{andrade-nasukawa-tsujii:2010:PAPERS}
+Andrade, D., Nasukawa, T., \BBA\ Tsujii, J. \BBOP 2010\BBCP.
+\newblock \BBOQ Robust Measurement and Comparison of Context Similarity for
+  Finding Translation Pairs.\BBCQ\
+\newblock In {\Bem Proceedings of COLING 2010}, \mbox{\BPGS\ 19--27}.
+
+\bibitem[\protect\BCAY{Blei, Ng, \BBA\ Jordan}{Blei
+  et~al.}{2003}]{Blei03latentdirichlet}
+Blei, D.~M., Ng, A.~Y., \BBA\ Jordan, M.~I. \BBOP 2003\BBCP.
+\newblock \BBOQ Latent Dirichlet Allocation.\BBCQ\
+\newblock {\Bem Journal of Machine Learning Research}, {\Bbf 3}, \mbox{\BPGS\
+  993--1022}.
+
+\bibitem[\protect\BCAY{Brown, Della~Pietra, Della~Pietra, \BBA\ Mercer}{Brown
+  et~al.}{1993}]{brown-EtAl:1993}
+Brown, P.~F., Della~Pietra, S.~A., Della~Pietra, V.~J., \BBA\ Mercer, R.~L.
+  \BBOP 1993\BBCP.
+\newblock \BBOQ The Mathematics of Statistical Machine Translation: Parameter
+  Estimation.\BBCQ\
+\newblock {\Bem Association for Computational Linguistics}, {\Bbf 19}  (2),
+  \mbox{\BPGS\ 263--312}.
+
+\bibitem[\protect\BCAY{Chang \BBA\ Lin}{Chang \BBA\ Lin}{2011}]{CC01a}
+Chang, C.-C.\BBACOMMA\ \BBA\ Lin, C.-J. \BBOP 2011\BBCP.
+\newblock \BBOQ {LIBSVM}: A Library for Support Vector Machines.\BBCQ\
+\newblock {\Bem ACM Transactions on Intelligent Systems and Technology}, {\Bbf
+  2}, \mbox{\BPGS\ 27:1--27:27}.
+
+\bibitem[\protect\BCAY{Chu, Nakazawa, Kawahara, \BBA\ Kurohashi}{Chu
+  et~al.}{2012}]{chu:2012:EAMT}
+Chu, C., Nakazawa, T., Kawahara, D., \BBA\ Kurohashi, S. \BBOP 2012\BBCP.
+\newblock \BBOQ Exploiting Shared {Chinese} Characters in {Chinese} Word
+  Segmentation Optimization for {Chinese--Japanese} Machine Translation.\BBCQ\
+\newblock In {\Bem Proceedings of EAMT 2012}, \mbox{\BPGS\ 35--42}.
+
+\bibitem[\protect\BCAY{Chu, Nakazawa, \BBA\ Kurohashi}{Chu
+  et~al.}{2014a}]{chu:2014:LREC}
+Chu, C., Nakazawa, T., \BBA\ Kurohashi, S. \BBOP 2014a\BBCP.
+\newblock \BBOQ Constructing a Chinese--Japanese Parallel Corpus from
+  Wikipedia.\BBCQ\
+\newblock In {\Bem Proceedings of LREC 2014}, \mbox{\BPGS\ 642--647}.
+
+\bibitem[\protect\BCAY{Chu, Nakazawa, \BBA\ Kurohashi}{Chu
+  et~al.}{2014b}]{chu-nakazawa-kurohashi:2014:CICLing}
+Chu, C., Nakazawa, T., \BBA\ Kurohashi, S. \BBOP 2014b\BBCP.
+\newblock \BBOQ Iterative Bilingual Lexicon Extraction from Comparable Corpora
+  with Topical and Contextual Knowledge.\BBCQ\
+\newblock In {\Bem Proceedings of CICLing 2014}, \mbox{\BPGS\ 8404:2:296--309}.
+
+\bibitem[\protect\BCAY{Do, Besacier, \BBA\ Castelli}{Do
+  et~al.}{2010}]{do:2010:EAMT}
+Do, T. N.~D., Besacier, L., \BBA\ Castelli, E. \BBOP 2010\BBCP.
+\newblock \BBOQ A Fully Unsupervised Approach for Mining Parallel Data from
+  Comparable Corpora.\BBCQ\
+\newblock In {\Bem Proceedings of EAMT 2010}.
+
+\bibitem[\protect\BCAY{Fung}{Fung}{1995}]{fung:1995}
+Fung, P. \BBOP 1995\BBCP.
+\newblock \BBOQ Compiling Bilingual Lexicon Entries from a Non-Parallel
+  English-Chinese Corpus.\BBCQ\
+\newblock In {\Bem Proceedings of the 3rd Annual Workshop on Very Large
+  Corpora}, \mbox{\BPGS\ 173--183}.
+
+\bibitem[\protect\BCAY{Fung \BBA\ Cheung}{Fung \BBA\
+  Cheung}{2004}]{fung-cheung:2004:COLING}
+Fung, P.\BBACOMMA\ \BBA\ Cheung, P. \BBOP 2004\BBCP.
+\newblock \BBOQ Multi-level Bootstrapping For Extracting Parallel Sentences
+  From a Quasi-Comparable Corpus.\BBCQ\
+\newblock In {\Bem Proceedings of Coling 2004}, \mbox{\BPGS\ 1051--1057}.
+
+\bibitem[\protect\BCAY{Fung \BBA\ Yee}{Fung \BBA\
+  Yee}{1998}]{fung-yee:1998:ACLCOLING}
+Fung, P.\BBACOMMA\ \BBA\ Yee, L.~Y. \BBOP 1998\BBCP.
+\newblock \BBOQ An IR Approach for Translating New Words from Nonparallel,
+  Comparable Texts.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-COLING 1998}, \mbox{\BPGS\ 414--420}.
+
+\bibitem[\protect\BCAY{Garera, Callison-Burch, \BBA\ Yarowsky}{Garera
+  et~al.}{2009}]{garera-callisonburch-yarowsky:2009:CoNLL}
+Garera, N., Callison-Burch, C., \BBA\ Yarowsky, D. \BBOP 2009\BBCP.
+\newblock \BBOQ Improving Translation Lexicon Induction from Monolingual
+  Corpora via Dependency Contexts and Part-of-Speech Equivalences.\BBCQ\
+\newblock In {\Bem Proceedings of CoNLL 2009}, \mbox{\BPGS\ 129--137}.
+
+\bibitem[\protect\BCAY{Gaussier, Renders, Matveeva, Goutte, \BBA\
+  Dejean}{Gaussier et~al.}{2004}]{gaussier-EtAl:2004:ACL}
+Gaussier, E., Renders, J., Matveeva, I., Goutte, C., \BBA\ Dejean, H. \BBOP
+  2004\BBCP.
+\newblock \BBOQ A Geometric View on Bilingual Lexicon Extraction from
+  Comparable Corpora.\BBCQ\
+\newblock In {\Bem Proceedings of ACL 2004}, \mbox{\BPGS\ 526--533}.
+
+\bibitem[\protect\BCAY{Haghighi, Liang, Berg-Kirkpatrick, \BBA\ Klein}{Haghighi
+  et~al.}{2008}]{haghighi-EtAl:2008:ACLMain}
+Haghighi, A., Liang, P., Berg-Kirkpatrick, T., \BBA\ Klein, D. \BBOP 2008\BBCP.
+\newblock \BBOQ Learning Bilingual Lexicons from Monolingual Corpora.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-HLT 2008}, \mbox{\BPGS\ 771--779}.
+
+\bibitem[\protect\BCAY{Hong, Li, Zhou, \BBA\ Rim}{Hong
+  et~al.}{2010}]{hong-EtAl:2010:PAPERS}
+Hong, G., Li, C.-H., Zhou, M., \BBA\ Rim, H.-C. \BBOP 2010\BBCP.
+\newblock \BBOQ An Empirical Study on Web Mining of Parallel Data.\BBCQ\
+\newblock In {\Bem Proceedings of COLING 2010}, \mbox{\BPGS\ 474--482}.
+
+\bibitem[\protect\BCAY{Jiang, Yang, Zhou, Liu, \BBA\ Zhu}{Jiang
+  et~al.}{2009}]{jiang-EtAl:2009:ACLIJCNLP}
+Jiang, L., Yang, S., Zhou, M., Liu, X., \BBA\ Zhu, Q. \BBOP 2009\BBCP.
+\newblock \BBOQ Mining Bilingual Data from the Web with Adaptively Learnt
+  Patterns.\BBCQ\
+\newblock In {\Bem Proceedings of ACLI-JCNLP 2009}, \mbox{\BPGS\ 870--878}.
+
+\bibitem[\protect\BCAY{Koehn}{Koehn}{2004}]{koehn:2004:EMNLP}
+Koehn, P. \BBOP 2004\BBCP.
+\newblock \BBOQ Statistical Significance Tests for Machine Translation
+  Evaluation.\BBCQ\
+\newblock In Lin, D.\BBACOMMA\ \BBA\ Wu, D.\BEDS, {\Bem Proceedings of EMNLP
+  2004}, \mbox{\BPGS\ 388--395}.
+
+\bibitem[\protect\BCAY{Koehn}{Koehn}{2010}]{Koehn:2010:SMT:1734086}
+Koehn, P. \BBOP 2010\BBCP.
+\newblock {\Bem Statistical Machine Translation\/} (1st \BEd).
+\newblock Cambridge University Press.
+
+\bibitem[\protect\BCAY{Koehn, Hoang, Birch, Callison-Burch, Federico, Bertoldi,
+  Cowan, Shen, Moran, Zens, Dyer, Bojar, Constantin, \BBA\ Herbst}{Koehn
+  et~al.}{2007}]{koehn-EtAl:2007:PosterDemo}
+Koehn, P., Hoang, H., Birch, A., Callison-Burch, C., Federico, M., Bertoldi,
+  N., Cowan, B., Shen, W., Moran, C., Zens, R., Dyer, C., Bojar, O.,
+  Constantin, A., \BBA\ Herbst, E. \BBOP 2007\BBCP.
+\newblock \BBOQ Moses: Open Source Toolkit for Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of ACL 2007}, \mbox{\BPGS\ 177--180}.
+
+\bibitem[\protect\BCAY{Koehn \BBA\ Knight}{Koehn \BBA\
+  Knight}{2002}]{koehn-knight:2002:ACL02-ULA}
+Koehn, P.\BBACOMMA\ \BBA\ Knight, K. \BBOP 2002\BBCP.
+\newblock \BBOQ Learning a Translation Lexicon from Monolingual Corpora.\BBCQ\
+\newblock In {\Bem Proceedings of the ACL-02 Workshop on Unsupervised Lexical
+  Acquisition}, \mbox{\BPGS\ 9--16}.
+
+\bibitem[\protect\BCAY{Kurohashi, \mbox{Nakamura}, Matsumoto, \BBA\
+  Nagao}{Kurohashi et~al.}{1994}]{kurohashi--EtAl:1994}
+Kurohashi, S., \mbox{Nakamura}, T., Matsumoto, Y., \BBA\ Nagao, M. \BBOP
+  1994\BBCP.
+\newblock \BBOQ Improvements of {J}apanese morphological analyzer
+  {JUMAN}.\BBCQ\
+\newblock In {\Bem Proceedings of the International Workshop on Sharable
+  Natural Language}, \mbox{\BPGS\ 22--28}.
+
+\bibitem[\protect\BCAY{Laroche \BBA\ Langlais}{Laroche \BBA\
+  Langlais}{2010}]{laroche-langlais:2010:PAPERS}
+Laroche, A.\BBACOMMA\ \BBA\ Langlais, P. \BBOP 2010\BBCP.
+\newblock \BBOQ Revisiting Context-based Projection Methods for
+  Term-Translation Spotting in Comparable Corpora.\BBCQ\
+\newblock In {\Bem Proceedings of COLING 2010}, \mbox{\BPGS\ 617--625}.
+
+\bibitem[\protect\BCAY{Ling, Xiang, Dyer, Black, \BBA\ Trancoso}{Ling
+  et~al.}{2013}]{ling-EtAl:2013:ACL2013}
+Ling, W., Xiang, G., Dyer, C., Black, A., \BBA\ Trancoso, I. \BBOP 2013\BBCP.
+\newblock \BBOQ Microblogs as Parallel Corpora.\BBCQ\
+\newblock In {\Bem Proceedings of ACL 2013}, \mbox{\BPGS\ 176--186}.
+
+\bibitem[\protect\BCAY{Liu, Duh, \BBA\ Matsumoto}{Liu
+  et~al.}{2013}]{liu-duh-matsumoto:2013:CoNLL-2013}
+Liu, X., Duh, K., \BBA\ Matsumoto, Y. \BBOP 2013\BBCP.
+\newblock \BBOQ Topic Models + Word Alignment = A Flexible Framework for
+  Extracting Bilingual Dictionary from Comparable Corpus.\BBCQ\
+\newblock In {\Bem Proceedings of CoNLL 2013}, \mbox{\BPGS\ 212--221}.
+
+\bibitem[\protect\BCAY{Lu, Jiang, Chow, \BBA\ Tsou}{Lu
+  et~al.}{2010}]{Lu:2010:LREC}
+Lu, B., Jiang, T., Chow, K., \BBA\ Tsou, B.~K. \BBOP 2010\BBCP.
+\newblock \BBOQ Building a Large English-Chinese Parallel Corpus from
+  Comparable Patents and its Experimental Application to SMT.\BBCQ\
+\newblock In {\Bem Proceedings of BUCC 2010}, \mbox{\BPGS\ 42--49}.
+
+\bibitem[\protect\BCAY{Mimno, Wallach, Naradowsky, Smith, \BBA\
+  \mbox{McCallum}}{Mimno et~al.}{2009}]{mimno-EtAl:2009:EMNLP}
+Mimno, D., Wallach, H.~M., Naradowsky, J., Smith, D.~A., \BBA\ \mbox{McCallum},
+  A. \BBOP 2009\BBCP.
+\newblock \BBOQ Polylingual Topic Models.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP 2009}, \mbox{\BPGS\ 880--889}.
+
+\bibitem[\protect\BCAY{Morin \BBA\ Prochasson}{Morin \BBA\
+  Prochasson}{2011}]{morin-prochasson:2011:BUCC}
+Morin, E.\BBACOMMA\ \BBA\ Prochasson, E. \BBOP 2011\BBCP.
+\newblock \BBOQ Bilingual Lexicon Extraction from Comparable Corpora Enhanced
+  with Parallel Corpora.\BBCQ\
+\newblock In {\Bem Proceedings of BUCC 2011}, \mbox{\BPGS\ 27--34}.
+
+\bibitem[\protect\BCAY{Munteanu \BBA\ Marcu}{Munteanu \BBA\
+  Marcu}{2005}]{Munteanu:2005}
+Munteanu, D.~S.\BBACOMMA\ \BBA\ Marcu, D. \BBOP 2005\BBCP.
+\newblock \BBOQ Improving Machine Translation Performance by Exploiting
+  Non-Parallel Corpora.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 31}  (4), \mbox{\BPGS\
+  477--504}.
+
+\bibitem[\protect\BCAY{Och}{Och}{2003}]{och:2003:ACL}
+Och, F.~J. \BBOP 2003\BBCP.
+\newblock \BBOQ Minimum Error Rate Training in Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of ACL 2003}, \mbox{\BPGS\ 160--167}.
+
+\bibitem[\protect\BCAY{Och \BBA\ Ney}{Och \BBA\
+  Ney}{2003}]{Och:2003:SCV:778822.778824}
+Och, F.~J.\BBACOMMA\ \BBA\ Ney, H. \BBOP 2003\BBCP.
+\newblock \BBOQ A Systematic Comparison of Various Statistical Alignment
+  Models.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 29}  (1), \mbox{\BPGS\
+  19--51}.
+
+\bibitem[\protect\BCAY{Papineni, Roukos, Ward, \BBA\ Zhu}{Papineni
+  et~al.}{2002}]{papineni-EtAl:2002:ACL}
+Papineni, K., Roukos, S., Ward, T., \BBA\ Zhu, W.-J. \BBOP 2002\BBCP.
+\newblock \BBOQ Bleu: A Method for Automatic Evaluation of Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of ACL 2002}, \mbox{\BPGS\ 311--318}.
+
+\bibitem[\protect\BCAY{Prochasson \BBA\ Fung}{Prochasson \BBA\
+  Fung}{2011}]{prochasson-fung:2011:ACL-HLT2011}
+Prochasson, E.\BBACOMMA\ \BBA\ Fung, P. \BBOP 2011\BBCP.
+\newblock \BBOQ Rare Word Translation Extraction from Aligned Comparable
+  Documents.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-HLT 2011}, \mbox{\BPGS\ 1327--1335}.
+
+\bibitem[\protect\BCAY{Qian, Wang, Zhou, \BBA\ Zhu}{Qian
+  et~al.}{2012}]{qian-EtAl:2012:PAPERS}
+Qian, L., Wang, H., Zhou, G., \BBA\ Zhu, Q. \BBOP 2012\BBCP.
+\newblock \BBOQ Bilingual Lexicon Construction from Comparable Corpora via
+  Dependency Mapping.\BBCQ\
+\newblock In {\Bem Proceedings of COLING 2012}, \mbox{\BPGS\ 2275--2290}.
+
+\bibitem[\protect\BCAY{Rapp}{Rapp}{1995}]{rapp:1995:ACL}
+Rapp, R. \BBOP 1995\BBCP.
+\newblock \BBOQ Identifying Word Translations in Non-Parallel Texts.\BBCQ\
+\newblock In {\Bem Proceedings of ACL 1995}, \mbox{\BPGS\ 320--322}.
+
+\bibitem[\protect\BCAY{Rapp}{Rapp}{1999}]{rapp:1999:ACL}
+Rapp, R. \BBOP 1999\BBCP.
+\newblock \BBOQ Automatic Identification of Word Translations from Unrelated
+  English and German Corpora.\BBCQ\
+\newblock In {\Bem Proceedings of ACL 1999}, \mbox{\BPGS\ 519--526}.
+
+\bibitem[\protect\BCAY{Resnik \BBA\ Smith}{Resnik \BBA\
+  Smith}{2003}]{Resnik:2003:WPC:964751.964753}
+Resnik, P.\BBACOMMA\ \BBA\ Smith, N.~A. \BBOP 2003\BBCP.
+\newblock \BBOQ The Web As a Parallel Corpus.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 29}  (3), \mbox{\BPGS\
+  349--380}.
+
+\bibitem[\protect\BCAY{Richardson, Nakazawa, \BBA\ Kurohashi}{Richardson
+  et~al.}{2013}]{richardson-nakazawa-kurohashi:2013:IJCNLP}
+Richardson, J., Nakazawa, T., \BBA\ Kurohashi, S. \BBOP 2013\BBCP.
+\newblock \BBOQ Robust Transliteration Mining from Comparable Corpora with
+  Bilingual Topic Models.\BBCQ\
+\newblock In {\Bem Proceedings of IJCNLP 2013}, \mbox{\BPGS\ 261--269}.
+
+\bibitem[\protect\BCAY{Smith, Quirk, \BBA\ Toutanova}{Smith
+  et~al.}{2010}]{smith-quirk-toutanova:2010:NAACLHLT}
+Smith, J.~R., Quirk, C., \BBA\ Toutanova, K. \BBOP 2010\BBCP.
+\newblock \BBOQ Extracting Parallel Sentences from Comparable Corpora using
+  Document Level Alignment.\BBCQ\
+\newblock In {\Bem Proceedings of NAACL-HLT 2010}, \mbox{\BPGS\ 403--411}.
+
+\bibitem[\protect\BCAY{Stefanescu \BBA\ Ion}{Stefanescu \BBA\
+  Ion}{2013}]{Stefanescu:2013:CICLing}
+Stefanescu, D.\BBACOMMA\ \BBA\ Ion, R. \BBOP 2013\BBCP.
+\newblock \BBOQ Parallel-Wiki: A Collection of Parallel Sentences Extracted
+  from Wikipedia.\BBCQ\
+\newblock In {\Bem Proceedings of CICLing 2013}, \mbox{\BPGS\ 117--128}.
+
+\bibitem[\protect\BCAY{Stefanescu, Ion, \BBA\ Hunsicker}{Stefanescu
+  et~al.}{2012}]{Stefanescu:2012:EAMT}
+Stefanescu, D., Ion, R., \BBA\ Hunsicker, S. \BBOP 2012\BBCP.
+\newblock \BBOQ Hybrid Parallel Sentence Mining from Comparable Corpora.\BBCQ\
+\newblock In {\Bem Proceedings of EAMT 2012}, \mbox{\BPGS\ 137--144}.
+
+\bibitem[\protect\BCAY{Tamura, Watanabe, \BBA\ Sumita}{Tamura
+  et~al.}{2012}]{tamura-watanabe-sumita:2012:EMNLP-CoNLL}
+Tamura, A., Watanabe, T., \BBA\ Sumita, E. \BBOP 2012\BBCP.
+\newblock \BBOQ Bilingual Lexicon Extraction from Comparable Corpora Using
+  Label Propagation.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP-CoNLL 2012}, \mbox{\BPGS\ 24--36}.
+
+\bibitem[\protect\BCAY{Tillmann}{Tillmann}{2009}]{tillmann:2009:Short}
+Tillmann, C. \BBOP 2009\BBCP.
+\newblock \BBOQ A Beam-Search Extraction Algorithm for Comparable Data.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-IJCNLP 2009}, \mbox{\BPGS\ 225--228}.
+
+\bibitem[\protect\BCAY{Tsuruoka, Miyao, \BBA\ Kazama}{Tsuruoka
+  et~al.}{2011}]{tsuruoka-miyao-kazama:2011:CoNLL}
+Tsuruoka, Y., Miyao, Y., \BBA\ Kazama, J. \BBOP 2011\BBCP.
+\newblock \BBOQ Learning with Lookahead: Can History-Based Models Rival
+  Globally Optimized Models?\BBCQ\
+\newblock In {\Bem Proceedings of CoNLL 2011}, \mbox{\BPGS\ 238--246}.
+
+\bibitem[\protect\BCAY{Uszkoreit, Ponte, Popat, \BBA\ Dubiner}{Uszkoreit
+  et~al.}{2010}]{uszkoreit-EtAl:2010:PAPERS}
+Uszkoreit, J., Ponte, J., Popat, A., \BBA\ Dubiner, M. \BBOP 2010\BBCP.
+\newblock \BBOQ Large Scale Parallel Document Mining for Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of COLING 2010}, \mbox{\BPGS\ 1101--1109}.
+
+\bibitem[\protect\BCAY{Utiyama \BBA\ Isahara}{Utiyama \BBA\
+  Isahara}{2003}]{utiyama-isahara:2003:ACL}
+Utiyama, M.\BBACOMMA\ \BBA\ Isahara, H. \BBOP 2003\BBCP.
+\newblock \BBOQ Reliable Measures for Aligning Japanese-English News Articles
+  and Sentences.\BBCQ\
+\newblock In {\Bem Proceedings of ACL 2003}, \mbox{\BPGS\ 72--79}.
+
+\bibitem[\protect\BCAY{Utiyama \BBA\ Isahara}{Utiyama \BBA\
+  Isahara}{2007}]{utiyama:2007:MTS}
+Utiyama, M.\BBACOMMA\ \BBA\ Isahara, H. \BBOP 2007\BBCP.
+\newblock \BBOQ A Japanese-English Patent Parallel Corpus.\BBCQ\
+\newblock In {\Bem Proceedings of MT Summit XI}, \mbox{\BPGS\ 475--482}.
+
+\bibitem[\protect\BCAY{Voorhees}{Voorhees}{1999}]{Voorhees-MRR:1999}
+Voorhees, E.~M. \BBOP 1999\BBCP.
+\newblock \BBOQ The {TREC-8} Question Answering Track Report.\BBCQ\
+\newblock In {\Bem Proceedings of the 8th Text Retrieval Conference (TREC-8)},
+  \mbox{\BPGS\ 77--82}.
+
+\bibitem[\protect\BCAY{Vuli{\'{c}}, De~Smet, \BBA\ Moens}{Vuli{\'{c}}
+  et~al.}{2011}]{vulic-desmet-moens:2011:ACL-HLT2011}
+Vuli{\'{c}}, I., De~Smet, W., \BBA\ Moens, M.-F. \BBOP 2011\BBCP.
+\newblock \BBOQ Identifying Word Translations from Comparable Corpora Using
+  Latent Topic Models.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-HLT 2011}, \mbox{\BPGS\ 479--484}.
+
+\bibitem[\protect\BCAY{Vuli{\'{c}} \BBA\ Moens}{Vuli{\'{c}} \BBA\
+  Moens}{2012}]{vulic-moens:2012:EACL2012}
+Vuli{\'{c}}, I.\BBACOMMA\ \BBA\ Moens, M.-F. \BBOP 2012\BBCP.
+\newblock \BBOQ Detecting Highly Confident Word Translations from Comparable
+  Corpora without Any Prior Knowledge.\BBCQ\
+\newblock In {\Bem Proceedings of EACL 2012}, \mbox{\BPGS\ 449--459}.
+
+\bibitem[\protect\BCAY{Vuli{\'{c}} \BBA\ Moens}{Vuli{\'{c}} \BBA\
+  Moens}{2013a}]{vulic-moens:2013:NAACL-HLT}
+Vuli{\'{c}}, I.\BBACOMMA\ \BBA\ Moens, M.-F. \BBOP 2013a\BBCP.
+\newblock \BBOQ Cross-Lingual Semantic Similarity of Words as the Similarity of
+  Their Semantic Word Responses.\BBCQ\
+\newblock In {\Bem Proceedings of NAACL-HLT 2013}, \mbox{\BPGS\ 106--116}.
+
+\bibitem[\protect\BCAY{Vuli{\'{c}} \BBA\ Moens}{Vuli{\'{c}} \BBA\
+  Moens}{2013b}]{vulic-moens:2013:EMNLP}
+Vuli{\'{c}}, I.\BBACOMMA\ \BBA\ Moens, M.-F. \BBOP 2013b\BBCP.
+\newblock \BBOQ A Study on Bootstrapping Bilingual Vector Spaces from
+  Non-Parallel Data (and Nothing Else).\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP 2013}, \mbox{\BPGS\ 1613--1624}.
+
+\bibitem[\protect\BCAY{Yu \BBA\ Tsujii}{Yu \BBA\
+  Tsujii}{2009}]{yu-tsujii:2009:NAACLHLT09-Short}
+Yu, K.\BBACOMMA\ \BBA\ Tsujii, J. \BBOP 2009\BBCP.
+\newblock \BBOQ Extracting Bilingual Dictionary from Comparable Corpora with
+  Dependency Heterogeneity.\BBCQ\
+\newblock In {\Bem Proceedings of NAACL-HLT 2009}, \mbox{\BPGS\ 121--124}.
+
+\bibitem[\protect\BCAY{Zhao \BBA\ Vogel}{Zhao \BBA\
+  Vogel}{2002}]{zhao:2002:IEEE}
+Zhao, B.\BBACOMMA\ \BBA\ Vogel, S. \BBOP 2002\BBCP.
+\newblock \BBOQ Adaptive Parallel Sentences Mining from Web Bilingual News
+  Collections.\BBCQ\
+\newblock In {\Bem Proceedings of the 2002 IEEE International Conference on
+  Data Mining}, \mbox{\BPGS\ 745--748}.
+
+\end{thebibliography}
+
+\vspace{1\Cvs}
+\begin{biography}
+
+\bioauthor[:]{Chenhui Chu}{
+received his B.S. in Software Engineering from Chongqing University in 2008. He received 
+his M.S. and Ph.D. in Informatics from Kyoto University in 2012 and 2015, respectively. He is currently 
+a researcher at the Japan Science and Technology Agency. His research interests include natural 
+language processing, particularly machine translation.
+}
+
+\bioauthor[:]{Toshiaki Nakazawa}{
+received his B.S. in Information and Communication Engineering and M.S. in Information 
+Science and Technology from the University of Tokyo in 2005 and 2007, respectively. He obtained his Ph.D. 
+in Informatics from Kyoto University in 2010. He is currently a researcher at the Japan Science and 
+Technology Agency. His research interests center on natural language processing, particularly machine translation.
+}
+
+\bioauthor[:]{\bf Sadao Kurohashi}{
+received his B.S., M.S., and Ph.D. in Electrical Engineering from Kyoto University in 
+1989, 1991, and 1994, respectively. In 1994, he was a visiting researcher at the Institute for Research 
+in Cognitive Science, University of Pennsylvania. He is currently a Professor at the Graduate School of 
+Informatics, Kyoto University. His research interests include natural language processing, knowledge 
+acquisition/representation, and information retrieval. He received a 10th anniversary best paper award 
+from the Journal of Natural Language Processing in 2004, a Funai IT promotion award in 2009, and an IBM 
+faculty award in 2009.
+}
+\end{biography}
+
+\biodate
+
+
+\end{document}

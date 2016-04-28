@@ -1,0 +1,720 @@
+\documentstyle[epsf,jnlpbbl]{jnlp_j_b5}
+\setcounter{page}{29}
+\setcounter{巻数}{6}
+\setcounter{号数}{1}
+\setcounter{年}{1999}
+\setcounter{月}{1}
+\受付{1998}{4}{24}
+\採録{1998}{10}{2}
+\title{長さ可変文脈を用いたマルチニューロタガー}
+\author{馬 青 \affiref{CRL} \and 井佐原 均 \affiref{CRL}}
+
+\headauthor{馬，井佐原}
+\headtitle{長さ可変文脈を用いたマルチニューロタガー}
+\affilabel{CRL}{郵政省通信総合研究所}
+{Communications Research Laboratory, Ministry of Posts and Telecommunications}
+\jabstract{
+本稿は最長文脈優先に基づいて長さ可変文脈で品詞タグづけを行うマルチニュー
+ロタガーを提案する.
+マルチニューロタガーはそれぞれ長さの異なる文脈を入力とした複数の
+ニューラルネット（それぞれをシングルニューロタガーと呼ぶ）とそれらの出力
+を選別
+する最長文脈優先セレクターで構成される.
+個々のニューラルネットの訓練は
+それぞれ独立に行なわれるのではなく, 短い文脈での訓練結果（訓練で獲得した
+重み）
+を長い文脈での初期値として使う. その結果, 訓練時間が大幅に短縮でき, 複数
+のニューラルネットを用いても訓練時間はほとんど変わらない.
+タグづけにおいては, 目標単語自身の影響が最も強く, 
+前後の単語もそれぞれの位置に応じた影響を与えていることを反映させるために,
+入力の各構成部分は情報量最大を考慮して訓練デー
+タから得られるインフォメーションゲイン（略してIGと呼ぶ）を影響度として重
+み付けられる.
+その結果, 更に訓練時間が短縮され, タグづけの性能が改善される. 計算機実験
+の結果, マルチニューロタガーは, 8,322文の小規模タイ語コーパスを訓練に用いることによ
+り, 未訓練タイ語データを94\%以上の正解率でタグづけすることができた.
+この結果は, 固定長さを文脈としたどのシングルニューロタガーを
+用いた場合よりも優れ, マルチニュー
+ロタガーはタグづけ過程において動的に適切な長さの文脈を見つけていることを
+示した.}
+
+\jkeywords{タイ語, コーパス, 品詞タグづけ, マルチニューロ, 長さ可変文脈, 最長文脈優先}
+
+\etitle{A Multi-Neuro Tagger\\ Using Variable Lengths of Contexts}
+\eauthor{Qing Ma \affiref{CRL} \and Hitoshi Isahara \affiref{CRL}}
+
+\eabstract{
+This paper presents a multi-neuro tagger that uses variable
+lengths of contexts for part of speech (POS) tagging based on longest
+context priority. The tagger is constructed using multiple neural
+networks, all of which can be regarded as single-neuro taggers with
+fixed but
+different lengths of contexts in inputs, and the longest context
+priority based selector.
+Because the trained results (weights) of the taggers with shorter
+lengths
+of contexts can be used as initial weights for those with longer lengths
+of contexts,
+the training time for the latter ones can be greatly reduced and
+the cost to train a multi-neuro tagger is almost the same as that to
+train a single-neuro tagger.
+In tagging, given that the target word is more relevant
+than any of the words in its context and the words in context may have
+different relevances, each element of the input is
+weighted by its relevance with information gain.
+Computer experiments show that the multi-neuro tagger
+has a correct rate of over 94\% for tagging untrained data
+when a small Thai corpus with 8,322 sentences
+that we have on hand
+is used for training.
+This result is better than any of the results obtained using the
+single-neuro taggers,
+which indicates that the multi-neuro tagger can dynamically find
+a suitable length of contexts in tagging.\bigskip}
+
+\ekeywords{Thai, corpus, POS tagging, multi-neuro, variable length of context, 
+longest context priority.}
+
+\begin{document}
+\thispagestyle{myheadings}
+\maketitle
+\thispagestyle{myheadings}
+
+\section{はじめに}
+一つ一つの単語はしばしば複数の品詞（即ち, 品詞の曖昧性）を持
+ち得る. しかしながら, その単語が一
+旦文に組み込まれば, 持ち得る品詞はその前後の品詞によって唯一に決まる場合が多い. 
+品詞のタグづけはこのような曖昧性を文脈を用いることによって除去することである.
+
+品詞タグづけの研究は, 特に英語や日本語などにおいて多数行なわれてきた. これら
+の研究を通じ, これまで
+主に四つのアプローチ, 即ち, ルールベースによるもの~\cite{garside,hindle,brill},
+HMMやn-gramを用い
+た確率モデルに基づいたもの~\cite{church,derose,cutting,weischedel,merialdo,schutze}, 
+メモリベースのもの~\cite{daelemans:96,marquez},
+そしてニューラルネットを用いたもの~\cite{nakamura,schmid,ma}が提案された. 
+これらの研究では, 
+大量の訓練データ（例えば\cite{schmid}においては1,000,000個のデータ）
+を用いれば, そのいずれの手法を用いても,
+未訓練データへのタグづけを95\%以上の正解率で行なえることを示した.
+しかしながら, 実際, 英語や日本語などを除いた数多くの言語（例えば本稿で取
+り上げたタイ語）に関しては, コーパス自体もまだ整備段階にあるのが現状で, 
+予め大量の訓練データを得るのが困難である.
+従って, これらの言語にとっては, 
+如何に少ない訓練データで十分実用的で高い正解率の品詞タグづけシステ
+ムを構築するかが重要な課題となる.
+
+これまで提案された確率モデルやニューラルネットモデルのほとんどはタグづけ
+に長さが固定の文脈を用いるものであり（HMMモデルにおいても状態遷移を定義す
+るのに固定されたn-gramベースのモデルを用いる）, 入力の各構成部分は同一の
+影響度を持つものとされていた. 
+しかし, 訓練データが少ない場合, タグづけ結果の確信度を高めるために, まず
+できるだけ長い文脈を用い, 訓練データの不足から確定的な答えが出ない場合
+に順次文脈を短くするといった
+ようにフレキシブルにタグづけすることが必要とされよう. そして, 
+客観的な基準で入力の各構成部分の品詞タグづけへの影響度を計り, 
+その影響度に応じた重みをそれぞれの構成部分に与えればより望ま
+しいであろう.
+そこで, シンプルで効果的と思われる解決法は
+マルチモジュールモデルを導入することである.
+マルチモジュールモデルとは, 複数のそれぞれ異なった長さの文脈を入力
+としたモジュールとそれらの出力を選別するセレクターから構成されるシステム
+のことである. しかし, このようなシステムを例えば確率モデルや
+メモリベースモデルで実現しようとすると, それぞれ以下に述べる不具合が生じる.
+確率モデルは, 比較的短い文脈を用いる場合には, 必要とされるパラメターの数
+はそれほど多くならない. しかし, ここで提案しているような複数のモジュール
+を場合に応じて使い分けるようなシステムでは, ある程度の長さの文脈を用いる
+ことが必要となり, 確率モデルのパラメターの数が膨大になる.
+例えば, 品詞が50種類ある言語を左右
+最大三つの単語の情報を文脈としてタグづけを行なう場合,
+その最長文脈を入力としたn-gramベース確率モデルにおいては,
+サイズが$50^7=7.8 \times 10^{11}$のn-gramテーブルを用意しなければならない. 
+一方, IGTreeのようなメモリベースモデル
+\cite{daelemans:96}においては, 品詞タグづけに実際に用いる特徴の数
+はそのツリーを張るノード（特徴）の範囲内で可変であり, 各特徴のタグ
+づけへの影響度もそれらを選択する優先順位で反映される. しかしながら, 
+特徴の数を大きく取った場合, この手法によるタグづけの計算コストが非常にかかっ
+てしまうケースが生じる. 実際, Daelmansらのモデル~\cite{daelemans:96}においては
+ノードの数は僅か４に設定されており, 実質的に固定長さの文脈を用いていると
+見てもよい.
+
+本稿では, 複数のニューラルネットで構成されるマルチニューロタガーを提案す
+る. 品詞のタグづけは, 長さが固定の文脈を用いるのではなく, 
+最長文脈優先でフレキシブルに行なわれる. 個々のニューラルネットの訓練は
+それぞれ独立に行なわれるのではなく, 短い文脈での訓練結果（訓練で獲得した
+重み）を長い文脈での訓練の初期値として使う. その結果, 訓練時間が大幅に短
+縮でき, 複数のニューラルネットを用いても訓練時間はほとんど変わらない.
+タグづけにおいては, 目標単語自身の影響が最も強く, 前後の単語もそれぞれ
+の位置に応じた影響度を持つことを反映させるために,
+入力の各構成部分は情報量最大を考慮して訓練デー
+タから得られるインフォメーションゲイン（略してIGと呼ぶ）を影響度として
+重み付けられる, その結果, 訓練時間が更に大幅に短縮され, タグづけの性能も
+僅かながら改善される. 計算機実験の結果, マルチニューロタガーは,
+8,322文の小規模タイ語コーパスを訓練に用いることにより, 
+未訓練タイ語データを94\%以上の正解率でタグづけすることができた.
+この結果は, どの固定長さの文脈を入力としたシングルニューロタガーを用いた
+場合よりも優れ, マルチニューロタガーはタグづけ過程において動的に適切な長
+さの文脈を見つけていることを示した. 
+
+以下, ２章では品詞タグづけ問題の定式化, ３章ではインフォメーションゲイン
+（IG）
+の求め方,  ４章ではマルチニューロタガーのアーキテクチャ, そして５章では計算
+機実験の結果について順に述べていく.
+
+\section{品詞タグづけ問題}
+表１は品詞をタグづけされたタイ語コーパスの例を示す. 記号`@'や`/'で区分さ
+れている記号列（例えばNCMNやPPRS）はその前にある単語が持ち得る品詞を表し, 
+記号`@'の直後の記号列はその文において唯一に決まった品詞を表している. 本
+稿で用いるタイ語の単語カテゴリの分類法に47種類の品詞が定義されて
+いる~\cite{charoenporn}.
+
+\begin{table*}
+\begin{center}
+表１ 品詞をタグづけされたタイ語コーパスの例 \\[2mm]
+\smallskip
+\epsfile{file=32.eps,width=14.3cm}
+\end{center}
+\end{table*}
+
+入力されるタイ語テキストは電子辞書を用いて単語に分割され, 各単語の持ち得
+る品詞もリストアップされるため, 品詞のタグづけ問題は以下に示すような
+文脈を用いた品詞の曖昧性除去あるいは一種のクラス分け問題と見なせる.
+\begin{equation}
+IPT: (ipt\_l_{l},\cdots,ipt\_l_{1}, ipt\_t, ipt\_r_{1}, \cdots,
+ipt\_r_{r}) \Rightarrow OPT: POS\_t
+\end{equation}
+ここで, $ipt\_x$ ($x=l_{i}, t, r_{j}$, $i=1, \cdots, l$, $j=1, \cdots,
+r$)を入力$IPT$の構成部分と呼ぶ. 具体的には,
+$ipt\_t$は目標単語の取りうる品詞に関するもの,
+$ipt\_l_{i}$と$ipt\_r_{j}$は
+それぞれ目標単語から左へ$i$番目と右へ$j$番目の単語の取りうる品詞（文脈）
+に関するもの,
+そして, $POS\_t$は目標単語がその文脈で取る正しい品詞を表すものである.
+
+\section{インフォメーションゲイン（IG）}
+インフォメーションゲイン（IG）は, 特徴ベクトルで定義されるデータ
+セットの情報量がある特定の特徴の値を知ることによってどれだけ増えるかを表す量である~\cite{daelemans:92,quinlan}. より具体的に言えば, 
+ある特徴のIGとはその特徴がデータのクラス同定にどれだけ重要かを反映する量である.  
+ここで, 特徴を入力の構成部分, 特徴の値をその構成
+部分の取りうる品詞, データの属するクラスを目標単語の取りうる品詞にそれぞ
+れ置き換えてやれば,
+各構成部分のIGはその構成部分の品詞タグづけへの影響
+度として考えることができる. 
+
+従って, (1)における入力の各構成部分$ipt\_x$ ($x=l_{i}, 
+t, \ \mbox{or} \ r_{j}$)はそれぞれタグづけへの影響度に応じた重み$w\_x$を持
+つと仮定すれば, その重みは以下のように求められる. ここで訓練データセットを$S$,
+$i$番目のクラス, あるいは$i$番目の品詞（$i=1, \cdots, n$, 但し, $n$は品詞の
+数）を$C_{i}$で表す.  セット$S$のエントロピー, 即ち, $S$の中の一つのデータの
+クラス（品詞）を同定するのに必要とされる情報の平均量は
+\begin{equation}
+info(S)=-\sum_{i=1}^{n}\frac{freq(C_{i},S)}{|S|} \times
+ln(\frac{freq(C_{i},S)}{|S|})
+\end{equation}
+である. 但し, $|S|$は$S$の中のデータの数, $freq(C_{i},S)$はそのうちクラス$C_{i}$
+に属するデータの数である. セット$S$が構成部分$ipt\_x$の持ちうる品詞によって$h$
+個のサブセット$S_{i}$ ($i=1, \cdots, h$)に分割されたとき, 新しいエントロ
+ピーはこれらのサブセットのエントロピーの重みつき総和で求められる. 即ち,
+\begin{equation}
+info_{x}(S)=\sum_{i=1}^{h}\frac{|S_{i}|}{|S|} \times info(S_{i})
+\end{equation}
+この分割（即ち, 構成部分$ipt\_x$の品詞を知ること）による情報の
+増益（IG）は以下になる.
+\begin{equation}
+gain(x)=info(S)-info_{x}(S)
+\end{equation}
+従って, 構成部分$ipt\_x$のタグづけへの影響度に応じた重みは以下のように設
+定できる.
+\begin{equation}
+w\_x=gain(x)
+\end{equation}
+
+\section{マルチニューロタガー}
+\subsection{シングルニューロタガー}
+
+
+\begin{center}
+\begin{minipage}[t]{8cm}
+\epsfile{file=33.eps,width=12cm}  \bigskip
+
+\end{minipage}
+\\ 図１ シングルニューロタガー (SNT)
+\end{center}
+
+
+
+図1は固定長さの文脈を用いて品詞タグづけをするニューラルネット
+（シングルニューロタガー, 略してSNTと呼ぶ）を示す. 単語$x$が入力の位置
+$y$ ($y=t$, $l_{i}$, or $r_{j}$)に与えられた時, 
+入力$IPT$の構成部分$ipt\_y$ は以下のように
+重み付けされたパターンで定義される.
+\begin{equation}
+ipt\_y=w\_y \cdot (e_{x1}, e_{x2}, \cdots, e_{xn})
+=(I_{x1}, I_{x2}, \cdots, I_{xn})
+\end{equation}
+但し, $w\_y$は(5)で求められた重み, $n$はタイ語に定義された品詞の数, 
+$I_{xi}=w\_y \cdot e_{xi}$ ($i=1,\cdots,n$)である. 
+もし単語$x$が既知のもの, 即ち, 訓練データに出現するならば, 
+各ビット$e_{xi}$は以下のように得られる.
+\begin{equation}
+e_{xi}=Prob(POS_{i}|x)
+\end{equation}
+ここで, $Prob(POS_{i}|x)$は単語$x$の品詞が$POS_{i}$である確率で, 訓練デー
+タから以下のように推定される.
+\begin{equation}
+Prob(POS_{i}|x)=\frac{|POS_{i}, x|}{|x|}
+\end{equation}
+ここで, $|POS_{i}, x|$は全訓練データを通じ, $x$が品詞$POS_{i}$を取る回数で,
+$|x|$は$x$が出現する回数である. 一方, もし単語$x$が未知のもの, 即ち, 
+訓練データに出現しないならば, 各ビット$e_{xi}$は以下のように
+得られる.
+\begin{equation}
+e_{xi}=\left\{ \begin{array}{ll}
+    \frac{1}{n_{x}}  &  \mbox{$POS_{i}$が$x$の取りうる品詞の場合} \\
+    0  &  \mbox{その他}
+  \end{array}
+\right.
+\end{equation}
+ここで, $n_{x}$は単語$x$が持ちうる品詞の数である. 出力$OPT$は以下のよう
+に定義されるパターンである.
+\begin{equation}
+OPT=(O_{1}, O_{2}, \cdots, O_{n})
+\end{equation}
+$OPT$はデコードされ, 目標単語の品詞として
+最終結果$RST$が得られる：
+\begin{equation}
+RST=\left\{ \begin{array}{ll}
+    POS_{i}  &  \mbox{$O_{i}=1$, すべての$O_{j}=0$（$j \neq i$）の場合} \\
+    Unknown  &  \mbox{その他}
+  \end{array}
+\right.
+\end{equation}
+
+文の各単語を左から右へ順にタグづけしていくとき,
+左側の単語はつねにタグづけ済みと考えられるため, 
+それらの単語に関する入力を構成するとき, より多くの情報が活用できる.
+具体的には, (6)-(9)を用いる代わりに, 入力は次のように構成される.
+\begin{equation}
+ipt\_l_{i}(t)=w\_l_{i} \cdot OPT(t-i)
+\end{equation}
+ここで, $t$は目標単語の文における位置であり, $i=1, 2, \cdots, l$
+for $t-i>0$.
+しかしながら, 訓練過程においてはタガーの出力はまだ正確ではないため, 
+それらを直接入力にフィードバックして使うことができない. そのために, 
+訓練過程における入力は以下のように実際の出力と目標出力の重みづき平均を
+用いて構成する.
+\begin{equation}
+ipt\_l_{i}(t)=w\_l_{i} \cdot (w_{OPT} \cdot OPT(t-i)+w_{DES} \cdot DES)
+\end{equation}
+ここで, $DES$は目標出力で, $w_{OPT}$と$w_{DES}$はそれぞれ次のように定
+義される.
+\begin{equation}
+w_{OPT}=\frac{E_{OBJ}}{E_{ACT}}
+\end{equation}
+\begin{equation}
+w_{DES}=1-w_{OPT}
+\end{equation}
+ここで, $E_{OBJ}$と$E_{ACT}$はそれぞれ目標誤差と実際の誤差を表す 
+（それらの詳細は4.3節で述べる）. 従って, 訓練の始めの入力構成では
+目標出力の比重が大きく, 
+時間が立つにつれゼロへ減っていく. 逆に, 実際の出力の比重は最初小さく, 時間
+が立つにつれて大きくなっていく.
+
+\subsection{マルチニューロタガー}
+図２に示すように, マルチニューロタガーはエンコーダー/デコーダー, 複数のシングルニュー
+ロタガーSNT$_{i}$ ($i=1, \cdots, m$), そして最大文脈優先セレクターで構成される. 
+SNT$_{i}$は入力$IPT_{i}$を持つ. 入力$IPT_{i}$の長さ
+（即ち, 構成部分の数: $l+1+r$）$l(IPT_{i})$は次の関係を持つ： 
+$l(IPT_{i}) < l(IPT_{j})$ for $i < j$.
+ 
+\begin{center}
+\epsfile{file=35.eps,width=12cm} \\
+図２ マルチニューロタガー
+\end{center}
+
+\vspace{3mm}
+目標単語$word\_t$を中心とした, 最大長さ$l(IPT_{m})$の 
+単語列($word\_l_{l}$, $\cdots$, $word\_l_{1}$, $word\_t$, $\cdots$, $word\_r_{r}$)
+がマルチニューロタガーに与えられた時, それぞれ同じく単語$word\_t$を中心と
+した長さ$l(IPT_{i})$の部分単語列が前節に述べた方法で$IPT_{i}$に符号化さ
+れ, 個々のシングルニューロタガーSNT$_{i}$ ($i=1, \cdots, m$)に入力される. 
+それらの入力に対し, 個々のSNT$_{i}$はそれぞれ独立に品詞タグづけを行
+ない, 出力$OPT_{i}$を得る. 出力$OPT_{i}$は前節に述
+べた方法で$RST_{i}$にデコードされる. $RST_{i}$は更に
+最大文脈優先セレクターに入力され, 最終結果は次のように得られる.
+\begin{equation}
+POS\_t=\left\{ \begin{array}{ll}
+    RST_{i}  &  \mbox{\hspace{-5.9cm}$RST_{i}$が$Unknown$でなく, すべての} \\
+      \mbox{\hspace{2.68cm}$RST_{j}$($j>i$)が$Unknown$である場合} \\
+    Unknown  &  \mbox{\hspace{-5.9cm}その他}
+  \end{array}
+\right.
+\end{equation}
+
+この式は, タグづけの最終結果はできるだけ長い文脈で得られた出力を優先的に用いる
+ことを意味する.
+
+\subsection{三層パーセプトロン}
+図１に示すように, シングルニューロタガーは三層パーセプトロン
+（詳細は\cite{haykin}を参照）で構成される. 三層パーセプトロン
+は誤差逆伝播学習アルゴリズム~\cite{rumelhart}を用いて
+品詞のタグづけ済みの訓練用データを学習することによって
+品詞タグづけ能力を学習できる.
+
+訓練段階においては, 各訓練データーのペア$(IPT^{(b)}, DES^{(b)})$
+は順番にネットワークに与えられる. 但し, 上つき記号$b$はデータの番号を表
+し, $b$ = $1, \cdots, P$, $P$は訓練データの数である.
+$b$番目の訓練データ$IPT^{(b)}$と$DES^{(b)}$は次のようなパターンとされる.
+\[
+IPT^{(b)}=(ipt\_l_{l}^{(b)}, \cdots, ipt\_l_{1}^{(b)}, ipt\_t^{(b)},
+ipt\_r_{1}^{(b)}, \cdots, ipt\_r_{r}^{(b)})
+\]
+\begin{equation}
+=(I^{(b)}_{1}, \cdots, I^{(b)}_{p})
+\end{equation}
+\begin{equation}
+DES^{(b)}=(D^{(b)}_{1}, \cdots, D^{(b)}_{n})
+\end{equation}
+但し, $p = (l+1+r) \cdot n$である. $IPT^{(b)}$の各ビット$I^{(b)}_{i}$は(6)-(9)
+或は(12)-(15)を用いて得られる.
+$DES^{(b)}$の各ビット$D^{(b)}_{i}$は
+次のように与えられる.
+\begin{equation}
+D^{(b)}_{i}=\left\{ \begin{array}{ll}
+    1  &  \mbox{$POS_{i}$が正解の場合} \\
+    0  &  \mbox{その他}
+  \end{array}
+\right.
+\end{equation}
+訓練は全訓練データに対し平均出力誤差が目標値以下になるまで繰り返して行なわ
+れる. ここで$k$回目の繰り返し訓練において$b$番目の訓練データのペアが提示されたと
+する. その時, ネットワークは, 入力層に与えられた入力パターン$IPT^{(b)}$
+を以下の(20)-(24)を用いて出力層へ前向きに伝播しながら変換する.
+入力層はまず以下のようにセットされる.
+\begin{equation}
+y_{i}(k)=I^{(b)}_{i} \ \mbox{and} \ y_{0}(k)=1
+\end{equation}
+但し, $i=1, \cdots, p$, 
+$y_{i}(k)$は入力層のユニット$i$の出力, $i=0$はバイアスユニッ
+トを表す. ここで, 次の層（中間層或は出力層）のユニット$j$の出力は次のように得
+られる.
+\begin{equation}
+y_{j}(k)=\phi(v_{j}(k))
+\end{equation}
+但し, $v_{j}(k)$はユニット$j$の内部活動度と呼ばれるもので次のように得られる.
+\begin{equation}
+v_{j}(k)=\sum_{i=0}^{q}w_{ji}(k)y_{i}(k)
+\end{equation}
+ここで, $y_{i}(k)$と$q$はそれぞれ前の層のユニット$i$の出力とユニットの総数
+である（入力層においては$q=p$）.
+また, $\phi(\cdot)$は次のように定義される.
+\begin{equation}
+\phi(x)=\frac{1}{(1+exp(-x))}
+\end{equation}
+出力層のユニット$j$の出力には別な記号$O^{b}_{j}$を用いる, 即ち,
+\begin{equation}
+O^{(b)}_{j}(k)=y_{j}(k)
+\end{equation}
+出力$O^{(b)}_{j}(k)$が得られた後, その出力と目標出力間の二乗誤差
+$E^{(b)}$は次のように計算される.
+\begin{equation}
+E^{(b)}(k)=\frac{1}{2} \sum_{j=1}^{n}(D^{(b)}_{j}-O^{(b)}_{j}(k))^2
+\end{equation}
+そこで, その誤差を出力から入力へ逆伝播して
+誤差を減らすようにネットワークの重みを次のように修正する.
+\begin{equation}
+w_{ji}(k+1)=w_{ji}(k) + \eta \Delta w_{ji}(k) +\alpha \Delta
+w_{ji}(k-1)
+\end{equation}
+但し, $\eta$は重みの更新量を決める学習率で, $\alpha$は慣性率である. 
+$\Delta w_{ji}(k)$は最急降下法で次のように計算される.
+\begin{equation}
+\Delta w_{ji}(k)=-\frac{\partial E^{(b)}(k)}{\partial w_{ji}(k)}
+\end{equation}
+このように(20)-(27)を通じて$k$回目の繰り返し訓練においての$b$番目のデー
+タの処理が終る.
+訓練は, 下の条件が満足されるまで, 即ち,
+各訓練データと各出力ユニットに対する平均誤差
+$E_{ACT}(k)$が目標誤差$E_{OBJ}$以下になるまで, 全訓練データを通じて
+繰り返して行なわれる：
+\begin{equation}
+E_{ACT}(k)=\frac{\sum_{b=1}^{P}\sum_{j=1}^{n}|D^{(b)}_{j}-O^{(b)}_{j}(k)|}{nP} 
+\leq E_{OBJ}
+\end{equation}
+
+品詞タグづけ段階においては, 入力$IPT=(I_{1}, \cdots, I_{p})$が与えられた
+時, ネットワークはその入力パターンを(20)-(24)を用いて入力層から出力層
+へ前向きに伝播しながら変換する. 
+ここで$k$は１にセットされ, 上つき記号$b$が取り除かれる. 最終的に, 出
+力$OPT=(O_{1}, \cdots, O_{n})$が(24)の代わりに次のように得られる.
+\begin{equation}
+O_{j}=1(y_{j}(1)-\theta)
+\end{equation}
+ここで$\theta$は出力の閾値で, $1(\cdot)$は以下のように定義される.
+\begin{equation}
+1(x)=\left\{ \begin{array}{ll}
+    1  &  \mbox{$x>0$の場合} \\
+    0  &  \mbox{その他}
+  \end{array}
+\right.
+\end{equation}
+
+\subsection{訓練}
+品詞タグづけにニューラルネットモデルを用いる主な欠点は訓練コストが高い
+（即ち, 訓練に時間がかかる）ことである.
+この欠点は複数のニューラルネットの導入によって更に強調されて
+しまう.
+しかしながら, 実際,
+もし短い入力のSNT$_{i}$の訓練結果
+（訓練で獲得した重み）を長い入力のSNT$_{i+1}$（$i=1, \cdots, m-1$）にコ
+ピーして初期値として使えば, SNT$_{i+1}$（$i=1, \cdots, m-1$）
+の訓練時間を大幅に短縮できる. 従って, この方法を用いれば
+マルチニューロタガーをシングルニューロタガーとほとんど変わらないコストで
+訓練することができる. 図３にSNT$_{1}$（入力の長さ3）とSNT$_{2}$（入力の
+長さ4）の場合の例を示す.
+この図では実線部分でSNT$_{1}$を示し, 点線部分を含む全体で
+SNT$_{2}$を示している. 図に示しているように, SNT$_{1}$が訓練された後, 
+その重み$w_{1}$と$w_{2}$はSNT$_{2}$の対
+応するところにコピーされ, SNT$_{2}$の初期値として使われている.
+\begin{center}
+\begin{minipage}[t]{8cm}
+\epsfile{file=38.eps,width=9cm} \\
+\end{minipage}
+\\図3 シングルニューロタガーSNT$_{2}$の訓練
+\end{center}
+
+\subsection{特徴}
+例えば品詞が５０種類ある言語を
+左右それぞれ三つの単語の情報を文脈としてタグづけを行なう場合, n-gramベー
+スの確率モデルは$50^{7}=7.8 \times 10^{11}$個のn-gram（パラメータ）を推定しな
+ければならない. それに対し, 例えば中間層のユニット数が入力層
+の半分であるような三層パーセプトロンを用いたニューロタガーの場合, 
+必要とされるパラメータ（ユニット間の結合）の数は僅か$n_{ipt} \cdot n_{hid} + 
+n_{hid} \cdot n_{opt}$ $=$ $350 \times 175 + 175 \times 50=70,000$である. 
+ここで, $n_{ipt}$, $n_{hid}$, と$n_{opt}$はそれぞれ入力層, 中間層, 及び出力
+層のユニットの数で, $n_{hid}=\frac{n_{ipt}}{2}$である. 
+一般的に, システムに必要とされるパラメータの数が少なければ, それらを正しく同定するの
+に必要な訓練データの数も少なくてよい.
+そのために, ニューラルネットモデルのタグづけ性能は
+確率モデルのそれに比べ訓練データの数の少なさに影響されにくい~\cite{schmid}.
+また, 他モデルに比べ, ニューラルネットモデルは訓練時間がかかる一方, 
+タグづけ速度が非常に速いことも特徴の一つである.
+
+\vspace*{-3.5mm}
+\section{実験結果}
+\vspace*{-2.5mm}
+
+実験用データはすでに品詞のタグづけされたタイ語コーパスから得られた10,452
+の文であった. それを無
+作為に8,322文と2,130文に分けてそれぞれ訓練とテストに使った. 訓練文におい
+ては22,311個の単語が複数の品詞を持ち,テスト文においては6,717個の単語が
+複数の品詞を持ちえた. 
+タイ語には47種類の品詞が定義されているため, 式(6), (10), (18)の中の$n$は
+47となる. マルチニューロタガーは五つの（入力に用いられる左右の単語の数がそれぞれ
+$(l, r)=(1,1), (2,1), (2,2), (3,2), (3,3)$の）
+シングルニューロタガーSNT$_{i}$
+から構成された. 個々のタガーSNT$_{i}$は入力長さ$l(IPT_{i})$ （$=l+1+r$）で入力層$-$中間層$-$出力層に$p-\frac{p}{2}-n$
+個のユニットを持つ三層パーセプトロンであった. 但し,
+$p=n \cdot l(IPT_{i})=n \cdot (l+1+r)$である.
+SNT$_{i}$の出力の閾値$\theta$[式(29)]は0.5に設定された.
+また, 重みの更新量を決める学習率$\eta$と慣性率$\alpha$[式(26)]はそれぞれ0.1と0.9に, 
+訓練を止める基準である目標誤差$E_{OBJ}$[式(28)]は0.005に設定された. 
+訓練セットから得られた各入力部分の重み[式(5)]
+は($w\_l_{3}$, $w\_l_{2}$, $w\_l_{1}$, $w\_t$, $w\_r_{1}$,
+$w\_r_{2}$, $w\_r_{3}$) = (0.575, 0.524, 0.749, 2.667, 0.801, 0.575,
+0.649)であった. 
+
+表２はテストデータへの品詞タグづけ結果を示す. 
+マルチニューロタガーはIGの有無とは関係なく, その正解率はどのシングルニューロタガー
+のそれよりも高かった. 従って, 
+マルチニューロタガーを用いることによって, 文脈の長さを事前に経験的に選ぶ必
+要がなく, いつも状況に応じて適切な長さの文脈を自動的に選んでいると言える.
+IGを用いる場合, タグづけの正解率は
+短い文脈を用いた場合では下がり, 
+長い文脈（入力長さが5以上）を用いた場合では上がった. 
+この表は更にシングルニューロタガーだけを用いても
+かなり高い正解率でタグづけすることができることを示した.
+実際, \cite{schmid}によれば, 英語タガーを10,000オーダー
+のデータを用いて訓練させた場合, タグづけの正解率は僅か85\%程度であった.
+両者の違いはそもそもタイ語のタグづけ問題が英語のそれより容易であ
+ることにあるかもしれない.
+しかしながら, 少なくとも訓練そのものに関しては
+タイ語のほうが英語より難しいと考えられる. なぜならば, 
+英語の場合は線形分離可能な問題しか解決
+できない二層パーセプトロンでタグづけ問題を学習できたのに対し, タイ語
+の場合は三層以上でなければ学習が正しくできなかった.
+
+\begin{center}
+表２ テストデータへの品詞タグづけ結果 \bigskip 
+
+\begin{tabular}{lcccccccc} \hline
+ & \multicolumn{5}{c}{シングルタガー} &
+\multicolumn{1}{c}{マルチタガー}
+\\ \hline
+$l(IPT_{i})$ \hspace{0.0cm} & 3 \hspace{0.0cm} & 4 \hspace{0.0cm} & 5
+\hspace{0.0cm} & 6 \hspace{0.0cm} & 7 \hspace{0.0cm} \\ \hline
+IGあり \hspace{0.0cm} & 0.915 \hspace{0.0cm} & 0.920 \hspace{0.0cm}
+& 0.929 \hspace{0.0cm} & 0.930 \hspace{0.0cm} & 0.933 \hspace{0.0cm}
+& 0.943 \\ \hline
+IGなし \hspace{0.0cm} & 0.924 \hspace{0.0cm} & 0.927 \hspace{0.0cm}
+&
+0.922 \hspace{0.0cm} & 0.926 \hspace{0.0cm} & 0.926 \hspace{0.0cm} &
+0.941 \\ \hline
+\end{tabular}
+\end{center}
+\vspace*{4mm}
+
+一般的に, 訓練データの数が十分でない場合, タグづけの正解率は用いる文
+脈が長くなるにつれて確定的な答えが少なくなるために落ちていく.
+しかしながら, 本実験ではこのような現象が現れなかった. その理由は
+新しい訓練方法, 即ち, 長い入力のタガーの訓練は
+短いタガーの訓練結果に依存すること, にあ
+ると考えられる. これを確かめるために, $l(IPT_{i})=6$でIGなしのシン
+グルニューロタガーSNT$_{4}$を改めて前の結果を利用せずに訓練し直した.
+その結果, SNT$_{4}$のタグづけの正解率は91.1\%まで下がった. これは
+短い入力のシングルニューロタガーSNT$_{i}$（$i=1,2,3$）のいずれ
+よりも低い数字であった.
+
+\begin{center}
+\epsfile{file=40.eps,width=11cm} \\
+図４ SNT$_{4}$の異なる条件での訓練曲線
+\end{center}
+
+図４は異なる条件でのSNT$_{4}$の
+訓練曲線を示す. 太い実線, 細い実線, そして点線はそれぞれSNT$_{3}$の訓練
+結果を利用した場合, SNT$_{3}$の訓練結果を利用しない場合, そし
+てSNT$_{3}$の訓練結果を利用せず, IGも用いない場合である. こ
+の図は, 訓練時間の大幅な短縮には
+前の訓練結果の利用だけでなく
+IGの利用も効果的であることを示している.
+
+\vspace*{-3.5mm}
+\section{結び}
+\vspace*{-2.5mm}
+
+情報量最大を考慮し
+最長文脈優先に基づいて長さ可変文脈で品詞タグづけを行うマルチニュー
+ロタガーを提案した.
+マルチニューロタガーは, 8,322文の小規模タイ語コーパスを訓練に用いることによ
+り, 未訓練タイ語データを94\%以上の正解率でタグづけすることができた. 
+この結果は, どのシングルニュー
+ロタガーを用いた場合よりも優れ, マルチニュー
+ロタガーはタグづけ過程において動的に適切な長さの文脈を見つけていることを
+示した. 効率的な訓練方法, 即ち, 短い文脈での訓練結果を長い文脈で
+の初期値として使うこと, を用いることにより, 
+マルチニューロタガーをシングルニューロタガーとほとんど
+変わらないコストで訓練することができた. インフォメーションゲイン（IG）を導
+入することにより, 訓練時間は更に大幅に短縮され, 
+タグづけの性能も僅かながら改善された.
+
+\begin{thebibliography}{99}
+\bibitem[\protect\BCAY{Brill}{Brill}{1992}]{brill}
+Brill, E. (1992). ``A simple rule-based part-of-speech tagger.'' {\it Proc. 3rd ACL 
+  Applied NLP}, Trento, Italy, pp. 152-155.
+
+\bibitem[\protect\BCAY{Charoenporn, Sornlertlamvanich, \BBA\ Isahara}{Charoenporn et~al.}{1997}]{charoenporn}
+Charoenporn, T., Sornlertlamvanich, V., and Isahara, H. (1997) ``Building a
+large Thai text corpus - part of speech tagged corpus: ORCHID.'' {\it Proc.
+Natural Language Processing Pacific Rim Symposium 1997}, Phuket,
+Thailand.
+
+\bibitem[\protect\BCAY{Church}{Church}{1988}]{church}
+Church, K. (1988). ``A stochastic parts program and noun phrase parser for
+unrestricted text.'' {\it Proc. 2nd ACL Applied NLP}, Austin, Texas,
+pp. 136-143.
+
+\bibitem[\protect\BCAY{Cutting, Kupiec, Pederson, \BBA\ Sibun}{Cutting et~al.}{1992}]{cutting}
+Cutting, D., Kupiec, J., Pederson, J., and Sibun, P. (1992).
+``A practical part of speech tagger.'' {\it Proc. 3rd ACL Applied NLP},
+Trento, Italy, pp. 133-140.
+
+\bibitem[\protect\BCAY{Daelemans \BBA\ Van~den~Bosch}{Daelemans \BBA\ Van~den~Bosch}{1992}]{daelemans:92}
+Daelemans, W. and Van den Bosch, A. (1992). ``Generalisation performance of
+backpropagation learning on a syllabification task.'' In M. Drossaers \&
+A. Nijholt (Eds.), {\em TWLT3: Connectionism and Natural Language
+  Processing}. Enschede: Twente University, pp. 27-38.
+
+\bibitem[\protect\BCAY{Daelemans, Zavrel, Berck \BBA\ Gillis}{Daelemans et~al.}{1996}]{daelemans:96}
+Daelemans, W., Zavrel, J., Berck, P., and Gillis, S. (1996).
+``MBT: A memory-based part of speech tagger-generator.'' {\it Proc. 4th
+  Workshop on Very Large Corpora}, Copenhagen, Denmark.
+
+\bibitem[\protect\BCAY{DeRose}{DeRose}{1988}]{derose}
+DeRose, S. (1988). ``Grammatical category disambiguation by statistical
+optimization.'' {\it Computational Linguistics}, Vol. 14, No. 1, pp. 31-39.
+
+\bibitem[\protect\BCAY{Garside, Leech \BBA\ Sampson}{Garside et~al.}{1987}]{garside}
+Garside, R., Leech, G., and Sampson, G. (1987). {\it The computational analysis
+  of English: A corpus-based approach}, London: Longman.
+
+\bibitem[\protect\BCAY{Haykin}{Haykin}{1994}]{haykin}
+Haykin, S. (1994). {\it Neural Networks}, Macmillan College Publishing Company,
+Inc.
+
+\bibitem[\protect\BCAY{Hindle}{Hindle}{1989}]{hindle}
+Hindle, D. (1989). ``Acquiring disambiguation rules from text.'' {\it
+  Proc. ACL'89}, Vancouver BC, pp. 118-125.
+
+\bibitem[\protect\BCAY{Ma, Isahara, \BBA\ Ozaku}{Ma et~al.}{1996}]{ma}
+Ma, Q., Isahara, H., and Ozaku, R. (1996). ``Automatic part-of-speech tagging of
+Thai corpus using neural networks, {\it Proc. Intel. Conf. Artificial
+  Neural Networks (ICANN'96)}, Lecture Notes in Computer Science 1112,
+Springer, pp. 275-280.
+
+\bibitem[\protect\BCAY{Marquez and Padro}{Marquez and Padro}{1997}]{marquez}
+Marquez, L. and Padro, L. (1997). ``A flexible POS tagger using an automatically
+acquired language model.'' {\it Proc. ACL-EACL'97}, Madrid, Spain,
+pp. 238-252.
+
+\bibitem[\protect\BCAY{Merialdo}{Merialdo}{1994}]{merialdo}
+Merialdo, B. (1994). ``Tagging English text with a probabilistic model.''
+{\em Computational Linguistics}, Vol. 20, No. 2, pp.155-171.
+
+\bibitem[\protect\BCAY{Nakamura, Maruyama, Kawabata, \BBA\ Shikano}{Nakamura et~al.}{1990}]{nakamura}
+Nakamura, M., Maruyama, K., Kawabata, T., and Shikano, K. (1990). ``Neural network 
+approach to word category prediction for English texts.'' {\it Proc.
+  COLING'90}, Helsinki University, pp. 213-218.
+
+\bibitem[\protect\BCAY{Quinlan}{Quinlan}{1993}]{quinlan}
+Quinlan, J. (1993). {\it C4.5: Programs for Machine Learning}, San Mateo, CA:
+Morgan Kaufmann.
+
+\bibitem[\protect\BCAY{Rumelhart, McClelland, \BBA\ PDP~Research~Group}{Rumelhart et~al.}{1984}]{rumelhart}
+Rumelhart, D. E., McClelland, J. L, and the PDP Research Group (1984).
+{\it Parallel Distributed Processing}, the MIT Press.
+
+\bibitem[\protect\BCAY{Schmid}{Schmid}{1994}]{schmid}
+Schmid, H. (1994).  ``Part-of-speech tagging with neural networks.'' {\it Proc.
+  COLING'94}, Japan, pp. 172-176.
+
+\bibitem[\protect\BCAY{Schutze and Singer}{Schutze and Singer}{1994}]{schutze}
+Schutze, H. and Singer, Y. (1994). ``Part-of-speech tagging using a variable
+memory markov model.'' {\it Proc. ACL'94}, Las Cruces, New
+Mexico, pp. 181-187.
+
+\bibitem[\protect\BCAY{Weischedel, Metter, Schwartz, Ramshaw, \BBA\ Palmucci}{Weischedel et~al.}{1993}]{weischedel}
+Weischedel, R., Metter, M., Schwartz, R., Ramshaw, L., and Palmucci, J. (1993). `` Coping with ambiguity and unknown words through
+probabilistic models.'' {\it Computational Linguistics}, Vol. 19, No. 2,
+pp. 359-382.
+
+\end{thebibliography}
+
+\begin{biography}
+\biotitle{略歴}
+\bioauthor{馬 青}{1983年北京航空航天大学自動制御学部卒業. 1987年筑波
+  大学大学院理工学研究科修士課程修了. 1990年同大学院工学研究科博士課程修
+  了. 工学博士. 1990 $\sim$ 93年株式会社小野測器勤務. 1993年郵政省通信総合研究
+  所入所, 主任研究官. 神経回路モデル, 知識表現, 自然言語処理の研究
+  に従事. 日本神経回路学会, 電子情報通信学会, 各会員. 
+}
+\bioauthor{井佐原 均}
+{1978年京都大学工学部電気工学第二学科卒業．1980年同大学院修士課程修
+  了．工学博士．同年通商産業省電子技術総合研究所入所．1995年郵政省通信総合研
+究所関西支所知的機能研究室室長．自然言語処理，機械翻訳の研究に従事．
+情報処理学会，言語処理学会，人工知能学会，日本認知科学会，各会員．
+}
+\bioreceived{受付}
+\bioaccepted{採録}
+\end{biography}
+
+\end{document}

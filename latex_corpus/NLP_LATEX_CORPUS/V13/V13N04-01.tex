@@ -1,0 +1,1455 @@
+    \documentstyle[graphicx,theorem,amsmath,jnlpbbl,fleqn]{jnlp_e_b5_2e}
+
+
+\theoremstyle{break}
+\newtheorem{theorem}{}[] 
+
+\theoremstyle{change}
+\newtheorem{lemma}{}[] 
+
+\newtheorem{syoumei}{}
+\renewcommand{\thesyoumei}{}
+\newcommand{\proof}[1]{}
+
+
+\newcommand{\myfigdir}{}
+
+\newcommand{\myfiglabelskip}{}
+\newcommand{\myfiglabelskippre}{}
+\newcommand{\mygapskip}{}
+
+
+
+    \newcommand{\mynoindent}{}
+
+
+\newcommand{\myindentskipa}{}
+
+
+
+\newif\if提出
+\提出true     
+
+
+\setcounter{page}{3}
+\setcounter{巻数}{13}
+\setcounter{号数}{4}
+\setcounter{年}{2006}
+\setcounter{月}{10}
+\受付{2005}{10}{14}
+\再受付{2006}{2}{20}
+\採録{2006}{5}{1}
+
+\title{}
+\author{}
+\jkeywords{}
+
+\etitle{
+Graph Branch Algorithm: An Optimum Tree\\
+Search Method for Scored Dependency Graph\\
+with Arc Co-occurrence Constraints
+}
+\eauthor{Hideki Hirakawa\affiref{toshiba}}
+\headauthor{Hirakawa}
+\headtitle{Graph Branch Algorithm}
+\affilabel{toshiba}
+          {TOSHIBA Corporate Research \& Development Center}
+          {TOSHIBA Corporate Research \& Development Center}
+\eabstract{ Preference Dependency Grammar (PDG) is a framework for the
+morphological, syntactic and semantic analysis of natural language
+sentences. PDG gives packed shared data structures for encompassing
+the various ambiguities in each levels of sentence analysis with
+preference scores and a method for calculating the most plausible
+interpretation of a sentence. This paper proposes the Graph Branch
+Algorithm for computing the optimum dependency tree (the most
+plausible interpretation of a sentence) from a scored dependency
+forest which is a packed shared data structure encompassing all
+possible dependency trees (interpretations) of a sentence. The graph
+branch algorithm adopts the branch and bound principle for managing
+arbitrary arc co-occurrence constraints including the single valence
+occupation constraint which is a basic semantic constraint in
+PDG. This paper also reports the experiment using English texts
+showing the computational complexity and behavior of the graph branch algorithm.
+}
+\ekeywords{Optimum Tree Search, Branch and Bound Method, Dependency Structure, Syntactic Analysis, Semantic Analysis}
+
+
+\begin{document}
+
+\maketitle
+\thispagestyle{empty}
+
+
+\section{Introduction}
+Preference Dependency Grammar (PDG) is a framework for the
+morphological, syntactic and semantic analysis of natural language
+sentences, mainly designed for manipulating one of the most serious
+issues in natural language analysis, i.e. ambiguities in sentence
+interpretations. It requires the suppression of combinatorial
+explosion, the proper treatment of various kinds of knowledge such as
+hypothesis generation, constraint and preference knowledge, and the
+integration of knowledge in each analysis
+level \cite{Hirakawa01,Hirakawa05a}. PDG adopts the following approach
+for these problems.
+
+\begin{itemize}
+\item [(a)] Utilizing multiple kinds of linguistic data structures such
+as phrase structure and dependency structure to treat morphological,
+syntactic and semantic knowledge with high module independency.
+\item [(b)] Utilizing packed shared data structure encompassing all
+ambiguities at each level of sentence analysis to suppress
+combinatorial explosion without pruning.
+\item [(c)] Every interpretation in each data structure has
+mapping to one or more interpretations in other data structures. This
+provides a basis for integrating multi-level preference knowledge
+(scores).
+\item [(d)] Incorporating an optimum tree search method for a packed
+shared data structure with arc co-occurrence constraints to
+compute the most plausible interpretation (dependency tree) of a sentence.
+\end{itemize}
+
+PDG adopts the packed shared data structures such as the ``Headed Parse
+Forest'', the ``Functional Dependency Forest''\footnote{``functional
+dependency forest'' is simply called ``dependency forest'' in this
+paper.} and the ``Semantic Dependency Forest'' encompassing parse trees
+(phrase structure trees), functional dependency trees (syntactic
+dependency trees) and semantic dependency trees, respectively
+\cite{Hirakawa05a}.
+
+PDG is a framework for dependency analysis. As described in
+\cite{McDonald05}, various dependency analysis methods are
+proposed. Some methods utilize lexicalized phrase-structure parsers
+with the ability to output dependency information
+\cite{Collins99,Charniak00} and some methods obtain dependency trees
+directly \cite{Ozeki94,Kato_ehara89,Eisner96,YamadaAndMatsumoto03,NivreAndScholz04}.
+In this paper, parsers in the former category are called
+phrase-structure based dependency parsers and those in the latter
+category are called direct dependency parsers. PDG is in the former
+category because it utilizes a lexicalized phrase-structure parser to
+generate a dependency forest \cite{Hirakawa05a} as described below.
+
+\cite{Collins99,Charniak00} are basically lexicalized phrase structure
+parsers and work as dependency parsers by attaching a function for
+conversion from a phrase-structure to a dependency structure. The
+dependency tree for a sentence is generated from the headed phrase
+structure tree\footnote{``headed'' means that each nonterminal symbol in the tree
+has its phrase head (an input word with POS)} obtained
+by the phrase structure parser. For example, each nonterminal symbol
+and its child constituents in the phrase structure tree correspond to
+the dependency structure that has one governor node (the phrase head
+of the nonterminal symbol) and its dependant nodes (the phrase heads
+of the child constituents) in \cite{Collins99}. On the other hand, PDG
+generates a dependency structure based on structure mapping information
+in grammar rules \cite{Hirakawa05a}. This mechanism enables 
+generation of flexible dependency structures with dependency relation
+labels. For example, PDG can provide phrase structure rules which
+generate non-projective dependency structures which are not produced
+by \cite{Collins99,Charniak00} and the majority of direct dependency
+parsers as described in Section \ref{sec:WellFormednessConstraints}. 
+The phrase-structure based dependency parsers have a possibility to 
+utilize the descriptive power of the phrase structure rules to
+prescribe the dependency structures.
+
+Training corpora and statistical information are used for computing
+the most appropriate dependency tree in many parsers. One class
+of parsers adopts a history-based approach\cite{Black92} in which each
+tree-building procedure uses a probability model p(A$\mid$B) to weight any
+action A based on the available context, or history, B.
+\cite{YamadaAndMatsumoto03,NivreAndScholz04} can be regarded as
+history-based direct dependency parsers which choose the optimum
+decision during the parsing process based on information obtained from
+the training data. Another class of parsers generates various
+dependency graphs encompassing all possible dependency trees for a
+sentence\footnote{In fact, a set of possible dependency trees is
+represented by a dependency graph and a set of constraints as shown in
+Section \ref{sec:OptimumTreeSearchForDependencyGraph}.} and searches
+for the optimum tree based on preference scores attached to the
+dependency graph\footnote{Dependency graphs with preference scores are
+called scored dependency graphs.}
+\cite{Ozeki94,Kato_ehara89,Hirakawa01,McDonald05}. This method is
+called the full-parse-based approach in this paper. In general, the
+history-based method seems to be more efficient than the
+full-parse-based method because it makes decisions before completing
+the full parse. However, the history-based method may fail to obtain
+the optimum solution because it does not utilize the full parse
+information. PDG is classified as a full-parse-based method since it
+searches for the optimum tree in a dependency forest\footnote{The
+dependency forest consists of a dependency graph and a constraint
+matrix which represents arc co-occurrence constraints as described in
+Section \ref{sec:SemanticDependencyGraphAndDependencyForest}.}.
+
+This paper focuses on full-parse-based methods and discusses some
+approaches to the optimum tree search in dependency graphs and
+proposes an optimum tree search algorithm for the dependency forest,
+the ``Graph Branch Algorithm''. PDG (and the graph branch
+algorithm) is an extension of the sentence analysis method based on the
+``Semantic Dependency Graph'' \cite{Hirakawa89b_e,Hirakawa01}.
+
+Section \ref{sec:OptimumTreeSearchForDependencyGraph} formalizes the
+framework of the optimum tree search in dependency graphs and shows
+some traditional methods. Section
+\ref{sec:SemanticDependencyGraphAndDependencyForest} compares two
+approaches based on semantic dependency graph and the dependency
+forest. Sections \ref{sec:OptimumTreeSearchForDependencyForest} and
+\ref{sec:ExampleOfOptimumTreeSearch} describe the graph branch
+algorithm and the execution example of the algorithm,
+respectively. Section \ref{sec:ExperimentOfOptSearch} shows some
+experimental results for the computational complexity and behavior of the graph branch
+algorithm.
+
+
+\section{Optimum Tree Search in a Scored Dependency Graph}
+\label{sec:OptimumTreeSearchForDependencyGraph}
+
+ \begin{figure}[tb]
+ \begin{center}
+     \includegraphics[scale=0.8]{OS_スコア付き依存グラフの枠組みENG.eps}
+ \end{center}
+\myfiglabelskippre
+\caption{Framework of the optimum tree search in a scored dependency graph}
+\label{fig:ScoreAddedDependencyGraph}
+\end{figure}
+
+\subsection{Basic Framework}
+
+Scored dependency graphs are widely used as packed shared data
+structures representing a set of dependency trees. Figure
+\ref{fig:ScoreAddedDependencyGraph} shows the basic framework of the
+optimum dependency tree search in a scored dependency
+graph\footnote{Sometimes ``dependency forest'' is used for representing
+``scored dependency graph'' for simplicity.}. In general, nodes in a
+dependency graph correspond to words in the sentence and the arcs show
+some kind of labeled or non-labeled dependency relations between
+nodes. Each arc has a preference score representing plausibility of
+the relation\footnote{Scoring method is an important issue beyond the
+scope of this paper.  \cite{McDonald05} proposes a discriminative
+learning method for obtaining the optimum parameters for scoring
+dependency arcs.}. The well-formed dependency tree constraint is a set
+of well-formed constraints which should be satisfied by all dependency
+trees representing sentence interpretations. A pair of a dependency
+graph and a well-formed dependency tree constraint defines a set of
+well-formed dependency trees. The score of a dependency tree is the
+sum total of arc scores. The optimum tree is a dependency tree with
+the highest score in the set of dependency trees defined by the
+dependency graph and the well-formed dependency tree constraint.
+
+\subsection{Dependency Graph}
+\label{sec:DependencyGraph}
+
+Dependency graphs are classified into some classes based on the types
+of nodes and arcs. This paper assumes three types of nodes,
+i.e. word-type, WPP-type\footnote{WPP is a pair of a word and a part
+of speech (POS). The word ``time'' has WPPs such as ``time/n'' and
+``time/v''.} and concept-type\footnote{One WPP (ex. ``time/n'') can be categorized
+into one or more concepts semantically (ex. ``time/n/period\_time''
+and ``time/n/clock\_time'').}. The types of dependency graphs are
+called a word dependency graph, a WPP dependency graph and a concept
+dependency graph, respectively, in this paper. Dependency graphs are
+also classified into non-labeled and labeled graphs. There are some
+types of arc labels such as syntactic label (ex. ``subject'',
+``object'') and semantic label (ex. ``agent'',``target''). Various
+types of dependency graphs are used in existing systems according to
+these classifications, such as non-label word dependency graph
+\cite{Lee97,Eisner96,McDonald05}, syntactic-label word dependency
+graph \cite{Maruyama90}, semantic-label word dependency graph
+\cite{Hirakawa01}, non-label WPP dependency graph
+\cite{Ozeki94,Kato_ehara89}, syntactic-label WPP dependency graph
+\cite{Wang04}, semantic-label concept dependency graph\footnote{This data structure encompasses semantic dependency trees
+for one word-dependency tree.} \cite{Harada01}. PDG utilizes two types of dependency
+graphs, i.e. a syntactic-label WPP dependency graph in the functional dependency forest and a
+semantic-label concept dependency graph in the semantic dependency
+forest \cite{Hirakawa05a}. 
+
+\subsection{Well-formedness Constraints for Dependency Tree}
+\label{sec:WellFormednessConstraints}
+
+There can be a variety of well-formedness constraints for dependency
+trees from very basic and language-independent constraints to specific
+language-dependent constraints. This paper focuses on the following four
+basic and language-independent constraints which may be embedded in
+data structure and/or the optimum tree search algorithm.
+
+
+\begin{itemize}
+\item [(C1)] Coverage constraint: Every input word has a corresponding node in the tree
+\item [(C2)] Single role constraint: No two nodes in a dependency tree
+occupy the same input position
+
+\item [(C3)] Projectivity constraint: No arc crosses another arc\footnote{Another condition for projectivity, i.e. ``no arc covers top
+node'' is equivalent to the crossing arc constraint if special root
+node, which is a governor of top node, is introduced at the top (or
+end) of a sentence.}
+
+\item [(C4)] Single valence occupation constraint: No two arcs in a tree occupy the same valence of a predicate 
+\end{itemize}
+
+{\mynoindent}(C1) and (C2) are basic constraints adopted by almost all
+dependency parsers. (C1) and (C2) are collectively referred to as
+``covering constraint''. (C3) is also adopted by the majority of
+dependency parsers which are called projective dependency parsers. A
+projective dependency parser fails to analyze non-projective
+sentences\footnote{\cite{Nivre05} proposes a pseudo-projective
+dependency parsing method which transforms projective dependency tree
+to non-projective dependency tree. This kind of approach is beyond the
+scope of this paper.}.
+Most sentences of a language are projective, but several types of
+non-projective sentences exist \cite{Meluk88}. The non-projective
+parsing model obtained improvement in overall accuracy compared with
+the projective model in an experiment on Czech, which has more
+flexible word order than English \cite{McDonald05}. 
+In this case, all possible non-projective dependency trees are
+candidates for the sentence structure because no projectivity
+constraint is applied in contrast to projective parsing model. The
+author calls this type of non-projectivity an uncontrolled
+non-projectivity. Uncontrolled acceptance of non-projectivity may
+cause overall degradation of parsing accuracy for other
+languages. This seems to be a main reason why the majority of
+dependency parsers adopt the projectivity constraint. As described below, PDG does not adopt (C3) directly. Therefore PDG
+can generate non-projective dependency trees for input sentences.
+(C4) is a basic constraint for valency but is not adopted by the majority
+of dependency parsers. 
+
+(C2)-(C4) can be described as a set of co-occurrence constraints
+between two arcs in a dependency graph. As described below, PDG adopts
+co-occurrence constraints between two arbitrary arcs in a dependency
+graph using a matrix called ``Constraint Matrix'' (CM) whose rows
+and columns are a set of arcs in a dependency graph. Constraints
+represented by CM are called arc co-occurrence constraints.
+
+{\mygapskip}
+\begin{itemize}
+\item [(C5)] Arc co-occurrence constraint: Each arc pair in a tree has a co-occurrence constraint in CM
+\end{itemize}
+{\mygapskip}
+
+{\mynoindent}More precise constraints compared with (C2) - (C4) are
+representable by means of CM. For example, it can allow
+non-projectivity for only some special arcs. In PDG, the mapping
+between a sequence of constituents (the body of a CFG rule) and a set
+of arcs (a partial dependency tree) is defined in an extended CFG rule
+\cite{Hirakawa05a}. As described below, this grammar framework allows
+generating non-projective structures defined by grammar rules. The
+author calls this type of non-projectivity a controlled
+non-projectivity. The controlled non-projectivity can reduce the
+generation of illegal non-projective dependency trees compared
+with the uncontrolled non-projectivity.
+
+The optimum tree search in a scored dependency graph is the task of
+searching for the dependency tree with the highest score satisfying the
+well-formed dependency tree constraint. The algorithm for this task is
+closely related to the types of dependency graphs and/or
+well-formedness constraints. Graph search algorithms, such as the
+Chu-Liu-Edmonds maximum spanning tree algorithm
+\cite{ChuLiu65,Edmonds67}, algorithms based on the dynamic
+programming (DP) principle \cite{Ozeki94,Eisner96} and the algorithm based
+on the branch and bound (B\&B) method \cite{Hirakawa01}, are used for
+the optimum tree search in scored dependency graphs. The Chu-Liu-Edmonds
+algorithm is very fast ($O(n^2)$ for sentence length $n$), but it works
+correctly only on word dependency graphs. Maximum spanning tree
+algorithms cannot satisfy the single role constraint for WPP and
+concept dependency graphs. DP-based algorithms can satisfy (C1) - (C3)
+and run efficiently, but seems not to satisfy (C4). \cite{Hirakawa01} proposed a
+B\&B-based algorithm working on word dependency graphs satisfying (C1)
+- (C4). This paper extends this algorithm to work on
+WPP and concept dependency graphs. The next section explains the
+problems of the DP-based method in treating (C4).
+
+\subsection{Single Valence Occupation Constraint and DP}
+
+
+ \cite{Ozeki94} proposed an algorithm for obtaining the optimum
+kakari-uke tree and its score from a set of all possible scored
+kakari-uke relations\footnote{Kakari-uke relation, widely adopted in
+Japanese sentence analysis, is projective dependency relation with a
+constraint such that the dependent word is located at the left-hand
+side of its governor word (the left to right dependency).}
+corresponding to a scored dependency graph. The author calls this
+algorithm the minimizing total cost method (MTCM) in this paper. MTCM
+can be extended to treat general dependency relations, including the
+right to left dependency relation\cite{Kato_ehara89}. This algorithm
+is generalized into the minimum cost partitioning method (MCPM), which
+is a partitioning computation based on the recurrence equation given
+below \cite{Ozeki99_e}. MCPM is also a generalization of the
+probabilistic CKY algorithm and the Viterbi algorithm\footnote{Specifically, MTCM corresponds to probabilistic CKY and the
+Viterbi algorithm because it computes both the optimum tree score and
+its structure.}.
+
+
+Considering the phrase $(w_i,…w_j; a_i,…,a_j; A)$ partitioned into $(w_i,…,w_k;
+a_i,…,a_k; B)$ and $(w_{k+1},…,w_j; a_{k+1},…, a_j: C)$ where
+$w_x$, $a_x$, and $A$-$C$ mean word, analog information (such as prosodic
+information), and features like phrase name, respectively. MCPM computes
+the optimum solution based on the following recurrence equation for
+total cost F.
+\[
+ F(i,j,A) = min[F(i,k,B)+F(k+1,j,C)+cost(w_i,…,w_j, a_i,…,a_j,k,A,B,C)]
+\]
+$F(i,j,A)$ is the total cost of phrase $A$ covering from
+the $i$-th to the $j$-th word in a given sentence. $cost(w_i,...w_j,
+a_i,...,a_j,k,A,B,C)$ is a cost function where $k$ is a partitioning
+position. The minimum cost partition of the whole sentence is
+calculated very efficiently by the DP principle for this equation. The
+optimum partitioning obtained by this method constitutes a tree
+covering the whole sentence satisfying the single role and
+projectivity constraints. However, it is not assured that the single
+valence occupation constraint adopted in PDG for basic semantic level
+constraint is satisfied by MCPM.
+
+\begin{figure}[bt]
+\myfiglabelskippre
+ \begin{center}
+     \includegraphics[scale=0.51]{OS多重格制約を満たす最適解探索DPとBB比較ENG.eps}
+ \end{center}
+\myfiglabelskippre
+\caption{Optimum solution search satisfying the single valence occupation constraint}
+\label{fig:SingleValenceOccupationProblem}
+\myfiglabelskippre
+\end{figure}
+
+Figure \ref{fig:SingleValenceOccupationProblem} shows a dependency
+graph for the Japanese phrase ``Isha-mo Wakaranai Byouki-no Kanja''
+encompassing dependency trees corresponding to ``a patient suffering
+from a disease that the doctor doesn't know'', ``a sick patient who
+does not know the doctor'', and so on. The dependency graph has two
+kinds of ambiguities, i.e. semantic role ambiguity and attachment
+ambiguity. For example, $Wakaranai(not\_know)$ has four outgoing arcs
+with different semantic roles ($agent$ and $target$) and different
+attachments ($Byouki(sickness)$ and $Kanja(patient)$) in Figure
+\ref{fig:SingleValenceOccupationProblem}. The single valence
+occupation constraint prevents $Wakaranai(not\_know)$ from being
+connected with the same two semantic role arcs. $OS_1$ - $OS_4$
+represent the optimum solutions for the phrases specified by their
+brackets computed based on MCPM. For example, $OS_3$ gives an optimum
+tree with a score of $22$ (consisting of $agent1$ and $target4$) for
+the phrase ``Isha-mo Wakaranai Byouki-no''. The optimum solution for
+the whole phrase is either $OS_1+OS_4$ or $OS_3+OS_2$ due to MCPM. The
+former has the highest score $40(=15+25)$ but does not satisfy the
+single valence occupation constraint because it has $agent1$ and
+$agent5$ simultaneously. The optimum solutions satisfying this
+constraint are $NOS_1+OS_4$ and $OS_1+NOS_2$ shown at the bottom of
+Figure \ref{fig:SingleValenceOccupationProblem}. $NOS_1$ and $NOS_2$
+are not optimum solutions for their word coverages. In this case, MCPM
+generates a non-optimum tree in $OS_3+OS_2$ if it adopts the strategy
+of neglecting inconsistent trees. Otherwise, MCPM generates a high
+score but an ill-formed tree in $OS_1+OS_4$. This shows that it is not
+assured that MCPM will obtain the optimum solution satisfying the
+single valence occupation constraint. 
+On the contrary, it is assured that the graph branch algorithm
+computes the optimum solution(s) satisfying the single valence
+occupation constraint because it computes the optimum solution(s)
+satisfying any co-occurrence constraints in the constraint matrix
+as described below. It is an open problem whether an algorithm based
+on the DP framework exists which can handle the single valence
+occupation constraint and arbitrary arc co-occurrence constraints.
+
+
+\section{Semantic Dependency Graph and Dependency Forest}
+\label{sec:SemanticDependencyGraphAndDependencyForest}
+
+The semantic dependency graph, as shown in Section
+\ref{sec:SemanticDependencyGraph}, is a semantic-label word
+dependency graph designed for Japanese sentence analysis
+\cite{Hirakawa89}. The optimum solution for a sentence is obtained by
+searching for the optimum tree in a semantic dependency graph with
+preference scores \cite{Hirakawa01}. 
+
+The sentence analysis method based on the semantic dependency graph is
+effective because it employs linguistic constraints as well as
+linguistic preferences. However, this method is lacking in terms of
+generality in that it cannot handle backward dependency and multiple
+WPP because it depends on some linguistic features peculiar to
+Japanese. PDG employs the dependency forest instead of the semantic
+dependency graph. The dependency forest is a packed shared data
+structure encompassing all dependency trees corresponding to parse
+trees in a packed shared parse forest \cite{Tomita91} for a
+sentence. Since the dependency forest has none of the
+language-dependent premises that the semantic dependency graph has, it
+is applicable to English and other languages. PDG has one more
+advantage in that it can generate non-projective dependency trees
+because the mapping from phrase structure to dependency structure is
+defined in grammar rules.
+
+The optimum tree search algorithm for the semantic dependency graph is
+not applicable to the dependency forest. This paper gives a brief
+explanation of the dependency forest and shows the graph branch
+algorithm for obtaining the optimum solution (tree) in the dependency
+forest.
+
+\subsection{Semantic Dependency Graph and its Drawbacks} 
+\label{sec:SemanticDependencyGraph}
+
+\begin{figure}[b]
+ \begin{center}
+     \includegraphics[scale=0.7]{OS最適解付き意味係り受けグラフの例ENG.eps}
+ \end{center}
+\myfiglabelskippre
+\caption{Example of semantic dependency graph and its optimum solution}
+\label{fig:ImiKakariGraphWithOptSol}
+\end{figure}
+
+Figure \ref{fig:ImiKakariGraphWithOptSol} shows a semantic dependency graph
+for ``Watashi-mo Kare-ga Tsukue-wo Katta Mise-ni Utta''
+ \cite{Hirakawa01}. The nodes in the graph correspond to the content words in the
+sentence and the arcs show possible semantic dependency relations between
+the nodes. Each arc has an arc ID and a preference score. Interpretations
+of a sentence are well-formed spanning trees that satisfy the
+projectivity constraint and the single valence occupation constraint.
+The bold arcs in the graph in
+Figure \ref{fig:ImiKakariGraphWithOptSol} shows the optimum
+interpretation with a maximum score of 130.
+
+The semantic dependency graph is designed based on the Japanese kakari-uke
+relation and assumes the following features of Japanese.
+\begin{itemize}
+\item [(a)] A dependant always locates to the left of its governor (no backward dependency)
+\item [(b)] POS ambiguities are quite minor compared with English\footnote{Word boundary ambiguity corresponding to the compound word
+boundary ambiguity in English exists in Japanese. Treatment of this
+ambiguity is a practical problem for the semantic dependency graph even when
+applied to Japanese sentence analysis.}
+\end{itemize}
+
+{\mynoindent}The semantic dependency graph and its optimum solution
+search algorithm adopt these as their premises. Therefore, this method
+is inherently inapplicable to languages like English that require
+backward dependency and multiple POS analysis.
+
+
+\subsection{Overview of Dependency Forest}
+
+ \begin{figure}[b]
+ \begin{center}
+     \includegraphics[scale=0.58]{COM_TimeFliesに対するスコア付き依存森ENG.eps}
+ \end{center}
+\myfiglabelskippre
+\caption{Scored dependency forest for ``Time flies like an arrow''}
+\label{fig:WDFForExample}
+\end{figure}
+
+The dependency forest is a packed shared data structure encompassing
+all possible dependency trees for a sentence. As described above, PDG
+utilizes two kinds of dependency forest, i.e. the functional
+dependency forest and the semantic dependency forest.  The functional
+dependency forest encompasses a set of functional (or syntactic)
+dependency trees which consist of WPP nodes and labeled arcs
+representing the syntactic relations between them. The semantic
+dependency forest encompasses a set of semantic dependency trees which
+consist of lexical concept nodes and labeled arcs representing the
+semantic relations between them. Each of the two dependency forests
+consists of a dependency graph (DG) and a constraint matrix (CM).
+This paper focuses on the functional dependency forest because it is
+the target of the current PDG prototype system. Figure
+\ref{fig:WDFForExample} shows a scored (functional) dependency forest
+for the example sentence ``Time flies like an arrow.'' The dependency
+graph consists of nodes and directed arcs. A node represents a WPP and
+an arc shows the dependency relation between nodes. An arc has its ID
+and preference score. CM is a matrix whose rows and columns are a set
+of arcs in DG and prescribes the co-occurrence constraint between
+    arcs. Only when CM(i,j) is $\bigcirc$, 
+$arc_i$ and $arc_j$ are co-occurrable
+in one dependency tree.
+
+\begin{figure}[b]
+ \begin{center}
+     \includegraphics[scale=0.8]{COM_TimeFliesに対する整依存木ENG.eps}
+ \end{center}
+\myfiglabelskippre
+\caption{Well-formed dependency trees for the example sentence}
+\label{fig:WellFormedTreesForExample}
+\end{figure}
+
+The dependency forest has correspondence with the packed shared parse
+forest\footnote{The correspondence between the parse tree and the
+dependency tree is generally 1 to N and vice versa.}. This means that
+the dependency forest provides a means to treat all possible
+interpretations of a sentence in dependency structure representation.
+One sentence interpretation is represented by one well-formed
+dependency tree which satisfies the well-formed dependency tree
+constraint, i.e. the covering constraint and the arc co-occurrence
+constraint described in Section \ref{sec:WellFormednessConstraints}.
+In semantic dependency graphs, a spanning tree of a graph is a
+well-covered tree. This simplifies the development of an optimum
+solution search algorithm. The algorithm for the dependency forest has
+to treat the covering
+constraint. 
+
+Figure \ref{fig:WellFormedTreesForExample} shows four
+well-formed dependency trees for the dependency forest in Figure
+\ref{fig:WDFForExample}. Tree (a) is the optimum dependency tree with
+the highest score of 51.
+
+
+\subsection{Relation Between Semantic Dependency Graph and Dependency Forest}
+
+The dependency forest and the semantic dependency graph utilize the
+WPP dependency graph and the word graph respectively. The word
+dependency graph can be seen as a special case of the WPP dependency
+graph. Therefore, the semantic dependency graph is a subset of the
+dependency graph of the dependency forest. On the other hand,
+well-formedness constraints introduced to a semantic graph, i.e. the
+projectivity and single valence occupation constraints, are a type of
+arc co-occurrence constraints representable by means of CM. Therefore,
+the dependency forest is a generalized and more powerful data
+structure covering the representative power of the semantic dependency
+graph.
+
+
+\section{The Optimum Tree Search in the Dependency Forest Based on the Graph Branch Method}
+\label{sec:OptimumTreeSearchForDependencyForest}
+
+The graph branch method works on the branch and bound principle and
+searches for the optimum well-formed tree in a dependency graph by
+applying partial sub-problem expansions called graph branching. The
+algorithm in \cite{Hirakawa01} applies the graph branch method to the
+semantic dependency graph. Unfortunately, this algorithm is not
+directly applicable to the dependency forest search problem. The
+following shows a new algorithm for applying the graph branch method
+to the dependency forest. This algorithm is applicable to the
+functional dependency forest and the semantic dependency forest
+because the basic framework is common to both of the dependency
+forests.
+
+
+\subsection{Outline of Branch and Bound Method}
+
+The branch and bound method is a principle for solving computationally
+hard problems such as NP-complete problems \cite{Ibaraki78}. The basic
+strategy is that the original problem is decomposed into easier
+partial-problems (branching) and the original problem is solved by
+solving them. Pruning called a bound operation is applied if it turns
+out that the optimum solution to a partial-problem is inferior to the
+solution obtained from some other partial-problem (dominance test), or
+if it turns out that a partial-problem gives no optimum solutions to
+the original problem (maximum value test). The dominance test is not
+used in the graph branch method. Usually, the branch and bound
+algorithm is constructed to minimize the value of the solution. The
+graph branch algorithm in this paper is constructed to maximize the
+score of the solution because the best solution is the maximum tree in
+the dependency forest.
+
+\begin{figure}[b]
+\begin{center}
+     \includegraphics[scale=0.88]{OS分枝限定法の基本アルゴリズムENG.eps}
+\end{center}
+\myfiglabelskippre
+\caption{Skeleton of branch and bound algorithm}
+\label{fig:BBAlgorithm}
+\end{figure}
+
+The following features for the maximum bound value test with respect
+to the problem $P$ and its partial-problem $P_c$ must be satisfied in
+the branch and bound method\footnote{MC1-MC4 are called model conditions in this paper.}.
+
+\begin{itemize}
+\item[(MC1)] $g(P_c){\geq}f(P)$ where $g(P_c)$ is the maximum value of $P_c$, and $f(P)$ is the maximum value of $P$.
+\item[(MC2)] If $g(P_c)=l(P)$ where $l$ gives a value of a feasible solution to $P$, then the feasible solution is a solution to $P$.
+\item[(MC3)] If $P_c$ has no feasible solutions then $P$ has no solutions.
+\item[(MC4)] If a feasible solution with an incumbent value $z$ is obtained for some partial-problem, and if $g(P_c){\leq}z$, then partial-problems branched from problem $P$ have no better solutions than $z$.
+\end{itemize}
+
+{\mynoindent}In the case of MC2-MC4, partial-problem $P_c$ can be
+terminated. Figure \ref{fig:BBAlgorithm} shows a general branch and
+bound algorithm for obtaining one optimum solution.
+
+
+\subsection{Graph Branch Algorithm}
+\label{GraphBranchAlgorithm}
+
+\begin{figure}[b]
+ \begin{center}
+      \includegraphics[scale=0.93]{OSグラフ分枝アルゴリズムENG.eps}
+ \end{center}
+\myfiglabelskippre
+\caption{Graph Branch Algorithm}
+\label{fig:GraphBrachAlgorithm}
+\end{figure}
+
+Figure \ref{fig:BBAlgorithm} shows a skeleton of the algorithm. In order to make it
+running code, each operation in the algorithm must be realized for
+the target problem. The graph branch algorithm applies the branch and bound
+method to the optimum tree search problem with the binary arc
+co-occurrence constraint by introducing the graph branch operation for
+the partial-problem expansion operation. Figure \ref{fig:GraphBrachAlgorithm}
+shows the graph branch algorithm which has been extended from the original
+skeleton to search for all the optimum trees in a dependency graph. The
+following sections explain how the components of the branch and bound
+method in Figure \ref{fig:BBAlgorithm} are implemented in the graph branch
+algorithm.
+
+\mygapskip\mynoindent{\bf 
+(1) Partial-problem}
+
+Partial-problem $P_i$ in the graph branch method is a problem
+searching for all the well-formed optimum trees in a dependency forest
+$DF_i$ consisting of the dependency graph $DG_i$ and constraint matrix
+$CM_i$. Partial-problem $P_i$ consists of the following elements.
+
+\begin{itemize}
+\item[(a)] Dependency graph $DG_i$
+\item[(b)] Constraint matrix $CM_i$
+\item[(c)] Feasible solution value $LB_i$ (corresponding to $l(P)$ in Figure \ref{fig:BBAlgorithm})
+\item[(d)] Upper bound value $UB_i$ (corresponding to $g(P)$ in Figure \ref{fig:BBAlgorithm})
+\item[(e)] Inconsistent arc pair list $IAPL_i$
+\end{itemize}
+
+{\mynoindent}The constraint matrix is common to all partial-problems,
+so one $CM$ is shared by all partial-problems. $DG_i$ is represented
+by ``$rem[..]$'' which shows a set of arcs to be removed from the
+whole dependency graph $DG_i$, i.e. $DG_i$ is obtained by removing
+$rem[..]$ from $DG_i$. For example, ``$rem[b,d]$'' represents a
+partial dependency graph $[a,c,e]$ in the case $DG=[a,b,c,d,e]$. This
+reduces the memory space and the computation for a feasible solution
+as described below. $IAPL_i$ is a list of inconsistent arc pairs. An
+inconsistent arc pair is an arc pair which does not satisfy some
+co-occurrence constraint.
+
+\mygapskip\mynoindent{\bf 
+(2) Algorithm for Obtaining Feasible Solution and Lower Bound Value
+}
+
+In the graph branch method, a well-formed dependency tree in the
+dependency graph $DG$ of the partial-problem $P$ is assigned as the
+feasible solution $FS$ (corresponding to $x$ in
+Figure \ref{fig:BBAlgorithm}) of $P$~\footnote{A feasible solution may not be
+optimum but is a possible interpretation of a sentence. Therefore, it
+can be used as an approximate output when the search process is
+aborted.}. The score of the feasible solution $FS$ is assigned as the
+lower bound value $LB$ (corresponding to $l(P)$ in
+Figure \ref{fig:BBAlgorithm}). The function for computing these values
+$get\_fs$ is called a feasible solution/lower bound value
+function. Figure \ref{fig:AlgorithmForLPi} shows the algorithm of
+$get\_fs$. Basically, $get\_fs$ searches for one feasible solution in
+a higher-score-first manner and a depth-first manner. When an arc which
+violates co-occurrence constraint against one of the selected arcs is found,
+$get\_fs$ backtracks at $step5$ to the nearest choice point
+which resolves the contradiction. This assures that the obtained
+solution satisfies the co-occurrence constraint. Furthermore, if $get\_fs$
+finds no solution, then the problem $P$ has no solution. Since
+$get\_fs$ selects one arc for each position in a sentence, the obtained
+arcs satisfies the well-covered constraint. 
+
+Arc groups $S_1$ to $S_n$ are sorted according to their scores in $step1$. This operation is introduced to obtain a better (higher score) feasible solution, since the better feasible solution lead to a higher incumbent value which bounds more partial-problems. 
+
+\begin{figure}[t]
+ \begin{center} 
+    \includegraphics[scale=0.93]{OS許容解・下界値を求めるアルゴリズムENG.eps}
+ \end{center}
+\myfiglabelskippre
+\caption{Algorithm for obtaining $FS$ and $LB$}
+\label{fig:AlgorithmForLPi}
+\end{figure}
+
+\mygapskip\mynoindent{\bf 
+(3) Algorithm for Obtaining Upper Bound Value}
+
+Given a set of arcs $A$ which is a subset of a dependency graph $DG$,
+if the set of dependent nodes\footnote{The dependent node of an arc
+is the node located at the source of the arc.} of arcs in $A$
+satisfies the covering constraint described above, the arc set $A$ is
+called the well-covered arc set. The maximum well-covered arc set is
+defined as a well-covered arc set with the highest score. In general,
+the maximum well-covered arc set does not satisfy the single role
+constraint and does not form a tree. In the graph branch method, the
+score of the maximum well-covered arc set of a dependency graph $G$ is
+assigned as the upper bound value $UB$ (corresponding to $g(P)$ in
+Figure \ref{fig:BBAlgorithm}) of the partial-problem $P$. Upper bound
+function $get\_ub$ calculates $UB$ by scanning the arc lists sorted by
+the surface position of the dependent nodes of the arcs.
+
+The above settings satisfy the model conditions. In these settings, $P$
+and $get\_ub$ corresponds to $P_c$ and $g(P_c)$ respectively. (MC1) is
+satisfied because $get\_ub(P){\geq}f(P)$ is true for $f(P)$ (the score
+of the optimum tree). (MC2) and (MC4) are satisfied because $get\_ub$ is
+the score of the maximum well-covered arc set. (MC3) is satisfied
+since $get\_ub(P)$ always has its solution. Therefore, partial-problem
+$P$ is prunable if the incumbent value $z$ satisfies $z{\geq}g(P)$\footnote{In the case of obtaining all optimum solutions, the terminate
+condition should be changed to $z>g(P)$.}.
+
+\mygapskip\mynoindent{\bf 
+(4) Branch Operation}
+
+\begin{figure}[b]
+ \begin{center}
+      \includegraphics[scale=0.77]{OSグラフ分枝の図ENG.eps}
+ \end{center}
+\myfiglabelskippre
+\caption{Graph Branching}
+\label{fig:GraphBranching}
+\end{figure}
+
+Figure \ref{fig:GraphBranching} shows a branch operation in the graph branch
+method called a graph branch operation. Child partial-problems of
+$P$ are constructed as follows:
+
+\begin{itemize}
+\item[(a)] Search for an inconsistent arc pair $(arc_i,arc_j)$ in the maximum
+well-covered arc set of the dependency graph of $P$.
+\item[(b)] Create child partial-problems $P_i$, $P_j$ which have new
+dependency graphs $DG_i=DG-\{arc_j\}$ and $DG_j=DG-\{arc_i\}$ respectively.
+\end{itemize}
+
+{\mynoindent}Since a solution to $P$ cannot have both $arc_i$ and
+$arc_j$ simultaneously due to the co-occurrence constraint, the
+optimum solution of $P$ is obtained from either/both $P_i$ or/and
+$P_j$. The child partial-problem is easier than the parent
+partial-problem because the size of the dependency graph of the child
+partial-problem is less than that of its parent.
+
+In Figure \ref{fig:GraphBrachAlgorithm}, $get\_iapl$ computes the list
+of inconsistent arc pairs $IAPL$(Inconsistent Arc Pair List) for the
+maximum well-covered arc set of $P_i$. Then the graph branch function
+$graph\_branch$ selects one inconsistent arc pair $(arc_i,arc_j)$ from
+$IAPL$ for branch operation. The selection criteria for
+$(arc_i,arc_j)$ affects the efficiency of the
+algorithm. $graph\_branch$ selects the inconsistent arc pair
+containing the highest score arc in $BACL$(Branch Arc Candidates
+List). $graph\_branch$ calculates the upper bound value for a child
+partial-problem by $get\_ub$ and sets it to the child
+partial-problem. Simultaneously, $graph\_branch$ executes bound
+operation by immediately pruning the child partial-problem whose upper
+bound value is less than the incumbent value $z$.
+
+\mygapskip\mynoindent{\bf 
+(5) Selection of Partial-problem from Active Partial-problems}
+
+$select\_problem$ in Figure \ref{fig:AlgorithmForLPi} corresponds to
+the search $s(A)$ in Figure \ref{fig:BBAlgorithm}. The best bound
+search is employed for $select\_problem$, i.e. it selects the
+partial-problem which has the maximum bound value among the active
+partial-problems. It is known that the number of partial-problems
+decomposed during computation is minimized by this strategy in the case
+that no dominance tests are applied \cite{Ibaraki78}.
+
+\mygapskip\mynoindent{\bf 
+(6) Computing All Optimum Solutions}
+
+
+In order to obtain all optimum solutions, partial-problems whose upper
+bound values are equal to the score of the optimum solution(s) are
+expanded at $S8(search\ for\ more\ optimum$ $solutions)$. In the case that at least
+one inconsistent arc pair remains in a partial-problem
+(i.e. $IAPL{\ne}\{\}$), graph branch is performed based on the
+inconsistent arc pair. Otherwise, the obtained optimum solution $FS$
+is checked if one of the arcs in $FS$ has an equal rival arc by
+$arcs\_with\_alternatives$ function in Figure \ref{fig:BBAlgorithm}. The
+equal rival arc of arc $A$ is an arc whose position and score are equal
+to those of arc $A$. If an equal rival arc of an arc in $FS$ exists, 
+a new partial-problem is generated by removing the arc in $FS$. $S8$
+assures that no partial-problem has an upper bound value greater than or equal
+to the score of the optimum solutions when the computation stopped. 
+
+\mygapskip\mynoindent{\bf 
+(7) Correctness of the Graph Branch Algorithm}
+
+All Dependency trees are generated by the feasible solution and lower
+bound value function $get\_fs$. $get\_fs$ does not violate the
+covering constraint(the single role constraint and the coverage
+constraint) because it selects one arc for one input position at the
+$step7$ in Figure \ref{fig:AlgorithmForLPi}. It also assures the
+co-occurrence constraint by checking the CM value for every two arcs
+in a tree at $step5$. Therefore, output dependency trees of the graph
+branch algorithm satisfy the well-formed dependency tree constraint.
+
+
+\section{Example of Optimum Tree Search}
+\label{sec:ExampleOfOptimumTreeSearch}
+
+This section presents an example showing the behavior of the graph
+branch algorithm using the dependency forest in
+Figure \ref{fig:WDFForExample}.
+
+
+\subsection{Feasible Solution/Lower Bound Value Function}
+The following section shows the behavior of feasible solution/lower bound value function $get\_fs$ for the example sentence.
+
+\begin{figure}[b]
+\begin{center}
+     \includegraphics[scale=0.7]{OSグループ化，ソートされた依存片JAPENG.eps}
+\end{center}
+\myfiglabelskippre
+\caption{Grouped and Sorted Arcs}
+\label{fig:SortedDepPces}
+\end{figure}
+
+$step1(grouping\ and\ sorting\ of\ arcs)$ in Figure
+\ref{fig:AlgorithmForLPi} is performed once at the beginning for the
+initial dependency forest. The result of $step1$ is shown in Figure
+\ref{fig:SortedDepPces}. $Pos$ and $MaxScore$ mean the position of the
+arc in the sentence and the maximum arc score at that position
+respectively. Arcs with no rival arc have $MaxScore$ $\infty$ and are
+located at the top of the arc group list. Arc groups with start
+positions $3$,$0$,$4$,$1$ and $2$ are assigned to
+$S_1$,$S_2$,$S_3$,$S_4$ and $S_5$, respectively. $step2(initialize)$
+initializes variables. After $step3$ and $step4$ are executed, $step5$
+checks that $a(i,j)=a(1,1)=14(=det14)$ can be registered to $FS$. In
+this case, no violation of the co-occurrence constraint occurs, and
+then $step7$ registers $a(1,1)$ to $FS$\footnote{In fact, the arc ID
+$14$ is registered to $FS$. The $a(i,j)$ form is used here for
+clarity.}, then backtrack point $BP[1]$ at the position $i(=1)$ is set
+to $j(=1)$.
+\[
+ FS=[a(1,1)](=[14]), \ BP=[1,-,-,-,-], \ \text{$i=2$, $j=1$, $k=1$, $l=0$}
+\]
+Next, $step3$-$5$ try the first arc $a(2,1)(=nc2)$ in $S_2$. Since
+$CM(a(1,1),a(2,1))=CM(14,2)=\bigcirc$ 
+in Figure \ref{fig:WDFForExample},
+$a(2,1)$ and $a(1,1)$ satisfy the co-occurrence constraint and then
+$a(2,1)$ is registered to $FS$.
+\[
+ FS=[a(1,1),a(2,1)](=[14,2]),\ BP=[1,1,-,-,-], \ \text{$i=3$, $j=1$, $k=1$, $l=0$}
+\]
+    $a(3,1)(=pre15)$ is skipped because $CM(a(3,1),a(2,1))=CM(15,2){\ne}\bigcirc$. 
+Then $a(3,2)$ is tried.
+\begin{align*}
+ & FS=[a(1,1),a(2,1),a(3,2)](=[14,2,16])\\
+ & BP=[1,1,2,-,-], \ \text{$i=4$, $j=1$, $k=1$, $l=1$}
+\end{align*}
+In a similar manner, $a(4,1)(=sub23)$ and $a(5,4)(=rt29)$ are added to $FS$, then the termination condition at $step3$ is satisfied.
+\begin{align*}
+ & FS=[a(1,1),a(2,1),a(3,2),a(4,1),a(5,4)] (=[14,2,16,23,29]),\\
+ & BP=[1,1,2,1,4], \ \text{$i=6$, $j=1$, $k=4$, $l=4$},
+\end{align*}
+The $FS$ here is a feasible solution and the sum total of arc scores,
+i.e. $17+17+6+10+0=50$ is the score of the feasible solution.
+
+No backtracking occurred in this example. Backtracking occurs when all
+arcs in $S_i$ are found to be inconsistent with either of the arcs in $FS$
+at that point. In this case, $step6(backtracking)$ backtracks to the
+$l$ position. $l$ is assured to be the rightmost position, where some
+element in $S_i$ is inconsistent with the selected arc in $FS$. This
+mechanism is introduced to optimize backtracking.
+
+
+\subsection{Example of Graph Branch Algorithm}
+
+The search process of the branch and bound method can be shown as a
+search diagram constructing a partial-problem tree representing the
+parent-child relation between the partial-problems. Figure
+\ref{fig:SearchDiagramForExample} is a search diagram for the example
+dependency forest showing the search process of the graph branch method.
+
+\begin{figure}[bt]
+ \begin{center}
+     \includegraphics[scale=0.6]{OS例文に対する計算過程を示す探索図ENG.eps}
+ \end{center}
+\myfiglabelskippre
+\caption{Search diagram for the example sentence}
+\label{fig:SearchDiagramForExample}
+\myfiglabelskippre
+\end{figure}
+
+In this figure, box $P_i$ is a partial-problem with its dependency
+graph $rem$, upper bound value $UB$, feasible solution and lower bound
+value $LB$ and inconsistent arc pair list $IAPL$. Suffix $i$ of $P_i$
+indicates the generation order of partial-problems. Updating of global
+variable $z$ (incumbent value) and $O$ (set of incumbent solutions) is
+shown under the box. The value of the left-hand side of the arrow is
+updated to that of right-hand side of the arrow during the
+partial-problem processing. Details of the behavior of the algorithm
+in Figure \ref{fig:GraphBrachAlgorithm} are described below.
+
+In $S1(initialize)$, $z$, $O$ and $AP$ are set to $-1$,
+$\{\}$ and $\{P_0\}$ respectively. The dependency graph of $P_0$ is that
+of the example dependency forest. This is represented by
+$rem=[]$. $get\_ub$ sets the upper bound value (=63) of $P_0$ to
+$UB$. In practice, this is calculated by obtaining the maximum
+well-covered arc set of $P_0$. In $S2(search)$, $select\_problem$
+selects $P_0$ and $get\_fs(P_0)$ is executed. The feasible solution
+$FS$ and its score $LB$ are calculated based on the algorithm in
+Figure \ref{fig:AlgorithmForLPi} to set $FS=[14,2,16,23,29]$, $LB=50$ ($P_0$ in the search
+diagram). $S3(incumbent\ value\ update)$ updates $z$ and $O$ to new
+values. Then, $get\_iapl(P_0)$ computes the inconsistent arc pair list
+$[(2,15),(15,23),(23,18),(2,18)]$ from the maximum well-covered arc
+set $[14,2,15,23,18]$ and set it to $IAPL$. $S5(maximum\ value\ test)$
+compares the upper bound value $UB$ and the feasible solution value
+$LB$. In this case, $LB<UB$ holds, so $BACL$ is assigned the value of
+$IAPL$. The next step $S6(branch\ operation)$ executes the $graph\_branch$
+function. $graph\_branch$ selects the arc pair with the highest arc
+score and performs the graph branch operation with the selected arc
+pair. The following is a $BACL$ shown with the arc names and arc scores.
+\[
+ [(nc2[17],pre15[10]),(pre15[10],sub23[10]),(sub23[10],vpp18[9]),(nc2[17],vpp18[9])]
+\]
+
+Scores are shown in $[\ ]$. The arc pair containing the highest arc
+score is $(2,15)$ and $(2,18)$ containing $nc2[17]$. Here, $(2,15)$ is
+selected and partial-problems $P_1(rem[2])$ and $P_2(rem[15])$ are
+generated. $P_0$ is removed from $AP$ and the new two partial-problems
+are added to $AP$ resulting in $AP=\{P_1,P_2\}$. Then, based on the
+best bound search strategy, $S2(search)$ is tried
+again. $select\_problem$ selects $P_1$ because the upper bound value of
+$P_1$ (=$61$) is greater than that of $P_2$ (=$59$). Since the upper
+bound of $P_1$ (=$61$) is greater than the feasible solution score
+(=$51$), $get\_iapl$ is executed and sets $BACL$ to the value shown in
+$P_1$ in Figure \ref{fig:SearchDiagramForExample}. The graph branch function
+$graph\_branch$ gets two candidates for child partial-problems
+corresponding to $rem[24,2]$ and $rem[23,2]$ because the inconsistent
+arc pair $(24,23)$ is selected as the source of the graph branch
+operation (arc $24$ has the highest score of $15$). The former
+candidate for $rem[24,2]$ is pruned immediately, because its upper bound
+value (=$46$) is smaller than the incumbent value (=$51$) (termination
+by the upper bound test). Therefore, $graph\_branch$ returns
+$\{P_3(rem[23,2])\}$. The upper bound value $UB$ of $P_3$ is $58$
+which is less than that of its parent problem $P_1$. The processing
+for $P_1$ is completed and $P_1$ is removed from
+$AP$. $select\_problem$ selects $P_2$ by comparing the upper bound
+values of $P_2$ and $P_3$ in $AP$. Partial-problem $P_2$ is terminated
+because it has no feasible solution ($FS=no\_solution$). Then, the next
+partial-problem $P_3$ is processed. $P_3$ has a feasible solution with
+a score of $41$. Updating of the incumbent value does not occur because the
+obtained score is lower than the existing incumbent value. The next
+partial-problem $P_4$ has no feasible solution, so all processing is
+terminated at $S8(stop)$. At this time, the values of $O$ and $z$ are the
+optimum solution (=$\{[14,24,15,31,18]\}$) and its score (=$51$)
+respectively. This solution corresponds to the dependency tree (a) in
+Figure \ref{fig:WellFormedTreesForExample}.
+
+
+
+
+\section{Experiment}
+\label{sec:ExperimentOfOptSearch}
+
+This section describes some experimental results showing the
+computational complexity and behavior of the graph branch algorithm. 
+
+\subsection{Environment and Metric of the Experiment}
+
+An English text corpus, PDG grammar and preference
+knowledge are prepared. Preference knowledge source in this
+experiment is the WPP frequencies (node frequencies) and the
+dependency relation frequencies (arc frequencies) in the
+corpus. Preference score is calculated from these statistical data and
+attached to the arcs in the dependency graphs. 
+
+Experiment data of 125,320 sentences extracted from English technical
+documents is divided into open data (8605 sentences) and closed data
+(116,715 sentences). Figure \ref{fig:SentenceDistribution} shows the
+distribution of word length of sentences in the open data. The closed
+data is used for producing WPP and dependency frequencies. An existing
+sentence analysis system (called the oracle system) is used as a
+generator of these frequencies. The oracle system is a real-world
+rule-based system with a long development history
+\cite{Amano89,Hirakawa00}. In order to see a brief accuracy of the
+oracle system, 136 sentences are selected randomly but with similar
+distribution shown in Figure \ref{fig:SentenceDistribution} from a set
+of sentences which are parsable using the basic grammar described
+below\footnote{Since unparsable sentences have no output, they are
+neglected in the succeeding evaluation experiments. Some extra method
+is required for obtaining partial parse trees for unparsable
+sentences.}. The arc precision ratio\footnote{Correct arc ratio with
+respect to arcs in output dependency trees \cite{Hirakawa05b}.} for
+this sentence set with respect to human analysis results is
+97.2\%. Therefore, the output of the oracle system is a good
+approximation of human correct data.
+
+\begin{figure}[t]
+\myfiglabelskippre
+ \begin{center}
+     \includegraphics[scale=0.66]{EV対象文の語数分布ENG.eps}
+ \end{center}
+\myfiglabelskippre
+\caption{Distribution of sentence length for sentences in the open data}
+\label{fig:SentenceDistribution}
+\myfiglabelskippre
+\end{figure}
+
+A PDG grammar called a basic grammar is prepared. The basic grammar
+consists of basic grammar rules which cover sentence variations such
+as noun/verb/adjective/adverbial/ prepositional phrases,
+simple/complex/compound sentences, relative/subordinate clauses and
+Onions' 5 sentence patterns\footnote{S+V,S+V+C,S+V+O,S+V+O+O and
+S+V+O+C patterns}. The basic grammar does not accept insertion,
+omission, inversion and idiomatic structures (ex. not only .. but also
+..). More detailed information on the environment of this experiment
+is described in \cite{Hirakawa05b}.  The expanded problem number, a
+principal computational complexity factor of the B\&B method, is adopted as the
+base metric. The following three metrics are used in
+this experiment.
+
+\begin{itemize}
+\item[(a)] Expanded Problem Number in Total (EPN-T): The number of the
+expanded problems which are generated in the entire search process.
+
+\item[(b)] Expanded Problem Number for the First Optimum
+Solution (EPN-F): 
+EPN-F is the number of the expanded problems when the first optimum
+solution is obtained.
+
+\item[(c)] Expanded Problem Number for the Last Optimum
+Solution (EPN-L): EPN-L is the number of the expanded problems when the last optimum
+solution is obtained. At this point, all optimum solutions are obtained.
+
+\end{itemize}
+
+{\mynoindent}Optimum solution number (OSN) for a problem, i.e. the
+number of optimum dependency trees in a given dependency forest, gives
+the lower bound value for all these metrics because one problem
+generates at most one solution. The minimum value of OSN is 1 because
+every dependency forest has at least one dependency tree. As the search
+process proceeds, the algorithm finds the first optimum solution, then
+the last optimum solution, and finally terminates the process by
+confirming no better solution is left. Therefore, the three metrics and
+OSN have the relation OSN ${\leq}$ EPN-F ${\leq}$ EPN-L ${\leq}$
+EPN-T. Average values for these are described as Ave:OSN, Ave:EPN-F,
+Ave:EPN-L and Ave:EPN-T.
+
+\subsection{Experimental Results}
+
+An evaluation experiment for the open data is performed using a
+prototype PDG system implemented in Prolog. The test sentences
+containing more than 22 words are neglected due to the limitation of
+Prolog system resources in the parsing process. 4334 sentences out of
+6882 test sentences are parsable. Without applying special treatment
+such as construction of the whole parse tree from partial parse trees,
+unparsable sentences (2584 sentences) are simply neglected in this
+experiment. 
+
+\begin{figure}[b]
+\myfiglabelskippre
+ \begin{center}
+    \includegraphics[scale=0.57]{OS_GraphBracn評価総問題展開数・第一解の展開数などグラフENG.eps}
+ \end{center}
+\myfiglabelskippre
+\caption{Total problem number, problem number for the first\\ optimum solution and optimum solution number}
+\label{fig:OptSolSrcExperimentResult}
+\myfiglabelskippre
+\end{figure}
+
+All optimum trees are computed by the graph branch algorithm described
+in Section
+\ref{GraphBranchAlgorithm}. Figure \ref{fig:OptSolSrcExperimentResult}
+shows averages of EPN-T, EPN-L, EPN-F and OSN with respect to sentence
+length. Overall averages of EPN-T, EPN-L, EPN-F and OSN for the test
+sentences are 3.0, 1.67, 1.43 and 1.15. The result shows that the
+average number of problems required is relatively small. The feasible
+solution search function based on the greedy algorithm in
+Figure \ref{fig:AlgorithmForLPi} seems to give a good feasible solution
+for a given problem and suppresses the number of expanded problems. The gap
+between Ave:EPN-T and Ave:EPN-L (3.0-1.67=1.33) is much greater than
+the gap between Ave:EPN-L and Ave:OSN (1.67-1.15=0.52). This means that
+the major part of the computation is performed only for checking if
+the obtained feasible solutions are optimum or not.
+
+
+\cite{Hirakawa01} reported the experiment for the B\&B-based optimum
+search algorithm implemented in C language using the semantic
+dependency graphs obtained from 100 sentences randomly selected from
+Japanese technical documents. Compared with the experiment reported in
+this paper, the previous experiment was performed in different
+conditions and settings with regard to, for example, the target
+language(English vs. Japanese), the target dependency
+graph(syntactic-label WPP dependency graph vs. semantic-label word
+dependency graph), the scoring method(statistics-based vs. rule-based)
+and the search target(all optimum solution search vs. one optimum
+solution search). However, the two experiments have the same basic
+structure, i.e. the optimum tree search in scored dependency graphs
+with arc constraints based on the B\&B principle. The B\&B-based
+algorithms of the two experiments have very similar components of the
+branch and bound method and the main factor of the computational
+complexity is the number of the expanded problems. The previous
+experiment shows that overall averages of EPN-T, EPN-F are 2.91, 1.33
+\footnote{OSN and EPN-L were not measured because the algorithm
+searches for only one optimum solution.}. These result values are very
+similar to those in the new experiment. The tendency for the optimum
+solution to be obtained in the early stage of the search process was
+observed in the previous experiment just as it is in this
+experiment. 
+
+\cite{Hirakawa01} introduced two improvements of the algorithm,
+i.e. the introduction of an improved upper bound function g'(P) and
+the optimized feasible solution search. As a result, the Ave:EPN-T is
+reduced from 2.91 to 1.82 and the Ave:EPN-F is increased from 1.33 to
+1.35. The average CPU time is reduced from 305.8\,ms to 162.1\,ms (on
+engineering work station AS-4260). In the new experiment, the g'(P) is
+introduced to the graph branch algorithm and has obtained the
+reduction of the Ave:EPN-T from 3.00 to 2.68 and the reduction of the
+Ave:EPN-F from 1.43 to 1.36. g'(P) is also effective to some extent in
+this experiment.
+
+\begin{figure}[bt]
+\myfiglabelskippre
+ \begin{center}
+    \includegraphics[scale=0.82]{OS展開問題数に対する全問題展開・第一最適解・最終最適解展開の充足率ENG.eps}
+ \end{center}
+\myfiglabelskippre
+\caption{Achievement ratios for full expansion, first optimum solution expansion and\\ last optimum solution expansion cases with respect to max problem expansion number}
+\label{fig:AchivementRatioWRTMaxProblemExpansionNumber}
+\myfiglabelskippre
+\end{figure}
+
+The tendency for the optimum solution to be obtained in the early
+stage of the search process suggests that limiting the number of
+problems to expand is an effective pruning
+strategy. Figure \ref{fig:AchivementRatioWRTMaxProblemExpansionNumber}
+shows the ratios of the sentences obtaining the whole problem
+expansion, the first optimum solution and the last optimum solution to
+whole sentences with respect to the expanded problem numbers. This
+kind of ratio is called an achievement ratio (AR) in this paper. From
+Figure \ref{fig:AchivementRatioWRTMaxProblemExpansionNumber}, the ARs
+for EPN-T, EPN-L, EPN-F (plotted in solid lines) are
+97.1\%,99.6\%,99.8\% respectively at the expanded solution number 10.
+The dotted line shows the AR for EPN-T of the improved algorithm using
+g'(P). The use of g'(P) increases the AR for EPN-T from 97.1\% to
+99.1\% at the expanded solution number 10. However, the effect of
+g'(P) is quite small for EPN-F and EPN-L. ARs for EPN-F and EPN-L in
+using g'(P) is almost the same as those shown in
+Figure \ref{fig:AchivementRatioWRTMaxProblemExpansionNumber}. This
+result shows that the pruning strategy based on the expanded problem
+number is effective and g'(P) works for the reduction of the problems
+generated in the posterior part of the search processes.
+
+Behavior of the search process should be affected by the scoring
+strategy (resources of preference knowledge and their application
+methods) and the structure of dependency graphs defined by grammar
+rules. The search process should be analyzed in greater detail along
+with scoring strategies and dependency graph structures. 
+
+The experiment using the basic English grammar shows a promising
+result. This is because EPN-T and EPN-F are similar to those in the
+algorithm described in \cite{Hirakawa01} which has a performance
+sufficient for real-world applications. The practical code
+implementation of the graph branch algorithm and its performance
+evaluation with an extended grammar are subjects for future work.
+
+
+
+
+
+\section{Concluding Remarks}
+
+This paper has described the graph branch algorithm for obtaining the
+optimum solution for a dependency forest used in the preference
+dependency grammar. The well-formedness dependency tree constraints
+are represented by the constraint matrix of the dependency forest,
+which has flexible and precise description ability so that controlled
+non-projectivity is available in PDG framework. The graph branch
+algorithm assures the search for the optimum trees with arbitrary arc
+co-occurrence constraints, including the single valence occupation
+constraint which has not been treated in DP-based algorithms so
+far. The dependency forest has wider applicability compared with the
+semantic dependency graph because it can handle whole morphological
+ambiguity caused by homonyms and word boundary divisions. The
+experimental result shows the averages of EPN-T, EPN-L and EPN-F for
+English test sentences are 3.0, 1.67 and 1.43, respectively. This
+is a promising result because EPN-T and EPN-F are similar to
+those in the algorithm described in \cite{Hirakawa01} which 
+has a performance sufficient for real-world applications. The
+practical code implementation of the graph branch algorithm and its
+performance evaluation with an extended grammar are subjects for
+future work.
+
+
+
+
+\bibliographystyle{nlpbbl}
+\renewcommand{\refname}{}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Amano, Hirakawa, Nogami, \BBA\ Kumano}{Amano
+  et~al.}{1989}]{Amano89}
+Amano, S., Hirakawa, H., Nogami, H., \BBA\ Kumano, A. \BBOP 1989\BBCP.
+\newblock \BBOQ The Toshiba Machine Translation System\BBCQ\
+\newblock {\Bem Future Computing Systems}, {\Bem 2\/}(3).
+
+\bibitem[\protect\BCAY{Black, Jelinek, Lafferty, Magerman, Mercer, \BBA\
+  Roukos}{Black et~al.}{1992}]{Black92}
+Black, E., Jelinek, F., Lafferty, J., Magerman, D., Mercer, R., \BBA\ Roukos,
+  S. \BBOP 1992\BBCP.
+\newblock \BBOQ Towards History-based Grammars: Using Richer Models for
+  Probabilistic Parsing\BBCQ\
+\newblock In {\Bem Proceedings of the 5th DARPA Speech and Natural Language
+  Workshop}, \BPGS\ 134--139.
+
+\bibitem[\protect\BCAY{Charniak}{Charniak}{2000}]{Charniak00}
+Charniak, E. \BBOP 2000\BBCP.
+\newblock \BBOQ A maximum-entropy-inspired parser\BBCQ\
+\newblock In {\Bem Proceedings of the 1st Conference of the North American
+  Chapter of the Association for Computational Linguistics}, \BPGS\ 132--139.
+
+\bibitem[\protect\BCAY{Chu \BBA\ Liu}{Chu \BBA\ Liu}{1965}]{ChuLiu65}
+Chu, Y., J.\BBACOMMA\  \BBA\ Liu, T., H. \BBOP 1965\BBCP.
+\newblock \BBOQ On the shortest arborescence of a directed graph\BBCQ\
+\newblock {\Bem Science Sinica}, {\Bem 14}, pp.~1396--1400.
+
+\bibitem[\protect\BCAY{Collins}{Collins}{1999}]{Collins99}
+Collins, M. \BBOP 1999\BBCP.
+\newblock {\Bem Head-Driven Statistical Models for Natural Language Parsing}.
+\newblock Ph.D.\ thesis, University of Pennsylvania.
+
+\bibitem[\protect\BCAY{Edmonds}{Edmonds}{1967}]{Edmonds67}
+Edmonds, J. \BBOP 1967\BBCP.
+\newblock \BBOQ Optimum branchings\BBCQ\
+\newblock {\Bem Journal of Research of the National Bureau of Standards}, {\Bem
+  71B}, pp.~233--240.
+
+\bibitem[\protect\BCAY{Eisner}{Eisner}{1996}]{Eisner96}
+Eisner, J. \BBOP 1996\BBCP.
+\newblock \BBOQ Three new probabilistic models for dependency parsing: An
+  exploration\BBCQ\
+\newblock In {\Bem Proceedings of COLING'96}, \BPGS\ 340--345.
+
+\bibitem[\protect\BCAY{Harada \BBA\ Mizuno}{Harada \BBA\
+  Mizuno}{2001}]{Harada01}
+Harada, M.\BBACOMMA\  \BBA\ Mizuno, T. \BBOP 2001\BBCP.
+\newblock \BBOQ Japanese semantic analysis system SAGE using EDR (in
+  Japanese)\BBCQ\
+\newblock {\Bem Transactions of the Japanese Society of Artificial
+  Intelligence}, {\Bem 16\/}(1), pp.~85--93.
+
+\bibitem[\protect\BCAY{Hirakawa}{Hirakawa}{2001}]{Hirakawa01}
+Hirakawa, H. \BBOP 2001\BBCP.
+\newblock \BBOQ Semantic Dependency Analysis Method for Japanese Based on
+  Optimum Tree Search Algorithm\BBCQ\
+\newblock In {\Bem Proceedings of the PACLING2001}, \BPGS\ 117--126.
+
+\bibitem[\protect\BCAY{Hirakawa}{Hirakawa}{2005a}]{Hirakawa05a}
+Hirakawa, H. \BBOP 2005a\BBCP.
+\newblock \BBOQ Dependency Forest: Packed Shared Dependency Structure
+  Corresponding to Parse Forest (in Japanese)\BBCQ\
+\newblock In {\Bem Natural Language Processing NL-167-9,IPSJ}, \BPGS\ 53--62.
+
+\bibitem[\protect\BCAY{Hirakawa}{Hirakawa}{2005b}]{Hirakawa05b}
+Hirakawa, H. \BBOP 2005b\BBCP.
+\newblock \BBOQ Evaluation Measures for Natural Language Analyser based on
+  Preference Dependency Grammar\BBCQ\
+\newblock In {\Bem Proceedings of the PACLING2005}, \BPGS\ 153--160.
+
+\bibitem[\protect\BCAY{Hirakawa \BBA\ Amano}{Hirakawa \BBA\
+  Amano}{1989a}]{Hirakawa89}
+Hirakawa, H.\BBACOMMA\  \BBA\ Amano, S. \BBOP 1989a\BBCP.
+\newblock \BBOQ Japanese sentence analysis using syntactic/semantic preference
+  (in Japanese)\BBCQ\
+\newblock In {\Bem Proceedings of the 3rd National Conference of JSAI}, \BPGS\
+  363--366.
+
+\bibitem[\protect\BCAY{Hirakawa \BBA\ Amano}{Hirakawa \BBA\
+  Amano}{1989b}]{Hirakawa89b_e}
+Hirakawa, H.\BBACOMMA\  \BBA\ Amano, S. \BBOP 1989b\BBCP.
+\newblock \BBOQ Method for Searching Optimum Tree in Japanese Sentence Analysis
+  (in Japanese)\BBCQ\
+\newblock In {\Bem Natural Language Processing NL-74-2,IPSJ}, \BPGS\ 9--16.
+
+\bibitem[\protect\BCAY{Hirakawa, Ono, \BBA\ Yoshimura}{Hirakawa
+  et~al.}{2000}]{Hirakawa00}
+Hirakawa, H., Ono, K., \BBA\ Yoshimura, Y. \BBOP 2000\BBCP.
+\newblock \BBOQ Automatic Refinement of a POS Tagger Using a Reliable Parser
+  and Plain Text Corpora\BBCQ\
+\newblock In {\Bem Proceedings of the COLING'00}, \BPGS\ 313--319.
+
+\bibitem[\protect\BCAY{Ibaraki}{Ibaraki}{1978}]{Ibaraki78}
+Ibaraki, T. \BBOP 1978\BBCP.
+\newblock \BBOQ Branch-and-bounding procedure and state-space representation of
+  combinatorial optimization problems\BBCQ\
+\newblock {\Bem Information and Control}, {\Bem 36,1-27}.
+
+\bibitem[\protect\BCAY{Katoh \BBA\ Ehara}{Katoh \BBA\
+  Ehara}{1989}]{Kato_ehara89}
+Katoh, N.\BBACOMMA\  \BBA\ Ehara, T. \BBOP 1989\BBCP.
+\newblock \BBOQ A fast algorithm for dependency structure analysis (in
+  Japanese)\BBCQ\
+\newblock In {\Bem Proceedings of 39th Annual Convention of the Information
+  Processing Society}.
+
+\bibitem[\protect\BCAY{Lee \BBA\ Choi}{Lee \BBA\ Choi}{1997}]{Lee97}
+Lee, S.\BBACOMMA\  \BBA\ Choi, K., S. \BBOP 1997\BBCP.
+\newblock \BBOQ Reestimation and Best-First Parsing Algorithm for Probablistic
+  Dependency Grammars\BBCQ\
+\newblock In {\Bem Proceedings of the Fifth Workshop on Very Large Corpora},
+  \BPGS\ 41--55.
+
+\bibitem[\protect\BCAY{Maruyama}{Maruyama}{1990}]{Maruyama90}
+Maruyama, H. \BBOP 1990\BBCP.
+\newblock \BBOQ Constraint Dependency Grammar and Its Weak Generative
+  Capacity\BBCQ\
+\newblock {\Bem Computer Software}.
+
+\bibitem[\protect\BCAY{McDonald, Crammer, \BBA\ Pereira}{McDonald
+  et~al.}{2005}]{McDonald05}
+McDonald, R., Crammer, K., \BBA\ Pereira, F. \BBOP 2005\BBCP.
+\newblock \BBOQ Spanning Tree Methods for Discriminative Training of Dependency
+  Parsers\BBCQ\
+\newblock Technical report, UPenn CIS.
+
+\bibitem[\protect\BCAY{Mel'uk}{Mel'uk}{1988}]{Meluk88}
+Mel'uk, I., A. \BBOP 1988\BBCP.
+\newblock {\Bem Dependency Syntax: Theory and Practice}.
+\newblock State University of New York Press, Albany, New York.
+
+\bibitem[\protect\BCAY{Nivre \BBA\ Nilsson}{Nivre \BBA\
+  Nilsson}{2005}]{Nivre05}
+Nivre, J.\BBACOMMA\  \BBA\ Nilsson, J. \BBOP 2005\BBCP.
+\newblock \BBOQ Pseudo-Projective Dependency Parsing\BBCQ\
+\newblock In {\Bem Proceedings of the 43rd Meeting of the ACL (ACL-05)}, \BPGS\
+  99--106.
+
+\bibitem[\protect\BCAY{Nivre \BBA\ Scholz}{Nivre \BBA\
+  Scholz}{2004}]{NivreAndScholz04}
+Nivre, J.\BBACOMMA\  \BBA\ Scholz, M. \BBOP 2004\BBCP.
+\newblock \BBOQ Deterministic Dependency Parsing of English Text\BBCQ\
+\newblock In {\Bem Proceedings of COLING'04}, \BPGS\ 64--70.
+
+\bibitem[\protect\BCAY{Ozeki}{Ozeki}{1994}]{Ozeki94}
+Ozeki, K. \BBOP 1994\BBCP.
+\newblock \BBOQ Dependency Structure Analysis as Combinatorial
+  Optimization\BBCQ\
+\newblock {\Bem Information Sciences}, {\Bem 78(1-2)}, pp.~77--99.
+
+\bibitem[\protect\BCAY{Ozeki \BBA\ Zhang}{Ozeki \BBA\ Zhang}{1999}]{Ozeki99_e}
+Ozeki, K.\BBACOMMA\  \BBA\ Zhang, Y. \BBOP 1999\BBCP.
+\newblock \BBOQ 最小コスト分割問題としての係り受け解析(Kakari-uke analysis as
+  minimum cost partitioning problem) (In Japanese)\BBCQ\
+\newblock In {\Bem Proceeding of the Workshop of The Fifth Annual Meeting of
+  The Association for Natural Language Processing}, \BPGS\ 9--14.
+
+\bibitem[\protect\BCAY{Tomita}{Tomita}{1991}]{Tomita91}
+Tomita, M. \BBOP 1991\BBCP.
+\newblock {\Bem Generalized LR Parsing}.
+\newblock Kluwer Academic Publishers, Boston, MA.
+
+\bibitem[\protect\BCAY{Wang \BBA\ Harper}{Wang \BBA\ Harper}{2004}]{Wang04}
+Wang, W.\BBACOMMA\  \BBA\ Harper, M., P. \BBOP 2004\BBCP.
+\newblock \BBOQ A Statistical Constraint Dependency Grammar (CDG) Parser\BBCQ\
+\newblock In {\Bem Workshop on Incremental Parsing: Bringing Engineering and
+  Cognition Together (ACL)}, \BPGS\ 42--49.
+
+\bibitem[\protect\BCAY{Yamada \BBA\ Matsumoto}{Yamada \BBA\
+  Matsumoto}{2003}]{YamadaAndMatsumoto03}
+Yamada, H.\BBACOMMA\  \BBA\ Matsumoto, Y. \BBOP 2003\BBCP.
+\newblock \BBOQ Statistical dependency analysis with support vector
+  machine\BBCQ\
+\newblock In {\Bem Proceedings of IWPT'03}, \BPGS\ 195--206.
+
+\end{thebibliography}
+
+\begin{biography}
+
+\biotitle{}
+
+\bioauthor{Hideki Hirakawa}
+{
+
+Hideki Hirakawa received the B.E. and M.E. degrees in electrical
+engineering from Kyoto University, Kyoto, Japan, in 1978 and 1980,
+respectively. In April 1980, he joined the Toshiba Corp, Kawasaki,
+Japan. From 1982 to 1984, he was a researcher at ICOT (Institute for
+New Generation Computer Technology), Tokyo, Japan. From 1994 to 1995,
+he worked as a research affiliate of the MIT Media Laboratory, Boston,
+U.S.A. He is currently a Chief Research Scientist of the Knowledge
+Media Laboratory, Corporate Research \& Development Center, Toshiba
+Corp., Kawasaki, Japan. He is a member of the Association for Natural
+Language Processing of Japan, the Information Processing Society of
+Japan, the Japanese Society for Artificial Intelligence, the Gengo
+Shigen Kyoukai and the Association for Computational Linguistics.  His
+current research interests include natural language processing,
+knowledge processing and human interface.
+
+}
+
+\bioreceived{Received}
+\biorevised{Revised}
+\bioaccepted{Accepted}
+
+\end{biography}
+
+
+\end{document}

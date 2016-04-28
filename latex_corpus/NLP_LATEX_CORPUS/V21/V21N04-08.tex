@@ -1,0 +1,903 @@
+    \documentclass[english]{jnlp_1.4_rep}
+
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\usepackage{amsmath}
+\usepackage{array}
+
+\newcommand{\argmax}{}
+
+\Volume{21}
+\Number{4}
+\Month{September}
+\Year{2014}
+
+\received{2009}{11}{21}
+\revised{2010}{2}{25}
+\accepted{2010}{3}{25}
+
+\setcounter{page}{841}
+
+\etitle{Generalization of Semantic Roles in Automatic \\ Semantic Role Labeling\footnotetext{\llap{*~}This article has been partially revised for better understanding of overseas readers.}}
+\eauthor{Yuichiroh Matsubayashi\affiref{Author_1}\affiref{Author_2} \and Naoaki Okazaki\affiref{Author_1} \and Jun'ichi Tsujii\affiref{Author_1}\affiref{Author_3}\affiref{Author_4}}
+\eabstract{
+Numerous studies have applied machine-learning approaches 
+to semantic role labeling with the availability of corpora such as FrameNet and PropBank. 
+These corpora define frame-specific semantic roles for each frame, 
+which are problematic for a machine-learning approach 
+because the corpus contains a number of infrequent roles that hinder efficient learning. 
+This paper focuses on the generalization problem of semantic roles 
+in a semantic role labeling task. 
+We compare existing generalization criteria with our novel criteria, 
+and clarify the characteristics of each criterion. 
+We also show that using multiple generalization criteria in a single model
+improves the performance of a semantic role classification.
+In experiments on FrameNet, we achieved $19.16\%$ error reduction in
+terms of total accuracy, and $7.42\%$ in macro-averaged F1.
+On PropBank,  we reduced $24.07\%$ of errors in total accuracy,
+and $26.39\%$ of errors in the evaluation for
+unseen verbs.
+}
+\ekeywords{semantic role labeling, FrameNet, PropBank, VerbNet, SemLink, semantic frame, semantic role generalization}
+
+\headauthor{Matsubayashi et al.}
+\headtitle{Generalization of Semantic Roles in Automatic Semantic Role Labeling}
+
+\affilabel{Author_1}{}{Department of Computer Science, University of Tokyo}
+\affilabel{Author_2}{}{National Institute of Informatics, from April, 2010}
+\affilabel{Author_3}{}{School of Computer Science, University of Manchester}
+\affilabel{Author_4}{}{National Centre for Text Mining, UK}
+
+\Reprint[T]{Vol.~17, No.~4, pp.~59--89}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+The emergence of FrameNet \cite{Baker:98}, PropBank \cite{Palmer:05}, and other corpora annotated with semantic roles has recently led to investigations into many statistical approaches to Semantic Role Labeling (SRL) \cite{marquez2008srl}. SRL is a type of predicate-argument structural analysis in which a predicate of a sentence and the phrases that constitute its arguments are identified and assigned appropriate semantic tags (semantic roles). Techniques for analyzing semantic relations between predicates and arguments are recognized as a key task for many NLP applications including question answering, machine translation, and information extraction, and the advancement of SRL systems has become a focus of interest for many researchers \cite{narayanan-harabagiu:2004:COLING,shen-lapata:2007:EMNLP-CoNLL2007,moschitti2007esa,Surdeanu2003}.
+
+The corpora are based on the concept that some words (usually a verb) in a sentence have their own specific argument structures, {\it frames}. Figure \ref{framenet-propbank} shows the frames defined for the verbs {\it sell} and {\it buy} in FrameNet and PropBank. In either corpus, as illustrated here, each frame is assigned a specific designation with specified semantic roles as arguments. In addition, the semantic roles are defined in a frame-specific manner. In PropBank, for example, the role {\it sell.01::0} (Seller) in frame {\it sell.01} and the role {\it buy.01::0} (Buyer) in frame {\it buy.01} are regarded as two different semantic roles. Similarly, the roles {\it sell.01::0} (Seller) and {\it buy.01::2} (Seller) are regarded as different roles, although they share the same description ``Seller''. The same holds for FrameNet. The frame-specific definition of semantic roles is applied in both corpora because semantic roles are invested with different senses depending on the concept and situation evoked by a frame-evoking word.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-4ia12f1.eps}
+\end{center}
+\caption{Comparison of the definitions of the frames for the verbs {\it sell} and {\it buy} in FrameNet and PropBank}
+\label{framenet-propbank}
+\end{figure}
+
+This mode of definition, however, tends to pose a problem for automatic SRL methods. For SRL systems that are generally constructed using a supervised learning framework, the subdivision of semantic roles for each frame leads to the presence of many roles having a few instances in the corpus, and thus to the data-sparseness problem in the learning stage. Actually, PropBank contains 4,659 frames and more than 11,500 different semantic roles, with an average of approximately 12 instances per frame. FrameNet contains 795 frames and 7,124 different semantic roles, with approximately half of the frames having 10 or fewer instances. To resolve this problem, it is necessary to determine some criteria for generalizing semantic roles that have similar aspects, and share instances of those roles.
+
+Several criteria for inter-frame generalization of semantic roles have been proposed in previous studies. For example, in many studies on SRL in PropBank, numerical tags ({\it ARG0} to {\it ARG5}) assigned to PropBank roles have been used as generalized labels. However, \citeA{yi-loper-palmer:2007:main} noted that the semantic role generalizations using tags {\it ARG2} to {\it ARG5} tend to lack syntactic and semantic consistency, and concluded that these tags are not appropriate as generalization criteria. Other criteria have therefore been investigated for use in semantic role generalization, such as thematic roles or similarities of syntactic structures \cite{gordon-swanson:2007:ACLMain,zapirain-agirre-marquez:2008:ACLMain}.
+
+While FrameNet defines its semantic roles in a frame-specific manner, it also includes typed hierarchical relations between semantic roles within frames. Figure \ref{fig:frame-hierarchy} illustrates an excerpt from the frame hierarchy of FrameNet, where, for example, the {\it Giving} frame and the {\it Commerce\_sell} frame are in an inheritance relation, and the correspondence between the roles in these frames in terms of which receives the inheritance from which is defined. This hierarchical relation might be expected to be useful for generalization of semantic roles, but it has not yet yielded any positive results \cite{Baldewein2004}. The generalization of roles in FrameNet, therefore, is considered as an important task \shortcite{Gildea2002,Shi2005ppt,Giuglea2006}.
+
+\begin{figure}[b]
+\vspace{-0.5\Cvs}
+\begin{center}
+\includegraphics{21-4ia12f2.eps}
+\end{center}
+\caption{Excerpt of the frame hierarchy in FrameNet 1.3}
+\label{fig:frame-hierarchy}
+\end{figure}
+
+A key point in regard to semantic role generalization is that things we call ``semantic roles'' encompass several different properties. For example, the FrameNet roles {\it Commerce\_sell::Seller} and {\it Commerce\_buy::Seller} in Figure~\ref{framenet-propbank} both have the same semantic property, in the sense that both can be described by the same lexical term, ``seller,'' but from the perspective of agency, {\it Commerce\_sell::Seller} is clearly an agent but {\it Commerce\_buy::Seller} is not. The characteristics of a semantic role thus cannot be explained by a single perspective and in fact require description based on several different criteria. None of the generalization methods proposed up to the present, however, have concurrently employed multiple criteria in a single classification model. Another key is elucidation of previously employed role generalization criteria; we have to discover what properties of semantic roles the criteria captures and how much each of the properties contributes to accurate role labeling.
+
+In this light, we hereby propose new generalization criteria for the FrameNet and PropBank roles based on different linguistic perspectives, together with a single classification model incorporating these criteria. This is accompanied by detailed analysis of the proposed criteria and existing generalization criteria based on experiments, and elucidation of the characteristic effects of each criterion.
+
+In the experiments on FrameNet, we propose a generalization method that employs three types of information in FrameNet: hierarchical relations among frames, role descriptors, and phrase semantic types, together with the thematic roles of VerbNet. We then investigate the contributions of these criteria to increased accuracy in semantic role classification. In the experiments on PropBank, we undertake an accurate elucidation of the differences between the effects of ARG tags and thematic roles as existing generalization techniques that are the focus of interest, based on error analysis. We propose a generalization technique that utilizes three types of information in VerbNet: verb classes, selectional restrictions, and semantic descriptions, to yield more robust semantic roles, and investigate their effectiveness.
+
+The experimental results showed that each of the proposed generalization criteria contributes to more robust classification on infrequent and unseen frames, and that the models simultaneously using multiple generalization criteria contributed to increased accuracy in semantic role classification. On FrameNet, the model comprising all of the criteria increased the overall accuracy as shown by a 19.16\% error reduction and a 7.42\% increase in macro-averaged F1 score. On PropBank, it again increased overall accuracy with a 24.07\% error reduction and, in the test for unseen verbs, yielded an error reduction of 26.39\%.
+
+
+\section{Related work}
+
+Several methods of semantic role generalization have been proposed to resolve the data-sparseness problem in SRL. \citeA{Moschitti2005} first divide the PropBank roles into four coarse-grained classes referred to as Core Roles, Adjuncts, Continuation Arguments, and Co-referring Arguments, and then apply a different classifier specifically constructed for each of these classes to assign the PropBank ARG tags. \shortciteA{Baldewein2004} train a classifier for each semantic role separately, re-using the training instances of other roles that are similar to the target role. As similarity measures, they use the hierarchical frame relations and peripheral role names in FrameNet, and clusters constructed by an EM-based method. \shortciteA{gordon-swanson:2007:ACLMain} propose a generalization of PropBank semantic roles, based on syntactic similarity of frames.
+
+Others have proposed the use of thematic roles, which are frame-independent role sets, as a bridge between semantic roles in different frames. \shortciteA{Gildea2002} show that the accuracy of role classification was increased by manually replacing FrameNet semantic roles with 18 thematic roles that they constructed for this purpose. \shortciteA{Shi2005ppt}, and \shortciteA{Giuglea2006} use VerbNet thematic roles as shared mapping destinations for roles defined in different semantic corpora.
+
+As a comparison between different criteria for semantic role generalization, \citeA{yi-loper-palmer:2007:main,loper2007clr}, and \shortciteA{zapirain-agirre-marquez:2008:ACLMain} compare the use of ARG tags and thematic roles on PropBank. Both \shortciteA{yi-loper-palmer:2007:main} and \shortciteA{loper2007clr} report that the use of thematic roles in place of PropBank ARG tags increases classification accuracy for ARG2 roles but decreases it for ARG1 roles. \shortciteA{yi-loper-palmer:2007:main} also show that ARG2 to ARG5 each map to various thematic roles. \shortciteA{zapirain-agirre-marquez:2008:ACLMain} assess the two label sets of PropBank ARG tags and VerbNet thematic roles using a state-of-the-art SRL system and conclude that the PropBank ARG tags overall yield a more robust generalization. All three of these studies were focused on comparison in terms of overall SRL accuracy, and more detailed investigation will be necessary for accurate elucidation of the effects of each generalization criterion.
+
+In previous studies, these generalized labels for FrameNet and PropBank have been directly inferred by the models, and have therefore been used for a method that directly replaces semantic roles in the corpora with the corresponding generalized roles and other similar methods. By nature, these methods preclude the concurrent use of different types of generalization criteria in a single classification model. Our objective of shared use of characteristics derived from multiple perspectives, in contrast, requires a classification model that enables a natural combination of the criteria.
+
+
+\section{Frame dictionaries and annotated corpora with semantic roles}
+
+This section provides a brief description of the characteristics of the semantically annotated language resources used in our experiments. The experiments in this study on automatic SRL are separately performed on FrameNet and PropBank. As illustrated in Figure \ref{fig:semantic-corpus}, each of these corpora comprises a frame dictionary that defines its frames and their semantic roles, together with actual text annotated 
+with these roles.
+
+VerbNet is employed as a knowledge resource for role generalization outside the corpora, and SemLink is employed to determine correspondence between the thematic roles of VerbNet and the semantic roles of FrameNet and PropBank.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{21-4ia12f3.eps}
+\end{center}
+\caption{Overview of a semantic role annotation corpus}
+\label{fig:semantic-corpus}
+\end{figure}
+
+
+\subsection{FrameNet}
+\label{sec:framenet}
+
+FrameNet is a semantically annotated corpus constructed on the basis of frame semantics \cite{fillmore1976}. Its frames are referred to as {\it semantic frames} and represent argument structures of specific events and concepts. Each frame contains specific words that evoke the frame. Semantic roles, known as {\it frame elements}, are defined specifically for each frame. Additionally, an attribute that indicates the relative importance of each role in terms of its centrality ({\it coreness}) in the frame is assigned as {\it core}, {\it core-unexpressed}, {\it peripheral}, and {\it extra-thematic}. As these names imply, core and core-unexpressed roles are central to the frame concept, peripheral roles are on the periphery of the concept, and extra-thematic roles are diverted roles from more abstract concepts outside the frame. A particularly noteworthy characteristic of FrameNet is its inclusion of hierarchical inter-frame relations (see Figure~\ref{fig:frame-hierarchy}), defined as the seven types of directed relations of {\it Inheritance}, {\it Using}, {\it Inchoative\_of}, {\it Causative}, {\it Subframe}, {\it Precedes} and {\it Perspective\_on}. In addition, a parent-child relation is defined between semantic roles in the frames where those relations are assigned. For text annotation, a unit of annotation instance consists of a single frame-evoking word and the frame it evokes, together with appropriate assignment of semantic role tags to phrases in a sentence. The annotated text set includes approximately 140,000 sentences excerpted from the British National Corpus, each of which includes one annotation instance, and full text annotations of additional corpora, comprising in total approximately 150,000 annotation instances.
+The current version, Version 1.3, was used in our experiments.
+
+
+\subsection{PropBank}
+\label{sec:propbank}
+
+The PropBank corpus gives predicate-argument structures of verbs in all text in the Wall Street Journal portion of Penn Treebank II corpus. It provides frames for each verb, such as {\it sell.01} and {\it buy.01} shown in Figure~\ref{framenet-propbank}, depending on the number of argument structures and averaging approximately 1.4 frames per verb. The corpus consists of 112,917 annotation instances. Unlike FrameNet, PropBank does not define inter-frame relations and its frames are independently defined. Its semantic role definitions are of two types. In one type, each role is assigned a number from 0 to 5 prefixed by ``ARG'' (thus, {\it ARG0} to {\it ARG5}). In the other, the roles are assigned ``AM tags,'' which are adjunctive semantic roles commonly defined for all frames. In the {\it ARG0} to {\it ARG5} labeling, as illustrated by {\it sell.01::0} (Seller) and {\it buy.01::0} (Buyer) in Figure~\ref{framenet-propbank}, the same number in different frames may refer to roles that are quite different in meaning. It is generally understood that {\it ARG0} and {\it ARG1} assignments broadly correspond to {\it Proto-Agent} and {\it Proto-Patient}, respectively, and that each of the other numbers may refer to different meanings depending on the verb \cite{Palmer:05,yi-loper-palmer:2007:main}. The AM tags are of 14 types, and represent peripheral roles such as location ({\it AM-LOC}) and time ({\it AM-TMP}).
+
+
+\subsection{VerbNet, SemLink}
+\label{sec:verbnet}
+
+VerbNet \cite{kipper2000cbc} was constructed for generalization of the syntactic and semantic characteristics of verbs. It is a systematic description of hierarchical groups of verbs and their characteristics. The groups comprise 470 verb classes, which are an extension of the classes proposed by \shortciteA{levin1993evc}. The assignment of a verb to a given class is determined by several characteristics that must be held by all verbs in that class. The verbs of a given class share the same argument slots each of which is chosen from 30 clearly defined thematic roles. In this study, we applied information from VerbNet Version 2.3 to semantic role generalization.
+
+Broadly speaking, the utilization of VerbNet has two major advantages. One is the potential of its 30 thematic roles, commonly defined for all verbs, as a criterion for generalization of the PropBank and FrameNet roles. The other is availability of the detailed level of syntactic and semantic commonalities that can be captured by the verb classes. In Sections~\ref{sec:frameNet-verbnet} and \ref{sec:generalization-criteria-propbank}, we propose a generalization method that utilizes all of this information.
+
+FrameNet, PropBank, and VerbNet were developed with different approaches. To utilize VerbNet for role generalization criteria, conversion of their respective semantic roles is therefore necessary. We use SemLink \cite{loper2007clr}\footnote{http://verbs.colorado.edu/semlink/} for this purpose. SemLink was constructed to map between semantic roles constructed with different methodologies. As shown in Figure \ref{fig:semlink}, it provides the two main resources of (A) frame dictionary mapping and (B) instance-level mapping. Resource (A) can be applied to map FrameNet and PropBank frames to the appropriate verb classes of VerbNet and link their respective semantic roles to the thematic roles in corresponding verb classes. In frame mapping, however, many-to-many mappings may occur for some frames due to the different ways of frame separation among FrameNet, PropBank, and VerbNet. Resource (B) is therefore concurrently applied for argument-structure mapping at the instance-level, which eliminates ambiguities due to the differences between the methodologies in these three resources and thus enables accurate mapping of the frames and their semantic roles to the verb classes and their thematic roles, respectively, for each instance.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{21-4ia12f4.eps}
+\end{center}
+\caption{Overview of SemLink}
+\label{fig:semlink}
+\end{figure}
+
+With the current version of SemLink (Version 1.1), mapping at the instance level applies only to PropBank.
+FrameNet is limited to dictionary-level mapping, which maps 1,726 semantic roles to thematic roles in VerbNet. This represents 37.16\% of the roles that occur once or more in the corpus. With PropBank, 62.34\% of the argument structures in the text map to the annotations using verb classes and thematic roles in VerbNet.
+
+
+\section{Semantic role classification}
+\label{sec:role-classification}
+
+SRL is a complex task involving intertwined problems. This is often resolved by separation into the four subproblems of {\it frame-evoking word identification} (identification of words that evoke frames), {\it frame disambiguation} (selection of the correct frames from among those that may be captured by evoking words), {\it role phrase identification} (identification of phrases with semantic roles), and {\it role classification} (assigning correct roles to role phrases). Herein, we focus entirely on role classification, which is directly related to the data-sparseness problem due to fine-grained semantic roles, and particularly on rigorous and detailed analysis of the effects of semantic role generalization through the accurate provision of input and the maximal elimination of errors produced by other processing.
+
+In this study, we define the task of role classification in accordance with the previous studies, with a sentence, a frame-evoking word, an evoked frame, candidate role labels in the frame, and gold role phrases as the input and correct assignments of roles to their respective role phrases as the output.
+Figure \ref{fig:input} shows a specific example of an input and output in role classification on FrameNet. Here, the {\it Commerce\_sell} frame is evoked by the verb {\it sell}, and role phrases are identified at three places in the sentence. The candidate roles are given by the frame as \{{\sf Seller}, {\sf Buyer}, {\sf Goods}, {\sf Reason}, ..., {\sf Place}\}, and the semantic role of each role phrase is selected from these candidate roles.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{21-4ia12f5.eps}
+\end{center}
+\caption{Example of input and output in the role classification}
+\label{fig:input}
+\end{figure}
+
+
+\section{Semantic role generalization and role classification models}
+
+\subsection{Formalization of semantic role generalization}
+\label{sec:define-generalization}
+
+Semantic role generalization can be regarded as an act of equating roles with the same classification label based on a certain (linguistic) perspective capturing a common characteristic among multiple semantic roles. It has generally been performed by replacement of the semantic role labels in a corpus with generalized labels, and only a generalized label can thus be assigned to a semantic role. From our viewpoint, however, the way to generalize roles should be multifaceted---based on multiple perspectives. We therefore express semantic role generalization as an assignment of a set of multiple generalized labels to the original semantic roles.
+
+This may be illustrated by the situation when a PropBank role is concurrently generalized by using {\it ARG0-5} tags and thematic roles. The frame-specific semantic role {\it sell.01::0} (seller) of the {\it sell.01} frame, for example, is generalized to {\it ARG0} and {\it Agent} by using the {\it ARG} tag and the thematic role, respectively. We use the label form {\it label@criterion\_name} to represent labels constructed with a certain criterion to distinguish the namespaces. The frame-specific role {\it sell.01::0} is assigned a set including the two generalized labels above. This assignment is expressed by the following function $gen$:
+\begin{equation}
+ \mathit{gen}(\mathit{sell.01::0})= \{\mathit{ARG0@ARG}, \mathit{Agent@TR}\}.
+\end{equation}
+For simplicity in related descriptions, we separate this function for labels derived from two different generalization criteria into components expressing the functions for each generalization criterion as follows:
+\begin{align}
+\mathit{gen}_\mathit{arg}(\mathit{sell.01::0}) & = \{\mathit{ARG0@ARG}\} \label{eqn:arg},\\
+\mathit{gen}_\mathit{tr}(\mathit{sell.01::0}) & = \{\mathit{Agent@TR}\} \label{eqn:thematic},\\
+\mathit{gen}(y) & = \mathit{gen}_\mathit{arg}(y) \cup \mathit{gen}_\mathit{tr}(y).
+\end{align}
+This can then be generalized to functions
+\begin{align}
+\mathit{gen}_i & : R \rightarrow\{C_i'|C_i'\subset C_i\},\\
+\mathit{gen} &: R \rightarrow\{C'|C'\subset C\}\mbox{ (}\mathit{gen}(y) = \bigcup_{i}\mathit{gen}_i(y)),
+\end{align}
+representing the semantic roles concurrently involving $n$ types of generalization criteria, in which $R$ is the entirety of the original semantic roles, $C_1, \ldots , C_n$ each is the set of generalized labels of individual type, and $C= \bigcup_{i=1}^{n}C_i$ is the set of all of the generalized labels.
+The specific definitions of these functions for role generalization in FrameNet and PropBank will be described in Sections~\ref{sec:generalization-criteria-framenet} and \ref{sec:generalization-criteria-propbank}.
+
+
+\subsection{Role classification model}
+
+As indicated above, the approach to semantic role generalization in most existing studies has essentially consisted of replacing frame-specific semantic roles with a small number of frame-independent generalized labels, and the process of role classification is thereby converted from a problem of inferring frame-specific roles to one of inferring their generalized labels. Given a sentence $s$, frame-evoking word $p$, frame $f$, and role phrase $x$, let $Y_f$ be the set of selectable semantic roles, and ${\bf x}$ be the observed feature vector for the target role phrase $x$ from $s$, $p$, and $f$. The semantic role classification is generally formalized as a problem of selecting the most appropriate role $\tilde{y}$ from among the candidates $Y_f$. Assuming a model that generates the scores of $y$ for triplet $(f,{\bf x},y)$, $\tilde{y}$ is then selected as
+\begin{equation}
+ \tilde{y} = \argmax_{y \in Y_f} \mathrm{Score}(f,\mathbf{x},y).
+\label{equ:frame-specific-class}
+\end{equation}
+
+In existing methods that directly infer generalized labels, the semantic roles in the training data and the test data are overwritten by generalized labels. A role $y$ in PropBank, for example, can be generalized by ARG tag $arg(y)$, and the classification model then selects the optimal {\it ARG} tag $\tilde{c}$ as
+\vspace{-0.5\Cvs}
+\begin{equation}
+\tilde{c} = \argmax_{c \in \{\mathit{arg}(y)|y \in Y_f\}} \mathrm{Score}_\mathit{arg}(f,\mathbf{x},c),
+\end{equation}
+where $\mathrm{Score}_\mathit{arg}(f,\mathbf{x},c)$ gives the score of generalized label $c$ in relation to $f$ and $\mathbf{x}$. In most existing systems, this model is achieved using a linear or log-linear score model and the feature function is designed as an indicator function for the possible pairs of $c$ and the elements of ${\bf x}$:
+\begin{gather}
+ \mathrm{Score}_\mathit{arg}(f,\mathbf{x},c) = \sum_{i}\lambda_{i}g_i(\mathbf{x},c),\\
+ g_1(\mathbf{x},c) =  \begin{cases}
+   1 & (\mbox{head of }x\mbox{ is ``he''}~\wedge c = \mathit{ARG0@ARG})\\
+   0 & (\mbox{otherwise})
+  \end{cases}.
+\end{gather}
+Here, $G=\{g_1,\ldots,g_m\}$ denotes a set of $m$ feature functions, and $\Lambda=\{\lambda_1,\ldots ,\lambda_m\}$ denotes a weight vector for the feature functions. $\tilde{y}$ is uniquely determined when one and only one role $y$ among the roles in $Y_f$ is assigned to $\tilde{c}$. This method of label replacement has also been used in existing comparative studies on generalization criteria \cite{loper2007clr,yi-loper-palmer:2007:main,zapirain-agirre-marquez:2008:ACLMain}.
+
+In contrast, we employ the model directly inferring the optimal frame-specific role (Eq.~\ref{equ:frame-specific-class}) and treat the generalized label set $gen(y)$ for $y$ as the feature set of semantic role $y$.
+\begin{equation}
+ g_1(\mathbf{x},y) =
+  \begin{cases}
+   1 & (\mbox{head of }x\mbox{ is ``he''}~\wedge \mathit{ARG0@ARG} \in gen(y))\\
+   0 & (\mbox{otherwise})
+  \end{cases}
+\label{equ:generalized-label-feature-arg0}
+\end{equation}
+Equation~\ref{equ:generalized-label-feature-arg0} is used to test whether role $y$ is generalized by the label {\it ARG0}, by investigating an inclusion of {\it ARG0} in the value of {\it gen(y)}.
+With the function {\it gen} used in this way as the conditional of the feature function, it is possible to design a model that concurrently processes multiple generalized labels. Similar to Eq.~\ref{equ:generalized-label-feature-arg0}, a feature function that checks the thematic role can also be incorporated into a model:
+\begin{equation}
+ g_2(\mathbf{x},y) =
+  \begin{cases}
+   1 & (\mbox{head of }x\mbox{ is ``he''}~\wedge
+      \mathit{Agent@TR} \in gen(y))\\
+   0 & (\mbox{otherwise})
+  \end{cases}.
+\label{equ:generalized-label-feature-agent}
+\end{equation}
+
+An advantage of this approach is that it provides more natural generalization
+for the cases where multiple semantic roles in a single frame map to a single generalized label, in addition to cases where a single role takes multiple generalized labels.
+For example, in generalizations using the selectional restriction that we will describe in Section~\ref{sec:selectional-restriction},  multiple roles in the same frame may have the same selectional-restriction label. If this selectional-restriction label is inferred by the model using a traditional replacement method, the original semantic roles cannot be restored from the generalized label. In our method, this problem does not occur since the original semantic roles are directly inferred using multiple generalization criteria. A further advantage is that, in combining different types of generalized labels, the weights for employed labels are automatically determined through the learning of $\Lambda$. With this model, accordingly, there is no need for advance investigation of the relative effectiveness of generalization criteria, and we can leave the selection of appropriate weights for labels to the learning process.
+
+For scoring, we utilize the conditional probability $P(y|f,\mathbf{x})$ determined by a maximum entropy method.
+\begin{equation}
+\mathrm{Score}(f,\mathbf{x},y) = P(y|f,\mathbf{x}) =
+  \frac{\exp(\sum_{i}\lambda_{i}g_i(\mathbf{x},y))}{\sum_{y\in Y_f}\exp(\sum_{i}\lambda_{i}g_i(\mathbf{x},y))}
+\label{eqn:probability}
+\end{equation}
+The feature function set $G$ contains indicator functions for all possible pairs of a label in $C$ and element of ${\bf x}$.
+The optimal weighting of $\Lambda$ is found by maximum a posteriori (MAP) estimation. The L2-regularized log-likelihood on the training data is maximized using limited-memory BFGS (L-BFGS) \cite{nocedal1980}. Classias\footnote{http://www.chokkan.org/software/classias/} is used for parameter estimation.
+
+
+\section{Role generalization on FrameNet}
+\label{sec:generalization-criteria-framenet}
+
+Here, we describe the criteria of role generalization on FrameNet. The generalized labels are designed for effective utilization of the defined hierarchical relations between frames in FrameNet. In addition, generalized labels with different properties are designed using the role names (descriptors), argument semantic types, and VerbNet thematic roles as criteria. The method of defining the function $gen$ for each type of proposed generalization criteria is described in Sections~\ref{sec:hierarchical-relations} to \ref{sec:frameNet-verbnet}, and Section~\ref{sec:experiment-in-framenet} describes experiments performed for comparison of the criteria and detailed analyses of their effects.
+
+In generalization, using the hierarchical relations and descriptors, we create relatively fine-grained generalized labels using the semantic role labels in FrameNet. While reading these descriptions, it may be helpful to refer to the actual semantic role labels and hierarchical relations,\footnote{http://framenet.icsi.berkeley.edu/FrameGrapher/. Note that the site shows the newest version of FrameNet. Please refer to Version 1.3 for the data used in our experiment.} to gain a clear overview of the construction.
+
+
+\subsection{Hierarchical relation among roles}
+\label{sec:hierarchical-relations}
+
+We employ the seven types of directed relations in the frame hierarchy described in Section~\ref{sec:framenet} as a criterion to retrieve common properties among roles. Among the semantic roles in a given frame, some may be connected to roles in another frame with directed relations via an inter-frame parent-child relation.
+The key idea of the generalization criterion using inter-role relations is the assumption that
+the subordinate roles in the hierarchy inherit the properties of superordinate roles. For example, the role {\it Buyer} in the {\it Commerce\_buy} frame inherits properties of the role {\it Recipient} in the frame {\it Getting}, and {\it Victim} in the {\it Killing} frame and {\it Protagonist} in the {\it Death} frame share the property ``is dead or will be dead''.
+
+The generalization function $gen_{hr}$ for utilization of inter-role relations is defined by the algorithm shown in Figure \ref{fig:hier-algorithm}. In tracing the hierarchical relations from role $y$, $gen_{hr}(y)$ collects a generalized label {\it z@HR} corresponding to a node $z$. For the four relations (A) {\it Inheritance}, {\it Using}, {\it Perspective\_on}, and {\it Subframe}, it traces the hierarchical relations in the parent direction, and for the relations (B) {\it Inchoative\_of} and {\it Causative}, it moves in the child direction.
+This is because descendant roles in relations (A) have the same or more specialized
+properties of their ancestors, and descendant roles of relations (B) represent more
+neutral stances or consequential states.
+The {\it Precedes} relation represents the series of transitions between states and events, and the inclusion relation of the role properties cannot be identified in a simple manner. We therefore determine the appropriate direction of travel for this relation by an experiment (see experiment in Section~\ref{sec:compare-hierarchical-relation}). The algorithm, as shown in Figure \ref{fig:hier-figure}, does not trace the direction that is the reverse of a previously traced direction.
+In addition, to investigate the effects of tracing depth, we constructed two functions and compared their performance in experiments: a function $gen_{hr\_depth1}$, which traces a single parent-child relation; and function $gen_{hr\_all}$, which traces all descendants and ancestors.
+
+\begin{figure}[t]
+\begin{minipage}[t]{225.5pt}
+\begin{center}
+\includegraphics{21-4ia12f6.eps}
+\end{center}
+\caption{Algorithm defining $gen_{hr}$}
+\label{fig:hier-algorithm}
+\end{minipage}
+\begin{minipage}[t]{194.5pt}
+\setlength{\captionwidth}{194.5pt}
+\begin{center}
+\includegraphics{21-4ia12f7.eps}
+\end{center}
+\hangcaption{Direction of tracing hierarchical relations}
+\label{fig:hier-figure}
+\end{minipage}
+\end{figure}
+
+
+\subsection{Role descriptors}
+\label{role-label}
+
+The semantic roles in FrameNet are frame specific, and the same identifier does not appear in different frames. However, the frames are assigned concise names by human experts, such as {\it Buyer} and {\it Seller}, whose meanings are readily understood by humans. We refer to these names as role descriptors. These descriptors are, to a fair degree, assigned systematically, and in many cases, different semantic roles in different frames share the same descriptor. The descriptor {\it Seller}, for example, is shared by {\it Commerce\_sell::Seller}, {\it Commerce\_buy::Seller}, {\it Commerce\_pay::Seller}, and other such frames. To assess the effectiveness of these descriptors as generalization criteria, we use them as generalized labels.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{21-4ia12f8.eps}
+\end{center}
+\caption{Different structures of generalization labels between hierarchical relation and role descriptor}
+\label{fig:descriptor-example}
+\end{figure}
+
+The generalization function $gen_{desc}$ for this criterion is defined as a function that returns a generalized label set including the descriptor of a target role. For example, if the descriptor label {\it Buyer@Desc} is taken for the role {\it Commerce buy::Buyer}, then
+$gen_{desc}(\mathit{Commerce\_buy::Buyer}) = \{\mathit{Buyer@Desc}\}$.
+Since the descriptors are single lexical units that describe roles, this criterion may effectively collect various roles having similar lexical characteristics. In addition, the generalized labels obtained by this method represent an equivalence class relation of roles, and are different in structure from labels obtained by hierarchical relations. The hierarchical relations in Figsure \ref{fig:descriptor-example}(a) and (b) provide one example. In Figure \ref{fig:descriptor-example}(a), {\it Commerce\_goods-transfer::Seller}, {\it Commerce\_sell::Seller}, and {\it Commerce\_buy::Seller} are unified in a single label by either a hierarchical relation or descriptor. In Figure \ref{fig:descriptor-example}(b), however, the roles {\it
+Giving::Donor} (provider of thing), {\it Commerce\_sell::Seller} (provider of goods), and {\it
+Commerce\_pay::Buyer} (provider of consideration) share the semantic property of {\it Donor} (provider of something) but in generalization by descriptors, the respective roles are assigned to different generalized labels.
+
+
+\subsection{Semantic types}
+\label{semanticType}
+
+Many roles in FrameNet are assigned {\it semantic types} that provide information similar to selectional restriction. Semantic types represent various categories, such as those shown in Figure~\ref{fig:semantictype-list}, and express the semantic tendencies of the filler phrases of roles. For example, the semantic type {\it Location} of the role {\it Self\_motion::Area} expresses the tendency that the role is filled by a phrase representing a place. This information roughly categorizes semantic roles from the perspective of the filler phrase, and can be expected to contribute to role classification by linking to the lexical characteristics of role candidate phrases. We therefore investigate the usefulness of semantic types as generalized labels.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-4ia12f9.eps}
+\end{center}
+\caption{Semantic types for roles in FrameNet}
+\label{fig:semantictype-list}
+\end{figure}
+
+We define the generalization function $gen_{st}$ so that it will return a set whose members are the semantic types of a target role. For example, $gen_{st}(\mathit{Self\_motion::Area})=\{\mathit{Location@ST}\}$ for the role {\it Self\_motion::Area}.
+
+
+\subsection{VerbNet thematic roles}
+\label{sec:frameNet-verbnet}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-4ia12f10.eps}
+\end{center}
+\caption{VerbNet thematic roles}
+\label{fig:thematic-role-list}
+\end{figure}
+
+VerbNet thematic roles are 30 rough semantic categories, as shown in Figure \ref{fig:thematic-role-list}, which classify arguments of verbs. These 30 labels are frame-independent and consistent across all verbs. We use SemLink to map FrameNet semantic roles to VerbNet thematic roles, and use these as generalized labels. As described in Section~\ref{sec:verbnet}, FrameNet semantic roles and VerbNet thematic roles are generally in a many-to-many correspondence, and with the current version of SemLink the thematic roles are not individually assigned to FrameNet instances; we therefore cannot construct a one-to-one correspondence between FrameNet semantic roles and VerbNet thematic roles in a simple manner. In cases where a given semantic role may be expected to map to multiple thematic roles, the generalization function $gen_{tr}$ therefore returns a set that includes all possible thematic roles. As one example, the role {\it Getting::Theme} may map to either {\it Theme@TR} or {\it Topic@TR} depending on the verb class that corresponds to a target instance, and both thematic roles are therefore considered by assuming $gen_{tr}(\mathit{Getting::Theme})=\{\mathit{Theme@TR}, \mathit{Topic@TR}\}$.
+
+
+\section{Experiments on FrameNet and discussion}
+\label{sec:experiment-in-framenet}
+
+\subsection{Experimental setting}
+
+In the experiments on FrameNet, we randomly selected 10\% of the Semeval-2007 Shared task training data \cite{baker-ellsworth-erk:2007:SemEval-2007} for test data, and the remaining 90\% for training and development. Performance was measured by micro- and macro-averaged F1 score \cite{chang2008kee} with respect to a variety of roles.
+
+For role phrases $x$, we employed features that have been effective in previous studies \cite{marquez2008srl}. They comprised frame, frame-evoking word, head word, content word, first/last word, head word of left and right sibling, phrase syntactic category, phrase position, voice, syntactic path (directed, undirected, partial), governing category, and WordNet supersense of head word, plus a combination of evoking word and head word, combination of evoking word and syntactic category, and a combination of voice and phrase position. We also used part-of-speech and word stem as extra features of any word-surface features. We employed the reranking parser of \citeA{charniak2005cfn} to obtain the parsing result, and supersense tagger of \citeA{ciaramita2006bcs} for supersense features. As a baseline, we performed classification on the classifier using only the original semantic roles without role generalization, and obtained a resulting micro-averaged F1 score of 89.00\%.
+
+
+\subsection{Accuracy of semantic role classification}
+
+Table \ref{integration} shows the micro- and macro-averaged F1 scores of the role classifications obtained with the various generalization criteria. In this experimental setting, the micro F1 score is equivalent to the overall classification accuracy for all roles. The criteria increased the score by 0.5 to 1.7, and the highest score was obtained in the model using the labels of all generalization criteria concurrently, as shown by a 19.16\% reduction in errors as compared with the baseline. These results indicate that different criteria have a mutually complementary effect. Comparison of the performance obtained with different generalization criteria shows that descriptor-based generalization was most effective, and that generalization based on hierarchical frame relations was less effective than those of the descriptor. The increase with thematic roles, though significant, was relatively small, apparently because only 37.61\% of the roles could be mapped to thematic roles.
+
+Although the use of FrameNet hierarchical relations did not show good results in experiments by \citeA{Baldewein2004}, it yielded a significant increase in accuracy in our model. With regard to role descriptors, we compared a traditional label-replacement approach using descriptors, as is the case in existing methods, with the concurrent use of descriptor labels and frame-specific role labels (lines 2 and 3, respectively, in Table \ref{integration}). In this comparison, we found that the concurrent use yielded more accurate role estimation, even when the original roles were simply utilized concurrently, than the existing methods of simple replacement with generalized labels.
+The macro-averaged F1 scores also suggested that our proposed generalization criteria effectively increased the accuracy of infrequent role classification.
+In Table \ref{sparseness}, we separated the roles into three groups according to the number of instances held by each role and investigated each group's classification accuracy. The results indicate that the proposed role generalization is particularly useful in classification of roles having only a small number of instances.
+
+\begin{table}[b]
+\begin{minipage}{212pt}
+\setlength{\captionwidth}{212pt}
+\hangcaption{Classification accuracy with each type of criterion}
+\label{integration}
+\input{12table01.txt}
+\end{minipage}
+\hfill
+\begin{minipage}{198pt}
+\setlength{\captionwidth}{198pt}
+\hangcaption{Effect of the generalization on the roles with few instances}
+\label{sparseness}
+\input{12table02.txt}
+\end{minipage}
+\end{table}
+
+
+\subsection{Analysis on role descriptor}
+
+In view of the marked increase for descriptor-based generalization in the experiments, we performed a more detailed analysis of the reasons for this effect. We first separately constructed models using descriptor generalized labels only for roles having a certain coreness level,\footnote{In the following experiments, {\it core} group includes both {\it core} and {\it core-unexpressed} types.} and determined the micro-averaged F1 scores of the entire evaluation set. The results, as shown in Table \ref{coreness}, indicate that descriptors are particularly effective in generalization of peripheral roles. Table \ref{class_instances} shows the number of roles, instances per role, the number of descriptors, and instances per descriptor at each coreness level. These results are characterized in particular by the relatively small number of descriptors, 250, for the 1,924 peripheral roles, which demonstrates the tendency of roles weakly dependent on frame meanings to be assigned to the same descriptor. This tendency may be the reason for the effective performance of descriptors, particularly in transverse generalization of peripheral roles across frames.
+
+\begin{table}[b]
+\begin{minipage}{118pt}
+\setlength{\captionwidth}{118pt}
+\hangcaption{Effect of role descriptors for each type of coreness}
+\label{coreness}
+\input{12table03.txt}
+\end{minipage}
+\hfill
+\begin{minipage}{291pt}
+\setlength{\captionwidth}{291pt}
+\hangcaption{The numbers of roles, instances, and role descriptors, for each type of coreness}
+\label{class_instances}
+\input{12table04.txt}
+\end{minipage}
+\end{table}
+
+
+\subsection{Effects of inter-role relations by type}
+\label{sec:compare-hierarchical-relation}
+
+\begin{table}[b]
+\caption{Effect of the inter-role relations and tracing depth}
+\label{relation-accuracy}
+\input{12table05.txt}
+\end{table}
+
+We next investigated the effects of differences in relation type and in depth of hierarchical tracing in generalization by inter-role hierarchical relation. Table \ref{relation-accuracy} shows the results obtained for relation type, in terms of micro-averaged F1 score. As shown, {\it Inheritance} and {\it Using} particularly yielded higher accuracy than the other relation types. The effects of the remaining types were small and not significantly different, which may be attributed to their small number of occurrences. For roles having deep hierarchical relations, we found that generalization tracing all ancestors/descendants through the hierarchy was more effective than using generalized labels tracing back just one generation. For the Precedes relation, we employed ancestor tracing, which had shown the greatest effect. The highest performance was obtained when all relations in the hierarchy were utilized.
+
+
+\subsection{Analysis of characteristics of generalization criteria}
+
+\begin{table}[b]
+\caption{Precision and recall with each of the criteria at each coreness level}
+\label{coreness-f1}
+\input{12table06.txt}
+\vspace{4pt}\small
+Type represents the type of coreness; c denotes core, p denotes peripheral, and e denotes extra-thematic
+\par
+\end{table}
+
+Table \ref{coreness-f1} shows the precision, recall, and micro-averaged F1 score obtained by the model with each of the generalization criteria at each coreness level. For the core semantic roles, the classification accuracy was 91.93\% without the use of generalization, and was comparatively high for all of the criteria. For the peripheral and extra-thematic roles, the use of descriptors, which is the most concise method, resulted in higher accuracy than with the other criteria.
+
+Table \ref{top1000} shows the classification of the feature functions with the highest 1,000 absolute-value weights in the best model, by the generalization criteria. The characteristics of the criteria may be divided into two groups, one consisting of descriptors and semantic types, and the other consisting of frame-specific roles and hierarchical relations. In the descriptor and semantic type group, features capturing adjunctive characteristics such as first word and supersense are highly weighted. In the frame-specific role and hierarchical relation group, generalized labels are strongly linked to lexical or structural features including syntactic path, content word, and head word. This suggests that generalizations using descriptors and semantic types are effective for peripheral roles and roles corresponding to adjuncts, and that generalizations using hierarchical relations are effective for core roles.
+
+\begin{table}[t]
+\hangcaption{Top 1000 feature functions}
+\label{top1000}
+\input{12table07.txt}
+\vspace{4pt}\small
+Each cell shows the number
+of feature functions in the category; fc: frame-specific role, hr: hierarchical relation, de: role
+descriptor, st: semantic type, and tr: VerbNet thematic role
+\par
+\end{table}
+
+
+\section{Role generalization on PropBank}
+\label{sec:generalization-criteria-propbank}
+
+We now turn to the method of generalization on PropBank, for which we propose the use of three new generalization criteria in addition to the existing criteria of {\it ARG} tags and thematic roles. These new criteria are based on the verb classes, selectional restrictions, and semantic predicates provided in VerbNet.
+
+ARG tags and thematic roles are small label sets of 6 and 30 types, respectively, and \mbox{accordingly} yield extremely coarse-grained semantic role categories. To show the multifaceted verb-dependent characteristics of semantic roles, a finer-grained generalization is necessary, and to obtain a more robust role categorization, we therefore subdivide the 30 thematic role types into generalized labels that are more syntactically and semantically refined, and assess the effects of these fine-grained labels.
+
+For a comprehensive perspective on these new labels, refer to the actual data of VerbNet version 2.3.\footnote{We can easily browse the data on VerbNet project website. See
+http://verbs.colorado.edu/verb-index/vn/class-h.php, for verb classes, and
+http://verbs.colorado.edu/verb-index/vn/reference.php, for the lists of the other information. Note that the website shows the newest version of VerbNet and our employed data is version 2.3.}
+
+
+\subsection{Task setting and model extension}
+
+We describe in detail the task setting of role classification on PropBank, since we utilize the verb classes and thematic roles of the annotations obtained using SemLink.
+
+As described in Section~\ref{sec:verbnet}, appropriate thematic roles and a verb class of each annotation instance can be obtained on PropBank by accurate instance-level mapping to VerbNet based on SemLink. In this study, we enable the use of the correct verb class of a target verb as role classification input, and the mapping between semantic roles and thematic roles in training and evaluation stages.
+
+``Verb classes'' in VerbNet correspond to ``frames'' in PropBank, and actual operation of an SRL system requires automatic frame and verb-class determination. However, as noted in Section~\ref{sec:role-classification}, the objective of our experiments is accurate determination of the effects of semantic-role generalization on classification accuracy. Thus, we give both the correct frames and the verb classes as input. Moreover, in this setting the {\it ARG} tags and thematic roles can be uniquely given for all role candidates $Y_f$ in Eq.~\ref{eqn:probability}, thus enabling comparison between classification with ARG tags and with thematic roles as equivalent problems of selection of a single optimum from the same candidates (Figure \ref{fig:arg-thematic-mapping}).
+
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-4ia12f11.eps}
+\end{center}
+\hangcaption{Role classification problem given a frame and verb class. In this setting, the
+three label sets of the frame-specific semantic roles, PropBank ARG tags, and thematic
+roles have one-to-one correspondances between them. The selection problems using
+each of the label sets can therefore be defined as equivalent problems of selecting
+the appropriate one from the same candidates.}
+\renewcommand{\baselinestretch}{}
+\label{fig:arg-thematic-mapping}
+\end{figure}
+
+All of the following proposed generalization criteria generate labels using verb-class information. We therefore also extend the generalization functions $gen$ and $gen_{i}$ so that both take semantic role $y$ and verb class $v$ as arguments, and Eq.~\ref{eqn:probability} is extended to a form including $v$ as
+\begin{equation}
+P(y|f,v,\mathbf{x}) =
+  \frac{\exp(\sum_{i}\lambda_{i}g_i(\mathbf{x},y,v))}{\sum_{y\in Y_f}\exp(\sum_{i}\lambda_{i}g_i(\mathbf{x},y,v))},
+\label{eqn:probability2}
+\end{equation}
+and Eq.~\ref{equ:generalized-label-feature-agent} becomes
+\begin{equation}
+ g_2(\mathbf{x},y,v) =
+  \begin{cases}
+   1 & (\mbox{head of }x\mbox{ is ``he''}~\wedge \mathit{Agent@TR} \in \mathit{gen}(y,v))\\
+   0 & (\mbox{otherwise})
+  \end{cases}.
+\end{equation}
+
+
+\subsection{ARG tags and thematic roles}
+
+We design $gen_{arg}$ and $gen_{tr}$ to return {\it ARG} tags and thematic roles of a given semantic role as shown by Eqs.~\ref{eqn:arg} and \ref{eqn:thematic} of Section~\ref{sec:define-generalization}. In this case, the thematic role is the correct label uniquely determined by SemLink. Given a correspondence such as that of Figure \ref{fig:arg-thematic-mapping}, the functions return the following values.
+\begin{align}
+\mathit{gen}_\mathit{arg}(\mathit{buy.01::0}, \mathit{get-13.5.1}) & = \{\mathit{ARG0@ARG}\} \\
+\mathit{gen}_\mathit{tr}(\mathit{buy.01::0}, \mathit{get-13.5.1}) & = \{\mathit{Agent@TR}\}
+\end{align}
+
+
+\subsection{Thematic role + verb class}
+
+VerbNet is a language resource that classifies English verbs into 470 syntactically and semantically consistent hierarchical classes. The verb class guarantees the consistency of the syntactic behavior of its member verbs, and the class therefore can provide information useful for appropriate refinement of thematic roles. For example, the thematic role {\t Patient} generally occurs only as an object or prepositional phrase but it may occur as a subject with verbs of {\it cooking-45.3} class. Utilization of verb class enables addition of detailed information of this nature to the thematic role. We therefore define the new generalization function $gen_{vc}$ that returns a pair of the verb class $v$ and thematic role $t$ of the target instance, as
+\begin{equation}
+\mathit{gen}_\mathit{vc}(y,v) = \{\langle t, v\rangle@VC\}.
+\end{equation}
+We define the feature functions in a form that checks this pair, as
+\begin{equation}
+ g_3(\mathbf{x},y,v) =
+  \begin{cases}
+   1 & (\mbox{head of }x\mbox{ is ``he''}~\wedge \langle\mathit{Patient},\mathit{cooking-45.3}\rangle@VC \in \mathit{gen}(y,v) ).\\
+   0 & (\mbox{otherwise})
+  \end{cases}
+\end{equation}
+
+
+\subsection{Selectional restriction}
+\label{sec:selectional-restriction}
+
+VerbNet adds selectional restriction information to the roles of each verb class. Much as with FrameNet semantic types, this information is expected to be useful in grouping semantically similar roles from the view of filler phrases. In VerbNet, selectional restrictions are expressed by a propositional formula using positives and negatives for 36 semantic categories (Figure \ref{fig:selectional-restriction-list}). As one example, the selectional restriction for the thematic role {\it Agent} of class {\it give-13.1} is given as {\it +animate} $\vee$ {\it +organization}. We use these propositions as generalized role labels and define $\mathit{gen}_\mathit{sr}$ as a function that returns the selectional restriction of thematic role $t$ in verb class $v$.
+\begin{equation}
+\mathit{gen}_\mathit{sr}(\mbox{give.01::0},\mathit{give-13.1}) = \{ \mathit{+animate}\vee \mathit{+organization})@\mathit{SR} \}.
+\end{equation}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-4ia12f12.eps}
+\end{center}
+\caption{Categories of selectional restrictions in VerbNet}
+\label{fig:selectional-restriction-list}
+\end{figure}
+
+
+\subsection{Thematic role + semantic predicates}
+
+VerbNet includes several example sentences for each verb class, with the sentence meaning expressed using combinations of logical predicate expressions called ``semantic predicates''. The example sentence ``I leased the car to my friend for \$5 a month.'' in class {\it give-13.1-1}, for example, includes five semantic predicates:
+$has\_possession(start(E), Agent, Theme)$;\\
+$has\_possession(end(E), Recipient, Theme)$;
+$has\_possession(start(E), Recipient, Asset)$;\\
+$has\_possession(end(E), Agent, Asset)$;
+and $transfer(during(E), Theme)$.
+These decomposed semantic expressions enable fine-grained sharing of the semantic properties of roles. 
+\pagebreak
+For example, the semantic roles that are {\it Agent} obtaining consideration at the end of the event can be grouped by searching the example sentences of the verb classes for the semantic predicate $s_1 = has\_possession(end(E), Agent, Asset)$, as shown in Figure \ref{fig:agent-of-possessing-asset}.\footnote{Figure~\ref{fig:agent-of-possessing-asset} lists PropBank frame-specific roles for clarity. Thematic roles of certain verb classes collected by the semantic predicate can be mapped to PropBank roles using SemLink.}
+
+We thus represent the semantic role group by the tuple $\langle {\it
+Agent},s_1\rangle$, and use it as the generalized label. Denoting as $t$ the thematic role of role $y$ in a given example, we define $gen_{sp}$ as a function that returns all semantic predicates including $t$ as an argument among those obtained from the example sentences of verb class $v$. For example, if the verb class of the instance of the role {\it lease01::0} having thematic role {\it Agent} is {\it give-13.3-1}, we have
+\begin{align*}
+\mathit{gen}_\mathrm{sp}(\mathrm{lease.01::0},\mathit{give-13.1-1}) & = \{ \langle \mathit{Agent}, \mathit{has\_possession(start(E)}, \mathit{Agent},
+ \mathit{Theme})\rangle@\mathit{SP}, \\
+& \langle \mathit{Agent}, \mathit{has\_possession}(\mathit{end}(E), \mathit{Agent}, \mathit{Asset})\rangle@\mathit{SP} \}.
+\end{align*}
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{21-4ia12f13.eps}
+\end{center}
+\hangcaption{Semantic roles that correspond to Agent having the semantic predicate {\it has\_possession(end(E),Agent,Asset)}}
+\label{fig:agent-of-possessing-asset}
+\end{figure}
+
+
+\section{Experimental comparisons on PropBank}
+
+The following experiments on PropBank were performed with two basic objectives. One was elucidation of the differences between the effects of {\it ARG} tags and thematic roles in generalization of semantic roles on PropBank, which have been discussed to date. In existing studies, comparisons between {\it ARG} tags and thematic roles have generally been limited to comparing their accuracy for the total SRL task \cite{loper2007clr,yi-loper-palmer:2007:main,zapirain-agirre-marquez:2008:ACLMain}. However, this type of comparison tends to leave unclear which parts of the SRL task involved the factors that significantly affected the final accuracy since SRL comprises several complex interrelated problems.
+It is known that SRL accuracy is strongly affected by errors in parsing which give rise to many complex and inconsistent syntactical structures \cite{marquez2008srl}. Fortunately, this problem can be avoided on PropBank since it was developed using the same text as that of the PennTreebank corpus, which provides manually annotated correct syntax trees.
+Therefore, we utilized those syntax trees as input and eliminated the influence of parsing errors to create a more rigorous and ideal context for error analysis in role classification, and for the analysis of differences between role properties acquired by two different generalization criteria.
+
+The second main objective was to compare the generalization capabilities of the three newly proposed criteria in addition to the other criteria. The comparisons were performed for evaluation of overall accuracy in classification of all roles, evaluation in the setting with the features relating to the target verbs eliminated, and evaluation with unseen verbs.
+
+
+\subsection{Experimental setting}
+\label{sec:propbank-setting}
+
+In the experiment, we used the Wall Street Journal portion of the Penn Treebank II corpus and the corresponding PropBank data. Sections 02 to 21 of the Wall Street Journal portion were used for training, Section 24 was used for development, and Section 23 was used for evaluation. Because verb classes and thematic roles given by SemLink on the annotation instances were used for our input, only those annotations that could be mapped to thematic roles by SemLink 1.1 in accordance with the method of \citeA{zapirain-agirre-marquez:2008:ACLMain} were used as the experimental dataset. The number of annotation instances was 70,397, which represents 62.34\% of the PropBank annotations. We also eliminated {\it AM} tags that had ideally been defined as frame-independent labels, and evaluated the classification accuracy only for {\it ARG0} to {\it ARG5} defined as frame-specific roles.
+
+For role phrases $x$, as in the case of FrameNet, we used features that had their effectiveness confirmed in existing studies. Specifically, these were frame, target verb, head word, content word, first/last word, head word of left/right sibling, phrase syntactic category, phrase position, voice, syntactic path, category of named entities in phrase, syntactic frame, first word of prepositional phrase, combination of target verb and head word, combination of voice and syntactic category, and a combination of syntactic frame and first word of prepositional phrase.  We also used part-of-speech and word stem as extra features of any word-surface features. For named entity extraction, we used the three outputs of the semantic tagger \cite{ciaramita2006bcs} given by the open-challenge dataset of the CoNLL-2008 shared task \cite{surdeanu2008cst}.
+
+
+\subsection{Comparison of PropBank {\itshape ARG0-5} and thematic roles}
+\label{sec:pbVsTr}
+
+In the comparison between {\it ARG} tags and thematic roles, we first evaluated their classification accuracy for the roles overall. Table \ref{table:moreLess} shows the classification accuracies obtained with each of the generalization criteria individually. The three-asterisk (***) mark indicates a significant difference of $p < 0.001$ by the McNemar test in comparison with the results obtained in the model using no general labels. With the ideal inputs to the role classification, the role classification accuracy was more than 96.7\% even in the model with no role generalization, and was significantly higher in the models with either ARG tags or thematic roles. The increase was particularly clear for roles having only a small number of instances. The entries for ``$>200$'' and ``$<50$'' in Table \ref{table:moreLess} show the role classification accuracies obtained for frames having more than 200 instances and less than 50 instances, respectively. The table shows that the accuracy for frames with less than 50 instances was approximately nine points lower than that for frames with more than 200 instances with no role generalization. On the other hand, the model of either ARG tags or thematic roles can more robustly classify roles having a small number of instances because they generalize roles to a small number of frame-independent labels.
+
+\begin{table}[b]
+\begin{minipage}{168pt}
+\setlength{\captionwidth}{168pt}
+\hangcaption{Classification accuracy with frames having a different number of instances}
+\label{table:moreLess}
+\input{12table08.txt}
+\end{minipage}
+\hfill
+\begin{minipage}{240pt}
+\setlength{\captionwidth}{240pt}
+\hangcaption{Comparison of the classification accuracy \mbox{between} PropBank ARGs and thematic roles}
+\label{table:argF1}
+\input{12table09.txt}
+\end{minipage}
+\end{table}
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-4ia12f14.eps}
+\end{center}
+\caption{Learning curves: accuracy (\%) vs. corpus size (\%)}
+\label{fig:reduce}
+\end{figure}
+
+\citeA{yi-loper-palmer:2007:main} and \citeA{zapirain-agirre-marquez:2008:ACLMain} reported that the performance level of SRL using thematic roles was somewhat lower than that obtained with {\it ARG} tags. In our experiments, however, we found no significant difference in effect between these two types of generalized label ($p \leq 0.838$). As shown in Figure \ref{fig:reduce}, the learning curves obtained with {\it ARG} tags and thematic roles were nearly the same, and we did not find an insufficiency of training data with thematic roles, which was pointed out by \citeA{yi-loper-palmer:2007:main} and \citeA{zapirain-agirre-marquez:2008:ACLMain}. In relation to {\it ARG} tags, \citeA{yi-loper-palmer:2007:main} and \citeA{loper2007clr} mentioned inconsistency in {\it ARG} tags, particularly on {\it ARG2}. However, as shown in Table \ref{table:argF1}, in our experiments with ideal inputs and frame-related restriction of label selection, all of the {\it ARG0} to {\it ARG5} tags and the thematic roles yielded approximately the same role classification accuracy. As may be seen in Table \ref{table:featureDistribution}, this uniformity may be attributed to two aspects: effective learning of the behavior of the individual roles with respect to each verb, based on the combination features related to verbs such as verb+path; and reduced mixing of roles having similar syntactic properties such as {\it Patient} and {\it Theme}, due to the restriction of label selection using frame information.
+
+\begin{table}[b]
+\caption{Distribution of top 0.1\% of features having large absolute values}
+\label{table:featureDistribution}
+\input{12table10.txt}
+\end{table}
+
+
+\begin{figure}[b]
+\input{12figure15.txt}
+\hangcaption{Error classification based on thematic roles. Table (A) shows cases correctly classified by the {\it ARG} tag model but incorrectly by the thematic role model, Table (B) is vice versa, and Table (C) shows cases where both models mistake classification. The column of verb classes shows the classes where a corresponding type of errors occurs.}
+\label{fig:errMap}
+\end{figure}
+
+To investigate the characteristics of the two types of generalized labels more closely, we manually checked the errors that occurred in each model and analyzed the instances that led to conflicts between the two models in the classification results.
+Figure \ref{fig:errMap} shows cases of correct classification by either the {\it ARG} tag model or the thematic role model but incorrect classification by the other model, and cases of incorrect classification by both models, together with the correct and inferred labels. Table (A) shows cases of classifications that were classified correctly by the {\it ARG} tag model but incorrectly by the thematic role model. The errors in the first three lines were induced by inconsistent syntactic positions of the thematic roles in different verb classes. For example, with the verbs of classes {\it amuse-31.1} and {\it appeal-31.4},  {\it Cause} tends to occur in the subject position and {\it Experiencer} in other positions, and this tendency is reversed with verbs in the class {\it marvel-31.3}. In the case of {\it Destination}$\rightarrow${\it Theme} ({\it Destination} misclassified as {\it Theme}), the error tends to occur because {\it Destination} generally occurs as a prepositional phrase, but often occurs in the object position with verb classes {\it spray-9.7}, {\it fill-9.8}, {\it butter-9.9}, and {\it image\_impression-25.1}. On the other hand, with any of these verbs, PropBank mainly assigns {\it ARG0} to roles that tend to occur in the subject position and {\it ARG1} to roles that tend to occur in the object position, thus reducing the occurrence of this type of ambiguity.
+
+Table (B) shows cases of classifications made correctly by the thematic role model but incorrectly by the {\it ARG} tag model. The top line in this list clearly illustrates the comparative effectiveness of the thematic role model. The {\it ARG} tags are groups that are based mainly on syntactic characteristics, and when {\it ARG1} occurs in the subject position, it is easily mistakenly for {\it ARG0}. Thematic roles, in contrast, compose groups more on the basis of semantic attributes and thus the penalty from syntactic features for role instances, such as {\it Patient} occurring in the subject position, is smaller. As a result, they are more likely to be correctly classified than in the case of {\it ARG0}.
+
+Table (C) also suggests several tendencies involved in cases of mistake by both the {\it ARG} tag and thematic role models. Mistakes were often observed in the cases where an ergative verb is used intransitively, and in the verb classes where {\it Theme} is unlikely to occur as the object. To reduce the errors of this nature, more detailed syntactic and semantic information for verbs or verb classes is required.
+Figure \ref{fig:errMap}, in summary, provides an overview of the respective advantages of these two types of generalized labels in semantic role generalization.
+
+\begin{table}[t]
+\caption{Classification accuracy with incorporating several types of labels}
+\label{table:incorporate}
+\input{12table11.txt}
+\end{table}
+
+In addition, the results shown in Table \ref{table:incorporate} for the model with concurrent utilization of these two types of generalized labels also indicate differing effects by each. The three-asterisk (***) mark indicates that the obtained accuracy is statistically significant ($p < 0.001$) from the model using {\it ARG} tags alone with the McNemar test. The {\it ARG tag + thematic role} model yielded 24.07\% error reduction compared to the ARG model. We also investigated the effect of adding the original semantic roles to this model, thus composing a {\it Frame-specific role + ARG tag + thematic role} model, but found no significant increase in accuracy as compared with that of the {\t ARG tag + thematic role} model. This may be attributed to the fact that several combination features using the target verbs were already included in the {\it ARG tag + thematic role} model.
+
+
+\subsection{Comparative experiments with the proposed generalized labels}
+
+We then compared the existing generalization methods with our proposed method. In these experiments, we used three experimental settings for comparison of generalization performance. Setting (A) was the setting described in Section~\ref{sec:propbank-setting} and used in Section~\ref{sec:pbVsTr}. For setting (B),
+we used the same dataset as in setting (A), but measured the accuracy of the model where all features deriving from the frames and the target verbs are removed, aiming to see the accuracy that could be achieved with only generalized labels that used no verb-specific information.
+For setting (C), we artificially constructed unseen verbs by removing the instances of the infrequent verbs in the corpus and assessed the classification accuracy for these verbs. This setting examines the robustness of the generalization capability of respective generalization criteria by testing on actual unlearned verbs. We removed instances of 1,190 verbs occurring 20 times or fewer (shown in Figure \ref{unseenList}) from the corpus and used them as the evaluation set. The number of extracted role instances was then 8,809.
+
+\begin{figure}[b]
+\input{12figure16.txt}
+\caption{Excerpt of unseen verbs}
+\label{unseenList}
+\end{figure}
+\begin{table}[b]
+\caption{Classification accuracy in three settings}
+\label{table:unseenAcc}
+\input{12table12.txt}
+\end{table}
+
+
+Table \ref{table:unseenAcc} shows the experimental results. In setting (A), the model yielding the highest performance was the {\it ARG tag + thematic role} model, rather than those with finer-grained generalized labels. In settings (B) and (C), the performance of the {\it ARG tag + thematic role} model was far higher than that of the models using {\it ARG} tags or thematic roles alone. This was particularly evident in setting (C), the setting designed for assessment of performance for unseen verbs, where the models using either ARG tags or thematic roles alone exhibited insufficient generalization effects.
+
+The results also demonstrated the effects of our proposed fine-grained generalization criteria. In settings (B) and (C), the addition of any one of these criteria, and particularly semantic predicates and verb classes, to the {\it ARG tag + thematic role} model increased the classification accuracy. In setting (C), for assessment relating to unseen verbs, the highest performance was exhibited by the {\it ARG tag + thematic role + semantic predicate} model, which yielded a 26.39\% error reduction as compared with the use of {\it ARG} tags alone. In short, the results indicate that overall accuracy is lowered by use of these fine-grained criteria in cases where learning for each verb is sufficient, but heightened by use of fine-grained generalizations that interweave different perspectives in cases where learning for individual verbs is insufficient.
+
+An interesting aspect of the results is that verb-class information, which has previously gone largely unused in SRL, appropriately generalizes semantic roles to fine-grained labels and achieves more robust role classification. This finding shows the potential value of verb-class disambiguation for target verbs as a  preprocessing or joint model for SRL. Investigation of this potential will require assessment of accuracy, including the disambiguation of the frames and verb classes of target verbs.
+
+
+\section{Conclusion}
+
+In this paper, we proposed multiple criteria and methodologies for appropriate role generalization on the FrameNet and PropBank corpora, and introduced classification models that concurrently utilize different types of generalized labels.
+We experimentally confirmed that use of generalized labels as features of semantic roles, and concurrent use of label sets having different perspectives and granularities, increases classification accuracy compared to existing label replacement methods. We also provide a detailed analysis and elucidation of the properties of our proposed generalized labels and existing generalized labels, based on comparative experiments.
+
+In the experiments on FrameNet, we constructed generalized labels using the four criteria of hierarchical role relation, role descriptor, phrase semantic type, and VerbNet thematic role, and showed that they improved classification performance and effectively mitigated the data-sparseness problem in role classification. The use of role descriptors yielded the highest performance, which was unexpectedly unsurpassed by the performance obtained with the use of FrameNet hierarchical relations.
+This result suggests that investigation of hierarchical relation inadequacies and related improvements will be needed for more effective utilization of hierarchical frame relations.
+Examination of the characteristics exhibited by each criterion showed that generalized labels using descriptors and semantic types linked strongly to features that captured peripheral and adjunctive roles, whereas generalization with hierarchical relations linked strongly to features that captured core roles. The model using all the generalized labels achieved a 19.16\% error reduction in overall accuracy, and a 7.42 points increase in macro-averaged F1.
+In our experiments, we used the data given in the most recent FrameNet version, which allowed the utilization of a higher number of frame relations than the previous versions. It was therefore not possible to perform a direct comparison with the accuracy of existing systems, but the micro-averaged F1 score of 89.00\% found for our baseline closely rivals the score of 88.93\% reported by \citeA{bejan2007usp} in SemEval-2007 \cite{baker-ellsworth-erk:2007:SemEval-2007}.\footnote{Two teams participated in the SRL task of SemEval-2007 and \shortciteA{bejan2007usp} reported role classification accuracy separately from the evaluation of whole system.}
+In conclusion, the results of our experiments indicate that the total performance of SRL systems will improve by utilizing generalization of semantic roles.
+
+On PropBank, we compared the effects of PropBank {\it ARG} tags and thematic labels, which represent the two existing generalization techniques on PropBank, in a rigorous setting where syntactic trees, role positions, and frames are given. The results revealed a characteristic difference between the two: {\it ARG} tags more strongly capture syntactic positions of roles and thematic roles are comparatively more flexible with regard to syntactic positions from the semantic perspective. The results also revealed that one of the main reason for the errors in role classification is the ambiguity of syntactic patterns in different verbs.
+As in the experiments on FrameNet, the results on PropBank also showed that combined use of the two types of generalized labels substantially increases the accuracy of role classification; in this case, effectively reducing errors by 24.07\% as compared with the use of {\it ARG} tags alone.
+We also introduced three types of more detailed generalization criteria derived from VerbNet verb class information as a new proposal to obtain robust classification for roles whose instances are a small number or unseen. Information for the three new criteria were verb class, selectional restriction, and semantic predicate. The experimental results showed that the fine-grained label sets derived from each one increases the role classification accuracy for infrequent and unseen verbs. The use of the new semantic predicate criterion in combination with {\it ARG} tags and thematic roles was found to be the most effective, yielding an error reduction of 26.39\% in comparison with the use of {\it ARG} tags alone.
+
+In summary, the results obtained in this study demonstrated that a method that captures syntactic and semantic aspects of semantic roles from several different perspectives and concurrently uses them as the features of roles significantly improves the accuracy of semantic role classification. More specifically, the results indicate that more accurate and robust classification can be expected through combined utilization of FrameNet and PropBank information that portrays semantic roles on the basis of differing linguistic contexts. At present, the relation is not clearly understood between the frames of FrameNet, PropBank, and VerbNet resources, which are based on different semantic principles, and the correspondence between their semantic roles; therefore, it is not yet possible to map between the semantic roles of these resources. In the experiments on FrameNet and PropBank in this study, we therefore performed the generalization of their semantic roles separately, using information specific to each corpus, and the evaluation thus did not extend to mixtures of their semantics.
+If the data appropriately linking the semantic roles of different corpora, such as the one provided by SemLink, can be expanded to a sufficient level, it will then, in principle, become possible by extension of our classification model to construct methods of detecting the FrameNet roles using the knowledge in PropBank, and conversely to apply hierarchical generalization of role concepts used in FrameNet to the PropBank roles concurrently. In this light, data describing the correspondence relation between the semantic roles of different resources may be expected to play an important role in SRL.
+Furthermore, to improve the robustness of role classification further, it is important to investigate by what kind of attribute collections could these semantically annotated argument structures, or what we call semantic role frames, be represented, in addition to the generalization criteria given by the semantics of FrameNet and PropBank.
+
+
+
+\acknowledgment
+
+This work was partially supported by Grant-in-Aid for Specially Promoted
+Research (MEXT, Japan) Number 20026313.
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Baker, Ellsworth, \BBA\ Erk}{Baker
+  et~al.}{2007}]{baker-ellsworth-erk:2007:SemEval-2007}
+Baker, C., Ellsworth, M., \BBA\ Erk, K. \BBOP 2007\BBCP.
+\newblock \BBOQ SemEval-2007 Task 19: Frame Semantic Structure
+  Extraction.\BBCQ\
+\newblock In {\Bem Proceedings of SemEval-2007}, \mbox{\BPGS\ 99--104}.
+
+\bibitem[\protect\BCAY{Baker, Fillmore, \BBA\ Lowe}{Baker
+  et~al.}{1998}]{Baker:98}
+Baker, C.~F., Fillmore, C.~J., \BBA\ Lowe, J.~B. \BBOP 1998\BBCP.
+\newblock \BBOQ The Berkeley FrameNet Project.\BBCQ\
+\newblock In {\Bem Proceedings of Coling-ACL 1998}, \mbox{\BPGS\ 86--90}.
+
+\bibitem[\protect\BCAY{Baldewein, Erk, Pad{\'{o}}, \BBA\ Prescher}{Baldewein
+  et~al.}{2004}]{Baldewein2004}
+Baldewein, U., Erk, K., Pad{\'{o}}, S., \BBA\ Prescher, D. \BBOP 2004\BBCP.
+\newblock \BBOQ Semantic Role Labeling with Similarity Based Generalization
+  using EM-based Clustering.\BBCQ\
+\newblock In {\Bem Proceedings of Senseval-3}, \mbox{\BPGS\ 64--68}.
+
+\bibitem[\protect\BCAY{Bejan \BBA\ Hathaway}{Bejan \BBA\
+  Hathaway}{2007}]{bejan2007usp}
+Bejan, C.~A.\BBACOMMA\ \BBA\ Hathaway, C. \BBOP 2007\BBCP.
+\newblock \BBOQ UTD-SRL: A Pipeline Architecture for Extracting Frame Semantic
+  Structures.\BBCQ\
+\newblock In {\Bem Proceedings of SemEval-2007}, \mbox{\BPGS\ 460--463}.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Chang \BBA\ Zheng}{Chang \BBA\
+  Zheng}{2008}]{chang2008kee}
+Chang, X.\BBACOMMA\ \BBA\ Zheng, Q. \BBOP 2008\BBCP.
+\newblock \BBOQ Knowledge Element Extraction for Knowledge-Based Learning
+  Resources Organization.\BBCQ\
+\newblock {\Bem Lecture Notes in Computer Science}, {\Bbf 4823}, \mbox{\BPGS\
+  102--113}.
+
+\bibitem[\protect\BCAY{Charniak \BBA\ Johnson}{Charniak \BBA\
+  Johnson}{2005}]{charniak2005cfn}
+Charniak, E.\BBACOMMA\ \BBA\ Johnson, M. \BBOP 2005\BBCP.
+\newblock \BBOQ Coarse-to-Fine N-Best Parsing and MaxEnt Discriminative
+  Reranking.\BBCQ\
+\newblock In {\Bem Proceedings of ACL 2005}, \mbox{\BPGS\ 173--180}.
+
+\bibitem[\protect\BCAY{Ciaramita \BBA\ Altun}{Ciaramita \BBA\
+  Altun}{2006}]{ciaramita2006bcs}
+Ciaramita, M.\BBACOMMA\ \BBA\ Altun, Y. \BBOP 2006\BBCP.
+\newblock \BBOQ Broad-Coverage Sense Disambiguation and Information Extraction
+  with a Supersense Sequence Tagger.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP-2006}, \mbox{\BPGS\ 594--602}.
+
+\bibitem[\protect\BCAY{Fillmore}{Fillmore}{1976}]{fillmore1976}
+Fillmore, C.~J. \BBOP 1976\BBCP.
+\newblock \BBOQ Frame Semantics and the Nature of Language.\BBCQ\
+\newblock {\Bem Annals of the New York Academy of Sciences: Conference on the
+  Origin and Development of Language and Speech}, {\Bbf 280}, \mbox{\BPGS\
+  20--32}.
+
+\bibitem[\protect\BCAY{Gildea \BBA\ Jurafsky}{Gildea \BBA\
+  Jurafsky}{2002}]{Gildea2002}
+Gildea, D.\BBACOMMA\ \BBA\ Jurafsky, D. \BBOP 2002\BBCP.
+\newblock \BBOQ Automatic Labeling of Semantic Roles.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 28}  (3), \mbox{\BPGS\
+  245--288}.
+
+\bibitem[\protect\BCAY{Giuglea \BBA\ Moschitti}{Giuglea \BBA\
+  Moschitti}{2006}]{Giuglea2006}
+Giuglea, A.-M.\BBACOMMA\ \BBA\ Moschitti, A. \BBOP 2006\BBCP.
+\newblock \BBOQ Semantic Role Labeling via FrameNet, VerbNet and
+  PropBank.\BBCQ\
+\newblock In {\Bem Proceedings of the Coling-ACL 2006}, \mbox{\BPGS\ 929--936}.
+
+\bibitem[\protect\BCAY{Gordon \BBA\ Swanson}{Gordon \BBA\
+  Swanson}{2007}]{gordon-swanson:2007:ACLMain}
+Gordon, A.\BBACOMMA\ \BBA\ Swanson, R. \BBOP 2007\BBCP.
+\newblock \BBOQ Generalizing Semantic Role Annotations Across Syntactically
+  Similar Verbs.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-2007}, \mbox{\BPGS\ 192--199}.
+
+\bibitem[\protect\BCAY{Kipper, Dang, \BBA\ Palmer}{Kipper
+  et~al.}{2000}]{kipper2000cbc}
+Kipper, K., Dang, H.~T., \BBA\ Palmer, M. \BBOP 2000\BBCP.
+\newblock \BBOQ Class-based Construction of a Verb Lexicon.\BBCQ\
+\newblock In {\Bem Proceedings of AAAI-2000}, \mbox{\BPGS\ 691--696}.
+
+\bibitem[\protect\BCAY{Levin}{Levin}{1993}]{levin1993evc}
+Levin, B. \BBOP 1993\BBCP.
+\newblock {\Bem English verb classes and alternations: A preliminary
+  investigation}.
+\newblock The University of Chicago Press.
+
+\bibitem[\protect\BCAY{Loper, Yi, \BBA\ Palmer}{Loper
+  et~al.}{2007}]{loper2007clr}
+Loper, E., Yi, S., \BBA\ Palmer, M. \BBOP 2007\BBCP.
+\newblock \BBOQ Combining Lexical Resources: Mapping between Propbank and
+  Verbnet.\BBCQ\
+\newblock In {\Bem Proceedings of the 7th International Workshop on
+  Computational Semantics}, \mbox{\BPGS\ 118--128}.
+
+\bibitem[\protect\BCAY{M{\`{a}}rquez, Carreras, Litkowski, \BBA\
+  Stevenson}{M{\`{a}}rquez et~al.}{2008}]{marquez2008srl}
+M{\`{a}}rquez, L., Carreras, X., Litkowski, K.~C., \BBA\ Stevenson, S. \BBOP
+  2008\BBCP.
+\newblock \BBOQ Semantic Role Labeling: an Introduction to the Special
+  Issue.\BBCQ\
+\newblock {\Bem Computational linguistics}, {\Bbf 34}  (2), \mbox{\BPGS\
+  145--159}.
+
+\bibitem[\protect\BCAY{Moschitti, Giuglea, Coppola, \BBA\ Basili}{Moschitti
+  et~al.}{2005}]{Moschitti2005}
+Moschitti, A., Giuglea, A.-M., Coppola, B., \BBA\ Basili, R. \BBOP 2005\BBCP.
+\newblock \BBOQ Hierarchical Semantic Role Labeling.\BBCQ\
+\newblock In {\Bem Proceedings of CoNLL-2005}, \mbox{\BPGS\ 201--204}.
+
+\bibitem[\protect\BCAY{Moschitti, Quarteroni, Basili, \BBA\
+  Manandhar}{Moschitti et~al.}{2007}]{moschitti2007esa}
+Moschitti, A., Quarteroni, S., Basili, R., \BBA\ Manandhar, S. \BBOP 2007\BBCP.
+\newblock \BBOQ Exploiting Syntactic and Shallow Semantic Kernels for Question
+  Answer Classification.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-07}, \mbox{\BPGS\ 776--783}.
+
+\bibitem[\protect\BCAY{Narayanan \BBA\ Harabagiu}{Narayanan \BBA\
+  Harabagiu}{2004}]{narayanan-harabagiu:2004:COLING}
+Narayanan, S.\BBACOMMA\ \BBA\ Harabagiu, S. \BBOP 2004\BBCP.
+\newblock \BBOQ Question Answering Based on Semantic Structures.\BBCQ\
+\newblock In {\Bem Proceedings of Coling-2004}, \mbox{\BPGS\ 693--701}.
+
+\bibitem[\protect\BCAY{Nocedal}{Nocedal}{1980}]{nocedal1980}
+Nocedal, J. \BBOP 1980\BBCP.
+\newblock \BBOQ Updating Quasi-Newton Matrices with Limited Storage.\BBCQ\
+\newblock {\Bem Mathematics of Computation}, {\Bbf 35}  (151), \mbox{\BPGS\
+  773--782}.
+
+\bibitem[\protect\BCAY{Palmer, Gildea, \BBA\ Kingsbury}{Palmer
+  et~al.}{2005}]{Palmer:05}
+Palmer, M., Gildea, D., \BBA\ Kingsbury, P. \BBOP 2005\BBCP.
+\newblock \BBOQ The Proposition Bank: An Annotated Corpus of Semantic
+  Roles.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 31}  (1), \mbox{\BPGS\
+  71--106}.
+
+\bibitem[\protect\BCAY{Shen \BBA\ Lapata}{Shen \BBA\
+  Lapata}{2007}]{shen-lapata:2007:EMNLP-CoNLL2007}
+Shen, D.\BBACOMMA\ \BBA\ Lapata, M. \BBOP 2007\BBCP.
+\newblock \BBOQ Using Semantic Roles to Improve Question Answering.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP-CoNLL 2007}, \mbox{\BPGS\ 12--21}.
+
+\bibitem[\protect\BCAY{Shi \BBA\ Mihalcea}{Shi \BBA\
+  Mihalcea}{2005}]{Shi2005ppt}
+Shi, L.\BBACOMMA\ \BBA\ Mihalcea, R. \BBOP 2005\BBCP.
+\newblock \BBOQ Putting Pieces Together: Combining FrameNet, VerbNet and
+  WordNet for Robust Semantic Parsing.\BBCQ\
+\newblock In {\Bem Proceedings of CICLing-2005}, \mbox{\BPGS\ 100--111}.
+
+\bibitem[\protect\BCAY{Surdeanu, Johansson, Meyers, M{\`{a}}rquez, \BBA\
+  Nivre}{Surdeanu et~al.}{2008}]{surdeanu2008cst}
+Surdeanu, M., Johansson, R., Meyers, A., M{\`{a}}rquez, L., \BBA\ Nivre, J.
+  \BBOP 2008\BBCP.
+\newblock \BBOQ The CoNLL-2008 Shared Task on Joint Parsing of Syntactic and
+  Semantic Dependencies.\BBCQ\
+\newblock In {\Bem Proceedings of CoNLL--2008}, \mbox{\BPGS\ 159--177}.
+
+\bibitem[\protect\BCAY{Surdeanu, Harabagiu, Williams, \BBA\ Aarseth}{Surdeanu
+  et~al.}{2003}]{Surdeanu2003}
+Surdeanu, M., Harabagiu, S., Williams, J., \BBA\ Aarseth, P. \BBOP 2003\BBCP.
+\newblock \BBOQ Using Predicate-Argument Structures for Information
+  Extraction.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-2003}, \mbox{\BPGS\ 8--15}.
+
+\bibitem[\protect\BCAY{Yi, Loper, \BBA\ Palmer}{Yi
+  et~al.}{2007}]{yi-loper-palmer:2007:main}
+Yi, S., Loper, E., \BBA\ Palmer, M. \BBOP 2007\BBCP.
+\newblock \BBOQ Can Semantic Roles Generalize Across Genres?\BBCQ\
+\newblock In {\Bem Proceedings of HLT-NAACL 2007}, \mbox{\BPGS\ 548--555}.
+
+\bibitem[\protect\BCAY{Zapirain, Agirre, \BBA\ M{\`{a}}rquez}{Zapirain
+  et~al.}{2008}]{zapirain-agirre-marquez:2008:ACLMain}
+Zapirain, B., Agirre, E., \BBA\ M{\`{a}}rquez, L. \BBOP 2008\BBCP.
+\newblock \BBOQ Robustness and Generalization of Role Sets: PropBank vs.
+  VerbNet.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-08: HLT}, \mbox{\BPGS\ 550--558}.
+
+\end{thebibliography}
+
+
+\begin{biography}
+\bioauthor[:]{Yuichiroh Matsubayashi}{
+received his Ph.D degree in Information Science and Technology from the University of Tokyo in 2010. He is a researcher at National Institute of Informatics from 2010. His research interests include semantic processing. He is a member of ACL.
+}
+
+\bioauthor[:]{Naoaki Okazaki}{
+received his Ph.D degree in Information Science and Technology from the University of Tokyo in 2007.
+He is a researcher at the University of Tokyo from 2007. His research interests include text mining. He is a member of JPSJ and ACL.
+}
+\bioauthor[:]{Jun'ichi Tsujii}{
+received his BE, ME, and Ph.D degree from Kyoto University in 1971, 1973, and 1978, respectively.
+He was an assistant professor and associate professor at Kyoto University, and professor at UMIST.
+He is now a professor at the University of Tokyo and the University of Manchester. His research interests include text mining and machine translation. He is a former president of ACL (2006).
+}
+\end{biography}
+
+\biodate
+
+
+
+\end{document}

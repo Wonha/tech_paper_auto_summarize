@@ -1,0 +1,1973 @@
+
+
+\documentstyle[named,epsf,epsf2]{jnlp_e_b5_old} 
+
+\def\atari(#1,#2){}
+
+\setcounter{page}{23}
+\setcounter{巻数}{2}
+\setcounter{号数}{2}
+\受付{August}{9}{1994}
+\再受付{October}{11}{1994}
+\採録{March}{3}{1995}
+\setcounter{secnumdepth}{2}
+\title{}
+\author{}
+\jkeywords{}
+
+
+\eauthor{Hideto Tomabechi\affiref{Justsystem}}
+
+
+\headauthor{Hideto ~Tomabechi}
+\headtitle{Design of Efficient Unification for Natural Language}
+
+\affilabel{Justsystem}
+          {Justsystem Scientific Institute, tomabech@justsystem.co.jp}
+          {Justsystem Scientific Institute, tomabech@justsystem.co.jp}
+
+\etitle{Design of Efficient Unification for Natural Language}
+
+
+\newtheorem{definition}{}[]
+\newtheorem{remark}{}[]
+\newtheorem{example}{}[]
+\newtheorem{proposition}{}[]
+\newtheorem{corollary}{}[]
+
+
+\eabstract{
+Graph unification has become a central processing mechanism of many
+natural language \hspace{0.2mm}systems \hspace{0.2mm}due \hspace{0.2mm}to \hspace{0.2mm}the \hspace{0.2mm}popularity \hspace{0.2mm}of \hspace{0.2mm}unification-based
+\hspace{0.2mm}theories \hspace{0.2mm}of \hspace{0.2mm}computational\\ linguistics. Despite the popularity of graph
+unification as the central processing mechanism, it remains the most
+expensive part of unification-based natural language processing. Graph
+unification alone often takes over 90\% of total parsing time.  As the
+criteria for efficient unification, we focus on two elements in the
+design of an efficient unification algorithm: 1) elimination of
+excessive copying and 2) quick detection of unification failures.  We
+propose a scheme to attain these criteria without expensive overhead
+for reversing the changes made to the graph node structures based on
+the notion of quasi-destructive unification.  Our experiments using an
+actual large scale grammar and also using a simulated grammar
+producing different unification success rates show that the
+quasi-destructive graph unification algorithm runs roughly at twice as
+fast as Wroblewski's non-destructive unification algorithm.}
+
+\ekeywords{Unification, Graph Unification, Non-destructive
+Unification,\\ Unification-based Grammer, Feature Structure, Parsing}
+
+\begin{document} 
+
+
+
+\maketitle
+
+
+
+\section{Motivation}
+
+ From theoretical linguistics to computational models of natural
+language, unification-based processing has become a central
+methodology in many research efforts. In theoretical linguistics,
+unification-based formalism has become one standard form of
+representation; many theories such as LFG (\cite{LFG}), HPSG
+(\cite{HPSG}), and JPSG (\cite{JPSG}) use feature structure and
+unification as the base of constraint postulations.  In computational
+linguistics, unification is used as the central constraint processing
+mechanism during parsing based upon the unification-based grammar
+analyses. In artificial intelligence, unification-based natural
+language is often used as an integral part of inference and learning
+mechanisms. Recent efforts in massively parallel artificial
+intelligence have also demonstrated the strength of graph unification
+as a uniform constraint processing mechanism for natural language in a
+massively parallel environment.  Despite the popularity of
+unification-based processing, graph unification has remained a
+bottleneck of the unification-based systems.  For example, in
+unification-based grammar parsing using parsing algorithms such as
+Earley's algorithm (\cite{Earley})and Tomita's algorithm
+(\cite{Tomita}), unification operations often consume 85 to 95 percent
+of the total cpu time devoted to a parse. In one large-scale
+unification-based spoken language parser\footnote{ATR's HPSG-based
+spoken Japanese analysis system.}, sometimes 98 percent of the elapsed
+time is calculated to be devoted to unification operation alone
+(\cite{Kogure-Lazy}).  Furthermore, the number of unification
+operations tends to grow as the grammar gets larger and more
+complicated.  An unavoidable paradox is that when the natural language
+system gets larger and the coverage of linguistic phenomena is
+increased as an attempt to bring performance to a practical level, the
+number of unification operations increases rapidly and the performance
+of the systems degrades to an impractical level. Thus an availability
+of efficient graph unification is of paramount importance both to
+theoretical natural language research as well as to practical natural
+language systems.  Overall parsing efficiency is crucial when building
+or experimenting with both practical and experimental natural language
+systems. For realtime practical systems, parsing speed is a
+prerequisite. For theoretical experimentation, the efficiency of
+hypothesis testing depends on the speed of constraint processing.
+
+A variety of grammatical formalisms have been proposed
+historically in computational linguistics, natural language
+processing, and artificial intelligence to capture the
+phenomena called `language'.  Kay proposed Functional
+Grammar and Functional Unification Grammar (FUG,
+\cite{FUG}) motivated by the notion of {\it functional description} of
+language.  Bresnan and Kaplan developed the Lexical Functional Grammar
+(LFG, \cite{LFG}) based on the framework of lexically-oriented
+linguistics. In the aritificial intelligence community, Definite
+Clause Grammar (DCG, \cite{DCG}) was developed by Pereira and Warren
+in the logic programming framework. 
+ Gazdar developed
+Generalized Phrase Structure Grammar (GPSG, \cite{GPSG}) in the
+nontransformational model of linguistic analysis.  Pollard and Sag
+developed Head-driven Phrase Structure Grammar (HPSG, \cite{HPSG}) in
+the similar nontransformational framework centered around the notion
+of {\it the linguistic head of a phrase}.  Gunji developed the
+Japanese Phrase Structure Grammar (JPSG, \cite{JPSG}), which is a 
+Japanese cousin of HPSG. 
+
+
+In the more computational and implementational aspects,
+PATR-II (\cite{PATR-II}) was developed at the SRI AI Center
+as a theory-neutral {\it simple} and {\it mathematically
+well-founded} tool for natural language processing. At
+Carnegie Mellon University, to address the inefficiency of
+unification algorithms, pseudo unification and Pseudo
+Unification Grammar were developed as a part of machine
+translation research (\cite{Pseudo}).
+Despite the variety of analysis captured in the modern theoretical and
+computational models of language, 
+all the above grammatical formalisms (at least the modern versions of
+them) use feature structures (normally represented as labelled
+directed graphs) as objects for
+capturing linguistic objects and use
+graph unification as the central constraint processing mechanism. 
+As Pollard and Sag put it ``Instead of the NASA Physicists' Euclidean
+spaces and differential equations, though, the formal object of choice
+in information-based linguistics are things known as {\it feature
+structures}'' and graph unification operation is the formal method of
+unanimous choice in the modern linguistic methodologies. 
+
+At least three methods are common in using unification during natural
+language processing. The first method is employed when linguistic theories such
+as HPSG are directly implemented.  Lexically-oriented theories such as
+HPSG assume no separate context-free rule for phrase structures.
+Phrase structure rules are implicitly contained in subcategorization
+lists which are lexically stored. Therefore, combined with universal
+principles such as the Head-Feature Principle (\cite{HPSG}), which are also
+represented through {\it feature structures}, parsing is 
+performed purely through graph unification \cite{Alex}.  The second method
+which is most popular (\cite{PATR-II},\cite{UP},\cite{SL-TRANS}) is employed
+when grammatical theories such as LFG and GPSG, which assume
+context free rules, are adopted. Also, some systems (such as
+\cite{SL-TRANS}) use this method for speed, although they adopt
+lexically-oriented formalisms (such as HPSG) by extracting lexically-specified 
+subcategorization constraints as context-free rules. In
+these systems, context-free rules based upon major grammatical
+categories (parts of speech) are augmented with unification-based
+constraints that specify actual constraints for building up phrase
+structures. The third method is employed when graph-based constraints are used
+in the conceptual memory-based recognition of natural language inputs.
+In these systems (which often assume massively-parallel spreading
+activation architectures) graphs are propagated in the network of
+semantic memory nodes to provide syntactic constraint application
+while performing spreading activation-based conceptual memory
+recognition (\cite{HMCP}, \cite{cogsci91}, \cite{MONA-LISA})
+
+
+\section{Our Observations and Criteria}
+
+In designing an efficient graph unification algorithm, we
+have made the following observation which influenced the basic
+design of the new algorithm described in this paper:
+
+\begin{quote}
+{\bf Unification does not always succeed.} 
+\end{quote}
+
+In a typical natural language system with a relatively small grammar
+size, 60 to 80 percent of unifications attempted during a successful
+parse result in failure.  As the grammar size increases, the number of
+unification failures for each successful parse increases.  For
+example, in one large-scale speech-to-speech translation system
+jointly developmented by CMU and ATR Interpreting Telephony
+Research Laboratories, we estimated more than 90\% of unifications to be
+failures during a successful parse.  If a unification fails, any
+computation performed and memory consumed during the unification is
+wasted.
+
+Another observation about the behaviour of graph unification which
+seems well accepted in the existing literature is that:
+
+\begin{quote}
+{\bf Copying is an expensive operation.} 
+\end{quote}
+
+Copying \hspace{0.3mm}a \hspace{0.3mm}node \hspace{0.3mm}places a heavy \hspace{0.3mm}burden on the parsing \hspace{0.3mm}system.
+ Wroblewski[1987] \hspace{0.3mm}calls it a ``computational sink''.  Copying is
+expensive in two ways: 1) it takes time; 2) it takes space.  We
+calculated the computation time cost of copying to be more than 90
+percent of the total parsing time in our large-scale speech-to-speech
+translation system. We have experienced in some cases, over hundred
+thousand nodes were copied unnecessarily during a parse of a single
+sentence using the large scale grammar of our speech-to-speech
+translation system.  This time/space copying burden presents problems
+in an environment where computational resources are limited due to the
+size of the grammar and other knowledge sources.  (Also, the creation
+of unnecessary copies eventually triggers garbage collections more
+often in a Lisp environment, which also degrades the overall
+performance of the parsing system.)  In general, parsing systems (such
+as large LR tables of Tomita-LR parsers, expanding tables and charts
+of Earley, and active chart parsers) are always short of memory space.
+Our own phoneme-based generalized LR parser for speech input is always
+running on a swapping space because the LR table is too big, and the
+marginal addition or subtraction of memory space consumed by other
+parts of the system often has critical effects on the performance of
+these systems.  Because of the massive amount of nodes created
+(copied) during a parse in the unification algorithms (often over
+100,000 nodes during a single parse), we have seen at CMU and at ATR
+that the amount of memory (conses) consumed by copying operations
+during a parse determines the necessary physical memory for the entire
+system\footnote{For example, as we will see in our experiments later
+in this paper, the memory needed for Wroblewski's algorithm and
+Karttunen's algorithms are sometimes significantly greater than the
+proposed scheme. This meant that not only were sentences parsed faster with
+our scheme, but also that some sentences could not be parsed at all
+using Wroblewski's and Karttunen's algorithms on our machine
+environment due to the physical limit of memory.}. With the
+aforementioned observations, we propose the following principles to be
+the desirable conditions for an efficient graph unification algorithm:
+
+\begin{itemize}
+\item {\bf Copying should be performed only for successful
+unifications.}
+\item {\bf Unification failures should be found as soon as possible.}
+\end{itemize}
+
+By way of definition, we would like to categorize excessive
+copying of graphs into Over Copying and Early Copying. 
+Wroblewski[1987] also defines Over Copying and Early Copying. Our
+definition of over copying is the same as Wroblewski's; however,
+our definition of early copying is slightly different.
+
+\begin{itemize}
+
+\item {\bf Over Copying:} Two graphs are created in order to
+create one new graph. This typically happens when copies of
+two input graphs are created prior to a destructive
+unification operation to build one new graph.
+
+\item {\bf Early Copying:} Copies are created prior to the
+failure of unification so that copies created since the
+beginning of the unification up to the point of
+failure are wasted. 
+
+\end{itemize}
+
+Wroblewski defines Early Copying as follows: ``The argument dags are
+copied {\it before} unification started. If the unification fails then
+some of the copying is wasted effort.'' He restricts early copying to
+cases that only apply to copies that are created prior to a
+unification.  Restricting early copying to represent copies that are
+created prior to a unification leaves a number of wasted copies that are
+created during the same unification up to the point of the detection
+of failure. Therefore, these wasted copies will not be covered by
+either of the above two definitions for excessive copying.  We would
+like Early Copying to mean all copies that are wasted due to a
+unification failure, whether these copies are created before or during
+the unification.
+
+
+
+\section{The Quasi-Destructive Graph Unification Algorithm}
+
+We would like to introduce an algorithm which addresses the criteria
+for fast unification discussed in the previous section. This algorithm
+replaces the algorithm described in \cite{quasi} with refined data
+structures and with full compatibility with cyclic feature structures.
+It naturally handles cycles without over copying (without any
+additional schemes such as those introduced by Kogure[1989]).
+
+As a data structure, a node is represented with six
+fields: `type', `arc-list', `comp-arc-list', `forward', 
+`copy'\footnote{Martin Emele of University of Stuttgart suggested that
+a separate field for `copy' may be saved by using a forward link only,
+since copy link is needed only when forward link is not used.},
+and `generation'.\footnote{Note that \cite{quasi} used separate mark
+fields for the comp-arc-list, forward, and copy; currently however,
+only one generation mark is used for all three
+fields. Thanks are due to Hidehiko Matsuo of Toyo Information Systems
+for suggesting this.}
+The data-structure for an arc has two fields, `label' and `value'.
+`Label' is an atomic symbol which labels the arc,
+and `value' is a pointer to a node structure(Figure~\ref{figure1}).
+
+\begin{figure}[htb]
+  \begin{center}
+    \unitlength=1mm
+    \begin{picture}(65,35)
+      \thicklines
+      \put( 0, 0){\framebox(25, 5){generation}}
+      \put( 0, 5){\framebox(25, 5){copy}}
+      \put( 0,10){\framebox(25, 5){forward}}
+      \put( 0,15){\framebox(25, 5){comp-arc-list}}
+      \put( 0,20){\framebox(25, 5){arc-list}}
+      \put( 0,25){\framebox(25, 5){type}}
+      \put(12.5,35){\makebox(0,0){NODE}}
+      \put(40, 0){\framebox(25, 5){value}}
+      \put(40, 5){\framebox(25, 5){label}}
+      \put(52.5,15){\makebox(0,0){ARC}}
+    \end{picture}
+  \end{center}
+\caption{{\bf Node and Arc Structures}}
+\label{figure1}
+\end{figure}
+
+The central notion of the Q-D algorithm is the dependency of the
+representational content on the global timing clock (or the
+global counter for the current generation of unifications).
+Any modification made to comp-arc-list, forward, or copy fields
+during one top-level unification
+can be invalidated by one increment operation on the global timing
+counter. Contents of the comp-arc-list, forward and copy fields
+are respected only when the generation mark of the
+particular node matches the current global counter value.
+ Q-D graph unification has two kinds of arc lists: 1) arc-list and
+2) comp-arc-list. Arc-list contains the arcs that are permanent
+(i.e., ordinary graph arcs) and comp-arc-list contains arcs
+that are valid only during one top-level unification operation.
+The algorithm also uses two kinds of forwarding links, i.e., permanent
+and temporary. A permanent forwarding link is the usual
+forwarding link found in other algorithms (\cite{Pereira},
+\cite{Wroblewski}, etc).  Temporary forwarding links are
+links that are valid only during one top-level unification. 
+The currency of the temporary links is determined by
+matching the content of the generation field for the links
+with the global counter; if they match, the content of this
+field is respected\footnote{We do not have a separate field
+for temporary forwarding links; instead, we designate the
+integer value 9 to represent a permanent forwarding link. We
+start incrementing the global counter from 10 so that
+whenever the generation mark is not 9, the integer value
+must equal the global counter value in order to respect the
+forwarding link.}. 
+
+ As in Pereira[1985], the Q-D algorithm has three types of
+nodes: 1) :atomic, 2) :Top\footnote{We called this :bottom
+in \cite{quasi} and \cite{quasi-str}. Also it is called leaf
+in Pereira's algorithm.}, and 3) :complex. The :atomic type
+nodes represent atomic symbol values (such as `Noun'), :Top
+type nodes are variables, and :complex type nodes are nodes
+that have arcs coming out of them. Arcs are stored in the
+arc-list field.  The atomic value is also stored in the
+arc-list if the node type is :atomic.  :Top nodes succeed in
+unifying with any nodes and the result of unification takes
+the type and the value of the node with which the :Top node
+is unified, :atomic nodes succeed in unifying with :Top
+nodes or with :atomic nodes with the same value (stored in
+the arc-list).  Unification of an :atomic node with a
+:complex node immediately fails. :complex nodes succeed in
+unifying with :Top nodes or with :complex nodes whose
+subgraphs all unify.\footnote{Arc values are always nodes
+and never symbolic values because :atomic and :Top nodes may
+be (or may become) pointed to by multiple arcs depending on
+grammar constraints. We do not want arcs to contain terminal
+atomic values.} What follows are the central
+quasi-destructive graph unification algorithm and the
+dereferencing\footnote{Dereferencing is the operation of
+recursively traversing forwarding links to return the target
+node of the forwarding.}
+function. Following is the algorithm description for
+copying nodes and arcs (called from unify0) while respecting
+the contents of comp-arc-lists.
+
+
+
+\vspace*{4mm}
+\begin{footnotesize}
+\framebox[6.5cm] {\sc Quasi-Destructive Graph Unification}  \\ 
+\vspace*{-3mm}
+\begin{tabbing}
+{\bf FUNCTION} unify-dg(dg1,dg2);   \\
+\hspace*{2mm} \= result \= $\leftarrow$ \= catch with tag 'unify-fail
+ \\
+ \>        \>    \> calling unify0(dg1,dg2);  \\
+ \> increment *unify-global-counter*;   ;; starts from 10
+\footnotemark \\
+ \>return(result); \\
+{\bf END}; \\ \\
+
+{\bf FUNCTION} unify0(dg1,dg2); \\
+ \> if \= '*T* $=$  unify1(dg1,dg2);  {\bf THEN} \\
+ \>    \> copy $\leftarrow$ copy-dg-with-comp-arcs(dg1); \\
+ \>    \>  return(copy); \\
+ {\bf END}; \\ \\
+
+
+
+
+{\bf FUNCTION} unify1 (dg1-underef,dg2-underef); \\
+\hspace*{2mm} \= dg1 $\leftarrow$ dereference-dg(dg1-underef); \\
+ \> dg2 $\leftarrow$ dereference-dg(dg2-underef); \\
+ \> {\bf IF} \= (dg1.copy is non-empty) {\bf THEN}  \\
+ \>          \> dg1.copy $\leftarrow$ nil;  ;; cutoff uncurrent copy
+\\
+ \> {\bf IF} \> (dg2.copy is non-empty) {\bf THEN}  \\
+ \>          \> dg2.copy $\leftarrow$ nil;  \\
+ \> {\bf IF} \> (dg1 $\equiv_{\Gamma}$ dg2)\footnotemark  {\bf THEN}  \\
+ \>          \> return('*T*);       \\
+ \> {\bf ELSE IF} (dg1.type $=$ :Top)  {\bf THEN} \\
+ \>  \> forward-dg(dg1,dg2,:temporary); \\
+ \> \>  return('*T*); \\
+ \> {\bf ELSE IF} (dg2.type $=$ :Top)  {\bf THEN} \\
+ \>  \> forward-dg(dg2,dg1,:temporary); \\
+ \>  \> return('*T*); \\
+ \> {\bf ELSE IF}  (\= dg1.type $=$ :atomic {\bf AND}  \\
+ \>               \> dg2.type $=$ :atomic)  {\bf THEN} \\
+ \> \hspace*{15mm} \= {\bf IF} \= (dg1.arc-list $=$
+    dg2.arc-list)\footnotemark
+                                          {\bf THEN} \\
+ \>                \>          \> forward-dg(dg2,dg1,:temporary); \\
+ \>                \>          \>  return('*T*); \\
+ \>                 \> {\bf ELSE} throw\footnotemark
+                        with keyword 'unify-fail;  \\
+ \> {\bf ELSE IF} (\= dg1.type $=$ :atomic {\bf OR} \\
+ \>               \>  dg2.type $=$ :atomic)    {\bf THEN} \\
+ \>               \> throw with keyword 'unify-fail; \\
+ \> {\bf ELSE}    \= shared $\leftarrow$ intersectarcs(dg1,dg2); \\
+ \> \hspace*{6mm} \= {\bf FOR EACH} arc {\bf IN} shared {\bf DO} \\
+ \>                \> \hspace*{10mm} unify1(\= destination of \\
+ \>                \>                       \> \hspace*{7mm} \= the
+shared arc for dg1, \\
+ \>                \>                       \> destination of \\
+ \>                \>                       \>   \>  the shared arc
+for dg2); \\
+ \>                \> forward-dg(dg2,dg1,:temporary);\footnotemark \\
+ \>                \>  new $\leftarrow$
+complementarcs(dg2,dg1);\footnotemark   \\
+ \>                \> {\bf IF}\footnotemark (\= dg1.comp-arc-list is
+non-empty) {\bf THEN} \\
+ \>                \>           \> {\bf IF} (\= dg1.generation $=$
+*unify-global-counter*) {\bf THEN} \\
+ \>                \>           \>          \> {\bf FOR EACH} arc {\bf
+IN} new {\bf DO} \\
+ \>                \>           \>          \> \hspace*{10mm} push arc
+to dg1.comp-arc-list; \\
+ \>                \>           \> {\bf ELSE} dg1.comp-arc-list
+$\leftarrow$ nil;   \\
+ \>                \> {\bf ELSE} \=  dg1.generation $\leftarrow$
+*unify-global-counter*; \\
+ \>                \>            \>  dg1.comp-arc-list $\leftarrow$
+new; \\
+ \>                \> return ('*T*); \\
+ {\bf END}; 
+\end{tabbing}
+
+
+\end{footnotesize}
+
+\footnotetext[9]{Our convention in our Q-D implementations is that the
+global counter is incremented from 10. Therefore, for the temporary
+links (contents) to be respected, the generation numbers larger than 9
+need to match the global counter. Also our conventions is that we use
+the number 9 to indicate a permanent forwarding link. Therefore, if
+the generation number of the node is 9 then the forwarding link is
+always respected regardless of the current content of the
+unify-global-counter.}
+\footnotetext[10]{As discussed previously, this represents
+`equal' in the `eq' sense.
+Because of forwarding and cycles, it is
+possible that dg1 and dg2 are `eq'.}
+\footnotetext[11]{Arc-list contains atomic value if
+the node is of type :atomic.}
+\footnotetext[12]{Catch/throw
+construct; i.e., immediately return to {\it unify-dg}.}
+\footnotetext[13]{This will be
+executed only when all recursive calls into unify1 have succeeded.
+Otherwise, a failure would have caused an immediate return
+to {\it unify-dg}.} 
+\footnotetext[14]{Complementarcs(dg2,dg1) was called before
+unify1 recursions in \cite{quasi}, Currently it is relocated to after all
+unify1 recursions successfully return. Thanks are due to 
+Marie Boyle of the University of Tuebingen for suggesting this.}
+\footnotetext[15]{This check was added after \cite{quasi}
+to avoid over-writing the comp-arc-list when it is written more than
+once within one unify0 call.  Thanks are due to Peter
+Neuhaus of Universit\"{a}t Karlsruhe for reporting this problem.}
+
+
+\begin{footnotesize}
+\framebox[6.5cm] {\sc Graph Node Dereferencing}  \\ 
+\vspace*{-3mm}
+\begin{tabbing}
+{\bf FUNCTION} dereference-dg(dg);   \\
+\hspace*{2mm} \= forward-dest $\leftarrow$ dg.forward;   \\
+ \> {\bf IF} \= (forward-dest is non-empty) {\bf THEN}  \\
+ \>        \> {\bf IF} (\= dg.generation $=$ *unify-global-counter*
+{\bf OR} \\
+ \>        \>           \> dg.generation $=$ 9) {\bf THEN} \\
+ \>        \>           \> return(dereference-dg(forward-dest));  \\
+ \>        \> {\bf ELSE} \= dg.forward $\leftarrow$ nil;  \\
+ \>        \>            \> return(dg); \\
+ \> {\bf ELSE} return(dg); \\
+{\bf END}; 
+\end{tabbing}
+\end{footnotesize}
+
+The functions Complementarcs(dg1,dg2) and
+Intersectarcs(dg1,dg2) return the set-difference (the arcs with
+labels that exist in dg1 but not in dg2) and intersection
+(the arcs with labels that exist both in dg1 and dg2).
+ During the set-difference and
+set-intersection operations, the content of comp-arc-lists
+are respected as parts of arc lists if the generation mark
+matches the current value of the global timing counter.
+Forward-dg(dg1, dg2, :forward-type) puts (the pointer to)
+dg2 in the forward field of dg1.  If the keyword in the
+function call is :temporary, the current value of the
+*unify-global-counter* is written in the generation field
+of dg1. If the keyword is :permanent, 9 is written in the
+generation field of dg1.\footnote{The Q-D algorithm itself does not
+require any permanent forwarding; however, the functionality
+is added because some grammar reader modules that read the
+path equation specifications into directed graph feature-structures
+use permanent forwarding to merge the additional
+grammatical specifications into a graph
+structure.}
+ The temporary forwarding links 
+are necessary to
+handle reentrancy and cycles.  As soon as unification (at any
+level of recursion through shared arcs) succeeds, a
+temporary forwarding link is made from dg2 to dg1 (dg1 to
+dg2 if dg1 is of type :Top). Thus, during unification,
+a node already unified by other recursive calls to unify1
+within the same unify0 call has a temporary forwarding link
+from dg2 to dg1 (or dg1 to dg2). As a result, if this
+node becomes an input argument node, dereferencing the node
+causes dg1 and dg2 to become the same node and unification
+immediately succeeds.  Thus, a subgraph below an already
+unified node will not be checked more than once even if an
+argument graph has a cycle.\footnote{Also, during copying 
+subsequent to a successful unification, two arcs
+converging into the same node will not cause overcopying
+simply because if a node already has a copy then the copy is
+returned.}
+
+
+\vspace*{4mm}
+\begin{footnotesize}
+\framebox[6.5cm] {\sc Quasi-Destructive Copying}  \\ 
+\vspace*{-3mm}
+\begin{tabbing}
+{\bf FUNCTION} copy-dg-with-comp-arcs(dg-underef); \\
+\hspace*{2mm} \= dg $\leftarrow$ dereference-dg(dg-underef); \\
+\> {\bf IF} (\= dg.copy is non-empty {\bf AND} \\
+\>           \> dg.copy.generation\footnotemark $=$
+*unify-global-counter*) {\bf THEN} \\
+\> \> return(dg.copy);\footnotemark \\
+\> {\bf ELSE IF} (dg.type $=$ :atomic) {\bf THEN} \\
+\> \>    newcopy $\leftarrow$ create-node();\footnotemark \\
+\> \>    newcopy.type $\leftarrow$ :atomic; \\
+\> \>    newcopy.arc-list $\leftarrow$ dg.arc-list; \\
+\> \>    newcopy.generation $\leftarrow$ *unify-global-counter*;   \\
+\> \>    dg.copy $\leftarrow$ newcopy; \\
+\> \>    return(newcopy); \\
+\> {\bf ELSE IF} (dg.type $=$ :Top) {\bf THEN} \\
+\> \>    newcopy $\leftarrow$ create-node(); \\
+\> \>    newcopy.type $\leftarrow$ :Top; \\
+\> \>    newcopy.generation $\leftarrow$ *unify-global-counter*; \\
+\> \>    dg.copy $\leftarrow$ newcopy; \\
+\> \>    return(newcopy); \\
+\> {\bf ELSE} \\
+\> \>     newcopy $\leftarrow$ create-node(); \\
+\> \>     newcopy.type $\leftarrow$ :complex; \\
+\> \>     newcopy.generation $\leftarrow$ *unify-global-counter*; \\
+\> \>     dg.copy $\leftarrow$ newcopy;\footnotemark \\
+\> \>     {\bf FOR ALL} arc {\bf IN} dg.arc-list {\bf DO} \\
+\> \>  \hspace*{4mm} \=  newarc $\leftarrow$
+copy-arc-and-comp-arc(arc); \\
+\> \>                 \>  push newarc into newcopy.arc-list; \\
+\> \> {\bf IF} (\= dg.comp-arc-list is non-empty {\bf AND} \\
+\> \>           \> dg.generation $=$ *unify-global-counter*) {\bf
+THEN} \\
+\> \> \hspace*{10mm} \= {\bf FOR ALL} comp-arc {\bf IN}
+dg.comp-arc-list {\bf DO} \\
+\> \>                \>  \hspace*{3mm} \= newarc $\leftarrow$
+copy-arc-and-comp-arc(comp-arc);  \\
+\> \>                \>                \> push newarc into
+newcopy.arc-list; \\
+\> \> dg.comp-arc-list $\leftarrow$ nil; \\
+\> \> return (newcopy); \\
+ {\bf END}; \\ \\
+
+{\bf FUNCTION} copy-arc-and-comp-arc(input-arc); \\
+\hspace*{2mm} \= label $\leftarrow$ input-arc.label; \\
+\> value $\leftarrow$ copy-dg-with-comp-arcs(input-arc.value); \\
+\> return a new arc with label and value; \\
+ {\bf END};
+\end{tabbing}
+\end{footnotesize}
+
+\footnotetext[18]{I.e., the `generation' field of the node
+stored in the `copy' field of the `dg' node. 
+The algorithm described in \cite{quasi} used `copy-mark' field
+of `dg'. Currently `generation' field replaces the three
+mark field described in the article.}
+\footnotetext[19]{I.e., the
+existing copy of the node.} 
+\footnotetext[20]{Creates an empty
+node structure. By the way, since atomic values never change, it makes
+no sense to make a copy of atomic nodes. It is safe to share the
+atomic nodes with the original graph. Therefore, the reader's of this
+paper should replace {\bf ELSE IF} (dg.type $=$ :atomic) {\bf THEN} \\
+  : \\ 
+  : \\
+ return(newcopy); \\ 
+by {\bf ELSE IF} (dg.type $=$ :atomic) {\bf THEN} return(dg); \\
+ to simply return the original dg for their actual implementations.
+It is not done so in this paper for a fair comparison with Wroblewski's
+algorithm since his algorithm copies each atomic node.}
+\footnotetext[21]{This operation to set a newly created copy
+node into the `copy' field of `dg' was done after recursion
+into subgraphs in the algorithm description in \cite{quasi} which
+was a cause of infinite recursion with a particular type of
+cycles in the graph. By moving up to this position from after the
+recursion, such a problem can be effectively avoided. Thanks
+are due to Peter Neuhaus for reporting the problem.}
+
+
+Let us walk through a simple unification example first. What follows
+in the following two pages using Figures~\ref{figure2} and \ref{figure3} is a simple unification of two
+graphs dg1 and dg2 which represent feature structures:
+
+
+\begin{verbatim}
+              dg1           dg2  
+              [[a S]        [[a X01 []]
+               [b []]]       [b X01]
+                             [c t]]
+\end{verbatim}
+
+First, top-level unify-dg calls unify0 which in turn calls unify1.
+Unify0 will perform quasi-destructive copying operation after the top
+level call to unify1 successfully returns.  Now top-level unify1 finds
+that each of the input graphs has arcs with labels a and b ({\it
+shared}).  For now we represent arcs with label a as arc-a.  Then
+unify1 is recursively called (unify1(2,5)). At step two, the recursion
+into arc-a locally succeeds, and a temporary forwarding link with
+time-stamp(n) is made from node 5 to node 2.  At the third step
+(recursion into arc-b), by the previous forwarding to node 2, node 5
+already has the value {\it S} (by dereferencing).  Then this
+unification returns a success and a temporary forwarding link with
+time-stamp(n) is created from node 3 to node 2.  At the fourth step,
+since all recursive unifications (unify1s) into shared arcs succeeded,
+top-level unify1 creates a temporary forwarding link with
+time-stamp(n) from dg2's root node 4 to dg1's root node 1, and sets
+arc-c ({\it new}) into comp-arc-list of dg1 and returns success
+('*T*). At the fifth step, a copy of dg1 is created respecting the
+content of comp-arc-list and dereferencing the valid forward links.
+This copy is returned as a result of unification. At the last step
+(step six), the global timing counter is incremented (n $\Rightarrow$
+n+1). After this operation, temporary forwarding links and
+comp-arc-lists with uncurrent time-stamp ($\neq$ n+1) will be ignored.
+Therefore, the original dg1 and dg2 are recovered in constant time
+without a costly reversing operation.  (Also, note
+that recursions into shared-arcs can be done in any order, producing
+the same result).
+
+\begin{figure}[htb] 
+\hspace{-1.2cm}
+\epsfile{scale=1.0,file=fig20.up}
+\caption{{\bf A Walkthrough of Unify-dg (to be continued)}} 
+\label{figure2}
+\end{figure} 
+
+\begin{figure}[htb] 
+\hspace{-1cm}
+\epsfile{scale=1.0,file=fig20.down}
+\caption{{\bf A Walkthrough of Unify-dg (continued)}}
+\label{figure3}
+\end{figure}
+
+
+As we just saw, the algorithm itself is simple.  
+The essential difference between our unify1 and the previous ones
+such as Pereira's is that our unify1 is non-destructive.  That is so 
+because the complementarcs(dg2,dg1) are set to the comp-arc-list of
+dg1 and not into the arc-list of dg1.  Thus, as soon as we increment
+the global counter, the changes made to dg1 (i.e., addition of
+complement arcs into comp-arc-list) vanish.  As long as the
+generation value matches that of the global counter, the content of
+the comp-arc-list can be considered a part of arc-list and therefore,
+dg1 is the result of unification.  Hence the name quasi-destructive
+graph unification.\clearpage  \hspace{-0.5cm}In order to create a copy for subsequent use, we
+only need to make a copy of dg1 before we increment the global counter,
+while respecting the content of the comp-arc-list of dg1. 
+
+This way, instead of calling other unification functions (such as
+unify2 of Wroblewski) for incrementally creating a copy node during a
+unification, we need only to create a copy after unification.  Thus,
+if unification fails, no copies are made at all (as in Karttunen's
+scheme, \cite{reversible}).  Because unification that recurses into
+shared arcs carries no burden of incremental copying (i.e., it simply
+checks whether nodes are compatible), as the depth of unification
+increases (i.e., as the graph gets larger) the speed-up of our method
+should become conspicuous if a unification eventually fails.  Since a
+parse that does not fail on a single unification is unrealistic, the
+gain from our scheme should depend on the number of unification
+failures that occur during a unification.  As the grammar size
+increases, the number of failures per parse tends to increase and the
+graphs that fail unifications get larger, and the speed-up from our algorithm
+should become more apparent. Therefore, the characteristics of our
+algorithm seem desirable.
+The quasi-destructive copying after unification copies the dg1s
+by simply following temporary forwarding pointers. Unlike Emele's
+method (\cite{Emele}), the temporary forwarding does not glow since there is no
+chronological derefencing. After a successful unification, one
+increment in the global counter invalidates all changes made to the
+graph. 
+
+We use  another simple example as shown in Figure~\ref{figure4}
+and Figure~\ref{figure5}. Note that unify-dg(dg1,dg2) and unify-dg(dg2,dg1) get
+the same results.  The result should be as in Figure~\ref{figure6}.  We can see
+that only a minimum number of copies are created.
+
+\begin{figure}[htb]
+\vspace*{-38mm}
+\hspace{-1cm}
+\epsfile{scale=1.0,file=fig1.5}
+\caption{{\bf Another simple example}}
+\label{figure4}
+\end{figure}
+\clearpage
+
+\begin{figure}[htb]
+\epsfile{scale=1.0,file=fig1}
+\caption{{\bf At the end of time n}}
+\label{figure5}
+\end{figure}
+
+\begin{figure}[htb]
+\epsfile{scale=1.0,file=fig1.down}     
+\caption{{\bf and the result}}
+\label{figure6}
+\end{figure}
+
+\clearpage
+
+Now, for a bit more complicated example (Figure~\ref{figure7}, Figure~\ref{figure8}), but
+one that works in a similar manner.
+
+\begin{figure}[htb]
+\vspace*{-40mm}
+\hspace{-1cm}
+\epsfile{scale=1.0,file=fig2.1}     
+\caption{{\bf A little more difficult example}}
+\label{figure7}
+\end{figure}
+
+\begin{figure}[hbt]
+\vspace*{-35mm}
+\hspace*{-1cm}
+\epsfile{scale=1.0,file=fig2}     
+\caption{{\bf At the end of time n}}
+\label{figure8}
+\end{figure}
+And the result in Figure~\ref{figure9}
+\begin{figure}[htb]
+\vspace{-20mm}
+\epsfile{file=fig2.down}     
+\caption{{\bf and the result}}
+\label{figure9}
+\end{figure}
+\clearpage
+
+Now comes a difficult example. Not only might its workings be
+difficult to follow, it was impossible for most past unification
+algorithms. But if you follow the simple rule of traversing the arcs,
+and if you find [], just forward it to the counterpart. Add the
+complement arcs into comp-arc-list, and it turns out that the
+unification is rather straightforward in the Q-D framework. We will
+use four figures (Figures~\ref{figure10}, \ref{figure11}, \ref{figure12}, and \ref{figure13}) to depict this one. The
+first step is to forward the dg2/$<a>$ which is [] to dg1/$<a>$
+(Figure~11). (Our convention is that dg2/$<a>$ represents the subgraph
+(node) that is the destination of the arc {\it a} of the graph dg2. )
+
+\begin{figure}[htb]
+\epsfxsize 140mm
+\epsfysize 200mm
+\epsfbox{fig3.1}     
+\vspace*{2cm}
+\hspace*{5cm}\fbox{図\ref{figure10}を貼り付け}
+\epsfile{file=fig3.1}     
+\vspace*{1.5cm}
+\hspace*{8cm} Fig 3.1
+\vspace*{2cm}
+\caption{{\bf A difficult example containing a cycle}}
+\label{figure10}
+\end{figure}
+\begin{figure}[hbt]
+\epsfxsize 140mm
+\epsfysize 200mm
+\epsfbox{fig3}     
+\vspace*{1.5cm}
+\hspace*{5cm}\fbox{図\ref{figure11}を貼り付け}
+\epsfile{file=fig3}     
+\vspace*{1.5cm}
+\hspace*{8cm} Fig 3
+\vspace*{2cm}
+\caption{{\bf First step}}
+\label{figure11}
+\end{figure}
+
+ Then we unify dg1/$<b,d>$ \footnote{Again, dg1/$<b,d>$ represents the
+subgraph (node) that is the destination of the path $<b,d>$ of the
+graph dg1.} and dg2/$<b,d>$. Since both are [],
+dg1/$<b,d>$ gets forwarded to dg2/$<b,d>$ (see the algorithm). Now we
+traverse into arc-c and unify dg1/$<c>$  and dg2/$<c>$. We find that
+dg1/$<c>$ is already forwarded to dg2/$<b,d>$ so actually we are unifying
+the dg2/$<b,d>$ with dg2/$<c>$. Since dg2/$<b,d>$ then is [], it succeeds and
+dg2/$<b,d>$ is forwarded to dg2/$<c>$. This is the end of the recursions
+into the shared arcs. Now, arc-f is the complementarc(dg2,dg1)
+therefore, it is put into the comp-arc-list of dg1.  This is the end
+of the recursive calls to unify1 (Figure~\ref{figure12}).
+
+
+\begin{figure}[htb]
+\epsfxsize 140mm
+\epsfysize 200mm
+\epsfbox{fig3.middle}     
+\vspace*{2.5cm}
+\hspace*{5cm}\fbox{図\ref{figure12}を貼り付け}
+\vspace*{2cm}
+\epsfile{file=fig3.middle}     
+\vspace*{-19cm}
+\hspace*{8cm} Fig 3
+\caption{{\bf At the end of time n}}
+\label{figure12}
+\end{figure}
+Now unify1 returns and unify0 makes a copy of dg1 respecting the
+current forwarding and comp-arc-list (Figure~\ref{figure13}).
+\begin{figure}[htb]
+\epsfxsize 140mm
+\epsfysize 100mm
+\epsfbox{fig3.down}     
+\vspace*{2.0cm}
+\hspace*{5cm}\fbox{図\ref{figure13}を貼り付け}
+\epsfile{file=fig3.down}     
+\vspace*{1.5cm}
+\hspace*{8cm} Fig 3
+\vspace*{2cm}
+\caption{{\bf and the result}}
+\label{figure13}
+\end{figure}
+
+One final note is that when Q-D copying recurses into the arc-e of dg2
+by following the temporary forwarding links while making a copy of
+dg1, the top node of dg2 will not be copied twice. This is so because
+when the top-level unify1 returns, the temporary forwarding from the
+top node of dg2 to dg1 is made, therefore, when the cyclic arc-e tries
+to make a copy of the top node of dg2, it finds that the top node is
+already forwarded to the top node of dg1. Since the top node of dg1
+was already copied at the beginning of the Q-D copying of dg1, the
+already-made copy is simply returned (see the first {\bf IF} in the
+Q-D Copying algorithm).
+
+
+
+Finally, we would like to provide the example of another cyclic graph
+unification (Figure~\ref{figure14}).
+It is the unification of the cyclic graphs which Pollard
+and Sag once regarded as not unifiable.  We claimed in \cite{thesis} that from
+our definition of the subsumption relation, the unification of these
+graphs should be perfectly reasonable. Also current version of HPSG
+accepts this kind of unification as correct\footnote{{\it Personal
+communication, Bob Carpenter 1993.}}.
+
+
+\begin{figure}[htb]
+\epsfxsize 140mm
+\epsfysize 200mm
+\epsfbox{fig12.up}     
+\vspace*{2.0cm}
+\hspace*{5cm}\fbox{図\ref{figure14}を貼り付け}
+\epsfile{file=fig12.up}     
+\vspace*{2cm}
+\hspace*{9cm} Fig 12 up
+\vspace*{3cm}
+\caption{{\bf Unification of another cyclic feature structure}}
+\label{figure14}
+\end{figure}
+
+
+
+Actually, we can see that unification of these structures is rather
+trivial through Q-D algorithm. First we do
+unify1(dg1/$<a>$,dg2/$<a>$).  Since dg2/$<a>$ is [] we forward from it
+to dg1/$<a>$ as in Figure~\ref{figure15}.  Next we do
+unify1(dg1/$<b>$,dg2/$<b>$) and this time dg1/$<b>$ is [] and we
+forward it to dg2/$<b>$ such that the result is as in Figure~\ref{figure15}.
+
+\begin{figure}[htb]
+\epsfxsize 140mm
+\epsfysize 200mm
+\epsfbox{fig12.middle}     
+\vspace*{2.5cm}
+\hspace*{5cm}\fbox{図\ref{figure15}を貼り付け}
+\epsfile{file=fig12.middle}     
+\vspace*{2cm}
+\hspace*{12cm} Fig 12 up
+\vspace*{3cm}
+\caption{{\bf Putting temporary forwarding links}}
+\label{figure15}
+\end{figure}
+
+Finally, we simply make a copy of dg1 as usual.\footnote{In our
+notation, the values with the same tagging X01 in the distinct feature
+structures do not indicate the same value. the taggings Xmn are simply
+put in order of appearance from the root nodes within one graph.
+Therefore, the node X01 of dg1 and node X01 of dg3 are distinct nodes. 
+Actually, as a matter of correspondence in this figure, X02 of dg3
+corresponds to X01 of dg1.} When we Q-D copy dg1/$<a,a>$ since it is
+forwarded to dg2/$<b>$ we copy the arc below which points to
+dg2/$<b,a>$. Since it is forwarded to dg1/$<a>$, we can copy that
+node. Now we find that this node was already copied when we traverse
+down the arc-a on dg1, so we simply return the copy that is already
+stored in the `copy' field of dg1/$<a>$ (Fig.~\ref{figure16}). This
+way, we can see that unification of these feature structures is
+possible and actually trivial using the Q-D scheme.
+
+
+\begin{figure}[htb]
+\epsfxsize 140mm
+\epsfysize 200mm
+\epsfbox{fig12.down}     
+\vspace*{2.5cm}
+\hspace*{5cm}\fbox{図\ref{figure16}を貼り付け}
+\epsfile{file=fig12.down}     
+\vspace*{2cm}
+\hspace*{12cm} Fig 12 down
+\vspace*{2cm}
+\caption{{\bf and the result}}
+\label{figure16}
+\end{figure}
+
+\section{Empirical Results}
+\subsection{Comparison using actual grammar}
+
+This section describes the empirical results obtained from our sample
+implementations of the Q-D and other algorithms.  Table~\ref{table1}
+shows the summary of the results of our experiments using an
+HPSG-based Japanese grammar for the conference registration telephone
+dialogue domain.  We used 16 sample sentences provided by ATR for the
+domain \footnote{Actual sentences are provided in Technical Report
+  from Justsystem Scientific Institute.}.  The grammar used in the
+experiments was originally developed by ATR as a large scale
+spoken-Japanese language grammar (containing over 10,000 grammar
+nodes) and is scaled down (about 3,000 grammar nodes) to run on a Sun
+Sparc2 with 28 mega bytes of physical memory.
+
+We used Earley's parsing algorithm for the experiment.
+Although it is scaled down from the ATR's {\sc Asura}
+grammar, it covers many of the important linguistic
+phenomena in spoken Japanese. The covered phenomena include
+coordination, case adjunction, adjuncts, control, slash
+categories, zero-pronouns, interrogatives, WH constructs,
+and some pragmatics (speaker, hearer relations, politeness,
+etc.)  (\cite{Yoshimoto}).  The 16 sample telephone
+conversation sentences used in the experiments varied from
+short sentences (one word, i.e., {\it hai} `yes') to
+relatively long ones (such as {\it
+soredehakochirakarasochiranitourokuyoushiwoookuriitashimasu},
+which means `In that case, we [speaker] will send [polite]
+you [hearer] (the) registration form.').  Thus, the number
+of (top-level) unifications per sentence varied widely (from
+7 to over 4,000).
+
+`Unifs' in the table represents the total number of top-level
+unifications during a parse (i.e, the number of calls to the top-level
+`unify-dg', and not `unify1').  Thus, `Unifs' is not the total number
+of unifications recursively called during a parse. It is only the
+number of top-level unifications called by the parser during the
+analysis of a sentence.  Normally, during a parse, `unify1' is called
+several times more often than `unify-dg' (`Unifs').  For example, for
+the parse of the sentence 12, `unify-dg' (`Unifs') were called 3,421
+times and during this parse, unify1 was called 22,674 times for the
+Q-D algorithm.  For sentence 13, it was 4,236 and 27,605 respectively.
+`USrate' represents the ratio of successful unifications to the total
+number of unifications.  `Number of Copies' represents the number of
+nodes created during each parse. `CPU-Time (non-gc user)' is the
+actual parsing time for a sentence in milli-seconds (1/1000th of a
+second or msec) not counting the time taken for garbage collection. (The
+parser and the unification algorithms are implemented in CommonLisp).
+`CPU-Time (total user)' includes the additional time required for garbage
+collection that proceeds in the background.
+
+The algorithms compared were Quasi-Destructive Graph Unification
+(Q-D), Wroblewski's algorithm (W) (\cite{Wroblewski})\footnote{We
+updated his algorithm to handle cycles. Additional computational cost
+for handling cycles is rather trivial for Wroblewski's algorithm. (See
+the footnote below.)}, and Karttunen's algorithm (K)
+(\cite{reversible})\footnote{We also updated his algorithm slightly to
+handle cycles and also only one array is used in our implementation to
+store the contents of original graphs.}.  We did not adopt Pereira's
+algorithm for the experiments since Karttunen's algorithm has been
+reported to be more efficient. Also, we could not find an efficient
+way of handling cycles using Pereira's algorithm. We adopted
+Wroblewski's algorithm (enhanced by Kogure's method for handling
+cycles\footnote{Cycles can be handled in Wroblewski's algorithm by
+checking whether an arc with the same label already exists when arcs
+are added to a node. If such an arc already exists, we destructively
+unify the node which is the destination of the existing arc with the
+node which is the destination of the arc being added. If such an arc
+does not exist, we simply add it (\cite{Kogure}). Thus, cycles can be
+handled very cheaply in Wroblewski's algorithm.}) as representative of
+the incremental copying schemes since a significant speed-up over
+Wroblewski's has not been reported in incremental schemes. Actually,
+Wroblewski's algorithm had been considered the fastest graph
+unification algorithm until we proposed our old version of the Q-D
+algorithm in 1991 (\cite{quasi}).  Additionally, among other
+incremental schemes, we could not find a
+method to handle cycles using Emele's algorithm (\cite{Emele})
+efficiently and therefore, Emele's algorithm is not adopted for this
+experiment. Because of the ease of implementing Wroblewski's
+algorithm, it should be easy to compare the performance of any future
+incremental schemes against the performance of Wroblewski's algorithm
+and to indirectly compare them with the performance of Q-D and
+Karttunen's algorithms reported in this paper.  The Earley parser and
+the unification algorithms are written in CommonLisp\footnote{Allegro
+CL 4.0.1 [SUN 4].} and are run on a SUN Sparc2 with 28 mega bytes of
+RAM.
+
+\begin{table*}[htb]
+\begin{small}
+\begin{verbatim}
+              Comparison of three methods - Number of Copies and CPU user time
+Sent#  Unifs USrate Num of Copies  CPU-Time (non-gc user)    CPU-Time (total user)
+                    Q-D&K     W      Q-D     W       K       Q-D     W       K     
+    1      7  0.42     79     96     184    250     250      184     250     250
+    2    370  0.38   6333   8118    1917   2534    9883     1917    3900   12483
+    3     19  0.21    111    172     267    267     250      267     267     250   
+    4    219  0.51   4654   6036    1567   1933    4334     1567    1933    5850
+    5   2433  0.38  50220  66204   16233  24033  352817    41050   51467  437567
+    6    245  0.37   3670   4569    1450   1667    3850     1450    1667    3850
+    7      7  0.42     79     96     200    300     250      200     300     250
+    8    314  0.48   6009   7426    2584   2800    7066     2584    2800   10166
+    9   1996  0.32  38024  53354   10784  17516  223683    30700   39383  320583
+    10  2811  0.42  59762  86448   28883  42849  596266    54433   95733  784700
+    11   223  0.43   3910   5454    1316   1683    4183     1316    1683    4183
+    12  3421  0.34  76161 103427   27217  51750  653233    51434  136434  924550
+    13  4236  0.38 111307 135504   41167 112683  957066    93433  225933 1371850
+    14    95  0.44   1218   1504     617    717     750      617     717     750
+    15    87  0.48   1513   1685     733    883     983      733     883     983
+    16    87  0.48   1513   1685     733    884     950      783     884     950
+ total 16570       364563 481778  135852 262749 2815814   282668  564234 3879215
+(
+                                    4.8
+\end{verbatim}
+\end{small}
+\caption{{\bf Comparison of four methods - Number of Copies and CPU
+user time.}}
+\label{table1}
+\end{table*}
+
+
+Using the data shown in the Table~\ref{table1}, Figure~\ref{figure17} and Figure~\ref{figure18} are
+plottings of the total parsing time (including the time required for
+garbage collection which is performed in the background).
+Figure~\ref{figure17} represents the comparison of the all three and
+Figure~\ref{figure18} excludes Karttunen's algorithm. Note also
+that as can be seen from the Table~\ref{table1}, parsing time not including the
+GC time, if plotted, would have the identical slopes. QDS in the
+plottings represent the Q-D algorithm with structure-sharing as proposed
+in \cite{quasi-str}. Although the discussions of the structure-sharing
+scheme is not the scope of this paper, since most of the
+up-to-date implementations of the Q-D algorithm include
+structure-sharing, the plottings for QDS are included for the reference
+purposes.\footnote{Full technical reports are available from
+Justsystem Scientific Institute for both Q-D and QDS methodologies.}
+
+
+\begin{figure}[htb]
+\epsfxsize 140mm
+\epsfysize 200mm
+\epsfbox{data7.ps}
+\epsfile{file=data7.ps}
+\vspace*{7cm}
+\hspace*{5cm}\fbox{図\ref{figure17}を貼り付け}
+\special{psfile=data7.ps}
+\epsfile{file=data7.ps,hscale=1.4}
+\vspace*{7cm}
+\caption{{\bf CPU time (total msec user) vs Number of Unifications}}
+\label{figure17}
+\end{figure}
+
+
+\begin{figure}[htb]
+\epsfxsize 140mm
+\epsfysize 200mm
+\vspace*{-58mm}
+\epsfbox{data8.ps}
+\epsfile{file=data8.ps}
+\epsfile{file=data8.ps,height=200mm,width=140mm}
+\vspace*{6cm}
+\hspace*{5cm}\fbox{図\ref{figure18}を貼り付け}
+\special{psfile=data8.ps}
+\vspace*{5.5cm}
+\caption{{\bf CPU time vs Number of Unifications \par (without
+Karttunen's algorithm)}}
+\label{figure18}
+\end{figure}
+
+
+\subsection{Comparison using a simulated grammar}
+
+We have seen in the previous section that the Q-D algorithm runs at
+over 10 times the speed of Karttunen's algorithm and 2 times the speed
+of Wroblewski's algorithm.  The speed was obtained based upon the
+sample grammar which provides the unification success rate (USRate) of
+about 40 to 48 percent with the 16 sample sentences.  As we discussed
+earlier, the strength of the Q-D algorithms depends largely on the
+levels of USRate.  With the lower USRate, the strength of the Q-D
+algorithms should be more conspicuous compared to the incremental
+algorithms since significantly fewer copies get wasted due to
+unification failures.
+
+In this section, we would like to examine the behaviour of
+the Q-D scheme under different USRates.  Since existing
+grammars normally produce consistent USRates for different
+sentences, we need to simulate different USRates using an
+artificial grammar.  
+ In order to simulate different USRates we first define
+three simple rules (based upon HPSG/JPSG framework) as seen
+belows.  Rule1 is the Head-Feature Principle, Rule2
+is the Subcat Principle and Rule3 is the Adjunct Principle
+\footnote{Technical Report from Justsystem Scientific Institute
+  contains actual lisp definitions of the bench-mark rules.}.
+
+
+\begin{footnotesize}
+\begin{verbatim}
+rule1:
+X01[[DTRS  X02[[DTR1  X03[[SYN  X04[[HEAD  X05[]]]]]
+     [SYN  X06[[HEAD  X05]] 
+
+rule2:
+X01[[DTRS  X02[[DTR1  X03[[SYN  X04[[HEAD  X05[[COH  X06[]]]]]
+                [DTR2  X07[[SYN  X08[[SUBCAT  X09[[FIRST  X06]
+                                                  [REST  X10[]]]]]]
+     [SYN  X11[[SUBCAT  X10]] 
+
+rule3:
+X01[[DTRS  X02[[DTR1  X03[[SYN  X04[[HEAD  X05[[COH  X06[]]]]]
+                [DTR2  X06]] 
+\end{verbatim}
+\end{footnotesize}
+We combine these three rules, i.e., (unify-dg (unify-dg
+rule1 rule2) rule3)), and produce one rule graph dg1 which
+is:
+
+\begin{footnotesize}
+\begin{verbatim}
+dg1:
+X01[[DTRS X02[[DTR1 X03[[SYN X04[[HEAD X05[[COH X06[[SYN X07[[SUBCAT X08[[FIRST X06]
+                                                                         [REST  X09[]]]]]]]]
+              [DTR2  X06]]
+    [SYN  X10[[HEAD  X05]
+              [SUBCAT  X09]] 
+\end{verbatim}
+\end{footnotesize}
+
+Note that dg1 represents the three basic principles of
+JPSG/HPSG and therefore characterizes typical
+unification-based grammar rules which are used many times
+during a parse. Note also that dg1 is cyclic. Given that the
+cycle is the result of combining the principles, the
+application of the cyclic rules are a common occurance using
+the JPSG/HPSG grammar formalisms like this one.
+
+Now, we provide two lexical entries which are mutually
+exclusive. (Unification between them would fail.)
+
+
+\begin{footnotesize}
+\begin{verbatim}
+lex1:
+X01[[SYN  X02[[HEAD  X03[[AGR  X04[[GEN  X05 FEM]
+                                    [NUM  X06 SING]
+                                    [PERS  X07 THIRD]]
+                          [CASE  X08 -MINIATIVE]
+                          [MAJ  X09 N]
+                          [NFORM  X10 NORMAL]
+                          [PRED  X11 MINUS]]] 
+
+lex2:
+X01[[SYN  X02[[HEAD  X03[[AGR  X04[[GEN  X05 FEM]
+                                    [NUM  X06 SING]
+                                    [PERS  X07 THIRD]]
+                          [CASE  X08 OBJECTIVE]
+                          [MAJ  X09 N]
+                          [NFORM  X10 NORMAL]
+                          [PRED  X11 MINUS]]] 
+\end{verbatim}
+\end{footnotesize}
+
+We unify dg1 with lex1 and get dg2:
+
+\begin{footnotesize}
+\begin{verbatim}
+dg2:
+X01[[DTRS  X02[[DTR2  X03[[SYN  X04[[SUBCAT  X05[[REST  X06[]]
+                                                  [FIRST  X03]]]]
+                [DTR1  X07[[SYN  X08[[HEAD  X09[[COH  X03]
+                                                [PRED  X10 MINUS]
+                                                [NFORM  X11 NORMAL]
+                                                 [MAJ  X12 N]
+                                                [CASE  X13 -MINIATIVE]
+                                                [AGR  X14[[PERS  X15 THIRD]
+                                                          [NUM  X16 SING]
+                                                          [GEN  X17 FEM]]]]]]
+     [SYN  X18[[SUBCAT  X06]
+               [HEAD  X09]] 
+\end{verbatim}
+\end{footnotesize}
+
+We also unify lex2 with dg1 and get dg3:
+
+\begin{footnotesize}
+\begin{verbatim}
+dg3:
+X01[[DTRS  X02[[DTR2  X03[[SYN  X04[[SUBCAT  X05[[REST  X06[]]
+                                                  [FIRST  X03]]]]
+                [DTR1  X07[[SYN  X08[[HEAD  X09[[COH  X03]
+                                                [PRED  X10 MINUS]
+                                                [NFORM  X11 NORMAL]
+                                                [MAJ  X12 N]
+                                                [CASE  X13 OBJECTIVE]
+                                                [AGR  X14[[PERS  X15 THIRD]
+                                                          [NUM  X16 SING]
+                                                          [GEN  X17 FEM]]]]]]
+     [SYN  X18[[SUBCAT  X06]
+               [HEAD  X09]] 
+\end{verbatim}
+\end{footnotesize}
+
+The experiment is as follows:
+We successfully unify dg1 with dg2. We unsuccessfully unify
+dg2 with dg3. We plot the relation between the CPU time
+(non-gc) and the number of top-level unifications for
+different numbers of top-level unifications. (Namely, 10,
+100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600, 51200,
+and 102400 times.) We collect data for USRate 0.0, 0.25,
+0.5, 0.75, and 1.0. When all unifications are between dg2
+and dg3 then the USRate is 0.0. If one out of four is
+between dg2 and dg3 and the rest are between dg1 and dg2
+then the USRate is 0.25. The described experiment was performed
+for 5 different kinds of USRates. We compared the Q-D
+algorithm and Wroblewski's algorithm. 
+
+Figures~\ref{figure19} to \ref{figure21} show the results of the 
+experiments\footnote{Experiments were conducted using
+CMU-CommonLisp run on an IBM RT with 12 mega bytes of RAM.
+The rules and the code are provided in Technical Report from
+Justsystem Scientific Institute and are put in public domain. The code
+can be used as a bench mark test of 
+the future graph unification algorithms. It is ideal for
+testing the behaviour under heavy use of cyclic feature
+structures as well as standard acyclic feature structures.}
+under the USRates 0.0, 0.5 and 1.0. We did not plot for 
+0.25 and 0.75 to save space; however, the slopes for those were 
+exactly in between the plotted slopes. One thing to be noted
+is that the Q-D algorithm runs faster than Wroblewski's even
+with the 100 percent unification success rate. It is
+probably because Wroblewski's algorithm needs two
+set-difference operations (complementarcs) in order to
+create copies incrementally. Also, handling cycles in
+Wroblewski's algorithm is adding a small amount of
+overhead to his algorithm. 
+
+\begin{figure}[htb]
+\epsfxsize 140mm
+\epsfysize 200mm
+\vspace*{6cm}
+\hspace*{5cm}\fbox{図\ref{figure19}を貼り付け}
+\special{psfile=data12.ps}
+\vspace*{5.5cm}
+\epsfile{file=data12.ps}
+\epsfbox{data12.ps}
+\caption{{\bf CPU time (non-gc msec user) vs Number of Unifications
+(USRATE 0.0)}}
+\label{figure19}
+\end{figure}
+
+
+
+
+\begin{figure}[htb]
+\epsfxsize 140mm
+\epsfysize 200mm
+\vspace*{6cm}
+\hspace*{5cm}\fbox{図\ref{figure20}を貼り付け}
+\special{psfile=data13.ps}
+\epsfile{file=data13.ps}
+\vspace*{5.5cm}
+\epsfbox{data13.ps}
+\caption{{\bf CPU time (non-gc msec user) vs Number of Unifications
+(USRATE 0.5)}}
+\label{figure20}
+\end{figure}
+
+
+
+
+
+\begin{figure}[htb]
+\epsfxsize 140mm
+\epsfysize 200mm
+\vspace*{6cm}
+\hspace*{5cm}\fbox{図\ref{figure21}を貼り付け}
+\special{psfile=data11.ps}
+\vspace*{5.5cm}
+\epsfile{file=data11.ps}
+\epsfbox{data11.ps}
+\caption{{\bf CPU time (non-gc msec user) vs Number of Unifications
+(USRATE 1.0)}}
+\label{figure21}
+\end{figure}
+
+
+\section{Discussion: Comparison to Other Approaches}
+\subsection{Concerning Incremental Copying}
+Wrobleski introduced a scheme for efficient unification based upon the
+notion of {\it incremental copying} in \cite{Wroblewski}. His
+algorithm and the incremental copying idea is generally known as
+``Wroblewski's non-destructive graph unification'' method. 
+This method is considered very effective and is adopted by algorithms
+such as \cite{Kogure}, \cite{Kogure-Lazy}, \cite{Godden} and \cite{Emele}.
+Wroblewski's and these algorithms are collectively known as `Lazy
+unification' methods since by using incremental copying, the copying of nodes
+are delayed (or copying is performed {\it Lazily}, a computational
+jargon representing a delayed activity -- as in {\it lazy evaluation}).
+The basic
+idea behind his method is to create copies incrementally {\it as we go}
+during unification only when such a need arises. It is a combination
+of a destructive algorithm (he calls it {\it unify1}) similar to
+Pereira's algorithm and a nondestructive algorithm {\it unify2} in
+which copies are created incrementally.  {\it Unify1} is called only when
+either (or both) of the highest (root) nodes of the input graphs are
+current copies of other nodes (so that they can be modified without
+losing the original grammar and constituent graphs). Otherwise {\it unify2}
+creates copies of the input nodes as the unification progresses.  This
+{\it Incremental copying} had been accepted as an effective method of
+minimizing over copying and eliminating early copying, as defined by
+Wroblewski (\cite{Wroblewski}).  However, while being effective in
+minimizing over copying (it over copies only in some special cases of
+convergent arcs), incremental copying is ineffective in eliminating
+early copying as we defined it previously.
+
+
+
+\begin{figure}[htb]
+\epsfxsize 140mm
+\epsfysize 200mm
+\epsfbox{fig16}     
+\vspace*{3.5cm}
+\hspace*{5cm}\fbox{図\ref{figure22}を貼り付け}
+\epsfile{file=fig16}     
+\vspace*{3.5cm}
+\vspace*{-20cm}
+\hspace*{12cm}        Fig 16
+\caption{{\bf Early copy of incremental scheme within the same
+subgraph}}
+\label{figure22}
+\end{figure}
+
+We claim incremental copying is ineffective in eliminating early
+copying for two reasons. First, when incremental copying unification
+is performed, any copies created up to the point of failure in the
+same subgraph of a shared arc will be wasted, as seen in Figure~\ref{figure22}.
+Second and more significantly that since the recursive calls into the
+shared arcs are non-deterministic (independent of each other), there
+is no way for one particular recursion into a shared arc to know the
+result of future recursions into other shared arcs. Therefore, even if
+a particular recursion into one arc succeeds (with minimum over
+copying and no early copying in Wroblewski's sense), other arcs may
+eventually fail; thus the copies that are created in the successful
+arcs are all wasted. Figure~\ref{figure23} shows such an example. If incremental
+unification proceeds unifying the subgraphs E,X,Y, and then Z. At some
+deep position of Z, if unification failure is found, not only are
+nodes in Z wasted (as we saw in Figure~\ref{figure22}) but all of the copying
+created in E,X,Y will also be wasted. By structure-sharing of
+unmodified graphs, Kogure's and Emele's schemes can avoid wasting the
+subgraph E (i.e., a complement graph), but their scheme cannot avoid
+wasting X and Y.  Note that this is inherent and unavoidable in
+incremental schemes, since by definition, these schemes must produce
+copies as they proceed. Since each recursive calls to shared arcs are
+non-deterministic, future event in other recursive calls are not
+predictable. In order to avoid this problem, incremental schemes will
+have to delay all copying until after entire top-level unification.
+This will mean that these unifications will no longer be incremental.
+Thus, fully delaying copying in incremental schemes to avoid early
+copying would make their control structures essentially no different
+from Q-D and reversible (Karttunen's) schemes.  In other words, we can
+also view the Q-D scheme as {\it a fully lazy scheme without overhead for
+delaying}.
+
+\begin{figure}[htb]
+\epsfxsize 140mm
+\epsfysize 200mm
+\vspace*{4.5cm}
+\epsfbox{fig27}     
+\hspace*{5cm}\fbox{図\ref{figure23}を貼り付け}
+\epsfile{file=fig27}     
+\vspace*{4cm}
+\hspace*{12cm}      Fig 27
+\vspace*{4cm}
+\caption{{\bf Unavoidable massive early copying of incremental
+schemes}}
+\label{figure23}
+\end{figure}
+
+
+\subsection{Specific to Each Algorithm}
+
+ One early and important research effort in the feature-structure
+unification-based method was by Pereira. Actually, the control
+structure of our unify1 is similar to that of Pereira[1985].  However,
+in Pereira's method, a result graph is represented as a combination of
+the original graph (`skeleton') and the updates (new arcs to be added
+to create the result stored in `environment'). Thus the result graph
+is dynamically created whenever it is needed.  This causes the log(d)
+overhead (where d is the number of nodes in a graph) to assemble the
+whole graph everytime the node is accessed.  In the proposed scheme,
+instead of storing changes to the argument graphs in the environment,
+we store the changes in the graph structure themselves
+(non-destructively); therefore, there will be no overhead associated
+with node accesses.
+
+We share the principle of storing changes in a restorable
+way with Karttunen's reversible unification and we copy
+graphs only after a successful unification.  In Karttunen's
+method, whenever a destructive change is about to be made,
+the attribute value pairs\footnote{I.e., arc structures:
+`label' and `value' pairs in our vocabulary.} stored in the
+body of the node are saved into an array.  These values are
+restored after the top level unification is completed.  (A
+copy is made prior to the restoration operation if the
+unification was a successful one.) Thus, in Karttunen's
+method, each node in the entire argument graph that has been
+destructively modified must be restored separately by
+retrieving the attribute values saved in an array and by
+resetting the values into the dag structure skeletons saved
+in another array. In the Q-D method, one increment to the
+global counter can invalidate all of the changes made to the
+nodes.  There is also a cost for {\it reversing} the
+unification operation every time unification is completed;
+this cost is also proportionate to the size of the input
+graph. Thus, if the input graph grows (which is likely with
+a large-scale system) then the cost for saving and reversing
+changes can be high.  There is also a hidden cost of
+Karttunen's method associated with the use of global arrays
+to store changes. It is the cost associated with resizing
+the arrays which are used to store the original information.
+These global arrays for saving require original allocation
+of memory. If the allocated memory is too big, then we will
+be wasting the unused memory cells; if it is too small then
+there will be dynamic array resizing operations during
+unification which can be costly.  Since the number of
+destructive operations during unification varies
+significantly from sentence to sentence and from grammar to
+grammar, determining the desirable initial array size for
+Karttunen's scheme is non-trivial.
+
+In the delayed schemes, \cite{Karttunen} considered the use
+of lazy evaluation to delay destructive changes during
+unification.  \cite{Godden} presented one method to delay
+copying until a destructive change is about to take place. 
+Godden uses delayed closures to directly implement lazy
+evaluation during unification.  While it may be conceptually
+straightforward to take advantage of delayed evaluation
+functionalities in programming languages, actual efficiency
+gain from such a scheme may not be significant. This is so
+because such a scheme simply shifts the time and space
+consumed for copying to creating and evaluating closures and
+no significant saving can be expected
+overall.\footnote{Instead creating closures in comparison to
+creating copies could be costly in actual implementations
+since `defstruct' operation which is normally used to create
+nodes (copies) is often effectively optimized in many
+commercial compilers while delayed closures are seldom
+optimized.} Additionally, \cite{Emele} also identifies a
+source of other problem in Godden's method in the operations
+which are needed to search for already existing instances of
+active data structures in the copy environment and merging
+of environments for successive unification causing an
+additional overhead.  Kogure and Emele also use the lazy
+evaluation idea to delay destructive changes. Both Kogure
+and Emele avoid direct usage of delayed evaluation by using
+pointer operations. Kogure's method also requires special
+dependency information to be maintained; this adds an
+overhead along with the cost of traversing the dependency
+arcs. Also, a second traversal of the set of dependent nodes
+is required for actually performing the copying. Emele
+proposes a method of dereferencing by adding environment
+information that carries a sequence of generation counters
+so that a specific generation node can be found by
+traversing the forwarding links until a node with that
+generation is found. While this allows undoing destructive
+changes cheaply by backtracking the environment, every time
+a specific graph is to be accessed the whole graph needs to
+be reconstructed by following the forwarding pointers
+sequentially, as specified in the environment list (except
+for the root node), in order to find the node that shares
+the same generation number as the root node. Therefore the
+overhead for dereferencing the environmental chain could be
+steep if a grammar is very large and if the same graphs are
+unified many times to create a large constituent.
+
+Like Wroblewski's method, all three lazy methods (i.e, Godden's,
+Kogure's and Emele's) suffer from the problem of {\it Early Copying}
+as discussed previously. This is so because the copies that are
+incrementally created up to the point of failure during the same
+top-level unification are all wasted.  Since the future unification
+result of other non-deterministic recursion into shared arcs is
+unknown at the point of a particular successful recursion into one
+shared arc, if unification succeeds with the arc, then copies are
+created. If a failure is detected later in some other recursive
+unification into the shared arcs, then the copies created until that
+point will all get wasted.  We have explained that if we are to avoid
+such early copying of incremental copying schemes, then all copying
+must be delayed until after the entire top-level unification.  That in
+essence is what the Q-D algorithm does. Thus, the Q-D algorithm may be
+seen as one extreme form of lazy copying scheme as well. The strength
+of it however, is that there is virtually no overhead for this full
+delaying of copying. The temporary forwarding pointers and
+comp-arc-list are utilized along with the global timing (generation)
+counter so that all copying can be effectively delayed until after the
+entire top-level unification.  All changes recorded as temporary
+forwarding links and as updates to comp-arc-list can be invalidated
+very cheaply (constant time) by just one increment of the global
+timing counter.  Other possibilities for speeding up unification
+includes sorting of feature structures based on criteria such as
+frequency of failure and nature of subgraphs (e.g., atomic vs complex
+always fails).
+
+ One such notion is briefly proposed in (\cite{Kogure-Lazy}).
+However, our informal experiments have shown that any specific
+modification of ordering of arcs during the unification generally
+slows down unification (and sometimes slows down very significantly)
+because 1) sorting is not a cheap operation; and 2) such sorting will
+be performed very many times and it becomes too expensive. Note that
+unifications are called recursively for sometimes over 100,000 times
+during a parse, and performing a sort operation for each of them
+becomes too expensive. A decent grammar such as the one developed by
+ATR normally comes with the arcs pre-sorted so that the arcs with
+higher frequency of failure are normally put before the ones that fail
+less. Such modification is done to the grammar prior to parsing and
+while the gain due to such a preprocessing is valued it is not very
+relevant to the issue of efficiency of the unification algorithm
+itself and to this paper. Other possibilities in efficiency in
+unification includes structure-sharing of graphs. We have reported in
+\cite{quasi-str} and \cite{thesis} that introduction of
+structure-sharing in Q-D framework provides another two fold increase
+in speed. Also, \cite{signature} proposes the method in preprocessing
+the feature-structures during the unification which claims another two
+fold increase in speed. Given these improvements are in data
+structures and preprocessing, discussions of these methodologies are
+not the scope of this paper.
+
+\section{Conclusion}
+
+Unification-based constraint processing has become a {\it de
+facto} standard of natural language processing. 
+Unification-based postulation has been accepted as the
+central tool for representing constraints in modern
+theoretical and computational linguistics. In massively
+parallel natural language processing, graph unification can
+be adopted to remedy the weakness of so-called
+marker-passing methods in processing syntactic constraints. 
+In fact, Q-D algorithm was developed during the course of
+such a massively-parallel natural language research, in
+which we needed an effectively parallelizable unification
+(\cite{cogsci91}, \cite{MONA-LISA}).  Given that recursions
+into shared arcs were parallel-processed in the
+parallel-processing environment, the problem of early
+copying inherent in incremental schemes were devastating in
+the parallel unification environment. Although the topic of
+parallel unification is not the scope of this paper,
+\cite{pquasi} describes some results in parallizing the Q-D
+algorithm. Since the Q-D algorithm performs constraint
+checking without the burden of copying, we found that
+unification failure can be found extremely quickly by
+parallely spawning the recursive unify1s deep into the
+feature structures.  The well-known weakness of
+unification-based natural language processing has been
+slowness of speed due to the time required by unification
+algorithms.  Given that more than 90 percent and often as
+much as 98 percent of parsing time is consumed by graph
+unification alone, the speed-up effect of improving graph
+unification algorithms should naturally have a greater
+impact than the effect of improving the speed of parsing
+methodologies alone. Yet, although there has been some
+successful and important research in speeding up parsing
+algorithms (such as \cite{Tomita}), efforts to improve
+unification algorithms were relatively rare compared to
+parsing research efforts.  Perhaps the reason for this could
+be that most natural language systems to date did not
+contain a very large grammar and, therefore, the performance
+bottleneck by unification algorithms remained largely
+unnoticed.  Thus, it is not surprising that some of the
+important unification-based research came from places such
+as SRI, MCC, ATR and CMU, where large-scale natural language
+processing projects were being conducted. 
+
+  The algorithm presented in this paper has been tested using the
+grammar developed at CMU and at ATR and has been demonstrated to
+consistently run fast with large scale grammars. At CMU, the algorithm
+has been integrated into the new JANUS multi-language speech-to-speech
+translation project.  Especially significant, ATR adopted the
+algorithm for the latest {\sc Asura} project, in which a fully
+separate implementation of the algorithm integrating Kogure's method
+for negative feature structures (\cite{negative}) and Kasper's method
+for disjunctive feature structures (\cite{Kasper}) was done.  The
+informal data that are currently available from them have confirmed the
+performance of the algorithm with a very large grammar.  More
+experiences with the algorithm should be available from other research
+institutes from around the world. Among them are the University of
+Tuebingen, the University of Karlsruhe, Keio University, Tokyo
+Institute of Technology, and Tokushima University who have already
+started using the algorithm in their projects.  With the capacity to
+handle variables, convergence, and cycles, and with the ease of
+implementing it, the algorithm should be easily integrated into
+existing and future natural language processing mechanisms as a
+central constraint processing algorithm of the systems.
+
+
+
+\acknowledgment
+~ ~A significant part of this research was performed at Center for
+Machine Translation and at Laboratory for Computational Linguistics of
+Carnegie Mellon University. Also a portion of this research was
+performed at ATR Interpreting Telephony Research Laboratories. Thanks
+are due to Alfredo Maeda and Joshua Arai for their help in preparing
+the final version of this paper, and also to Kazunori and Hatsuko Ukigawa 
+for their dedication in setting up a fine lab for our research in
+basic science.
+
+
+
+
+
+\begin{thebibliography}{References}
+\bibitem[\protect \citeauthoryear{Bresnan and Kaplan}{1982}]{LFG}
+Bresnan, J. and R. Kaplan
+``Lexical-Functional Grammar: A Formal System for Grammatical
+Representation''.
+In J. Bresnan (ed) {\it The Mental Representation of Grammatical
+Relations}, MIT Press, 1982.
+
+
+
+
+
+
+\bibitem[\protect \citeauthoryear{Earley}{1968}]{Earley}
+Earley, J.
+{\it An efficient context-free parsing algorithm}. Doctoral
+dissertation,
+Carnegie Mellon University.
+
+
+\bibitem[\protect \citeauthoryear{Emele}{1991}]{Emele}
+Emele, M.
+``Unification with Lazy Non-Redundant Copying''.
+In {\it Proceedings of ACL-91}, 1991.
+
+
+
+
+\bibitem[\protect \citeauthoryear{Franz}{1990}]{Alex}
+Franz, A.
+{\it A Parser for HPSG}
+Report No. CMU-LCL-90-3, Carnegie Mellon University.
+
+
+\bibitem[\protect \citeauthoryear{Fujioka, {\it et al}}{1990}]{pquasi}
+Fujioka, T., Tomabechi, H., Furuse, O., and H. Iida
+{\it Parallelization Technique for Quasi-Destructive Graph Unification
+Algorithm}, 90-NL-80, Information Processing Society of Japan, 1990.
+
+\bibitem[\protect \citeauthoryear{Gazdar, {\it et al}}{1985}]{GPSG}
+ Gazdar, G., G. Pullum, and I. Sag
+{\it Generalized Phrase Structure Grammar}.  Harvard University Press, 1985.
+
+\bibitem[\protect \citeauthoryear{Gazdar and Mellish}{1989}]{Gazdar}
+Gazdar, G., and C. Mellish
+{\it Natural Language Processing in Lisp}.
+Addison Wesley, 1989.
+
+\bibitem[\protect \citeauthoryear{Godden}{1990}]{Godden}
+Godden, K.
+``Lazy Unification''
+In {\it Proceedings of ACL-90}, 1990.
+
+\bibitem[\protect \citeauthoryear{Gunji}{1987}]{JPSG}
+Gunji, T.
+{\it Japanese Phrase Structure Grammar}.
+D.Reidel, Dordrecht, 1987.
+
+
+
+
+
+
+
+
+
+\bibitem[\protect \citeauthoryear{Jackendoff}{1977}]{XBAR}
+Jackendoff, R. {\it X-Bar Syntax: A Study of Phrase Structure}, MIT
+Press, 
+1977.
+
+\bibitem[\protect \citeauthoryear{Karttunen}{1986a}]{reversible}
+Karttunen, L. 
+{\it D-PATR: A Development Environment for Unification-Based
+Grammars}.
+Report CSLI-86-61. Center for the Study of Language and
+Information, 1986.
+
+
+\bibitem[\protect \citeauthoryear{Karttunen}{1986b}]{reversibleb}
+Karttunen, L. 
+``D-PATR: A Development Environment for Unification-Based
+Grammars''.
+In {\it Proceedings of COLING-86}, 1986. (Also, Report
+CSLI-86-61 Stanford University).
+
+\bibitem[\protect \citeauthoryear{Karttunen and Kay}{1985}]{Karttunen}
+Karttunen, L. and M. Kay. 
+``Structure Sharing with Binary Trees''.
+In {\it Proceedings of ACL-85}, 1985.
+
+\bibitem[\protect \citeauthoryear{Kasper}{1987}]{Kasper}
+ Kasper, R.
+``A Unification Method for Disjunctive Feature Descriptions''.
+In {\it Proceedings of ACL-87}, 1987.
+
+
+\bibitem[\protect \citeauthoryear{Kay}{1984}]{FUG}
+Kay, M.
+``Functional Unification Grammar: A Formalism for Machine
+Translation.''
+In {\it Proceedings of COLING'84}, 1984.
+
+
+
+
+\bibitem[\protect \citeauthoryear{Kogure}{1989}]{Kogure}
+ Kogure, K.
+{\it A Study on Feature Structures and Unification}.
+   ATR Technical Report. TR-1-0032, 1988.
+
+\bibitem[\protect \citeauthoryear{Kogure}{1990}]{Kogure-Lazy}
+ Kogure, K.
+``Strategic Lazy Incremental Copy Graph Unification''.
+In {\it Proceedings of COLING-90}, 1990.
+
+\bibitem[\protect \citeauthoryear{Kogure}{1992}]{negative}
+ Kogure, K.
+``A Treatment of Negative Description of Typed Feature Structurees''.
+In {\it Proceedings of COLING-92}, 1992.
+
+
+\bibitem[\protect \citeauthoryear{Maeda, {\it et al}}{1994}]{signature}
+Maeda, A., H. Tomabechi, J. Aoe.
+``Signature-Check Based Unification Filter'',
+{\it Software Practice and Experience}, Vol 24, 1994.
+
+
+\bibitem[\protect \citeauthoryear{Morimoto, {\it et
+al}}{1990}]{SL-TRANS}
+Morimoto, T., H. IIda, A. Kurematsu, K. Shikano, and T. Aizawa.
+``Spoken Language Translation: Toward Realizing an Automatic
+Telephone Interpretation System''.
+ In {\it Proceedings of InfoJapan 1990}, 1990.
+
+
+
+\bibitem[\protect \citeauthoryear{Pereira and Shieber}{1984}]{Formal-PATR}
+Pereira, F. and S. Shieber
+``The Semantics of Grammar Formalisms Seen as Computer Languages''.
+In {\it Proceedings of COLING84}.
+
+\bibitem[\protect \citeauthoryear{Pereira and Warren}{1980}]{DCG}
+Pereira, F. and D. Warren
+``Definite clause grammars for language analysis -- a survey of the
+formalisms and a comparison with augmented transition networks.''
+In {\it Artificial Intelligence} 13, 1980.
+
+\bibitem[\protect \citeauthoryear{Pereira}{1985}]{Pereira}
+Pereira, F.
+``A Structure-Sharing Representation for Unification-Based
+Grammar Formalisms''.
+In {\it Proceedings of ACL-85}, 1985.
+
+\bibitem[\protect \citeauthoryear{Pollard}{1984}]{Pollard} 
+Pollard, C.
+{\it Generalized Phrase Structure Grammars, Head Grammars and Natural
+Language}, Ph.D Dissertation, Stanford University. 1984
+
+\bibitem[\protect \citeauthoryear{Pollard and Sag}{1987}]{HPSG} 
+Pollard, C. and I. Sag {\it Information-\-based
+Syntax and Semantics}. Vol 1,  CSLI, 1987.
+
+
+
+
+
+
+\bibitem[\protect \citeauthoryear{Shieber, {\it et al}}{1983}]{PATR-II}
+Shieber, S., H. Uszkoreit, J. Robinson, and M. Tyson
+{\it The Formalism and Implementation of PATR-II}. In Research on 
+Interactive Acquisition and Use of Knowledge.  Artificial Intelligence
+Center, SRI International, 1983
+
+\bibitem[\protect \citeauthoryear{Shieber}{1986}]{Shieber}
+Shieber, S.
+{\it An Introduction to Unification-based Approaches to Grammar}
+CSLI Lecture Notes Number 4, Center for the Study of Language and Information. 1986.
+
+
+
+\bibitem[\protect \citeauthoryear{Tomabechi}{1991a}]{quasi}
+Tomabechi, H.
+``Quasi-Destructive Graph Unification''.
+In {\it Proceedings of ACL-91}, 1991.
+
+\bibitem[\protect \citeauthoryear{Tomabechi}{1991b}]{cogsci91}
+Tomabechi, H.
+``A Graph Propagation Architecture for Massively-Parallel Processing of
+Natural Language''. In {\it Proceedings of The Thirteenth Annual
+Conference of the Cognitive Science Society}, 1991.
+
+\bibitem[\protect \citeauthoryear{Tomabechi}{1991c}]{MONA-LISA}
+Tomabechi, H.
+``MONA-LISA: Multimodal Ontological Neural
+Architecture for Linguistic Interactions and Scalable Adaptations''.
+In {\it Proceedings of the International Workshop on Future Generation
+Natural Language Systems}, 1991.
+
+\bibitem[\protect \citeauthoryear{Tomabechi}{1992}]{quasi-str}
+Tomabechi, H.
+``Quasi-Destructive Graph Unification with Structure-Sharing''. In
+{\it Proceedings of COLING92}, 1992.
+
+\bibitem[\protect \citeauthoryear{Tomabechi}{1993}]{thesis}
+Tomabechi, H.
+{\it Efficient Unification for Natural Language}. Doctoral dissertation,
+Carnegie Mellon University, 1993.
+
+\bibitem[\protect \citeauthoryear{Tomabechi and Levin}{1989}]{HMCP}
+ Tomabechi, H. and L. Levin
+``Head-driven Massively-parallel Constraint Propagation:
+Head-features and subcategorization as interacting constraints
+in associative memory'', 
+In {\it Proceedings of The Eleventh Annual Conference of 
+the Cognitive Science Society}, 1989.
+
+
+
+
+\bibitem[\protect \citeauthoryear{Tomita}{1985}]{Tomita}
+Tomita, M.
+{\it An efficient context-free parsing algorithm for natural languages
+and its applications}. Doctoral dissertation, Carnegie Mellon
+University, 1985.
+
+
+\bibitem[\protect \citeauthoryear{Tomita and Carbonell}{1987}]{UP}
+Tomita, M. and J. Carbonell.
+``The Universal Parser Architecture for Knowledge-Based
+Machine Translation''. In {\it Proceedings of IJCAI87},
+1987.
+
+\bibitem[\protect \citeauthoryear{Tomita and Knight}{1987}]{Pseudo}
+Tomita, M. and K. Knight
+{\it Pseudo-Unification and Full-Unification}
+CMU-CMT-88-MEMO, Carnegie Mellon University, 1987.
+
+
+\bibitem[\protect \citeauthoryear{Wroblewski}{1987}]{Wroblewski}
+Wroblewski, D.``Nondestructive Graph Unification''.
+In {\it Proceedings of AAAI87}, 1987.
+
+
+\bibitem[\protect \citeauthoryear{Yoshimoto and
+Kogure}{1989}]{Yoshimoto}
+ Yoshimoto, K. and K. Kogure
+{\it Japanese Sentence Analysis
+by means of Phrase Structure Grammar}.   ATR Technical
+Report. TR-1-0049, 1989.
+
+
+\end{thebibliography}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+\begin{biography}
+\bioauthor{Hideto Tomabechi}
+{Hideto Tomabechi was a member of the Yale AI Project, Yale Cognitive
+Science Program, and the Ph.D. Program in Computer Science at Yale
+University from 1985 to 1987. From 1987 to 1992, he was a member of
+the Center for Machine Translation at School of Computer Science, and
+the Laboratory for Computational Linguistics at Department of
+Philosophy at Carnegie Mellon University (CMU).  He was a Visiting
+Research Scientist from CMU to ATR Interpreting Telephony Research
+Laboratories for 8 months respectively in 1990 and 1991. He received
+his Ph.D. from Carnegie Mellon University in 1993.  He was an
+Associate Professor at Department Information Science and Intelligent
+Systems of Tokushima University from 1992 to 1994. Currently, he is
+Director of Justsystem Scientific Institute, Tokyo, Japan.  His
+research interests include multimodal natural language processing,
+artificial intelligence, massively parallel processing, cognitive and
+clinical psychology, functional brain mapping, and virtual reality.}
+
+
+\bioreceived{Received}
+\biorevised{Revised}
+\bioaccepted{Accepted}
+
+\end{biography}
+
+\end{document}
+
+
+
+
+
+
+

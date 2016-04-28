@@ -1,0 +1,1137 @@
+    \documentclass[japanese]{jnlp_1.4}
+
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{amsmath}
+\usepackage{dcolumn}
+
+\usepackage{bm}
+\usepackage{amssymb} 
+
+\Volume{21}
+\Number{5}
+\Month{Septermber}
+\Year{2014}
+
+\received{2014}{1}{22}
+\revised{2014}{4}{1}
+\rerevised{2014}{5}{13}
+\accepted{2014}{6}{30}
+
+\setcounter{page}{1011}
+
+\jtitle{共変量シフト下の学習による語義曖昧性解消の\\
+教師なし領域適応}
+\jauthor{新納　浩幸\affiref{Author_1} \and 佐々木　稔\affiref{Author_1}}
+\jabstract{
+本論文では語義曖昧性解消(Word Sense Disambiguation，WSD)の教師なし領域適応の問題
+に対して，共変量シフト下の学習を試みる．共変量シフト下の学習では
+確率密度比 $w({\bm x}) =  P_T({\bm x})/P_S({\bm x})$ を重みとした
+重み付き学習を行うが，WSD の場合，推定される確率密度比の値が小さくなる傾向がある．
+ここでは$P_T({\bm x})$と$P_S({\bm x})$を
+それぞれ求めて，その比を取ることで$w({\bm x})$を推定するが，
+$P_S({\bm x})$を求める際に，
+ターゲット領域のコーパスとソース領域のコーパスを合わせたコーパスを，
+新たにソース領域のコーパス$S$と見なすことで，先の問題に対処する．
+BCCWJ の3つの領域 OC （Yahoo! 知恵袋），PB（書籍）及び PN（新聞）を選び，
+SemEval-2 の日本語 WSD タスクのデータを利用して，多義語 16種類を対象に，
+WSD の領域適応の実験を行った．
+$w({\bm x})$を推定する手法として，$P_T({\bm x})$と$P_S({\bm x})$を求めずに，
+$w({\bm x})$を直接推定する uLSIF も試みた．また確率密度比を上方修正するために
+「$p$乗する」「相対確率密度比を取る」という手法も組み合わせて試みた．
+それらの実験の結果，提案手法の有効性が示された．
+}
+\jkeywords{語義曖昧性解消，領域適応，共変量シフト，uLSIF，負の転移}
+
+\etitle{Unsupervised Domain Adaptations for Word Sense Disambiguation by Learning under Covariate Shift}
+\eauthor{Hiroyuki Shinnou\affiref{Author_1} \and Minoru Sasaki\affiref{Author_1}} 
+\eabstract{
+In this paper, we apply the learning under covariate shift
+to the problem of unsupervised domain adaptation for word sense disambiguation (WSD).
+This learning is a type of weighted learning method, 
+in which the probability density ratio $w({\bm x}) =  P_T({\bm x})/P_S({\bm x})$
+is used as the weight of an instance. 
+However, $w({\bm x})$ tends to be small in WSD tasks.
+In order to address this problem, 
+we calculate $w({\bm x})$ by estimating $P_T({\bm x})$ and $P_S({\bm x})$,
+where $P_S({\bm x})$ is estimating by regarding 
+the corpus combining the source domain corpus and target domain corpus
+as the source domain corpus.
+In the experiment, we use three domains -OC (Yahoo! Chiebukuro), PB (books) and 
+PN (news papers)- in BCCWJ,
+and 16 target words provided by the Japanese WSD task in SemEval-2.
+For calculating $w({\bm x})$, we also use 
+uLSIF, which  directly estimates $w({\bm x})$
+without estimating $P_T({\bm x})$ or $P_S({\bm x})$.
+Moreover, we use the ``$p$ power'' method and the ``relative probability density ratio'' method 
+to boost the obtained probability density ratio.
+These experiments prove our method to be effective.
+}
+\ekeywords{word sense disambiguation, domain adaptation, covariate shift, uLSIF，negative transfer}
+
+\headauthor{新納，佐々木}
+\headtitle{共変量シフト下の学習による語義曖昧性解消の教師なし領域適応}
+
+\affilabel{Author_1}{茨城大学工学部情報工学科}{Department of Computer and Information Sciences, Ibaraki University}
+
+
+
+\begin{document}
+\maketitle
+
+\section{はじめに}
+
+本論文では，語義曖昧性解消(Word Sense Disambiguation, WSD)の領域適応に対して，
+共変量シフト下の学習を試みる．
+共変量シフト下の学習では確率密度比を重みとした重み付き学習を行うが，
+WSD のタスクでは算出される確率密度比が小さくなる傾向がある．
+ここではソース領域のコーパスとターゲット領域のコーパスとを合わせたコーパスを
+ソース領域のコーパスと見なすことで，この問題に対処する．
+なお本手法はターゲット領域のデータにラベル付けしないため，教師なし領域適応手法に分類される．
+
+WSD は文中の多義語の語義を識別するタスクである．通常，あるコーパス$S$から
+対象単語の用例を取り出し，その用例中の対象単語の語義を付与した訓練データを作成し，
+そこから SVM 等の分類器を学習することで WSD を解決する．
+ここで学習した分類器を適用する用例がコーパス$S$とは異なるコーパス$T$内のものである場合，
+学習した分類器の精度が悪い場合がある．これが領域適応の問題であり，
+自然言語処理では WSD 以外にも様々なタスクで問題となるため，近年，活発に研究されている\cite{da-book,mori,kamishima}．
+
+今，対象単語$w$の用例を${\bm x}$，$w$の語義の集合を$C$とする．
+${\bm x}$内の$w$の語義が$c \in C$である確率を$P(c|{\bm x})$とおくと，
+WSD は$\arg \max_{c \in C} P(c|{\bm x})$を求めることで解決できる．
+領域適応では，コーパス$S$（ソース領域）から得られた訓練データを用いて，
+$P(c|{\bm x})$を推定するので，得られるのは$S$上の条件付き分布$P_S (c|{\bm x})$であるが，
+識別の対象はコーパス$T$（ターゲット領域）内のデータであるため必要と
+されるのは$T$上の条件付き分布$P_T (c|{\bm x})$である．
+このため領域適応の問題は$P_S (c|{\bm x}) \ne P_T (c|{\bm x})$から生じているように見えるが，
+用例${\bm x}$がどのような領域で現れたとしても，その用例${\bm x}$内の対象単語$w$の
+語義が変化するとは考えづらい．
+このため$P_S (c|{\bm x}) = P_T (c|{\bm x})$と考えられる．
+$P_S (c|{\bm x}) = P_T (c|{\bm x})$が成立しているなら，$P_T (c|{\bm x})$の代わりに
+$P_S (c|{\bm x})$を用いて識別すればよいと思われるが，この場合，識別の精度が悪いことが多い．
+これは$P_S ({\bm x}) \ne P_T ({\bm x})$から生じている．
+$P_S (c|{\bm x}) = P_T (c|{\bm x})$かつ$P_S ({\bm x}) \ne P_T ({\bm x})$という仮定は
+共変量シフトと呼ばれる\cite{sugiyama-book}．
+自然言語処理の多くの領域適応のタスクは共変量シフトが成立していると考えられる\cite{da-book}．
+
+ソース領域のコーパス$S$から得られる訓練データを$D = \{ ({\bm x_i},c_i) \}_{i=1}^N$とおく．
+一般に共変量シフト下の学習では確率密度比$w({\bm x}) = P_T({\bm x})/P_S({\bm x})$を重みとした
+以下の重み付き対数尤度を最大にするパラメータ${\bm \theta}$を求めることで，
+$P_T (c|{\bm x})$ を構築する．
+\[
+\sum_{i=1}^{N} w({\bm x_i}) \log P_T (c_i|{\bm x_i};{\bm \theta})
+\]
+
+共変量シフト下の学習の要は確率密度比$w({\bm x})$の算出であるが，その方法は大きく2つに分類できる．
+1つは$P_T({\bm x})$と$P_S({\bm x})$をそれぞれ求め，その比を求めることで
+$w({\bm x})$を求める方法である．もう1つは$w({\bm x})$を直接モデル化する方法である\cite{sugiyama-2010}．
+ただしどちらの方法をとっても，WSD の領域適応に対しては，求められる値が低くなる傾向がある．
+この問題に対しては，確率密度比を$p$乗($0 < p < 1$)したり\cite{sugiyama-2006-09-05}，
+相対確率密度比\cite{yamada2011relative}を使うなど，
+求めた確率密度比を上方に修正する手法が存在する
+\footnote{これらの手法は正確には確率密度比を 1 に近づける手法であるが，
+多くの場合，確率密度比は 1 以下の値であるため，
+ここではこれらの手法も確率密度比を上方に修正する手法と呼ぶことにする．}．
+本論文では$P_T({\bm x})$と$P_S({\bm x})$をそれぞれ求める手法を用いる際に，
+ターゲット領域のコーパスとソース領域のコーパスを合わせたコーパスを，
+新たにソース領域のコーパス$S$と見な
+して確率密度比を求めることを提案する．
+提案手法は必ずしも確率密度比を上方に修正する訳ではないが，
+多くの場合，この処理により$P_S({\bm x})$の値が減少し，結果的に$w({\bm x})$の値が増加する．
+
+なお，本論文で利用する手法は，ターゲット領域のラベル付きデータを利用しないために，
+教師なし領域適応手法に属する．当然，ターゲット領域のラベル付きデータを利用する
+教師付き領域適応手法を用いる方が，WSD の識別精度は高くなる．
+しかし本論文では教師なし領域適応手法を扱う．理由は3つある．
+1 つ目は，教師なし領域適応手法はラベル付けするコストがないという大きな長所があるからである．
+2 つ目は，共変量シフト下の学習はターゲット領域の
+ラベル付きデータを利用しない設定になっているからである．
+3 つ目は， WSD の領域適応の場合，対象単語毎に領域間距離が異なり，
+コーパスの領域が異なっていても，領域適応の問題が生じていないケースも多いからである．
+領域適応の問題が生じている，いないの問題を考察していくには，
+ターゲット領域のラベル付きデータを利用しない教師なし領域適応手法の方が適している．
+
+実験では現代日本語書き言葉均衡コーパス (Balanced Corpus of Contemporary Written Japanese, 
+BCCWJ \cite{bccwj}) における3つの領域 OC（Yahoo! 知恵袋），PB（書籍）及び PN（新聞）
+を利用する．SemEval-2 の日本語 WSD タスク\cite{semeval-2010}ではこれらのコーパスの一部に語義タグを付けた
+データを公開しており，そのデータを利用する．
+すべての領域である程度の頻度が存在する多義語 16単語を対象にして，WSD の領域適応の実験を行う．
+領域適応としては OC→PB，PB→PN，PN→OC，OC→PN，PN→PB，PB→OC の計 6通りが存在する．
+結果 $16 \times 6 = 96$通りのWSD の領域適応の問題に対して実験を行った．
+その結果，提案手法による重み付けの効果を確認できた．
+
+また，従来手法はベースラインよりも低い値となったが，
+これは多くの WSD の教師なし領域適応では負の転移が生じていない，
+言い換えれば実際には領域適応の問題になっていないことから生じていると考えられる．
+考察では負の転移と重み付けとの関連，また
+負の転移と関連の深い Misleading データの存在と重み付けとの関連を
+中心に議論した．
+
+
+\section{関連研究}
+
+
+自然言語処理における領域適応は，帰納学習手法を利用する全てのタスクで生じる問題であるために，
+その研究は多岐にわたる．
+利用手法をおおまかに分類すると，ターゲット領域のラベル付きデータを利用するかしないかで分類できる．
+利用する場合を教師付き領域適応手法，利用しない場合を教師なし領域適応手法と呼ぶ．
+提案手法は教師なし領域適応手法の範疇に入るので，
+ここでは教師なし領域適応手法を中心に関連研究を述べる．
+
+領域適応の問題は，一般の教師付き学習手法における訓練事例のスパース性の問題だと
+捉えることもできる．そのためターゲット領域のデータにラベルを付与しないという条件では，
+半教師付き学習\cite{chapelle2006semi}が教師なし領域適応手法として使えることは明らかである．
+ただし半教師付き学習では大量のラベルなしデータを必要とする．
+半教師付き学習を WSD に利用する場合，対象単語毎に用例を集める必要があり，
+しかもターゲット領域のコーパスは新規であることが多いため，
+対象単語毎の用例を大量に集めることは困難である．
+このため WSD の領域適応の場合，半教師付き学習を利用しようとすれば，
+Transductive 学習\cite{joachims1999transductive}に近い形となるが，
+ソース領域とターゲット領域が異なる領域適応の形に 
+Transductive 学習が利用できるかどうかは明らかではない．
+
+WSD の領域適応をタスクとした教師なし領域適応の研究としては，
+論文\cite{shinnou-gengo-13}の研究がある．そこでの基本的なアイデアは WSD で使うシソーラスを
+ターゲット領域のコーパスから構築することであるが，
+WSD で使うシソーラスが分野依存になっているかどうかは明らかではない\cite{shinnou-jws5}
+\footnote{この論文\cite{shinnou-gengo-13}は本論文と同じタスクに対して，一部同じデータを用いた
+実験結果を示しているため，考察において提案手法との比較を行う．}．
+また Chan はターゲット領域上の語義分布を EM アルゴリズムで推定している
+\cite{chan2005word,chan2006estimating}．
+これも教師なし領域適応手法であるが，本論文で扱う領域適応では
+語義分布の違いは顕著ではなく，効果が期待できない．
+
+本論文は，WSD の領域適応では共変量シフトの仮定が成立していると考え，
+共変量シフト下の学習を利用する．共変量シフト下の学習を領域適応に応用した研究としては
+Jiang の研究\cite{jiang2007instance}と齋木の研究\cite{saiki-2008-03-27}がある．
+Jiang は確率密度比を手動で調整し，モデルにはロジステック回帰を用いている．
+また齋木は$P_S({\bm x})$と$P_T({\bm x})$を unigram でモデル化することで確率密度比を推定し，
+モデルには最大エントロピー法を用いている．
+ただしどちらの研究もタスクは WSD ではない．しかもターゲット領域の
+ラベル付きデータを利用しているために，教師なし領域適応手法でもない．
+また新納は WSD の領域適応に共変量シフト下の学習を用いているが\cite{shinnou-gengo-14}，
+そこではDaum{\'e} が提案した素性空間拡張法 (Feature Augmentation)\cite{daume0}を
+組み合わせて利用しているために，これも教師なし領域適応手法ではない．
+
+一方，共変量シフト下の学習は，事例への重み付き学習の一種である．
+Jiang は識別精度を悪化させるようなデータを
+Misleading データとして訓練データから取り除いて学習することを試みた\cite{jiang2007instance}．
+これは Misleading データの重みを 0 にした学習と見なせるため，この手法も重み付き学習手法と見なせる．
+吉田はソース領域内の訓練データ${\bm x}$がターゲット領域から見て外れ値と見なせた場合，
+${\bm x}$をMisleading と判定し，それらを訓練データから取り除いて学習している\cite{yoshida}．
+これは WSD の教師なし領域適応手法であるが，
+Misleading データの検出は困難であり，精度の改善には至っていない．
+また WSD の領域適応をタスクとした古宮の手法\cite{komiya-nenji2013}も重み付き学習と見なせる．
+そこでは複数のソース領域のコーパスを用意し，そこから訓練事例をランダムに選択し，
+選択された訓練データセットの中で，ターゲット領域のテストデータを識別するのに
+最も適した訓練データセットを選ぶ．これは全ソース領域のコーパスの訓練データから
+選択された訓練データの重みを 1，それ以外を重み 0 としていることを意味する．
+ただし複数のソース領域のコーパスから対象単語のラベル付き訓練データを集めるのは
+実際は困難である．また古宮は上記の研究以外にも 
+WSD の領域適応の研究\cite{komiya3,komiya2,komiya-nlp2012}を行っているが，
+これらは教師付き学習手法となっている．
+
+
+\section{期待損失最小化に基づく共変量シフト下の学習}
+
+対象単語$w$の語義の集合を$C$，また
+$w$の用例${\bm x}$内の$w$の語義を$c$と識別したときの
+損失関数を$l({\bm x},c,d)$で表す．$d$は$w$の語義を識別する分類器である．
+$P_T({\bm x},c)$ をターゲット領域上の分布とすれば，
+本タスクにおける期待損失$L_0$は以下で表せる．
+\[
+L_0 = \sum_{{\bm x},c} l({\bm x},c,d) P_T({\bm x},c)
+\]
+また$P_S({\bm x},c)$ をソース領域上の分布とすると以下が成立する．
+\[
+L_0 = \sum_{{\bm x},c} l({\bm x},c,d) \frac{P_T({\bm x},c)}{P_S({\bm x},c)} P_S({\bm x},c)
+\]
+ここで共変量シフトの仮定から
+\[
+\frac{P_T({\bm x},c)}{P_S({\bm x},c)} = \frac{P_T({\bm x})P_T(c|{\bm x})}{P_S({\bm x})P_S(c|{\bm x})} = \frac{P_T({\bm x})}{P_S({\bm x})}
+\]
+となり，$w({\bm x}) = P_T({\bm x})/P_S({\bm x})$とおくと以下が成立する．
+\[
+L_0 = \sum_{{\bm x},c} w({\bm x}) l({\bm x},c,d) P_S({\bm x},c)
+\]
+
+訓練データを$D = \{ ({\bm x_i},c_i) \}_{i = 1}^N$とし，
+$P_S({\bm x},c)$を経験分布で近似すれば，
+\[
+ L_0 \approx  \frac{1}{N} \sum_{i=1}^N w({\bm x_i}) l({\bm x_i},c_i,d) 
+\]
+となるので，期待損失最小化の観点から考えると，共変量シフトの問題は以下の式$L_1$を
+最小にする$d$を求めればよいことがわかる．
+\begin{equation}
+    \label{eq:1}
+L_1 = \sum_{i=1}^N w({\bm x_i}) l({\bm x_i},c_i,d) 
+\end{equation}
+
+分類器$d$として以下の事後確率最大化推定に基づく識別を考える．
+\[
+d({\bm x}) = \arg \max_{c} P_T(c|{\bm x})
+\]
+また損失関数として対数損失$- \log P_T(c|{\bm x})$を用いれば，
+\mbox{式(\ref{eq:1})}は以下となる．
+\[
+L_1 = - \sum_{i=1}^N w({\bm x_i}) \log P_T(c_i|{\bm x_i}) 
+\]
+つまり，分類問題の解決に$P_T(c|{\bm x},{\bm \lambda})$のモデルを導入するアプローチを取る場合，
+共変量シフト下での学習では，確率密度比を重みとした以下に示す
+重み付き対数尤度$L({\bm \lambda})$を最大化する
+パラメータ${\bm \lambda}$を求める形となる．
+\begin{equation}
+     \label{eq:2}
+    L({\bm \lambda}) = \sum_{i=1}^N w({\bm x_i}) \log P_T(c_i|{\bm x_i},{\bm \lambda})        
+\end{equation}
+
+
+ここではモデルとして以下の式で示される最大エントロピー法を用いる．
+\begin{equation}
+     \label{eq:3}
+P_T(c|{\bm x},{\bm \lambda}) = \frac{1}{Z({\bm x},{\bm \lambda})} \exp \left(
+\sum_{j=1}^M \lambda_j f_j({\bm x},c)
+\right)
+\end{equation}
+${\bm x} = (x_1,x_2,\cdots,x_M)$が入力，$c$がクラスである．
+関数$f_j({\bm x},c)$は素性関数であり，実質${\bm x}$の真のクラスが
+$c$のときに$x_j$を返し，そうでないとき 0 を返す関数に設定される．
+$Z({\bm x},{\bm \lambda})$は正規化項であり，以下で表せる．
+\begin{equation}
+     \label{eq:4}
+  Z({\bm x},{\bm \lambda}) = \sum_{c \in C} \exp \left(
+\sum_{j=1}^M \lambda_j f_j({\bm x},c) 
+\right)
+\end{equation}
+\noindent
+そして${\bm \lambda} = (\lambda_1,\lambda_2,\cdots,\lambda_M)$が
+素性に対応する重みパラメータとなる．
+
+
+\section{確率密度比の算出}
+
+確率密度比$w({\bm x}) =  P_T({\bm x})/P_S({\bm x})$の算出法は大きく2つに分類できる．
+1つは$P_S({\bm x})$と$P_T({\bm x})$を各々推定し，その比を取る手法であり，
+もう1つは$w({\bm x})$を直接モデル化する手法である．
+ここでは前者の方法として論文\cite{shinnou-gengo-14}において提案された手法を利用する．
+簡単化のために本論文ではこの手法を NB 法と名付ける．
+また後者の方法としては論文\cite{kanamori2009least}において
+提案された拘束無し最小二乗重要度適合法 (unconstrained Least-Squares Importance Fitting, uLSIF)
+を利用する．
+
+
+\subsection{NB 法}
+
+対象単語$w$の用例${\bm x}$の素性リストを$\{ f_1,f_2,\cdots, f_n \}$ とする．
+求めるのは領域$R \in \{S, T\}$上の${\bm x}$の分布$P_R ({\bm x})$である．
+ここで Naive Bayes で使われるモデルを用いる．Naive Bayes のモデルでは以下を仮定する．
+\[
+P_R ({\bm x}) = \prod_{i=1}^{n} P_R (f_i) 
+\]
+
+領域$R$のコーパス内の$w$の全ての用例について素性リストを作成しておく．
+ここで用例の数を$N(R)$とおく．
+また$N(R)$個の用例の中で，素性$f$が現れた用例数を$n(R,f)$とおく．
+MAP 推定でスムージングを行い，$P_R (f)$を以下で定義する\cite{takamura}．
+\[
+P_R (f) = \frac{n(R,f) + 1}{N(R) + 2}
+\]
+
+以上より，ソース領域$S$の用例${\bm x}$に対して，
+確率密度比$w({\bm x}) = P_T ({\bm x})/P_S ({\bm x})$が計算できる．
+\[
+w({\bm x}) = \frac{P_T ({\bm x})}{P_S ({\bm x})} = \prod_{i=1}^n \left( \frac{n(T,f_i) + 1}{N(T) + 2}\cdot\frac{N(S) + 2}{n(S,f_i) + 1} \right)
+\]
+
+
+\subsection{uLSIF}
+
+ソース領域内のデータを$\{{\bm x_i^s}\}_{i=1}^{N_s}$，
+ターゲット領域内のデータを$\{{\bm x_i^t}\}_{i=1}^{N_t}$とする
+uLSIF では確率密度比$w({\bm x})$を以下の式でモデル化する．
+\begin{align*}
+w({\bm x}) & = \sum_{l = 1}^b \alpha_l \psi_l ({\bm x}) \\
+           & = {\bm \alpha}\cdot {\bm \psi}({\bm x})
+\end{align*}
+ただしここで，
+$
+{\bm \alpha} = (\alpha_1, \alpha_2, \cdots, \alpha_b) 
+$，
+$
+{\bm \psi}({\bm x}) = (\psi_1 ({\bm x}), \psi_2 ({\bm x}), \cdots, \psi_b ({\bm x})) 
+$ である．
+また$\alpha_l$は正の実数であり，$\psi_l ({\bm x})$は基底関数と呼ばれる
+ソース領域のデータ${\bm x}$から正の実数値への関数である．
+uLSIF では，概略，自然数$b$と基底関数${\bm \psi}({\bm x}) $を定めた後に，
+パラメータ${\bm \alpha}$を推定する手順をとる．
+
+説明の都合上，$b$ と ${\bm \psi}({\bm x})$が定まった後の${\bm \alpha}$の推定を
+先に説明する．
+$w({\bm x})$のモデルを$\hat{w}({\bm x})$とおくと，
+パラメータ$\alpha_l$を推定するには，
+$w({\bm x})$と$\hat{w}({\bm x})$の平均2乗誤差$J_0({\bm \alpha})$を
+最小にするような${\bm \alpha}$を求めれば良い．
+$w({\bm x}) = P_T ({\bm x})/P_S ({\bm x})$に注意すると，$J_0({\bm \alpha})$
+は以下のように変形できる．
+\begin{align*}
+J_0({\bm \alpha}) & = \frac{1}{2} \int (\hat{w}({\bm x})  - w({\bm x}))^2 P_S({\bm x}) d{\bm x} \\
+ & = \frac{1}{2} \int \hat{w}({\bm x})^2 P_S({\bm x}) d{\bm x}
+	- \int \hat{w}({\bm x}) w({\bm x}) P_S({\bm x}) d{\bm x}
+	+ \frac{1}{2} \int w({\bm x})^2 P_S({\bm x}) d{\bm x} \\
+ & = \frac{1}{2} \int \hat{w}({\bm x})^2 P_S({\bm x})  d{\bm x}
+	- \int \hat{w}({\bm x}) P_T({\bm x}) d{\bm x}
+  + \frac{1}{2} \int w({\bm x})^2 P_S({\bm x}) d{\bm x} 
+\end{align*}
+
+3項目の式は定数なので，$J_0({\bm \alpha})$を最小にするには，
+以下の$J({\bm \alpha})$を最小にすればよい．
+\[
+J({\bm \alpha}) =  \frac{1}{2} \int \hat{w}({\bm x})^2 P_S({\bm x})  d{\bm x}
+  - \int \hat{w}({\bm x}) P_T({\bm x}) d{\bm x} 
+\]
+
+$J({\bm \alpha})$を経験分布で近似した$\widehat{J}({\bm \alpha})$は
+以下となる．
+\begin{equation}
+\begin{aligned}[b]
+\widehat{J}({\bm \alpha}) & = \frac{1}{2 N_s} \sum_{i=1}^{N_s} \widehat{w}({\bm x_i^s})^2 
+  -  \frac{1}{N_t} \sum_{j=1}^{N_t} \widehat{w}({\bm x_j^t}) \\
+ & = \frac{1}{2} \sum_{l,l'=1}^b \alpha_l \alpha_{l'} 
+	 \left( \frac{1}{N_s} \sum_{i=1}^{N_s} \psi_l({\bm x_i^s}) \psi_{l'}({\bm x_i^s}) \right) 
+	 - \sum_{l=1}^b  \alpha_l \left( \frac{1}{N_t} \sum_{j=1}^{N_t} \psi_l({\bm x_j^t})  \right) \\
+ & =  \frac{1}{2} {\bm \alpha}^T \widehat{H} {\bm \alpha} - \widehat{h}^T {\bm \alpha}
+\end{aligned}
+\label{jhatalpha}
+\end{equation}
+
+ここで$\widehat{H}$は$b \times b$の行列であり，その$l$行$l'$列の要素
+$\widehat{H}_{l,l'}$は以下である．
+\[
+\widehat{H}_{l,l'} = \frac{1}{N_s} \sum_{i=1}^{N_s}  \psi_l({\bm x_i^s}) \psi_{l'}({\bm x_i^s}) 
+\]
+また$\widehat{h}$は$b$次元のベクトルであり，その$l$次元目の要素
+$\widehat{h}_l$は以下である．
+\[
+\widehat{h}_l = \frac{1}{N_t} \sum_{j=1}^{N_t} \psi_l({\bm x_j^t}) 
+\]
+
+$\widehat{J}({\bm \alpha})$の最小値を求める際に正則化を行う．このとき
+付加する正則化項を L2 ノルムに設定し，${\bm \alpha} > 0$の条件を外して，
+以下の最小化問題を解く．ここでパラメータ$\lambda$が導入されることに
+注意する．$\lambda$は基底関数を設定する際に決められる．
+\[
+\min_{{\bm \alpha}} \left[ \frac{1}{2} {\bm \alpha}^T \widehat{H} {\bm \alpha}
+-\widehat{h}^T {\bm \alpha} + \frac{\lambda}{2} {\bm \alpha}^T {\bm \alpha}
+\right]
+\]
+この最小化問題は制約のない凸2次計画問題であるために，唯一の大域解が得られる．
+その解は以下である．
+\begin{equation}
+    \label{eq:alp-kai1}
+\tilde{{\bm \alpha}} = (\widehat{H} + \lambda I_b)^{-1} \widehat{h}^T    
+\end{equation}
+最後に${\bm \alpha} > 0$の条件に合わせるように，以下の調整を行う．
+\begin{equation}
+\begin{aligned}[b]
+ \widehat{{\bm \alpha}} & = \left( (\max(0,\tilde{\alpha_1}),\max(0,\tilde{\alpha_2}), 
+	\cdots, \max(0,\tilde{\alpha_b})            \right) \\
+  & = \max( 0_b, \tilde{{\bm \alpha}})
+\end{aligned}
+\label{eq:alp-kai2}
+\end{equation}
+
+パラメータ$b$と基底関数の設定であるが，まず，$b$については以下で設定する
+\footnote{本実験では$b$の値は最大 100 となるが，この 100 という数値は
+オリジナルの論文\cite{kanamori2009least}で使われた値であり，
+本論文でのなんらかの予備実験から得た値ではない．
+uLSIF の実験結果はこの値を調整することで多少の向上があったかもしれない．}．
+\[
+b = \min (100, N_t)
+\]
+次にターゲット領域のデータから重複を許さずに$b$個の点をランダムに取り出す．
+それらの点を$\{ {\bm x_j^t} \}_{j=1}^b$ とおく．
+そして基底関数$\psi_l ({\bm x})$を以下のガウシアンカーネルで定義する．
+\[
+\psi_l ({\bm x}) = K({\bm x},{\bm x_l^t}) = \exp \left( - \frac{|| {\bm x} - {\bm x_l^t} ||^2}{\sigma^2} \right)
+\]
+
+以上より，確率密度比を求めるために残されているパラメータは正則化項の係数$\lambda$と
+ガウシアンカーネルの幅$\sigma$の2つである．これらのパラメータはグリッドサーチの交差検定で求める．
+まずソース領域のデータとターゲット領域のデータをそれぞれ交わりのない$R$個の
+部分集合に分割する．それらの部分集合の中で$r$番目の部分集合を除き，残りを結合した
+集合を作る．それらを新たなソース領域のデータとターゲット領域のデータと見なす．
+そして$\lambda$と$\sigma$をある値に設定し，\mbox{式(\ref{eq:alp-kai1})}と
+\mbox{式(\ref{eq:alp-kai2})}より${\bm \alpha}$を求め，
+\mbox{式(\ref{jhatalpha})}より$\widehat{J}({\bm \alpha})^{(r)}$の値を求める．$r$を 1 から$R$まで
+変化させることで，$R$個の$\widehat{J}({\bm \alpha})^{(r)}$の値が求まり，
+それらを平均した値を$\lambda$と$\sigma$に対する
+$\widehat{J}({\bm \alpha})$の値とする．次に$\lambda$と$\sigma$を変化させ，
+上記手順で得られる$\widehat{J}({\bm \alpha})$の値が最小となる
+$\hat{\lambda}$と$\hat{\sigma}$を求め，これを
+$\lambda$と$\sigma$の推定値とする．
+
+
+\subsection{$P_S({\bm x})$の補正による確率密度比の算出}
+
+WSD のタスクでは NB 法あるいは uLSIF で算出される確率密度比は小さい値を取る傾向があり，
+実際の学習で用いる際には，少し上方に修正した値を取る方が
+最終の識別結果が改善されることが多い．
+これは以下の2点から生じていると考えられる．
+\begin{itemize}
+      \item $T$に${\bm x}$が入っているかは確率的であるが，$S$には必ず${\bm x}$が入っている．
+      \item $P_S({\bm x})$を推定するために${\bm x} \in S$を用いるため，訓練データである
+${\bm x}$に過学習した結果$P_S({\bm x})$は $P_T({\bm x})$に比べて高く見積もられてしまう．
+\end{itemize}
+
+このため，求まった確率密度比を上方に修正する手法が存在する．
+論文\cite{sugiyama-2006-09-05}では確率密度比$w({\bm x})$を$p$乗($0 < p < 1$)することを
+提案している．また論文\cite{yamada2011relative}では以下で示される相対確率密度比$w'({\bm x})$を
+確率密度比として利用することを提案している．
+\[
+w'({\bm x}) = \frac{P_T({\bm x})}{\alpha P_S({\bm x}) + (1-\alpha) P_T({\bm x})}
+\]
+ここで$0 < \alpha < 1$である．
+
+確率密度比$w({\bm x})$が 1 以下である場合，
+$w({\bm x})$を$p$乗すると上方に修正できることは，それらの比の対数を取れば，
+\mbox{$\log w({\bm x}) < 0$}であることから明らかである．
+\[
+\log \frac{w({\bm x})^p}{w({\bm x})} = (p - 1) \log w({\bm x}) > 0
+\]
+また相対確率密度比$w'({\bm x})$は以下の変形から
+$w({\bm x})$を上方に修正していると見なせる．
+\begin{align*}
+w'({\bm x}) & = \frac{P_T({\bm x})}{\alpha P_S({\bm x}) + (1-\alpha) P_T({\bm x})}    \\
+             & = \frac{1}{\alpha  + (1-\alpha) w({\bm x})} w({\bm x})\\
+             & > \frac{1}{\alpha  + (1-\alpha)} w({\bm x})\\
+             & = w({\bm x})
+\end{align*}
+
+確率密度比が 1 以上である場合，これらの手法は確率密度比を下方に修正するので，
+正確には確率密度比を 1 に近づける手法である．しかし，ほとんどの訓練データの確率密度比は
+1 以下であるために，ここではこれらの手法を上方修正する手法と呼び，提案手法と対比させる．
+
+本論文では確率密度比を上方に修正するために，
+ソース領域のデータとターゲット領域のデータを合わせたデータを新たにソース領域のデータとみなし，
+NB 法を用いて$P_S({\bm x})$を補正することを提案する．
+これは$S$のスパース性を緩和させることを狙ったものである．
+確率密度比が真の値よりも低く見積もられる原因の 1 つは，
+$P_S({\bm x})$が真の値よりも高く見積もられるからだと考える．
+さらにその原因が$S$のスパース性なので，スパース性を緩和するために
+$S$にデータを追加するというアイデアである．ただし追加するデータは$S$
+と類似の領域のデータであることが望ましい．
+WSD の領域適応の場合，$S$と$T$は完全に異なることはなく，
+比較的似ているために，追加するデータとして$T$のデータが利用できると考えた．
+
+提案手法の新たなソース領域を$S+T$で表せば，
+$P_S ({\bm x}) >  P_{S+T} ({\bm x})$が成立していると考えるのは自然であり，
+この不等式が成立していれば，提案手法により確率密度比は上方に修正される．
+ただし，ここで提案手法は必ずしも NB 法の確率密度比を上方に修正できるとは限らないことに注意する．
+また提案手法は NB 法の確率密度比が 1 以下かどうかには無関係であることにも注意する．
+NB 法の確率密度比が 1 以上であっても，上方に修正する可能性がある．
+また$P_{S+T} ({\bm x})$は以下の式を利用して求められる．
+\begin{align*}
+P_{S+T} (f) & = \frac{n(S+T,f) + 1}{N(S+T) + 2}  \\
+           & = \frac{n(S,f) +n(T,f) + 1}{N(S) + N(T) + 2}
+ \end{align*}
+
+
+\section{実験}
+
+BCCWJ の PB（書籍），OC（Yahoo! 知恵袋）及び PN（新聞）を異なった領域として実験を行う．
+SemEval-2 の日本語 WSD タスク\cite{semeval-2010}ではこれら領域のコーパスの一部に
+語義タグを付けたデータを公開しており，そのデータを利用する．
+この3つの領域からある程度頻度のある多義語 16単語を WSD の対象単語とする．
+これら単語と辞書上での語義数及び各コーパスでの頻度と語義数を\mbox{表\ref{tab:target-word}}に示す
+\footnote{語義は岩波国語辞書がもとになっている．そこでの中分類までを対象にした．
+また「入る」は辞書上の語義が3つだが，OC や PB では 4つの語義がある．
+これは SemEval-2 の日本語 WSD タスクでは新語義のタグも許しているからである．}．
+領域適応の方向としては OC→PB，PB→PN，PN→OC，OC→PN，PN→PB，PB→OC
+の計 6通りの方向が存在する．
+
+\begin{table}[t]
+\caption{対象単語}
+\label{tab:target-word}
+\input{02table01.txt}
+\end{table}
+
+本稿で利用した素性は以下の 8 種類である．
+(e0) $w$ の表記，(e1) $w$ の品詞，(e2) $w_{-1}$ の表記，(e3) $w_{-1}$ の品詞，
+(e4) $w_1$ の表記，(e5) $w_1$ の品詞，(e6) $w$ の前後3単語までの自立語の表記，
+(e7) e6 の分類語彙表の番号の4桁と5桁．なお対象単語の直前の単語を$w_{-1}$，直後の単語を$w_1$としている．
+
+対象単語$w$についてソース領域$S$からターゲット領域$T$への
+領域適応の実験について説明する．ソース領域$S$の訓練データのみを用いて，
+手法 A により分類器を学習し$w$に対する正解率を求める．
+16種類の各対象単語 ($w_1,w_2, \cdots, w_{16}$) に対する正解率の平均，つまりマクロ平均を
+ソース領域$S$からターゲット領域$T$に対する手法 A の正解率とする．
+結果，手法 A について 6種類の各領域適応に対しての正解率が得られる．
+それらの平均を手法 A の平均正解率とする．
+
+上記の手法 A としては，以下の 8種類を試す．
+(1) 重みを考慮しない（重みを1で固定する）手法 (Base)，
+(2) NB 法による重みをつけた手法 (NB)，
+(3) NB 法の重みを$p$乗した値を重みにする手法 (P-NB)，
+(4) NB 法の重みを相対確率密度比により上方修正した値を重みにする手法 (A-NB)，
+(5) uLSIF による重みをつけた手法 (uLISF)，
+(6) uLSIF の重みを$p$乗した値を重みにする手法 (P-uLSIF)，
+(7) uLSIF の重みを相対確率密度比により上方修正した値を重みにする手法 (A-uLSIF)，
+(8) 提案手法，
+またすべての手法において学習アルゴリズムとしては最大エントロピー法を用いた．
+またその実行にはツールの Classias を用いた\cite{Classias}．
+$S$から$T$への領域適応における各手法の正解率を\mbox{表\ref{tab:resultall}}に示す．
+ただし P-NB，A-NB，P-uLSIF，A-uLSIF については$p$と$\alpha$のパラメータが存在する．
+これらの値については，その値を 0.01 から 0.09 まで0.01 刻み，及び 0.1 から 0.9 まで 0.1 刻みで変化させ，
+平均正解率が最もよい値を示した値を採用した．
+結果，P-NB については$p = 0.2$，
+A-NB については$\alpha = 0.01$，
+P-uLSIF については$p = 0.04$，
+A-uLSIF については$\alpha = 0.01$の値を採用した．
+
+\mbox{表\ref{tab:resultall}}が示すように，
+領域適応のタイプ毎に最適な手法は異なるが，平均正解率としては
+提案手法が最も高い値を示した．
+また P-NB と A-NB の平均正解率は NB の平均正解率よりも高く，
+P-uLSIF と A-uLSIF の平均正解率は uLSIF の平均正解率よりも高い．
+つまり確率密度比を上方に修正する手法が有効であったことがわかる．
+
+\begin{table}[b]
+\caption{各手法の平均正解率(\%)}
+\label{tab:resultall}
+\input{02table02.txt}
+\end{table}
+
+また有意差を検定するために以下の実験を行った．
+まず対象単語毎に OC のデータからランダムに 9 割のデータ取り出し，それらのデータセットを OC-1 とする．
+これを 20 回行い，OC-1，OC-2，$\cdots$，OC-20 を作成する．
+同様に PB のデータから PB-1，PB-2，$\cdots$，PB-20 を作成する．
+また同様に PN のデータから PN-1，PN-2，$\cdots$，PN-20 を作成する．
+そしてデータセットの組 (OC-i, PB-i, PN-i) を用いて，前述した実験と同様の実験を行い，
+20 個の平均正解率を算出し t-検定（両側検定の有意水準 5\%）を行った．
+結果を\mbox{表\ref{tab:kentei}}に示す．
+\mbox{表\ref{tab:kentei}}における評価値は以下の式により計算されたものである．
+\[
+\frac{\bar{X_1} - \bar{X_2}}{\sqrt{\left(\frac{1}{n_2} +\frac{1}{n_2}\right)\frac{n_1 S_1^2 + n_2 S_2^2 }{n_1 + n_2 - 2}}}
+\]
+ここで$\bar{X_1}$と$S_1^2$が提案手法の20 個の平均正解率の平均と分散であり，
+$\bar{X_2}$と$S_2^2$が比較対象の手法の20 個の平均正解率の平均と分散である．
+$n_1$と$n_2$は共にサンプル数 20 である．
+この評価値が自由度 38 の t 分布の 0.975 の分位点 2.0244 よりも大きい場合に，
+提案手法が対応する手法に対して有意であると判定される．
+
+\begin{table}[b]
+\caption{有意差の検定結果}
+\label{tab:kentei}
+\input{02table03.txt}
+\end{table}
+
+\mbox{表\ref{tab:kentei}}が示すように P-NB 以外の全ての手法に対して，提案手法が有意に優れていた．
+
+
+\section{考察}
+
+\subsection{確率密度比を上方修正しないケース}
+
+「$p$乗する」あるいは「相対確率密度比を取る」という手法は，
+元の確率密度比が 1 以下である全てのデータに対
+してその値を
+上方に修正するが，
+提案手法は一部のデータに対しては
+NB 法の確率密度比が 1 以下であっても，それらを
+上方に修正できない．
+提案手法により確率密度比の値が大きくならず，逆に小さくなったデータの個数を\mbox{表\ref{tab:down}}に示す．
+
+\begin{table}[b]
+\caption{上方修正できなかったデータの個数}
+\label{tab:down}
+\input{02table04.txt}
+\end{table}
+
+ほとんどのデータに対して，その確率密度比を上方に修正しているが，修正できていないデータが極端に多い
+ケースも存在する．例えば，PB→PN に関しては「言う」「自分」「見る」「やる」「ゆく」，
+OC→PN に関しては「書く」「見る」「やる」「ゆく」である．
+これらに関してのみ Base と NB と提案手法の正解率の比較を\mbox{表\ref{tab:down-pre}}に示す．
+
+\mbox{表\ref{tab:down-pre}}からわかるように，上方修正ができないデータが多くなると，
+提案手法は NB 法よりも正解率が下がっている．
+ただし，下方に修正した場合には必ず正解率が下がるとも言えないことに注意したい．
+例えば，確率密度比の値を下げないようにするには提案手法を修正し，
+「 NB 法の値を上方に修正できなければ，NB 法の値をそのまま使う」という形にすれば良い．
+この修正案の手法も試した結果を\mbox{表\ref{tab:resultsyuusei}}に示す．
+修正案の手法の平均正解率は，提案手法よりも若干悪かった．
+
+\begin{table}[t]
+\caption{上方修正できなかったデータの正解率(\%)}
+\label{tab:down-pre}
+\input{02table05.txt}
+\end{table}
+\begin{table}[t]
+\caption{修正版提案手法の平均正解率(\%)}
+\label{tab:resultsyuusei}
+\input{02table06.txt}
+\end{table}
+
+上記の実験は NB 法による確率密度比が 1 以下かどうかは考慮していない．
+「p 乗する」や「相対確率密度比を取る」手法では，確率密度比が 1 以上の場合に，
+その値を逆に小さくしている．確率密度比が 1 以上の場合に，上方修正する方がよいのか
+下方修正する方がよいのかは未解決である．参考として上記の修正案の手法
+を更に修正し，「 NB 法の値が 1 以上の場合，あるいは NB 法の値を上方に修正できな場合には
+NB 法の値をそのまま使う」という形の実験も行った．結果，平均正解率は 72.14 と
+若干改善はされたが，提案手法よりも若干悪いことに変化はなかった．
+
+データの確率密度比（重み）はその値の大きさが重要ではなく，他データとの重みとの関係が本質的である．
+例えば全てのデータの重みを 10倍して，値自体を増やしても，推定できるパラメータが
+変化しないのは，重み付き対数尤度（\mbox{式\ref{eq:2}}）の最大化する部分が
+変化しないことから明らかである．
+
+データの重みは
+タスクの背景知識から，その重要度を
+設定していくか，
+そのデータを数値化した後に
+確率密度比という観点から設定していくしか方法はないと考える．
+提案手法は後者であり，コーパスのスパース性への対処から NB 法を改良した手法と考えている．
+上方修正することに，どのような意味があるかを調べることは今後の課題である．
+
+
+\subsection{提案手法の重みの上方修正}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-5ia2f1.eps}
+\end{center}
+\caption{$p$ 乗による提案手法値の上方修正}\label{zu1}
+\end{figure} 
+\begin{figure}[tb]
+\begin{center}
+\includegraphics{21-5ia2f2.eps}
+\end{center}
+\caption{相対確率密度比による提案手法値の上方修正}\label{zu2}
+\end{figure} 
+
+提案手法は，確率密度比を上方修正する手法と組み合わせて利用することで更なる精度改善も可能である．
+提案手法の確率密度比を$p$乗した場合の平均正解率の変化を\mbox{図\ref{zu1}}に示す．
+$p = 0.6$のとき最大値 72.54\% をとった．
+また提案手法の確率密度比に対してパラメータ$\alpha$の相対確率密度比をとった場合の
+平均正解率の変化を\mbox{図\ref{zu2}}に示す．
+$\alpha = 0.6$のとき最大値 72.30\% をとった．
+ともに確率密度比を上方修正することで平均正解率は改善されている．
+
+本論文の以降の記述において，
+提案手法の重みを$p$乗した値を重みにする手法を「P-提案手法」，
+提案手法の重みを相対確率密度比により上方修正した値を重みにする手法を「A-提案手法」と名付ける．
+ここで$p = 0.6$，$\alpha = 0.6$である．
+
+また前節で行った有意差の検定を「P-提案手法」と「A-提案手法」に対しても行った．
+結果，「P-提案手法」は P-NB や提案手法を含む全ての手法に対して有意に優れていた．
+ただし「A-提案手法」は P-NB や提案手法とに有意な差はなかった．
+
+
+\subsection{Misleading データからの評価}
+
+本論文で提案した確率密度比（重み）は NB 法や uLSIF による確率密度比よりも，有効に機能していた．
+ただし真の確率密度比の値は未知であるために，真の値に近いかどうかという観点での評価は
+不可能である．また重みの設定だけで，どの程度まで平均正解率が向上できるのかも未知である．
+一方，Misleading データを削除してから学習を行うことでかなりの精度向上が可能であることが
+論文\cite{yoshida}により示されている．Misleading データを削除してから学習することは，
+Misleading データの重みを 0，
+それ以外のデータの重みを 1 とした重み付き学習と見なせる．
+この重み付けが真の確率密度比と類似しているかどうかは不明だが，
+Misleading データに対してはできるだけ小さな重みを与える手法が優れているとみなせる．
+そこでここでは各手法において Misleading データに付与された重みを調べることで手法を評価する．
+
+まず論文\cite{yoshida}で行ったように，しらみつぶしに Misleading を見つけ出す．
+領域$S$から領域$T$の領域適応において，対象単語$w$の
+$S$上のラベル付きデータ$D$が存在する．
+まず$D$で学習した識別器の$T$に対する正解率$p_0$を測る．
+次に$D$から 1 つデータ$x$を取り除き，$D - \{x\}$
+から学習した識別器の$T$に対する正解率$p_1$を測る．
+$p_1 > p_0$となった場合，データ$x$を Misleading データと見なす．
+これを$D$内のすべてのデータに対して行い，
+$S$から$T$の領域適応における対象単語$w$の Misleading データを見つける．
+この処理によって見つけ出された Misleading データの個数を\mbox{表\ref{tab:mislead}}示す．
+括弧内の数値は全データ数である．
+
+また Misleading による重みを用いた学習の
+識別結果を\mbox{表\ref{tab:resultmis}}に示す．表中の Mislead がそれにあたる．
+本論文の実験で得られている平均正解率よりもかなり高い．
+つまり重みの設定のみでも Base の平均正解率 71.71\% を少なくとも 75.42\% まで改善可能である．
+
+\begin{table}[t]
+\caption{Misleading データの個数}
+\label{tab:mislead}
+\input{02table07.txt}
+\end{table}
+\normalsize
+\begin{table}[t]
+\caption{Misleading による重みを用いた学習の平均正解率(\%)}
+\label{tab:resultmis}
+\input{02table08.txt}
+\end{table}
+
+次に各手法が Misleading データに付与した重みにより手法を評価する．
+領域$S$から領域$T$の領域適応において，対象単語$w$の
+$S$上のラベル付きデータを$D = \{ x_i \}_{i=1}^{N_w}$とする．
+まず$D$内のデータの重みの平均値$m_w$を調べる．
+\[
+m_w = \frac{1}{N_w} \sum_{i=1}^{N_w} w(x_i)
+\]
+次に$D$内の Misleading データを
+$\{ x'_j \}_{j=1}^{M_w}$とする．各$x'_j$の重み$w(x'_j)$が$m_w$と比較して
+小さな値であればよいので，対象単語$w$に関する Misleading データを用いた評価値$d_w$を以下で測る．
+\[
+d_w = \frac{1}{M_w} \sum_{j=1}^{M_w} \frac{w(x'_j)}{m_w}
+\]
+$d_w$は対象単語$w$の訓練データの重みの平均値$m_w$に対して，
+Misleading データ$x'_j$の重み$w(x'_j)$の比を取り，
+その比の平均を取ったものである．このため$d_w$の値が小さいほど，
+適切に重み付けできていると考えられる．
+そして
+$d_w$の各単語に関して平均を取った値を，
+その手法における$S$から$T$の Misleading  データを用いた評価値（小さいほど良い）とする．
+これをまとめたものが\mbox{表\ref{tab:miseval}}である．
+\mbox{表\ref{tab:miseval}}が示すように，
+Misleading  データを用いた評価では，NB法，uLSIF 及び提案手法の3つの中で uLSIF が最も優れている．
+ただし提案手法は NB法よりも優れていた．
+更に全ての手法において「$p$乗する」，あるいは「相対確率密度比を取る」ことで評価値は改善されており，
+重みを上方修正する効果があることがわかる．
+また「$p$乗する」と「相対確率密度比を取る」を比較すると，「$p$乗する」方が効果が
+あることもわかる．
+
+\begin{table}[t]
+\caption{Misleading データからの評価値}
+\label{tab:miseval}
+\input{02table09.txt}
+\end{table}
+
+
+
+\subsection{負の転移の有無}
+
+NB法や uLSIF は Base よりも平均正解率が低い．これは確率密度比からの重み付き学習が効果が
+なかったことを示している．この原因として，WSD の領域適応では，領域の変化はあるが，
+実際には領域適応の問題が生じていない，つまり負の転移\cite{rosenstein2005transfer}が生じていない対象単語が
+かなり存在するからだと考える．負の転移が生じていなければ，訓練データを全て利用して
+学習する方が有利であることは明らかであり，重みをつけると逆効果になると考えられる．
+
+この点を確認するために，負の転移が生じているものと生じていないものに分けて，
+各手法の平均正解率を測ってみる．
+まず負の転移が生じている単語の判定であるが，これは\mbox{表\ref{tab:mislead}}で
+示した Misleading データの個数から行う．ここでは Misleading データが全データの 1割以下の場合，
+負の転移が生じないと判定した．結果を\mbox{表\ref{tab:mislead2}}に示す．
+チェックが付いているものが「負の転移が生じない」と判定したものである．
+
+\mbox{表\ref{tab:mislead2}}でチェックがついていない対象単語に限定して，
+各手法の平均正解率を測った結果が\mbox{表\ref{tab:del-fu-kekka}}である．
+また逆に\mbox{表\ref{tab:mislead2}}でチェックがついている対象単語に限定して，
+各手法の平均正解率を測った結果が\mbox{表\ref{tab:del-fu-kekka2}}である．
+
+\begin{table}[t]
+\caption{負の転移が生じない単語}
+\label{tab:mislead2}
+\input{02table10.txt}
+\end{table}
+\begin{table}[t]
+\caption{負の転移が生じる単語に限定した平均正解率(\%)}
+\label{tab:del-fu-kekka}
+\input{02table11.txt}
+\end{table}
+
+\mbox{表\ref{tab:del-fu-kekka}}と\mbox{表\ref{tab:del-fu-kekka2}}からわかるように，
+NB 法や uLSIF は負の転移が生じる，生じないに関わらず，Base よりも平均正解率が低く，
+本実験においては有効ではなかった．一方，提案手法は負の転移が生じる場合でも，生じない場合でも
+Base よりも平均正解率が高く，どちらの場合でも有効であることがわかる．
+
+また負の転移が生じる場合，提案手法の平均正解率は NB 法の平均正解率の 1.09 倍であり，
+uLSIF の平均正解率 1.05 倍である．
+一方，負の転移が生じない場合，
+提案手法の平均正解率は NB 法の平均正解率の 1.02 倍であり，
+uLSIF の平均正解率 1.03 倍である．
+つまり負の転移が生じるケースで提案手法と既存手法（NB法，uLSIF）との差が大きくなる．
+
+更に確率密度比を上方修正する効果をみてみる．負の転移が生じる場合，NB 法は 
+平均正解率 60.69\% が$p$乗することで  65.19\%，相対確率密度比を取ることで 65.35\% まで向上しているので，
+平均的には 7.5\% 平均正解率が向上している
+\footnote{$((65.19 + 65.35)/2)/60.69 \approx 1.075$ から算出した．}．
+同様に計算して uLSIF の平均正解率は 3.6\%，提案手法の平均正解率は 0.5\% 向上している．
+負の転移が生じない場合，NB 法は 1.4\%，uLSIF は 2.8\% 平均正解率が向上している．
+また提案手法では平均正解率はほとんど変化しない．
+つまり確率密度比を上方修正する効果は負の転移が生じるケースで顕著になっている．
+
+\begin{table}[t]
+\caption{負の転移が生じない単語に限定した平均正解率(\%)}
+\label{tab:del-fu-kekka2}
+\input{02table12.txt}
+\end{table}
+
+今後の課題としては Misleading データの検出方法を考案することである．
+Misleading データを検出し，そのデータに重みを 0 にすることは
+かなりの精度向上が期待できる．また Misleading データの割合から負の転移の有無を判定し，
+負の転移が生じる問題にだけ，重み付け学習手法を適用するアプローチも効果があると考えられる．
+
+
+\subsection{トピックモデルの利用}
+
+論文\cite{shinnou-gengo-13}は本論文と同じタスクに対して一部同じデータを用いた
+実験結果を示している．ここではそこでの実験結果の値と本論文の実験結果の
+値を比較し，手法間の違いを考察する．
+
+論文\cite{shinnou-gengo-13}の核となるアイデアは，ターゲット領域$T$の
+トピックモデルを作成し，ターゲット領域に特有のシソーラスを構築することである．
+このシソーラスの情報を素性として組み込むことで，識別精度を上げることを狙っている．
+実験は OC → PB と
+\mbox{PB → OC}の2方向である． また対象単語は
+本論文の 16 単語の他「来る」が含まれている
+\footnote{本論文では「来る」は PN の領域において曖昧性がないため対象単語から外した．}．
+
+\begin{table}[p]
+\caption{正解率(\%)の比較 (OC → PB)}
+\label{tm-hikaku1}
+\input{02table13.txt}
+\end{table}
+\begin{table}[p]
+\caption{正解率(\%)の比較 (PB → OC)}
+\label{tm-hikaku2}
+\input{02table14.txt}
+\end{table}
+
+OC → PB と PB → OC の領域適応における，本論文の対象単語 16 単語についての識別精度の
+比較を\mbox{表\ref{tm-hikaku1}}と\mbox{表\ref{tm-hikaku2}}に示す．
+なお表中の SVM-TM-kNN は論文\cite{shinnou-gengo-13}の手法を意味する．
+
+対象単語に応じて最も高い正解率の手法は異なるが，平均的には SVM-TM-kNN が最も高い正解率を
+示している．ただし  SVM-TM-kNN はトピックモデルを構築するために，ターゲット領域のコーパスを
+利用していることに注意したい．本論文の提案手法はターゲット領域の対象単語の
+用例を用いているが，コーパスは利用していない．つまり利用しているリソースが異なるために，
+単純に SVM-TM-kNN が提案手法よりも優れているとは結論できない．
+
+また SVM-TM-kNN におけるトピックモデルは素性構築の際に利用されているだけであり，
+提案手法と競合するものではない．つまり SVM-TM-kNN の手法を利用して，
+WSD での素性を構築し，それに対して本論文の提案手法を適用することも可能である．
+今後はこの方向での改良も試みたい．
+
+
+\section{おわりに}
+
+本論文では，WSD の領域適応に対して，共変量シフト下の学習を試みた．
+共変量シフト下の学習では確率密度比を重みとした重み付き学習を行うが，
+WSD のタスクでは算出される確率密度比が小さくなる傾向があるため，
+ソース領域のコーパスとターゲット領域のコーパスとを合わせたコーパスを
+ソース領域のコーパスと見なして NB 法を用いる手法を提案した．
+
+BCCWJ の3つの領域 OC（Yahoo! 知恵袋），PB（書籍）及び PN（新聞）に
+共通して出現する多義語 16単語を対象にして，WSD の領域適応の実験を行った．
+NB法，uLSIF 及び提案手法を比較すると，提案手法が最も高い平均正解率を出した．
+また「$p$乗する」や「相対確率密度比を取る」といった確率密度比を上方修正する手法も試し，
+提案手法のように確率密度比を上方修正する効果を確認した．
+
+また Misleading データをしらみつぶし的に取り出し，Misleading データを用いた
+手法の評価も行った．Misleading データを利用した評価では uLSIF が優れていたが，
+提案手法は NB法の改良になっていることを確認できた．
+WSD の領域適応の場合，Misleading データの検出あるいは負の転移の有無を判定することが，
+精度改善に大きく寄与できる．今後はこの点の研究を進めたい．
+またトピックモデルの利用も検討したい．
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Chan \BBA\ Ng}{Chan \BBA\ Ng}{2005}]{chan2005word}
+Chan, Y.~S.\BBACOMMA\ \BBA\ Ng, H.~T. \BBOP 2005\BBCP.
+\newblock \BBOQ Word Sense Disambiguation with Distribution Estimation.\BBCQ\
+\newblock In {\Bem Proceedings of IJCAI-2005}, \mbox{\BPGS\ 1010--1015}.
+
+\bibitem[\protect\BCAY{Chan \BBA\ Ng}{Chan \BBA\ Ng}{2006}]{chan2006estimating}
+Chan, Y.~S.\BBACOMMA\ \BBA\ Ng, H.~T. \BBOP 2006\BBCP.
+\newblock \BBOQ Estimating Class Priors in Domain Adaptation for Word Sense
+  Disambiguation.\BBCQ\
+\newblock In {\Bem Proceedings of COLING-ACL-2006}, \mbox{\BPGS\ 89--96}.
+
+\bibitem[\protect\BCAY{Chapelle, Sch{\"o}lkopf, \BBA\ Zien}{Chapelle
+  et~al.}{2006}]{chapelle2006semi}
+Chapelle, O., Sch{\"o}lkopf, B., \BBA\ Zien, A. \BBOP 2006\BBCP.
+\newblock {\Bem Semi-Supervised Learning}, \lowercase{\BVOL}~2.
+\newblock MIT press Cambridge.
+
+\bibitem[\protect\BCAY{Daum{\'{e}}}{Daum{\'{e}}}{2007}]{daume0}
+Daum{\'{e}}, H.~I. \BBOP 2007\BBCP.
+\newblock \BBOQ Frustratingly Easy Domain Adaptation.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-2007}, \mbox{\BPGS\ 256--263}.
+
+\bibitem[\protect\BCAY{Jiang \BBA\ Zhai}{Jiang \BBA\
+  Zhai}{2007}]{jiang2007instance}
+Jiang, J.\BBACOMMA\ \BBA\ Zhai, C. \BBOP 2007\BBCP.
+\newblock \BBOQ Instance Weighting for Domain Adaptation in NLP.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-2007}, \mbox{\BPGS\ 264--271}.
+
+\bibitem[\protect\BCAY{Joachims}{Joachims}{1999}]{joachims1999transductive}
+Joachims, T. \BBOP 1999\BBCP.
+\newblock \BBOQ Transductive Inference for Text Classification using Support
+  Vector Machines.\BBCQ\
+\newblock In {\Bem ICML}, \lowercase{\BVOL}~99, \mbox{\BPGS\ 200--209}.
+
+\bibitem[\protect\BCAY{神嶌}{神嶌}{2010}]{kamishima}
+神嶌敏弘 \BBOP 2010\BBCP.
+\newblock 転移学習.\
+\newblock \Jem{人工知能学会誌}, {\Bbf 25}  (4), \mbox{\BPGS\ 572--580}.
+
+\bibitem[\protect\BCAY{Kanamori, Hido, \BBA\ Sugiyama}{Kanamori
+  et~al.}{2009}]{kanamori2009least}
+Kanamori, T., Hido, S., \BBA\ Sugiyama, M. \BBOP 2009\BBCP.
+\newblock \BBOQ A Least-Squares Approach to Direct Importance Estimation.\BBCQ\
+\newblock {\Bem The Journal of Machine Learning Research}, {\Bbf 10},
+  \mbox{\BPGS\ 1391--1445}.
+
+\bibitem[\protect\BCAY{古宮\JBA 奥村}{古宮\JBA 奥村}{2012}]{komiya-nlp2012}
+古宮嘉那子\JBA 奥村学 \BBOP 2012\BBCP.
+\newblock 語義曖昧性解消のための領域適応手法の決定木学習による自動選択.\
+\newblock \Jem{自然言語処理}, {\Bbf 19}  (3), \mbox{\BPGS\ 143--166}.
+
+\bibitem[\protect\BCAY{古宮\JBA 小谷\JBA 奥村}{古宮 \Jetal
+  }{2013}]{komiya-nenji2013}
+古宮嘉那子\JBA 小谷善行\JBA 奥村学 \BBOP 2013\BBCP.
+\newblock 語義曖昧性解消の領域適応のための訓練事例集合の選択.\
+\newblock \Jem{言語処理学会第 19 回年次大会}, \mbox{\BPGS\ C6{--}2}.
+
+\bibitem[\protect\BCAY{Komiya \BBA\ Okumura}{Komiya \BBA\
+  Okumura}{2011}]{komiya3}
+Komiya, K.\BBACOMMA\ \BBA\ Okumura, M. \BBOP 2011\BBCP.
+\newblock \BBOQ Automatic Determination of a Domain Adaptation Method for Word
+  Sense Disambiguation using Decision Tree Learning.\BBCQ\
+\newblock In {\Bem Proceedings of IJCNLP-2011}, \mbox{\BPGS\ 1107--1115}.
+
+\bibitem[\protect\BCAY{Komiya \BBA\ Okumura}{Komiya \BBA\
+  Okumura}{2012}]{komiya2}
+Komiya, K.\BBACOMMA\ \BBA\ Okumura, M. \BBOP 2012\BBCP.
+\newblock \BBOQ Automatic Domain Adaptation for Word Sense Disambiguation Based
+  on Comparison of Multiple Classifiers.\BBCQ\
+\newblock In {\Bem Proceedings of PACLIC-2012}, \mbox{\BPGS\ 75--85}.
+
+\bibitem[\protect\BCAY{Maekawa}{Maekawa}{2007}]{bccwj}
+Maekawa, K. \BBOP 2007\BBCP.
+\newblock \BBOQ Design of a Balanced Corpus of Contemporary Written
+  Japanese.\BBCQ\
+\newblock In {\Bem Symposium on Large-Scale Knowledge Resources (LKR2007)},
+  \mbox{\BPGS\ 55--58}.
+
+\bibitem[\protect\BCAY{森}{森}{2012}]{mori}
+森信介 \BBOP 2012\BBCP.
+\newblock 自然言語処理における分野適応.\
+\newblock \Jem{人工知能学会誌}, {\Bbf 27}  (4), \mbox{\BPGS\ 365--372}.
+
+\bibitem[\protect\BCAY{Okazaki}{Okazaki}{2009}]{Classias}
+Okazaki, N. \BBOP 2009\BBCP.
+\newblock \BBOQ Classias: A Collection of Machine-Learning Algorithms for
+  Classification.\BBCQ.
+
+\bibitem[\protect\BCAY{Okumura, Shirai, Komiya, \BBA\ Yokono}{Okumura
+  et~al.}{2010}]{semeval-2010}
+Okumura, M., Shirai, K., Komiya, K., \BBA\ Yokono, H. \BBOP 2010\BBCP.
+\newblock \BBOQ SemEval-2010 Task: Japanese WSD.\BBCQ\
+\newblock In {\Bem Proceedings of the 5th International Workshop on Semantic
+  Evaluation}, \mbox{\BPGS\ 69--74}.
+
+\bibitem[\protect\BCAY{Rosenstein, Marx, Kaelbling, \BBA\
+  Dietterich}{Rosenstein et~al.}{2005}]{rosenstein2005transfer}
+Rosenstein, M.~T., Marx, Z., Kaelbling, L.~P., \BBA\ Dietterich, T.~G. \BBOP
+  2005\BBCP.
+\newblock \BBOQ To Transfer or Not to Transfer.\BBCQ\
+\newblock In {\Bem Proceedings of the NIPS 2005 Workshop on Inductive Transfer:
+  10 Years Later}.
+
+\bibitem[\protect\BCAY{齋木\JBA 高村\JBA 奥村}{齋木 \Jetal
+  }{2008}]{saiki-2008-03-27}
+齋木陽介\JBA 高村大也\JBA 奥村学 \BBOP 2008\BBCP.
+\newblock 文の感情極性判定における事例重み付けによるドメイン適応.\
+\newblock \Jem{情報処理学会第 184 回自然言語処理研究会, NL-184-10}.
+
+\bibitem[\protect\BCAY{新納\JBA 佐々木}{新納\JBA
+  佐々木}{2013}]{shinnou-gengo-13}
+新納浩幸\JBA 佐々木稔 \BBOP 2013\BBCP.
+\newblock k 近傍法とトピックモデルを利用した語義曖昧性解消の領域適応.\
+\newblock \Jem{自然言語処理}, {\Bbf 20}  (5), \mbox{\BPGS\ 707--726}.
+
+\bibitem[\protect\BCAY{新納\JBA 佐々木}{新納\JBA
+  佐々木}{2014}]{shinnou-gengo-14}
+新納浩幸\JBA 佐々木稔 \BBOP 2014\BBCP.
+\newblock 共変量シフトの問題としての語義曖昧性解消の領域適応.\
+\newblock \Jem{自然言語処理}, {\Bbf 21}  (1), \mbox{\BPGS\ 61--79}.
+
+\bibitem[\protect\BCAY{新納\JBA 國井\JBA 佐々木}{新納 \Jetal
+  }{2014}]{shinnou-jws5}
+新納浩幸\JBA 國井慎也\JBA 佐々木稔 \BBOP 2014\BBCP.
+\newblock 語義曖昧性解消を対象とした領域固有のシソーラスの構築.\
+\newblock \Jem{第 5 回コーパス日本語学ワークショップ}, \mbox{\BPGS\ 199--206}.
+
+\bibitem[\protect\BCAY{Sogaard}{Sogaard}{2013}]{da-book}
+Sogaard, A. \BBOP 2013\BBCP.
+\newblock {\Bem Semi-Supervised Learning and Domain Adaptation in Natural
+  Language Processing}.
+\newblock Morgan \& Claypool.
+
+\bibitem[\protect\BCAY{杉山}{杉山}{2006}]{sugiyama-2006-09-05}
+杉山将 \BBOP 2006\BBCP.
+\newblock 共変量シフト下での教師付き学習.\
+\newblock \Jem{日本神経回路学会誌}, {\Bbf 13}  (3), \mbox{\BPGS\ 111--118}.
+
+\bibitem[\protect\BCAY{杉山}{杉山}{2010}]{sugiyama-2010}
+杉山将 \BBOP 2010\BBCP.
+\newblock 密度比に基づく機械学習の新たなアプローチ.\
+\newblock \Jem{統計数理}, {\Bbf 58}  (2), \mbox{\BPGS\ 141--155}.
+
+\bibitem[\protect\BCAY{Sugiyama \BBA\ Kawanabe}{Sugiyama \BBA\
+  Kawanabe}{2011}]{sugiyama-book}
+Sugiyama, M.\BBACOMMA\ \BBA\ Kawanabe, M. \BBOP 2011\BBCP.
+\newblock {\Bem Machine Learning in Non-Stationary Environments: Introduction
+  to Covariate Shift Adaptation}.
+\newblock MIT Press.
+
+\bibitem[\protect\BCAY{高村}{高村}{2010}]{takamura}
+高村大也 \BBOP 2010\BBCP.
+\newblock \Jem{言語処理のための機械学習入門}.
+\newblock コロナ社.
+
+\bibitem[\protect\BCAY{Yamada, Suzuki, Kanamori, Hachiya, \BBA\
+  Sugiyama}{Yamada et~al.}{2011}]{yamada2011relative}
+Yamada, M., Suzuki, T., Kanamori, T., Hachiya, H., \BBA\ Sugiyama, M. \BBOP
+  2011\BBCP.
+\newblock \BBOQ Relative Density-ratio Estimation for Robust Distribution
+  Comparison.\BBCQ\
+\newblock {\Bem Neural Computation}, {\Bbf 25}  (5), \mbox{\BPGS\ 1370--1370}.
+
+\bibitem[\protect\BCAY{吉田\JBA 新納}{吉田\JBA 新納}{2014}]{yoshida}
+吉田拓夢\JBA 新納浩幸 \BBOP 2014\BBCP.
+\newblock 外れ値検出手法を利用した Misleading データの検出.\
+\newblock \Jem{第 5 回コーパス日本語学ワークショップ}, \mbox{\BPGS\ 49--56}.
+
+\end{thebibliography}
+
+
+
+\begin{biography}
+
+\bioauthor{新納　浩幸}{
+1985年東京工業大学理学部情報科学科卒業．
+1987年同大学大学院理工学研究科情報科学専攻修士課程修了．
+同年富士ゼロックス，翌年松下電器を経て，
+1993年4月茨城大学工学部システム工学科助手．
+1997年10月同学科講師，2001年4月同学科助教授，
+現在，茨城大学工学部情報工学科准教授．博士（工学）．
+機械学習や統計的手法による自然言語処理の研究に従事．
+言語処理学会，情報処理学会，人工知能学会 各会員．
+}
+\bioauthor{佐々木　稔}{
+1996年徳島大学工学部知能情報工学科卒業．
+2001年同大学大学院博士後期課程修了．博士（工学）．
+2001年12月茨城大学工学部情報工学科助手．
+現在，茨城大学工学部情報工学科講師．
+機械学習や統計的手法による情報検索，自然言語処理等に関する研究に従事．
+言語処理学会，情報処理学会 各会員．
+}
+
+\end{biography}
+
+\biodate
+
+
+
+\end{document}

@@ -1,0 +1,908 @@
+    \documentclass[english]{jnlp_1.4_rep}
+
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+
+\usepackage{amsmath}
+\newcommand{\nom}{}
+\newcommand{\acc}{}
+\newcommand{\dat}{}
+\newcommand{\abl}{}
+\newcommand{\gen}{}
+\newcommand{\loc}{}
+\newcommand{\cmi}{}
+\newcommand{\enu}{}
+\newcommand{\cnj}{}
+\newcommand{\all}{}
+\newcommand{\TOP}{}
+\newcommand{\TM}{}
+\usepackage{gb4e}
+\noautomath
+\newcommand{\argmax}[2]{}
+
+
+\Volume{21}
+\Number{4}
+\Month{September}
+\Year{2014}
+
+\received{2006}{11}{12}
+\revised{2007}{3}{12}
+\accepted{2007}{4}{13}
+
+\setcounter{page}{799}
+
+\etitle{A Fully-Lexicalized Probabilistic Model \\ for Japanese Syntactic and Case Structure Analysis\footnotetext{\llap{*~}This article has been partially revised for better understanding of overseas readers.}}
+\eauthor{Daisuke Kawahara\affiref{Author_1} \and Sadao Kurohashi\affiref{Author_2}} 
+\eabstract{
+ We present an integrated probabilistic model for Japanese syntactic and
+ case 
+\linebreak
+structure analysis. Syntactic and case structures are
+ simultaneously analyzed on the basis of wide-coverage case frames that are
+ constructed from a huge raw corpus in an unsupervised manner. This
+ model selects the syntactic and case structures that have the highest
+ generative probability. We evaluate both syntactic structure and 
+\linebreak
+case
+ structure. In particular, the experimental results for syntactic
+ analysis on web sentences show that the proposed model significantly
+ outperforms the known 
+\linebreak
+syntactic analyzers.
+}
+\ekeywords{case frames, corpus, web, syntactic analysis, case structure analysis}
+
+\headauthor{Kawahara and Kurohashi}
+\headtitle{Fully-Lexicalized Model for Syntactic/Case Structure Analysis}
+
+\affilabel{Author_1}{}{National Institute of Information and Communications Technology}
+\affilabel{Author_2}{}{Graduate School of Informatics, Kyoto University}
+
+\Reprint[T]{Vol.~14, No.~4, pp.~67--81}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+In recent years, the accuracy of syntactic parsing has improved. The
+approaches for syntactic parsing can be divided into two types:
+    rule-based methods (e.g., Kurohashi and Nagao 1994\nocite{Kurohashi1994}) and statistical methods
+    (e.g., Kudo and Matsumoto 2002\nocite{Kudo2002}). Fundamentally, both types use information from
+parts of speech (POS) and conjugation of morphemes, punctuation, and
+function words to achieve high accuracy. For example, consider the
+following Japanese sentence:\footnote{In this article, we use the
+following abbreviations: \nom~(nominative), \acc~(accusative),
+\dat~(dative), \loc~(locative), \abl~(ablative), \all~(allative),
+\gen~(genitive), and \TOP~(topic marker).}
+
+\begin{exe}
+\ex \label{ExampleSimple}
+ \gll {\textit{bentou-wo}} {\textit{tabete}} {\textit{shuppatsu}-\textit{shita}} \\
+      {lunch box-\acc} {eat} {departed} \\
+ \trans ((someone) ate a lunchbox and departed.)
+\end{exe}
+
+These systems can correctly judge the head of ``\textit{bentou-wo}''
+(lunch box-\acc) as ``\textit{tabete}'' (eat).  This is because they
+consider the tendency that the phrase ``-\textit{wo}'' (\acc) depends on
+the closest predicate in most cases. This kind of dependency constraint
+and preference based on POS, function words, and so forth, is described
+by rule-based methods and learned from a tagged corpus by statistical
+methods. However, neither method can deal with lexical preferences.
+
+\begin{exe}
+\ex \label{ExampleLexPref}
+ \begin{xlist}
+ \ex
+  \gll {\textit{bentou-wo}} {\textit{shuppatsu-suru}} {\textit{mae-ni}} {\textit{tabeta}} \\
+      {lunch box-\acc} {depart} {before} {ate} \\
+  \trans ((someone) ate a lunchbox before departing.)
+ \ex
+  \gll {\textit{bentou-wa}} {\textit{tabete}} {\textit{shuppatsu-shita}} \\
+      {lunch box-\TOP} {eat} {departed} \\
+  \trans (As for the lunchbox, (someone) ate (it) and departed.)
+ \end{xlist}
+\end{exe}
+
+In example (\ref{ExampleLexPref}a), ``\textit{bentou-wo}'' (lunch
+box-\acc) is handled in the same
+way as example (\ref{ExampleSimple}), and the head of ``\textit{bentou-wo}'' is
+incorrectly judged as ``\textit{shuppatsu-suru}'' (depart). In example (\ref{ExampleLexPref}b),
+the head of ``\textit{bentou-wa}'' (lunch box-\TOP) is incorrectly
+judged as ``\textit{shuppatsu-shita}'' (departed) because of the
+tendency that the topical phrase ``-\textit{wa}'' (\TOP) is likely to depend on a
+distant phrase, such as at the end of the sentence. To make these cases
+correct, it is necessary to learn lexical preferences such as
+``\textit{bentou-wo taberu}'' (eat a lunch box). Although statistical methods consider lexical information as
+features in many cases, it is difficult or almost impossible to learn
+lexical preferences from a training corpus comprising tens of
+thousands of sentences, because of the data sparseness problem.
+
+Furthermore, even if such lexical preferences are sufficiently learned,
+it is difficult to analyze the following sentence correctly:
+
+\begin{exe}
+\ex \label{ExampleDifficult}
+ \gll {\textit{Taro-ga}} {\textit{tabeta}} {\textit{Hanako}-\textit{no}} {\textit{bentou}} \\
+      {Taro-\nom} {ate} {Hanako-\gen} {lunch box}\\
+ \trans (Hanako's lunch box that Taro ate)
+\end{exe}
+
+If the lexical preferences of ``\textit{bentou-wo taberu}'' (eat a lunch box) and ``\textit{Hanako-ga taberu}'' (Hanako eats)
+are learned, it is not possible to determine the head of ``\textit{tabeta}'' (ate) from
+such knowledge. To analyze this sentence correctly, it is necessary to
+recognize that ``\textit{tabeta}'' has a ``\textit{ga}'' (\nom) argument of ``\textit{Taro}'' and a ``\textit{wo}'' (\acc)
+argument of ``\textit{bentou}'' (lunch box). In this way, it is important for the improvement
+of syntactic analysis to recognize predicate-argument structures based
+on lexical preferences.
+
+To perform case structure analysis in practice, which is the task of
+recognizing predicate-argument structures, the requisites are as large
+case frames as possible, which represent the relations between a
+predicate and its arguments. For such case frames, we can use
+large-scale case frames compiled from a large web corpus
+\cite{Kawahara2006}. We propose a probabilistic model for joint
+syntactic and case structure analysis on the basis of these case
+frames. This model performs probabilistic case structure analysis in a
+generative manner, and selects the syntactic structure that has the
+highest probability of case structure.
+
+There have been several approaches that explicitly consider lexical
+preferences. \citeA{Shirai1998e} and \citeA{Fujio1998} used probabilities for word
+co-occurrences estimated from hundreds of thousands or millions of
+sentences. The work most closely related to
+our model is the syntactic analysis method of \cite{Abekawa2006}. They
+proposed a method for syntactic analysis, based on relations between
+arguments of a predicate and co-occurrence relations between a
+predicate and its arguments. These two types of relations were gathered
+from a 30-year volume of newspaper articles, and these probabilities were
+estimated using PLSI. They applied probabilistic re-ranking to n-best
+syntactic trees output by an existing parser, and selected the tree with
+the highest probability. This method introduced latent semantic classes
+based on PLSI, and estimated probabilities from a mid-scale corpus.
+
+Our work is different from these previous approaches in the following
+aspects.
+\begin{itemize}
+ \item We use case frames that are classified explicitly, according to
+       predicate meanings and usages. We can perform precise case
+       structure analysis by selecting an appropriate case frame and
+       disambiguating the semantic ambiguity of predicates.
+ \item We do not generalize corpus instances, but use instances
+       in case frames themselves, extracted from a very large corpus.
+ \item We define a generative model for syntactic and case structure
+       analysis. It is different from the re-ranking model
+       based on an n-best list \cite{Abekawa2006}.
+\end{itemize}
+
+
+\section{Automatically Constructed Case Frames}
+\label{Section::AutomaticCaseFrameConstruction}
+
+We employ automatically compiled case frames \cite{Kawahara2006}. This
+section outlines the method for compiling case frames.
+
+It is desirable to cover various linguistic expressions with case
+frames, which are an important part of humans' common sense. To build
+such case frames, we gradually extract reliable information from a
+large-scale corpus.
+
+A large corpus is first automatically parsed, and initial case frames
+are constructed from modifier-head examples in the resulting parses. The
+biggest problem in automatic case frame compilation is predicate usage
+ambiguities. That is, a predicate may have multiple usages
+(or senses), and case patterns and filled instances are different for
+each usage. For example, the following two sentences have the same
+predicate but different usages.\footnote{Although the English
+translations of the predicate are different, the same predicate is used
+in Japanese.}
+
+\begin{exe}
+\ex
+ \begin{xlist}
+ \ex
+  \gll {\textit{torakku-ni}} {\textit{nimotsu-wo}} {\textit{tsumu}} \\
+       {truck-\dat} {baggage-\acc} {load} \\
+  \trans ((someone) loads baggage onto a truck.)
+ \ex
+  \gll {\textit{keiken-wo}} {\textit{tsumu}} \\
+       {experience-\acc} {accumulate} \\
+  \trans ((someone) accumulates experience.)
+ \end{xlist}
+\end{exe}
+
+\noindent
+To divide case frames according to their usages, we make a couple of a
+predicate and its closest argument to be a unit of case frame
+compilation. Our units for case frames are ``\textit{nimotsu-wo tsumu}''
+(load baggage) and ``\textit{keiken-wo tsumu}'' (accumulate experience)
+for the predicate ``\textit{tsumu}.'' Furthermore, we apply clustering
+to these initial case frames to merge very similar expressions such as
+``\textit{nimotsu-wo tsumu}'' (load baggage) and ``\textit{busshi-wo
+tsumu}'' (load supply).
+
+The above first step of case frame compilation uses syntactic parsing,
+and basically collects arguments with case-marking
+postpositions. Therefore, the resulting case frames cannot handle
+complex expressions, such as double nominative constructions,
+non-gapping relations, and case alternation. To cope with this problem,
+we analyze the corpus again using the acquired case frames, and provide
+the case frames with new information. This new information includes
+knowledge about topic-marked phrases (phrases with ``\textit{wa}'' and
+``\textit{mo}'' postpositions) and clausal modifiees that cannot be
+handled by the first step of case frame compilation.
+
+\begin{exe}
+\ex
+ \gll {\textit{kono}} {\textit{kuruma-wa}} {\textit{enjin-ga}} {\textit{yoi}} \\
+      {this} {car-\TOP} {engine-\nom} {good} \\
+ \trans (This car's engine is good.)
+\end{exe}
+
+For example, syntactic analysis cannot interpret ``\textit{kuruma-wa}''
+(car-\TOP). Case analysis can interpret ``\textit{kuruma-wa}'' as an
+outer nominative because the case frame ``\{\textit{enjin}\}:\textit{ga
+yoi}'' (\{engine\}: \nom\ is good) does not have case slots other than
+``\textit{ga}'' (\nom). That is, this process says that this case frame
+can take a double nominative construction.
+
+\begin{exe}
+\ex
+ \gll {\textit{sono}} {\textit{mondai-wa}} {\textit{kare-ga}} {\textit{toshokan-de}} {\textit{shirabete-iru}} \\
+      {that} {problem-\TOP} {he-\nom} {library-\loc} {investigate} \\
+ \trans (As for that problem, he is investigating (it) in a library.)
+\end{exe}
+
+Since ``\textit{mondai-wa}'' (problem-\TOP) in this sentence is similar
+to the instances in the ``\textit{wo}'' (\acc) case slot of the case
+frame ``\{\textit{mondai}, \textit{kadai}\}:\textit{wo}
+\{\textit{toshokan}\}:\textit{de} \textit{shiraberu}'' (\{problem,
+issue\}:\acc\ \{library\}:\loc\ investigate), it is judged as an
+instance of ``\textit{wo}'' (\acc) case and this process does not
+produce new information. Similarly, clausal modifiees are not
+interpreted in syntactic analysis but in case analysis by
+examining the similarity between a clausal modifiee and instances in
+case slots (``\textit{ga},'' ``\textit{wo},'' etc.) of case
+frames. For example, since ``\textit{menkyo}'' (license) in the
+expression ``\textit{gyoumu-wo itonamu menkyo}'' (the license to carry
+on business) is not similar to any instance in the case frame
+``\{\textit{ginkou}, \textit{kaisha} \}:\textit{ga} \{\textit{gyoumu},
+\textit{bijinesu}\}:\textit{wo} \textit{itonamu}'' (\{bank,
+company\}:\nom\ \{business, work\}:\acc\ carry on), it is considered to
+have a non-gapping relation and is added to the case frame as new
+information.
+
+\begin{table}[b]
+\hangcaption{Case frame examples (Examples are written only in English 
+ because of space limitation. The number following each example is its frequency.)}
+ \label{Example::CF}
+\input{08table01.txt}
+\end{table}
+
+Using this gradual procedure, we compiled case frames from the web
+corpus \cite{Kawahara2006}. The case frames were obtained from
+approximately 500 million sentences extracted from the web. This process was
+conducted using a computer grid comprising approximately 350 CPUs, and it
+took approximately a week. The resultant case frames consisted of 90,000
+predicates. Table \ref{Example::CF} shows some examples of the
+resulting case frames.
+
+
+\section{Integrated Probabilistic Model for Syntactic and Case Structure Analysis}
+
+The proposed method gives a probability to each possible syntactic
+structure $T$ and case structure $L$ of input sentence $S$, and
+outputs the syntactic and case structure that have the highest
+probability. That is, the system selects the syntactic structure
+$T_{best}$ and the case structure $L_{best}$ that maximize the
+probability $P(T,L|S)$:
+\begin{equation}
+\begin{aligned}[b]
+ (T_{best}, L_{best}) & = \argmax{(T, L)}{P(T,L|S)} \\
+                      & = \argmax{(T, L)}{\frac{P(T,L,S)}{P(S)}} \\
+                      & = \argmax{(T, L)}{P(T,L,S)}.
+\end{aligned}
+\end{equation}
+The last equation is derived because $P(S)$ is constant.
+
+
+\subsection{Generative Model for Syntactic and Case Structure Analysis}
+
+We propose a generative probabilistic model based on dependency
+formalism. This model considers a clause as a unit of generation, and
+generates the input sentence from the end of the sentence in
+turn. $P(T,L,S)$ is defined as the product of a probability for
+generating a clause $c_i$ as follows:
+\begin{equation}
+ P(T,L,S) = \prod_{c_i \in S} P(c_i|b_h),
+\label{Formula::Division}
+\end{equation}
+where $b_h$ is $c_i$'s modifying \textit{bunsetsu}.\footnote{In Japanese, \textit{bunsetsu} is a
+basic unit of dependency, consisting of one or more content words and
+the following zero or more function words. It corresponds to a base
+phrase in English and ``\textit{eojeol}'' in Korean.} The main clause
+$c_n$ at the end of a sentence does not have a modifying head, but we
+handle it by assuming $b_{h_n} = \mbox{EOS}$ (End Of Sentence).
+
+Although most previous studies defined the generative probability of a
+sentence as the product of a dependency probability between two
+\textit{bunsetsu}s, we use a generative model of a clause, which is a
+predicate and its arguments, in equation (\ref{Formula::Division}). By
+virtue of this, our model can determine dependencies by considering
+multiple arguments and correctly analyze sentences, such as example
+(\ref{ExampleDifficult}).
+
+\begin{figure}[t]
+ \begin{center}
+  \includegraphics{21-4ia8f1.eps}
+ \end{center}
+  \caption{Example of Probability Calculation}
+  \label{Figure::Outline}
+\end{figure}
+
+For example, consider the sentence in Figure \ref{Figure::Outline}.
+There are two possible dependency structures, and for each structure, the
+product of probabilities indicated below the tree is
+calculated. Finally, the model chooses the highest-probability
+structure (in this case, the left one).
+
+$c_i$ is decomposed into its predicate type $f_i$ (including the
+predicate's inflection) and the rest case structure $CS_i$. This means
+that the predicate included in $CS_i$ is lemmatized. \textit{Bunsetsu}
+$b_h$ is also decomposed into content part $w_h$ and type $f_h$.
+\begin{equation}
+\begin{aligned}[b]
+ P(c_i|b_h) & = P(CS_i, f_i|w_h, f_h) \\
+                & = P(CS_i|f_i,w_h,f_h) P(f_i|w_h,f_h) \\
+                & \approx P(CS_i|f_i,w_h) P(f_i|f_h).
+\end{aligned}
+\label{Equation::Dependency}
+\end{equation}
+The last equation is derived because the content part in $CS_i$ is
+independent of the type of its modifying head ($f_h$), and in most
+cases, type $f_i$ is independent of the content part of its
+modifying head ($w_h$).
+
+For example, $P(\mbox{\textit{bentou-wa tabete}}|\mbox{\textit{shuppatsu-shita}})$ is calculated as follows:
+\[
+P(CS(\mbox{\textit{bentou-wa taberu}})|\mbox{\textit{te}},\mbox{\textit{shuppatsu-suru}}) P(\mbox{\textit{te}}|\mbox{\textit{ta.}}).
+\]
+
+We call $P(CS_i|f_i,w_h)$ the \textit{generative model for case
+structure} and $P(f_i|f_h)$ the \textit{generative model for predicate type}.
+The following two sections describe these models.
+
+
+\subsection{Generative Model for Case Structure}
+
+We propose a generative probabilistic model of case structure. This
+model selects a case frame that matches the input case components and
+makes correspondences between input case components and case slots.
+
+A case structure $CS_i$ consists of a predicate $v_i$, a case frame
+$CF_l$ and a case assignment $CA_k$. Case assignment $CA_k$ represents
+correspondences between the input case components and case slots, as shown in
+Figure \ref{Figure::Correspondence}. Note that there are various
+possibilities of case assignment in addition to that in Figure
+\ref{Figure::Correspondence}, such as a corresponding ``\textit{bentou}''
+(lunchbox) with ``\textit{ga}'' case. Accordingly, the index $k$ of $CA_k$
+ranges up to the number of possible case assignments. By splitting
+$CS_i$ into $v_i$, $CF_l$ and $CA_k$, $P(CS_i|f_i,w_h)$ is rewritten
+as follows:
+\begin{equation}
+\begin{aligned}[b]
+ P(CS_i|f_i,w_h) & = P(v_i,CF_l,CA_k|f_i,w_h) \\
+  & = P(v_i|f_i,w_h) \\
+  & \quad \times P(CF_l|f_i,w_h,v_i) \\
+  & \quad \times P(CA_k|f_i,w_h,v_i,CF_l) \\
+  & \approx P(v_i|w_h) \\
+  & \quad \times P(CF_l|v_i) \\
+  & \quad \times P(CA_k|CF_l,f_i).
+\end{aligned}
+\label{Formula::PA}
+\end{equation}
+
+\begin{figure}[t]
+ \begin{center}
+  \includegraphics{21-4ia8f2.eps}
+ \end{center}
+  \caption{Example of case assignment $CA_k$}
+  \label{Figure::Correspondence}
+\end{figure}
+
+The above approximation is given because it is natural to consider that the predicate $v_i$ depends on its
+modifying head $w_h$, that the case frame $CF_l$ only depends on the
+predicate $v_i$, and that the case assignment $CA_k$ depends on the case
+frame $CF_l$ and the predicate type $f_i$.
+
+The probabilities $P(v_i|w_h)$ and $P(CF_l|v_i)$ are estimated from the
+case structure analysis results of a large raw corpus. The remainder of
+this section illustrates $P(CA_k|CF_l,f_i)$ in detail.
+
+
+\subsubsection{Generative Probability of Case Assignment}
+\label{Section::格対応生成確率}
+
+Let us consider case assignment $CA_k$ for each case slot $s_j$ in case
+frame $CF_l$. $P(CA_k|CF_l,f_i)$ can be decomposed into the following
+product depending on whether a case slot $s_j$ is filled with an input
+case component (content part $n_j$ and type $f_j$) or vacant:
+{\allowdisplaybreaks
+\begin{align}
+ P(CA_k|CF_l,f_i) & = \prod_{s_j: A(s_j)=1} P(A(s_j)=1,n_j,f_j|CF_l,f_i,s_j) \nonumber\\
+ & \quad \times \prod_{s_j: A(s_j)=0} P(A(s_j)=0|CF_l,f_i,s_j) \nonumber\\[10pt]
+ & = \prod_{s_j: A(s_j)=1} \Bigl\{ P(A(s_j)=1|CF_l,f_i,s_j) 
+	\times P(n_j,f_j|CF_l,f_i,A(s_j)=1,s_j)\Bigl\} \nonumber\\[10pt]
+ & \quad \times \prod_{s_j: A(s_j)=0} P(A(s_j)=0|CF_l,f_i,s_j),
+\label{Formula::CCExample}
+\end{align}
+}
+where the function $A(s_j)$ returns 1 if a case slot $s_j$ is filled
+with an input case component; otherwise 0.
+
+$P(A(s_j)=1|CF_l,f_i,s_j)$ and $P(A(s_j)=0|CF_l,f_i,s_j)$
+in equation (\ref{Formula::CCExample}) can be rewritten as
+$P(A(s_j)=1|CF_l,s_j)$ and $P(A(s_j)=0|CF_l,s_j)$ because the evaluation
+of case slot assignment depends only on the case frame.  We call these
+probabilities the \textit{generative probability of a case slot}, which
+are estimated from the case structure analysis results of a large corpus.
+
+Let us calculate $P(CS_i|f_i,w_h)$ by using the example in Figure
+\ref{Figure::Outline}. In the sentence, ``\textit{wa}'' is a topic
+marking (\textsf{TOP}) postposition, and hides the case marker. The
+generative probability of the case structure varies depending on the case
+slot to which the topic marked phrase is assigned. For example, when a
+case frame of ``\textit{taberu}'' (eat) $CF_{\textit{taberu1}}$ with
+``\textit{ga}'' and ``\textit{wo}'' case slots is used,
+$P(CS(\mbox{\textit{bentou-wa
+taberu}})|\mbox{\textit{te}},\mbox{\textit{shuppatsu-suru}})$ is
+calculated as follows:
+{\allowdisplaybreaks
+\begin{align}
+  & P_{1}(CS(\mbox{\textit{bentou-wa} \textit{taberu}})|\mbox{\textit{te}},\mbox{\textit{shuppatsu-suru}}) \nonumber\\
+  & \quad = P(\mathrm{\mbox{\textit{taberu}}}|\mathrm{\mbox{\textit{shuppatsu-suru}}}) \nonumber\\
+  & \qquad \times P(CF_{\textit{taberu1}}|\mathrm{\mbox{\textit{taberu}}}) \nonumber\\
+  & \qquad \times P(\mathrm{\mbox{\textit{bentou}}}, \mathrm{\mbox{\textit{wa}}}|CF_{\textit{taberu1}},\mathrm{\mbox{\textit{te}}},A(\mathrm{\mbox{\textit{wo}}})=1,\mbox{\textit{wo}}) \nonumber\\
+  & \qquad \times P(A(\mathrm{\mbox{\textit{wo}}})=1|CF_{\textit{taberu1}}, \textit{wo}) \nonumber\\
+  & \qquad \times P(A(\mathrm{\mbox{\textit{ga}}})=0|CF_{\textit{taberu1}}, \textit{ga}), \\
+ & P_{2}(CS(\mbox{\textit{bentou-wa} \textit{taberu}})|\mbox{\textit{te}},\mbox{\textit{syupatsu-suru}}) \nonumber\\
+ & \quad = P(\mathrm{\mbox{\textit{taberu}}}|\mathrm{\mbox{\textit{shuppatsu-suru}}}) \nonumber\\
+ & \qquad \times P(CF_{\textit{taberu1}}|\mathrm{\mbox{\textit{taberu}}}) \nonumber\\
+ & \qquad \times P(\mathrm{\mbox{\textit{bentou}}}, \mathrm{\mbox{\textit{wa}}}|CF_{\textit{taberu1}},\mathrm{\mbox{\textit{te}}},A(\mathrm{\mbox{\textit{ga}}})=1,\mbox{\textit{ga}}) \nonumber\\
+ & \qquad \times P(A(\mathrm{\mbox{\textit{ga}}})=1|CF_{\textit{taberu1}}, \textit{ga}) \nonumber\\
+ & \qquad \times P(A(\mathrm{\mbox{\textit{wo}}})=0|CF_{\textit{taberu1}}, \textit{wo}).
+\end{align}
+}
+Such probabilities are computed for each case frame of
+``\textit{taberu}'' (eat), and the case frame and its corresponding case
+assignment that have the highest probability are selected.
+
+\pagebreak
+We describe the generative probability of a case component
+$P(n_j,f_j|CF_l, f_i, A(s_j)=1, s_j)$ below.
+
+
+\subsubsection{Generative Probability of Case Component}
+\label{Section::格要素生成確率}
+
+We approximate the generative probability of a case component, assuming that
+
+\begin{itemize} \itemsep=0mm
+ \item a generative probability of content part $n_j$ is independent of
+       that of type $f_j$,
+ \item the interpretation of the surface case included in $f_j$ does
+		     not depend on case frames.
+\end{itemize}
+
+\noindent
+Considering these assumptions, the generative probability of a
+case component is approximated as follows:
+\begin{equation}
+\begin{aligned}[b]
+ & P(n_j,f_j|CF_l, f_i, A(s_j)=1, s_j)  \\
+ & \quad \approx P(n_j|CF_l, A(s_j)=1, s_j) \ P(f_j|s_j, f_i). 
+\end{aligned}
+\label{Prob::CaseComponent}
+\end{equation}
+
+$P(n_j|CF_l, A(s_j)=1,s_j)$ is the probability of generating a content
+part $n_j$ from a case slot $s_j$ in a case frame $CF_l$.
+This probability is estimated from case frames.
+
+Let us consider $P(f_j|s_j, f_i)$ in equation
+(\ref{Prob::CaseComponent}). This is the probability of generating 
+type $f_j$ of a case component that has a correspondence with
+the case slot $s_j$. Since type $f_j$ consists of a surface
+case $c_j$,\footnote{A surface case means a postposition sequence at the
+end of \textit{bunsetsu}, such as ``\textit{ga},'' ``\textit{wo},''
+``\textit{koso}'' and ``\textit{demo}.''} a punctuation mark (comma)
+$p_j$ and a topic marker ``\textit{wa}'' $t_j$, $P(f_j|s_j, f_i)$ is
+rewritten as follows (using the chain rule):
+\begin{equation}
+\begin{aligned}[b]
+  P(f_j|s_j, f_i) & = P(c_j,t_j,p_j|s_j,f_i) \\
+  & = P(c_j|s_j,f_i)  \\
+  & \quad \times P(p_j|s_j,f_i,c_j) \\
+  & \quad \times P(t_j|s_j,f_i,c_j,p_j) \\
+  & \approx P(c_j|s_j) \\
+  & \quad \times P(p_j|f_i) \\
+  & \quad \times P(t_j|f_i,p_j).
+\end{aligned}
+\end{equation}
+This approximation is given by assuming that $c_j$ only depends on
+$s_j$, $p_j$ only depends on $f_j$, and $t_j$ depends on $f_j$ and
+$p_j$.  $P(c_j|s_j)$ is estimated from the Kyoto University Text Corpus
+\cite{Kawahara2002ec}, in which the relation between a surface case
+marker and a case slot is annotated by hand.
+
+In Japanese, a punctuation mark and a topic marker are likely to be used
+when their belonging \textit{bunsetsu} has a long distance
+dependency. By considering such tendency, $f_i$ can be regarded as
+$(o_i, u_i)$, where $o_i$ means whether a dependent \textit{bunsetsu}
+gets over another head candidate before its modifying head $v_i$, and
+$u_i$ means a clause type of $v_i$. The value of $o_i$ is binary, and
+$u_i$ is one of the clause types described in \cite{Kawahara1999}.
+\begin{align}
+ P(p_j|f_i) & = P(p_j|o_i,u_i), \\
+ P(t_j|f_i,p_j) & = P(t_j|o_i,u_i,p_j).
+\end{align}
+
+
+\subsection{Generative Model for Predicate Type}
+
+Now, consider $P(f_i|f_h)$ in equation
+(\ref{Equation::Dependency}). This is the probability of generating
+the predicate type of a clause $c_i$ that modifies $b_h$. This
+probability varies depending on the type of $b_h$.
+
+When $b_h$ is a predicate \textit{bunsetsu}, $c_i$ is a subordinate
+clause embedded in the clause of $b_h$. For types $f_i$
+and $f_h$, it is necessary to consider punctuation marks ($p_i$,
+$p_h$) and clause types ($u_i$, $u_h$). To capture a long
+distance dependency indicated by punctuation marks, $o_h$ (whether
+$c_i$ has a possible head candidate before $b_h$) is also
+considered.
+\begin{equation}
+ P_{VBmod}(f_i|f_h) = P_{VBmod}(p_i,u_i|p_h,u_h,o_h).
+\end{equation}
+
+When $b_h$ is a noun \textit{bunsetsu}, $c_i$ is an embedded clause
+in $b_h$. In this case, clause types and a punctuation mark of the
+modifiee do not affect the probability.
+\begin{equation}
+ P_{NBmod}(f_i|f_h) = P_{NBmod}(p_i|o_h).
+\end{equation}
+
+
+\section{Experiments}
+
+We evaluated the syntactic structure and case structure output by our
+model. Each parameter was estimated using maximum likelihood from the
+data described in Table \ref{Table::ParameterEstimation}. These
+data are not all obtainable by a single process, but acquired by
+applying syntactic analysis, case frame construction, and case structure
+analysis in turn. The process of case structure analysis in this table
+is a similarity-based method \cite{Kawahara2002e}. The case frames were
+automatically constructed from the web corpus comprising approximately
+500 million sentences, and the case structure analysis results were obtained
+from approximately six million sentences in the web corpus.
+
+\begin{table}[b]
+ \caption{Data for parameter estimation}
+ \label{Table::ParameterEstimation}
+\input{08table02.txt}
+\end{table}
+
+\begin{table}[b]
+ \caption{Experimental results for syntactic analysis}
+ \label{Table::Accuracy}
+\input{08table03.txt}
+\end{table}
+
+
+\subsection{Experiments for Syntactic Structure}
+
+We evaluated syntactic structures analyzed by the proposed model. Our
+experiments were run on 675 hand-annotated web sentences.\footnote{The
+test set is not used for case frame construction and probability
+estimation.} These web sentences were manually annotated using the same
+criteria as the Kyoto University Text Corpus. The system input was tagged
+automatically using the JUMAN morphological analyzer
+\cite{Kurohashi1994b}. The syntactic structures obtained were evaluated
+with regard to dependency accuracy---the proportion of correct
+dependencies out of all dependencies, except for the last one at
+the sentence end.\footnote{Since Japanese is head-final, the second last
+\textit{bunsetsu} unambiguously depends on the last \textit{bunsetsu},
+and the last \textit{bunsetsu} has no dependency.}
+
+Table \ref{Table::Accuracy} shows the dependency accuracy. In the table,
+``CaboCha'' means the SVMs-based statistical syntactic parser, CaboCha;\footnote{http://chasen.org/{\textasciitilde}taku/software/cabocha/ 
+(We used the last version of CaboCha (0.36), which can take the output
+of the morphological analyzer JUMAN as an input.)}
+``KNP'' means the rule-based syntactic parser, KNP
+\cite{Kurohashi1994}; and ``proposed'' represents the proposed
+method. All the systems are given the same outputs of morphological analysis.
+To compare dependency accuracy fairly, \textit{bunsetsu}
+segmentations for CaboCha are coincided with KNP by inputting the \textit{bunsetsu}
+segmentations by KNP into CaboCha.
+The proposed method significantly outperformed the two baselines
+(McNemar's test; $p < 0.05$). The dependency accuracies are classified
+into four types, according to the \textit{bunsetsu} classes (VB: verb
+\textit{bunsetsu}, NB: noun \textit{bunsetsu}) of a dependent and its
+head. The ``NB$\rightarrow$VB'' type is further divided into two types:
+``TOP'' (topic-marked phrases) and ``others.'' The type that is most related to case structure
+is ``others'' in ``NB$\rightarrow$VB.'' Its accuracy was improved by
+1.6\%, and the error rate was reduced by 10.9\%, compared to KNP. This result indicated
+that the proposed method is effective in analyzing dependencies related
+to the case structure.
+
+\begin{figure}[b]
+  \includegraphics{21-4ia8f3.eps}
+ \hangcaption{Examples of analysis. The dotted lines represent the analysis 
+ by KNP and the solid lines represent the analysis by our proposed method.}
+ \label{Figure::AnalysisExamples}
+\end{figure}
+
+Figure \ref{Figure::AnalysisExamples} shows some analysis
+results. Sentences (1) and (2) are incorrectly analyzed by KNP, but
+correctly analyzed by the proposed method.
+
+There are two major causes that led to the analysis errors.
+
+
+\subsubsection{Mismatch between the analysis results and annotation criteria}
+
+In sentence (3) in Figure \ref{Figure::AnalysisExamples}, KNP correctly
+recognized the head of ``\textit{iin-wa}'' (commissioner-\TOP) as
+``\textit{hirakimasu}'' (open).  However, the proposed method
+incorrectly judged it as ``\textit{oujite-imasuga}'' (offer). Both
+analysis results can be considered to be semantically correct, but from
+the viewpoint of our annotation criteria, the latter is not a syntactic
+relation, but an ellipsis relation. To address this problem, it is
+necessary to simultaneously evaluate not only syntactic relations but
+also indirect relations, such as ellipses and anaphora.
+
+
+\subsubsection{Dependency constraints}
+
+The correct syntactic structure is not always included in the list of
+possible structures output by KNP. In sentence (4) in Figure
+\ref{Figure::AnalysisExamples}, the correct head of ``\textit{kohi-wo}''
+(coffee-\acc) is ``\textit{osagashi-no}'' (looking for-\gen). Since
+``\textit{osagashi-no}'' is not a possible head of ``\textit{kohi-wo},''
+our proposed method fails to detect the correct head. Although noun
+\textit{bunsetsu}s like ``\textit{osagashi-no}'' are not usually modified, it is necessary to relax this type of constraint and search
+more possible structures.
+
+
+\subsubsection{Linear weighting on each probability}
+
+We proposed a generative probabilistic model, and thus cannot optimize
+the weight of each probability. Such optimization could be a way to
+improve the system performance. In the future, we plan to employ a
+machine learning technique for optimization.
+
+
+\subsection{Experiments for Case Structure}
+
+We applied case structure analysis to 215 web sentences, which are
+manually annotated with case structure, and evaluated case markers of 
+TOP and clausal modifiees by comparing them with the gold standard
+in the corpus. The experimental results are shown in Table
+\ref{Result::CaseAnalysisAccuracy}, in which the baseline refers to a
+similarity-based method \cite{Kawahara2002e}.
+The experimental results were good compared to the baseline. It
+is difficult to compare the results with the previous work stated in the
+next section because of different experimental settings (e.g., our
+evaluation includes parse errors in incorrect cases).
+
+\begin{table}[b]
+  \caption{Experimental results for case structure analysis}
+  \label{Result::CaseAnalysisAccuracy}
+\input{08table04.txt}
+\end{table}
+
+
+\subsection{Coverage of Case Frames}
+
+To measure the coverage of case frames in the analysis process, we
+judged whether an argument was contained in a case frame of the
+modifying predicate. We evaluated dependencies that were correctly
+detected, and obtained a coverage of 60.7\%. For comparison, we conducted
+the same experiment using case frames compiled from a 26-year volume of
+newspaper articles (2.6 million sentences), obtaining a coverage of
+35.1\%. This result indicates that the case frames from the web corpus
+had a high coverage.
+
+Bikel reported that only 1.5\% of bilexical dependencies in a test set
+were covered in a training set \cite{Bikel2004}. Although a direct
+comparison is difficult because of the differences in language and
+resource, the coverage of our case frames is considered to be very high.
+
+
+\section{Related Work}
+
+There have been several approaches for syntactic analysis handling
+lexical preference on a large scale. \citeA{Shirai1998e} proposed a PGLR-based
+syntactic analysis method using large-scale lexical preference. Their system learned lexical preference from a large
+newspaper corpus (five years' worth of articles), such as $P(\mbox{pie}|\mbox
+{\textit{wo}}, \mbox{\textit{taberu}})$, but did not deal with verb
+sense ambiguity. They reported an accuracy of 84.34\% on 500 relatively short
+sentences from the Kyoto University Text Corpus.
+
+\citeA{Fujio1998} presented a syntactic analysis method based on
+lexical statistics. They used a probabilistic
+model defined by the product of a probability of having a dependency
+between two co-occurring words, and a distance probability. The model was
+trained on the EDR corpus, and performed with an accuracy of 86.89\% on 10,000
+sentences from the EDR corpus.\footnote{The evaluation includes the last
+dependencies in the sentence end, which are always correct.}
+
+\citeA{Abekawa2006} proposed a method for syntactic analysis, based on
+the relations between arguments of a predicate and co-occurrence relations
+between a predicate and its arguments. Both types
+were gathered from a 30-year volume of newspaper
+articles, and these probabilities were estimated using PLSI. They applied
+probabilistic re-ranking to n-best syntactic trees output by an existing
+parser, and selected the tree with the highest probability. They
+achieved an accuracy of 91.21\% on approximately 9,000 sentences from
+the Kyoto University Text Corpus, which was higher than the baseline
+parser by 0.26\%. They also integrated a method for analyzing clausal
+modifiees \cite{Abekawa2005} into their model, and achieved an accuracy of 91.25\%.
+
+There have been several machine-learning-based
+approaches using lexical preference as 
+\linebreak
+their features. Among these, \citeA{Kudo2002} yielded the best performance. They
+proposed a chunking-based dependency analysis method using SVMs.
+They used two-fold cross validation on the Kyoto Text
+Corpus, and achieved an accuracy of 90.46\%. However, it is very difficult to
+learn sufficient lexical preferences from several tens of thousands of
+sentences of a hand-tagged corpus. CaboCha, which is one of the baseline
+methods in our experiments, is an analyzer based on this method.
+
+
+\section{Conclusion}
+
+We have described an integrated probabilistic model for syntactic and
+case structure analysis. This model takes advantage of lexical
+selectional preference of large-scale case frames, and performs
+syntactic and case analysis simultaneously. The experiments indicate
+the effectiveness of our model. In the future, by incorporating ellipsis
+resolution, we will develop an integrated model of syntactic, case, and
+ellipsis analysis.
+
+
+{
+\addtolength{\baselineskip}{-1pt}
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Abekawa \BBA\ Okumura}{Abekawa \BBA\
+  Okumura}{2005}]{Abekawa2005}
+Abekawa, T.\BBACOMMA\ \BBA\ Okumura, M. \BBOP 2005\BBCP.
+\newblock \BBOQ Corpus-Based Analysis of Japanese Relative Clause
+  \mbox{Constructions}.\BBCQ\
+\newblock In {\Bem Proceedings of the 2nd International Joint Conference on
+  Natural \mbox{Language} Processing}, \mbox{\BPGS\ 46--57}.
+
+\bibitem[\protect\BCAY{Abekawa \BBA\ Okumura}{Abekawa \BBA\
+  Okumura}{2006}]{Abekawa2006}
+Abekawa, T.\BBACOMMA\ \BBA\ Okumura, M. \BBOP 2006\BBCP.
+\newblock \BBOQ Japanese Dependency Parsing using Co-Occurrence Information and
+  a Combination of Case Elements.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on
+  Computational Linguistics and 44th Annual Meeting of the Association for
+  Computational Linguistics}, \mbox{\BPGS\ 833--840}.
+
+\bibitem[\protect\BCAY{Bikel}{Bikel}{2004}]{Bikel2004}
+Bikel, D.~M. \BBOP 2004\BBCP.
+\newblock \BBOQ Intricacies of {C}ollins' Parsing Model.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 30}  (4), \mbox{\BPGS\
+  479--511}.
+
+\bibitem[\protect\BCAY{Fujio \BBA\ Matsumoto}{Fujio \BBA\
+  Matsumoto}{1998}]{Fujio1998}
+Fujio, M.\BBACOMMA\ \BBA\ Matsumoto, Y. \BBOP 1998\BBCP.
+\newblock \BBOQ {J}apanese Dependency Structure Analysis Based on
+  \mbox{Lexicalized} Statistics.\BBCQ\
+\newblock In {\Bem Proceedings of the 3rd Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 88--96}.
+
+\bibitem[\protect\BCAY{Kawahara \BBA\ Kurohashi}{Kawahara \BBA\
+  Kurohashi}{1999}]{Kawahara1999}
+Kawahara, D.\BBACOMMA\ \BBA\ Kurohashi, S. \BBOP 1999\BBCP.
+\newblock \BBOQ Corpus-based Dependency Analysis of {J}apanese \mbox{Sentences}
+  using Verb Bunsetsu Transitivity.\BBCQ\
+\newblock In {\Bem Proceedings of the 5th Natural Language Processing Pacific
+  Rim Symposium}, \mbox{\BPGS\ 387--391}.
+
+\bibitem[\protect\BCAY{Kawahara \BBA\ Kurohashi}{Kawahara \BBA\
+  Kurohashi}{2002}]{Kawahara2002e}
+Kawahara, D.\BBACOMMA\ \BBA\ Kurohashi, S. \BBOP 2002\BBCP.
+\newblock \BBOQ Fertilization of Case Frame Dictionary for Robust {J}apanese
+  Case Analysis.\BBCQ\
+\newblock In {\Bem Proceedings of the 19th International Conference on
+  Computational Linguistics}, \mbox{\BPGS\ 425--431}.
+
+\bibitem[\protect\BCAY{Kawahara \BBA\ Kurohashi}{Kawahara \BBA\
+  Kurohashi}{2006}]{Kawahara2006}
+Kawahara, D.\BBACOMMA\ \BBA\ Kurohashi, S. \BBOP 2006\BBCP.
+\newblock \BBOQ Case Frame Compilation from the Web using High-Performance
+  Computing.\BBCQ\
+\newblock In {\Bem Proceedings of the 5th International Conference on Language
+  Resources and Evaluation}.
+
+\bibitem[\protect\BCAY{Kawahara, Kurohashi, \BBA\ Hasida}{Kawahara
+  et~al.}{2002}]{Kawahara2002ec}
+Kawahara, D., Kurohashi, S., \BBA\ Hasida, K. \BBOP 2002\BBCP.
+\newblock \BBOQ Construction of a {J}apanese Relevance-tagged Corpus.\BBCQ\
+\newblock In {\Bem Proceedings of the 3rd International Conference on Language
+  Resources and Evaluation}, \mbox{\BPGS\ 2008--2013}.
+
+\bibitem[\protect\BCAY{Kudo \BBA\ \mbox{Matsumoto}}{Kudo \BBA\
+  \mbox{Matsumoto}}{2002}]{Kudo2002}
+Kudo, T.\BBACOMMA\ \BBA\ \mbox{Matsumoto}, Y. \BBOP 2002\BBCP.
+\newblock \BBOQ {J}apanese Dependency Analysis using Cascaded Chunking.\BBCQ\
+\newblock In {\Bem Proceedings of the Conference on Natural Language Learning},
+  \mbox{\BPGS\ 29--35}.
+
+\bibitem[\protect\BCAY{Kurohashi \BBA\ Nagao}{Kurohashi \BBA\
+  Nagao}{1994}]{Kurohashi1994}
+Kurohashi, S.\BBACOMMA\ \BBA\ Nagao, M. \BBOP 1994\BBCP.
+\newblock \BBOQ A Syntactic Analysis Method of Long {J}apanese Sentences Based
+  on the Detection of Conjunctive Structures.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 20}  (4), \mbox{\BPGS\
+  507--534}.
+
+\bibitem[\protect\BCAY{Kurohashi, Nakamura, Matsumoto, \BBA\ Nagao}{Kurohashi
+  et~al.}{1994}]{Kurohashi1994b}
+Kurohashi, S., Nakamura, T., Matsumoto, Y., \BBA\ Nagao, M. \BBOP 1994\BBCP.
+\newblock \BBOQ Improvements of {J}apanese Morphological Analyzer
+  {JUMAN}.\BBCQ\
+\newblock In {\Bem Proceedings of the International Workshop on Sharable
+  Natural Language}, \mbox{\BPGS\ 22--28}.
+
+\bibitem[\protect\BCAY{Shirai, Inui, Tokunaga, \BBA\ Tanaka}{Shirai
+  et~al.}{1998}]{Shirai1998e}
+Shirai, K., Inui, K., Tokunaga, T., \BBA\ Tanaka, H. \BBOP 1998\BBCP.
+\newblock \BBOQ An Empirical Evaluation on Statistical Parsing of {J}apanese
+  Sentences using Lexical Association Statistics.\BBCQ\
+\newblock In {\Bem Proceedings of the 3rd Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 80--87}.
+
+\end{thebibliography}
+}
+
+\begin{biography}
+
+\bioauthor[:]{Daisuke Kawahara}{
+Daisuke Kawahara received his B.S. and M.S. in Electronic Science and
+Engineering from Kyoto University in 1997 and 1999, respectively. He
+obtained his Ph.D. in Informatics from Kyoto University in 2005. He is
+currently a researcher with National Institute of Information and
+Communications Technology. His research interests center on natural language
+processing, particularly knowledge acquisition and text understanding.
+}
+
+\bioauthor[:]{Sadao Kurohashi}{
+Sadao Kurohashi received his Ph.D. in Electrical 
+\linebreak
+Engineering from Kyoto
+University in 1994. He is currently a professor at the Graduate School
+of Informatics at Kyoto University. His research interests include
+natural language processing, knowledge acquisition/representation, and
+information retrieval.
+}
+\end{biography}
+
+\biodate
+
+
+\end{document}

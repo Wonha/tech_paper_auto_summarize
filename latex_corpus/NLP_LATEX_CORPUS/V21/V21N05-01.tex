@@ -1,0 +1,1041 @@
+    \documentclass[english]{jnlp_1.4}
+
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{hangcaption_jnlp}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[multi]{otf}
+
+\usepackage{clrscode}
+\allowdisplaybreaks[4]
+
+\Volume{21}
+\Number{5}
+\Month{September}
+\Year{2014}
+
+\received{2013}{10}{29}
+\revised{2014}{2}{4}
+\rerevised{2014}{4}{12}
+\accepted{2014}{5}{22}
+
+\setcounter{page}{981}
+
+\etitle{A Generative Dependency N-gram Language Model: Unsupervised Parameter Estimation and Application}
+\eauthor{Chenchen Ding\affiref{Author} \and Mikio Yamamoto\affiref{Author}} 
+\eabstract{
+We design a language model based on a generative dependency structure for sentences. The parameter of the model is the probability of a {\em dependency N-gram}, which is composed of lexical words with four types of extra tag used to model the dependency relation and valence.
+We further propose an unsupervised expectation-maximization algorithm for parameter estimation,
+in which all possible dependency structures of a sentence are considered. 
+As the algorithm is language-independent, it can be used on a raw corpus from any language, without any part-of-speech annotation, tree-bank or trained parser. We conducted experiments using four languages, i.e., English, German, Spanish and Japanese, to illustrate the applicability and the properties of the proposed approach. 
+We further apply the proposed approach to a Chinese microblog data set to extract and investigate Internet-based, non-standard lexical dependency features of user-generated content. 
+}
+\ekeywords{N-gram language model, Generative dependency structure, Unsupervised algorithm, Microblog}
+
+\headauthor{Ding and Yamamoto}
+\headtitle{A Generative Dependency N-gram Language Model}
+
+\affilabel{Author}{}{Department of Computer Science, University of Tsukuba}
+
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+\vspace{-0.5\Cvs}
+
+Statistical language models are a fundamental component of speech recognition systems, machine translation systems and so forth. 
+At present, the N-gram language model is the most widely used approach. This model focuses on sequences of neighboring lexical words (Figure~\ref{n-gram}) and uses the probabilities of these sequences as model parameters. Due to the complete lexicalization of the N-gram language model, local features of word sequences can be well modeled. However, an N-gram language model cannot capture relatively long-range features, because it considers a sentence as a flat string and ignores its structure.
+
+Revealing a sentence structure is the task of parsing, which is based on linguistically oriented formulations, and it focuses on generating the likeliest structure for a given sentence, using  constituency- or dependency-based formulations. The former organizes continuous word sequences in a hierarchy of small to large range groups with linguistically oriented labels, while the latter directly links words with dependency relations\footnote{In general, the dependency relations can be further classified using linguistically oriented labels. However, they are not indispensable, and we do not use them in our approach. For the figures in this study, we use the following representation to show the dependency structure. If two aligned words are on different levels, the upper one is the head of the lower one; if they are on the same level, they are siblings.} (Figure~\ref{tree}).
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-5ia1f1.eps}
+\end{center}
+\hangcaption{N-gram language model. For $N=2$, the model treats the English sentence ``{\em all things pass}'' as being constructed from the bi-grams {\em (all, things)} and {\em (things, pass)}.}
+\label{n-gram}
+\end{figure}
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-5ia1f2.eps}
+\end{center}
+\hangcaption{Constituency-based parsing {\bf(A)} and dependency-based parsing {\bf(B)}\footnotemark\ of the English sentence ``{\em all things pass}''.}
+\label{tree}
+\end{figure}
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-5ia1f3.eps}
+\end{center}
+\hangcaption{All possible dependency structures for the English sentence ``{\em all things pass}''. {\bf(I)} is the linguistically correct structure, while the original N-gram language model handles the sentence as if it has the structure labeled {\bf(II)}. We consider all these structures in our unsupervised estimation algorithm.}
+\label{dep-n-gram}
+\end{figure}
+
+In this study, we focus on introducing sentence structure into language modeling. We propose a generative dependency N-gram language model that integrates the generative dependency structure of a sentence into the original N-gram language model.
+We prefer the dependency-based formulation because it can directly model the relations between words. 
+In the proposed model, the parameter is the probability of the dependency N-gram, which is a sequence of words along the dependency structure rather than along a flat left-to-right string. 
+The proposed model is thus as completely lexical as the original N-gram language model.
+We further propose an expectation-maximization (EM) algorithm for estimating the probability of arbitrary order\footnote{In this study, the term ``order'' of a dependency N-gram means the number of lexical words ($N$) in a head-modifier chain, which is used as an extension of the original N-gram. In the context of dependency parsing, ``order'' generally means the number of words in a treelet, which can contain relations such as  siblings, ancestors and descendants. That is, the ``order'' in this study is restricted to include only ancestors.} dependency N-grams, by considering all possible dependency structures\footnote {Only projective dependency structures are considered.} of a sentence (Figure~\ref{dep-n-gram}). 
+The proposed algorithm is unsupervised, language-independent and needs no linguistic information.
+
+
+\section{Related Work}
+\label{relatedwork}
+
+The technical report by \cite{chen1998} has compared various approaches to the N-gram language model and the modified Kneser-Ney (KN) discounting proposed in it is still the state-of-the-art. Since the N-gram language model only captures local lexical features, there have been proposals to generalize the lexical N-gram by word class \cite{brown1992} or to model long-range word co-occurrences by word triggers \cite{tillmann1997}. However, these models are unaware of the sentence structure, and they basically take a sentence as a flat string.
+
+Many approaches have been proposed for constituency-based parsing \cite{collins1998,klein2003,klein2004} and for dependency-based parsing \cite{eisner1996,lee1997,kudo2002japanese,klein2004,nivre2008,koo2010efficient,zhang2012generalized}. Discriminative approaches \cite{kudo2002japanese,nivre2008} are used more than generative ones for dependency-based parsing, because a generative model is usually restricted to being bi-lexical (i.e., the components are bi-grams of head-modifier pairs). 
+Specific algorithms have been designed to handle more complex dependency relations \cite{koo2010efficient,zhang2012generalized},
+and these allow the consideration of more lexical information in a generative model.
+
+There have been attempts to integrate sentence structure into language modeling. \cite{chelba2000} have proposed a constituency-based approach, but the use of language-dependent non-terminals cannot be avoided. 
+There are also dependency-based approaches. One straightforward method is to construct a language model based on the decisively best structure produced by a parser \cite{stolcke1997,gao2003,graham2010}. These approaches can be considered to convert the left-to-right string in the original N-gram model to a completely syntax-driven tree structure.
+A more reasonable method is to consider all dependency structures of a sentence. One such attempt is the bi-gram head-modifier model of \cite{lee1998automatic}, which is based on the parsing approach of \cite{lee1997}. 
+
+In our approach, we consider all dependency structures of a sentence and try to include more lexical information. We extend the approach of \cite{lee1997} to head-modifier chains of arbitrary words, rather than head-modifier pairs. We also use extra tags of the type typically found in parsing models. These tags are treated as general lexical words and are used to model the valence of a head word. The parsing approaches of \cite{koo2010efficient} also handle more lexical information in a dependency structure, including complex relations, such as the sibling relation. However, the use of high-order dependency patterns in the approach is limited. As described in \cite{zhang2012generalized}, arbitrary orders of lexical information with arbitrary dependency relations can be handled only if the proper algorithms are designed, and designing these becomes more complex with the increasing number of lexical words and dependency relations. Our approach concentrates only on the head-modifier chain, that is, a sequence of parent-child relations. Therefore, our approach is a direct extension of the original N-gram model, which models a lexical word sequence, without branching. We will also show that a head-modifier chain of arbitrary order can be modeled in a uniform algorithm, 
+which will not increase in formulation complexity when the order increases.
+
+
+\section{Generative Dependency Model}
+\label{generativemodel}
+
+We model the marginal probability of a sentence $S$ over set $D$ of all possible dependency structures of $S$: $P (S) = \sum_{d \in D} P (S, d)$.  As described in \cite{klein2004}, if we separate the dependency structure and lexicalization, then $\sum_{d \in D} P (S, d) = \sum_{d \in D} P (d) P(S | d)$. The term $ P(S | d)$ is given by a model of completely lexical word sequences with dependency relations. However, the term $P (d)$, which is the probability of a dependency graph without lexical words, is difficult to model.
+In earlier studies , the $P (d)$ term is taken as a constant or omitted (i.e., taken as 1) for simplicity, as in \cite{paskin2002,lee1998automatic}.
+For example, in \cite{lee1998automatic}, the probability of a sentence $S$ is calculated as $P (S) = \sum_{d \in D} \prod_{(x \to y) \in d} P (x \to y)$, where the element $(x \to y)$ is a lexical head-modifier pair in a given dependency structure $d$. Thus, the term $\prod_{x \to y \in d} P (x \to y)$ is equivalent to $P(S | d)$. 
+
+To combine the dependency structure and lexicalization, the {\it valence}, which represents the modifier numbers of a head word, should be modeled. A {\it{dependency model with valence}} (DMV) is proposed by \cite{klein2004}. DMV is a generative model that includes a special mark, {\it{STOP}}, to terminate the modifier sequence of a head word. With the help of the {\it STOP} mark, the number of modifiers can be controlled. It is necessary to distinguish the two types of parameters, i.e., $P_{\mathrm{STOP}}$ and $P_{\mathrm{CHOOSE}}$ in the bi-gram estimation, which makes it difficult to extend the approach to higher orders. 
+
+In a similar approach to that used in DMV, we introduce four types of tag to normalize the distribution of modifier numbers (the valence) of a head word. In this study, we use $\langle L \rangle$ (resp. $\langle \slash L \rangle$) and $\langle R \rangle$ (resp. $\langle \slash R \rangle$) to show the start (resp. end) of the left and right modifier word sequences of a head word. 
+The dependency structure can thus be organized as nested word sequences.
+Specifically, modifier word sequences of a head word are of the form 
+$M=m_0^{\phi+1}\equiv m_0, m_1, \cdots, m_{\phi+1}$,
+where $m_0\equiv\langle O \rangle$, $m_{\phi+1}\equiv\langle \slash O \rangle$ ($O \in \{L, R\}$), and $m_{1}^{\phi}$ is a lexical $\phi$-word sequence.
+We show an example of the dependency structure in Figure~{\ref{T}}. For example, in Figure~\ref{T}, the word {\it get} has a left modifier word sequence ``$\langle L \rangle \ i\ \langle \slash L \rangle$'' and a right modifier word sequence ``$\langle R \rangle\ book\ from\ \langle \slash R \rangle$''.
+In contrast to the treatment in DMV, we treat tags as ordinary words in the parameter estimation. This means parameters of our model have a uniform representation, by which our approach can be easily extended to arbitrary high orders.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-5ia1f4.eps}
+\end{center}
+\hangcaption{A dependency structure for the English sentence ``{\it{i get a book from him .}}'', with $\langle L \rangle$, $\langle R \rangle$, $\langle \slash L \rangle$, $\langle \slash R \rangle$ tags. The root of the sentence is marked as $\langle \slash s \rangle$, and for a word without modifiers, its modifier word sequences are $\langle O \rangle \langle \slash O \rangle$, where $O \in \{L, R\}$ (marked by dashed lines).}
+\label{T}
+\end{figure}
+
+Our model is essentially equivalent to the generative {\it{Model C}} in \cite{eisner1996}.
+In other words, the sequence $\langle O \rangle m_{1}^{\phi} \langle \slash O \rangle\ (O \in \{L, R\}) $ is generated as a Markov sequence to serve as the modifier word sequences (left/right separately) of the head word. The ``start tag'' $\langle O \rangle  $ always satisfies $P (m_0=\langle O \rangle) \equiv 1$ to represent the nested structure.
+The ``end tag'' $\langle \slash O \rangle$ terminates the generation process: the larger  $P (m_{\phi+1}=\langle \slash O \rangle)$ is, the smaller $\phi$, which is the number of generated words, becomes and vice versa.\footnote{As to the consistency of our language model, that is, whether $\sum_{S \in L} P(S)=1$ for every possible sentence $S$ in a language $L$, we note that it {\bf cannot} be guaranteed by the generative structure alone. As discussed in \cite{wetherell1980probabilistic}, a language generated by a probabilistic context-free grammar cannot be guaranteed to be consistent, because the generation process cannot be guaranteed to finish, even when the probabilities are normalized. However, in this situation, the probabilities of terminal sequences (i.e. sentences) will be very low, which will lead to a poor performance of the language model. Thus, the results for the proposed approach reported in this study may underestimate probabilities but will not overestimate them.}
+
+Without loss of generality, the probability of $m_{\kappa+1}$ ($ 0 < \kappa \leq \phi$) in $M = m_0^{\phi+1}$ can be represented by 
+$P (m_{\kappa+1} | m_{0}^{\kappa}, H)$,
+where $H$ is the history of $M$
+along the generated path\footnote{The generation process can be realized in a depth-first or a breadth-first way, but distinction is not essential.}.
+We use the independent assumption that the probability of a word in the generation process only depends on its direct ancestors and the orientation between them.
+The probability can be simplified to: 
+\begin{equation}
+\label{parameter1}
+P (h^0 | o^1, h^1, \dots, o^{n-1}, h^{n-1}),
+\end{equation}
+where $h^k$ ($k \in [1,n-1]$) is the head word of $h^{k-1}$ and $o^k$ ($k \in [1,n-1]$) shows the orientation between them.
+Specifically, $h^k$ ($k \in [0,n-1]$) can be any of the following:
+\begin{itemize}
+\item a lexical word in a given sentence,
+\item a $\langle \slash O \rangle\ (O \in \{L, R\}) $ tag,
+\item the sentence-ending tag $\langle \slash s \rangle$, which is taken as the root of a sentence, or
+\item the sentence-beginning tag $\langle s \rangle$, which is taken as a trivial placeholder,
+\end{itemize}
+and $o^k$ ($k \in [1,n-1]$) is a $\langle O \rangle\ (O \in \{L, R\}) $ tag. 
+
+The ``slash'' tags, $\langle \slash s \rangle$, $\langle \slash L \rangle$ and $\langle \slash R \rangle$, are taken as lexical words, which are represented by $h^k$. The ``no-slash'' tags, $\langle L \rangle$ and $\langle R \rangle$, show the direction of a modifier word against its head word, which is represented by $o^k$. Specifically, for $k \in [1,n-1]$, we have $o^k=\langle L \rangle$ when $h^{k-1}$ is on the left side of $h^k$, and $o^k=\langle R \rangle$ when $h^{k-1}$ is on the right side of $h^k$.\footnote{The use of an index in Exp. (\ref{parameter1}) can be interpreted as $h^0$ is on the $o^1$ side of its head word $h^1$, which is on the $o^2$ side of its head word $h^2$, and continue this pattern to $h^{n-2}$, which is on the $o^{n-1}$ side of its head word $h^{n-1}$.}
+Further, the sentence-beginning tag $\langle s \rangle$ is used as a trivial placeholder to increase the order of Exp. (\ref{parameter1}) to $n$. It is used only when $h^k = \langle \slash s \rangle$ for some $k<n-1$.\footnote{Hence, we omit the $\langle s \rangle$ tag in Figure~\ref{T} as it adds nothing to the structure.}
+For the tags, there are some noticeable properties, such as the following:
+\begin{itemize}
+\item if $h^k = \langle \slash O \rangle\ (O \in \{L, R\})$, then $k \equiv 0$; because $\langle \slash O \rangle\ (O \in \{L, R\})$ cannot have modifiers,
+\item if $h^0 = \langle \slash L \rangle$, then $o^1 \equiv \langle L \rangle$, and if $h^0 = \langle \slash R \rangle$, then $o^1 \equiv \langle R \rangle$,
+\item if $h^k = \langle \slash s \rangle$ ($k \in [1, n-1]$), then $o^k \equiv \langle L \rangle$,
+\item if $h^k = \langle \slash s \rangle$ ($k \in [1, n-2]$), then both $o^{k+1} \equiv \langle R \rangle$ and $h^{k+1} = \langle s \rangle$,
+\item if $h^k = \langle s \rangle$ ($k \in [1, n-2]$), then both $o^{k+1} \equiv \langle R \rangle$ and $h^{k+1} = \langle s \rangle$.
+\end{itemize}
+
+For example, a dependency N-gram is ($\langle \slash L \rangle$, $\langle L \rangle$, \emph{him}, $\langle R \rangle$, \emph{from}, $\langle R \rangle$, \emph{get}, $\langle L \rangle$, \emph{.}, $\langle L \rangle$, $\langle \slash s \rangle$) in the dependency structure illustrated in Figure~{\ref{T}}. We can see $\langle O \rangle\ (O \in \{L, R\}) $ tags between words show the relevant position between head and modifier words. In fact, all words in a modifier sequence share the same $\langle O \rangle\ (O \in \{L, R\}) $. For example, in Figure~\ref{T}, the ``\emph{book}'' and ``\emph{from}'' share the same $\langle R \rangle$ tag as they are both in the right modifier word sequence of the head word ``\emph{get}''.
+
+The sequence $(h^0, o^1, h^1, \dots, o^{n-1}, h^{n-1})$ in Exp. (\ref{parameter1}) is referred as a dependency N-gram.
+Exp. (\ref{parameter1}) is 
+the probability of the dependency N-gram and thus 
+the parameter of our model, where the dependency relation and valence are modeled uniformly for arbitrary orders.
+
+From the probability of the dependency N-gram of Exp. (\ref{parameter1}), the probability of a given dependency structure $d$ of a sentence $S$ can be calculated as $\prod_{h^0 \in d}p (h^0 | o^1, h^1, \dots, o^{n-1}, h^{n-1})$. Because of how we use $\langle \slash O \rangle\ (O \in \{L, R\})$ tags, the $\prod_{h^0 \in d}p (h^0 | o^1, h^1, \dots, o^{n-1}, h^{n-1})$ is equivalent to $P(S, d)$ rather than to $P(S|d)$, as in \cite{lee1998automatic}. We show an example of the $P (S, d)$ from Exp. (\ref{layer1}) to Exp. (\ref{layer5}) according to the structure in Figure~\ref{T}, proceeding layer by layer\footnote{From Exp. (\ref{layer3}), we omit part of the histories for brevity.}.
+We can see there are many terms of the type $h^0 = \langle \slash O \rangle\ (O \in \{L, R\})$ in the calculation. This can be considered a ``discount'' for the product of lexical terms to represent the ``structure probability'' $p(d)$, although $p(d)$ is never separated as an individual term because we merge the lexicalization and dependency structure in our calculations. 
+{\small \begin{align}
+ P &(S, d) = \nonumber \\ 
+   & P (. | \langle L \rangle \ \langle \slash s \rangle) \label{layer1}\\ 
+\cdot & P (get | \langle L \rangle \ . \ \langle L \rangle \ \langle \slash s \rangle) P (\langle \slash L \rangle | \langle L \rangle \ . \ \langle L \rangle \ \langle \slash s \rangle)
+	P (\langle \slash R \rangle | \langle R \rangle \ . \ \langle L \rangle \ \langle \slash s \rangle) \\
+\cdot & P (i | \langle L \rangle \ get \ \langle L \rangle \ .\cdots) P (\langle \slash L \rangle | \langle L \rangle \ get \ \langle L \rangle\ .\cdots) \label {layer3} \nonumber \\
+ & \quad \cdot P (book | \langle R \rangle \ get \ \langle L \rangle\ .\cdots) P (from | \langle R \rangle \ get \ \langle L \rangle \ .\cdots) P (\langle \slash R \rangle | \langle R \rangle \ get \ \langle L \rangle \ .\cdots) \\
+ \cdot & P (\langle \slash L \rangle | \langle L \rangle \ i \ \langle L \rangle \ get\cdots) P (\langle \slash R \rangle | \langle R \rangle \ i \ \langle L \rangle \ get\cdots) \nonumber \\
+ & \quad \cdot P (a | \langle L \rangle \ book \ \langle R \rangle \ get\cdots) P (\langle \slash L \rangle | \langle L \rangle \ book \ \langle R \rangle \ get\cdots) P (\langle \slash R \rangle | \langle R \rangle \ book \ \langle R \rangle \ get\cdots) \nonumber \\
+ & \quad  \cdot P (\langle \slash L \rangle | \langle L \rangle \ from \ \langle R \rangle \ get\cdots) P (him | \langle R \rangle \ from \ \langle R \rangle \ get\cdots) P (\langle \slash R \rangle | \langle R \rangle \ from \ \langle R \rangle \ get\cdots) \\
+ \cdot & P (\langle \slash L \rangle | \langle L \rangle \ a \ \langle L \rangle \ book\cdots) P (\langle \slash R \rangle | \langle R \rangle \ a \ \langle L \rangle \ book\cdots) \nonumber \\ 
+ & \quad \cdot P (\langle \slash L \rangle | \langle L \rangle \ him \ \langle R \rangle \ from\cdots) P (\langle \slash R \rangle | \langle R \rangle \ him \ \langle R \rangle \ from\cdots) \label{layer5}
+\end{align}}
+
+
+The probability of a sentence $S$ can then be calculated by $P(S)=\sum_{d \in D} P (S, d)$, where the left-to-right generation of the original N-gram model is naturally included, and the probability of it will be discounted by the terms of the form $h^0 = \langle \slash O \rangle\ (O \in \{L, R\})$.
+
+\section{Parameter Estimation}
+\label{parameterestimation}
+\vspace{-0.5\Cvs}
+
+\subsection{Notation}
+\label{notation}
+
+We denote a sentence with $l$ words as $S=w_{0}^{l+1}\equiv w_0, w_1, \cdots, w_{l+1}$, where $w_0\equiv\langle s \rangle$ and $w_{l+1}\equiv\langle \slash s \rangle$; each $w_k$ ($k \in [1,l]$) is an ordinary lexical word.
+In a sentence $S=w_{0}^{l+1}$, we denote a  dependency N-gram $(h^0, o^1, h^1, \dots, o^{n-1}, h^{n-1})$ by an N-tuple ${\bf{d}} = (d_0, d_1, \dots, d_{n-1})$ according to the following definition.
+\begin{equation}
+\label{word2index}
+d_k=
+\begin{cases}
+h^k,\ \mathrm{if}\ k= 0\ \mathrm{and}\ h^k\ \mathit{is\ a}\ \langle \slash O \rangle\ (O \in \{L, R\}) \\
+i\ \mathrm{such\ that}\ h^k=w_i,\ \mathrm{otherwise}
+\end{cases}
+\end{equation}
+ 
+The definition of $d_k$ in Exp. (\ref{word2index}) thus shows the relation between $h^k$ and $d_k$. Because the $\langle s \rangle$, $\langle \slash s \rangle$, $\langle \slash L \rangle$ and $\langle \slash R \rangle$ tags are taken as lexical words in a dependency N-gram, they can appear in a ${\bf{d}}$. 
+In our notation, $\langle s \rangle$ and $\langle \slash s \rangle$ are assigned absolute positions of $0$ and $l+1$, respectively, in an $l$-word sentence, so they can be trivially integrated in a ${\bf{d}}$.
+Conversely, as $\langle \slash L \rangle$ and $\langle \slash R \rangle$ tags are attached to every word in a sentence, we cannot assign absolute positions to them,
+so, they remain in a ${\bf{d}}$ with no transformation to absolute position. 
+Consequently, $d_k$ in a ${\bf{d}}$ can be an integer in $[0, l+1]$ or a $\langle \slash O \rangle\ (O \in \{L, R\})$ tag.
+In fact, because $\langle \slash L \rangle$ and $\langle \slash R \rangle$ tags can appear only as $h^0$ in a dependency N-gram, they only appear as $d_0$ in a ${\bf{d}}$.
+The N-tuple ${\bf{d}}$ with a $d_0 = \langle \slash O \rangle\ (O \in \{L, R\})$ 
+will play a special role in the recursive definition in Section \ref{defination}.
+
+Because the magnitudes of $d_k$ and $d_{k+1}$ ($k \in [0, n-2]$) show the orientation, $o^{k+1}$ can be omitted.
+In addition, $o^{k+1}$ can be unambiguously omitted for the $\langle \slash L \rangle$ and $\langle \slash R \rangle$ tags because of the properties we mentioned in the previous section.
+Consequently, the $\langle L \rangle$ and $\langle R \rangle$ tags never need to appear in a ${\bf{d}}$.
+As an example, the dependency N-gram ($\langle \slash L \rangle$, $\langle L \rangle$, \emph{him}, $\langle R \rangle$, \emph{from}, $\langle R \rangle$, \emph{get}, $\langle L \rangle$, \emph{.}, $\langle L \rangle$, $\langle \slash s \rangle$) in the dependency structure illustrated in Figure~{\ref{T}} can be denoted by a ${\bf{d}} = (\langle \slash L \rangle, 6, 5, 2, 7, 8)$ given the sentence ``{\it{i (1) get (2) a (3) book (4) from (5) him (6) . (7)}}''.
+
+\cite{lee1997} propose the {\it{complete-link set}} and {\it{complete-sequence set}} for head-modifier pairs (i.e., a dependency bi-gram in our model) to handle all possible projective dependency structures of a sentence in a recursive manner. We follow the terms they use and extend their definitions
+to adapt them to our dependency N-gram model. 
+We use $\mathit{Link} ({\bf{d}})$ to denote the complete-link set of an N-tuple ${\bf{d}}$ and $\mathit{Seq} ({\bf{d}})$ for the complete-sequence set.
+
+In \cite{lee1997}, the complete-link set of a span $[i, j]$ in a sentence is composed of all possible dependency structures within the span, with the directional dependency link of the two words $w_i$ and $w_j$. The complete-sequence set of a span $[i, j]$ is defined as the set of all possible sequences with any number (including zero) of adjacent complete-link sets having the same direction within the span.
+By our notation, the word at $d_1$ is the direct head of the word at $d_0$ for $\mathit{Link} (d_0, d_1)$, but the word at $d_1$ is an ancestor (not only a direct head) of the word at $d_0$ for $\mathit{Seq} (d_0, d_1)$.
+The two types of set can be defined recursively, and the set of all possible dependency structures of a sentence $S=w_{0}^{l+1}$ is the complete-sequence set over the span $[1, l+1]$ or is the complete-link set over the span $[0, l+1]$\footnote{Because $p(\langle \slash s \rangle | \langle R \rangle\ \langle s \rangle) \equiv 1$, which is one of the properties we have described, the two complete sets have the same probability. This is also mentioned in \cite{lee1997}.}. We illustrate these recursive relations
+in Figure~\ref{bi-link} and \ref{bi-seq}.\footnote{By our notation, there is no necessity to show the head-modifier relation by arrows in Figure~\ref{bi-link} to \ref{n-seq}. These figures show the relation between N-tuples, rather than directional pairs.}
+
+Because more than two words are involved in the proposed dependency N-gram, we generalize the two types of set for the N-tuples $\bf{d}$, rather than just spans.
+The generalization still retains the properties of $d_0$ and $d_1$ in $\mathit{Link} ({\bf{d}})$ and $\mathit{Seq}({\bf{d}})$, as well as the recursive properties of the two types of set.
+We show the examples of a dependency tri-gram in Figure~\ref{n-link} and \ref{n-seq}.
+
+\begin{figure}[t]
+\begin{minipage}[t]{210pt}
+\setlength{\captionwidth}{210pt}
+\begin{center}
+\includegraphics{21-5ia1f5.eps}
+\end{center}
+\hangcaption{$\mathit{Link} ({\bf{d}} = (i, j))$. In \protect\cite{lee1997}, for a span $[i,j]$, $\mathit{Link} (i, j)$ is composed of the dependency link of $w_i$ and  $w_j$, and all possible pairs of complete-sequence sets $\mathit{Seq} (x, i)$ and $\mathit{Seq} (x+1, j)$.}
+\label{bi-link}
+\end{minipage}
+\hfill
+\begin{minipage}[t]{190pt}
+\setlength{\captionwidth}{190pt}
+\begin{center}
+\includegraphics{21-5ia1f6.eps}
+\end{center}
+\hangcaption{$\mathit{Seq} ({\bf{d}} = (i, j))$. In \protect\cite{lee1997}, for a span $[i,j]$, $\mathit{Seq} (i,j)$ is composed of all possible pairs of complete-sequence set $\mathit{Seq} (i,x)$ and complete-link set $\mathit{Link} (x,j)$.}
+\label{bi-seq}
+\end{minipage}
+\end{figure}
+\begin{figure}[t]
+\begin{minipage}[t]{210pt}
+\setlength{\captionwidth}{210pt}
+\begin{center}
+\includegraphics{21-5ia1f7.eps}
+\end{center}
+\hangcaption{$\mathit{Link} ({\bf{d}} = (i, j, k))$. In our model, an extended high-order (three-order is shown here) complete-link set $\mathit{Link} (i, j, k)$ is composed of the N-tuple ${\bf{d}}$, and all possible pairs of complete-sequence sets $\mathit{Seq} (x, i, j)$ and $\mathit{Seq} (x+1, j, k)$.}
+\label{n-link}
+\end{minipage}
+\hfill
+\begin{minipage}[t]{190pt}
+\setlength{\captionwidth}{190pt}
+\begin{center}
+\includegraphics{21-5ia1f8.eps}
+\end{center}
+\hangcaption{$\mathit{Seq} ({\bf{d}} = (i, j, k))$. In our model, an extended high-order (three-order is shown here) complete-sequence set $\mathit{Seq} (i, j, k)$ is composed of all possible pairs of complete-sequence set $\mathit{Seq} (i, x, j)$ and complete-link set $\mathit{Link} (x, j, k)$.}
+\label{n-seq}
+\end{minipage}
+\end{figure}
+
+
+\subsection{Recursive Definition}
+\label{defination}
+
+Here, we provide the formulation of the recursive definition of the complete-link set and complete-sequence set for an arbitrary order dependency N-gram.
+
+In the description of the calculation example shown from Exp. (\ref{layer1}) to Exp. (\ref{layer5}) in Section \ref{generativemodel}, we mentioned that those terms $h^0 = \langle \slash O \rangle\ (O \in \{L, R\})$ can be considered as a ``discount'' of the product of lexical terms. By the definition in Exp. (\ref{word2index}) in Section \ref{notation}, we can further see that $h^0 = \langle \slash O \rangle\ (O \in \{L, R\})$ terms are represented by the N-tuple ${\bf{d}}$ with $d_0 = \langle \slash O \rangle\ (O \in \{L, R\})$ and the other lexical terms are represented by the N-tuple ${\bf{d}}$ in which all the $d_k$ ($k \in [0,n-1]$) are integers. For clarity, in this section, we will first describe the recursion definition of lexical terms without $d_0 = \langle \slash O \rangle\ (O \in \{L, R\})$ involved up to Exp. (\ref{seq}). Next, we turn to the ``discount'' terms, that is, the case of  $d_0 = \langle \slash O \rangle\ (O \in \{L, R\})$, from Exp. (\ref{slashbegin}) to Exp. (\ref{slashend}).
+
+First, due to the properties of the projective dependency structure, any $d_k$ ($k \in [1,n-1]$) in the N-tuple ${\bf{d}} = (d_0, d_1, \dots, d_{n-1})$ needs to satisfy the following constraint of Exp. (\ref{dk}) to guarantee that a head word is outside the range covered by a chain of its descendants. 
+\begin{equation}
+d_{k} > \max (d_0, \cdots, d_{k-1}),\ \text{or}\ d_{k} < \min (d_0, \cdots, d_{k-1})
+\label{dk}
+\end{equation}
+The $\max (\cdot)$ and $\min (\cdot)$ operations are used to get the maximum and minimum from a tuple composed of integers.
+
+Trivially, we take $\langle \slash s \rangle$ as the $root$ mark of a sentence $S=w_{0}^{l+1}$, and the $\langle s \rangle$ as the head of itself or as the head of the $\langle \slash s \rangle$. So, we have the following constraints:
+\begin{equation}
+\text{if}\ d_{k-1} = l+1\ \text{or}\ d_{k-1} = 0, \text{then}\ d_{k} = 0, \text{for}\ k \in [1, n-1]
+\end{equation} 
+
+To reveal the relations between N-tuples, 
+we introduce three basic operations, {\em Push}, {\em Cover} and {\em Insert}, over an index $x$ (absolute word position) and an N-tuple ${\bf{d}} = (d_0, d_1, \dots, d_{n-1})$:
+\begin{align}
+\mathit{Push} (x, {\bf{d}}) &= (x, d_0, d_1, \dots, d_{n-2}) \label{push} \\
+\mathit{Cover} (x, {\bf{d}}) &= (x, d_1, d_2, \dots, d_{n-1}) \label{cover} \\
+\mathit{Insert} (x, {\bf{d}}) &= (d_0, x, d_1, \dots, d_{n-2}) \label{insert}
+\end{align} 
+
+With the three operations, we can express the relation shown in Figure~\ref{n-link} as follows:
+\begin{equation}
+\label{linkexample}
+\mathit{Link} (i, j, k) = \bigcup_{i \le x < j}\{\mathit{Seq} (\mathit{Push} (x, (i, j, k))) \times \mathit{Seq} (\mathit{Cover} (x+1, (i, j, k))) \times \{ { (i, j, k)\} } \}.
+\end{equation}
+Here, the symbol $\times$ indicates the direct product of sets. That $\mathit{Seq} (\mathit{Push} (x, (i, j, k))) \equiv \mathit{Seq} (x, i, j)$ and $\mathit{Seq} (\mathit{Cover} (x+1, (i, j, k))) \equiv \mathit{Seq} (x+1, j, k)$ follows from their definitions.
+
+Moreover, the relation shown in Figure~\ref{n-seq} can be expressed as follows:
+\begin{equation}
+\label{seqexample}
+\mathit{Seq} (i, j, k) = \bigcup_{i \le x < j}\{\mathit{Seq} (\mathit{Insert} (x, (i, j, k))) 
+	\times \mathit{Link} (\mathit{Cover} (x, (i, j, k))) \}.
+\end{equation}
+Here, that $\mathit{Seq} (\mathit{Insert} (x, (i, j, k))) \equiv \mathit{Seq} (i, x, j)$ and $\mathit{Link} (\mathit{Cover} (x, (i, j, k))) \equiv \mathit{Link} (x, j, k)$ follows from the definitions.
+
+Then, we can provide the formal definition of the $\mathit{Link} ({\bf{d}})$ and $\mathit{Seq} ({\bf{d}})$ for an arbitrary order ${\bf d}$
+by Exp. (\ref{link}) and Exp. (\ref{seq}) below.
+\pagebreak
+\begin{align}
+ & \mathit{Link} ({\bf{d}}) = \bigcup_{\substack{\mathrm{if}\ d_1=l+1,\ \mathrm{then}\ i=d_1-1; \\ \mathrm{else}\ i \in [\min (d_0, d_1), \max (d_0,d_1)-1]}} 
+	\{\mathit{Seq} (\mathit{Left} (i, {\bf{d}})) \times \mathit{Seq} (\mathit{Right} (i+1, {\bf{d}})) \times \{ {\bf{d}\} } \}
+	\label{link} \\ 
+&\hspace{25mm}\text{\it where}\ 
+	(\mathit{Left},\mathit{Right}) = 
+	\begin{cases}
+	(\mathit{Push},\mathit{Cover}),\ \mathrm{if}\ d_0 < d_1 \\
+	(\mathit{Cover},\mathit{Push}),\ \mathrm{if}\ d_0 > d_1
+	\end{cases}
+	\label{leftright} \\
+ & \mathit{Seq} ({\bf{d}}) = \bigcup_{\substack{i \in [\min (d_0, d_1),\ \max (d_0, d_1)]\\ \mathrm{and}\ i \neq d_1}} 
+	\{\mathit{Seq} (\mathit{Insert} (i, {\bf{d}})) \times \mathit{Link} (\mathit{Cover} (i, {\bf{d}})) \}
+	\label{seq}
+\end{align}
+
+Exp. (\ref{link}) shows that a complete-link set is recursively composed of the direct product of all possible complete-sequence set pairs, with the N-tuple ${\bf {d}}$ itself.\footnote{We further restrict the {\em root} mark  $\langle \slash s \rangle$ to take only one modifier (the situation when $d_1 = l+1$ in Exp. (\ref{link})), according to the general restrictions of the dependency grammar.} Exp. (\ref{seq}) shows that a complete-sequence set is recursively composed of the direct product of all possible pairs of a complete-link set and a smaller complete-sequence set.  
+
+In Exp. (\ref{link}) and Exp. (\ref{seq}), if $d_0 = d_1$, which violates the restriction of Exp. (\ref{dk}), we then replace $d_0$ by $\langle \slash L \rangle$ and $\langle \slash R \rangle$ as follows. In fact, in this situation alone, $\langle \slash L \rangle$ and $\langle \slash R \rangle$ can appear in a ${\bf{d}}$ as $d_0$, which is mentioned in the definition of Exp. (\ref{word2index}) and related properties. The complete sets containing $\langle \slash O \rangle\ (O \in \{L, R\})$ tags start the recursive definition.
+\begin{align}
+\label{slashbegin}
+\mathit{Left} (x, {\bf{d}}) = \mathit{Left} (\langle \slash R \rangle, {\bf{d}}),&
+\indent \indent \text{if $x=\min(d_0, d_1)$ in Exp. (\ref{link})}
+\\
+\mathit{Right} (x, {\bf{d}}) = \mathit{Right} \ (\langle \slash L \rangle, {\bf{d}}),&
+\indent \indent \text{if $x=\max(d_0, d_1)$ in Exp. (\ref{link})}
+\\
+\mathit{Insert} (x, {\bf{d}}) = \mathit{Push} (\langle \slash L \rangle, {\bf{d}}),&
+\indent \indent \text{if $x=d_0$, and $d_0 < d_1$ in Exp. (\ref{seq})}
+\\
+\label{slashend}
+\mathit{Insert} (x, {\bf{d}}) = \mathit{Push} (\langle \slash R \rangle, {\bf{d}}),&
+\indent \indent \text{if $x=d_0$, and $d_0 > d_1$ in Exp. (\ref{seq})}
+\end{align}
+
+
+\subsection{Estimation}
+\label{sec:estimation}
+
+According to the recursive definitions, it is natural to derive an inside-outside algorithm \cite{lari1990estimation}, which is an adaption of the EM algorithm \cite{dempster1977} to tree structures, to conduct parameter re-estimation by calculating the inside and outside probabilities of all complete sets in sentences.
+
+We generalize the expressions in Exp. (\ref{link}) and Exp. (\ref{seq}) to Exp. (\ref{abslink}) and Exp. (\ref{absseq}), respectively. In Exp. (\ref{abslink}), $\mathit{Sub_1}$ and $\mathit{Sub_2}$ mean the $\mathit{Seq (Left(\cdot))}$ and the $\mathit{Seq (Right(\cdot))}$, respectively, on the right-hand side of Exp. (\ref{link}).
+In Exp. (\ref{absseq}), $\mathit{Sub_1}$ and $\mathit{Sub_2}$ mean the $\mathit{Seq (Insert(\cdot))}$ and the $\mathit{Link(Cover(\cdot))}$, respectively, on the right-hand side of Exp. (\ref{seq}).  
+The notation $\langle \cdot, \cdot \rangle$ in Exp. (\ref{abslink}) and Exp. (\ref{absseq}) represents an unordered two-tuple of a complete-set pair.
+\pagebreak
+\begin{align}
+\label{abslink}
+\mathit{Link} ({\bf{d}}) = &\bigcup_{\forall \langle \mathit{Sub}_1, \mathit{Sub}_2 \rangle} 
+\hspace{-3mm} \{ \mathit{Sub}_1 \times \mathit{Sub}_2 \times \{ {\bf{d}\} } \} \\
+\label{absseq}
+\mathit{Seq} ({\bf{d}}) = &\bigcup_{\forall \langle \mathit{Sub}_1, \mathit{Sub}_2 \rangle} 
+\hspace{-3mm} \{ \mathit{Sub}_1 \times \mathit{Sub}_2 \}
+\end{align}
+We further define
+$R_{\mathrm{Link}} (\mathit{Link} ({\bf{d}}), \langle \mathit{Sub}_1, \mathit{Sub}_2 \rangle)$
+as a relation for $\mathit{Link} ({\bf{d}})$, $\langle \mathit{Sub}_1, \mathit{Sub}_2 \rangle$ satisfying Exp. (\ref{abslink}). Similarly,
+$R_{\mathrm{Seq}} (\mathit{Seq} ({\bf{d}}), \langle \mathit{Sub}_1, \mathit{Sub}_2 \rangle)$
+is a relation for $\mathit{Seq} ({\bf{d}})$, $\langle \mathit{Sub}_1, \mathit{Sub}_2 \rangle$ satisfying Exp. (\ref{absseq}).
+Then, the inside probability $\beta$ and outside probability $\alpha$ of the two types of complete set can be calculated by Exp. (\ref{blink}) to Exp. (\ref{aseq}), where $p ({\bf{d}})$ is the probability of the lexical dependency N-gram, represented by ${\bf{d}}$ in a sentence.
+\begin{align}
+ & \beta (\mathit{Link} ({\bf{d}})) = \hspace{-8mm}
+  \sum_{\substack{\langle \mathit{Sub_1}, \mathit{Sub}_2 \rangle,\ \mathrm{s.t.}\\
+  R_{\mathrm{Link}} (\mathit{Link} ({\bf{d}}), \langle \mathit{Sub}_1, \mathit{Sub}_2 \rangle)}} \hspace{-8mm}
+  \beta (\mathit{Sub}_1) \cdot \beta (\mathit{Sub}_2) \cdot p({\bf{d}})
+  \label{blink}\\
+ & \beta (\mathit{Seq} ({\bf{d}})) = \hspace{-4.5mm}
+  \sum_{\substack{\langle \mathit{Sub}_1, \mathit{Sub}_2 \rangle,\ \mathrm{s.t.}\\
+  R_{\mathrm{Seq}} (\mathit{Seq} ({\bf{d}}), \langle \mathit{Sub}_1, \mathit{Sub}_2 \rangle)}} \hspace{-7mm}
+  \beta (\mathit{Sub}_1) \cdot \beta (\mathit{Sub}_2)
+  \label{bseq}\\
+ & \alpha (\mathit{Link} ({\bf{d}})) = \hspace{-6mm}
+  \sum_{\substack{\langle \mathit{Sup}, \mathit{Con} \rangle,\ \mathrm{s.t.}\\
+  R_{\mathrm{Seq}} (\mathit{Sup}, \langle \mathit{Link} ({\bf{d}}), \mathit{Con} \rangle)}} \hspace{-7mm}
+  \alpha (\mathit{Sup}) \cdot \beta (\mathit{Con})
+  \label{alink}\\
+\begin{split}
+ & \alpha (\mathit{Seq} ({\bf{d}})) = \hspace{-4mm}
+  \sum_{\substack{\langle \mathit{Sup}, \mathit{Con} \rangle,\ \mathrm{s.t.}\\
+  R_{\mathrm{Link}} (\mathit{Sup}, \langle \mathit{Seq} ({\bf{d}}), \mathit{Con} \rangle)}} \hspace{-6.5mm}
+  \alpha (\mathit{Sup}) \cdot \beta (\mathit{Con}) \cdot p({\bf{d'}})
+  \hspace{2mm} + \hspace{-8mm} \sum_{\substack{\langle \mathit{Sup}, \mathit{Con} \rangle,\ \mathrm{s.t.}\\
+  \ R_{\mathrm{Seq}} (\mathit{Sup}, \langle \mathit{Seq} ({\bf{d}}), \mathit{Con} \rangle)}} \hspace{-8mm}
+  \alpha (\mathit{Sup}) \cdot \beta (\mathit{Con}) \\
+& \hspace{8mm}\text{\it (where ${\bf{d'}}$ is the N-tuple of $\mathit{Sup}$)}
+  \label{aseq}
+\end{split}
+\end{align}
+
+Specifically, Exp. (\ref{blink}) and Exp. (\ref{bseq}) can be directly derived from the respective definitions of Exp. (\ref{link}) and Exp. (\ref{seq}). Further, a complete-link set can only be a component of a complete-sequence set from Exp. (\ref{seq}), while a complete-sequence set can be both a component of a complete-link set from Exp. (\ref{link}) and a component of a complete-sequence set from Exp. (\ref{seq}). Consequently, Exp. (\ref{alink}) and Exp. (\ref{aseq}) can both be derived.
+
+For all $\mathit{Seq} ({\bf{d}})$ with $\langle \slash L \rangle$ or $\langle \slash R \rangle$, we use
+\begin{equation}
+\label{startseq}
+\beta (\mathit{Seq} ({\bf{d}})) = p({\bf{d}})
+\end{equation}
+as the start of the calculation. 
+At the end of the calculation, the probability of the entire sentence $S=w_{0}^{l+1}$ can be obtained as follows:
+\begin{equation}
+\label{sntprob}
+P(S) = \beta (Seq({\bf{d}} = (1, l+1, 0, \cdots, 0)))
+\end{equation}
+
+For re-estimation, 
+we can obtain the probabilistic counts\footnote{They are no longer integers.} of a dependency 
+N-gram represented by ${\bf{d}}$ in a sentence using:
+\begin{equation}
+\frac {\beta (\mathit{Link} ({\bf{d}})) \cdot \alpha (\mathit{Link} ({\bf{d}}))} {{P (S)}}
+\indent \footnote{For the situation in  Exp. (\ref{startseq}), we use $\frac {\beta (\mathit{Seq} ({\bf{d}})) \cdot \alpha (\mathit{Seq} ({\bf{d}}))}{P (S)}$.}
+\end{equation}
+according to the inside-outside algorithm. Finally, all the counts of the dependency N-gram in the training corpus are added and normalized using Exp. (\ref{parameter1}) to update the model parameters.
+
+We show the details of the re-estimation algorithm with pseudocode in {\bf Appendix A}. 
+
+
+\section{Experiments}
+\label{experiments}
+\vspace{-0.5\Cvs}
+
+\subsection{Experiment Setting}
+
+\begin{table}[b]
+\vspace{-0.5\Cvs}
+\begin{minipage}[b]{.55\textwidth}
+\caption{Training sets}
+\label{training}
+\input{01table01.txt}
+\end{minipage}
+\hfill
+\begin{minipage}[b]{.40\textwidth}
+\caption{Sentences in dev. and test sets}
+\label{devtest}
+\input{01table02.txt}
+\end{minipage}
+\end{table}
+
+As the proposed dependency N-gram model and estimation algorithm are independent from language, we conduct experiments using four different languages, i.e., English, German, Spanish and Japanese. The corpora we use for English, German and Spanish are sets of sentences with 5--15 words from the corresponding single-language corpora of {\bf{Europarl}}\footnote{http://www.statmt.org/europarl/} \cite{koehn2005europarl}. The corpus for Japanese is a set of sentences with 5--20 words from the Japanese side of the {\bf{NTCIR-8}} corpus \cite{yamamoto2010}. We take $\frac{1}{200}$ of the sentences from a corpus to form each of the development and test sets used in experiments, and the remaining sentences are used for training. The details of training, development (denoted dev.) and test sets are shown in Table \ref{training} and \ref{devtest}.
+
+To investigate the fundamental properties of the model and algorithm, we do not use any pruning or approximating methods in the parameter estimation. Specifically, we collect all possible lexical dependency N-grams\footnote{As Japanese is a typical head-final language, that is, the head word always comes after its modifiers, we only take the left-oriented (from head to modifier) dependency links into account. For the other three languages, dependency links of both orientations are considered. The parameter collection and initialization do not take the structure into account.} from the raw corpora without any cut-off thresholds for models of any order. Before estimation, we use relative frequency to initialize the probabilities.
+
+
+\subsection{Results}
+
+\subsubsection{Algorithm Convergence}
+
+Figure \ref{converge} shows the change of English training set perplexities before each iteration by the proposed estimation algorithm, for $2$ (bi-) and $3$ (tri-) order dependency N-gram models. The convergence trend along with the iteration times can be observed. For the dependency bi-gram, the training set perplexity becomes nearly stable after five iterations. However, for the dependency tri-gram, the first iteration is at very low training set perplexity, and it does not change much in further iterations. This phenomenon suggests that the non-pruned dependency tri-gram model may be complex with many parameters, so the features of the training set are represented well, resulting in a low perplexity. This suggests the model is overfitting the data. We discuss this in Section \ref{sec:disc}.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-5ia1f9.eps}
+\end{center}
+\caption{English training set perplexities before each iteration (y-axis is logarithmic)}
+\label{converge}
+\end{figure}
+
+
+\subsubsection{Test Set Perplexity}
+
+As well as the training set perplexity, the perplexity of a test set which has not been used in parameter estimation should be investigated in evaluation. Because different order dependency N-gram models are trained separately, we use linear interpolation in calculating the test set perplexity. Specifically, we use the held-out development set to tune the interpolation coefficients (weights) and to select the iteration times of different order models to minimize the development set perplexity. Next we use the tuned weights to combine the iteration-time-selected models in the test set perplexity calculation. The reason for using simple and straightforward linear interpolation is that we want to discover the essential aspects of the proposed model and algorithm, so we use no further smoothing approaches. As the lowest order of a dependency N-gram is two, we use a uni-gram model with modified KN discounting to handle the unknown words. The uni-gram model is interpolated with the dependency bi-gram model. Furthermore, as the $\langle \slash L \rangle$ and $\langle \slash R \rangle$ tags are taken as general words, which never really appear in a training set, we treat them separately, and interpolate them with the uni-gram model. Because the $\langle s \rangle$, $\langle L \rangle$ and $\langle R \rangle$ tags only appear in the history, no other model is needed to handle them. 
+
+\begin{table}[b]
+\hangcaption{Development set perplexities (dev-ppl) and test set perplexities (test-ppl) of dependency N-gram models (N = $2$ (bi), $3$ (tri))}
+\label{testppl}
+\input{01table03.txt}
+\vspace{4pt}\small
+The iteration times in dependency bi- and tri-gram model training are $\mathit{iter}_{\mathit{bi}}$ and $\mathit{iter}_{\mathit{tri}}$, respectively.
+The weights of uni-gram, dependency bi- and tri-gram models are $\lambda_{\mathit{uni}}$, $\lambda_{\mathit{bi}}$ and $\lambda_{\mathit{tri}}$, respectively. $(1-\lambda_{\mathit{bi}})$ and $(1-\lambda_{\mathit{tri}})$ are assigned to the interpolated lower order models and $(1-\lambda_{\mathit{uni}})$ is assigned to the $\langle \slash L \rangle$ and $\langle \slash R \rangle$ tags.
+\par
+\end{table}
+\begin{table}[b]
+\caption{Test set perplexities of the original N-gram models}
+\label{srilmppl}
+\input{01table04.txt}
+\vspace{4pt}\small
+MLE is the maximum likelihood estimation, realized by setting the {\it{adding delta}} to $0$ in adding smoothing. MKN is the interpolated modified KN discounting.
+\par
+\end{table}
+
+In Table \ref{testppl}, we show the development and test set perplexities of the linear-interpolated dependency bi- and tri-gram models. For comparison, we used {\bf{SRILM}}\footnote{http://www.speech.sri.com/projects/srilm/} \cite {stolcke2002srilm} to build two original N-gram language models on the same training sets: one is constructed by maximum likelihood estimation without any smoothing, and the other is constructed by the state-of-the-art interpolated modified KN discounting.  We calculate the test set perplexities of the two N-gram language models on the same test sets. The results are listed in Table \ref{srilmppl}. In both Table \ref{testppl} and \ref{srilmppl}, the perplexities are calculated according to the number of lexical words, and the tags used for normalization are not counted\footnote{That is, we do not count the $\langle \slash s \rangle$ tag in the original N-gram language models, or $\langle \slash L \rangle$ and $\langle \slash R \rangle$, in our models. If they are included, the perplexities decrease. In the original N-gram model, this is because a $\langle \slash s \rangle$ tag nearly always appears after the period mark. The effect is even more dramatic in our model,  as each word in a sentence has a $\langle \slash L \rangle$ and a $\langle \slash R \rangle$ tag to normalize its modifier numbers, so the token number in a sentence is multiplied. Therefore, for fairness, we only count the lexical words in the perplexity calculation.}. We discuss these results in Section \ref{sec:disc}.
+
+
+\subsection{Discussion}
+\label{sec:disc}
+
+\subsubsection{Parameter Number}
+
+For a sentence with $l$ words, the number of dependency N-grams that can be collected increases exponentially as $O (l^N)$ if we consider all possible combinations. Although for a given $N$, the proposed algorithm takes a time which is polynomial in sentence length $l$, a large $N$ will be practically intractable, especially for long sentences. In Figure \ref{completeset}, we show the number of complete sets of different order dependency N-gram models for different sentence lengths. 
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-5ia1f10.eps}
+\end{center}
+\caption{Number of complete sets (y-axis is logarithmic)}
+\label{completeset}
+\end{figure}
+
+This behavior is also related to the overfitting problem, because our algorithm is essentially an iterative maximum likelihood estimation. A model that is very complex will be extremely specific to the training set.
+From Table \ref{testppl}, we see that the performance of a dependency tri-gram model will saturate after only one iteration, which is also indicated in Figure \ref{converge}, and does little to improve the test set perplexities. The exception is Japanese, where the dependency tri-gram does improve the performance. The linguistic reason for this is that Japanese is a head-final language with a simpler syntactic structure, so we restrict the dependency link in Japanese to ``left only'', which leads to a model with fewer parameters. Consequently, the high order model performs better. From the experimental results, we can see that the proposed algorithm has the usual strengths and weaknesses of an EM algorithm.
+
+
+\subsubsection{Test Set Perplexity}
+
+Comparing the test set perplexities in Table \ref{testppl} and \ref{srilmppl}, we can see the dependency bi-gram model achieves the same, or sometimes better, performance as the original N-gram language models. However, when we look at the tri-grams, the interpolated modified KN discounting method, which is the state-of-the-art, shows its strength, and our dependency model does not produce much improvement for the reasons we described above\footnote{For Japanese, the result is improved by the dependency tri-gram model, but the original tri-gram model with interpolated modified KN discounting method performs much better.}. As the modified KN method uses an efficient discounting to avoid the overfitting problem and our model has no smoothing, the difference in performance is reasonable for complex models. Conversely, the competitive results of our bi-gram model and its performance on Japanese show that our model is a promising one, particularly if the number of parameters can be reduced.
+
+
+\subsubsection{Model Preference}
+
+In Figure~\ref{en0} to \ref{ja2}, we present the examples of the best dependency structures of sentences in test set generated by our approach. We used the settings in Table \ref{testppl} and generated them using the Viterbi algorithm \cite{viterbi1967error}. It can be seen that the proposed approach can reveal features of specific languages, even though it is unsupervised, such as for the final-position verb ``{\it{stellen}}'' and its relation with the second-position auxiliary verb  ``{\it{m\"{o}chte}}'' in the German sentence in Figure~\ref{de0}. The results also show a preference for associating semantic relations and making the function words\footnote{Articles, prepositions, etc.} of a language the modifiers of the content words. 
+This tendency is noticeable in the English examples, such as the particle ``{\it{to}}'' in Figure~\ref{en1} and \ref{en3} and the ``{\it{'s}}'' in Figure~\ref{en3}. In addition, the arrangement of commas around ``{\it{however}}'' in Figure~\ref{en0} and around ``{\it{therefore}}'' in Figure~\ref{en3} is impressive.
+Another example is in the Spanish sentence in Figure~\ref{es0}. Syntactically, the preposition ``{\it{a}}'' is the head of the noun ``{\it{respecto}}'', but in unsupervised training, our model prefers to assign ``{\it{a}}'' to be the modifier of ``{\it{respecto}}'' and directly link two content words, i.e. ``{\it{respecto}}'' and the verb ``{\it{haciendo}}''. We think this is because the probabilities of $\langle \slash L \rangle$ and \mbox{$\langle \slash R \rangle$} tags have large estimates, especially when they appear after function words, which prevents them from having modifiers. This tendency, however, is correct for articles, such as the ``{\it{der}}'' in German and ``{\it{la}}'' in Spanish. Furthermore, an interesting phenomenon can be observed in the Japanese sentence in Figure~\ref{ja2}. In the example, the verb stem“応用”is linked to the auxiliary verb“できる”, and the words of“する こと が”are arranged as a dependency chain and attached to“できる”as well. Semantically, the expressions of“応用 できる”(literally: {\it can apply}) and“応用 する こと が できる”(literally: {\it the thing, that applies, can}) have nearly the same meaning and are generally interchangeable. Consequently, the model prefers to designate“する こと が”, which has a weak semantic function, as a branch and link the semantically-crucial words“応用”and“できる”directly. All these examples suggest that the proposed model with unsupervised training has a strong preference for organizing a sentence by semantic relations and for assigning relations between those words that play a central role in such a semantic unit.
+
+\begin{figure}[p]
+\noindent
+\large\textbf{Example of English Sentences}
+\vspace{1\Cvs}
+\begin{center}
+\includegraphics{21-5ia1f11.eps}
+\end{center}
+\caption{Best dependency structure of the sentence ``{\it{i would , however , add one important caveat~.}}''}
+\label{en0}
+\end{figure}
+\begin{figure}[p]
+\begin{center}
+\includegraphics{21-5ia1f12.eps}
+\end{center}
+\caption{Best dependency structure of the sentence ``{\it{let us remember what we are trying to do .}}''}
+\label{en1}
+\end{figure}
+\begin{figure}[p]
+\begin{center}
+\includegraphics{21-5ia1f13.eps}
+\end{center}
+\hangcaption{Best dependency structure of the sentence ``{\it{we have , therefore , voted against your self-congratulation .}}''}
+\label{en2}
+\end{figure}
+\begin{figure}[p]
+\begin{center}
+\includegraphics{21-5ia1f14.eps}
+\end{center}
+\caption{Best dependency structure of the sentence ``{\it{you are too late to change today 's agenda .}}''}
+\label{en3}
+\end{figure}
+
+\clearpage
+
+\begin{figure}[p]
+\noindent
+\large\textbf{Example of German Sentences}
+\vspace{1\Cvs}
+\begin{center}
+\includegraphics{21-5ia1f15.eps}
+\end{center}
+\hangcaption{Best dependency structure of the sentence ``{\it{trotzdem m\"{o}chte ich der kommission einige fragen stellen .}}''}
+\label{de0}
+\end{figure}
+\begin{figure}[p]
+\begin{center}
+\includegraphics{21-5ia1f16.eps}
+\end{center}
+\hangcaption{Best dependency structure of the sentence ``{\it{vielen dank , ich emphehle die annahmen des bericht .}}''}
+\label{de1}
+\end{figure}
+\begin{figure}[p]
+\begin{center}
+\includegraphics{21-5ia1f17.eps}
+\end{center}
+\hangcaption{Best dependency structure of the sentence ``{\it{sonst verlieren die b\"{u}rger in den mitgliedstaaten das vertauen .}}''}
+\label{de2}
+\end{figure}
+\begin{figure}[p]
+\begin{center}
+\includegraphics{21-5ia1f18.eps}
+\end{center}
+\hangcaption{Best dependency structure of the sentence ``{\it{zum beitritt techechiens habe ich mich der stimme enthalten .}}''}
+\label{de3}
+\end{figure}
+
+
+\clearpage
+\begin{figure}[p]
+\noindent
+\large\textbf{Example of Spanish Sentences}
+\vspace{1\Cvs}
+\begin{center}
+\includegraphics{21-5ia1f19.eps}
+\end{center}
+\hangcaption{Best dependency structure of the sentence ``{\it{la comisi\'{o}n est\'{a} haciendo muchas cosas a este respecto .}}''}
+\label{es0}
+\end{figure}
+\begin{figure}[p]
+\begin{center}
+\includegraphics{21-5ia1f20.eps}
+\end{center}
+\hangcaption{Best dependency structure of the sentence ``{\it{el tratado de lisboa contiene una cl\'{a}usula social horizontal .}}''}
+\label{es1}
+\end{figure}
+\begin{figure}[p]
+\noindent
+\large\textbf{Example of Japanese Sentences}
+\vspace{1\Cvs}
+\begin{center}
+\includegraphics{21-5ia1f21.eps}
+\end{center}
+\caption{Best dependency structure of the sentence“図 3 は 、 その 実際 の 配置 例 で ある 。”}
+\label{ja0}
+\end{figure}
+\begin{figure}[p]
+\begin{center}
+\includegraphics{21-5ia1f22.eps}
+\end{center}
+\caption{Best dependency structure of the sentence“以下 に 、 この 設定 方法 を 説明 する 。”}
+\label{ja1}
+\end{figure}
+
+
+\clearpage
+\begin{figure}[t]
+\begin{center}
+\includegraphics{21-5ia1f23.eps}
+\end{center}
+\hangcaption{Best dependency structure of the sentence“この よう な 場合 に も 本発明 を 応用 する こと が できる 。”}
+\label{ja2}
+\end{figure}
+
+
+\section{Application to Microblog Data}
+\label{application}
+
+\subsection{Task and Corpus}
+
+Microblogging is an emerging application that provides a new platform for communicating. Postings on microblogs are usually brief due to restrictions on message length such that no more than 140 characters may be used. Moreover, microblogs use many non-standard expressions and Internet-based neologisms. These words and expressions are hard for general natural language processing tools, which are usually trained on standard data sets, to handle.
+Therefore, tasks using microblogs as a huge data source must consider the characteristics of user-generated content. One example of this is the part-of-speech tagging task on microblogs \cite{gimpel2010part}. However, the more explicit and structured we want the information extracted from a microblog to be, the more difficult the task turns out to be, due to the flexible and non-standard use of the expressions. 
+
+
+Because our proposed approach is completely data driven, we think it can efficiently capture features in user-generated content. In this section, using our proposed model, we focus on extracting and investigating lexical dependency features from Chinese microblog data.
+
+We use the NLPIR Chinese Weibo corpus\footnote{http://www.nlpir.org/download/weibo\_content\_corpus.rar} in our experiment. The corpus contains $230,000$ posts collected from {\em Sina Weibo} and {\em Tencent Weibo}. During preprocessing, we split the posts into sentences, delete the tags beginning with {\bf @} and {\bf \#} and all the URLs. We use the Stanford Chinese Word Segmenter\footnote{http://www-nlp.stanford.edu/software/segmenter.shtml} \cite{tseng2005conditional} with the {\em  Chinese Penn Treebank standard} to segment each Chinese sentence and take those sentences with 5--30 words as the training corpus in our experiment. We further normalize the punctuation marks in the training corpus and replace all words appearing fewer than five times with a symbolic {\em UNK} token. The details of the training corpus are shown in Table \ref{weibotraining}.
+
+\begin{table}[t]
+\caption{Chinese Weibo corpus}
+\label{weibotraining}
+\input{01table05.txt}
+\end{table}
+
+We collect all possible lexical dependency N-grams from the training corpus and use relative frequency to initialize the probabilities. Figure~\ref{conv} shows the change of training corpus perplexities before each iteration for $2$ (bi-) and $3$ (tri-) order dependency N-gram models. We can observe the same trend shown in Figure~\ref{converge}.
+However, our interest is the learned features of the training set. We discuss the examples of lexical parameters and parsing using a three-time iterated dependency bi-gram model and a one-time iterated dependency tri-gram model in the next section. 
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{21-5ia1f24.eps}
+\end{center}
+\caption{Training set perplexities before each iteration (y-axis is logarithmic)}
+\label{conv}
+\end{figure}
+
+
+\subsection{Discussion}
+
+In Table \ref{general}, \ref{shenma} and \ref{youmuyou}, we show the examples of lexical dependency features with high estimates of logarithmic probability (log-prob.) with our unsupervised approach.
+
+In Table \ref{general}, the examples of dependency bi-grams around general words are shown. We can see that the dependency relations between them are well modeled. Moreover, in Table \ref{general}, we show the features of the {\em root} mark $\langle \slash s \rangle$ of sentences. We can see that the final punctuation marks and final-position particles are automatically learned as modifiers of the root mark (i.e., of the root word of a sentence).
+In Table \ref{shenma}, we show an example of a special Chinese expression on the Internet. 
+    The word ``\UTFC{795E}\UTFC{9A6C}'', 
+read as {\em sh\'{e}n-m\v{a}}, means ``{\em what}'' on the basis of similarity in pronunciation to the original word {\em sh\'{e}n-me}. Our unsupervised data-driven approach reveals the behaviors of this neologism, which is natural for a Chinese native speaker.
+
+\begin{table}[t]
+\caption{Dependency bi-grams for the {\em root} mark ($\langle \slash s \rangle$) and some general Chinese words}
+\label{general}
+\input{01table06.txt}
+\vspace{4pt}\small
+The top five highest estimates for each history (given $o^1$ and $h^1$ in $(h^0, o^1, h^1)$) are shown. The $h^0$ shown here excludes {\em UNK}, $\langle \slash L \rangle$, $\langle \slash R \rangle$ and punctuation marks for lexical $h^0$.
+\par
+\end{table}
+\begin{table}[t]
+\begin{minipage}[t]{210pt}
+\setlength{\captionwidth}{210pt}
+\hangcaption{Dependency bi-grams for a Chinese Internet neologism ``\UTFC{795E}\UTFC{9A6C}''}
+\label{shenma}
+\input{01table07.txt}
+\vspace{4pt}\small
+In $(h^0, o^1, h^1)$,  $h^1=\text{\UTFC{795E}\UTFC{9A6C}}$, $o^1 = \langle L \rangle\ \text{or}\  \langle R \rangle$. The top five highest estimates are shown.
+\par
+\end{minipage}
+\hfill
+\begin{minipage}[t]{190pt}
+\setlength{\captionwidth}{190pt}
+\hangcaption{Dependency tri-grams for a Chinese Internet neologism ``\UTFC{6709}\UTFC{6728}\UTFC{6709}'' and for the corresponding standard expression ``\UTFC{6709}\UTFC{6CA1}\UTFC{6709}''}
+\label{youmuyou}
+\input{01table08.txt}
+\vspace{4pt}\small
+The estimates of all four possible structure patterns of both expressions are shown.
+\par
+\end{minipage}
+\vspace{-0.5\Cvs}
+\end{table}
+
+
+In Table \ref{youmuyou}, we show an example of a dependency tri-gram. The expression ``\UTFC{6709}\UTFC{6728}\UTFC{6709}'' ({\em y\v{o}u-m\`{u}-y\v{o}u}) is also an Internet-based neologism, which means ``{\em to exist or not}'', because the original expression ``\UTFC{6709}\UTFC{6CA1}\UTFC{6709}'' ({\em y\v{o}u-m\'{e}i-y\v{o}u}) has a similar pronunciation in some dialects. We show all four possible structure patterns for both of them. We can see that all of these structures have relatively high estimates, which shows strong dependency relations. However, if we use a general Chinese parser\footnote{http://nlp.stanford.edu:8080/parser/index.jsp}\label{sfparser}, the character ``\UTFC{6728}'' is always treated as a noun due to its original meaning of ``{\em wood}'', and the tri-order relation of the expression ``\UTFC{6709}\UTFC{6728}\UTFC{6709}'' is not recognized. 
+
+In Figure~\ref{emsnt}, we show the best dependency structure given by the Viterbi algorithm for a sentence in the training set. Figure~\ref{sfsnt} is the dependency structure generated by the Stanford Dependency Parser$^{\ref{sfparser}}$. Although there are no neologisms in this sentence, the Chinese word \mbox{``\UTFC{771F}\UTFC{5FC3}''} is a general word and ordinarily used as a noun or an adjective, meaning ``{\em sincerity}'' or ``{\em sincere}'' respectively. However, it has recently been used as an adverb to express the meaning of ``{\em really}'' in a slightly emphatic manner. This feature is also captured by our approach from training data and contextualized within the entire sentence structure, resulting in a correct analysis. A standard parser cannot efficiently handle this type of flexible usage of general words.
+
+\begin{figure}[t]
+\centering
+\includegraphics{21-5ia1f25.eps}
+\hangcaption{Best dependency structure of the sentence ``\UTFC{6BCE} \UTFC{9053} \UTFC{83DC} \UTFC{90FD} \UTFC{771F}\UTFC{5FC3} \UTFC{597D}\UTFC{5403} \UTFC{5462}。'' generated by the proposed approach}
+\label{emsnt}
+\end{figure}
+\begin{figure}[t]
+\centering
+\includegraphics{21-5ia1f26.eps}
+\hangcaption{Dependency structure of the sentence ``\UTFC{6BCE} \UTFC{9053} \UTFC{83DC} \UTFC{90FD} \UTFC{771F}\UTFC{5FC3} \UTFC{597D}\UTFC{5403} \UTFC{5462}。'' generated by the Stanford Dependency Parser}
+\label{sfsnt}
+\end{figure}
+
+
+\section{Conclusion and Future Work}
+
+In this study, 
+we focused on introducing sentence structure into language modeling. We proposed a generative dependency N-gram language model, which extends the original N-gram language model to include sentence dependency structures, as well as 
+a definition of complete sets for arbitrary order, which facilitates an unsupervised parameter estimation algorithm. 
+The experimental results demonstrate the applicability and the properties of the proposed approach.
+We also applied a complete data-driven approach for lexical dependency feature extraction to a textual  microblog data set. The experimental results show that our approach can handle non-standard linguistic phenomena in user-generated content. 
+
+In future, we will develop methods for parameter pruning and discounting to handle the overfitting problem. As the proposed dependency language model is intrinsically complex, we also plan more fundamental simplifications. In addition, although our proposed algorithm is unsupervised, the output of a trained parser, which would provide clear and lexical heuristics, can be integrated in it. We plan to investigate this possibility and evaluate the performance achieved by using linguistically motivated criteria.
+
+
+\acknowledgment
+
+An earlier version of this study has been presented at {\it the 6th International Joint Conference on Natural Language Processing (IJCNLP 2013)} \cite{ding-yamamoto:2013:IJCNLP}. We would like to thank the anonymous reviewers for their valuable comments and suggestions. This study was supported by JSPS KAKENHI Grant Number 24650063.
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Brown, deSouza, Mercer, Pietra, \BBA\ Lai}{Brown
+  et~al.}{1992}]{brown1992}
+Brown, P.~F., deSouza, P.~V., Mercer, R.~L., Pietra, V. J.~D., \BBA\ Lai, J.~C.
+  \BBOP 1992\BBCP.
+\newblock \BBOQ Class-based N-gram Models of Natural Language.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 18}  (4), \mbox{\BPGS\
+  467--479}.
+
+\bibitem[\protect\BCAY{Chelba \BBA\ Jelinek}{Chelba \BBA\
+  Jelinek}{2000}]{chelba2000}
+Chelba, C.\BBACOMMA\ \BBA\ Jelinek, F. \BBOP 2000\BBCP.
+\newblock \BBOQ Structured Language Modeling.\BBCQ\
+\newblock {\Bem Computer Speech and Language}, {\Bbf 14}  (4), \mbox{\BPGS\
+  283--332}.
+
+\bibitem[\protect\BCAY{Chen \BBA\ Goodman}{Chen \BBA\ Goodman}{1998}]{chen1998}
+Chen, S.~F.\BBACOMMA\ \BBA\ Goodman, J. \BBOP 1998\BBCP.
+\newblock \BBOQ An Empirical Study of Smoothing Techniques for Language
+  Modeling.\BBCQ\
+\newblock \BTR, TR-10-98, Computer Science Group, Harvard Univ.
+
+\bibitem[\protect\BCAY{Collins}{Collins}{1998}]{collins1998}
+Collins, M. \BBOP 1998\BBCP.
+\newblock \BBOQ Three Generative, Lexicalised Models for Statistical
+  Parsing.\BBCQ\
+\newblock In {\Bem Proceedings of ACL 1998}, \mbox{\BPGS\ 16--23}.
+
+\bibitem[\protect\BCAY{Dempster, Laird, \BBA\ Rubin}{Dempster
+  et~al.}{1977}]{dempster1977}
+Dempster, A.~P., Laird, N.~M., \BBA\ Rubin, D.~B. \BBOP 1977\BBCP.
+\newblock \BBOQ Maximum Likelihood from Incomplete Data via the EM
+  Algorithm.\BBCQ\
+\newblock {\Bem Journal of the Royal Statistical Society. Series B
+  (Methodological)}, {\Bbf 39}  (1), \mbox{\BPGS\ 1--38}.
+
+\bibitem[\protect\BCAY{Ding \BBA\ Yamamoto}{Ding \BBA\
+  Yamamoto}{2013}]{ding-yamamoto:2013:IJCNLP}
+Ding, C.\BBACOMMA\ \BBA\ Yamamoto, M. \BBOP 2013\BBCP.
+\newblock \BBOQ An Unsupervised Parameter Estimation Algorithm for a Generative
+  Dependency N-gram Language Model.\BBCQ\
+\newblock In {\Bem Proceedings of IJCNLP2013}, \mbox{\BPGS\ 516--524}.
+
+\bibitem[\protect\BCAY{Eisner}{Eisner}{1996}]{eisner1996}
+Eisner, J.~M. \BBOP 1996\BBCP.
+\newblock \BBOQ Three New Probabilistic Models for Dependency Parsing: An
+  Exploration.\BBCQ\
+\newblock In {\Bem Proceedings of COLING1996}, \mbox{\BPGS\ 340--345}.
+
+\bibitem[\protect\BCAY{Fujii, Utiyama, Yamamoto, Utsuro, Ehara, Echizen-ya,
+  \BBA\ Shimohata}{Fujii et~al.}{2010}]{yamamoto2010}
+Fujii, A., Utiyama, M., Yamamoto, M., Utsuro, T., Ehara, T., Echizen-ya, H.,
+  \BBA\ Shimohata, S. \BBOP 2010\BBCP.
+\newblock \BBOQ Overview of the Patent Translation Task at the NTCIR-8
+  Workshop.\BBCQ\
+\newblock In {\Bem Proceedings of NTCIR-8}, \mbox{\BPGS\ 371--376}.
+
+\bibitem[\protect\BCAY{Gao \BBA\ Suzuki}{Gao \BBA\ Suzuki}{2003}]{gao2003}
+Gao, J.\BBACOMMA\ \BBA\ Suzuki, H. \BBOP 2003\BBCP.
+\newblock \BBOQ Unsupervised Learning of Dependency Structure for Language
+  Modeling.\BBCQ\
+\newblock In {\Bem Proceedings of ACL2003}, \mbox{\BPGS\ 521--580}.
+
+\bibitem[\protect\BCAY{Gimpel, Schneider, O'Connor, Das, Mills, Eisenstein,
+  Heilman, Yogatama, Flanigan, \BBA\ Smith}{Gimpel
+  et~al.}{2010}]{gimpel2010part}
+Gimpel, K., Schneider, N., O'Connor, B., Das, D., Mills, D., Eisenstein, J.,
+  Heilman, M., Yogatama, D., Flanigan, J., \BBA\ Smith, N.~A. \BBOP 2010\BBCP.
+\newblock \BBOQ Part-of-Speech Tagging for Twitter: Annotation, Features, and
+  Experiments.\BBCQ\
+\newblock \BTR, DTIC Document.
+
+\bibitem[\protect\BCAY{Graham \BBA\ van Genabith}{Graham \BBA\ van
+  Genabith}{2010}]{graham2010}
+Graham, Y.\BBACOMMA\ \BBA\ van Genabith, J. \BBOP 2010\BBCP.
+\newblock \BBOQ Deep Syntax Language Models and Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of SSST at COLING2010}, \mbox{\BPGS\ 118--126}.
+
+\bibitem[\protect\BCAY{Klein \BBA\ Manning}{Klein \BBA\
+  Manning}{2003}]{klein2003}
+Klein, D.\BBACOMMA\ \BBA\ Manning, C.~D. \BBOP 2003\BBCP.
+\newblock \BBOQ Accurate Unlexicalized Parsing.\BBCQ\
+\newblock In {\Bem Proceedings of ACL2003}, \mbox{\BPGS\ 423--430}.
+
+\bibitem[\protect\BCAY{Klein \BBA\ Manning}{Klein \BBA\
+  Manning}{2004}]{klein2004}
+Klein, D.\BBACOMMA\ \BBA\ Manning, C.~D. \BBOP 2004\BBCP.
+\newblock \BBOQ Corpus-based Induction of Syntactic Structure: Models of
+  Dependency and Constituency.\BBCQ\
+\newblock In {\Bem Proceedings of ACL2004}, \mbox{\BPGS\ 478--485}.
+
+\bibitem[\protect\BCAY{Koehn}{Koehn}{2005}]{koehn2005europarl}
+Koehn, P. \BBOP 2005\BBCP.
+\newblock \BBOQ Europarl: A Parallel Corpus for Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of MT summit 2005}, \mbox{\BPGS\ 79--86}.
+
+\bibitem[\protect\BCAY{Koo \BBA\ Collins}{Koo \BBA\
+  Collins}{2010}]{koo2010efficient}
+Koo, T.\BBACOMMA\ \BBA\ Collins, M. \BBOP 2010\BBCP.
+\newblock \BBOQ Efficient Third-order Dependency Parsers.\BBCQ\
+\newblock In {\Bem Proceedings of ACL2010}, \mbox{\BPGS\ 1--11}.
+
+\bibitem[\protect\BCAY{Kudo \BBA\ Matsumoto}{Kudo \BBA\
+  Matsumoto}{2002}]{kudo2002japanese}
+Kudo, T.\BBACOMMA\ \BBA\ Matsumoto, Y. \BBOP 2002\BBCP.
+\newblock \BBOQ Japanese Dependency Analysis using Cascaded Chunking.\BBCQ\
+\newblock In {\Bem Proceedings of COLING2002}, \mbox{\BPGS\ 1--7}.
+
+\bibitem[\protect\BCAY{Lari \BBA\ Young}{Lari \BBA\
+  Young}{1990}]{lari1990estimation}
+Lari, K.\BBACOMMA\ \BBA\ Young, S.~J. \BBOP 1990\BBCP.
+\newblock \BBOQ The Estimation of Stochastic Context-free Grammars using the
+  Inside-Outside Algorithm.\BBCQ\
+\newblock {\Bem Computer Speech and Language}, {\Bbf 4}  (1), \mbox{\BPGS\
+  35--56}.
+
+\bibitem[\protect\BCAY{Lee \BBA\ Choi}{Lee \BBA\ Choi}{1997}]{lee1997}
+Lee, S.\BBACOMMA\ \BBA\ Choi, K.-S. \BBOP 1997\BBCP.
+\newblock \BBOQ Reestimation and Best-first Parsing Algorithm for Probabilistic
+  Dependency Grammars.\BBCQ\
+\newblock In {\Bem Proceedings of WVLC1997}, \mbox{\BPGS\ 41--55}.
+
+\bibitem[\protect\BCAY{Lee \BBA\ Choi}{Lee \BBA\ Choi}{1998}]{lee1998automatic}
+Lee, S.\BBACOMMA\ \BBA\ Choi, K.-S. \BBOP 1998\BBCP.
+\newblock \BBOQ Automatic Acquistion of Language Model Based on Head-dependent
+  Relation between Words.\BBCQ\
+\newblock In {\Bem Proceedings of COLING-ACL1998}, \mbox{\BPGS\ 723--727}.
+
+\bibitem[\protect\BCAY{Nivre}{Nivre}{2008}]{nivre2008}
+Nivre, J. \BBOP 2008\BBCP.
+\newblock \BBOQ Algorithms for Deterministic Incremental Dependency
+  Parsing.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 34}  (4), \mbox{\BPGS\
+  513--553}.
+
+\bibitem[\protect\BCAY{Paskin}{Paskin}{2002}]{paskin2002}
+Paskin, M.~A. \BBOP 2002\BBCP.
+\newblock \BBOQ Grammatical Bigrams.\BBCQ\
+\newblock {\Bem Advances In Neural Information Processing Systems 14}, {\Bbf
+  1}, \mbox{\BPGS\ 91--97}.
+
+\bibitem[\protect\BCAY{Stolcke}{Stolcke}{2002}]{stolcke2002srilm}
+Stolcke, A. \BBOP 2002\BBCP.
+\newblock \BBOQ SRILM---An Extensible Language Modeling Toolkit.\BBCQ\
+\newblock In {\Bem Proceedings of ICSLP2002}, \mbox{\BPGS\ 901--904}.
+
+\bibitem[\protect\BCAY{Stolcke, Chelba, Engle, Jimenez, Mangu, Printz, Ristad,
+  Rosenfeld, Wu, Jelinek, \BBA\ Khudanpur}{Stolcke et~al.}{1997}]{stolcke1997}
+Stolcke, A., Chelba, C., Engle, D., Jimenez, V., Mangu, L., Printz, H., Ristad,
+  E., Rosenfeld, R., Wu, D., Jelinek, F., \BBA\ Khudanpur, S. \BBOP 1997\BBCP.
+\newblock \BBOQ Dependency Language Modeling.\BBCQ.
+
+\bibitem[\protect\BCAY{Tillmann \BBA\ Ney}{Tillmann \BBA\
+  Ney}{1997}]{tillmann1997}
+Tillmann, C.\BBACOMMA\ \BBA\ Ney, H. \BBOP 1997\BBCP.
+\newblock \BBOQ Word Triggers and the EM Algorithm.\BBCQ\
+\newblock In {\Bem Proceedings of CoNNL 1997}, \mbox{\BPGS\ 117--124}.
+
+\bibitem[\protect\BCAY{Tseng, Chang, Andrew, Jurafsky, \BBA\ Manning}{Tseng
+  et~al.}{2005}]{tseng2005conditional}
+Tseng, H., Chang, P., Andrew, G., Jurafsky, D., \BBA\ Manning, C. \BBOP
+  2005\BBCP.
+\newblock \BBOQ A Conditional Random Field Word Segmenter.\BBCQ\
+\newblock In {\Bem SIGHAN2005, Workshop on Chinese Language Processing},
+  \lowercase{\BVOL}\ 171.
+
+\bibitem[\protect\BCAY{Viterbi}{Viterbi}{1967}]{viterbi1967error}
+Viterbi, A. \BBOP 1967\BBCP.
+\newblock \BBOQ Error Bounds for Convolutional Codes and an Asymptotically
+  Optimum Decoding Algorithm.\BBCQ\
+\newblock {\Bem Information Theory, IEEE Transactions on Information Theory},
+  {\Bbf 13}  (2), \mbox{\BPGS\ 260--269}.
+
+\bibitem[\protect\BCAY{Wetherell}{Wetherell}{1980}]{wetherell1980probabilistic}
+Wetherell, C.~S. \BBOP 1980\BBCP.
+\newblock \BBOQ Probabilistic Languages: A Review and Some Open
+  Questions.\BBCQ\
+\newblock {\Bem ACM Computing Surveys (CSUR)}, {\Bbf 12}  (4), \mbox{\BPGS\
+  361--379}.
+
+\bibitem[\protect\BCAY{Zhang \BBA\ McDonald}{Zhang \BBA\
+  McDonald}{2012}]{zhang2012generalized}
+Zhang, H.\BBACOMMA\ \BBA\ McDonald, R. \BBOP 2012\BBCP.
+\newblock \BBOQ Generalized Higher-order Dependency Parsing with Cube
+  Pruning.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP2012}, \mbox{\BPGS\ 320--331}.
+
+\end{thebibliography}
+
+
+\appendix
+
+\section{Calculation of the Estimation Algorithm}
+
+In Section \ref{sec:estimation}, we provide a re-estimation method as an inside-outside algorithm. When the order is restricted to two, as in \cite{lee1997}, the calculation of all the inside ($\beta (\cdot)$) and outside ($\alpha (\cdot)$) probabilities can be conducted on a CKY-wise triangle table. Specifically, the inside probabilities are first calculated from small to large spans in a bottom-up way; then the outside probabilities are calculated in a top-down way by using the calculated inside probabilities. Because the proposed approach extends the dependency N-gram to an arbitrary order, a two-dimensional triangle table is not sufficient. In general, the re-estimation of a model with N-order lexical parameters needs an N-dimension table, which ceases to be intuitive.
+
+A naive method of calculating the inside-outside probability of a sentence can be performed by the pseudocode of $\proc{Naive-Inside-Outside}$. More efficiently, we can first generate a {\it process list} to record the processing order for all the necessary inside and outside probabilities of a sentence, and then calculate them according to the process list. In practice, the process given in $\proc{Naive-Inside-Outside}$, which identifies the processing order, needs to execute only once, which can be performed during pre-processing. The generation of the process list is shown by the pseudocode of $\proc{Process-List}$. This code is basically identical to the process $\proc{Naive-Inside-Outside}$; instead of calculating, the ``name'' tokens (generated by $\proc{Get-Tuple}$) of all the inside and outside probabilities are recorded. For creating the process list, the calculation step of $\proc{Inside-Outside}$ is trivial, because the calculation is found from the recorded ``name'' by using $\proc{Get-Probability}$.
+
+\vspace {5mm}
+{\small
+\begin{codebox}
+\Procname{$\proc{Naive-Inside-Outside(Sentence)}$}
+\li calculate $\beta (Set)$ according to Exp. (\ref{startseq})
+\li \Repeat
+\li 	\For all inside probabilities $\beta (Set)$ of $\proc{Sentence}$
+\li 		\Do \Comment according to Exp. (\ref{blink}), Exp. (\ref{bseq})
+\li				\If all $\beta (Sub_1)$, $\beta (Sub_2)$ on the right side are available
+\li				\Then calculate $\beta (Set)$
+				\End
+			\End
+\li	\Until all inside probabilities $\beta (Set)$ are calculated
+\li \Repeat
+\li 	\For all outside probabilities $\alpha (Set)$ of $\proc{Sentence}$
+\li 		\Do \Comment according to Exp. (\ref{alink}) or Exp. (\ref{aseq})
+\li				\If all $\alpha (Sup)$ on the right side are available
+\li				\Then calculate $\alpha (Set)$
+				\End
+			\End
+\li	\Until all outside probabilities $\alpha (Set)$ are calculated
+\end{codebox}
+\vspace{1mm}
+\begin{codebox}
+\Procname{$\proc{Inside-Outside(Sentence, ProcessList)}$}
+\li \For $i \gets 1$ \To length $(\proc{ProcessList})$
+\li		\Do $\proc{Get-Probability} (\proc{ProcessList} [i])$
+	\End
+\end{codebox}
+\vspace{1mm}
+\begin{codebox}
+\Procname{$\proc{Get-Probability(X, Y, Z)}$}
+\li	\Return X (Y (Z)) according to Exp. (\ref{blink}), Exp. (\ref{bseq}), Exp. (\ref{alink}), Exp. (\ref{aseq}) or Exp. (\ref{startseq})
+\end{codebox}
+\vspace{1mm}
+\begin{codebox}
+\Procname{$\proc{Process-List()}$}
+\li Process-List $\gets []$
+\li \For all $Seq ({\bf d})$ of Exp. (\ref{startseq})
+\li 	\Do append $\proc{Get-Tuple} (\beta (Seq ({\bf d})))$ to Process-List
+		\End
+\li \Repeat
+\li \For all complete sets $Set$
+\li 	\Do \Comment according to Exp. (\ref{blink}) or Exp. (\ref{bseq})
+\li				\If all $\proc{Get-Tuple} (\beta (Sub_1))$, $\proc{Get-Tuple} (\beta (Sub_2))\in$ Process-List
+\li			\Then append $\proc{Get-Tuple} (\beta (Set))$ to Process-List
+			\End
+		\End
+\li	\Until $\proc{Get-Tuple} (\beta (Set))\in$ Process-List for all $Set$
+\li \Repeat
+\li \For all complete sets $Set$
+\li 	\Do \Comment according to Exp. (\ref{alink}) or Exp. (\ref{aseq})
+\li				\If all $\proc{Get-Tuple} (\alpha (Sup))\in$ Process-List
+\li			\Then append $\proc{Get-Tuple} (\alpha (Set))$ to Process-List
+			\End
+		\End
+\li	\Until $\proc{Get-Tuple} (\alpha (Set))\in$ Process-List for all $Set$
+\li \Return Process-List
+\end{codebox}
+\vspace{1mm}
+\begin{codebox}
+\Procname{$\proc{Get-Tuple(X (Y (Z)))}$}
+\li	\Return (X, Y, Z)
+\end{codebox}
+}
+
+
+
+\begin{biography}
+
+\bioauthor[:]{Chenchen Ding}{
+He received a B.S. degree in Mathematics from Shandong University, China, in 2009.  He received an M.E. degree in Computer Science from the University of Tsukuba, Japan, in 2012. Currently, he is a doctoral student of the University of Tsukuba, working on natural language processing.
+}
+
+\bioauthor[:]{Mikio Yamamoto}{
+He received the B.E, M.E and D.E degrees
+in information and computer sciences from Toyohashi
+University of Technology, Japan, in 1984, 1986 and
+1992, respectively.  In 1988, he joined the Toyohashi
+University of Technology as a technical official.
+In 1995, he moved to the University of Tsukuba as an
+assistant professor.  Currently, he is a professor
+in the Department of Computer Science, University
+of Tsukuba, working on statistical methods for
+processing text.
+}
+\end{biography}
+
+
+\biodate
+
+
+
+\end{document}

@@ -1,0 +1,1057 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+
+\Volume{19}
+\Number{3}
+\Month{September}
+\Year{2012}
+
+\received{2011}{12}{7}
+\revised{2012}{2}{27}
+\rerevised{2012}{5}{30}
+\accepted{2012}{6}{12}
+
+\setcounter{page}{143}
+
+\newcommand{\figref}[1]{} 
+\newcommand{\tabref}[1]{} 
+\newcommand{\equisionref}[1]{}
+
+
+
+\jtitle{語義曖昧性解消のための領域適応手法の\\
+	決定木学習による自動選択}
+\jauthor{古宮嘉那子\affiref{Author_1} \and 奥村　　学\affiref{Author_2}}
+\jabstract{
+ソースドメインのデータによって分類器を学習し，ターゲットドメインに適応することを領域適応といい，
+近年さまざまな手法が研究されている．しかし，語義曖昧性解消 (WSD: Word
+Sense Disambiguation) について領域適応を行った場合，
+最も効果的な領域適応手法は，ソースデータとターゲットデータの性質により異なる．
+本稿ではそれらの性質から，
+WSDの対象単語タイプ，ソースドメインとターゲットドメインの組み合わせに対して，
+最も効果的な領域適応手法を決定木学習を用いて自動的に選択する手法について述べるとともに，
+どのような性質が効果的な領域適応手法の決定に影響を与えたかについて考察する．
+}
+\jkeywords{語義曖昧性解消，領域適応，手法選択，決定木学習}
+
+\etitle{Automatic Selection of Domain Adaptation Method for WSD using Decision Tree Learning}
+\eauthor{Kanako Komiya\affiref{Author_1} \and Manabu Okumura\affiref{Author_2}} 
+\eabstract{
+ Domain adaptation (DA), which involves adapting a classifier developed from source 
+to target data, has been studied intensively in recent years. 
+However, when DA for word sense
+disambiguation (WSD) was carried out, the optimal DA
+method varied according to the properties of the source and 
+target data. This paper describes how the optimal
+method for DA was determined depending on these properties
+using decision tree learning given a triple of the target word type of WSD, the source domain, and the target domain 
+and discusses what properties affected the determination of the best method when Japanese WSD was performed. 
+}
+\ekeywords{word sense disambiguation, domain adaptation, method selection, decision tree learning}
+
+\headauthor{古宮，奥村}
+\headtitle{語義曖昧性解消のための領域適応手法の決定木学習による自動選択}
+
+
+\affilabel{Author_1}{東京農工大学工学研究院}{Institute of Engineering, Tokyo University of Agriculture and Technology.\hfill\break kkomiya@cc.tuat.ac.jp}
+\affilabel{Author_2}{東京工業大学精密工学研究所}{Precision and Intelligence Laboratory, Tokyo Institute of Technology.\hfill\break oku@pi.titech.ac.jp}
+
+
+
+\begin{document}
+\maketitle
+
+
+
+\section{はじめに}
+
+自然言語処理で使われる帰納学習では，新聞データを用いて新聞用の分類器を学習するなど，
+ドメインAのデータを用いてドメインA用の分類器
+を学習することが一般的である．しかし一方，ドメインBについての分類器を学習したいのに，ドメインAのデータにしか
+ラベルがついていないことがあり得る．このとき，ドメインA（ソースドメイン）のデータによって分類器を学習し，
+ドメインB （ターゲットドメイン）のデータに適応することを考える．これが領域適応であり，
+様々な手法が研究されている．
+
+
+しかし，語義曖昧性解消 (Word Sense Disambiguation，WSD) について領域適応を行った場合，
+最も効果的な領域適応手法は，
+ソースドメインのデータ（ソースデータ）とターゲットドメインのデータ（ターゲットデータ）の性質により
+異なる．
+SVM等の分類器を利用してWSDを行う際にモデルを作る単位である，
+WSDの対象単語タイプ，ソースドメイン，ターゲットドメインの三つ組を
+1ケースとして数えるとする．
+本稿では，
+このケースごとに，データの性質から，最も効果的な領域適応手法を，決定木学習を用いて自動的に
+選択する手法について述べるとともに，
+どのような性質が効果的な領域適応手法の決定に影響を与えたかについて考察する．
+
+
+本稿の構成は以下のようになっている．まず\ref{Sec:関連研究}節で領域適応
+の関連研究
+について紹介する．\ref{Sec:領域適応手法の自動選択}節では領域適応手法をどのように自動選択するかについて述べる．
+\ref{Sec:データ}節では本研究で用いたデータについて説明する．
+\ref{sec:決定木学習におけるラベル付きデータの作成方法と学習方法}節では決定木学習におけるラベル付きデータの作成方法と学習方法について述べ，
+\ref{Sec:結果}節に結果を，\ref{Sec:考察}節に考察を，\ref{Sec:まとめ}節にまとめを述べる．
+
+
+
+\section{関連研究} \label{Sec:関連研究}
+
+領域適応は，学習に使用する情報により，supervised，semi-supervised，unsupervisedの
+三種に分けられる．まずsupervisedの領域適応は，訓練事例として
+少量のターゲットドメインだけでなく大量のソースドメインのデータを加えて
+学習を行うもので，
+訓練事例としてソースデータまたは少量のターゲットデータだけを利用する場合よりも，分類器を改良することを目指す．
+次のsemi-supervisedの領域適応は，ラベルつきのソースデータに加え，
+ラベルなしのターゲットデータを利用し，
+訓練事例としてソースデータだけを利用する場合よりも，分類器を改良することを目指す．
+また，最後のunsupervisedの領域適応は，ラベルつきのソースデータで学習後，ターゲットデータで実行する．
+本研究で扱うのは，supervisedの領域適応である．
+
+領域適応の研究は様々な分野で研究が行われており，
+ここではその一部を紹介する．まず，\cite{article2}は，EMアルゴリズムによる
+語義の事前確率推定によりWSDの領域適応を行っている．
+\cite{article3}も，EMアルゴリズムによる事前確率推定を行っているが，
+これは能動学習により事例をターゲットドメインから加えるsupervisedの領域適応である．
+Count-mergingにより重要文に重みをつけることで，性能を向上させている．
+
+また，
+\cite{article4}はシーケンスラベリングを例にsupervisedの領域適応を行っている．
+素性空間の次元を「ソースデータの素性空間」「ターゲットデータの素性空間」
+「ソースデータとターゲットデータ共通の素性空間」に相当する三倍にし，モデルを三倍に拡張して実験を行うというもので，
+様々なsupervisedの領域適応に併用できる手法である．利点として，上記の併用可能性に加え，
+実装が簡単で処理が速いこと，マルチドメインに拡張が簡単（素性空間の次元をドメイン数+1倍にすればよい）
+であることが挙げられる．
+
+さらに，\cite{article12}は\cite{article4}をsemi-supervisedのために拡張した．
+この手法がなぜ有効なのかはまだ解き明かされていないが，拡張前の利点を引き継いでいるだけでなく，
+ラベルなしのターゲットデータを利用することでよりよい性能が得られる．
+
+\cite{article5}は，semi-supervisedのWSDの領域適応を行った．大量のラベルなしのソースデータに，
+ラベルなしのターゲットデータを加えて行列を作り，特異値分解 (SVD) により素性圧縮をして分類器を学習する手法である．
+また\cite{article6}は，大量のラベルなしのソースデータの代わりに，少量のラベルつきのソースデータを使用して，
+同様の手法でsupervisedの領域適応を行っている．
+
+\cite{article7}は領域適応を行う際，事例の重み付けにより性能が向上することを示した．
+この手法は様々なsupervisedまたはsemi-supervisedの領域適応との併用が可能である．
+また，領域適応に悪影響を及ぼすソースデータを特定して削除することも試みているが，
+ソースデータの削除は事例の重み付けを
+行わなければ有効であるが，事例の重み付けを行った場合には有効ではないと結論づけている．
+
+\cite{article14}はターゲットデータとソースデータの周辺確率を似せるようにカーネル空間を学習した後，条件確率が
+ターゲットデータに似ているソースデータの事例をクラスタリングベースの事例選択を用いて選び，その事例を利用して
+領域適応を行っている．
+
+
+\cite{article15}はWeb上からランダムに取得したラベルなしデータを利用して，より高いレベルの素性を作成するために
+スパースコーディングを利用したself-taught learningを提案している．これはunsupervisedの領域適応の一種である．
+
+\cite{article16}はco-trainingにおいて領域適応を行ったco-adaptationの研究である．boostingによる線形補完により
+領域適応を行い，両方の分類器においてエラー率が低下したことを報告している．
+
+また\cite{article17}はsemi-supervisedの領域適応である．この研究では，ソースデータ中とターゲットデータ中の単語の類似度を
+計算するために，pivot feature（ソースデータとターゲットデータの
+両方でよく出てくる単語）の周りの単語の重みを計算する．この重みの行列にSVDを適用して新しい素性空間を作り，
+オリジナルの素性に新しい素性を加えて使用するという手法をとっている．
+
+本稿に最も近い研究は，\cite{article20}である．この研究では，多様なドメインからなる文書を構文解析する際，最も良いモデルは
+異なるという問題に注目している．彼らは様々な混合モデルによる構文解析の正解率を回帰分析で予測し，それぞれのターゲットデータに対して，
+最も高い正解率を出すと予測されたモデルを利用して構文解析を行っている．本研究との最も大きな違いは，対象のタスクが構文解析ではなく
+語彙曖昧性解消である点である．そのため，本論文ではケースという単位ごとに最適な領域適応を行う．
+また，彼らは複数のソースドメインから抽出した用例を混合して訓練事例とした領域適応を想定して
+いるが，我々は想定していない．
+本研究では決定木学習を用いることで，どのような性質が最適な領域適応の決定に影響を与えるのかについて考察する．
+
+本稿では，ソースデータとターゲットデータの性質をもとに領域適応に用いる手法を自動選択する手法について述べる．
+これに関連した研究として \cite{article10}や \cite{article11}
+がある．\cite{article10}は，構文解析において，分野間距離をはかり，より適切なコーパスを利用して
+領域適応を行えるようにした．また，\cite{article11}は，構文解析において，
+自動的にタグ付けされたコーパスを用いて，ソースデータとターゲットデータの類似度から性能を予測できることを示した．
+これらの研究では，領域間の距離からソースデータとして利用できるコーパスを選択するという立場をとっているが，
+本研究では領域間の距離などの性質から，手法を選択するという立場をとる．
+
+
+
+\section{領域適応手法の自動選択}
+\label{Sec:領域適応手法の自動選択}
+
+
+\subsection{ケースごとの領域適応手法の自動選択}
+\label{Sec:ケースごとの領域適応手法の自動選択}
+
+本論文では，ケースという単位を定義し，ケースごとに適切な領域適応を行う．本論文にお
+けるケースとは，SVM等の分類器を利用してWSDを行う際にモデルを作る単位である．WS
+Dの分類器は，対象単語タイプ，ソースドメイン，ターゲットドメインの三つ組に対してひと
+つ作られるので，この三つ組をケースと呼ぶ．例えば，ケースを（対象単語タイプ，ソースド
+メイン，ターゲットドメイン）の順に書くと，（出る，新聞，Yahoo!知恵袋），（出る，Yahoo!
+知恵袋，新聞），（手，Yahoo!知恵袋，新聞）は全て別のケースである．
+
+
+最適な領域適応手法は，ソースデータとターゲットデータの性質により異なるが，WSDにお
+けるソースデータとターゲットデータの訓練事例集合は，ソースやターゲットになるコーパス
+のドメインだけでなく，WSDの対象単語も含めたケースごとに定まる．したがって，
+ケースごとに適切な領域適応手法を自動的に選択し，その手法を適宜用いて領域適応を行えば，
+どれかひとつの手法を用いるよりも，WSDの性能が向上することが予想される．このため，決定木学習を用いて，
+ケースごとに領域適応手法の自動選択を行う．
+決定木学習の素性にはソースデータとターゲ
+ットデータの性質を利用し，ラベル（教師値）には，WSDの正解率を比較した際に，そのケ
+ースにおいて最も正解率が高かった領域適応手法を用いる．
+決定木学習を用いるのは，どのような性質が最適な領域適応手法の決定に影響を与えるのかを明示的に
+示すことができる上，少量の訓練事例から学習しても十分な分類精度が得られるからである．
+また，n個の領域適応手法から選択する際には，pairwise方式で$_{n}C_{2}$通りの二分決定木をつくり，最終的にそれらを
+統合することで，ひとつのケースにつきひとつの領域適応手法を決定する\footnote{
+	pairwise方式を利用するのは，多値分類では十分な分類性能が得られなかったためである．この原因は，入手できた事例数が144ケースという少数であったためだと思われる．}．
+
+なお，本論文で扱う領域適応手法は，どれもsupervisedの領域適応であるため，最終的にど
+の領域適応手法が選択されるかは不明な段階でも，先にターゲットデータに対する少量の語義
+のタグ付けが必要である．
+
+本論文では，一般公開されているYahoo!知恵袋，白書，新聞の三つのタグ付きコーパスか
+ら，144ケースのラベル付きデータを作成して決定木学習を行った．これらのラベル付きデータ
+の素性ベクトルには，ソースデータとターゲットデータのJS距離などを用いており，それぞれ
+のケースの対象単語タイプ，ソースドメイン，ターゲットドメインが何なのかという情報は与え
+ていない．WSD の領域適応の問題が生じた場合には，問題のケースごとに，本論文で叙述する
+ように素性ベクトルを作成して決定木への入力とし，決定木によって最適な領域適応手法を選択
+する．本論文では決定木学習の有効性を144ケースの交差検定によって示す．
+
+
+\subsection{WSDのための領域適応手法}
+\label{sec:item17}
+
+WSDのための領域適応手法として，本研究では以下に示す三つ
+を用いる．したがって，pairwise方式で三つ（TOとRS，TOとFD，RSとFD）の二分決定木
+をつくり，最終的にそれらを
+統合することで，ひとつのケースにつきひとつの領域適応手法を決定する．
+
+以降，決定木の用例の単位であるケースと区別するために，WSDの用例の単位をトークンと
+呼ぶ．WSDの対象単語をwとすると，トークンはwの用例と等しい．それぞれソースドメイン
+とターゲットドメインのコーパス中のwの用例が，ソースデータとターゲットデータの訓練事
+例であるため，ケースごとにソースデータとターゲットデータの数や性質は異なる．
+
+\begin{itemize}
+\item\ TO: Target Only．ソースデータを用いず，ランダムに選んだ少量のターゲットデータのトークンに語義をタグ付けしたものだけを訓練事例にする．
+\item\ RS: Random Sampling．ランダムに選んだ少量のターゲットデータのトークンに語義をタグ付けしたものとソースデータの両方を訓練事例にする．
+\item\ FD: フィルタリングによる削除．ランダムに選んだ少量のターゲットデータのトークンに語義をタグ付けしたものとソースデータの両方を訓練事例にする．
+このときソースデータは，フィルタリングによりターゲットデータにある一定の閾値以上似ているデータのみを用いる．
+\end{itemize}
+
+FDでは以下の手順を取る．なお，ターゲットデータやソースデータのトークンは，後述する
+WSDの素性を要素としたベクトルとして表されている．
+
+\begin{itemize}
+\item[(1)] ターゲットデータのトークン$\forall t_{i}\in T$について，全ソースデータのトークン$\forall s_{j}\in S$とのコサイン類似度$sim_{i,j}$を計算する．
+\item[(2)] ソースデータのトークン$\forall s_{j}\in S$について，それぞれ最も自身と近いターゲットデータのトークン$ t_{j,nearest}$を特定する．
+\item[(3)] ソースデータのトークン$\forall s_{j}\in S$について$t_{j,nearest}$との類似度$sim_{j,nearest}$をもとに，訓練事例とするかどうかを判定する．
+
+ここで，$sim_{j,nearest}$が0.8以上のソースデータ$s_{j}$を訓練事例に含めた．なお$sim_{i,j}$を計算
+する際，重みづけや正規化は行っていない．
+\end{itemize}
+
+なお，追加するターゲットデータ数は常に10トークンとした．
+
+分類器としてはマルチクラス対応のSVM (libsvm) を使用した．
+カーネルは予備実験の結果，線形カーネルが最も高い正解率を示したため，これを採用した．また，学習の素性には，
+\cite{article21}で使われている以下の17素性を用いた．
+
+\begin{itemize}
+\item WSDの対象単語の前後二語までの形態素の表記（4素性）
+\item WSDの対象単語の前後二語までの品詞（4素性）
+\item WSDの対象単語の前後二語までの品詞の細分類（4素性）
+\item WSDの対象単語の前後二語までの分類コード（4素性）
+\item 係り受け（1素性）
+	\begin{itemize}
+	\item 対象単語が名詞の場合はその名詞が係る動詞
+	\item 対象単語が動詞の場合はその動詞のヲ格の格要素
+	\end{itemize}
+\end{itemize}
+
+分類語彙表の分類コードには\cite{book1}を使用した．
+
+
+
+\subsection{決定木学習のラベル}
+\label{Sec:決定木学習のラベル}
+
+作成する三つの二分決定木のうち，ここではTOとRSの決定木のラベル（教師値）について述べる．
+作成する決定木によって，TOとRSを，それぞれTOとFD，
+またはRSとFDに読み替えていただきたい．
+
+ケースごとに，最もWSDの正解率がよかった手法によって，TOとRSとSameの三種類のうちのひとつのラベルをつける．
+これらのつけ方は\ref{sec:Sameラベルの付け方}節で述べる．
+決定木は，ケースごとにソースデータとターゲットデータの性質から，TOかRSのどちらの手法を使って領域適応するべきかを
+判定していることに留意いただきたい\footnote{
+	TOとFDの決定木なら，ラベルはTOとFD，Sameから選ぶことになり，
+TOかFDのどちらの手法を使って領域適応するべきかを判定することになる．また，
+RSとFDの決定木なら，ラベルはRSとFD，Sameから選ぶことになり，
+RSかFDのどちらの手法を使って領域適応するべきかを判定する．}．
+
+\begin{itemize}
+\item\ TO: RSよりTOを使用した方がWSDの正解率が良いケース
+\item\ RS: TOよりRSを使用した方がWSDの正解率が良いケース
+\item\ Same: TOとRSのどちらを使ってもWSDの正解率に差がないケース
+\end{itemize}
+
+なお，TOとRSのどちらを使ってもWSDの正解率に差がないケースには，Sameラベルを
+使用せず，どちらかの手法に強制的に割りつけることも可能であるが，このような正解率に差
+がないケースが比較的多かったため (c.f. \tabref{決定木とラベル付け手法別に見たラベルの分布})，本論文ではSameラベルを使って決定木の分
+類性能をあげている．
+
+
+
+\subsection{決定木学習の素性}
+
+最適な領域適応手法はソースデータとターゲットデータの分布や距離などの性質によって異なると考えられるため，
+決定木には以下の24種類の合計40の素性を利用する\footnote{
+	41番目の素性として品詞を追加した実験も行ったが，正解率が低下したため，最終的には含めなかった．}．
+なお，手法1と手法2は作成する二分決定木によって，
+RSとTO，またはRSとFD，またはTOとFDが相当する．
+また，データ1とデータ2は手法1と手法2に準じ，それぞれRSの場合にはソースデータ，TOの場合にはターゲットデータ，
+FDの場合にはターゲットデータに閾値以上似たソースデータが相当する．
+
+\begin{enumerate}
+\item 手法1のシミュレーションの正解率 \label{1}
+\item 手法2のシミュレーションの正解率 \label{2}
+\item ふたつの正解率の比 ((\ref{1})/(\ref{2}))
+\item データ1のトークン数 \label{4}
+\item データ2のトークン数  \label{5}
+\item ふたつのデータのトークン数の比 ((\ref{4})/(\ref{5}))
+\item データ1の語義数 \label{7}
+\item データ2の語義数 \label{8}
+\item 辞書中の語義数 
+\item データ1のMFS（Most Frequent Sense:データ中最も頻出する語義）のトークン数 \label{10}
+\item データ2のMFSのトークン数 \label{11}
+\item MFSの語義がデータ1とデータ2で同じか \label{12}
+\item データ1のMFSのパーセンテージ ((\ref{10})/(\ref{4})) \label{13}
+\item データ2のMFSのパーセンテージ ((\ref{11}9/(\ref{5})) \label{14}
+\item データ2のMFSのデータ1中でのパーセンテージ ((\ref{11})/(\ref{4})) \label{15}
+\item データ1のMFSのデータ2中のパーセンテージ ((\ref{10})/(\ref{5})) \label{16}
+\item データ1とデータ2の語義タグのジェンセン・シャノン・ダイバージェンス（JS距離） \label{17}
+\item データ1とデータ2の間のWSDの素性ごとの分布のJS距離 \label{18}
+\item データ1とデータ2の間の素性ごとのJS距離を足しあわせたもの（(\ref{18})を17種類足しあわせた値） \label{19}
+\item データ1とデータ2の素性をひとつの単位としたときのJS距離 \label{20}
+\item 新語義の数 \label{21}
+\item データ1とデータ2で共通する語義数 \label{22}
+\item データ1とデータ2で共通する語義の，データ1中のパーセンテージ ((\ref{22})/(\ref{4})) \label{23}
+\item データ1とデータ2で共通する語義の，データ2中のパーセンテージ ((\ref{22})/(\ref{5})) \label{24}
+\end{enumerate}
+
+なお，(\ref{1}) と (\ref{2}) のシミュレーションの正解率としては，手法ごとに以下を用いる．
+\begin{itemize}
+\item RS：ソースデータのシミュレーションの正解率．ソースデータで分類器を学習し，語義をタグ付けしたターゲットデータ10トークンで評価した正解率
+\item TO：TOのシミュレーションの正解率．ターゲットデータ10トークンに語義をタグ付けし，
+Leave One Out法で評価を行った際の正解率
+\item FD：FDのシミュレーションの正解率．ターゲットデータに閾値以上似たソースデータで分類器を学習し，語義をタグ付けしたターゲットデータ10トークン
+で評価した正解率
+\end{itemize}
+
+また，(\ref{4}) と (\ref{5}) のトークン数には，手法ごとに以下を用いる．ただし，(\ref{13})〜(\ref{16})，(\ref{23})，(\ref{24}) 
+において，TOのデータ数は10トークンとする．
+\begin{itemize}
+\item RS：全ソースデータのトークン数
+\item TO：全ターゲットデータのトークン数
+\item FD：全ソースデータの4/5（5分割交差検定のうち一試行）のうち，ターゲットデータに閾値以上似ているトークンの数
+\end{itemize}
+
+また，(\ref{7}) と (\ref{8}) の語義数には，手法ごとに以下を用いる．
+\begin{itemize}
+\item RS：全ソースデータ中に出現する語義の異なり数
+\item TO：語義をタグ付けした10トークンのターゲットデータ中に出現する語義の異なり数
+\item FD：ソースデータの全トークンの4/5のうち，ターゲットデータに閾値以上似たデータに出現する語義の異なり数
+\end{itemize}
+
+また，(\ref{10}) と (\ref{11})，(\ref{12}) のMFSには，手法ごとに以下を用いる．
+\begin{itemize}
+\item RS：全ソースデータ中の，全ソースデータのMFSを語義に持つトークンの数
+\item TO：語義をタグ付けしたターゲットデータ10トークンの中の，語義をタグ付けしたターゲットデータ10トークンのMFSを語義に持つ
+トークンの数
+\item FD：「全ソースデータの4/5のうち，ターゲットデータに閾値以上似たデータ」中の，
+「全ソースデータの4/5のうち，ターゲットデータに閾値以上似たデータ」のMFSを語義に持つトークンの数
+\end{itemize}
+
+さらに，(\ref{17})〜(\ref{20}) のJS距離は，カルバック・ライブラー・ダイバージェンスを対称に
+したものであり，H(P) が分布Pのエントロピーであるとき，以下の式で与えられる．
+\begin{equation}
+D_{JSD}(P||Q)=H(\frac{1}{2}P+\frac{1}{2}Q)-\frac{1}{2}H(P)-\frac{1}{2}H(Q)\label{eq1}
+\end{equation}
+
+また，(\ref{17})では，
+\begin{itemize}
+\item RS：全ソースデータの4/5
+\item TO：ターゲットデータの10トークン
+\item FD：全ソースデータの4/5のうち，ターゲットデータに閾値以上似たトークン
+\end{itemize}
+の語義タグの分布間のJS距離を用いたが，(\ref{18}) のJS距離では，
+\begin{itemize}
+\item RS：全ソースデータ
+\item TO：全ターゲットデータ
+\item FD：全ソースデータの4/5のうち，ターゲットデータに閾値以上似たトークン
+\end{itemize}
+の間のWSDの素性（形態素情報など17種類．\ref{sec:item17}節参照）
+の素性ごとの分布のJS距離を，(\ref{19}) のJS距離では，これらのデータのWSDの素性（形態素情報など17種類）をつなげて，
+ひとつの単位としたものの分布のJS距離を用いた．
+これは，17種類全ての素性が等しいときにだけ，同じ要素と考えてJS距離を求めるものである．
+また，(\ref{22}) の共通語義も，(\ref{17}) のJS距離の際のデータのうち，手法に対応したふたつのデータに出現した語義の異なり数である．
+
+また，(\ref{21}) の新語義の数は，
+\begin{itemize}
+\item RSとTOの決定木：語義をタグ付けしたターゲットデータ10トークンに出現せず，全ソースデータのみに出現する語義の異なり数
+\item RSとFDの決定木：全ソースデータの4/5のうち，ターゲットデータに閾値以上似たデータに出現せず，全ソースデータのみに出現する語義の異なり数
+\item TOとFDの決定木：語義をタグ付けしたターゲットデータ10トークンに出現せず，全ソースデータの4/5のうち，ターゲットデータに閾値以上似たトークン
+のみに出現する語義の異なり数
+\end{itemize}
+になる．
+
+
+決定木作成アルゴリズムにはC4.5 \cite{book2}を利用し，二分決定木を作成した．
+また，五分割交差検定を行った．
+決定木作成の枝刈りの閾値は訓練事例の1/4を開発用データとした予備実験により最適化した．
+なお，このとき決定木作成の閾値にはノードのエントロピーの値を使用し，0, 0.1, 0.2...というように0.1きざみで試した．
+閾値の最適化の際に，最高の正解率の決定木の閾値が複数ある場合には，決定木がより小さいときの閾値を採用した．
+
+
+
+\section{データ} \label{Sec:データ}
+
+実験には，現代日本語書き言葉均衡コーパス（BCCWJコーパス）\cite{article18}の白書のデータとYahoo! 知恵袋のデータ，
+またRWCコーパスの毎日新聞コーパス\cite{article19}の三つのデータを利用し，
+ソースデータとターゲットデータを変えることで，全部で6通りの領域適応を行った．
+これらのデータには岩波国語辞典\cite{book3}の語義が付与されている．
+これらのコーパス中の多義語のうち，ソースデータおよびターゲットデータ中にともに50トークン以上存在する単語を実験対象とした．
+WSDを行う単語の異なり数は，白書⇔Yahoo! 知恵袋：24　白書⇔新聞：22　Yahoo! 知恵袋⇔新聞：26であり，
+最終的なケースの数は，28単語，合計144のケースとなった．
+ターゲットコーパス別に見たケースの最小，最大，平均トークン数を\tabref{tab:table1}に示す．
+また，実験には岩波国語辞典の小分類の語義を採用した．
+全WSDの対象単語の語義数ごとの内訳を\tabref{tab:The list of target words}に示す．
+
+\begin{table}[b] 
+\caption{ターゲットコーパス別に見たケースの最小，最大，平均トークン数}
+\label{tab:table1}
+\input{02table01.txt}
+\end{table}
+\begin{table}[b]
+\caption{全WSDの対象単語の語義数ごとの内訳}
+\label{tab:The list of target words}
+\input{02table02.txt}
+\end{table}
+
+
+また，領域適応によるWSDの実験には五分割交差検定を用いた．
+    RSのときのこの様子を\figref{fig:two-1}
+に示す．RSの場合には，ソースデータの4/5（ソースデータの濃い灰色の部分）に加え，ター
+ゲットデータの4/5（ターゲットデータの白の部分と薄い灰色の部分）から10トークン（白い
+部分）を訓練事例とする．FDの際には，ソースデータの4/5（ソースデータの濃い灰色の部分）
+に関して，ターゲットデータの4/5（ターゲットデータの白の部分と薄い灰色の部分）との類似
+度を測り，一定以上似たデータと10トークン（白い部分）を訓練事例とする．テストデータは，
+ターゲットデータの残りの1/5（黒い部分）である．
+
+\begin{figure}[b]
+ \begin{center}
+  \includegraphics{19-3ia945f1.eps}
+ \end{center}
+ \caption{RSによるWSDの実験の五分割交差検定}
+     \label{fig:two-1}
+\end{figure}
+\begin{table}[b]
+\begin{center}
+\hangcaption{Yahoo! 知恵袋と白書でソースデータとターゲットデータを逆にしたときの領域適応別のWSDの正解率} \label{tab:table0}
+\input{02table03.txt}
+\end{table}
+
+
+
+\tabref{tab:table0}に，白書⇔Yahoo! 知恵袋でソースデータとターゲットデータを逆にしたときの領域適応
+別のWSD の正解率を示す．
+これらの結果は，すべてのトークンごとの平均の正解率（マイクロ平均）である．
+ここで，タグつきターゲットデータが手に入ったと仮定して，supervisedの学習を5分割交差検定を用いて行った
+selfと，ターゲットデータに対して，ソースデータだけで5分割交差検定を用いて学習を行ったSource Onlyについて
+のWSDも行い，その正解率も参考として示した．
+\tabref{tab:table0}から，使用するコーパスによって効果の出る手法が異なることが分かる．
+また，\tabref{ソースデータとターゲットデータのコーパス別に見たケースごとの最適な領域適応手法の分布}に，ソー
+スデータとターゲットデータのコーパス別に見たケースごとの最適な領域適応手法の分布を示
+す．この表において，例えば「RSとTO」は，RSとTOが同率一位であることを表す．この
+表から，最適な領域適応手法は，コーパスごとよりも，ケースごとに異なることが分かる．
+
+
+\begin{table}[t]
+\caption{ソースデータとターゲットデータのコーパス別に見たケースごとの最適な領域適応手法の分布}
+\label{ソースデータとターゲットデータのコーパス別に見たケースごとの最適な領域適応手法の分布}
+\input{02table04.txt}
+\end{table}
+
+\section{決定木学習におけるラベル付きデータの作成方法と学習方法}
+\label{sec:決定木学習におけるラベル付きデータの作成方法と学習方法}
+
+本研究では，決定木のSameラベルの付け方や，Sameラベルのついたトークンの扱い，決定
+木におけるケースの重みを変えて8通りの決定木を作成した．本節ではそれらの手法の詳細と，
+pairwiseに作成した複数の決定木の結果を統合して，最終的に領域適応手法を一意に定める手法
+について述べる．
+
+ここでも，\ref{Sec:決定木学習のラベル}節と同様，TOとRSの決定木のラベルについて述べる．
+作成する決定木によって，WSDの手法は読み替えていただきたい．
+
+
+\subsection{Sameラベルの付け方}
+\label{sec:Sameラベルの付け方}
+
+\ref{Sec:決定木学習のラベル}節で述べたように，決定木学習の教師値として，ケースごとに，最もWSD の正解率が
+よかった手法によって，TO とRS とSame の三種類のうちのひとつのラベルをつける．このう
+ち，Same はTO でもRS でもWSD の正解率に差がないケースに対するラベルであるが，
+どこまでが正解率に差がなく，どこからが差があるかという点については
+いくつかの考え方がある．本稿では，以下の二通りのSameの定義を考え，両方について実験を行う．
+
+\begin{itemize}
+\item\ 「同じもの」：TOとRSのWSDの正解率が全く等しいものにSameをつけ，
+それ以外にTOかRSを付与する．
+\item\ 「カイ二乗検定」：TOとRSのWSDの正解率を比較してカイ二乗検定を
+行い，有意差がないものにSameをつけ，あるものにTOかRSを付与する．
+なお，カイ二乗検定の有意水準は0.05を利用した．
+\end{itemize}
+
+「同じもの」では，全く同じ正解率のケースだけを，TOとRSに差がないケースと考え，「カイ二乗検定」では，
+カイ二乗検定により有意差がないケースを，TOとRSに差がないケースと考えている．
+
+決定木とラベル付け手法別に見たラベルの分布を\tabref{決定木とラベル付け手法別に見たラベルの分布}に示す．
+また，コーパスとラベル付け手法別に見たラベルが割りつけられたケースの数と
+合計の単語タイプ数を\tabref{tab:The number of cases} 
+に示す．
+
+\begin{table}[t]
+\caption{決定木とラベル付け手法別に見たラベルの分布}
+\label{決定木とラベル付け手法別に見たラベルの分布}
+\input{02table05.txt}
+\end{table}
+\begin{table}[t]
+\caption{コーパスとラベル付け手法別に見たラベルが割りつけられたケースの数と
+合計の単語タイプ数} 
+\label{tab:The number of cases}
+\input{02table06.txt}
+\end{table}
+
+
+
+\subsection{決定木学習におけるSameの扱い}
+\label{sec:決定木学習におけるSameの扱い}
+
+前節のように全てのケースに三つのラベルを付与したが，三つ目のラベルSameについては
+TOでもRSでも差がないケースであり，決定木学習の際に
+いくつかの扱い方が考えられる．
+本稿では，決定木学習の際，以下の二通りのSameの扱い方で実験を行う．
+
+\begin{itemize}
+\item\ 「Sameを利用した3値分類」：TO，RS，Sameの3値分類の決定木学習とテストを行う．
+\item\ 「訓練事例からSameの事例を削除した2値分類」：Sameが付与されたケースを
+訓練事例から削除してTOとRSの2値分類の決定木学習を行う．
+なお，テストには 全ケースを利用する．
+\end{itemize}
+
+\figref{fig:three}に，「訓練事例からSameの事例を削除した2値分類」のときの
+決定木学習の五分割交差検定の様子を示す．
+全体が144ケースあり，最終的に訓練データとして用いる
+ケースはそのうちのTOかRSのラベルをもつケースである．「同じもの」を使用するときは129ケースがこれにあたり，
+「カイ二乗検定」を用いるときには69ケースがこれにあたる（濃い灰色の部分）．
+五分割交差検定の一試行において，この訓練データとなる濃い灰色の部分の4/5（白い部分）で訓練を行い，全体の
+ケースの144ケースのうちの1/5（薄い灰色の部分）でテストを行う．
+これを五回交差して行うことで決定木学習の五分割交差検定を行った．
+
+\begin{figure}[t]
+ \begin{center}
+  \includegraphics{19-3ia945f2.eps}
+  \end{center}
+ \caption{訓練事例からSameの事例を削除した2値分類のときの決定木学習の五分割交差検定}
+ \label{fig:three}
+\end{figure}
+
+「訓練事例からSameの事例を削除した2値分類」を利用してテストを行う場合，
+Sameラベルがふられたケースに正解はない．
+そのため，決定木のノードにおけるラベルの確からしさの度合いなどの閾値をもうけることで，
+「Sameを利用した3値分類」のSameのようなどちらの手法を利用してもよい
+という結果を出力することも考えられる．しかし，Sameラベルがふられたケースはもともと，
+どちらの手法を利用してもよい
+ケースであるため，便宜的な割り付けを行っても問題ないとの考えから，本稿では学習した決定木を用いて
+全てのケースに自動的にTOかRSかを割り付けた．
+
+
+\subsection{ケースによる分類とトークン数による重みづけを用いた分類}
+\label{sec:ケースによる分類とトークン数による重みづけを用いた分類}
+
+\tabref{tab:table1}にあるように，ケースにはたくさんの事例があるケースと，少量の事例しかないケースがある．
+このため，決定木において，少量のトークン（WSDの事例）しかないケースよりも，たくさんのトークンがあるケースについて，
+利用する領域適応手法を正確に予測できた方が，より全体のWSDの正解率に寄与する可能性がある．
+本稿では，以下のようにケースによる分類のほかに，トークン数による重みづけを行う分類についても実験を行った．
+
+
+\begin{itemize}
+\item\ 「ケースによる分類」：全てのケースに同等の重みがあるとして決定木学習を行う．
+\item\ 「トークン数による重みづけを用いた分類」：ケースごとにケース中のトークン数の
+重みをつけて決定木学習を行う．
+\end{itemize}
+
+具体的には，トークン数による重みづけを用いた分類は，
+決定木学習の際，エントロピーの計算において，ひとつのケースをひとつのケースとして数えるかわりに，
+トークン数分のケースとして数えることで重みを付けている．
+
+\ref{sec:Sameラベルの付け方}--\ref{sec:ケースによる分類とトークン数による重みづけを用いた分類}節でそれぞれ二通りの選択肢があるため，
+本稿では全組み合わせの合計8通りの決定木を作成した．
+
+
+
+\subsection{決定木の統合} \label{sec:決定木の統合}
+
+決定木の統合は，以下のように行った．
+pairwiseの性質上，三つの決定木が三つとも同じ方法がよいと答えることはなく，答えが2:1に分かれるか，三つ巴になるはずである．
+
+このうち，2:1に分かれるときは，かならず2つの決定木が出した答えが理論的に一番良くなるため，その答えを選択すればよい．
+手法1$>$手法2のとき手法1のほうがよい手法であるとすると，例えば， TO$>$RSかつ，
+FD$>$RSかつTO$>$FDであれば，
+TO$>$FD$>$RSなので，TOを選択する．
+
+次に，三つ巴のときには，事例が割りつけられた葉についている確率を比較し，一番高い確率のところに割り付けた．確率は，
+「学習時にその葉に割りつけられたその手法のケース数/学習時に，その葉に割りつけられた全ケース数」として計算した．
+たとえば，テストデータが，実行時に「学習時に，TOが1ケース，RSが2ケース割り当てられた葉」に割り当てられた場合，
+そのテストデータは2/3の確率でRSとなる．三つ巴の場合には，この確率で比較し，最も高い確率の手法を割り当てた．
+
+三つ巴のときに，ふたつの決定木で割りつけられた葉の確率が同率一位である場合には，
+RS$>$TOかつFD$>$RSなら，
+FD$>$RS$>$TOなのでFDを選択，
+というように論理的に選択された手法を選択した．
+
+また，三つ巴でどれも確率が等しい時など，上記のルールを利用してもどうしても領域適応手法が選べない時には，
+一括的に領域適応を行ったときに正解率が高い順，つまり，FD，TO，RSの順で割りつけた．
+
+
+\section{結果} \label{Sec:結果}
+
+\tabref{tab:table2}に，もともとの手法を一括的に用いた際のWSDの平均正解率を示す．
+なお，144のケースには合計232,116のWSDのトークンが含まれており，本稿の平均正解率はそれらのトークンの平均の正解率（マイクロ平均）である．
+\tabref{tab:table2}からTO，RS，FDのうち，最も良い
+正解率はFDの82.27\%であることが分かる．
+
+\begin{table}[b] 
+\caption{個別の手法を用いた際のWSDの平均正解率} \label{tab:table2}
+\input{02table07.txt}
+\end{table}
+
+\tabref{tab:table3}に，\ref{sec:決定木学習におけるラベル付きデータの作成方法と学習方法}節の決定木を用いて自動的にケースごとに
+選択した手法を利用した際のWSDの平均正解率を示す．なお，選択の仕方は，
+決定木学習による選択の8種類と，Golden Answerの一種類の合計9種類である．
+ここで，決定木学習による選択の8種類は，\ref{sec:Sameラベルの付け方}--\ref{sec:ケースによる分類とトークン数による重みづけを用いた分類}節でのそれぞれ二通りの選択肢による，
+全組み合わせに対応する．
+\tabref{tab:table3}の決定木学習の方法の列はそれぞれ，一
+列目が\ref{sec:Sameラベルの付け方}節の分類に，二列目が\ref{sec:決定木学習におけるSameの扱い}節の分類に，
+三列目が\ref{sec:ケースによる分類とトークン数による重みづけを用いた分類}節の分類にあたる．
+それぞれ，3値と2値は「Sameを利用した3値分類」と「訓練事例からSameの事例を削除した2値分類」を，
+ケースとトークンは「ケースによる分類」と「トークン数による重みづけを用いた分類」を示す．
+なお，Golden Answerは，決定木学習を用いる代わりに，ラベルとなっているふたつの領域適応
+のうち，WSDの正解率の高い領域適応手法をケースごとに人手で選択して，WSDの平均正解率を求めた値であり，upper boundである．
+
+\begin{table}[t] 
+\caption{選択した手法を利用した際のWSDの平均正解率} \label{tab:table3}
+\input{02table08.txt}
+\end{table}
+
+「Sameを利用した3値分類」の決定木でSameが割りつけられたケースは，
+本来はTOでもRSでもどちらでもよいというように，二つの領域適応手法の選択肢のどちらを用いてもよいケースであるが，
+本稿では一括的に領域適応を行ったときに正解率が高い方の手法を用いて，最終的なWSDの平均正解率を算出した．
+「訓練事例からSameの事例を削除した2値分類」を利用した場合は，
+\ref{sec:決定木学習におけるSameの扱い}節で述べたように，
+学習した決定木を用いて自動的に全てのケースを
+分類した．そのため，Sameの割りつけられたケースも，
+決定木によって選択された手法を利用して最終的なWSDの平均正解率を算出した．
+
+\tabref{tab:table3}から，決定木学習を用いて選択した手法を利用した際のWSDの平均正解率のうち，
+最も高いWSDの平均正解率は，「カイ二乗検定」，「訓練事例からSameの事例を削除した2値分類」，「ケースによる分類」を利用した83.52\%で
+ある．\tabref{tab:table2}の，個別の手法を用いた際の最高の正解率，FDの82.27\%よりも
+正解率が高いため，
+決定木を利用して適切な領域適応手法を利用した方が，個々の領域適応手法を使った時よりも正解率が上がることが分かる．
+またこのとき，カイ二乗検定により十分な有意差が認められた．
+
+
+\section{考察} \label{Sec:考察}
+
+\subsection{決定木学習のラベル付きデータの作成方法と学習方法についての比較}
+
+本節では，決定木学習におけるラベル付きデータの作成方法と学習方法による違いを比較する．
+まずSameラベルの付け方について比べると，決定木学習におけるSameの扱いを「訓練事例からSameの事例を削除した2値分類」
+にしたときには「同じもの」が「カイ二乗検定」よりもよいが，「Sameを利用した3値分類」にしたときには
+「カイ二乗検定」が「同じもの」よりもよい
+ことが分かる．
+
+
+また決定木学習におけるSameの扱いについて比べると，
+「訓練事例からSameの事例を削除した2値分類」のほうがいつも「Sameを利用した3値分類」よりもよいことが分かる．
+
+
+さらにケースによる分類とトークン数による重みづけを用いた分類について比べると，
+「ケースによる分類」のほうがいつも「トークン数による重みづけを用いた分類」よりもよいことが分かる．
+
+
+8種類の決定木の作成手法のうち最も良かったのは，
+決定木学習のデータのSameのラベル付けには「カイ二乗検定」を利用し，
+決定木学習におけるSameの扱いにおいては「訓練事例からSameの事例を削除した2値分類」を利用し，
+決定木学習の際には「ケースによる分類」を用いた決定木学習（カイ二乗検定，2値，ケース）であった．
+
+このとき，決定木の正解率はそれぞれ，TOとRSの決定木は69.57\%，
+TOとFDの決定木は64.81\%，
+RSとFDの決定木は52.63\%であった．
+
+また，上記の実験は，コーパスを考慮しない五分割交差検定であるため，語義タグがついて
+いないコーパスに対しての性能を見るために，ケースをコーパスごとに分け，コーパスごとの
+交差検定を行った．上記の実験で最高の正解率だった（カイ二乗検定，2値，ケース）の決定
+木学習の手法で実験を行ったところ，WSDの平均正解率は82.32\%となった．FD の82.27\%よ
+りも高いが，カイ二乗検定による有意差は得られなかった．利用したコーパスは3つであるた
+め，144ケースのおおよそ三分割交差検定を行うこととなっており，訓練事例数が足りず，決
+定木の十分な分類性能が得られなかったためだと考えられる．
+WSDの領域適応の実際のタスクにおいて，本論文が提案する決定木を
+作る際には，ソースドメインのコーパス以外に，語義タグ付きのコーパスが
+少なくともひとつ以上存在する必要がある．その中にターゲットドメインのコー
+パスを含めずに済むかどうかは不明である．しかし，上記の実験から，含めな
+い場合にもある程度の効果は得られると考える．あるいはターゲットドメイン
+のコーパスに決定木を作るのに必要な程度の語義タグをつけることも考え
+られる．
+
+
+\subsection{学習された決定木についての考察}
+
+WSDの平均正解率が最高だった「カイ二乗検定」，「訓練事例からSameの事例を削除した2値分類」，「ケースによる分類」の決定木学習の五回の検定のうち，最も高い正解率だった決定木を
+付録として示し，生成に特に貢献した素性と素性値について以下に述べる．
+
+まず，TOとRSの決定木のルートノードでは，「ふたつの正解率の比=0.70以上」がnoのときTOが割り当てられた．
+これは「the Other のシミュレーションの正解率/ TOのシミュレーションの正解率」の割合が0.70以下であれば，
+TOが割り当てられたということである．
+つまり，10トークンのターゲットデータに語義をタグ付けし，Leave One Out法で評価を行った際の正解率のほうが，
+ソースデータで分類器を学習し，
+10トークンのターゲットデータに語義をタグ付けしたもので評価した正解率よりも高いときには
+TOが割り当てられたということに等しい．
+このことから，10ケースの語義をタグ付けしたターゲットデータによるシミュレーションの予測が，
+最適な領域適応の手法を予想する強力な手がかりになることが分かる．
+
+次に，決定木の深さが1のノードでは，
+「JS 距離（WSD の対象単語の一つ前の形態素）=0.61以上」のときにTOが選ばれている．
+このことから，
+WSD の対象単語の一つ前の形態素に関する素性の分布がソースデータとターゲットデータで異なっているときには，
+ソースデータを訓練事例に利用せず，ターゲットデータの10トークンに語義をタグ付けして訓練事例にした方がよいことが分かる．
+JS距離が大きいのは素性の分布が異なっていることを意味し，逆にJS距離が小さいのは素性の分布が似通っていることを意味する．
+WSDにおいて鍵となる素性の分布が遠く，ソースデータが十分に似ていない時には，
+ソースデータを利用しない方がよいため，JS距離が大きいときにはTO になりやすいと考えられる．
+同様に素性の分布が近く，ソースデータが十分に似ている時には，
+ソースデータを利用した方がよいため，
+JS距離が小さいときにはRSになりやすいと考えられる．
+
+また，RSとFDの決定木のルートノードでは，「ソースデータの数/ターゲットデータに一定以上似ているソースデータの数=186.85以上」
+のときFDが割り当てられた．FDは，ターゲットデータに閾値以上似た
+ソースデータだけを訓練事例に利用する手法であるため，ターゲットデータに閾値以上似ていないソースデータが多量にあるときには，
+全ソースデータではなく，ターゲットデータに似ているデータだけを利用すればよいことが分かる．
+このことから，ターゲットデータに十分似ていないデータを足しすぎると，誤った学習が行われてしまうことが推察できる．
+
+次に，決定木の深さが1のノードでは，「JS 距離（WSD の対象単語の二つ前の形態素）=0.74以上」がyesであればFDが，
+noであればRSが割り当てられた．このことから，
+WSD の対象単語の二つ前の形態素に関する素性の分布がソースデータ
+と「ターゲットデータに一定以上似ているソースデータ」で似ているときには，
+ソースデータを訓練事例にすべて利用した方がよく，似ていない時には，
+ソースデータを利用せずに語義をタグ付けしたターゲットデータの10トークンを訓練事例にした方がよいことが分かる．
+本決定木では，TOとRSの決定木の深さ1のノードと同様に，素性の分布が似ているときに，ソースデータを利用した
+ほうがよいという結果になっている．
+
+また，TOとFDの決定木のルートノードでは，
+「ターゲットデータ10トークン中のMFSの，ターゲットデータに閾値以上似たソースデータ中のパーセンテージ=12.58以下」である場合に，
+TOが割り当てられた．このことにより，ターゲットデータ10トークン中に最頻出する語義が，
+FDの訓練事例として利用される，「ターゲットデータに一定以上似ているソースデータ」に少ない時には，
+TOを用いた方がよいことが分かる．このことから，
+二つのデータの語義タグが似ていないときは，ソースデータから
+訓練事例を一切足すことなく，ターゲットデータだけで学習した方がよいと考えられる．
+
+次に，決定木の深さが1のノードでは，「JS距離（WSDの対象単語の一つ後の形態素の分類語彙表の値）=0.15以下」であれば，
+TOが割り当てられた．WSD の対象単語の一つ後の形態素の分類語彙表の値に関する素性の分布が，ターゲットデータ
+と「ターゲットデータに一定以上似ているソースデータ」で似ているときには，
+ソースデータを訓練事例に一切利用せず，ターゲットデータを10トークンタグ付けして訓練事例にした方がよいことが分かる．
+ここで注目したいのは，
+これまでの決定木とは逆に，素性の分布が似ているときに，ソースデータを利用しない
+ほうがよいという結果になっていることである．
+TOとFDの決定木全体を見てみると，ノードにJS距離についての条件は四度現れる．そのうち，二回は素性の分布が似ているときに，ソースデータを利用しない
+ほうがよいという結果であり，残りの二回は逆に素性の分布が似ているときに，ソースデータを利用した
+ほうがよいという結果になっている．
+このように同じJS距離でも素性によって似ているときにソースデータを利用した方がよかったり，そうでなかったりするのは，
+本決定木ではTOとFDの二手法から
+領域適応手法を選択しているためであると考えられる．全てのソースデータを訓練事例に含めるRSと異なり，
+FDでは，ターゲットデータに一定以上似ているソースデータを訓練事例に含めるため，
+素性によって似ていたらソースデータを使用すべきものと，ソースデータを使用すべきでないものに分かれているのではないかと考えられる．
+「WSDの対象単語の一つ後の形態素の分類語彙表の値」は後者であることが決定木から読みとれる．
+
+
+\section{まとめ} \label{Sec:まとめ}
+
+語義曖昧性解消 (WSD; Word Sense Disambiguation) について領域適応を行った場合，
+ソースデータとターゲットデータのデータの性質により，最も効果的な領域適応手法が異なる．
+そのため本稿では，決定木学習を用いてソースデータとターゲットデータの性質
+から，最も効果的な領域適応手法を自動的に選択する手法について述べた．
+WSDの対象単語タイプ，ソースドメイン，ターゲットドメインの三つ組を
+1ケースとして数え，決定木学習を利用してケースごとに，
+TO，RS，FDの三種類から
+適切な領域適応手法を選択した．
+なお，TOはソースデータを用いず，ランダムに選んだ少量のターゲットデータに語義をタグ付けしたものだけを
+訓練事例とする手法，
+RSはソースデータと語義をタグ付けした少量のターゲットデータの両方を訓練事例とする手法，
+FDはターゲットデータに似たソースデータと語義をタグ付けした少量のターゲットデータを訓練事例とする手法である．
+三つの手法から領域適応手法を一意に選ぶため，pairwise方式に三つの決定木を作成し，最後に統合して用いた．
+ケースごとに自動的に選択された手法を用いて領域適応を行うことで，もともとの手法を一括的に使った時に比べ，
+WSDの正解率が有意に向上した．
+
+また，ラベル付きデータの作成方法と学習方法を8通り試したが，
+このうち最もWSDの平均正解率が高かったのは，
+決定木学習のケースへのラベル付けの際，ふたつの領域適応手法の
+WSDの正解率に有意差がないケースにSameラベルを付与し，
+Sameの割りつけられたケースは訓練事例から取り除いて
+2値分類を行い，ケースごとに分類を行う決定木学習であった．
+
+作成した決定木から，語義をタグ付けした少量のターゲットデータによるシミュレーションの予測や，
+同ターゲットデータの最頻出語義の「ターゲットデータに一定以上似ているソースデータ」中の出現率，
+ソースデータの数と「ターゲットデータに一定以上似ているソースデータ」の数の比が，
+最適な領域適応の手法を予想する強力な手がかりになることが分かった．
+
+\acknowledgment
+
+文部科学省科学研究費補助金特定領域研究「現代日本語書き言葉均衡コーパス」の助成により行われた．
+ここに，謹んで御礼申し上げる．また，本論文の内容の一部は，5th International Joint Conference on Natural Language Processingで発表した
+ものである\cite{article22}.
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Agirre \BBA\ de~Lacalle}{Agirre \BBA\
+  de~Lacalle}{2008}]{article5}
+Agirre, E.\BBACOMMA\ \BBA\ de~Lacalle, O.~L. \BBOP 2008\BBCP.
+\newblock \BBOQ On Robustness and Domain Adaptation using SVD for Word Sense
+  Disambiguation.\BBCQ\
+\newblock In {\Bem Proceedings of the 22nd International Conference on
+  Computational Linguistics}, \mbox{\BPGS\ 17--24}.
+
+\bibitem[\protect\BCAY{Agirre \BBA\ de~Lacalle}{Agirre \BBA\
+  de~Lacalle}{2009}]{article6}
+Agirre, E.\BBACOMMA\ \BBA\ de~Lacalle, O.~L. \BBOP 2009\BBCP.
+\newblock \BBOQ Supervised Domain Adaption for WSD.\BBCQ\
+\newblock In {\Bem Proceedings of the 12th Conference of the European Chapter
+  of the Association of Computational Linguistics}, \mbox{\BPGS\ 42--50}.
+
+\bibitem[\protect\BCAY{Asch \BBA\ Daelemans}{Asch \BBA\
+  Daelemans}{2010}]{article11}
+Asch, V.~V.\BBACOMMA\ \BBA\ Daelemans, W. \BBOP 2010\BBCP.
+\newblock \BBOQ Using Domain Similarity for Performance Estimation.\BBCQ\
+\newblock In {\Bem Proceedings of the 2010 Workshop on Domain Adaptation for
+  Natural Language Processing, ACL 2010}, \mbox{\BPGS\ 31--36}.
+
+\bibitem[\protect\BCAY{Blitzer, McDonald, \BBA\ Pereira}{Blitzer
+  et~al.}{2006}]{article17}
+Blitzer, J., McDonald, R., \BBA\ Pereira, F. \BBOP 2006\BBCP.
+\newblock \BBOQ Domain Adaptation with Structural Coppespondence
+  Learning.\BBCQ\
+\newblock In {\Bem Proceedings of the 2006 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 120--128}.
+
+\bibitem[\protect\BCAY{Chan \BBA\ Ng}{Chan \BBA\ Ng}{2006}]{article2}
+Chan, Y.~S.\BBACOMMA\ \BBA\ Ng, H.~T. \BBOP 2006\BBCP.
+\newblock \BBOQ Estimating Class Priors in Domain Adaptation for Word Sense
+  Disambiguation.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on
+  Computational Linguistics and 44th Annual Meeting of the Association for
+  Computational Linguistics}, \mbox{\BPGS\ 89--96}.
+
+\bibitem[\protect\BCAY{Chan \BBA\ Ng}{Chan \BBA\ Ng}{2007}]{article3}
+Chan, Y.~S.\BBACOMMA\ \BBA\ Ng, H.~T. \BBOP 2007\BBCP.
+\newblock \BBOQ Domain Adaptation with Active Learning for Word Sense
+  Disambiguation.\BBCQ\
+\newblock In {\Bem Proceedings of the 45th Annual Meeting of the Association of
+  Computational Linguistics}, \mbox{\BPGS\ 49--56}.
+
+\bibitem[\protect\BCAY{Daum\'{e}}{Daum\'{e}}{2007}]{article4}
+Daum\'{e}, III, H. \BBOP 2007\BBCP.
+\newblock \BBOQ Frustratingly Easy Domain Adaptation.\BBCQ\
+\newblock In {\Bem Proceedings of the 45th Annual Meeting of the Association of
+  Computational Linguistics}, \mbox{\BPGS\ 256--263}.
+
+\bibitem[\protect\BCAY{Daum\'{e}, Kumar, \BBA\ Saha}{Daum\'{e}
+  et~al.}{2010}]{article12}
+Daum\'{e}, III, H., Kumar, A., \BBA\ Saha, A. \BBOP 2010\BBCP.
+\newblock \BBOQ Frustratingly Easy Semi-Supervised Domain Adaptation.\BBCQ\
+\newblock In {\Bem Proceedings of the 2010 Workshop on Domain Adaptation for
+  Natural Language Processing, ACL 2010}, \mbox{\BPGS\ 23--59}.
+
+\bibitem[\protect\BCAY{Hashida, Isahara, Tokunaga, Hashimoto, Ogino, \BBA\
+  Kashino}{Hashida et~al.}{1998}]{article19}
+Hashida, K., Isahara, H., Tokunaga, T., Hashimoto, M., Ogino, S., \BBA\
+  Kashino, W. \BBOP 1998\BBCP.
+\newblock \BBOQ The RWC text databases.\BBCQ\
+\newblock In {\Bem Proceedings of The First International Conference on
+  Language Resource and Evaluation}, \mbox{\BPGS\ 457--461}.
+
+\bibitem[\protect\BCAY{Jiang \BBA\ Zhai}{Jiang \BBA\ Zhai}{2007}]{article7}
+Jiang, J.\BBACOMMA\ \BBA\ Zhai, C. \BBOP 2007\BBCP.
+\newblock \BBOQ Instance Weighting for Domain Adaptation in NLP.\BBCQ\
+\newblock In {\Bem Proceedings of the 45th Annual Meeting of the Association of
+  Computational Linguistics}, \mbox{\BPGS\ 264--271}.
+
+\bibitem[\protect\BCAY{Komiya \BBA\ Okumura}{Komiya \BBA\
+  Okumura}{2011}]{article22}
+Komiya, K.\BBACOMMA\ \BBA\ Okumura, M. \BBOP 2011\BBCP.
+\newblock \BBOQ Automatic Determination of a Domain Adaptation Method for Word
+  Sense Disambiguation Using Decision Tree Learning.\BBCQ\
+\newblock In {\Bem Proceedings of the 5th International Joint Conference on
+  Natural Language Processing, IJCNLP 2011}, \mbox{\BPGS\ 1107--1115}.
+
+\bibitem[\protect\BCAY{Maekawa}{Maekawa}{2008}]{article18}
+Maekawa, K. \BBOP 2008\BBCP.
+\newblock \BBOQ Balanced Corpus of Contemporary Written Japanese.\BBCQ\
+\newblock In {\Bem Proceedings of the 6th Workshop on Asian Language Resources
+  (ALR)}, \mbox{\BPGS\ 101--102}.
+
+\bibitem[\protect\BCAY{McClosky, Charniak, \BBA\ Johnson}{McClosky
+  et~al.}{2010}]{article20}
+McClosky, D., Charniak, E., \BBA\ Johnson, M. \BBOP 2010\BBCP.
+\newblock \BBOQ Automatic Domain Adaptation for Parsing.\BBCQ\
+\newblock In {\Bem Proceedings of the 2010 Annual Conference of the North
+  American Chapter of the Association for Computational Linguistics},
+  \mbox{\BPGS\ 28--36}.
+
+\bibitem[\protect\BCAY{Quinlan}{Quinlan}{1993}]{book2}
+Quinlan, J.~R. \BBOP 1993\BBCP.
+\newblock {\Bem C4.5: Programs for Machine Learning}.
+\newblock Morgan Kaufmann Publishers.
+
+\bibitem[\protect\BCAY{Raina, Battle, Lee, Packer, \BBA\ Ng}{Raina
+  et~al.}{2007}]{article15}
+Raina, R., Battle, A., Lee, H., Packer, B., \BBA\ Ng, A.~Y. \BBOP 2007\BBCP.
+\newblock \BBOQ Self-taught Learning: Transfer Learning from Unlabeled
+  Data.\BBCQ\
+\newblock In {\Bem ICML '07: Proceedings of the 24th international conference
+  on Machine learning}, \mbox{\BPGS\ 759--766}.
+
+\bibitem[\protect\BCAY{Sugiyama \BBA\ Okumura}{Sugiyama \BBA\
+  Okumura}{2009}]{article21}
+Sugiyama, K.\BBACOMMA\ \BBA\ Okumura, M. \BBOP 2009\BBCP.
+\newblock \BBOQ Semi-supervised Clustering for Word Instances and Its Effect on
+  Word Sense Disambiguation.\BBCQ\
+\newblock In {\Bem Proceedings of the 10th International Conference on
+  Intelligent Text Processing and Computational Linguistics (CICLing 2009)},
+  \mbox{\BPGS\ 266--279}.
+
+\bibitem[\protect\BCAY{Tur}{Tur}{2009}]{article16}
+Tur, G. \BBOP 2009\BBCP.
+\newblock \BBOQ Co-adaptation: Adaptive Co-training for Semi-supervised
+  Learning.\BBCQ\
+\newblock In {\Bem Proceedings of the IEEE International Conference on
+  Acoustics, Speech and Signal Processing, 2009. ICASSP 2009}, \mbox{\BPGS\
+  3721--3724}.
+
+\bibitem[\protect\BCAY{Zhong, Fan, Peng, Zhang, Ren, Turaga, \BBA\
+  Verscheure}{Zhong et~al.}{2009}]{article14}
+Zhong, E., Fan, W., Peng, J., Zhang, K., Ren, J., Turaga, D., \BBA\ Verscheure,
+  O. \BBOP 2009\BBCP.
+\newblock \BBOQ Cross Domain Distribution Adaptation via Kernel Mapping.\BBCQ\
+\newblock In {\Bem Proceedings of the 15th ACM SIGKDD international conference
+  on Knowledge discovery and data mining}, \mbox{\BPGS\ 1027--1036}.
+
+\bibitem[\protect\BCAY{張本\JBA 宮尾\JBA 辻井}{張本 \Jetal }{2010}]{article10}
+張本佳子\JBA 宮尾祐介\JBA 辻井潤一 \BBOP 2010\BBCP.
+\newblock
+  構文解析の分野適応における精度低下要因の分析及び分野間距離の測定手法.\
+\newblock \Jem{言語処理学会　第16回年次大会発表論文集}, \mbox{\BPGS\ 27--30}.
+
+\bibitem[\protect\BCAY{国立国語研究所}{国立国語研究所}{1964}]{book1}
+国立国語研究所 \BBOP 1964\BBCP.
+\newblock \Jem{分類語彙表}.
+\newblock 秀英出版.
+
+\bibitem[\protect\BCAY{西尾\JBA 岩淵\JBA 水谷}{西尾 \Jetal }{1994}]{book3}
+西尾実\JBA 岩淵悦太郎\JBA 水谷静夫 \BBOP 1994\BBCP.
+\newblock \Jem{岩波国語辞典 第五版}.
+\newblock 岩波書店.
+
+\end{thebibliography}
+
+\appendix
+\section{生成された決定木}
+上の枝がyes，下の枝がnoに相当する．
+JS 距離（語義）は，決定木の素性の(\ref{17})データ1とデータ2の語義タグのJS距離の略記，
+JS距離（*）は，(\ref{18})データ1とデータ2の間のWSDの素性ごとの分布のJS距離の略記であり，
+ *には\ref{sec:item17}節のWSDの素性名が入る．
+JS距離 (Featureplus) は(\ref{19})データ1とデータ2の間の素性ごとのJS距離を足しあわせたものの略記で，(\ref{18}) を17種類足しあわせた値であり，
+JS距離 (Featureall) は(\ref{20})データ1とデータ2の素性をひとつの単位としたときのJS距離の略記である．
+
+
+\begin{figure}[h]
+ \begin{center}
+  \includegraphics{19-3ia945f3.eps}
+ \end{center}
+ \caption{TOとRSの決定木}
+\end{figure}
+\begin{figure}[h]
+ \begin{center}
+  \includegraphics{19-3ia945f4.eps}
+ \end{center}
+ \caption{RSとFDの決定木}
+\end{figure}
+\begin{figure}[h]
+ \begin{center}
+  \includegraphics{19-3ia945f5.eps}
+ \end{center}
+ \caption{TOとFDの決定木}
+\end{figure}
+
+
+\begin{biography}
+\bioauthor{古宮嘉那子}{
+2005年東京農工大学工学部情報コミュニケーション工学科卒．2009年同大大学院
+博士後期課程電子情報工学専攻修了．博士（工学）．同年東京工業大学精密工学研究所研究員，
+2010年東京農工大学工学研究院特任助教，現在に至る．自然言語処理の研究に従事．
+情報処理学会，人工知能学会，言語処理学会各会員．
+}
+\bioauthor{奥村　　学}{
+1962生．1984年東京工業大学工学部情報工学科卒業．1989年同大学院博士課程修了．
+工学博士．同年，東京工業大学工学部情報工学科助手．1992年北陸先端科学技術大学
+院大学情報科学研究科助教授，2000年東京工業大学精密工学研究所助教授，
+2009年同教授，現在に至る．自然言語処理，知的情報提示技術，語学学習支援，
+テキスト評価分析，テキストマイニングに関する研究に従事．
+情報処理学会，電子情報通信学会，人工知能学会，AAAI，言語処理学会，
+ACL，認知科学会，計量国語学会各会員．
+}
+
+\end{biography}
+
+
+\biodate
+
+
+\clearpage
+
+
+
+
+
+
+
+
+\clearpage
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+\end{document}

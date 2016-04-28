@@ -1,0 +1,599 @@
+\documentstyle[epsf,jnlpbbl]{jnlp_e_b5}
+
+\setcounter{page}{103}
+\setcounter{巻数}{3}
+\setcounter{号数}{4}
+\setcounter{年}{1996}
+\setcounter{月}{10}
+\受付{November}{16}{1995}
+\再受付{April}{1}{1996}
+\採録{June}{14}{1996}
+
+\setcounter{secnumdepth}{2}
+
+\title{}
+\author{}
+\jkeywords{}
+
+\etitle{Mixture Probabilistic Context-Free Grammar:\\
+An Improvement of a Probabilistic\\
+Context-Free Grammar Using Cluster-Based\\
+Language Modeling
+}
+
+\eauthor{Kenji Kita\affiref{TokushimaUniv}}
+
+\headauthor{Kita,~K.}
+\headtitle{Mixture Probabilistic Context-Free Grammar}
+
+\affilabel{TokushimaUniv}
+          {Tokushima University, Faculty of Engineering}
+          {Tokushima University, Faculty of Engineering}
+
+\eabstract
+{
+This paper proposes an improved probabilistic CFG (Context-Free Grammar),
+called the {\em mixture probabilistic CFG},
+based on an idea of cluster-based language modeling.
+This model assumes that
+the language model parameters have different probability distributions
+in different topics or domains.
+In order to performs topic- or domain-dependent language modeling,
+we first divide the training corpus into a number of subcorpora
+according to their topics or domains,
+and then estimate separate probability distribution
+from each subcorpus.
+Therefore, a mixture probabilistic CFG
+has several different probability distributions
+for CFG productuions.
+The language model probability of a sentence is calculated
+as the mixture of these probability distributions.
+The mixture probabilistic CFG enables us to make a context- or topic-dependent
+language model,
+and thus accurate language modeling would be possible.
+The proposed model was evaluated by calculating test-set perplexity
+using the ADD (ATR Dialogue Database) corpus and a Japanese intra-phrase
+grammar.
+The mixture probabilistic CFG had a test-set perplexity of 2.47/phone,
+while simple probabilistic CFG had a test-set perplexity of 2.77/phone.
+We also conducted speech recognition experiments
+using three language models,
+including pure CFG (without probabilities),
+simple probabilistic CFG, and the mixture probabilistic CFG.
+In our experiments, the mixture probabilistic CFG
+attained the best performance.
+The proposed model was also evaluated using sentence-level clustering.
+This evaluation used the dialogue corpus in which each utterance is annotated with
+an utterance type called IFT (Illocutionary Force Type).
+Using these IFTs, we divided the corpus into 9 clusters,
+and then estimated production probabilities from these clusters.
+Without IFT clustering, the perplexity was 2.18 per phone,
+but using IFT clustering, the perplexity was reduced to 1.82 per phone.
+}
+
+\ekeywords
+{
+language model, probabilistic context-free grammar,
+mixture probabilistic context-free grammar,
+cluster-based language model
+}
+
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+Recently, probabilistic language models have been shown effective
+in many natural language applications.
+One such application is automatic speech recognition.
+Speech inherently contains ambiguities and uncertainties
+that cannot be resolved by pure acoustic information.
+During recognition, many acoustically similar hypotheses are built.
+To effectively rank these hypotheses,
+the speech recognizer is required to rely on
+linguistic likelihood as well as acoustic likelihood.
+A probabilistic language model provides the basis for
+calculating linguistic likelihood.
+
+One well-known probabilistic language model is
+a probabilistic context-free grammar (CFG),\hspace*{-1mm}
+that is a grammar whose production rules have attached to them
+a probability of being used.
+These production probabilities are usually estimated
+from a training corpus
+under a probabilistic independent assumption,
+that the choice of a production rule is independent
+of the context.
+But, this simple assumption often results in
+a poor estimate of probability.
+Recently, more powerful language models
+beyond simple probabilistic CFGs
+have attracted considerable attention \cite{Chitrao90,Magerman91,Black92,Chiang95};
+some of them take
+context-sensitive probabilities into account.
+
+This paper will describe an improved probabilistic CFG,
+called the {\em mixture probabilistic CFG},
+based on an idea of cluster-based language modeling.
+The basic idea of this model involves
+clustering a training corpus into a number of subcorpora,
+and then training probabilistic CFGs from these subcorpora.
+At the clustering, the similar linguistic objects
+(e.g., belonging to the same context, topic or domain)
+are formed into one cluster.
+The resulting probabilistic CFGs become
+context- or topic-dependent,
+and thus accurate language modeling would be possible.
+
+This paper is organized as follows.
+Section~2 gives an overview of a probabilistic CFG.
+Section~3 describes a mixture probabilistic CFG.
+Section~4 contains evaluation experiments,
+including language model evaluation experiments
+from the viewpoint of perplexity reduction
+and speech recognition experiments.
+Section~5 describes another evaluation experiments
+using the IFT-annotated dialogue corpus.
+Finally, Section~6 presents our conclusions.
+
+
+\section{Probabilistic CFG: An Overview}
+
+A probabilistic CFG (Fujisaki,~T., Jelinek,~F., Cocke,~J., Black,~E. and Nishino,~T.~~1991) extends
+a CFG so that each production rule is of the form
+$<\!\!A \rightarrow \alpha, p\!\!>$,
+where $p$ is the conditional probability of $A$ being rewritten into $\alpha$.
+The probabilities of all $A$-productions (rules having $A$ on the LHS)
+should sum to~1.
+
+In the probabilistic CFG, the probability of a derivation can be computed
+as the product of the probabilities of the rules used.
+Suppose that
+\begin{equation}
+  S \stackrel{r_{1}}{\Longrightarrow} \gamma_{1}
+    \stackrel{r_{2}}{\Longrightarrow} \gamma_{2}
+    \stackrel{r_{3}}{\Longrightarrow} \cdots
+    \stackrel{r_{n}}{\Longrightarrow} \gamma_{n} = w
+\end{equation}
+is a derivation of $w$ from the start symbol $S$,
+then the probability of this derivation $D$ is given by
+\begin{equation}
+  P(D) = \prod_{i=1}^{n} P(r_{i}).
+\end{equation}
+The probability of a sentence $w$ is the sum of the probabilities
+of all possible derivations for $w$.
+\begin{equation}
+  P(w) = \sum_{D} P(D)
+\end{equation}
+
+
+The production probabilities are estimated
+from a training corpus as follows:
+
+\subsubsection*{Definition of Symbols}
+
+\begin{description}
+\item[\hspace*{0.5cm}\mbox{$\{B_{1},B_{2},\ldots,B_{I}\}$}] $\cdots$
+	A set of training sentences.
+\item[\hspace*{0.5cm}\mbox{$\{D_{1}^{i},D_{2}^{i},\ldots,D_{n_{i}}^{i}\}$}] $\cdots$
+	A set of derivations for the {\em i}-th sentence $B_{i}$.
+	Here, $n_{i}$ represents the number of derivations for $B_{i}$.
+\item[\hspace*{0.5cm}\mbox{$N_{j}^{i}(r)$}] $\cdots$
+	This function counts the number of rule occurrences (of its arguments)
+	in the derivation $D_{j}^{i}$.
+\end{description}
+
+\subsubsection*{Training of the Probabilistic CFG}
+
+The conditional probabilities of rules in the probabilistic CFG
+were estimated using the following procedure \cite{Fujisaki91}.
+
+\begin{enumerate}
+\item	Make an initial guess of $P(A \rightarrow \alpha)$
+	such that $\sum_{\alpha} P(A \rightarrow \alpha) = 1$ holds.
+\item	Parse the {\em i}-th sentence $B_{i}$ and get all the derivations for $B_{i}$.
+\item	Re-estimate $P(A \rightarrow \alpha)$ by the following formula.
+\begin{equation}
+      \overline{P(A \rightarrow \alpha)} = \frac{\sum_{i} C_{A}^{i}(\alpha)}
+      {\sum_{i} \sum_{\beta} C_{A}^{i}(\beta)}
+\end{equation}
+      where
+\begin{equation}
+      C_{A}^{i}(\alpha) = \sum_{j}
+      \left( \frac{P(D_{j}^{i})}{\sum_{k} P(D_{k}^{i})} N_{j}^{i}(A \rightarrow \alpha) \right)
+\end{equation}
+\item	Replace $P(A \rightarrow \alpha)$ with $\overline{P(A \rightarrow \alpha)}$ and repeat from step 2.
+\end{enumerate}
+
+
+\section{Mixture Probabilistic CFG}
+
+\subsection{Cluster-Based Language Modeling}
+
+There are two different approaches for cluster-based language modeling.
+The first approach addresses the data sparseness problem.
+In probabilistic language modeling,
+model parameters are usually estimated according to
+their frequencies in a training corpus.
+However, since the amount of available data is limited,
+many events are infrequent and do not occur in the corpus.
+To circumvent this problem,
+the training data is clumped into a number of clusters,
+which are then used to smooth probabilities
+of occurrence for infrequent events.
+A class-based $n$-gram model \cite{Brown92}
+is a typical example of this approach.
+
+The second approach aims to increase the model precision.
+The basic assumption in this approach is that
+the language model parameters have different probability distributions
+in different topics or domains.
+The training corpus contains texts from various kinds of topics or domains.
+This approach first divides the training corpus into a number of subcorpora
+according to their topics or domains,
+and then performs topic- or domain-dependent language modeling.
+Works \cite{Carter94,Iyer94} belongs to this category.
+
+\subsection{Mixture Probabilistic CFG}
+
+A mixture probabilistic CFG is based on the second approach.
+In a conventional manner,
+production probabilities are estimated using the whole training data.
+In a mixture probabilistic CFG, however,
+we divide the training corpus into $N$ clusters,
+and estimate separate probability distribution for each cluster.
+Thus, as a result, we have $N$ probability distributions for the CFG.
+
+Now suppose that the training corpus $T$ is divided into
+$N$ clustsers $T_{1},T_{2},\cdots,T_{N}$.
+That is,
+\begin{equation}
+	T = T_{1} \cup T_{2} \cup \cdots \cup T_{N}
+\end{equation}
+\begin{equation}
+	T_{i} \cap T_{j} = \phi \;\;\;\;\; \mbox{(if $i \neq j$)}
+\end{equation}
+
+Let $P_{i}(S)$ denote
+the probability of sentence $S$ using the probability distribution
+obtained from cluster $T_{i}$.
+Then, the mixture probabilistic CFG calculates
+the probability of $S$ as follows:
+\begin{equation}
+	P(S) = \sum_{i=1}^{N} q_{i} P_{i}(S)  \label{Eq:MPCFG}
+\end{equation}
+In Equation~\ref{Eq:MPCFG},
+$q_{i}$ is the probability of sentence $S$ arising from cluster $T_{i}$
+and calculated as follows:
+\begin{equation}
+	q_{i} = \frac{|T_{i}|}{\sum_{j} |T_{j}|}
+\end{equation}
+Here, $|T_{i}|$ indicates the number of sentences in cluster $T_{i}$.
+
+\section{Evaluation Experiments}
+
+\subsection{Corpus and Grammar}
+
+\begin{figure}[b]
+\begin{center}
+\begin{tabular}{lcl}
+\hline
+     $<$start$>$   & $\longrightarrow$ &  $<$bunsetu$>$	\\
+     $<$bunsetu$>$ & $\longrightarrow$ &  $<$interj$>$	\\
+     $<$bunsetu$>$ & $\longrightarrow$ &  $<$conj$>$	\\
+     $<$bunsetu$>$ & $\longrightarrow$ &  $<$np$>$	\\
+     $<$bunsetu$>$ & $\longrightarrow$ &  $<$vaux$>$	\\
+     $<$bunsetu$>$ & $\longrightarrow$ &  $<$quote$>$	\\
+		&     ..........	\\
+     $<$np$>$	   & $\longrightarrow$ &  $<$n-suffix$>$ \\
+     $<$np$>$	   & $\longrightarrow$ &  $<$n-suffix$>$  $<$p-k-wa$>$\\
+     $<$np$>$	   & $\longrightarrow$ &  $<$n-hutu$>$  $<$p-kaku-ga$>$\\
+		&     ..........	\\
+     $<$interj$>$  & $\longrightarrow$ &  m o sh i m o sh i	\\
+		&     ..........	\\
+\hline
+\end{tabular}
+\end{center}
+\caption{Example of CFG productions.} \label{Fig:Prods}
+\end{figure}
+
+In \hspace*{1mm}our \hspace*{1mm}evaluation \hspace*{1mm}experiments , \hspace*{1mm}we \hspace*{1mm}used \hspace*{1mm}the \hspace*{1mm}ADD \hspace*{1mm}(ATR Dialogue Database) \hspace*{1mm}corpus \\
+\cite{Ehara90} , which was created by ATR Interpreting Telephony Research Laboratories in Japan.
+The ADD corpus is a large structured database of dialogues collected
+from simulated telephone or keyboard conversations
+which are spontaneously spoken or typed in Japanese or English.
+
+Currently, the ADD corpus contains textual data from two tasks (text categories);
+one consists of simulated dialogues between a secretary and participants
+at international conferences (Conference Task),
+and the other of simulated dialogues between travel agents and customers (Travel Task).
+In our experiments,
+we used the keyboard dialogues from the Conference Task.
+
+In the experiments,
+we also used a Japanese intra-phrase grammar
+for the Conference Task.
+This grammar does not describe a sentence structure,
+but it describes constraints inside Japanese phrases.
+Figure~\ref{Fig:Prods}
+shows some productions in our grammar.
+
+
+In Figure~\ref{Fig:Prods},
+the grammar symbols quoted by\hspace*{1mm} $<>$ \hspace*{1mm}indicate \hspace*{1mm}nonterminal \hspace*{1mm}symbols.\hspace*{1mm}
+The start symbol, indicated by $<$start$>$,
+is rewritten into phrase category names.
+For example, $<$interj$>$, $<$conj$>$ and $<$np$>$
+are nonterminal symbols for
+interjection words, conjunctional phrases and noun phrases,
+respectively.
+Our grammar was written for phone-based speech recognition,
+thus terminal symbols are phone names.
+
+Table~\ref{Tab:CFG}
+shows the size of the grammar
+and the training/evaluation data.
+
+
+
+\begin{table}[h]
+\caption{Size of the grammar and the training/evaluation data.} \label{Tab:CFG}
+\begin{center}
+\begin{tabular}{c|c}
+\hline
+Number of productions	&  2,590 rules	\\ \hline
+Number of words		&  1,591 words	\\ \hline
+Number of training data	&  34,301 phrases	\\ \hline
+Number of evaluation data & 693 phrases		\\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+
+\subsection{Corpus Clustering}
+
+Corpus clustering is required to derive probability distributions
+in a mixture probabilistic CFG.
+In our evaluation experiments,
+the clustering was conducted using phrase category names
+such as \hspace*{1mm}$<$interj$>$\hspace*{1mm}, \hspace*{1mm}$<$conj$>$\hspace*{1mm} or \hspace*{1mm}$<$np$>$\hspace*{1mm}.
+We first segmented the training corpus into phrases,
+and then assign a phrase category name to each phrase.
+Category assignment was carried out by analyzing
+each phrase using the the intra-phrase grammar.
+In this way,
+the training corpus was devided into a number of clusters
+according to their phrase categories.
+
+There is one thing that should be noted here.
+Since the parameters for the mixture probabilistic CFG
+are derived by statistical estimation from each cluster,
+the size of each cluster (the number of phrases belonging to each cluster)
+is largely reponsible for the quality of the model.
+In other words, in order to estimate the reliable probabilities,
+each cluster must have enough data.
+In our experiments,
+the intra-phrase grammar had 109 phrase categories.
+However, after clustering based on these 109 categories,
+some clusters had very few data.
+For the reliable statistical estimation,
+clusters having fewer than 10 phrases (32 clusters in total)
+were merged into one cluster.
+As a result, we had 78 clusters obtained.
+
+
+\subsection{Evaluation Results}
+
+To evaluate the quality of a mixture probabilistic CFG,
+we calculated the {\em test-set perplexity} \cite{Lee89}.
+As a comparison, we also calculated the test-set perplexity
+of a simple probabilistic CFG.
+The test-set perplexity is the information-theoretic average branching
+of words along the test sentences (test-set),
+and is used as a measure of the difficulty of a recognition task
+relative to a given language model.
+In general, speech recognition performance is expected to increase
+as the test-set perplexity decreases.
+Thus, a language model with low perplexity is better.
+
+As stated earlier,
+terminal symbols of the CFG are phone names.
+Therefore, we actually calculated the test-set perplexity per phone.
+A formula for the test-set perplexity per phone, $PP$, is given by:
+\begin{eqnarray}
+	PP & = & 2^{LP} \\
+	LP & = & -\frac{1}{N_{W}} \sum_{i=1}^{N_{S}} \log_{2} P(S_{i})
+\end{eqnarray}
+where $N_{S}$ is the total number of phrases in the test-set,
+$N_{W}$ is the total number of phones in all phrases,
+and $P(S_{i})$ is the language model probability for the $i$-th phrase $S_{i}$.
+The results of perplexity measurements are summarized in Table~\ref{Tab:Perplexity}.
+The mixture probabilistic CFG had a test-set perplexity of 2.47/phone,
+while simple probabilistic CFG had a test-set perplexity of 2.77/phone.
+This result
+supports the effectiveness of the mixture probabilistic CFG.
+
+\begin{table}[h]
+\caption{Test-set perplexity} \label{Tab:Perplexity}
+\begin{center}
+\begin{tabular}{c|c}
+\hline
+Simple probabilistic CFG	& 2.77 / phone \\ \hline
+Mixture probabilistic CFG	& 2.47 / phone \\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+
+\subsection{Speech Recognition Experiments}
+
+We also conducted speech recognition experiments
+using three language models:
+\begin{itemize}
+\item[(1)]	Pure CFG (without production probabilities),
+\item[(2)]	Simple probabilistic CFG,
+\item[(3)]	Mixture probabilistic CFG.
+\end{itemize}
+As the speech recognition system,
+we used the {\em HMM-LR system} \cite{Kita89,Hanazawa90},
+which is an integration of {\em hidden Markov models} (HMM) \cite{Huang90}
+and {\em generalized LR parsing} \cite{Tomita91}.
+The HMM-LR system is a syntax-directed continuous speech recognition system.
+The system outputs sentences that the grammar can accept.
+
+The speech recognition experiments were conducted
+under the speaker-dependent condition,
+using discrete-type, context-independent HMMs without duration control.
+The results reported in Table~\ref{Tab:Performance}
+compare three language models
+in terms of phrase recognition performance.
+The mixture model attains the best performance.
+
+
+\begin{table}[h]
+\caption{Phrase recognition performance} \label{Tab:Performance}
+\begin{center}
+\begin{tabular}{c|c}
+\hline
+Pure CFG (without production probabilities)	&  83.6\% \\ \hline
+Simple probabilistic CFG			&  86.4\% \\ \hline
+Mixture probabilistic CFG			&  89.0\% \\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+
+\section{Sentence-Level Evaluation Experiments}
+
+In the previous section,
+we have described evaluation experiments based on phrase-level clustering.
+This section describes another evaluation experiments,
+in which sentence-level clustering are performed
+based on discourse-level information.
+
+In this evaluation,
+we used a dialogue corpus in which each utterance is annotated with
+an utterance type \cite{Nagata94}.
+The corpus used in the evaluation is what we call ``Model Dialogues'',
+which consists of 10 dialogues with 225 sentences.
+Each utterance is annotated with IFT (Illocutionary Force Type),
+which is an abstraction of the speaker's intention in terms of the type
+of action the speaker intends by the utterance.
+The following 9 IFTs are used in this corpus:
+\begin{itemize}
+\item[(1)] {\bf phatic} $\cdots$
+    phatic expressions such as greetings (e.g. Hello, Good-bye)
+
+\item[(2)] {\bf expressive}  $\cdots$
+    idioms that express the speaker's feeling (e.g. Thank you, You're welcome)
+
+\item[(3)] {\bf response}  $\cdots$
+    idiomatic responses and short answers (e.g. Yes, I see, That's right)
+
+\item[(4)] {\bf promise}  $\cdots$
+    the speaker commits himself to perform an action (e.g. I will send you a registration form)
+
+\item[(5)] {\bf request}  $\cdots$
+    the speaker asks the hearer to perform an action (e.g. Please go to Kitaooji station by subway)
+
+\item[(6)] {\bf inform}  $\cdots$
+    informative expressions (e.g. We are not giving any discount this time)
+
+\item[(7)] {\bf questionif}  $\cdots$
+    Yes-No questions (e.g. Do you have the announcement of the conference?)
+
+\item[(8)] {\bf questionref}  $\cdots$
+    WH questions (e.g. What should I do?)
+
+\item[(9)] {\bf questionconf}  $\cdots$
+    confirmations (e.g. You have already transfered the registration fee, right?)
+\end{itemize}
+
+
+Our experiment used a sentential grammar for the conference registration task,
+which had 2,789 production rules including 1,591 words.
+As stated above, utterances in the dialogue corpus are annotated with their IFTs.
+Using these IFTs, we divided the dialogue corpus into 9 clusters,
+and then estimated production probabilities from these clusters.
+The resulting probabilistic CFG was evaluated by calculating perplexity.
+In this experiment, since the amount of available data is small
+(namely, 10 dialogues with 225 sentences),
+all data were used both in the training stage and evaluation stage.
+That is, perplexity measurement was performed against 225 sentences,
+which were also used in the probability estimation.
+
+Without IFT clustering, the perplexity was 2.18 per phone,
+but using IFT clustering, the perplexity was reduced to 1.82 per phone.
+Although this evaluation was conducted using small-scale data,
+our result suggests the effectiveness of
+the mixture probabilistic CFG.
+
+
+
+
+\section{Conclusion}
+
+In this paper,
+we have proposed an improved probabilistic CFG,
+called the {\em mixture probabilistic CFG},
+based on an idea of cluster-based language modeling.
+The basic idea of this model involves
+clustering a training corpus into a number of subcorpora,
+and then training probabilistic CFGs from these subcorpora.
+At the clustering, the similar linguistic objects
+(e.g., belonging to the same context, topic or domain)
+are formed into one cluster.
+The resulting probabilistic CFGs become
+context- or topic-dependent,
+and thus accurate language modeling would be possible.
+The proposed model was evaluated
+using the ADD (ATR Dialogue Database) corpus and a Japanese intra-phrase
+grammar.
+The effectiveness of the model
+was confirmed by perplexity reduction and speech recognition experiments.
+
+
+\acknowledgment
+
+The author would like to thank Masaaki Nagata
+(NTT Information and Communication Systems Laboratories)
+and Tsuyoshi Morimoto (ATR Interpreting Telecommunications Research Laboratories)
+for providing us with the IFT-annotated dialogue corpus.
+
+\bibliographystyle{nlpbbl}
+\bibliography{kita}
+
+\begin{biography}
+
+\biotitle{}
+
+\bioauthor{Kenji Kita}
+{
+Kenji Kita received the B.S. degree in mathematics 
+and the Ph.D degree in electrical engineering,
+both from Waseda University,
+Tokyo, Japan, in 1981 and 1992, respectively.
+From 1983 to 1987, he worked for the Oki Electric Industry Co. Ltd., Tokyo, Japan.
+From 1987 to 1992,
+he was a researcher at ATR Interpreting Telephony
+Research Laboratories, Kyoto, Japan.
+Since 1992, he has been with the Faculty of Engineering,
+Tokushima University, Tokushima, Japan,
+where he is currently an Associate Professor.
+He is a member of the Acoustical Society of Japan,
+the Information Processing Society of Japan,
+the Institute of Electronics, Information and Communication Engineers,
+and the Association for Computational Linguistics.
+His current research interests include speech recognition,
+natural language processing, and corpus linguistics.
+}
+
+\bioreceived{Received}
+\biorevised{Revised}
+\bioaccepted{Accepted}
+
+\end{biography}
+
+\end{document}

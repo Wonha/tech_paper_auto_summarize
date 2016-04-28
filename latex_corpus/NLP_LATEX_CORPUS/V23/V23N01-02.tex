@@ -1,0 +1,988 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{amsmath}
+\usepackage{array}
+
+
+\Volume{23}
+\Number{1}
+\Month{January}
+\Year{2016}
+
+\received{2015}{5}{21}
+\revised{2015}{8}{6}
+\accepted{2015}{11}{3}
+
+\setcounter{page}{37}
+
+\jtitle{商品の属性値抽出タスクにおけるエラー分析}
+\jauthor{新里　圭司\affiref{rit} \and 関根　　聡\affiref{nyu} \and 村上　浩司\affiref{rit}}
+\jabstract{
+本稿では商品の属性値抽出タスクにおけるエラー分析のひとつの事例研究
+について報告する．
+具体的には，属性値辞書を用いた単純な辞書マッチに基づく属性値抽出システ
+ムを構築し，人手により属性値がアノテーションされたコーパスに対してシス
+テムを適用することで明らかとなる False-positive, False-negative 事例の
+分析を行った．属性値辞書は商品説明文に含まれる表や箇条書きなどの半構造
+化データを解析することで得られる自動構築したものを用いた．
+エラー分析は実際のオンラインショッピングサイトで用いられている5つの商品
+カテゴリから抽出した100商品ページに対して行った．そして分析を通してボトム
+アップ的に各事例の分類を行ってエラーのカテゴリ化を試みた．
+本稿ではエラーカテゴリおよびその実例を示すだけでなく，誤り事例を無くすため
+に必要な処理・データについても検討する．
+}
+\jkeywords{商品の属性値抽出，オンラインショッピング，エラー分析，エラーのカテゴリ化}
+
+\etitle{Error Analysis on Product Attribute Value Extraction}
+\eauthor{Keiji Shinzato\affiref{rit} \and Satoshi Sekine\affiref{nyu} \and Koji Murakami\affiref{rit}} 
+\eabstract{
+This paper reports error analysis results on the product attribute
+value extraction task. We built the system that extracted attribute
+values from product descriptions by simply matching the descriptions
+and entries in an attribute value dictionary.
+The dictionary is automatically constructed by parsing semi-structured data
+such as tables and itemizations in product descriptions.
+We run the extraction system on the corpus where product attribute
+values were annotated by a single subject, and then investigated
+false-positives and false-negatives.
+We conducted the error analysis procedure on 100 product pages
+extracted from five different product categories of an actual
+e-commerce site, and designed error type categories according to the
+results of the error analysis on those product pages.
+In addition to show the error type categories and their instances, we
+also discuss processing and data resources required for reducing the
+number of error instances.
+}
+\ekeywords{Product Attribute Value Extraction, Online Shopping, Error Analysis, Error Type Category}
+
+\headauthor{新里，関根，村上}
+\headtitle{商品の属性値抽出タスクにおけるエラー分析}
+
+\affilabel{rit}{楽天技術研究所}{Rakuten Institute of Technology}
+\affilabel{nyu}{ニューヨーク大学}{New York University}
+
+
+
+\begin{document}
+\maketitle
+
+\section{はじめに}
+
+場所や時間を気にすることなく買い物可能なオンラインショッピングサイトは
+重要なライフラインになりつつある．オンラインショッピングサイトでは商品に関する説明はテキスト形式で提供されるため，
+この商品説明文から商品の属性-属性値を抽出し構造化された商品データを作成する属性値抽出技術は実世界でのニーズが高い．
+ここで「商品説明文から商品の属性値を抽出する」とは，例えばワインに関係した
+以下の文が入力された時，(生産地，フランス)，(ぶどう品種，シャルドネ)，
+(タイプ，辛口)といった属性と属性値の組を抽出することを指す．
+
+\begin{itemize}
+\item フランス産のシャルドネを配した辛口ワイン．
+\end{itemize}
+
+\noindent このような商品の属性値抽出が実現できれば，他の商品のレコメンドやファセット検索での利用，詳細なマーケティング分析\footnote{商品を購入したユーザの属性情報と組み合わせることで「30代女性にフランス産の辛口ワインが売れている」といった分析ができる．}等が可能になる．
+
+
+
+商品の属性値抽出タスクは従来より多くの研究がなされており，少数のパ
+ターンにより属性値の獲得を試みる手法\cite{mauge2012}，事前に人手または
+自動で構築した属性値辞書に基づいて属性値抽出モデルを学習する手法\cite{ghani2006,probst2007,putthividhya2011,bing2012,shinzato2013}，
+トピックモデルにより属性値を獲得する手法\cite{wong2008}など様々な手法が提案されている．
+
+本研究の目的は商品属性値抽出タスクに内在している研究課題を洗い出し，抽
+出システムを構築する上でどのような点を考慮すべきか，またどの部分に注力するべ
+きかという点を明らかにすることである．
+タスクに内在する研究課題を洗い出すため，属性-属性値辞書に基づく単純なシ
+ステムを実装し，このシステムが抽出した結果のFalse-positve，
+False-negative事例の分析を行った．
+エラー分析という観点では，Shinzatoらがワインとシャンプーカテゴリに対し
+て得られた結果から無作為に50件ずつFalse-positive事例を抽出し，エラーの
+原因を調査している\cite{shinzato2013}．
+これに対し本研究では5つの商品カテゴリから20件ずつ商品ページを選びだし
+て作成した100件のデータ（2,381文）を対象に分析を行い，分析を通してボトムアップ的に各事例の分類を行って
+エラーのカテゴリ化を試みた．
+システムのエラー分析を行い，システム固有の問題点を明らかにすることはこ
+れまでも行われてきたが，この規模のデータに対して商品属性値抽出タスクに
+内在するエラーのタイプを調査し，カテゴリ化を行った研究は筆者らの知る限
+りない．
+
+
+
+後述するように，今回分析対象としたデータは属性-属性値辞書に基づく単純な抽出
+システムの出力結果であるが，これはDistant supervision \cite{mintz2009}に
+基づく情報抽出手法で行われるタグ付きコーパス作成処理と見なすことができ
+る．
+したがって，本研究で得られた知見は商品属性値抽出タスクだけでなく，
+一般のドメインにおける情報抽出タスクにおいても有用であると考えられる．
+
+
+
+\section{分析対象データ}
+\label{corpus}
+
+楽天データ公開\footnote{http://rit.rakuten.co.jp/opendataj.html}より配布されている商品データから，論文\cite{shinzato2013}を参考に，ワイン，シャンプー，プリンターインク，Tシャツ，キャットフードカテゴリに登録されている商品ページを無作為に20件ずつ，
+計100件抽出した．そして，抽出したページをブロック要素タグ，記号\footnote{【, 】, 。, ？, ！, ♪, ※, ●, ○, ◎, ★, ☆, ■, □, ▼, ▽, ▲, △, ◆, ◇, 《, ≫, ≪．ただし，これらが括弧内（「」，『』）に出現している場合は区切らない．}を手がかりに文に分割した．
+
+\begin{table}[b]
+\caption{対象カテゴリ，対象属性および対象データの規模．商品ページ数は各カテゴリ共に20件．}
+\label{attributes}
+\input{02table01.txt}
+\end{table}
+
+カテゴリ毎に分析対象とした属性を表\ref{attributes}に示す．これらの属性
+は論文\cite{shinzato2013}で抽出対象とされたものに以下の修正を加えたも
+のである．
+
+\begin{itemize}
+\item 同じ意味を表す属性名を人手で統合した．
+\item 誤った属性を人手で削除した．
+\item ブランド名，商品名，メーカー名などの重要な属性が抽出対象となっていなかったので，これらを分析対象として加えた．
+\end{itemize}
+
+続いて，各商品ページのタイトル，商品説明文，販売方法別説明文に含まれる属性値を1名の作業者によりアノテーションした．アノテーション時に
+は，後述する\ref{dictbuild}節の方法で作成した属性-属性値のリストを提示
+し，これらと類似する表現をアノテーションするよう依頼した．また．アノテー
+ションにあたり作業者に以下の点を指示した．
+
+\begin{description}
+\item [長い表現をとる] 
+属性値を$v$，任意の語を$w$とした時，表現「$w$の$v$」が属性値として見なせる場合，$w$もまた属性値として見なせる場合であっても「$w$の$v$」を1つの属性値としてアノテーションする．
+例えば「フランスのブルゴーニュ産ワインです」という文があった場合，「フラン
+  ス」，「ブルゴーニュ産」をそれぞれアノテーションするのではなく，「フ
+  ランスのブルゴーニュ産」をアノテーションする．
+
+\item [記号で区切る] 
+記号を挟んで属性値が列挙されている場合は別々にアノテーションする．
+例えば，「フランス・ブルゴーニュ産ワインです」という文があった場合，記号「・」
+で区切り，「フランス」，「ブルゴーニュ産」をそれぞれアノテーションする．
+ただし固有名詞（e.g., 「カベルネ・ソーヴィニョン」），数値（e.g.,
+  「3,000 ml」），サイズ（e.g., 「$19.5\times 24.1 \times 8.0$ cm」），数値の範囲
+（e.g., 「10〜15cm」）の場合は例外とし，記号があっても区切らない．
+
+\item [括弧の扱い]
+括弧の直前，中にある表現が共に属性値と見なせる場合は別々にアノテーションする．
+例えば「ブルゴーニュ（フランス）のワインです．」の場合，「ブルゴーニュ」，「フランス」を個別にアノテーションする．一方，
+「シャルドネ（100\%）」の場合は，「シャルドネ（100\%）」をアノテーションする．
+\end{description}
+
+\noindent
+以上の作業により得られた分析対象データの規模を表\ref{attributes}の文数
+および属性値数列に示す．カテゴリ毎に文数およびアノテーションされた属性
+値数に差があることがわかる．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{23-1ia2f1.eps}
+\end{center}
+\caption{商品ページ中に含まれる半構造化データ（枠で囲まれた部分）}
+\label{semi-structured-data}
+\end{figure}
+
+
+
+\section{商品の属性値抽出システム}
+\label{system}
+
+本節では商品の属性値を商品説明文から抽出するシステムについて述べる．本
+研究で用いる情報抽出システムは，オンラインショッピングサイト上の商品デー
+タの特徴を考慮したものであるため，まず商品データの特徴について整理する．
+
+
+\subsection{商品データの特徴}
+
+オンラインショッピングサイト上の商品データの特徴として以下の点が挙げられる．
+
+\begin{enumerate}
+\item 商品カテゴリ数が多い．
+\item 一部の商品ページには表や箇条書きなどの形式で整理された属性情報が含まれている．
+\end{enumerate}
+
+\noindent
+一般にオンラインショッピングサイトの商品カテゴリ数は多く，例えば，今回分析対象とした楽天で
+は4万以上のカテゴリが存在する．そのため，それぞれのカテゴリにお
+いて学習データを準備することはとてもコストの高い作業となるため現実的ではない．
+その一方で，一部の商品ページにおいては，図\ref{semi-structured-data}に挙
+げたように商品の属性情報が表や箇条書きなどを使って整理されている場合
+がある．これら半構造化データはショッピングサイトに出店している店舗ごと
+にその形式が異なるものの，いくつかのパターンを用いれば，そこから属性-属
+性値情報をある程度の精度で抽出することができる．例えば，Shinzatoら\cite{shinzato2013}は簡単な正規表現パターンを適用することで，ワインとシャンプーカテゴリに対して70\%程度の精
+度で属性-属性値辞書が構築できたと報告している．
+
+
+\subsection{抽出システム}
+
+タスクに内在する研究課題を明らかにするためには，少なくとも2つの方法が考
+えられる．1つは複数のシステムを同じデータで実行し，多くのシステムがエラー
+となる事例の分析を通してタスクの研究課題を明らかにする方法である．
+もう1つはシステムがシンプルでどのような動きになっているかをグラスボッ
+クス的に分析できるものを実行し，その結果を基に課題を明らかにする方
+法である．
+今回の商品属性値抽出タスクは，標準的なタグ付きコーパスや属性値抽出のた
+めのソフトウェア等が公開されているわけではないため，多くのシステムを実
+行させることは現実的ではない．
+そこで，今回のエラー分析は2つ目の方法により行った．具体的には，商品ペー
+ジに含まれる半構造化データから属性-属性値辞書を自動構築し，この辞書を使っ
+た辞書マッチによって商品ページのタイトル，商品説明文，販売方法別説明文
+から属性値を抽出する．
+この辞書マッチに基づくシステムは，辞書に属性値が登録されているか否かで
+属性値の抽出を行うためエラーの原因の特定が容易である．
+このような単純なシステムのエラー分析を行うことで，このタスクに含まれる
+エラーのタイプおよびその割合が明らかとなり，この結果は複雑なシステムを
+実装する際も，その素性の設計や重みの調整などに役立つと考えられる．
+
+近年，図\ref{flow-of-ds}に示すようなDistant supervisionに基づく情報抽出手法が多く提案されている\cite{mintz2009,wu2010,takamatsu2012,ritter2013,xu2013}．これらは FreebaseやWikipediaのInfoboxなどの人手で整備された辞書を活用して
+テキストデータに対し自動でアノテーションし，これを訓練データとして抽出規則を
+学習する．
+本手法でFreebaseやWikiepdiaのInfoboxを用いない理由は，これら辞書にはオンラインショッピング
+で有用となる商品の属性-属性値が記述されていない商品カテゴリが多く，教師
+データを自動構築する際の辞書データとしては利用できないためである．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{23-1ia2f2.eps}
+\end{center}
+\caption{Distant supervisionの流れ}
+\label{flow-of-ds}
+\end{figure}
+
+本手法は単純なものであるが，これはDistant supervisionにおける初期タグ付
+きデータ作成部分に相当する（図\ref{flow-of-ds}の破線の部分）．多くの手法では，この
+後，固有表現抽出と組み合わせたフィルタリングや，統計量を用いたフィルタ
+リング等の処理を行ってタグ付きコーパスからFalse-positive，False-negativeを減ら
+すように工夫している\cite{roth2013}．
+そのため，本研究で得られたエラー分析の結果は商品の属性値抽出のみならず，
+Distant supervisionに基づく一般の情報抽出タスクにおいても，どのようなエ
+ラーについて後続のフィルタリング処理で考慮しないといけないのかを示唆する有用な知見になると考えられる．
+
+以下，属性-属性値辞書の構築方法，および辞書に基づく属性値抽出方法について述べる．
+
+
+\subsubsection{属性-属性値辞書の構築}
+\label{dictbuild}
+
+属性-属性値辞書の構築はShinzatoらの手法\cite{shinzato2013}に基づいて行った．
+この手法は「属性-属性値の抽出」，「同じ意味を持つ属性の集約」の2つの処理からなる．
+
+\vspace{1\Cvs}
+\noindent
+\textbf{属性-属性値の抽出}　前述したように一部の商品ページには表や箇条書きなどの半構造化データが含
+まれており，辞書の構築にはこれらのデータを利用する．まずドメイン特有の
+属性を得るため，正規表現パターン$<$TH.*?$>$.+?$<$/TH$>$を使って表のヘッ
+ダーから属性を獲得する（$<$TH$>$は表のヘッダーを表すHTMLタグ）．獲得され
+た属性のうち「保存方法」「その他」「商品説明」「広告文責」「特徴」「仕様」は適切な属性と見なせないため除く．
+
+続いて属性-属性値の組を抽出するため，以下の正規表現パターンを商品
+ページに適用し，[ANY]にマッチした表現を[ATTR]に対応する属性の値として抽
+出する．
+
+\newpage
+\begin{description}
+\item [P1:] $<$T(H$|$D).*?$>$[ATTR]$<$/T(H$|$D)$><$TD.*?$>$[ANY]$<$/TD$>$
+\item [P2:] [P][ATTR][S][ANY][P]
+\item [P3:] [P][ATTR][ANY][P]
+\item [P4:] [ATTR][S][ANY][ATTR][S]
+\end{description}
+
+\noindent
+ここで[ATTR]は事前に獲得しておいた属性を表す文字列，[ANY]は任意の文字列，[P]は○，●，◎，□，■，・，☆，★，【，＜，［のいずれかの文字，
+[S]は：，／，】，＞，］のいずれかの文字を表す．
+なおP4において，[ANY]は最初に出現した[ATTR]の値とする．
+
+抽出された属性-属性値の組に対して，それらを表や箇条書きなどの形式で記述
+した店舗の異なり数を計数する．この店舗の異なり数を以降では店舗頻度と呼
+ぶ．この店舗頻度が高いほど抽出された属性-属性値が正しい関係にあることが報告されて
+おり\cite{shinzato2013}，次節で述べる属性値抽出システムでは，店舗
+頻度を用いて属性値の曖昧性解消を行っている．
+
+\vspace{1\Cvs}
+\noindent
+\textbf{同じ意味を持つ属性の集約}　前述の方法で抽出した属性-属性値には属性の表記に揺れがある．これは商品データを店舗が記述
+するための標準的な方法（規則）がないためである．例えば，「イタリア」「フ
+ランス」はワインカテゴリにおいて「生産地」であるが，店舗$m_1$は「生産地」，店舗$m_2$は「生産国」として記述することがある．
+そこでShinzatoらは「属性$a, b$が同一の半構造化
+データに出現しておらず，$a, b$が店舗頻度の高い同一の属性値をとる場合，
+$a, b$は同義である」という仮説を用いて表記の揺れた属性の認識・集約を行っている．
+具体的には，まず，店舗頻度が$N$を超える属性-属性値を対象に，同じ属性値を
+持つ属性のベクトル($a_1$, $a_2$)を生成する．そして，属性$a_1$, $a_2$が
+同一の半構造化データに含まれているかどうかチェックし，含まれていなければ
+それらを同義語と見なす．
+$N$は$N = \mathrm{max}(2, M_S/m)$で求まる値であり，$M_S$は対象カテゴ
+リにおいて半構造化データを提供している店舗数を表す．$m$は店舗頻度の閾値を決定するパラメータであり，本手法では経験的に100としている．この処理により，例え
+ばワインカテゴリであれば$v_1$=(生産国,生産地), $v_2$=(ぶどう品種,品種)が得られる．得られた属性のベクトルの集合
+(\{$v_1, v_2, \cdots$\})を$S_{attr}$で表す．
+
+続いて，属性ベクトルの集合$S_{attr}$の中で類似度の高い属性のベクトル同
+士をマージする．例えば，(地域,生産国,生産地)は，(地域,生産国)，(生産国,生
+産地)をマージすることで得られる．ベクトル間の類似度はコサイン尺度で求め，マージ処理は類似度の最大値が0.5を下回るまで繰り返し行う．
+この閾値0.5は経験的に決定した．
+
+
+\vspace{1\Cvs}
+\noindent
+以上の操作を楽天市場のワイン，シャンプー，プリンターインク，Tシャツ，
+キャットフードカテゴリに登録されている商品データに対して適用した．
+獲得された属性-属性値をカテゴリ毎に400件無作為に抽出し，正しい関係になっているかどうかを1人の被験者により評価した．
+獲得された属性-属性値の数，および正解率を表\ref{dicteval}に示す．
+Tシャツカテゴリで極端に低い精度(43.5\%)が得られたが，それ以外は
+Shinzatoらの報告と同程度，もしくはより高い精度が達成できていることがわかる．
+
+最後にワインカテゴリに対して獲得された属性-属性値の例を表\ref{dict}に示
+す．括弧（[~]）内の数字は店舗頻度を表す．
+
+\begin{table}[b]
+\caption{属性-属性値の数と正解率}
+\label{dicteval}
+\input{02table02.txt}
+\end{table}
+\begin{table}[b]
+\caption{ワインカテゴリに登録された商品データから自動構築した属性-属性値辞書の例}
+\label{dict}
+\input{02table03.txt}
+\par\vspace{4pt}\small
+[~]内の数字は店舗頻度を表す．
+\end{table}
+
+
+\subsubsection{属性値の抽出}
+
+まず入力文を形態素解析し，属性-属性値辞書中の属性値と最長
+一致した形態素列を対応する属性の値として抽出する．この時，抽出された属性値か
+らさらに別の属性値を取ることは考えない．
+また，誤抽出の影響を少なくするため属性値が数値のみからなる場合は抽出しなかった．
+形態素解析器にはJUMAN~7.01\footnote{http://nlp.ist.i.kyoto-u.ac.jp/index.php?JUMAN}を用いた．
+一部の表現は複数の属性の値となることがあるため抽出時に曖昧性を解消する
+必要がある．例えば「55cm」はTシャツカテゴリの属性「身幅」，「着丈」のど
+ちらの値にもなりえる．
+本システムでは店舗頻度が高いほど自動抽出された属性-属性値の信頼性が高いことに注目し，複数の属性が考えられる場合は店舗頻度の
+高い属性の値として抽出した．先程の例の場合，(身幅，55cm)の店舗頻度は35，
+(着丈，55cm)の店舗頻度は7であるため，Tシャツカテゴリでは，表現「55cm」は「身幅」の属性値として常に抽出される．
+
+
+
+\section{エラー分析}
+
+\ref{corpus}節で述べたデータに対し属性値の抽出を行った時のTrue-positive/False-positive/False-negativeの事例数および精度(Prec.)と再現率(Recall)を表\ref{tpfpfn}に示す．
+5カテゴリ中3カテゴリでは，辞書の正解率は80\%に近かったにも関わらず，それ
+らを用いて行った自動抽出の精度は50\%程度であることがわかる．
+
+以下では，まず，
+False-positive，False-negativeの事例について分析し，各エラーを除くためにどのような処理・データが必要となるかを検討する．
+\ref{chiken}節では，エラー分析を通して得られた知見のうち，Distant supervisionに基づく一般の情報抽出タスクにおいても有用なものについて考える．
+
+\begin{table}[b]
+\caption{True-positive/False-positive/False-negativeの数および精度と再現率}
+\label{tpfpfn}
+\input{02table04.txt}
+\end{table}
+
+
+\subsection{False-positiveの分析}
+
+False-positiveとなった1,057事例について，以下の項目を順次チェックすることで分類を試みた．
+
+\begin{enumerate}
+\item 誤った属性-属性値に基づいて属性値が抽出されている
+\item 属性値を抽出するべき商品ページでない
+\item 商品と関係ないパッセージから属性値が抽出されている
+\end{enumerate}
+
+\noindent
+分類の結果を表\ref{checkitems}に示す．表より誤った辞書エントリに起因す
+る誤抽出が多いことがわかる．各チェック項目の詳細については\ref{check1}節，
+\ref{check2}節，\ref{check3}節で述べる．
+
+チェック項目(1)，(2)，(3)をパスした抽出結果は，適切な商品ページの適切な
+パッセージから適切な属性-属性値に基づいて抽出されたものであるにも関わら
+ず誤抽出と判断されたものである．そこで，残った事例を調査し，何が原因な
+のかを検討した．この結果については\ref{check4}節で述べる．
+
+\begin{table}[t]
+\caption{事前チェック項目の該当事例数}
+\label{checkitems}
+\input{02table05.txt}
+\end{table}
+
+
+
+\subsubsection{誤った属性-属性値に基づいて属性値が抽出されている}
+\label{check1}
+
+属性値の抽出は商品ページの半構造化データより構築した辞書に
+基づいて行っている．辞書は自動構築しているため，誤った属性-属性値の組も
+含まれている．そこでまず，誤った属性-属性値に基づいて抽出された結果であるかど
+うかを確認した．この項目に該当する事例数は712であり，
+False-positive事例の67.4\%に相当する．
+自明ではあるが，高い精度で辞書を構築することが，辞書ベースの情報抽出シ
+ステムにおいて重要であることがわかる．
+
+この項目に該当する事例を減らすためには辞書構築の方法を見直す必要がある．
+今回は表・箇条書きデータに注目して辞書を構築しているため，辞書構築の精
+度を改善するためには，商品ページ中のこれら半構造化データの解析をより正
+確に行う必要があるだろう．
+また，表・箇条書き以外の手がかり（例えば語彙統語パターン）を取り入れる
+ことも辞書構築の精度向上に有効であると考えられる．
+
+次に人手でチェックするなどして属性-属性値辞書に含まれる誤ったエントリを
+削除した場合，辞書マッチに基づく抽出システムの精度がどの程度改善され
+るのかについて確認する．
+誤った属性-属性値に基づいて抽出されてしまった事例を除いた後，再
+度計算したカテゴリ毎の精度を表\ref{estprec}に示す．表\ref{tpfpfn}および
+表\ref{estprec}を比べると，平均で精度が45.2\%から71.6\%に改善されている
+ことがわかる．
+この結果から，エントリが全て正しい辞書を用いたとしても3割程度は誤抽出と
+なることがわかる．
+
+\begin{table}[t]
+\caption{エントリが全て正しい辞書を用いた場合の精度}
+\label{estprec}
+\input{02table06.txt}
+\end{table}
+
+
+\subsubsection{属性値を抽出するべき商品ページでない}
+\label{check2}
+
+楽天では商品ページを商品カテゴリに登録する作業は店舗によって行われ
+ており，そこには誤りが含まれている．そこで誤って分析対象カテゴリに登録され
+た商品ページかどうかを確認した．誤ったカテゴリに登録されている商品ペー
+ジは今回のデータセット中に4件\footnote{シャンプーカテゴリにシャンプーの容器，化粧品，Tシャツカテゴリに帽子，キーホルダーが登録されていた．}あり，そこに含まれるFalse-positive事例数
+は53件(5.0\%)であった．
+
+このような誤りを除くためには，与えられた商品ページが商品カテゴリに該当する
+ものであるかどうかを判定する処理が必要である．例えば，村上ら
+\cite{murakami2012}は辞書に基づく方法で商品ページが正しい商品カテゴリに登録されているかを判定する手法を提案している．このような手法を用いることで，この項目に該当
+する事例を減らすことができると考えられる．
+
+
+\subsubsection{商品と関係ないパッセージから属性値が抽出されている}
+\label{check3}
+
+商品ページには当該ページで販売している商品以外のことについて記述される
+ことも多い．例えば，商品ページ閲覧者を店舗サイト内で回遊させるために，
+当該ページで販売されている商品以外の商品の広告を掲載していたり，検索結
+果に頻繁に表示されるようキーワードスタッフィングが行われている商品ページがある．
+そこで3番目の項目として，当該ページにて販売されている商品に関係ないパッ
+セージから属性値抽出が行われたかどうかを確認した．結果，99件(9.4\%)の事例がこ
+の項目に該当した．このうち90件は以下のような他の商品へのナビゲーションであった
+（括弧内はカテゴリ名）．
+
+\begin{itemize}
+\item その他の\underline{シャンパン}$_{タイプ}$＆スパーク＆ワイン関連はコチラをクリック♪※順次追加中！（ワイン）
+\item \underline{ミルボン}$_{メーカー}$一覧はこちら（シャンプー）
+\item 色違い”\underline{ナチュラル}$_{色}$”　’’ＴＨＥＲＥ　ＡＲＥ　ＷＡＶＥＳ　ＮＡＴ’’クルーネックＴシャツ（Tシャツ）
+\item 《チャオ缶　\underline{国産}$_{原産国}$》（キャットフード）
+\end{itemize}
+
+\noindent
+他の商品ページへのリンクが埋め込まれているかどうかの確認や，他の商品へ
+のナビゲーションは複数の商品ページに対して設置されることが多いため，商
+品ページのテンプレートを認識した結果を利用することで，このような事例は
+減らせるのではないかと考えられる．
+
+残りの9件はキーワードスタッフィングが行われた領域から抽出されたものであっ
+た．前処理としてキーワードスタッフィングが行われているかどうかを判定す
+ることで，これらの事例を削除することが期待できる．
+
+\vspace{0.5\Cvs}
+\subsubsection{残りの誤り事例はどんなものか？}
+\label{check4}
+
+ここまでの項目をパスした抽出結果は，適切な商品ページの適切なパッセージ
+から適切な属性-属性値に基づいて抽出されたものであるが誤抽出となった事例
+である．このような誤りは193件(18.2\%)あり，これら事例を重複を考慮して分類すると表\ref{error_type_fp}のようになった．
+
+\begin{table}[b]
+\caption{各商品カテゴリにおける誤りの種類とその事例数.}
+\label{error_type_fp}
+\input{02table07.txt}
+\end{table}
+
+以下エラータイプ毎に事例を列挙するとともに，エラーを除くために必要とな
+る処理・データについて検討する．
+
+\vspace{1.5\Cvs}
+\noindent
+\textbf{人手アノテーションと部分一致}　人手アノテーションと部分一致している事例が84件あった．このうち以下の例のように正解とみなして
+も問題ない事例が37件あった（太字が人手アノテーション，下線が自動抽出結果）．
+
+\begin{itemize}
+\item ドメーヌ・レ・グリフェは{\bf \underline{ボジョレー}の南}$_{産地}$に位置する歴史あるドメーヌです。
+\item {\bf \underline{国内}製}$_{製造国}$　ヘアケア品
+\item {\bf 薄手の\underline{コットン素材}}$_{素材}$で着心地抜群。
+\item \underline{表記{\bf Ｌ}}$_{サイズ}$
+\end{itemize}
+
+\noindent これらは「どのような表現を属性値として抽出するか」という属性値の定義
+と関係している．定義は抽出結果を利用するアプリケーションに依存する部分
+であり，アプリケーションによっては上に挙げた抽出結果でも問題ない場合が
+ある．そのため，これらはFalse-positiveであるが，ほぼ正解と見なしても問
+題ないと考えられる．
+
+残りの47件中41件はシャンプーの成分に関するものであり，以下の例のように
+人手アノテーションと部分一致しているものの，これが抽出されても意味をな
+さないものであった．
+
+\begin{itemize}
+\item ２−アルキル−Ｎ−カルボキシメチルヒドロキシエチルイミダゾリニウムベタイン、{\bf ラウロイルメチル−Β−\underline{アラニン}$_{成分}$ＮＡ液}、ヤシ油脂肪酸アミドプロピルベタイン液
+\end{itemize}
+
+\noindent
+このような事例は属性-属性値辞書のカバレージを改善することで減らせると考えられる．
+
+\vspace{1\Cvs}
+\noindent
+\textbf{他のエンティティの部分文字列からの抽出}　次に多かった誤りは他のエンティティの部分文字列から抽出している事例であり40件あった．これら
+はエンティティのタイプから組織名やイベント名，型番，ブランド名などの固有表現，ドメイン固有の用語，一般的な名詞句に分類できた．
+
+固有表現の一部から抽出されていた例を示す（太字が固有表現相当の表現）．
+
+\begin{itemize}
+\item {\bf \underline{フランス}$_{産地}$革命}の戦いの舞台にもなった歴史あるシャトー。
+\item また、フランスで最も古いＡＯＣ、{\bf ブランケット・ド・\underline{リムー}}$_{産地}$を産出します。
+\item 醸造方法も{\bf シャトー・\underline{マルゴー}$_{産地}$}と　同じ手法をとって、　セカンドながらも品質は他の特級シャトーに匹敵するほどです。
+\item ２０１１年度の{\bf トロフィー・リヨン・\underline{ボジョレー}$_{産地}$・ヌーヴォーコンクール}では見事金賞を受賞！
+\item １円３個まで　リピート歓迎　ＣＡＮＯＮ（キヤノン）対応の純正互換インクカートリッジＢＣＩ−６ＰＭ（残量表示機能付）（関連商品　{\bf ＢＣＩ−６\underline{ＢＫ}$_{カラー}$}　ＢＣＩ−６Ｃ　ＢＣＩ−６Ｍ　ＢＣＩ−６Ｙ　ＢＣＩ−６ＰＣ　ＢＣＩ−６ＰＭ　ＢＣＩ−６Ｒ　ＢＣＩ−６Ｇ）
+\item アメリカンイーグル（ＡＭＥＲＩＣＡＮ　ＥＡＧＬＥ）は、{\bf \underline{ＡＢＥＲＣＲＯＭＢＩＥ}$_{ブランド}$　＆　ＦＩＴＣＨ}（アバクロンビー＆フィッチ）と並んで人気のカジュアルブランドで、北米では８００店舗の直営店を持っています。
+\item {\bf \underline{ブラック}$_{色}$メタル}　ページ正規ライセンスＴシャツ販売
+\end{itemize}
+
+\noindent
+このような事例は全部で25件あり，前処理として固有表現認識を行い，固有表
+現の一部からは属性値を抽出しない，等のルールを適用することで事例を減らすことができると考えられる．ただ，ブランド名等は従来の固有表現タイプではカバーされていないため，従来にはないタイプの固有表現の認識技術が求められる．
+
+次にドメイン固有の用語から抽出していた例を示す．
+
+\begin{itemize}
+\item {\bf \underline{ボジョレー}$_{産地}$・ヌーヴォー}２０１３年（新酒）！
+\item パーマ・デジパー（デジタルパーマ）・縮毛矯正ストレートパーマ　エアウエーブ・{\bf \underline{水}$_{成分}$パーマ}・フィルムパーマなどパーマのウエーブを長持ちさせたい方に。
+\end{itemize}
+
+\noindent
+このような例は全部で12件であった．固有表現の場合と同様に，ドメイン毎に
+専門性の高い用語を抽出するなどし，用語の部分文字列からは属性値を抽出し
+ないなどのルールを設ける必要があると考えられる．
+
+最後に名詞句の一部から抽出されていた事例を示す．このような事例は以下の3件であった．
+
+\begin{itemize}
+\item ２位にルイ・ロデレール・ブリュット、７位にテタンジュ・ブリュットなど　大手の{\bf \underline{シャンパン}$_{タイプ}$ハウス}も名を連ねています。
+\item ジョエル・ファルメ氏が引き継いだころは、栽培した葡萄を{\bf \underline{シャンパン}$_{タイプ}$メーカー}に売っていましたが、現在は、葡萄の栽培・醸造・瓶詰めまで行うＲＭ（レコルタン・マニピュラン）です。
+\item {\bf \underline{アメリカ}$_{製造国}$各種機関}で厳しい環境基準をクリアした分解作用で汚れだけを分解してくれるから髪や頭皮を傷めません。
+\end{itemize}
+
+\noindent
+これらを除くためには名詞句の構造を解析し，主辞以外の部分からは属性値を抽出しない，等の処理が考えられる．
+
+
+\vspace{1\Cvs}
+\noindent
+\textbf{当該商品の属性値の説明とは関係ない記述からの抽出}　このような事例は37件あった．以下に例を示す．
+
+\begin{itemize}
+\item \underline{スペイン}$_{産地}$のロマネ・コンティで知られるヴェガ・シシリア社がハンガリーで造るワイン。
+\item 米国ではアメリカンイーグル、アバクロ、\underline{ＧＡＰ}$_{ブランド}$（ギャップ）は３大アメカジブランドとして、３つとも同じくらいの知名度となっています。
+\item Ｍ，Ｌ　モデル着用サイズ：Ｍ（モデル　身長：１７０ＣＭ，　体重：５８ＫＧ，　ウエスト：７２ＣＭ，　ヒップ：９０ＣＭ，　胸囲：８８ＣＭ，　肩幅：\underline{４４ＣＭ}$_{肩幅}$，　首周り：３７ＣＭ）
+\item 成猫体重\underline{１ＫＧ}$_{内容量}$当り１日約１．４袋を目安として、１日の給与量を２回以上に分けて与えてください。
+\item レビューで\underline{５％}$_{粗脂肪}$ＯＦＦクーポン！
+\end{itemize}
+
+\noindent
+上の例からわかるように，ワインはワイナリーに関する記述から，Tシャツはブ
+ランドの説明およびモデルの体型に関する記述から，キャットフードはその利
+用方法やクーポンに関する記述から誤った情報が抽出されている．このような
+誤抽出を除くためには，商品ページ内の各文が何について言及しているのかといった文中の主題を認識する必要がある．
+
+\vspace{1\Cvs}
+\noindent
+\textbf{属性値の多義性に起因する誤抽出}　このような事例は33件あった．この中で最も多かったタイプはサイズに関する属性値であり，16件であった．
+以下に例を示す．
+
+\begin{itemize}
+\item 着丈５９ＣＭ、身幅\underline{４２ＣＭ}$_{肩幅}$、袖幅１７ＣＭ
+\item \underline{５４．５ＣＭ}$_{身幅}$
+\end{itemize}
+
+\noindent 1つ目の例のように，サイズに関する情報は属性名とともに属性値が記述されることがある
+ため，属性名に相当する表現と属性値がどのくらい離れた場所に記述されてい
+るか，という指標を考慮することで誤りを減らせる可能性がある．2つ目の例は
+表のセルに記述されたものであった．そのため，表形式で記述されたデータの
+理解も重要な処理と考えられる．
+
+
+次に多かったタイプは割合に関する表現であった．このタイプの事例は9件であった．以下にその例を示す．
+
+\begin{itemize}
+\item ピノノワール７０％、ピノムニエ\underline{２０％}$_{度数}$、シャルドネ１０％
+\item 粗たん白質：\underline{４．０％以上}$_{粗脂肪}$、粗脂肪：０．１％以上、粗繊維：０．１％以下、粗灰分：１．０％以下、水分：９４．０％以下、エネルギー：約１５ＫＣＡＬ／袋
+\item \underline{０．０５％以上}$_{粗脂肪}$
+\end{itemize}
+
+\noindent
+1つ目の例のように混合比が素材と一緒に併記されることがある．そのため，素材に相当する表現の間に挟まれる割合表現を抽出対象としないことでエラーを減らせると考えられる．
+サイズ同様，割合についても2つ目の例のように属性名にあたる表現と併記されることがあるため，属性名との距
+離を考慮することである程度事例数を減らすことが期待できる．また割合も表形式のデータで記述されることがあるため，表データの理解は重要であろう．
+
+以下は本来であれば，ワインの属性「タイプ」の値として抽出されるべきであるが，地名として抽出されてしまった例である．
+
+\begin{itemize}
+\item ＮＹタイムズで、ベスト\underline{シャンパーニュ}$_{産地}$（４０ドル以下）に選ばれました。
+\item モエ・シャンドン・ドンペリニヨンの最高級品、通称「ドンペリ・ゴールド」最高の葡萄を熟成させ生産量が極めて少なく本場フランスと日本でしか手に入れることのできない究極の「幻の\underline{シャンパーニュ}$_{産地}$」と呼ばれています。
+\end{itemize}
+
+\noindent このような地名に関係した誤りは3件あり，サイズ，割合表現につい
+で多かった．最初の例は「40ドル以下」，次の例は「幻の」や「フランスと日本
+でしか手に入れることのできない」という表現から「シャンパーニュ」が
+「地名」ではなく「タイプ」の意味で使われていることがわかる．
+このことから，属性値の周辺の語彙を見ることで多義性解消を行う従来手法で
+解決できそうである．しかし従来手法は機械学習に基づくものが多く，教師デー
+タを曖昧性のある属性値ごとに作成するのは膨大なコストがかかる．そのため，
+教師なし学習に基づく解消方法が求められる．
+
+
+
+\vspace{1\Cvs}
+\noindent
+\textbf{メトニミーに起因する誤抽出}　このタイプに該当する事例は5件あり，すべて「ボジョレー」に関するものであっ
+た．以下に例を示す．
+
+\begin{itemize}
+\item 本物の\underline{ボジョレー}$_{産地}$の味わいを　感じさせてくれる、自然派！
+\item \underline{ボジョレー}$_{産地}$に求める要素をすべて備えていると言っても過言ではありません。
+\end{itemize}
+
+\noindent
+「ボジョレー」はワインの産地の1つであるが，ここでは産地としてではなく，
+「ボジョレー産のワイン」という意味で用いられている．上の例は「の味わい」
+という表現に注目することで「産地」でないことがわかる．その一方で下の例は文単
+体では「産地」という理解も可能である．しかしながら，当該文の直前の文が
+「彼らのスタイルは飲み心地が良く、フルーティで果実味が豊か。」であるこ
+とを考えると「産地」ではないことがわかる．このタイプのエラー事例を減ら
+すには，ある表現がメトニミーなのかどうかを判定する処理が必要であり，さらに2つ目の例のように一文中の情報では判定できない事例もあるため，文を跨いだ解析が求められる．
+
+
+\vspace{1\Cvs}
+\noindent
+\textbf{形態素解析器の過分割による誤抽出}　形態素解析器により過分割されたために誤って抽出された事例が1件あった．以下に示す．
+
+\begin{itemize}
+\item トカイ・フルミント・ドライ・マン\underline{デュラス}$_{品種}$［２００６］（オレムス）
+\end{itemize}
+
+\noindent
+マンデュラス(mandulas)とはハンガリー語でアーモンドを意味する語である．
+形態素解析器の辞書にマンデュラスが登録されていなかったため，過分割されて
+しまい誤った属性値が抽出されていた．しかしながら，マンデュラスのような語が形態素解析器の辞書にあらかじめ登録されていることは期待できないため，あるドメインに関するテキスト集合か
+ら自動的に語彙を獲得し，形態素解析器の辞書を動的に拡充する手法（例えば，村脇らの手法\cite{murawaki2010}）が必要であると考えられる．
+
+\vspace{1\Cvs}
+\noindent
+\textbf{商品ページ内の誤った情報からの抽出}　
+誤った情報が商品ページに記述されており，そこから誤った属性値が抽出されている事例が1件あった．以下に示す．
+
+\begin{itemize}
+\item アリミノ　ミントシャンプー　フローズンクール　\underline{２２０ＭＬ}$_{容量}$
+\end{itemize}
+
+\noindent
+商品タイトルには1000mlと記述されており，商品画像も1000mlのものであったことから220mlは誤り
+であることがわかった．このように抽出元となるテキストの信頼度や，画像デー
+タなどのテキスト以外の情報を考慮することも精度の向上に必要である．
+
+
+
+\subsection{False-negativeの分析}
+
+False-negativeに該当する事例は全部で831件あった．分析にあたり，まず，キャット
+フードカテゴリについては全18件，キャットフード以外のカテゴリからは無作
+為に50件ずつ選び出した．そして，以下の条件のいずれかに一致する事例を削
+除して残った188件について分析を行った．
+
+\begin{itemize}
+\item 誤ったカテゴリに登録された商品ページ．
+\item 人手アノテーションと部分一致し，かつ正解と見なしても問題ないもの．
+\end{itemize}
+
+\noindent
+分析の結果，False-negative事例は(1)異表記すら辞書に含まれていない，(2)異表記
+は辞書に含まれている，(3)抽出手法の問題の3種類に分類できた．本節では各
+タイプについて述べる．
+
+
+\subsubsection{異表記すら辞書に含まれていない}
+\label{notContainedSpellingVariation}
+
+当該表現だけでなく，その異表記すら辞書に含まれていない事例が100件 (53.2\%) あっ
+た．表\ref{fn_type}に異表記が辞書に含まれていない属性値のタイプと例を示
+す．組織名，地名，割合表現，人名など既存の固有表現のタイプが見てとれる．
+そのため，固有表現のタイプと属性の間に変換ルールを設けることで，辞書に含まれていない属性値についても固
+有表現認識技術を用いることで抽出できる可能性が
+ある．しかしながら，この操作によってFalse-positiveの数が増えてしまう可能性があることに留意する必要がある．
+
+\begin{table}[b]
+\caption{異表記すら辞書に含まれていない属性値の例}
+\label{fn_type}
+\input{02table08.txt}
+\end{table}
+
+
+\subsubsection{異表記は辞書に含まれている}
+\label{containedSpellingVariation}
+
+属性値自身は辞書に含まれていないが，その異表記が辞書に含まれている事例
+は69件(36.7\%)あった．異表記のタイプ，各タイプの数および例を表\ref{variation}に
+示す．
+空白，中黒，ハイフンの有無や入れ替わり，長音とハイフンの入れ替わり，接
+辞の有無，翻字の違い，小数点の扱い，送り仮名の有無など，テキスト中と辞書中の表現の柔軟
+なマッチングを行うことで改善できる事例が多いことがわかる．
+その一方で，略語，翻訳，言い換えなど事前の知識獲得処理を必要とする事例も見られる．
+
+\begin{table}[b]
+\caption{テキスト中の表現と辞書エントリの表記の違い}
+\label{variation}
+\input{02table09.txt}
+\end{table}
+
+
+
+\subsubsection{抽出手法の問題}
+
+辞書に正しい属性-属性値の組が登録されているにも関わらず\ref{system}節で述べた手法の問題によ
+り抽出されなかった事例が19件 (10.1\%) あった．この中で最も多かったタイプは数値単
+体からなる属性値であった（13件）．誤抽出の影響を減らすため数値のみの
+属性値は抽出しないようにしたことが原因である．
+数値に関する抽出手法を洗練することで，このタイプの誤りは減らせると考えられる．
+
+残り6件のうち3件は，辞書エントリとテキストの最長一致による属性値抽出方
+法が問題となっていた．具体的には，正解の属性値（例えば，(メーカー，デミ　コスメティクス)）よりも文字列長の長い誤っ
+た属性値（例えば，(メーカー，日華化学株式会社　デミ　コスメティクス)）が先に抽出されてしまい，正しい属性値が抽出されなくなっていた．文字列長だけではなく，属性-属性値としての正しさも考慮に入れて抽出を行うことで改善できる可能性がある．
+
+残りの3件は属性値に多義性がある場合であった．属性値抽出を行う際，店舗頻
+度をもとに多義性解消を行っているが，この処理が誤っていた．そのため，店
+舗頻度だけでなく，前後の文脈を考慮するなどして多義性解消を行う必要があ
+ると考えられる．
+
+
+
+
+\subsection{Distant supervisionに基づく一般の情報抽出タスクに対して有用な知見}
+\label{chiken}
+
+一般にDistant supervisionに基づく情報抽出手法では，FreebaseやWikipediaのInfoboxなどの人手で整備された辞書に登録されているエンティティ（もしくはエンティティの組）がテキストに
+出現している際，エンティティに紐づいている辞書内の情報（例えば，エンティティのタイプやエンティティ間の関係）を当該テキ
+ストに付与することで教師データを自動的に作成する．
+例えばDistant supervisionの考え方を一般的な関係抽出タスクに初めて用いた
+Mintzら\cite{mintz2009}の手法では，まず固有表現抽出器をテキストに対して
+適用し，任意の文$s$に固有表現$e_1$，$e_2$が含まれ，かつFreebaseに
+$<e_1, e_2, r>$というレコードが登録されている時，文$s$を関係$r$の学習デー
+タとして利用する．
+
+Distant supervisionに基づく方法で教師データを作成する際，エンティティの
+誤認識が問題となる．どのような誤認識のタイプがあるのか，という点で4.1.4節
+で述べた以下のエラーカテゴリはDistant supervisionに基づく一般の情報抽出においても有用な知見になると考えられる．
+
+\begin{itemize}
+\item 他のエンティティの部分文字列からの抽出
+\item 形態素解析器の過分割による誤抽出
+\item 属性値の多義性に起因する誤抽出
+\item メトニミーに起因する誤抽出
+\end{itemize}
+
+\noindent
+「他のエンティティの部分文字列からの抽出」に関しては，固有表現の認識を
+事前に行うことで，ある程度の誤認識は減らせるかもしれない．しかしながら，
+4.1.4節で述べたように，従来の固有表現抽出で定義されたタイプ以外の表現の
+認識も求められることから，依然としてこの問題点は考慮する必要がある．
+「形態素解析器の過分割による誤抽出」についても，固有表現の認識に
+失敗する可能性があるため，タグ付け対象となるテキストのドメインに特化し
+た表現の自動獲得手法が求められる．
+
+関係抽出では「文に2つのエンティティが含まれている」という条件が各エンティティの多義性解
+消の手がかりになると考えられるが，この条件だけで全ての多義性を解消できるとは考えにくい．また，固有表現抽出のような1つエンティティを対象とした
+タスクの場合は上述の条件が適用できない．そのため，「エ
+ンティティがどの意味で用いられているのか」を認識
+することが一般の情報抽出においても重要である．
+このことから，「属性値の多義性に起因する誤抽出」および「メトニミーに起
+因する誤抽出」で列挙した事例については，商品属性値抽出タスクに限らず，
+一般の情報抽出においても考慮する必要があるだろう．
+
+
+エンティティの誤認識以外には，エンティティが出現しているにも関わらず認識されないFalse-negativeの問題がある．
+この問題のうち，異表記が辞書に含まれているエンティティについては\ref{containedSpellingVariation}節で得られた結果が役立つと考えられる．
+この結果は，辞書中とテキスト中の表現のマッチングを行う際，どのような「ずれ」について考慮しなければならないか，を検討する1つの知見になりえる．
+
+
+
+\section{おわりに}
+
+本稿では商品の属性値抽出タスクにおけるエラー分析のひとつの事例研究につ
+いて述べた．まず，楽天市場のワイン，シャンプー，プリンターインク，Tシャ
+ツ，キャットフードカテゴリに登録された商品データ100件に対して，人手で属
+性値のアノテーションを行った．次に属性-属性値辞書に基づく情報抽出システ
+ムを実装し，このシステムを属性値がアノテーションされた商品データに対し
+て適用した．
+その結果明らかとなるFalse-positive，False-negtive事例を調査し，各事例を
+そのエラーのタイプに応じて分類した．こうすることで，商品属性値抽出タス
+クに内在する研究課題を洗い出し，抽出システムを構築する上でどのような点
+を考慮するべきか，またどのような点に注力するべきかという部分を明らかに
+した．
+
+
+
+本研究で行ったエラー分析の結果，より高い精度で属性値を抽出するためには，
+以下の処理・データが必要になることがわかった．
+
+\begin{itemize}
+\item 質とカバレージの高い属性-属性値辞書
+\item 適切でない商品カテゴリに登録されている商品ページの検出
+\item 商品ページで販売されている商品と関係のあるパッセージの同定
+\item ブランド名や商品名といったオンラインショッピングに特化した固有表現の認識
+\item 商品説明文中の主題の認識
+\item 属性値を抽出する際の多義性解消技術
+\item メトニミーの認識
+\item 商品説明文中に含まれる表形式データの解釈
+\item 知識獲得（新規辞書エントリの獲得, 辞書エントリの同義語獲得，形態素解析辞書の動的な拡張）
+\item 辞書エントリとテキスト中の表現の柔軟なマッチング
+\end{itemize}
+
+\noindent エラー分析に用いた属性値抽出システムは，Distant supervisionに
+おけるタグ付きデータ作成方法と見なせる．そのため，今後は本稿で挙げた問
+題点を考慮した高品質なタグ付きコーパス作成方法を実装し，それを基にした
+機械学習ベースの属性値抽出システムの開発を考えている．
+
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Bing, Wong, \BBA\ Lam}{Bing et~al.}{2012}]{bing2012}
+Bing, L., Wong, T.-L., \BBA\ Lam, W. \BBOP 2012\BBCP.
+\newblock \BBOQ Unsupervised Extraction of Popular Product Attributes from Web
+  Sites.\BBCQ\
+\newblock In {\Bem Proceedings of the 8th Asia Information Retrieval Societies
+  Conference}, \mbox{\BPGS\ 437--446}.
+
+\bibitem[\protect\BCAY{Ghani, Probst, Liu, Krema, \BBA\ Fano}{Ghani
+  et~al.}{2006}]{ghani2006}
+Ghani, R., Probst, K., Liu, Y., Krema, M., \BBA\ Fano, A. \BBOP 2006\BBCP.
+\newblock \BBOQ Text Mining for Product Attribute Extraction.\BBCQ\
+\newblock {\Bem ACM SIGKDD Explorations Newsletter}, {\Bbf 8}  (1),
+  \mbox{\BPGS\ 41--48}.
+
+\bibitem[\protect\BCAY{Mauge, Rohanimanesh, \BBA\ Ruvini}{Mauge
+  et~al.}{2012}]{mauge2012}
+Mauge, K., Rohanimanesh, K., \BBA\ Ruvini, J.-D. \BBOP 2012\BBCP.
+\newblock \BBOQ Structuring E-Commerce Inventory.\BBCQ\
+\newblock In {\Bem Proceedings of the 50th Annual Meeting of the Association
+  for Computational Linguistics (Volume 1: Long Papers)}, \mbox{\BPGS\
+  805--814}.
+
+\bibitem[\protect\BCAY{Mintz, Bills, Snow, \BBA\ Jurafsky}{Mintz
+  et~al.}{2009}]{mintz2009}
+Mintz, M., Bills, S., Snow, R., \BBA\ Jurafsky, D. \BBOP 2009\BBCP.
+\newblock \BBOQ Distant Supervision for Relation Extraction without Labeled
+  Data.\BBCQ\
+\newblock In {\Bem Proceedings of the Joint Conference of the 47th Annual
+  Meeting of the ACL and the 4th International Joint Conference on Natural
+  Language Processing of the AFNLP}, \mbox{\BPGS\ 1003--1011}.
+
+\bibitem[\protect\BCAY{村上\JBA 関根}{村上\JBA 関根}{2012}]{murakami2012}
+村上浩司\JBA 関根聡 \BBOP 2012\BBCP.
+\newblock カテゴリに強く関連する語の発見と商品データクリーニングへの適用.\
+\newblock \Jem{言語処理学会第18回年次大会発表論文集}, \mbox{\BPGS\ 195--198}.
+
+\bibitem[\protect\BCAY{村脇\JBA 黒橋}{村脇\JBA 黒橋}{2010}]{murawaki2010}
+村脇有吾\JBA 黒橋禎夫 \BBOP 2010\BBCP.
+\newblock 形態論的制約を用いたオンライン未知語獲得.\
+\newblock \Jem{自然言語処理}, {\Bbf 17}  (1), \mbox{\BPGS\ 55--75}.
+
+\bibitem[\protect\BCAY{Probst, Ghani, Krema, Fano, \BBA\ Liu}{Probst
+  et~al.}{2007}]{probst2007}
+Probst, K., Ghani, R., Krema, M., Fano, A., \BBA\ Liu, Y. \BBOP 2007\BBCP.
+\newblock \BBOQ Semi-supervised Learning of Attribute-value Pairs from Product
+  Descriptions.\BBCQ\
+\newblock In {\Bem Proceedings of the 20th International Joint Conference in
+  Artificial Intelligence}, \mbox{\BPGS\ 2838--2843}.
+
+\bibitem[\protect\BCAY{Putthividhya \BBA\ Hu}{Putthividhya \BBA\
+  Hu}{2011}]{putthividhya2011}
+Putthividhya, D.\BBACOMMA\ \BBA\ Hu, J. \BBOP 2011\BBCP.
+\newblock \BBOQ Bootstrapped Named Entity Recognition for Product Attribute
+  Extraction.\BBCQ\
+\newblock In {\Bem Proceedings of the 2011 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 1557--1567}.
+
+\bibitem[\protect\BCAY{Ritter, Zettlemoyer, Mausam, \BBA\ Etzioni}{Ritter
+  et~al.}{2013}]{ritter2013}
+Ritter, A., Zettlemoyer, L., Mausam, \BBA\ Etzioni, O. \BBOP 2013\BBCP.
+\newblock \BBOQ Modeling Missing Data in Distant Supervision for Information
+  Extraction.\BBCQ\
+\newblock In {\Bem Transactions of the Association of Computational Linguistics
+  -- Volume 1}, \mbox{\BPGS\ 367--378}.
+
+\bibitem[\protect\BCAY{Roth, Barth, Wiegand, \BBA\ Klakow}{Roth
+  et~al.}{2013}]{roth2013}
+Roth, B., Barth, T., Wiegand, M., \BBA\ Klakow, D. \BBOP 2013\BBCP.
+\newblock \BBOQ A Survey of Noise Reduction Methods for Distant
+  Supervision.\BBCQ\
+\newblock In {\Bem Proceedings of the 2013 Workshop on Automated Knowledge Base
+  Construction}, \mbox{\BPGS\ 73--78}.
+
+\bibitem[\protect\BCAY{Shinzato \BBA\ Sekine}{Shinzato \BBA\
+  Sekine}{2013}]{shinzato2013}
+Shinzato, K.\BBACOMMA\ \BBA\ Sekine, S. \BBOP 2013\BBCP.
+\newblock \BBOQ Unsupervised Extraction of Attributes and Their Values from
+  Product Description.\BBCQ\
+\newblock In {\Bem Proceedings of the 6th International Joint Conference on
+  Natural Language Processing}, \mbox{\BPGS\ 1339--1347}.
+
+\bibitem[\protect\BCAY{Takamatsu, Sato, \BBA\ Nakagawa}{Takamatsu
+  et~al.}{2012}]{takamatsu2012}
+Takamatsu, S., Sato, I., \BBA\ Nakagawa, H. \BBOP 2012\BBCP.
+\newblock \BBOQ Reducing Wrong Labels in Distant Supervision for Relation
+  Extraction.\BBCQ\
+\newblock In {\Bem Proceedings of the 50th Annual Meeting of the Association
+  for Computational Linguistics (Volume 1: Long Papers)}, \mbox{\BPGS\
+  721--729}.
+
+\bibitem[\protect\BCAY{Wong, Wong, \BBA\ Lam}{Wong et~al.}{2008}]{wong2008}
+Wong, T.-L., Wong, T.-S., \BBA\ Lam, W. \BBOP 2008\BBCP.
+\newblock \BBOQ An Unsupervised Approach for Product Record Normalization
+  across Different Web Sites.\BBCQ\
+\newblock In {\Bem Proceedings of the 23rd AAAI Conference on Artificial
+  Intelligence}, \mbox{\BPGS\ 1249--1254}.
+
+\bibitem[\protect\BCAY{Wu \BBA\ Weld}{Wu \BBA\ Weld}{2010}]{wu2010}
+Wu, F.\BBACOMMA\ \BBA\ Weld, D.~S. \BBOP 2010\BBCP.
+\newblock \BBOQ Open Information Extraction Using Wikipedia.\BBCQ\
+\newblock In {\Bem Proceedings of the 48th Annual Meeting of the Association
+  for Computational Linguistics}, \mbox{\BPGS\ 118--127}.
+
+\bibitem[\protect\BCAY{Xu, Hoffmann, Zhao, \BBA\ Grishman}{Xu
+  et~al.}{2013}]{xu2013}
+Xu, W., Hoffmann, R., Zhao, L., \BBA\ Grishman, R. \BBOP 2013\BBCP.
+\newblock \BBOQ Filling Knowledge Base Gaps for Distant Supervision of Relation
+  Extraction.\BBCQ\
+\newblock In {\Bem Proceedings of the 51st Annual Meeting of the Association
+  for Computational Linguistics (Volume 2: Short Papers)}, \mbox{\BPGS\
+  665--670}.
+
+\end{thebibliography}
+
+\begin{biography}
+\bioauthor{新里　圭司}{
+2006年北陸先端科学技術大学院大学情報科学研究科博士後期課程修了．博士（情報科学）．京都大学大学院情報学研究科特任助教，特定研究員を経て，2011年から楽天技術研究所．自然言語処理，特に，知識獲得，情報抽出，評判分析の研究に従事．
+}
+\bioauthor{関根　　聡}{
+New York University, Associate Research Professor. 1998年 NYU Ph.D.．松下電器産業，University of Manchester，ソニーCSL，MSR，楽天技術研究所ニューヨークなどでの研究職を歴任．ランゲージ・クラフト代表．専門は自然言語処理，特に情報抽出，固有表現抽出，質問応答の研究に従事．
+}
+\bioauthor{村上　浩司}{
+2004年北海道大学大学院工学研究科博士課程単位取得退学．ニューヨーク大学コンピュータサイエンス学科，東京工業大学統合研究院，奈良先端科学技術大学院大学情報科学研究科を経て2010年より楽天技術研究所ニューヨークに所属．博士（工学）．自然言語処理の研究に従事．
+}
+
+\end{biography}
+
+
+\biodate
+
+
+\end{document}

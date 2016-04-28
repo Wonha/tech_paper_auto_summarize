@@ -1,0 +1,1641 @@
+    \documentclass[english]{jnlp_1.4}
+
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+    \setulminsep{1.2ex}{0.5ex}
+\let\underline
+\usepackage{biodateX}
+
+\usepackage{multirow}
+\usepackage{theorem}
+\usepackage{amsfonts}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+
+\DeclareMathOperator*{\argmin}{arg\,min}
+    \def\leader#1{}
+\def\X{}
+\def\P{}
+\def\B{}
+\def\E{}
+\def\U{}
+\def\YC{}
+\def\YS{}
+{\theorembodyfont{\upshape}             
+\newtheorem{mydef}{}[] 
+}
+
+
+\Volume{20}
+\Number{5}
+\Month{December}
+\Year{2013}
+
+\received{2012}{7}{19}
+\revised{2012}{11}{6}
+    \rerevisedX{April 22, 2013; July 4, 2013}
+\accepted{2013}{7}{25}
+
+\setcounter{page}{629}
+
+\etitle{ILP-based Inference for Cost-based Abduction \\
+	on First-order Predicate Logic}
+\eauthor{Naoya Inoue\affiref{TU} \and Kentaro Inui\affiref{TU}} 
+\eabstract{
+  Abduction is desirable for many natural language processing (NLP)
+  tasks. While recent advances in large-scale knowledge acquisition
+  warrant applying abduction with large knowledge bases to real-life
+  NLP problems, as of yet, no existing approach to abduction has
+  achieved the efficiency necessary to
+  be a practical solution for large-scale reasoning on real-life
+  problems. In this paper, we propose an efficient
+  solution for large-scale abduction. The contributions of our study
+  are as follows: (i) we propose an efficient method of cost-based
+  abduction in first-order predicate logic that avoids computationally
+  expensive grounding procedures; (ii) we formulate the
+  best-explanation search problem as an integer linear programming
+  optimization problem, making our approach extensible;
+	(iii) we show how cutting plane inference, which is an iterative optimization
+	strategy developed in operations research, can be applied to make abduction in
+	first-order logic tractable; and (iv) 
+  the abductive inference engine presented in this paper is made
+  publicly available.}
+\ekeywords{Cost-based Abduction, Integer Linear Programming, Discourse Processing, \mbox{Interpretation} as Abduction}
+
+\headauthor{Inoue and Inui}
+\headtitle{ILP-based First-order Cost-based Abduction}
+
+\affilabel{TU}{}{Tohoku University}
+
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+Discovering implicit information from natural language discourse is
+essential to a wide range of NLP tasks, such as question answering,
+information extraction and recognizing textual entailment (RTE). Several NLP
+components for processing a variety of discourse phenomena (e.g., anaphora resolution) are exploited when inferring
+implicit information. In the field of computational linguistics, each
+NLP component has been studied extensively in recent decades; however,
+less attention has been paid to how to integrate them into a single
+inference framework.
+
+In this paper, we explore \emph{abduction}-based discourse processing
+as a framework for integrating NLP components. Abduction, defined here as
+inference to the best explanation, has long been studied in a wide
+range of contexts. For example, abduction has been viewed as a
+promising framework for describing the mechanism of human perception
+\cite{Charniak91,Hobbs93,Shanahan05,Peraldi07}. The idea is that
+the declarative nature of abduction enables us to infer the most
+plausible, implicitly stated information combining several types of
+inference and pieces of explicitly observed information, as humans
+do. 
+
+Abduction-based discourse processing was studied intensively in
+the 1980s and 1990s; Hobbs et al. (1993)\nocite{Hobbs93} show that the
+lowest-cost abductive proof provides the solution to a broad range of
+natural language understanding problems, such as word sense
+disambiguation, anaphora, and metonymy resolution. As detailed in
+Sec.~\ref{sec:ia}, the key advantage of using abduction for discourse
+processing is twofold:
+\begin{itemize}
+\item abduction-based discourse processing models interdependencies
+between NLP tasks and identifies the most coherent interpretation;
+\item it discovers plausible new information by combining
+heterogeneous inference rules and pieces of information
+observed from texts.
+\end{itemize}
+
+
+While the lack of world knowledge resources hampered applying
+abduction to real-life problems in the 1980s and 1990s, a number of
+techniques have been developed
+in the last decade
+\cite{fellbaum98,Chambers09,framenetII,Scho10,Hovy11}.
+Consequently, several researchers started applying abduction to
+real-life problems, exploiting large knowledge bases. For instance,
+inspired by Hobbs et al. (1993)\nocite{Hobbs93}, 
+    \citeA{Ovch11} proposed an abduction-based NLP framework using forty
+thousand axioms extracted from the popular ontological resources WordNet \cite{fellbaum98} and
+FrameNet \cite{framenetII}. They evaluate their approach on the
+real-life natural language processing task of RTE \cite{Dagan10}.
+
+However, in order to apply abduction to real-life problems with
+a large-scale knowledge base, we still need to address the following
+issue: \emph{how to search for the best explanation efficiently}. In
+this paper, we adopt \emph{first-order logic-based, cost-based
+  abduction} (henceforth first-order cost-based abduction), where we
+use function-free first-order logic (FOL) as a representation
+language. In first-order cost-based abduction, an explanation is
+represented by a set of literals, and the plausibility of the explanation
+is evaluated through the sum of the costs defined on each literal. The
+best explanation is defined as the lowest-cost explanation. Finding
+the lowest-cost explanation can be reduced to a constrained
+combinatorial optimization problem with respect to the cost function,
+which is an NP-hard problem \cite{Charniak91}; this hampers the
+application of abduction with large knowledge resources to real-life
+problems. In fact, Ovchinnikova et al. (2011) \nocite{Ovch11} report
+that the Mini-TACITUS cost-based abduction system \cite{Mulkar07}
+could not search the entire search space of explanations within 30
+min in most of the RTE problems in their experiments.
+
+In the
+literature, many researchers have tried to overcome cost-based
+abduction's inefficiency using a range of methods from approximation to
+exact
+inference~\cite{Poole93b,Santos94,Ishizuka98,Chivers07}. For
+example, Santos (1994) formulated cost-based abduction in propositional
+logic using integer linear programming (ILP), and showed its
+efficiency. However, to the best of our knowledge, most of the
+proposed methods are optimized for propositional logic. In order to
+employ these methods for first-order cost-based abduction, we need to
+transform knowledge bases and observations to propositional logic
+(henceforth, we call the transformation \emph{grounding}). The process
+of grounding generates a huge search space and does not scale
+to larger problems, as discussed in Sec.~\ref{sec:i_and_i}.
+
+In this paper, we provide a scalable solution to
+first-order cost-based abduction with the following contributions:
+
+\begin{itemize}
+\item[(i)] we propose an efficient search technique for FOL
+  abduction, which avoids expanding first-order logical formulae to
+  propositional level;
+
+\item[(ii)] we formulate the best-explanation finding problem as an
+  ILP optimization problem to make our framework extensible,
+  supporting definite clauses in background knowledge;
+
+
+\item[(iii)] we describe how cutting plane inference (CPI), an
+  iterative optimization strategy developed in operations research,
+  can be exploited for making FOL abduction tractable, showing its
+  efficiency by providing evaluation on a large, real-life dataset;
+
+\item[(iv)] the abductive inference engine presented in this paper is
+  made publicly available.\footnote{https://github.com/naoya-i/henry-n700}
+\end{itemize}
+
+Our paper is structured as follows. We start with a brief
+introduction of abduction-based discourse processing, taking Hobbs's
+interpretation as abduction framework \cite{Hobbs93} as a motivating example
+(Sec.~\ref{sec:bg}). We then describe how to perform efficient searches in FOL
+abduction, and formulate the search problem as an ILP optimization problem
+(Secs.~\ref{sec:liftedcba} and \ref{sec:ilpf}).
+We then show how CPI enables us to apply FOL
+abduction with large knowledge bases (Sec.~\ref{sec:cpi}). Finally, we
+evaluate the efficiency of our CPI-based framework on a large,
+real-life problem of NLP, RTE
+(Sec.~\ref{sec:eval}), and give a comparison of our work to
+prior implementations of cost-based abduction
+(Sec.~\ref{sec:related_work}).
+
+
+
+
+\section{Background}
+\label{sec:bg}
+
+\subsection{Interpretation as Abduction}
+\label{sec:ia}
+
+\leader{Hobbs et al. (1993)\nocite{Hobbs93} pioneered an
+  abduction-based approach for natural language understanding.} The
+key idea is that ``\emph{interpreting sentences is to prove the
+  logical forms of sentences, allowing assumptions, merging
+  redundancies where necessary}.'' They demonstrated that a wide range
+of NLP tasks involved in discourse interpretation, including anaphora
+resolution and discourse relation recognition, can be cast as the
+problem of finding an explanation to the pieces of information
+observed from the discourse. Figure~\ref{fig:ia} shows an example
+taken from Hobbs et al. 1993\nocite{Hobbs93}. In this example, we solve three
+types of NLP tasks: (i) coreference resolution, e.g., the coreference relation
+between \emph{John} and \emph{he} ($x1=y1$); (ii) intent recognition,
+e.g., the intention of \emph{John} (backward inference on
+$\emph{go}(e1,x1,x2)$ to $loan(y2)$); and (iii) word sense
+disambiguation, e.g., the meaning of \emph{bank} is not a riverbank,
+but a financial institution (backward inference on $\emph{bank}(x2)$
+to $\emph{financial\_inst}(x2)$, where the inference rule means that
+``\emph{a financial institution is expressed as bank in a text}'').
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{20-5ia1f1.eps}
+\end{center}
+\caption{Example of abductive interpretation}
+\label{fig:ia}
+\end{figure}
+
+While the lack of knowledge was a serious problem in applying
+abduction to real-life problems in the 1980s and 1990s, the situation has
+changed. A number of techniques that acquire lexical resources useful
+for language processing have been developed
+\cite[etc.]{fellbaum98,framenetII,Chambers09,Scho10}. Given the recent
+advances in techniques, several researchers started pursuing
+abduction-based approaches for ``real-life'' problems, using large
+knowledge bases. For instance, Ovchinnikova et
+al. (2011)\nocite{Ovch11} took on the popular, knowledge-intensive
+NLP task of RTE. A series of
+studies in machine reading projects \cite{Etzioni06}, which discover
+implicit information from texts \cite{Penas10,Hovy11}, can also
+be viewed as an abductive interpretation problem. 
+
+
+\subsection{Cost-based abduction}
+\label{sec:cba}
+
+Abduction is inference to the best explanation. We use function-free
+first-order logic as the meaning representation of
+abduction in this paper. 
+Formally, first-order logical abduction is defined as follows:\footnote{The same framework is used in
+  \emph{induction}. While induction finds a set of plausible rules
+  from observations, abduction finds a set of plausible facts.}
+
+\begin{itemize}
+\item \textbf{Given:} Background knowledge $B$ and observations $O$,
+  where $B$ is a set of first-order logical formulae and $O$ is a set
+  of literals or equalities.
+\item \textbf{Find:} An \emph{explanation} (or \emph{hypothesis}) $H$
+  such that $H \cup B \models O, H \cup B \not\models \perp$, where
+  $H$ is a set of literals or equalities. Each element in $H$ is
+  called an \emph{elemental explanation}.
+\end{itemize}
+Let us define some terminologies. We define \emph{equality} to be the
+form $x=y$ (\emph{positive} equality) or $x\not=y$ (\emph{negative}
+equality), where $x$ and $y$ are either variables or constants. The
+equality $x=y$ means that referents of $x$ and $y$ are the same
+(i.e., $\{p(x), p(y), x=y\}$ has the same meaning as $\{p(x)\}$). We
+say that the literal $p$ is the \emph{logical consequence} of $S$ if $S
+\models p$; $p$ is (\emph{explicitly}) \emph{hypothesized} w.r.t. $H$
+if $p \in H$; $p$ is \emph{implicitly hypothesized} if $H \cup B
+\models p$ w.r.t. $H$ and $B$ (i.e., $p$ is a logical consequence of
+$H$ w.r.t.  $B$); $p$ is \emph{explained} if $H \cup B \setminus \{p\}
+\models p$; otherwise $p$ is \emph{assumed}. We refer to the operation
+that we unify two or more literals in set $S$ of literals, and apply
+the unifier to $S$ as \emph{factoring} of $S$. 
+
+In this paper, we assume that all variables occurring in a logical
+form of background knowledge are \emph{universally} quantified with
+the widest possible scope, unless it is explicitly stated as
+existentially quantified. On the other hand, we assume that variables
+occurring in an explanation and observation are implicitly \emph{existentially}
+quantified. We assume that the background knowledge has no
+cyclic dependencies between an explaining and an explained
+literal (e.g., $B=\{P(x) \rightarrow Q(x), Q(x) \rightarrow P(x)\}$ has
+a cyclic dependency). We call this assumption \emph{knowledge
+  recursion-free assumption}.
+
+Typically, several explanations $H$ explaining $O$ exist. We call each
+of them a \emph{candidate explanation}, and represent the set of
+candidate explanations of $O$ given $B$ as $\YS_{\X,\B}$. The goal of
+abduction is to find the best explanation among candidate explanations
+by a specific evaluation measure. In this paper, we formulate
+abduction as the task of finding the minimum-cost explanation $\YC$
+among $\YS_{\X,\B}$. Henceforth, we refer to abduction based on the
+minimum-cost explanation finding as \emph{cost-based abduction
+  (CBA)}. Formally, we find $\YC = \argmin_{H \in \YS_{\X,\B}}
+cost(H)$, where $cost$ is a function $\YS_{\X,\B} \rightarrow
+\mathbb{R}$, which is called the \emph{cost function}.  
+
+Let us describe the task of abduction with a toy
+example. Given $B=\{p(x, y) \land q(x) \rightarrow r(x), s(x)
+\rightarrow r(x)\}, O=\{r(z)\}$, we have four candidate explanations:
+$H_1=\{r(z)\}$, $H_2=\{p(z, w), q(z)\}$, $H_3=\{s(z)\}$, and
+$H_4=\{p(z, w), q(z), s(z)\}$. The task of abduction is to select the
+best explanation among them in terms of cost. Suppose
+$cost(H_1)=5.5$, $cost(H_2)=12.25$, $cost(H_3)=10.8$, and
+$cost(H_4)=7.13$. Then, the correct prediction is then $H_1$.
+
+It is crucial to discuss the specificity of explanations. We say that
+an explanation $H$ is more \emph{specific} than another explanation
+$H'$ if $H \cup B \models H'$. As discussed in Hobbs et al.
+1993\nocite{Hobbs93}, we want to decide the appropriate specificity of an explanation because there
+is often little evidence (i.e., observation) to support specific
+explanations. Traditionally, two extreme modes of abduction have been
+considered. The first is \emph{most-specific abduction}. In
+most-specific abduction, what we can explain from background knowledge
+is all detailed, which is suitable for diagnostic systems. In
+diagnostic systems, users might want to know, as much as possible, about what
+has caused the current situation. Some cost-based
+and probabilistic approaches fall into this
+group~\cite{Charniak91,Raghavan10}. The second is
+\emph{least-specific abduction}. Literally, in this mode, an explanation is
+obtained by just assuming observations. Using only least-specific
+abduction has little purpose, but as described below, it makes sense
+if it is combined with most-specific abduction.
+
+In natural language understanding systems, we need both modes at the
+same time. Adopting only one of these levels is problematic. For
+example, if we adopt most-specific abduction, the system yields too
+specific an explanation, 
+    such as ``{\itshape Bob took a gun because \ul{he would rob \mbox{XYZ} bank using a machine gun which he had bought three days ago}}.'' 
+Conversely, if we adopt
+least-specific abduction, the system assumes just observation, 
+    as in ``{\itshape Bob took a gun because \ul{he \mbox{took} a gun}}.'' 
+We thus want to determine the suitable specificity during inference. To the
+best of our knowledge, the weighted abduction of Hobbs et al.
+(1993)\nocite{Hobbs93} is the only framework that concerns the appropriateness of
+explanation specificity. The cost function of weighted abduction
+\linebreak
+naturally handles this by propagating costs of propositions and
+unification as described in 
+\linebreak
+Sec.~\ref{sec:ilpf}.
+
+\subsection{Cost function}
+\label{sec:cfunc}
+
+In the literature, several types of cost functions have been proposed,
+including cost- and probability-based functions
+\cite[etc.]{Charniak91,Poole93,Hobbs93,Raghavan10,Singla11}. In this
+paper, we adopt the cost function proposed by Hobbs et
+al. (1993)\nocite{Hobbs93}. The cost function assumes that each
+elemental explanation $p \in H$ has the \emph{non-negative} cost of
+hypothesizing $p$ (intuitively, the plausibility of $p$ being an explanation for given
+observations), and sums up the costs of \emph{assumed} elemental
+explanations. Henceforth, we write $P(x)^{\$c}$ to denote $P(x)$
+having a cost $c$.
+
+During the construction of $H$, one can \emph{factor} $H$ to generate
+a new explanation at any time. When $H$ is factored, the following
+things happen: (i) the literal that has the smallest cost among a set
+of unified literals remains in $H$, and (ii) for the unifier
+$\{x_i/y_i\}_{i=1}^{n}$, a set of elemental explanations
+$\{x_i=y_i^{\$0}\}_{i=1}^n$ is added to $H$. For example, one can
+factor $H=\{R(a)^{\$20}, R(b)^{\$10}, Q(a)^{\$20}\}$ with the unifier
+$\{a/b\}$ to get $H' = \{R(b)^{\$10}, a=b^{\$0}, Q(b)^{\$20}\}$, where
+the smaller cost $\$10$ is assigned to $R(b)$. Formally, the cost
+function is defined as follows:
+\begin{equation}
+  \mathit{cost}(H) = \sum_{h \in \emph{A}(H)} \mathit{cost}(h),
+\end{equation}
+where $\emph{A}(H)$ is a set of \emph{assumed} literals in
+$H$.
+
+In Hobbs et al. (1993), each cost is determined by two factors: (i)
+\emph{weights}, the parameters assigned to axioms in background
+knowledge; and (ii) the costs of observations initially assigned. In
+this paper, we do not go into detail, and just assume that each
+cost is given in some way.
+
+
+\section{ILP-based inference for cost-based abduction}
+\label{sec:i_and_i}
+
+We now describe our strategy to find the best explanation in
+first-order CBA. The key idea is that we solve first-order CBA
+problems using the \emph{lifted inference} technique, where each
+inference operation is directly performed on a first-order level, like
+resolution \cite{Robinson65}. In principle, this way of problem
+formulation gives us three benefits. First, we can reduce the search
+space of candidate explanations in comparison to a grounding approach,
+because we can avoid instantiating FOL formulae with all
+possible constants. Second, the best explanation finding problem can
+be reduced to the constrained combinatorial optimization problem of
+first-order literals and/or equalities, meaning that we can exploit
+several choices of combinatorial optimization technology developed in
+operations research. Specifically, our optimization problem can be
+naturally formulated as an ILP problem,
+which can be efficiently solved by existing ILP solvers. Third, the
+resulting framework is highly extensible; for example, we can easily
+incorporate linguistically motivated heuristics by simply adding some
+ILP variables and/or constraints to an optimization problem, keeping
+the overall framework unchanged.
+
+In the rest of this section, we first formalize the best explanation
+finding in first-order CBA using the lifted inference technique, and
+then describe how to solve it as an ILP optimization problem.
+
+
+\subsection{Lifted first-order inference for CBA}
+\label{sec:liftedcba}
+
+First-order logic inherits all the theoretical properties of
+propositional logic, and hence a sound and complete inference can be
+performed on propositional logic. However, performing first-order
+logical inference on a propositional level has severe overhead, because
+we need \emph{grounding}, which generates the ground instances of
+first-order logical formulae in knowledge bases and observations
+(i.e., instantiating them with all possible constants). The grounding
+procedure generates a lot of formulae when a domain is
+large. In this paper, we thus propose to perform cost-based
+abduction on a first-order level. The approach is in the spirit of
+resolution \cite{Robinson65}, but is applied to the best explanation
+finding problems. 
+In the rest of this section, we show how to solve the
+abductive inference problem on first-order level.
+
+\begin{figure}[b]
+  \begin{center}
+\includegraphics{20-5ia1f2.eps}
+     \caption{Summary of the ILP-based approach}
+  \label{fig:int_ex}
+  \end{center}
+\end{figure}
+
+Figure~\ref{fig:int_ex} summarizes our approach. In principle, our
+approach takes two steps: (i) Step 1: \emph{search-space generation},
+and (ii) Step 2: \emph{best-explanation search}. In search-space
+generation, we first construct a set of all possible literals
+and/or equalities that are potentially included in $H$. For example,
+given the toy problem in Sec.~\ref{sec:cba}, we construct the
+following set: $\{r(z), p(z,w), q(z), s(z)\}$. In the best-explanation
+search step, we find the best explanation for $O$ by finding the best
+combination of literals or equalities among the set of literals
+constructed in the search-space generation step, according to the cost
+function. The problem is solved in the form of constrained boolean
+optimization problem, which is the problem of finding the truth
+assignment to boolean variables that maximizes or minimizes an
+objective function satisfying the given constraints.
+
+Now we move on to the detail of our approach, in which we use
+the following format for background knowledge, observations, and
+explanation:
+\begin{itemize}
+\item Background knowledge: a set of first-order definite clauses
+  (i.e., $p_1 \land p_2 \land \ldots \land p_n \rightarrow q$, where
+  $p_1,p_2,\ldots , p_n,$ and $q$ are atoms);
+\item Observations: a set of positive literals or positive equalities;
+\item Explanation: a set of positive literals or positive equalities.
+\end{itemize}
+Henceforth, we call each clause in background knowledge an
+\emph{axiom}, the right-hand side the \emph{head}, and the left-hand
+side the \emph{body}.
+
+\begin{algorithm}[b]
+  \caption{\textbf{liftedFirstOrderCBA}(Background knowledge $\B$, Observation $\X$, Cost function $cost$)}
+  \label{alg:liftedcba}
+\input{01algo01.txt}
+\end{algorithm}
+
+We give the overall algorithm in Algorithm~\ref{alg:liftedcba}. Given
+background knowledge $B$ and observations $O$, we first create the
+set $\P$ of literals or equalities that are potentially included as
+constituents of the best explanation of $O$ (line 2--10). We refer to
+the literal or equality $p \in \P$ as the \emph{potential elemental
+  explanation}, which we enumerate by
+first initializing $\P$ with $O$. We then iteratively apply
+\emph{backward inference} to each $p \in \P$ (line 2--6). 
+Algorithm~\ref{alg:backward} depicts the backward-inference operation in detail
+(lines 5--8). We define backward inference as the following operation:
+\begin{itemize}
+\item \textbf{Input:} a clause in the form $p_1 \land p_2 \land
+  \ldots \land p_n \rightarrow q$ and the literal $l$, where there must
+  exist the most general unifier $\theta$ such that $l\theta =
+  q\theta$.
+\item \textbf{Output:} $\{p_1, p_2, \ldots, p_n\}\theta$, where the
+  variables that are not substituted by $\theta$
+  (\emph{notSubstitutedVars}$(\{p_1, p_2, \ldots, p_n\}, \theta)$ 
+in Algorithm~\ref{alg:backward}) are replaced with existentially quantified variables not appearing in $\P$ so far.
+\vspace*{-1\Cvs}
+\end{itemize}
+\newpage
+For example, given the axiom $p(x, y) \land q(x,y,z) \rightarrow r(x)$
+and $r(a)$, it derives $\{p(a, u_1), q(a,u_1,u_2)\}$, where $u_1$ and
+$u_2$ are existentially quantified variables not appearing in $\P$.
+Note that $\P$ is not equivalent to a set of resolvents that are
+generated by a particular proof procedure. The goal of proof procedure
+is to check whether a logical formula is implied by a set of logical
+formulae.  Therefore, the derived proof might not contain a set of
+\emph{all literals} that can explain observations. For example, SLD
+resolution \cite{Kowalski74}, is a backward-inference-based proof
+procedure that works on definite clauses, where literals resolved upon
+are selected by a particular computation rule (e.g., leftmost), and the
+resolution procedure terminates when the proof is found to be a failure
+or a success. However, what we want to enumerate is the set of all
+literals that can explain observations. Since we have the
+ knowledge-recursion-free assumption, lines 2--11 terminate in finite time
+(i.e., until no more backward inference can be applied).
+
+\begin{algorithm}[b]
+  \caption{\textbf{getPotentialElementalExplanations}(Background knowledge $\B$,
+      set $S$ of \mbox{literals)}}
+  \label{alg:backward}
+\input{01algo02.txt}
+\end{algorithm}
+
+In lines 6--10, we search for the pairs of unifiable literals in $\P$ in
+order to represent the application of factoring operation to $H$. For
+each pair of unifiable literals, we add the equalities that are
+potentially hypothesized by the unifier (see Sec.~\ref{sec:cba}).
+We do \emph{not} unify such literals in $\P$ here because we want to
+allow that the factoring operations are also defeasible,
+``\emph{possibly}'' true operations. We use the cost function to
+determine whether they should be factored.
+
+
+
+
+In line 11, we find the best explanation. Given $\P$, the problem of
+best explanation finding can be reduced to a constrained combinatorial
+optimization problem. Note that the number of candidate explanations
+grows exponentially (i.e., $O(2^{|\P|})$), because each explanation is
+represented by the combination of potential elemental explanations. We
+immediately see that a simple approach that finds a minimal
+explanation by evaluating all candidate explanations
+is intractable. To improve efficiency, we formulate the best
+explanation finding as the 0-1 ILP optimization problem to exploit the
+state-of-the-art search strategy of combinatorial optimization
+problems. The formulation is described in the next section.
+
+
+\subsection{ILP Formulation}
+\label{sec:ilpf}
+
+We formulate the best-explanation finding problem as an ILP
+optimization problem where the search space is represented as ILP
+variables and constraints, and the cost function is used as the ILP
+objective. Intuitively, for each $p \in \P$, we introduce some 0-1
+state variable that represents whether the potential elemental
+explanation $p$ is (explicitly or implicitly) hypothesized. Then,
+every possible $H \in \mathcal{H_{\X,\B}}$ can be expressed as a
+combination of value assignments to these state
+variables. 
+
+We elaborate on two types of ILP variables and ILP constraints in the
+optimization problem: (i) for representing the search space of
+candidate explanations, and (ii) for implementing the cost function. 
+
+
+\subsubsection{Formulation for CBA search space: }
+
+\leader{To represent whether the literal or equality $p \in \P$ is
+  hypothesized (including \emph{implicitly} hypothesized), we
+  introduce an ILP variable $h \in \{0, 1\}$ as follows:}
+\[
+\text{for each}\quad p \in \P: h_p = \begin{cases}
+  1 & \text{iff}\ H \cup B \models p; \\
+  0 & \text{otherwise.}
+\end{cases}
+\]
+For example, $H_2$ in Figure~\ref{fig:int_ex} holds $h_{r(x)}=1$,
+where $r(x)$ is hypothesized in $H_2$. We also use $h$ to represent
+equalities. 
+In $H_3$, the variable $h_{x=A}$ is set to $1$ because $x=A$ is
+assumed.  Note that $h$ variables do not represent the truth values
+of $p$ (i.e., $h_p=0$ does not mean $H \cup B \models \lnot p$). Once a
+value assignment to $h$ is determined, we construct $H$ on the basis of the
+assignment as follows:
+\begin{mydef}
+\label{def:relsolhypo}
+Given a particular value assignment to $h$ variables, we generate an
+explanation $H$ as follows:
+\begin{itemize}
+\item $p \in H \Leftrightarrow h_p=1$ for each $p \in \P$;
+\item $p \not\in H \Leftrightarrow h_p=0$ for each $p \in \P$.
+\end{itemize}
+\end{mydef}
+That is, \emph{all} logical consequences of $H \cup B$ are considered
+to be an explanation (i.e., the generated explanation includes
+\emph{implicitly}, as well as \emph{explicitly},
+hypothesized literals).  
+
+
+
+
+Note that not all value assignments to ILP variables $h$ are allowed.
+By the definition of candidate explanation in Sec.~\ref{sec:cba}, for
+example, it is not allowed to output the assignment that there exists
+$p \in O$ s.t. $H \cup B \not\models p$. To ensure that the search
+space includes only \emph{valid} candidate explanations (i.e., $H$
+satisfies $H \cup B \models O$ and $H \cup B \not\models \perp$), we
+impose several constraints on the value assignments of $h$. We denote
+$T$ to represent a set of logical atomic terms in $\P$.
+\begin{description}
+\item[Constraint 1:] From the definition of explanation, observations
+  must be the logical consequences of $H \cup B$ (i.e., $H \cup B
+  \models O$).
+  \begin{equation}
+    \text{for each}\quad p \in O: h_p = 1
+  \end{equation}
+  Since we assume that $\P$ includes only positive literals, it is not
+  necessary to ensure the consistency of $H \cup B$. 
+In Figure~\ref{fig:int_ex}, the constraint $h_{q(y)}=1$ is generated.
+
+\item[Constraint 2:] From the equality axiom in first-order logic,
+  equality relations must be reflexive (i.e., for all $x \in T$,
+  $h_{x=x}=1$), symmetric (i.e., for all $x,y \in T$, $h_{x=y}=1
+  \Rightarrow h_{y=x}=1$), and transitive (i.e., for all $x,y,z \in T$,
+  $h_{x=y}=1 \land h_{y=z}=1 \Rightarrow h_{x=z}=1$). To satisfy these
+  three properties, we introduce the following constraints:
+  \begin{align}
+    & \text{for each}\quad x \in T: h_{x=x} = 1 \\
+    & \text{for each}\quad x,y \in T: h_{x=y} = h_{y=x} \\
+    & \text{for each}\quad x,y,z \in T: h_{x=y} + h_{y=z} - h_{x=z} \le 1 \label{eqn:trans}
+  \end{align}
+  In Figure~\ref{fig:int_ex}, the constraint $h_{x=y} + h_{A=x} -
+  h_{y=A} \le 1$ is generated as an instance of inequality
+  (\ref{eqn:trans}).
+  
+
+\item[Constraint 3:] From the definition of $h$ variables, $h_p$ must
+  be $1$ if there exists set $Q$ of literals such that $Q$ implies $p$
+  and each literal in Q is hypothesized (i.e., for all $Q \subseteq P$,
+  $(Q \cup B \models p \land H \cup B \models Q) \Rightarrow H \cup B
+  \models p$). To represent that each literal in the set $Q$ of elemental
+  explanations is hypothesized, we introduce a new ILP variable $a_Q
+  \in \{0,1\}$ s.t. $a_Q = 1$ iff all literals in $Q$ are logical
+  consequences of $H \cup B$; $a_Q = 0$ otherwise. Using $a_Q$, the
+  constraint $\forall Q \subseteq P[ (H \cup B \models Q \land Q \cup
+  B \models p) \Rightarrow h_p=1]$ can be expressed as follows:
+  \begin{equation}
+     \text{for each}\quad p \in \P: \sum_{Q \in \E(p)} a_Q \le |\E(p)| \cdot h_p,
+  \end{equation}
+  where $\E(p)$ is a family of sets of potential elemental
+  explanations that explain $p$.
+  For example, in Figure~\ref{fig:int_ex}, the constraint
+  $a_{\{s(y),t(u)\}} \le h_{q(y)}$ is generated since $q(y)$ is
+  explained by $s(y) \land t(u)$.
+
+\item[Constraint 4:] From the definition of an ILP variable $a$, for
+  all $Q \subseteq P$, $a_Q$ can be set to 1 if and only if $Q$ is a
+  logical consequence of $H \cup B$ (for all $q \in Q$, $h_q=1$). This
+  can be expressed as follows:
+  \begin{align}
+    & \text{for each}\quad p \in \P, Q \in \E(p): |Q| a_Q \le \sum_{q \in Q} h_q \label{eqn:aq1} \\
+    & \text{for each}\quad p \in \P, Q \in \E(p): \sum_{q \in Q} h_q \le |Q| - 1 + a_Q \label{eqn:aq2}
+  \end{align}
+  In Figure~\ref{fig:int_ex}, two constraints are generated: (i)
+  $2a_{\{s(y),t(u)\}} \leq h_{q(y)} + h_{t(u)}$, which ensures that
+  $a_{\{s(y)t(u)\}}=1 \Rightarrow h_{q(y)}=1 \land h_{t(u)}=1$; and
+  (ii) $h_{q(y)} + h_{t(u)} \leq 1 + a_{\{s(y),t(u)\}}$, which ensures
+  that $h_{q(y)}=1 \land h_{t(u)}=1 \Rightarrow a_{\{s(y)t(u)\}}=1$.
+\end{description}
+
+
+In this formulation, we generate $O(n^3)$ ILP constraints for
+Constraint 2, where $n$ is the number of logical atomic terms
+appearing in $\P$. As the reader will see in Sec.~\ref{sec:eval}, this
+makes inference intractable in large-scale processing. We show how
+this drawback can be overcome by exploiting CPI in
+Sec.~\ref{sec:cpi}.
+
+
+
+\subsubsection{Formulation for implementing the cost function: } As
+mentioned in Sec.~\ref{sec:cba}, 
+we adopt the cost function proposed by Hobbs et
+al. (1993)\nocite{Hobbs93}. For convenience, we repeat the cost
+function:
+\begin{equation}
+  \mathit{cost}(H) = \sum_{h \in \emph{A}(H)} \mathit{cost}(h), \label{eqn:ilpobj}
+\end{equation}
+where $\emph{A}(H)$ is a set of \emph{assumed} literals in $H$. This
+means that the cost of $H$ is calculated from the subset of
+hypothesized literals. To represent the set of literals 
+counted in the cost function, we first introduce ILP variables $c \in
+\{0,1\}$ as follows:
+\[
+\text{for each}\quad p \in \P: c_p = \begin{cases}
+  1 & \text{if } p \mbox{ pays its cost; } \\
+  0 & \text{otherwise.}
+\end{cases}
+\]
+In Figure~\ref{fig:int_ex}, $c_{s(x)}$ is set to 0 in $H_2$ since
+$s(x)$ does not pay the cost (i.e., $s(x)$ is explained by $r(x)$).
+
+Using $c$ variables, the objective function of the ILP problem is
+given by
+\begin{equation}
+  \mbox{minimize } cost(H) = \sum_{p \in \P} c_p \cdot cost(p) \label{eqn:ilp}
+\end{equation}
+Note that it is easy to incorporate other criteria into the cost
+function. For instance, one can consider the plausibility of
+coreference relations between two mentions in a text. Assuming that
+mentions are represented by variables (e.g., $cat(x)$ means that
+mention $x$, whose linguistic expression is \emph{cat}, appears in a
+text), one can add $\sum_{x,y \in T} cost(x,y,O) \cdot h_{x=y}$, where
+the cost is calculated by the information mentioned in $O$. For
+example, one could design the cost function that returns a higher cost
+if two contradictory properties are mentioned in $O$ (e.g., $cat(x)$ and
+$dog(y)$ occur in $O$).
+
+
+Again, from the definition of $c$ variables, not all value assignments
+to $c$ are allowed.
+\mbox{Accordingly,} we introduce several constraints on $c$ as follows.
+\begin{description}
+\item[Constraint 5:] From the definition of the cost function in
+  Sec.~\ref{sec:cfunc}, $c_p$ is set to $1$ if and only if (i) $p$ is
+  \emph{not} explained (i.e., assumed); and (ii) $p$ is \emph{not}
+  unified with any other literal that has a smaller cost by
+  factoring $H$. To represent the second case, we introduce a new
+  ILP variable $u_{p_1,p_2} \in \{0,1\}$ for the pair $(p_1, p_2)$ of
+  unifiable literals s.t. $u_{p_1,p_2} = 1$ iff $p_1$ is unified with
+  $p_2$ by factoring $H$; $u_{p_1,p_2} = 0$ otherwise. Using $u$,
+  the condition can be expressed as follows:
+  \begin{equation}
+\begin{aligned}[b]
+    \text{for each}\quad p \in \P: h_p & + \sum_{Q \in \E(p)} (1-a_Q) + \sum_{p' \in \U(p)} (1-u_{p,p'}) \\
+	& \quad \le |\E(p)|+|\U(p)| + c_p 
+\end{aligned}
+\label{eqn:cp}
+\end{equation}
+  where $\U(p)$ is a set of literals that (i) are unifiable with $p$,
+  and (ii) have a cost smaller than $cost(p)$.
+  For example, in Figure~\ref{fig:int_ex}, we introduce $h_{s(x)} +
+  (1-a_{\{r(x)\}}) + (1-u_{s(x),s(y)}) \le 2 + c_{s(x)}$ as an
+  instance of inequality (\ref{eqn:cp}).
+\end{description}
+
+
+Finally, we impose a constraint on $u_{p_1,p_2}$ so that the value of
+$u_{p_1,p_2}$ is allowed to be $1$ only if (i) there exist 
+equalities that make $p_1$ and $p_2$ equivalent in $H$, and (ii) $p_1$
+and $p_2$ are hypothesized.\footnote{We can consider the unification
+  of two literals $p(x_1,x_2,\ldots,x_n),p(y_1,y_2,\ldots,y_n)$ as
+  ``$p(x_1,x_2,\ldots,x_n)$ is explained by $p(y_1,y_2,\ldots,y_n)
+  \land x_1=y_1 \land x_2=y_2 \land \ldots \land x_n=y_n$'' where
+  $cost(p(x_1,x_2,\ldots,x_n)) > cost(p(y_1,y_2,\ldots,y_n))$. In this
+  formulation, we do not need to introduce ILP variable $u$ and
+  Constraint 6, which can simplify our formulation.  However, we
+  intentionally leave the formulation with $u$ variables in order to
+  keep the comprehensibility of our paper.  }
+\begin{description}
+\item[Constraint 6:] By the definition of an ILP variable $u$,
+  $u_{p_1(\mathbf{x}),p_2(\mathbf{y})}$ can be set to 1 if and only if
+  (i) two literals $p_1(\mathbf{x}) \equiv p_1(x_1,x_2,...,x_n)$ and
+  $p_2(\mathbf{y}) \equiv p_2(y_1,y_2,...,y_n)$ are unified (i.e., the
+  substitution $\{x_i/y_i\}_{i=1}^n$ occurs, namely $h_{x_i=y_i}=1$
+  for all $i \in \{1,2,...,n\}$), and (ii) both $p_1(\mathbf{x})$ and
+  $p_2(\mathbf{x})$ are hypothesized.
+  \begin{gather}
+    (n+2) \cdot u_{p_1(\mathbf{x}),p_2(\mathbf{y})} \leq \sum_{i=1}^{n}{h_{x_i=y_i}} + h_{p_1(\mathbf{x})} + h_{p_2(\mathbf{y})} \\
+    \sum_{i=1}^{n}{h_{x_i=y_i}} + h_{p_1(\mathbf{x})} + h_{p_2(\mathbf{y})} \leq (n+2) - 1 + u_{p_1(\mathbf{x}),p_2(\mathbf{y})}
+  \end{gather}
+  In Figure~\ref{fig:int_ex}, the constraint $(1+2) \cdot u_{r(x),r(A)} \leq
+  h_{x=A} + h_{r(x)} + h_{r(A)}$ is generated. 
+  Finally, in order to avoid the case where we hypothesize a single
+  literal that (i) does not explain anything, but (ii) is unified with
+  the other literal, we impose the following constraint:
+  \begin{equation}
+    \text{for each}\quad p \in \P: h_{p} \le \sum_{Q \in C(p)} a_{Q},
+  \end{equation}
+  where $C(p)$ is a family of sets of literals with which $p$
+  co-occurs to explain the other literal. In Figure~2, since $s(y)$
+  co-occurs with $t(u)$ to explain $q(y)$ (i.e., $C(s(y)) = \{\{s(y),
+  t(u)\}\}$), we introduce $h_{s(y)} \le a_{s(y), t(u)}$. If we do not
+  have this constraint, we can hypothesize $s(y)$ without
+  hypothesizing $t(u)$ to reduce the cost of $s(x)$. Since such a
+  hypothesis cannot be generated through backward inference, we need
+  to prohibit it.
+\end{description}
+
+As mentioned in Sec.~1, the most similar work to ours is
+Santos\nocite{Santos94}'s ILP-based formulation of propositional logic-based CBA
+(1994), but our approach is different in two ways.
+
+First, we are capable of evaluating the specificity of explanations, which is an
+important feature for abduction-based NLP, as discussed in Sec.~\ref{sec:cba}.
+The Santos approach amounts to performing most-specific abduction, and he finds
+a truth assignment to all propositions. Let us describe how the appropriate
+level of specificity is controlled in our approach. Suppose $O=\{p(a), q(a)\}$
+and $B=\{r(x) \rightarrow p(x)\}$. We then have two candidate explanations. The
+first explanation is $H_1 = \{p(a), q(a)\}$, which simply assumes observations,
+and the cost is $cost(p(a)) + cost(q(a))$ (i.e., $c_{p(a)}=1$, $c_{q(a)}=1$).
+Backward chaining on $p(a)$ yields the second explanation $H_2 = \{q(a),
+r(a)\}$, which is more specific than $H_1$. The cost of $H_2$ is $cost(q(a)) +
+cost(r(a))$ ($c_{p(a)}=0$, $c_{q(a)}=1$, $c_{r(a)}=1$). Note that we do not
+count $p(a)$ because $p(a)$ is \emph{not} assumed anymore. Therefore, for this
+problem, if $cost(r(a)) < cost(p(a))$, then a more specific explanation $H_1$ is
+selected as the best explanation; otherwise, the less specific explanation $H_2$
+is selected. This is controlled by the ILP variables $c$
+and Constraints 5 and 6, which are not introduced in the Santos approach.
+To summarize, our approach can decide which specificity of explanation is
+appropriate for the current observation and knowledge base, on the basis of how
+well the explanation is supported by observations.
+
+Second, our approach directly models first-order CBA, while Santos approach
+formulates propositional-logic abduction.
+We could employ his approach for first-order CBA since it is
+well known that FOL formulae can be represented by propositional logic
+formulae through the application of grounding procedure (i.e., generate
+logical formulae, replacing variables with all possible constants).
+However, abductive inference over propositional level will make
+inference intractable when existentially quantified variables are
+included in observations or background knowledge. For example, suppose
+that $B = \{q(x,y) \rightarrow p(x, y), r(x,y,z) \rightarrow q(x,y)
+\}, O = \{p(x, y)\}$ and all possible constants are
+$\mathcal{C}=\{C_1, C_2, \ldots, C_n\}$. To ground this observation, we
+need to generate a disjunctive clause for $p(x,y)$, replacing $x$ and
+$y$ with all possible combinations from $\mathcal{C}$,
+i.e., $p(C_1,C_1) \lor p(C_1,C_2) \lor \ldots \lor p(C_n, C_n)$. The
+extension of the expressivity of observation is not difficult, but the
+problem arises in the search-space generation process: we get $O(n^2)$
+potential elemental explanations (i.e., $q(C_i,C_j)$ for all $i,j \in
+\{1,2,\ldots,n\}$) to explain each disjunct with the axiom $q(x,y)
+\rightarrow p(x, y)$. In addition, backchaining on each $q(C_i,C_j)$
+with $r(x,y,z) \rightarrow q(x,y)$ yields $O(n)$ potential elemental
+explanations (i.e., $r(C_i,C_j,C_k)$ for all $k \in \{1,2,\ldots,n\}$). In
+contrast, the search-space generation in our approach yields
+$\{p(x,y),q(x,y),r(x,y,u)\}$. As the readers can see, our approach
+seems to be more robust to the size of domain. In discourse
+processing, this robustness is important because literals usually have
+more than two or three arguments to represent an event with its
+participants.
+
+
+\subsection{CPI for CBA} \label{sec:cpi}
+
+
+
+
+
+
+
+
+One major drawback of  ILP formulation is that it needs to generate
+$O(n^3)$ transitivity constraints, where $n$ is the number of logical
+atomic terms, because we perform inference over FOL-based
+representation. That makes inference intractable (see
+Sec.~\ref{sec:eval} for empirical evidence) because it generates an
+ILP optimization problem that has quite a large number of
+constraints. 
+
+How do we overcome this drawback? The idea is that ``all the
+transitivity constraints may not be violated all at once; so we
+gradually optimize and add transitivity constraints \emph{if violated}
+in an iterative manner.'' More formally, we propose applying
+CPI to the CBA problems that was originally developed
+for solving large linear programming (LP) problems in operations
+research \cite{Dantzig54}.  CPI has been successfully applied to a
+wide range of constrained optimization problems where constraints are
+very large \cite{Riedel06,Riedel08,Joachims09,Berant11}, from
+probabilistic deductive inference problems \cite{Riedel08} to machine
+learning problems \cite{Joachims09}. To the best of our knowledge,
+however, our work is the first successful application of CPI to
+abductive inference tasks. In principle, CPI solves optimization
+problem in an iterative manner as follows: it solves an optimization
+problem without constraints, and then adds violated constraints to the
+optimization problem. When the iteration terminates, it guarantees
+solutions to be optimal. The proposed algorithm, called
+\emph{CPI4CBA}, is also an exact inference framework.
+
+How do we apply the technique of CPI to cost-based abduction problems?
+Intuitively, we iterate the following two steps: (i) solving an
+abduction problem without enforcing transitivity on logical atomic
+terms, and (ii) generating transitivity constraints dynamically when
+transitiveness of unification is violated (e.g., $H \cup B \models x=y
+\land y=z$, and $H \cup B \not\models x = z$). The iteration
+terminates if there is no violated unification transitivity. The
+pseudocode is given in Algorithm~\ref{alg:cpi4cba}. In line 1, we
+first create an ILP optimization problem described in
+Sec.~\ref{sec:ilpf}, but
+without transitivity constraints (i.e., Constraint 2), where $\Psi$
+denotes a set of ILP variables, and $I$ denotes a set of ILP
+constraints. In lines 2--13, we repeat checking consistency of
+unification transitiveness, adding constraints for violated
+transitiveness, and re-optimizing. In line 3, we find the solution
+$\emph{sol}$ for the current ILP optimization problem. Then, for each
+pair ($x,y$) of logical atomic terms unified in the solution
+$\emph{sol}$ (line 4), we find the logical term $z$ which is unifiable
+with $x$ and $y$ (line 5). If the transitive relation $x, y$ with
+respect to $z$ is violated (i.e., $h_{x=z}=0 \land h_{y=z}=1$ or
+$h_{x=z}=1 \land h_{y=z}=0$), then we generate constraints for
+preventing this violation, and keep it in set $V$ of constraints (lines
+6--9). Finally, we again perform an ILP optimization with newly
+generated constraints (lines 12 and 3). The iteration ends when there
+is no violated transitiveness (line 13).
+
+
+\begin{algorithm}[b]
+  \caption{\textbf{cpiForLiftedFirstOrderCBA}(Background Knowledge $\mathbf{B}$, Observation $\mathbf{O}$)}
+  \label{alg:cpi4cba}
+\input{01algo03.txt}
+\end{algorithm}
+
+The key advantage of CPI4CBA is that it can reduce the time of search-space
+generation, and it is also expected to reduce the time of ILP optimization.
+CPI4CBA does not generate all transitivity constraints before optimization,
+which saves search-space generation time. In addition, optimization problems
+that we solve would become smaller than the original problem in most cases,
+because not all transitivity constraints need to be
+considered. In the worst case, we need to solve the optimization problem that is
+same as the original one; however, in most cases, we found this unnecessary.
+We will show its empirical evidence through large-scale evaluation in
+Sec.~\ref{sec:eval}.
+
+
+
+
+\section{Runtime Evaluation}
+\label{sec:eval}
+
+How much does CPI improve the \emph{runtime} of an ILP-based reasoner?
+Does CPI scale to larger real-life problems? To answer these
+questions, we evaluated the CPI4CBA algorithm in two settings: (i)
+\textbf{STORY}, the task of plan recognition; and (ii) \textbf{RTE},
+the popular, knowledge-intensive, real-life natural language
+processing task of RTE. While
+most of the existing abductive inference systems are evaluated on
+rather small, and/or artificial datasets
+\cite[etc.]{Kate09,Raghavan10,Singla11}, our evaluation takes
+real-life, much larger datasets (see Sec.~\ref{sec:setting}). In our
+experiments, we compare our system with systems
+\cite{Kate09,Singla11,Blythe11} based on Markov logic networks (MLNs)
+\cite{Richardson06}. For our experiments, we have used a 12-Core
+Opteron 6174 (2.2~GHz) 128~GB RAM machine, and assigned 8 CPU cores for
+each run. For an ILP solver, we used a Gurobi
+optimizer.\footnote{http://www.gurobi.com/} It is commercial, but an
+academic license is freely
+available. In our experiments, we use Constraint 6 \emph{without}
+enumerating potential logical consequences (i.e., Algorithm~\ref{alg:liftedcba}
+is used). The empirical evaluation with the enumeration of potential logical
+consequences is our future work.
+
+
+\subsection{Settings}
+\label{sec:setting}
+
+\textbf{STORY}: For this setting, we have used Ng and Mooney\nocite{Ng92}'s story understanding
+dataset (1992),\footnote{ftp://ftp.cs.utexas.edu/pub/mooney/accel} which is
+widely used for the evaluation of abductive plan recognition systems
+\cite{Kate09,Raghavan10,Singla11}. In this task, we need to
+abductively infer the top-level plans of characters from actions. We
+follow Singla and Mooney\nocite{Singla11}'s setting to define
+top-level plan predicates. These include 10
+types of literals, such as $\emph{shopping}$.\footnote{The complete
+  list of top-level plan predicates is as follows: \emph{shopping, robbing,
+  traveling, rest\_dining, drinking, paying, jogging}, and \emph{partying}.} 
+  The dataset consists of 50 plan recognition problems represented by a set of
+ground atoms (e.g., {\small $\{ \emph{getting\_off}(\emph{Getoff16}),
+  \emph{agent\_get\_off}(\emph{Getoff16},\emph{Fred16}),
+  \emph{name}(\emph{Fred16},\emph{Fred})\}$}) and 107 background
+definite clauses (e.g.,  {\small $\emph{go\_step}(r,g) \land
+  \emph{going}(g) \rightarrow \emph{robbing}(r)$}). The dataset
+contains on average 12.6 literals in the logical forms of actions. 
+We additionally generated 73 ILP constraints to prevent one variable/constant
+from having distinct top-level plan predicates in a hypothesis (e.g.
+$H=\{\emph{robbing}(R), $\emph{shopping}(R)$\}$).
+ For example, we generated $h_{\emph{robbing}(x)} + h_{\emph{shopping}(y)} + h_{x=y} \leq 2$
+to represent that \emph{robbing} and \emph{shopping} cannot be hypothesized for
+the same variable/constant. Note that $H = \{\emph{robbing}(R),
+\emph{shopping}(S)\}$ is still possible.
+
+To assign a cost to each literal (i.e., $cost(h)$ in equation
+(\ref{eqn:ilp})), we followed Hobbs et al.\nocite{Hobbs93}'s
+weighted abduction theory~\cite{Hobbs93}. In the theory, as mentioned in
+Sec.~\ref{sec:cba}, each literal in the left-hand side of the axioms has a
+set of \emph{weights}, which is expressed as $p_1^{w_1} \land
+p_2^{w_2} \land ... \land p_n^{w_n} \rightarrow q$. During
+backward chaining, each weight is multiplied with the cost of literal
+that is backchained on. For example, given $p(x)^{0.6} \land
+q(x)^{0.6} \rightarrow r(x)$ and $r(a)^{\$10}$, the theory derives
+$\{p(a)^{\$6}, q(a)^{\$6}\}$. Because the background knowledge of Ng
+and Mooney's dataset does not have weights, we assigned
+weights to the axioms so that the sum of the weights is 1.2 (e.g., $p^{0.4}
+\land q^{0.4} \land r^{0.4} \rightarrow s$). This assignment means
+that backward inference always increases the cost of explanation, and
+unification is the only way to reduce the cost. That is, it is almost
+equivalent to performing pure logic-based abduction, where the number
+of literals in an explanation is used as the plausibility of
+explanation.
+
+\textbf{RTE}: For observations (input), we employed the second
+challenge of the RTE
+dataset.\footnote{http://pascallin.ecs.soton.ac.uk/Challenges/RTE2/}
+In this, we need to determine correctly whether one text
+(called \emph{text}, or T) entails another (called \emph{hypothesis},
+or H). The dataset consists of a development set and a test set,
+each of which includes 800 natural language text hypothesis pairs. We
+used all 800 texts from the test set. We converted texts
+into logical forms presented in Hobbs (1985)\nocite{Hobbs85} using the Boxer
+semantic parser \cite{Bos08}. The number of literals in observations
+is 29.6 literals on average. For background knowledge, we 
+extracted 289,655 axioms\footnote{The extracted relations include
+  word-to-synset mapping, hypernym-hyponym, cause-effect, entailment,
+  derivational, instance-of relations.} from WordNet 3.0
+\cite{fellbaum98}, and 7,558 axioms from FrameNet 1.5
+\cite{framenetII}, following Ovchinnikova et al. (2011)\nocite{Ovch11}. In
+principle, the WordNet knowledge base contains various lexical relations between
+words, such as IS-A, ontological relations (e.g., {\small $dog(x)
+  \rightarrow animal(x)$}). FrameNet knowledge bases contain
+lexeme-to-frame mappings, frame-frame relations, etc. For example, the
+mapping from surface realization ``$x_1$ give $x_2$ $x_3$'' to a frame
+``Giving'' is given by
+{\small $\emph{Giving}(e_1,x_1,x_2,x_3) \land
+  \emph{donor}(e_1,x_1)$ $\land \emph{recipient}(e_1,x_2)
+  \land \emph{theme}(e_1,x_3)$ $\rightarrow
+  \emph{give}(e_1,x_1,x_2,x_3)$}.
+We again followed Hobbs's weighted
+abduction theory for calculating the cost of explanation. We assigned
+the weights to axioms by following Ovchinnikova et
+al. (2011)\nocite{Ovch11} in this setting.
+
+
+\subsection{Results and discussion}
+
+
+The reasoner was given a 2-min time limit for each inference step
+(i.e., search-space generation and best-explanation search). 
+In Table~\ref{tbl:runtime_su}, we show the results of each setting for two
+inference methods: (i) \emph{IAICBA}: the
+inference method without CPI, and (ii) \emph{CPI4CBA}: inference
+method with CPI.
+
+\begin{table}[t]
+\caption{The results of averaged inference time in \textbf{STORY} and \textbf{RTE}}
+\label{tbl:runtime_su}
+\input{01table01.txt}
+\end{table}
+
+In order to investigate the relationship between the size
+of search space and the runtime, we show the results for each depth,
+which we used for limiting the length of backward chaining. In the
+``Generation'' column, we show the runtime, which is taken for
+search-space generation in seconds, averaged over all problems whose
+search-space generation is finished within 2~min. In the
+parenthesis, we show the percentage of those problems whose
+search-space generation is finished within 2~min. In the column
+``ILP inf,'' we show the runtime of ILP optimization averaged on only
+problems such that both search-space generation and ILP optimization
+are finished within 2~min as well as the percentage of those
+problems (e.g., 80\% means ``for 80\% of all the problems,
+search-space generation, as well as ILP inference, was finished within 2
+min.''). In the ``\# of ILP cnstr'' column, we show the averaged
+number of generated ILP constraints. Concerning CPI4CBA, the number
+denotes the averaged number of constraints considered in the end,
+including the constraints added by CPI. The number marked by $\Delta$
+indicates the averaged number of constraints that are added during CPI
+(i.e., how many times are the constraints added by line 7 or 9 in
+Algorithm~\ref{alg:cpi4cba}).
+
+
+Overall, the runtimes in both search-space generation and ILP inference are
+dramatically improved from IAICBA to CPI4CBA in both settings, 
+as shown in Table~\ref{tbl:runtime_su}. In addition, CPI4CBA can find optimal solutions in ILP
+inference for more than 90\% of the problems, even for depth $\infty$. This
+indicates that CPI4CBA scales to larger problems. The results of IAICBA in
+\textbf{RTE} settings indicate the significant bottleneck of IAICBA in
+large-scale reasoning: the time of search-space generation. Search-space
+generation could be performed within 2~min for only 90.7\% of the problems.
+CPI4CBA successfully overcomes this bottleneck. CPI4CBA is clearly advantageous
+in search-space generation because it is not necessary to generate
+transitivity constraints, an operation that grows cubically before optimization.
+
+\begin{figure}[b]
+  \begin{center}
+\includegraphics{20-5ia1f3.eps}
+  \end{center}
+\hangcaption{Runtime comparison between IAICBA and CPI4CBA
+      (logarithmic scale). The left figure shows the results of
+      {STORY} dataset, and the right figure shows the results of {RTE}
+      datasets}
+    \label{fig:scale_su}
+\end{figure}
+
+In addition, CPI4CBA also reduces the time of ILP inference
+significantly.  In ILP inference, CPI did not guarantee the reduction
+of inference time in theory; \emph{however}, 
+as shown in Table~\ref{tbl:runtime_su}, we found that the number of ILP constraints
+actually used is much less than the original problem. Therefore,
+CPI4CBA successfully reduces the complexity of the ILP optimization
+problems in practice. This is also supported by the fact that CPI4CBA
+keeps 76.9\% in ``ILP inf'' for Depth = $\infty$ because it solves
+very large ILP optimization problems that fail to be generated in
+IAICBA. In order to see how CPI contributes to the improvement in ILP
+inference time, we show how the runtime of IAICBA is affected by
+the CPI4CBA method for each problem in Figure~\ref{fig:scale_su}. Each
+data point corresponds to one problem in \textbf{STORY} and
+\textbf{RTE} settings. We show the data points for problems for which we
+found optimal solutions in ILP inference for Depth =
+$\infty$. Overall, the runtime of CPI4CBA is smaller than that of IAICBA in
+most problems. In particular, CPI4CBA successfully
+reduces the time of ILP inference for larger problems by exploiting
+the iterative optimization technique. In the larger domain of
+\textbf{RTE} setting, we found that performance was improved in
+81.7\% of the problems.
+
+Finally, we compare CPI4CBA with the existing MLN-based systems
+\cite{Kate09,Singla11,Blythe11}. In summary, our system is comparable or
+slightly less efficient in the \textbf{STORY} setting; \emph{however}, our
+system is more efficient in the \textbf{RTE} setting.
+
+For the \textbf{STORY} setting, Singla and Mooney
+(2011)\nocite{Singla11} reported the averaged inference time of two
+existing MLN-based systems using CPI \cite{Riedel08}
+\emph{on the test set}:
+(i) Kate and Mooney (2009)\nocite{Kate09}'s approach: 2.93~s, and (ii)
+Singla and Mooney (2011)\nocite{Singla11}'s approach: 0.93
+s.\footnote{This is the result of MLN-HC in
+  \cite{Singla11}. MLN-HCAM cannot be directly compared with our
+  results, since the search space is different from our experiments
+  because they unify some assumptions in advance to reduce the search
+  space.} To make the comparison fair, we evaluated our approach with
+a single CPU core \emph{on the test set}. It took 2.36
+s on average to process all the problems (optimal solutions were found for
+all of them).
+MLN-based approaches seem to be reasonably efficient for small
+datasets.
+
+However, it does not scale to larger problems; for the
+\textbf{RTE} setting, Blythe et al. (2011)\nocite{Blythe11} reported
+that only 28 from 100 selected RTE-2 problems could be run to
+completion with only the FrameNet knowledge bases. The processing time
+was 7.5~min on average (personal communication\footnote{They used 56,000 FrameNet
+  axioms in the experiments, while we used 289,655 WordNet axioms and
+  7,558 FrameNet axioms. To make the comparison fairer, we run our
+  experiment on the same but smaller dataset, as in Blythe et
+  al. (2011).\nocite{Blythe11}
+  The dataset contains 65 background axioms and 14 abductive interpretation problems
+  from Hobbs et al. (1993).\nocite{Hobbs93} As reported in
+  Blythe et al. (2011)\nocite{Blythe11}, it took 5.6~s for their system to
+  process 12 problems (2 problems cannot be solved), while it took 1.0~s for our system to process all the problems
+  with a single CPU core (Depth = 8).}).
+  However, our method solves 76.9\% of all the problems, with suboptimal
+solutions still available for the remaining 21.5\%, and it takes
+only 0.84~s for search-space generation, and 11.73~s for
+ILP inference. As mentioned in Sec. \ref{sec:related_work}, our
+framework is more scalable because it does not need to
+generate the axioms explicitly to emulate an \emph{explaining away}
+effect (i.e., inferring one cause makes another cause less probable)
+and needs no grounding (Sec. \ref{sec:ilpf}).
+
+
+\section{Related work}
+\label{sec:related_work}
+
+The computational aspect of abduction has been studied extensively in
+the contexts of logic programming and statistical relational learning.
+In the context of logic programming, abduction has been introduced as
+the extension of logic programming \cite{Stickel91,Kakas92},
+where the extended framework is often called abductive logic
+programming (ALP). Since abduction and induction share the basic
+framework (see Sec.~\ref{sec:cba} for detail), abduction has also been
+studied in the area of inductive logic programming, the logic
+programming framework for induction
+\cite{Inoue04,Tamaddoni-Nezhad06}.
+In the context of ALP, Stickel (1991) \nocite{Stickel91} showed how to
+formulate minimum-cost explanation finding in Prolog, a popular
+implementation of logic programming. Stickel allowed the system to
+\emph{assume} literals during SLD resolution when definite clause
+rules or facts unifiable with the targeted literal are not found. In
+this system, the cost of explanation is calculated by the sum of the
+costs of elemental explanations, and the costs of axioms used for
+constructing the proof. However, Stickel did not show how to
+implement it efficiently.
+
+In the following years, a number of
+methods attempting to find the minimum-cost explanation efficiently were
+ proposed
+\cite{Santos94,Ishizuka98,Prendinger99,Abdelbar05,Chivers07,Guinn08};
+for example, Santos (1994) formulated cost-based abduction in
+propositional logic using ILP, and showed its efficiency. However,
+most of them focus on improving the efficiency of propositional
+logic-based abduction. As discussed in Sec.~\ref{sec:i_and_i}, one
+could use such a framework through propositionalization techniques for
+first-order CBA; however, the propositionalization will produce a huge
+number of ground instances of background knowledge axioms and literals
+in observation. Hence, they would not scale to larger problems with
+sizeable knowledge bases.
+
+
+In the context of statistical relational learning, abduction has also
+been widely studied. One of the prominent formalisms is PRISM
+\cite{Sato08}, which is a general logic-based probabilistic modeling
+language. In the past two decades, a number of techniques for
+efficient inference or learning have been studied extensively (see Sato
+and Kameya (2008)\nocite{Sato08} for overview). Concerning inference,
+in principle PRISM achieves the best explanation finding in a
+polynomial time through a tabled search technique for logic programs
+\cite{Tamaki86}. However, this technique exploits the local
+information computed so far, and hence is incompatible with
+the factoring of explanation, which is a global operation
+(personal communication). It is a nontrivial issue to incorporate the
+factoring process into the search without loss of efficiency.
+
+
+Another important stream is the series of studies
+\cite{Kate09,Blythe11,Singla11}, where abduction has been
+emulated through MLNs \cite{Richardson06}, a
+probabilistic deductive inference framework. MLNs provide full support
+of first-order predicate logic and software packages of inference
+and learning; however, MLN-based approaches have severe overheads of
+inference: (i) they require special procedures to convert abduction
+problems into deduction problems because of the deductive nature of
+MLNs, and (ii) they need grounding for inference.
+To emulate abduction in the deductive framework, the pioneering work
+of MLN-based abduction \cite{Kate09} exploits the reverse implication
+of the original axioms, and uses the additional axioms to emulate
+the \emph{explaining away} effect (i.e., inferring one cause makes another
+cause less probable). For example, suppose {\small $B = \{p_1
+  \rightarrow q, p_2 \rightarrow q$, $ p_3 \rightarrow q\}$}. Then,
+$B$ is not used in MLN background knowledge base as it is: $B$ is
+converted into the following set of logical formulae: {\small $\{q
+  \rightarrow p_1 \lor p_2 \lor p_3$, $q \rightarrow \lnot p_1 \lor
+  \lnot p_2$, $q \rightarrow \lnot p_1 \lor \lnot p_3\}$}. As the
+readers can imagine, an MLN-based approach suffers from the inefficiency
+of inference because of the increase in converted axioms. In addition, to
+the best of our knowledge, most of the existing approaches for
+maximum-a-posterior (MAP) inference for MLN
+\cite[etc.]{Singla06,Riedel08} need (partial) grounding of axioms,
+which makes inference prohibitively
+slow.
+
+
+
+In terms of the applications, there are multiple researches that
+exploit abduction in many fields. For example, in systems biology,
+abduction is used for discovering scientific knowledge, such as causal
+relationships from genotype to phenotype, or modeling inhibition in
+metabolic networks \cite{Doncescu08,Tamaddoni-Nezhad06}.
+
+
+\section{Conclusion}
+
+We have proposed an ILP-based lifted formulation for cost-based abduction on
+FOL. 
+Although abductive reasoning on FOL is computationally expensive,
+we demonstrated that the lifted inference and CPI
+techniques bring us a significant boost to the efficiency of
+FOL-based reasoning. We have evaluated our method on two datasets, including
+real-life problems (i.e., RTE dataset with axioms generated from WordNet and
+FrameNet).
+ Our evaluation revealed that our inference method CPI4CBA
+was more efficient than other existing systems on a large KB. The
+abductive inference engine presented in this paper is made publicly
+available.\footnote{https://github.com/naoya-i/henry-n700}
+
+In future work, we plan to apply CPI to both
+search-space generation and ILP inference, repeating the generation of
+potential elemental explanations and ILP optimization interactively,
+as in Cutting Plane MAP inference in MLNs \cite{Riedel08}. 
+
+We also plan to extend the expressivity of our approach, i.e., to
+support negations in background knowledge. The capability of handling
+negations is crucial for a wide range of abductive inference
+systems. For example, in abduction-based natural language
+interpretation, one can easily imagine that it needs to handle negated
+expressions, such as ``\emph{I don't like ice cream}'', or
+``\emph{Tweety is not a bird.}'' Our future direction also includes
+providing the formal proof of completeness and soundness of our approach.
+
+
+
+
+
+\acknowledgment
+
+I thank the reviewers of this paper for their helpful comments.
+This work was partially supported by Grant-in-Aid for JSPS Fellows
+(22-9719) and Grant-in-Aid for Scientific Research (23240018). 
+The authors would like to thank Enago (www.enago.jp) for the English language
+review.
+
+{\addtolength{\baselineskip}{-0.5pt}
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Abdelbar \BBA\ Hefny}{Abdelbar \BBA\
+  Hefny}{2005}]{Abdelbar05}
+Abdelbar, A.~M.\BBACOMMA\ \BBA\ Hefny, M. \BBOP 2005\BBCP.
+\newblock \BBOQ An efficient LP-based admissible heuristic for cost-based
+  abduction.\BBCQ\
+\newblock {\Bem Journal of Experimental and Theoretical Artificial
+  Intelligence}, {\Bbf 17}  (3), \mbox{\BPGS\ 297--303}.
+
+\bibitem[\protect\BCAY{Berant, Aviv, \BBA\ Goldberger}{Berant
+  et~al.}{2008}]{Berant11}
+Berant, J., Aviv, T., \BBA\ Goldberger, J. \BBOP 2008\BBCP.
+\newblock \BBOQ {Global Learning of Typed Entailment Rules}.\BBCQ\
+\newblock In {\Bem Proceedings of the 49th Annual Meeting of the Association
+  for Computational Linguistics}, \mbox{\BPGS\ 610--619}.
+
+\bibitem[\protect\BCAY{Blythe, Hobbs, Domingos, Kate, \BBA\ Mooney}{Blythe
+  et~al.}{2011}]{Blythe11}
+Blythe, J., Hobbs, J.~R., Domingos, P., Kate, R.~J., \BBA\ Mooney, R.~J. \BBOP
+  2011\BBCP.
+\newblock \BBOQ {Implementing Weighted Abduction in Markov Logic}.\BBCQ\
+\newblock In {\Bem Proceedings of the International Conference on Computational
+  Semantics}, \mbox{\BPGS\ 55--64}.
+
+\bibitem[\protect\BCAY{Bos}{Bos}{2008}]{Bos08}
+Bos, J. \BBOP 2008\BBCP.
+\newblock \BBOQ {Wide-Coverage Semantic Analysis with Boxer}.\BBCQ\
+\newblock In {\Bem Proceedings of the 2008 Conference on Semantics in Text
+  Processing}, \mbox{\BPGS\ 277--286}.
+
+\bibitem[\protect\BCAY{Chambers \BBA\ Jurafsky}{Chambers \BBA\
+  Jurafsky}{2009}]{Chambers09}
+Chambers, N.\BBACOMMA\ \BBA\ Jurafsky, D. \BBOP 2009\BBCP.
+\newblock \BBOQ {Unsupervised Learning of Narrative Schemas and their
+  Participants}.\BBCQ\
+\newblock In {\Bem Proceedings of the Joint Conference of the 47th Annual
+  Meeting of the ACL and the 4th International Joint Conference on Natural
+  Language Processing of the AFNLP}, \mbox{\BPGS\ 602--610}.
+
+\bibitem[\protect\BCAY{Charniak \BBA\ Goldman}{Charniak \BBA\
+  Goldman}{1991}]{Charniak91}
+Charniak, E.\BBACOMMA\ \BBA\ Goldman, R.~P. \BBOP 1991\BBCP.
+\newblock \BBOQ {A Probabilistic Model of Plan Recognition}.\BBCQ\
+\newblock In {\Bem Proceedings of the 9th National Conference on Artificial
+  Intelligence}, \mbox{\BPGS\ 160--165}.
+
+\bibitem[\protect\BCAY{Chivers, Tagliarini, \BBA\ Abdelbar}{Chivers
+  et~al.}{2007}]{Chivers07}
+Chivers, S.~T., Tagliarini, G.~A., \BBA\ Abdelbar, A.~M. \BBOP 2007\BBCP.
+\newblock \BBOQ {An Evolutionary Optimization Approach to Cost-Based Abduction,
+  with Comparison to PSO}.\BBCQ\
+\newblock In {\Bem Proceedings of the 2007 IEEE International Joint Conference
+  in Neural Networks}, \mbox{\BPGS\ 2926--2930}.
+
+\bibitem[\protect\BCAY{Dagan, Dolan, Magnini, \BBA\ Roth}{Dagan
+  et~al.}{2010}]{Dagan10}
+Dagan, I., Dolan, B., Magnini, B., \BBA\ Roth, D. \BBOP 2010\BBCP.
+\newblock \BBOQ {Recognizing textual entailment: Rational, evaluation and
+  approaches - Erratum}.\BBCQ\
+\newblock {\Bem Natural Language Engineering}, {\Bbf 16}  (1), \mbox{\BPG\
+  105}.
+
+\bibitem[\protect\BCAY{Dantzig, Fulkerson, \BBA\ Johnson}{Dantzig
+  et~al.}{1954}]{Dantzig54}
+Dantzig, G.~B., Fulkerson, R., \BBA\ Johnson, S.~M. \BBOP 1954\BBCP.
+\newblock \BBOQ Solution of a large-scale traveling salesman problem.\BBCQ\
+\newblock {\Bem Operations Research}, {\Bbf 2}  (4), \mbox{\BPGS\ 393--410}.
+
+\bibitem[\protect\BCAY{Doncescu, Inoue, \BBA\ Sato}{Doncescu
+  et~al.}{2008}]{Doncescu08}
+Doncescu, A., Inoue, K., \BBA\ Sato, T. \BBOP 2008\BBCP.
+\newblock \BBOQ {Hypothesis-Finding in Systems Biology}.\BBCQ\
+\newblock {\Bem ALP Newsletter}, {\Bbf 21}, \mbox{\BPGS\ 2--3}.
+
+\bibitem[\protect\BCAY{Etzioni, Banko, \BBA\ Cafarella}{Etzioni
+  et~al.}{2006}]{Etzioni06}
+Etzioni, O., Banko, M., \BBA\ Cafarella, M.~J. \BBOP 2006\BBCP.
+\newblock \BBOQ {Machine reading}.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st National Conference on Artificial
+  Intelligence}.
+
+\bibitem[\protect\BCAY{Fellbaum}{Fellbaum}{1998}]{fellbaum98}
+Fellbaum, C.\BED\ \BBOP 1998\BBCP.
+\newblock {\Bem {WordNet: an electronic lexical database}}.
+\newblock MIT Press.
+
+\bibitem[\protect\BCAY{Guinn, Shipman, \BBA\ Addison}{Guinn
+  et~al.}{2008}]{Guinn08}
+Guinn, C., Shipman, W., \BBA\ Addison, E. \BBOP 2008\BBCP.
+\newblock \BBOQ {The Parallelization of Membrane Computers to Find Near Optimal
+  Solutions to Cost-Based Abduction}.\BBCQ\
+\newblock In {\Bem Proceedings of the 2008 International Conference on Genetic
+  and Evolutionary Methods}, \mbox{\BPGS\ 241--247}.
+
+\bibitem[\protect\BCAY{Hobbs}{Hobbs}{1985}]{Hobbs85}
+Hobbs, J.~R. \BBOP 1985\BBCP.
+\newblock \BBOQ Ontological Promiscuity.\BBCQ\
+\newblock In {\Bem Proceedings of the 23rd annual meeting on Association for
+  Computational Linguistics}, \mbox{\BPGS\ 61--69}, Chicago, Illinois.
+
+\bibitem[\protect\BCAY{Hobbs, Stickel, Martin, \BBA\ Edwards}{Hobbs
+  et~al.}{1993}]{Hobbs93}
+Hobbs, J.~R., Stickel, M., Martin, P., \BBA\ Edwards, D. \BBOP 1993\BBCP.
+\newblock \BBOQ Interpretation as Abduction.\BBCQ\
+\newblock {\Bem Artificial Intelligence}, {\Bbf 63}, \mbox{\BPGS\ 69--142}.
+
+\bibitem[\protect\BCAY{Hovy, Zhang, Hovy, \BBA\ Penas}{Hovy
+  et~al.}{2011}]{Hovy11}
+Hovy, D., Zhang, C., Hovy, E., \BBA\ Penas, A. \BBOP 2011\BBCP.
+\newblock \BBOQ Unsupervised Discovery of Domain-Specific Knowledge from
+  Text.\BBCQ\
+\newblock In {\Bem Proceedings of the 49th Annual Meeting of the Association
+  for Computational Linguistics: Human Language Technologies}, \mbox{\BPGS\
+  1466--1475}.
+
+\bibitem[\protect\BCAY{Inoue}{Inoue}{2004}]{Inoue04}
+Inoue, K. \BBOP 2004\BBCP.
+\newblock \BBOQ Induction as consequence finding.\BBCQ\
+\newblock {\Bem Machine Learning}, {\Bbf 55}  (2), \mbox{\BPGS\ 109--135}.
+
+\bibitem[\protect\BCAY{Ishizuka \BBA\ Matsuo}{Ishizuka \BBA\
+  Matsuo}{1998}]{Ishizuka98}
+Ishizuka, M.\BBACOMMA\ \BBA\ Matsuo, Y. \BBOP 1998\BBCP.
+\newblock \BBOQ {SL Method for Computing a Near-optimal Solution using Linear
+  and Non-linear Programming in Cost-based Hypothetical Reasoning}.\BBCQ\
+\newblock In {\Bem Proceedings of the 5th Pacific Rim International Conference
+  on Artificial Intelligence: Topics in Artificial Intelligence}, \mbox{\BPGS\
+  611--625}.
+
+\bibitem[\protect\BCAY{Joachims, Finley, \BBA\ Yu}{Joachims
+  et~al.}{2009}]{Joachims09}
+Joachims, T., Finley, T., \BBA\ Yu, C.~J. \BBOP 2009\BBCP.
+\newblock \BBOQ Cutting-plane training of structural SVMs.\BBCQ\
+\newblock {\Bem Machine Learning}, {\Bbf 77}  (1), \mbox{\BPGS\ 27--59}.
+
+\bibitem[\protect\BCAY{Kakas, Kowalski, \BBA\ Toni}{Kakas
+  et~al.}{1992}]{Kakas92}
+Kakas, A., Kowalski, R., \BBA\ Toni, F. \BBOP 1992\BBCP.
+\newblock \BBOQ Abductive logic programming.\BBCQ\
+\newblock {\Bem Journal of Logic and Computation}, {\Bbf 2}  (6), \mbox{\BPGS\
+  719--770}.
+
+\bibitem[\protect\BCAY{Kate \BBA\ Mooney}{Kate \BBA\ Mooney}{2009}]{Kate09}
+Kate, R.~J.\BBACOMMA\ \BBA\ Mooney, R.~J. \BBOP 2009\BBCP.
+\newblock \BBOQ {Probabilistic Abduction using Markov Logic Networks}.\BBCQ\
+\newblock In {\Bem Proceedings of the IJCAI-09 Workshop on Plan, Activity, and
+  Intent Recognition}.
+
+\bibitem[\protect\BCAY{Kowalski}{Kowalski}{1974}]{Kowalski74}
+Kowalski, R. \BBOP 1974\BBCP.
+\newblock \BBOQ {Predicate Logic as a Programming Language}.\BBCQ\
+\newblock In {\Bem Proceedings of the IFIP Congress}, \mbox{\BPGS\ 569--574}.
+
+\bibitem[\protect\BCAY{Mulkar, Hobbs, \BBA\ Hovy}{Mulkar
+  et~al.}{2007}]{Mulkar07}
+Mulkar, R., Hobbs, J., \BBA\ Hovy, E. \BBOP 2007\BBCP.
+\newblock \BBOQ {Learning from Reading Syntactically Complex Biology
+  Texts}.\BBCQ\
+\newblock In {\Bem Proceedings of the 8th International Symposium on Logical
+  Formalizations of Commonsense Reasoning.}, Palo Alto.
+
+\bibitem[\protect\BCAY{Ng \BBA\ Mooney}{Ng \BBA\ Mooney}{1992}]{Ng92}
+Ng, H.~T.\BBACOMMA\ \BBA\ Mooney, R.~J. \BBOP 1992\BBCP.
+\newblock \BBOQ {Abductive Plan Recognition and Diagnosis: A Comprehensive
+  Empirical Evaluation}.\BBCQ\
+\newblock In {\Bem Proceedings of the Third International Conference on
+  Principles of Knowledge Representation and Reasoning}, \mbox{\BPGS\
+  499--508}.
+
+\bibitem[\protect\BCAY{Ovchinnikova, Montazeri, Alexandrov, Hobbs, McCord,
+  \BBA\ Mulkar-Mehta}{Ovchinnikova et~al.}{2011}]{Ovch11}
+Ovchinnikova, E., Montazeri, N., Alexandrov, T., Hobbs, J.~R., McCord, M.,
+  \BBA\ Mulkar-Mehta, R. \BBOP 2011\BBCP.
+\newblock \BBOQ {Abductive Reasoning with a Large Knowledge Base for Discourse
+  Processing}.\BBCQ\
+\newblock In {\Bem Proceedings of the International Conference on Computational
+  Semantics}, \mbox{\BPGS\ 225--234}.
+
+\bibitem[\protect\BCAY{Penas \BBA\ Hovy}{Penas \BBA\ Hovy}{2010}]{Penas10}
+Penas, A.\BBACOMMA\ \BBA\ Hovy, E. \BBOP 2010\BBCP.
+\newblock \BBOQ {Filling knowledge gaps in text for machine reading}.\BBCQ\
+\newblock In {\Bem Proceedings of the 23rd International Conference on
+  Computational Linguistics: Posters}, \mbox{\BPGS\ 979--987}.
+
+\bibitem[\protect\BCAY{Peraldi, Kaya, Melzer, M\"oller, \BBA\ Wessel}{Peraldi
+  et~al.}{2007}]{Peraldi07}
+Peraldi, S.~E., Kaya, A., Melzer, S., M\"oller, R., \BBA\ Wessel, M. \BBOP
+  2007\BBCP.
+\newblock \BBOQ {Multimedia Interpretation as Abduction}.\BBCQ\
+\newblock In {\Bem International Workshop on Description Logics}.
+
+\bibitem[\protect\BCAY{Poole}{Poole}{1993a}]{Poole93b}
+Poole, D. \BBOP 1993a\BBCP.
+\newblock \BBOQ {Logic Programming, Abduction and Probability: a top-down
+  anytime algorithm for estimating prior and posterior probabilities}.\BBCQ\
+\newblock {\Bem New Generation Computing}, {\Bbf 11}  (3-4), \mbox{\BPGS\
+  377--400}.
+
+\bibitem[\protect\BCAY{Poole}{Poole}{1993b}]{Poole93}
+Poole, D. \BBOP 1993b\BBCP.
+\newblock \BBOQ {Probabilistic Horn abduction and Bayesian networks}.\BBCQ\
+\newblock {\Bem Artificial Intelligence}, {\Bbf 64}  (1), \mbox{\BPGS\
+  81--129}.
+
+\bibitem[\protect\BCAY{Prendinger \BBA\ Ishizuka}{Prendinger \BBA\
+  Ishizuka}{1999}]{Prendinger99}
+Prendinger, H.\BBACOMMA\ \BBA\ Ishizuka, M. \BBOP 1999\BBCP.
+\newblock \BBOQ {First-Order Diagnosis by Propositional Reasoning: A
+  Representation-Based Approach}.\BBCQ\
+\newblock In {\Bem Proceedings of the 10th International Workshop on Principles
+  of Diagnosis}, \mbox{\BPGS\ 220--225}.
+
+\bibitem[\protect\BCAY{Raghavan \BBA\ Mooney}{Raghavan \BBA\
+  Mooney}{2010}]{Raghavan10}
+Raghavan, S.\BBACOMMA\ \BBA\ Mooney, R.~J. \BBOP 2010\BBCP.
+\newblock \BBOQ {Bayesian Abductive Logic Programs}.\BBCQ\
+\newblock In {\Bem Proceedings of the AAAI-10 Workshop on Statistical
+  Relational AI}, \mbox{\BPGS\ 82--87}.
+
+\bibitem[\protect\BCAY{Richardson \BBA\ Domingos}{Richardson \BBA\
+  Domingos}{2006}]{Richardson06}
+Richardson, M.\BBACOMMA\ \BBA\ Domingos, P. \BBOP 2006\BBCP.
+\newblock \BBOQ Markov logic networks.\BBCQ\
+\newblock {\Bem {Machine Learning}}, {\Bbf 62}  (1-2), \mbox{\BPGS\ 107--136}.
+
+\bibitem[\protect\BCAY{Riedel}{Riedel}{2008}]{Riedel08}
+Riedel, S. \BBOP 2008\BBCP.
+\newblock \BBOQ {Improving the Accuracy and Efficiency of MAP Inference for
+  Markov Logic}.\BBCQ\
+\newblock In {\Bem Proceedings of the 24th Annual Conference on Uncertainty in
+  AI}, \mbox{\BPGS\ 468--475}.
+
+\bibitem[\protect\BCAY{Riedel \BBA\ Clarke}{Riedel \BBA\
+  Clarke}{2006}]{Riedel06}
+Riedel, S.\BBACOMMA\ \BBA\ Clarke, J. \BBOP 2006\BBCP.
+\newblock \BBOQ {Incremental Integer Linear Programming for Non-projective
+  Dependency Parsing}.\BBCQ\
+\newblock In {\Bem Proceedings of the 2006 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 129--137}.
+
+\bibitem[\protect\BCAY{Robinson}{Robinson}{1965}]{Robinson65}
+Robinson, J.~A. \BBOP 1965\BBCP.
+\newblock \BBOQ {A Machine-Oriented Logic Based on the Resolution
+  Principle}.\BBCQ\
+\newblock {\Bem {Journal of the ACM}}, {\Bbf 12}, \mbox{\BPGS\ 23--41}.
+
+\bibitem[\protect\BCAY{Ruppenhofer, Ellsworth, Petruck, Johnson, \BBA\
+  Scheffczyk}{Ruppenhofer et~al.}{2010}]{framenetII}
+Ruppenhofer, J., Ellsworth, M., Petruck, M., Johnson, C., \BBA\ Scheffczyk, J.
+  \BBOP 2010\BBCP.
+\newblock \BBOQ {FrameNet II: Extended Theory and Practice}.\BBCQ\
+\newblock \BTR, International Computer Science Institute, Berkeley, USA.
+
+\bibitem[\protect\BCAY{Santos}{Santos}{1994}]{Santos94}
+Santos, E. \BBOP 1994\BBCP.
+\newblock \BBOQ {A linear constraint satisfaction approach to cost-based
+  abduction}.\BBCQ\
+\newblock {\Bem Artificial Intelligence}, {\Bbf 65}  (1), \mbox{\BPGS\ 1--27}.
+
+\bibitem[\protect\BCAY{Sato \BBA\ Kameya}{Sato \BBA\ Kameya}{2008}]{Sato08}
+Sato, T.\BBACOMMA\ \BBA\ Kameya, Y. \BBOP 2008\BBCP.
+\newblock \BBOQ New Advances in Logic-Based Probabilistic Modeling by
+  PRISM.\BBCQ\
+\newblock In Raedt, L., Frasconi, P., Kersting, K., \BBA\ Muggleton, S.\BEDS,
+  {\Bem Probabilistic Inductive Logic Programming}, \lowercase{\BVOL}\ 4911 of
+  {\Bem Lecture Notes in Computer Science}, \mbox{\BPGS\ 118--155}. Springer
+  Berlin Heidelberg.
+
+\bibitem[\protect\BCAY{Schoenmackers, Davis, Etzioni, \BBA\ Weld}{Schoenmackers
+  et~al.}{2010}]{Scho10}
+Schoenmackers, S., Davis, J., Etzioni, O., \BBA\ Weld, D. \BBOP 2010\BBCP.
+\newblock \BBOQ {Learning First-order Horn Clauses from Web Text}.\BBCQ\
+\newblock In {\Bem Proceedings of the 2010 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 1088--1098}.
+
+\bibitem[\protect\BCAY{Shanahan}{Shanahan}{2005}]{Shanahan05}
+Shanahan, M. \BBOP 2005\BBCP.
+\newblock \BBOQ {Perception as Abduction: Turning Sensor Data Into Meaningful
+  Representation}.\BBCQ\
+\newblock {\Bem Cognitive Science}, {\Bbf 29}  (1), \mbox{\BPGS\ 103--134}.
+
+\bibitem[\protect\BCAY{Singla \BBA\ Domingos}{Singla \BBA\
+  Domingos}{2006}]{Singla06}
+Singla, P.\BBACOMMA\ \BBA\ Domingos, P. \BBOP 2006\BBCP.
+\newblock \BBOQ {Memory-Efficient Inference for Relational Domains}.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st National Conference on Artificial
+  Intelligence}, \mbox{\BPGS\ 488--493}.
+
+\bibitem[\protect\BCAY{Singla \BBA\ Mooney}{Singla \BBA\
+  Mooney}{2011}]{Singla11}
+Singla, P.\BBACOMMA\ \BBA\ Mooney, R.~J. \BBOP 2011\BBCP.
+\newblock \BBOQ {Abductive Markov Logic for Plan Recognition}.\BBCQ\
+\newblock In {\Bem Proceedings of the 25th AAAI Conference on Artificial
+  Intelligence}, \mbox{\BPGS\ 1069--1075}.
+
+\bibitem[\protect\BCAY{Stickel}{Stickel}{1991}]{Stickel91}
+Stickel, M.~E. \BBOP 1991\BBCP.
+\newblock \BBOQ A prolog-like inference system for computing minimum-cost
+  abductive explanations in natural-language interpretation.\BBCQ\
+\newblock {\Bem Annals of Mathematics and Artificial Intelligence}, {\Bbf 4}
+  (1), \mbox{\BPGS\ 89--105}.
+
+\bibitem[\protect\BCAY{Tamaddoni-Nezhad, Chaleil, Kakas, \BBA\
+  Muggleton}{Tamaddoni-Nezhad et~al.}{2006}]{Tamaddoni-Nezhad06}
+Tamaddoni-Nezhad, A., Chaleil, R., Kakas, A., \BBA\ Muggleton, S. \BBOP
+  2006\BBCP.
+\newblock \BBOQ Application of abductive ILP to learning metabolic network
+  inhibition from temporal data.\BBCQ\
+\newblock {\Bem Machine Learning}, {\Bbf 64}  (1-3), \mbox{\BPGS\ 209--230}.
+
+\bibitem[\protect\BCAY{Tamaki \BBA\ Sato}{Tamaki \BBA\ Sato}{1986}]{Tamaki86}
+Tamaki, H.\BBACOMMA\ \BBA\ Sato, T. \BBOP 1986\BBCP.
+\newblock \BBOQ OLD resolution with tabulation.\BBCQ\
+\newblock In Shapiro, E.\BED, {\Bem Third International Conference on Logic
+  Programming}, \lowercase{\BVOL}\ 225 of {\Bem Lecture Notes in Computer
+  Science}, \mbox{\BPGS\ 84--98}. Springer Berlin Heidelberg.
+
+\end{thebibliography}
+}
+
+\begin{biography}
+
+\bioauthor[:]{Naoya Inoue}{
+He received his M.S. degree of engineering from Nara Institute of Science and
+Technology in 2010 and his Ph.D. degree in information science from Tohoku
+University in 2013. He is currently a post-doc researcher at Tohoku University
+and works as a researcher for DENSO Research Laboratries. His
+research interests are in inference-based discourse processing and
+language grounding problems.}
+
+\bioauthor[:]{Kentaro Inui}{
+He received his doctorate degree of engineering from
+Tokyo Institute of Technology in 1995. Having experienced Assistant Professor at
+Tokyo Institute of Technology and Associate Professor at Kyushu Institute of
+Technology and Nara Institute of Science and Technology, he has been Professor
+of Graduate School of Information Sciences at Tohoku University since 2010. His
+research interests include natural language understanding and knowledge
+processing. He currently serves as IPSJ Director and ANLP Director.
+}
+
+\end{biography}
+
+\biodate
+
+
+
+\end{document}

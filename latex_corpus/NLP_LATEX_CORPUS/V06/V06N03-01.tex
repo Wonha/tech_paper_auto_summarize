@@ -1,0 +1,1184 @@
+
+
+
+\documentstyle[epsf,nlpbbl,macro]{jnlp_e}
+
+\setcounter{page}{21}
+\setcounter{巻数}{2}
+\setcounter{号数}{3}
+\setcounter{年}{1995}
+\setcounter{月}{7}
+\受付{August}{9}{1995}
+\再受付{October}{11}{1995}
+\採録{December}{14}{1995}
+
+\setcounter{secnumdepth}{2}
+
+\title{}
+\author{}
+\jkeywords{}
+
+\etitle{Empirical Support for New Probabilistic \\
+Generalized LR Parsing}
+
+\eauthor{Virach Sornlertlamvanich\affiref{TIT} \and
+  Kentaro Inui\affiref{TIT} \and
+  Hozumi Tanaka\affiref{TIT} \and
+  Takenobu Tokunaga\affiref{TIT} \and
+  Toshiyuki Takezawa\affiref{ATR}}
+
+\headauthor{Sornlertlamvanich,~V.~et~al.}
+\headtitle{Empirical Support for New Probabilistic Generalized LR
+  Parsing}
+
+\affilabel{TIT}
+          {Tokyo Institute of Technology, Department of Computer Science}
+          {Tokyo Institute of Technology, Department of Computer Science}
+\affilabel{ATR}
+          {ATR Interpreting Telecommunications Research Laboratories}
+          {ATR Interpreting Telecommunications Research Laboratories}
+
+
+\eabstract{ This paper shows the empirical results of our probabilistic
+  GLR parser based on a new probabilistic GLR language model (PGLR)
+  against existing models based on the same GLR parsing framework,
+  namely the model proposed by Briscoe and Carroll (B\&C), and two-level
+  PCFG or pseudo context-sensitive grammar (PCSG) which is claimed to be
+  a context-sensitive version of PCFG. We evaluate each model in
+  character-based parsing (morphological and syntactic analysis) tasks,
+  in which we have to consider the word segmentation and multiple
+  part-of-speech problems. Parsing a sentence from the morphological
+  level makes the task much more complex because of the increase of
+  parse ambiguity stemming from word segmentation ambiguities and
+  multiple corresponding sequences of parts-of-speech. As a result of
+  the well-founded probabilistic nature of PGLR, the model accurately
+  incorporates probabilities for word prediction, by way of encoding
+  pre-terminal n-gram constraints into LR parsing tables. The PGLR model
+  empirically outperforms the other two models in all measures, on
+  experimentation with the ATR Japanese corpus.  To examine the
+  appropriateness of PGLR using an LALR table, we test the PGLR model
+  using both an LALR and CLR table. The results show that parsing with
+  the PGLR model using LALR table returns the best performance in
+  parse accuracy, parsing time and memory space consumption.}
+
+\ekeywords{Probabilistic parsing, GLR parser, Corpus, LALR table, CLR table}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+The probabilistic GLR language model (PGLR)~\cite{Inui:97a} has
+previously been proven to be better than existing models, in
+particular the model proposed by Briscoe and Carroll~\cite{Briscoe:93}
+and the baseline model using a probabilistic context-free grammar
+(PCFG), in parsing strings of parts-of-speech (non-word-based
+parsing)~\cite{Virach:97c}. Parsing a sentence from the morphological
+level makes the task much more complex because of the increase of
+parse ambiguity stemming from word segmentation ambiguities and
+multiple corresponding sequences of parts-of-speech. In this paper, we
+empirically evaluate the preciseness of a probabilistic model for PGLR
+against that for Briscoe and Carroll's model (B\&C), which is based on
+the same GLR parsing framework. We also examine the benefits of
+context-sensitivity in GLR parsing, of the PGLR model against the
+``two-level PCFG'' model~\cite{Chitrao:90} or ``pseudo
+context-sensitive grammar'' model (PCSG)---recently presented
+in~\cite{Charniak:94}---which has been shown to capture greater
+context-sensitivity than the original PCFG model, by empirical results
+and qualitative analysis.
+
+Like the B\&C model, PGLR inherits the benefits of context-sensitivity
+in generalized LR parsing (GLR). Its LR parsing table (``LR table''
+for short) is generated from a context-free grammar (CFG) by
+decomposing a parse into a sequence of actions. Every action in the LR
+table is determined by the pairing of a state and input symbol, so
+that it is valid to regard the state/input symbol pair as the context
+for determining an action. As a result, PGLR inherently captures two
+levels of context, i.e. global context over structures from the source
+CFG, and local n-gram context from adjoining pre-terminal constraints.
+Inui~et~al.~\cite{Inui:97a} showed that B\&C has some defects in
+distributing parse probabilities over the actions of an LR table. One
+is that, in B\&C, no distinction is made between actions when
+normalizing action probabilities over the states in an LR table, while
+PGLR distinguishes the action probability normalization of states
+reached immediately after applying a shift action, from states reached
+immediately after applying a reduce action. B\&C repeatedly counts the
+next input symbol when computing the probabilities (though the next
+input symbol is deterministic), if parsing is at the state reached
+immediately after applying a reduce action. Redundantly including the
+probabilities of the preceding input symbols in this case
+significantly distorts the overall parse probabilities. Moreover,
+subdividing reduce action probabilities according to the states
+reached after applying reduce actions is also redundant because
+resultant stack-top states after popping for reduce actions are always
+deterministic. B\&C thus estimates parse probabilities lower than they
+should be.
+
+Sornlertlamvanich~et~al.~\cite{Virach:97c} demonstrated the superior
+performance of PGLR over B\&C and PCFG in a syntactic analysis task
+involving a determined sequence of parts-of-speech as
+input---non-word-based parsing. Most syntactic parsing model
+evaluation takes a string of parts-of-speech as input and leaves the
+problems of word segmentation and part-of-speech determination to
+other morphological analysis modules, such as part-of-speech taggers.
+Since GLR parsing has the ability to integrate morphological and
+syntactic analysis~\cite{Tanaka:96}, we can easily realize PGLR
+parsing for morphosyntactic analysis, by adding lexical probabilities.
+To prove that local n-gram constraints in PGLR are effective in
+morphological parsing, we conducted a character-based experiment on
+the ATR Japanese corpus, and compared the resulting performance with
+the existing B\&C model and two-level PCFG, an extension of PCFG which
+is claimed to yield a significant performance advantage over the
+original PCFG framework. Since no spaces are placed between words in
+Japanese sentences, the models can in this way be evaluated in terms
+of both morphological and syntactic analysis.
+
+Parsing highly ambiguous sentences or long sentences can cause
+extended parse time and exhaustive use of computing resources. We
+propose a new technique for pruning parses that have a lower
+probability than parses within a predetermined beam width, called the
+{\it node-driven parse pruning algorithm}. Unlike the method proposed
+by Carroll and Briscoe~\cite{Carroll:92}, which has to parse a
+sentence completely before extracting n-best parses, our technique
+allows pruning the less probable parses
+at any stage of parsing. By using our parse pruning technique, the
+parser needs to extend only the probable parses
+within a beam width, resulting in reduction of both parsing time and
+memory space.
+
+Section~\ref{sec:model} briefly reviews the various probabilistic
+models, namely B\&C, two-level PCFG and PGLR, which are evaluated
+through character-based parsing on the ATR Japanese
+corpus. Section~\ref{sec:experiments} shows the results of experiments
+carried out on the three models and the baseline model of PCFG. We
+discuss the empirical results and give case analyses in
+Section~\ref{sec:discussion}. Section~\ref{sec:LALR-CLR} shows the
+relative results for LALR and CLR table-based PGLR and their parameter
+trainability. 
+
+\section{Probabilistic Models}
+\label{sec:model}
+In this section, we briefly describe the existing probabilistic
+models, namely B\&C and two-level PCFG, which are to be evaluated
+against the PGLR model. B\&C is a high-performance probabilistic model
+proposed for the GLR parsing framework, as presented
+in~\cite{Briscoe:93}. Two-level PCFG is an extended PCFG model for
+yielding greater context-sensitivity than the original paradigm. It
+was recently explored more thoroughly by Charniak and
+Carroll~\cite{Charniak:94}, using the terminology ``pseudo
+context-sensitive grammar'' (PCSG), showing the improvement in
+per-word cross-entropy over the original PCFG model. Our motivation in
+selecting B\&C and two-level PCFG for the comparative evaluation of
+PGLR is to examine the effectiveness of LR table context-sensitivity
+(global context over CFG-derived structures and local n-gram context
+from adjoining pre-terminal constraints), and the appropriateness of
+PGLR for GLR parsing.
+
+In character-based parsing, given a string of characters $C =
+{c_1,\ldots,c_n}$ as an input, the joint probability of a parse tree
+($T$) and word sequence ($W$) is:
+\begin{eqnarray}
+  \label{eq:tree-prob}
+  P(T,W|C) &=& \frac{P(T) \cdot P(W|T) \cdot P(C|W,T)}{P(C)} \\
+           &\propto& P(T) \cdot P(W|T)
+\end{eqnarray}
+The term $P(C|W,T)$ becomes one when word sequence $W$ is determined,
+and $P(C)$ is a constant scaling factor, independent of $T$ and $W$,
+which is not worthy of consideration in ranking parse trees and word
+sequences.
+
+Probabilistic models allow us to estimate parse tree probabilities
+($P(T)$). For the lexical probability $P(W|T)$, in our evaluation, we
+naively assume that word $w_i$ in word sequence $W = {w_1,\ldots,w_m}$
+depends only on its part-of-speech ($l_i$). Therefore,
+\begin{equation}
+  \label{eq:lex-prob}
+  P(W|T) \approx \prod_{i=1}^m P(w_i|l_i)
+\end{equation}
+The estimation of lexical probability is applied identically in all
+models.
+
+\subsection{Briscoe and Carroll's Model (B\&C)}
+Briscoe and Carroll~\cite{Briscoe:93} introduced probability to the
+GLR parsing algorithm in the light of the fact that LR tables do
+provide appropriate contextual information for solving the
+context-sensitivity problems observable in real world NL applications.
+They pointed out that an LR parse state encodes information about the
+left and right context of the parse. This results in
+distinguishability of context for an identical rule reapplied in
+different ways across different derivations. Briscoe and Carroll's
+method allows us to associate probabilities with an LR table directly,
+rather than simply with the rules of the grammar.
+
+They consider the LR table as a nondeterministic finite-state automaton. 
+Each row of the LR table corresponds to the possible transitions out of
+the state represented by that row, and each transition is associated
+with a particular lookahead item\footnote{The term ``lookahead'',
+originally used in~\cite{Aho:86}, refers to the extra information that
+is incorporated into a state by redefining {\it items} to include a
+terminal symbol as a second component. An LR {\it item} of a grammar $G$
+is a production of $G$ with a dot at some position of the right side.
+In this case, however, Briscoe and Carroll refer to lookahead as an
+``input symbol''.} and a parsing action.  Nondeterminism arises when
+more than one action is possible given a particular input symbol. The
+following is a review of B\&C in terms of our formalization.
+
+Briscoe and Carroll regard a parse derivation as a sequence of state
+transitions ($T$):-
+\begin{equation}
+  \label{eq:b&c-def}
+  s_0\tr{l_1,a_1}s_1\tr{l_2,a_2}
+  \ldots\tr{l_{n-1},a_{n-1}}s_{n-1}\tr{l_n,a_n}s_n
+\end{equation}
+where $a_i$ is an action, $l_i$ is an input symbol and $s_i$ is the
+state at time $t_i$. The probability of the parse derivation $T$ is
+estimated by equation~\eq{b&c-bayes}:-
+\begin{eqnarray}
+  P(T) &\approx&
+  \nonumber{\prod_{i=1}^n P(l_i,a_i,s_i|s_{i-1})} \\
+  \label{eq:b&c-bayes}
+       &=& \prod_{i=1}^n P(l_i,a_i|s_{i-1}) \cdot P(s_i|s_{i-1},l_i,a_i)
+\end{eqnarray}
+
+Based on B\&C, the following is a summary of the scheme for
+deriving the action probabilities ($p(a)$) from the count of state
+transitions resulting from parsing a training set.
+\begin{enumerate}
+\item The probability of an action given an input symbol is
+  conditioned by the state it originated from. The probabilities
+  assigned to each action at a given state must sum to
+  one. Therefore,
+  \begin{equation}
+    \label{eq:b&c-act}
+    \sum_{l\in La(s)}\sum_{a\in Act(s,l)} p(a)=1
+    \quad\mbox{(for $\forall s\in\SS$)}
+  \end{equation}
+  where $La(s)$ is the set of input symbols at state $s$, $Act(s,l)$ is
+  the set of actions given a pair of state $s$ and input symbol $l$, 
+  and $\SS$ is the set of all states of the LR table. This means that
+  the actions in the LR table are normalized within each state.
+\item In the case of a shift action (\As),
+  $P(s_i|s_{i-1},l_i,a_i)$ in equation~\eq{b&c-bayes} is equal to one
+  because shift conflict never occurs in an LR table. Therefore,
+  \begin{equation}
+    \label{eq:b&c-sh}
+    p(a_i)=P(l_i,a_i|s_{i-1})
+    \quad\mbox{(for $a_i \in \As$)}
+  \end{equation}
+\item In the case of a reduce action (\Ar), the
+  probability is subdivided according to the state reached after
+  applying the reduce action. The reason for this is that Briscoe and
+  Carroll associate probabilities with transitions in the automaton
+  rather than with actions in the action part of the LR table. In this
+  case $P(s_i|s_{i-1},l_i,a_i)$ in equation~\eq{b&c-bayes} is not
+  one. Therefore,
+  \begin{eqnarray}
+    \label{eq:b&c-re}
+    \nonumber
+    p(a_i)=P(l_i,a_i|s_{i-1}) \cdot P(s_i|s_{i-1},l_i,a_i) \\
+    \mbox{(for $a_i \in \Ar$)}
+  \end{eqnarray}
+\end{enumerate}
+
+B\&C employs the geometric mean of the probabilities of the actions
+($p(a_i)$) for state transitions across the whole parse derivation as
+the probability of a parse derivation, to avoid bias in favor of parses
+involving fewer rules or equivalently smaller trees. Therefore,
+\begin{equation}
+  \label{eq:b&c-tree}
+  P(T) = (\prod_{i=1}^n p(a_i))^{1/n}
+\end{equation}
+
+\subsection{Two-level Probabilistic Context-Free Grammar}
+
+Two-level Probabilistic Context-Free Grammar (Two-level PCFG) is an
+extended version of PCFG, deriving from the idea of providing
+context-sensitivity for a context-free grammar.
+
+In the original PCFG model, the probability of a parse derivation ($T$)
+is regarded as the product of probabilities of the rules which are
+employed for deriving that parse derivation. Each production rule of the
+grammar $(r_i)$ is of the form $<A \rightarrow \alpha, P(r_i)>$ where
+$P(r_i)$ is the associated probability, and the probabilities associated
+with all rules with a given nonterminal $A$ on the left-hand side must
+sum to one. $P(\alpha | A)$ is the probability of a rule whose left-hand
+side nonterminal symbol is ``A'', and the right-hand side ``$\alpha$''
+is a sequence of terminal and/or non-terminal symbols. Therefore,
+\begin{eqnarray}
+  \label{eq:pcfg}
+  \sum_{\alpha} P(\alpha | A) &=& 1\\
+  P(T) &=& \prod_{i} P(r_i)
+\end{eqnarray}
+where $P(r)$ corresponds to $P(\alpha | A)$.
+
+Two-level PCFG utilizes extra information provided by the parent of
+nonterminals in expanding rules $(r_i)$ through assignment of rule
+probabilities. Thus, the rule probability in equation~\eq{pcfg} can be
+rewritten as:
+\begin{equation}
+  \label{eq:2-pcfg}
+  \sum_{\alpha} P(\alpha | \rho(A)) = 1
+\end{equation}
+where $\rho(A)$ is the nonterminal that immediately dominates $A$
+(i.e. its parent).
+
+\subsection{Probabilistic Generalized LR (PGLR)}
+Inui~et~al.~\cite{Inui:97a} recently proposed a new formalization of a
+probabilistic model for GLR parsing. Unlike B\&C, a parse derivation
+is regarded as a sequence of transitions between LR parse stacks ($T$)
+as shown in ~\eq{pglr-def}, where $\st_i$ is the stack at time $t_i$,
+$a_i$ is an action, and $l_i$ is an input symbol. Schema~\eq{pglr-def}
+shows the inherent diversion from B\&C in the definition of parse
+derivation.
+\begin{equation}
+  \label{eq:pglr-def}
+  \st_0\tr{l_1,a_1}\st_1\tr{l_2,a_2}
+  \ldots\tr{l_{n-1},a_{n-1}}\st_{n-1}\tr{l_n,a_n}\st_n
+\end{equation}
+
+Based on the above definition, the probability of a complete stack
+transition sequence $T$ can be represented with equation~\eq{pglr-bayes}, by
+assuming that $\st_i$ contains all the information of its preceding
+parse derivation:-
+\begin{equation}
+  \label{eq:pglr-bayes}
+  P(T) = \prod_{i=1}^n P(l_i,a_i,\st_i|\st_{i-1})
+\end{equation}
+
+To estimate each transition probability $P(l_i,a_i,\st_i|\st_{i-1})$, we 
+decompose it to:
+\begin{equation}
+  \label{eq:pglr-bayes2}
+  P(l_i,a_i,\st_i|\st_{i-1}) = P(l_i|\st_{i-1}) \cdot
+  P(a_i|\st_{i-1},l_i) \cdot P(\st_i|\st_{i-1},l_i,a_i)
+\end{equation}
+
+By the nature of GLR parsing, the stack $\st_i$ is determined if the previous
+stack $\st_{i-1}$, the next input symbol $l_i$ and action $a_i$ are
+given. Therefore, the term $P(\st_i|\st_{i-1},l_i,a_i)$ is equal to one. We
+hence have to estimate only the terms $P(l_i|\st_{i-1})$ and
+$P(a_i|\st_{i-1},l_i)$.
+
+{\bf The first term $P(l_i|\st_{i-1})$ is a conditional probability for
+estimating an input symbol $l_i$, given the current stack $\st_{i-1}$.}
+According to the LR parsing algorithm, the input symbol after applying a
+reduce action remains unchanged. Therefore, we have to consider
+$P(l_i|\st_{i-1})$ separately in terms of the actions that are applied
+to reach the stack $\st_{i-1}$:
+\begin{enumerate}
+\item If the previous action $a_{i-1}$ is a shift action, and we assume
+  that the stack-top state represents the stack information
+  beneath it, then
+  \begin{equation}
+    \label{eq:pglr-prob1a}
+    P(l_i|\st_{i-1}) \approx P(l_i|s_{i-1})
+  \end{equation}
+\item If the previous action $a_{i-1}$ is a reduce action, the input
+  symbol is not changed. Therefore,
+  \begin{equation}
+    \label{eq:pglr-prob1b}
+    P(l_i|\st_{i-1}) = 1
+  \end{equation}
+\end{enumerate}
+
+{\bf The second term $P(a_i|\st_{i-1},l_i)$ is a conditional probability
+for estimating an action $a_i$, given the current stack $\st_{i-1}$ and
+input symbol $l_i$.} By the same assumption as applied above, that the
+stack-top state represents the stack information beneath it, this term
+can be estimated by:
+\begin{equation}
+  \label{eq:pglr-prob2}
+  P(a_i|\st_{i-1},l_i) \approx P(a_i|s_{i-1},l_i)
+\end{equation}
+
+The first term in transition probability~\eq{pglr-bayes2}
+is estimated differently depending on the type of action applied to
+reach the current stack. Therefore, we divide states into two classes,
+namely the class of states reached after applying a shift action
+($\Ss$), and the class of states reached after applying a reduce action
+($\Sr$). Fortunately, these two classes are mutually exclusive because
+state transition in LR parsing is representable by a deterministic
+finite automaton\footnote{A deterministic finite automaton has at most
+one transition from each state on any input.} (DFA). A state can be
+reached by a unique grammar symbol, which distinguishes states that are
+reached by a terminal symbol from states that are reached by a
+non-terminal symbol. Therefore,
+\begin{equation}
+  \SS = \Ss \cup \Sr\; and\; \Ss \cap \Sr = \emptyset
+\end{equation}
+
+To summarize, the transition probability can be rewritten as:
+\begin{equation}
+  \label{eq:pglr-act}
+  P(l_i,a_i,\st_i|\st_{i-1}) \approx
+  \left\{
+    \begin{array}{@{\,}ll}
+      P(l_i|s_{i-1}) \cdot P(a_i|s_{i-1},l_i) 
+                                = P(l_i,a_i|s_{i-1}) & \mbox{$(s_{i-1}\in\Ss$})\\
+      P(a_i|s_{i-1},l_i) & \mbox{$(s_{i-1}\in\Sr$})
+    \end{array}
+  \right.\\
+\end{equation}
+  such that:
+  \begin{eqnarray}
+    \label{eq:pglr-act1}
+    \sum_{l\in La(s)}\sum_{a\in Act(s,l)} p(a) &=& 1
+    \quad\mbox{(for $s\in\Ss$)}\\
+    \sum_{a\in Act(s,l)} p(a) &=& 1
+    \quad\mbox{(for $s\in\Sr$)}
+  \end{eqnarray}
+where $p(a)$ is the probability of an action $a$, $\Ss$ is the class of
+states reached after applying a shift action, including the initial
+state, and $\Sr$ is the class of states reached after applying a reduce
+action.
+
+The probability of a parse derivation is the product of the
+probabilities of the actions ($p(a_i)$) for stack transitions across the
+whole parse derivation:-
+\begin{equation}
+  \label{eq:pglr-tree}
+  P(T) = \prod_{i=1}^n p(a_i)
+\end{equation}
+
+\section{Experimental Results}
+\label{sec:experiments}
+We evaluated the various probabilistic models (i.e. B\&C, two-level PCFG
+and PGLR) on a portion of the ATR Japanese corpus, called the Spoken
+Language Database (SLDB)~\cite{Takezawa:97}. Given an input string of
+Japanese characters, each model produces probabilistically ranked parses
+together with the associated parse probabilities, computed as described
+in Section~\ref{sec:model}.
+
+As the dictionary to generate word candidates and their corresponding
+parts-of-speech, we collected all the words used in the corpus. Each
+word in the dictionary retains lexical probability $P(w|l)$, which is
+the probability of generating word `$w$' from an arbitrary
+part-of-speech `$l$'.
+
+Each model was trained equally with the same hand-annotated training
+set. For unseen events, we simply added part of a count to smooth the
+model probabilities. Evaluation of the smoothing method is beyond the
+scope of this paper. We additionally present the results of the original
+PCFG framework as the baseline for the evaluation.
+
+\subsection{ATR Corpus and Grammar}
+The ``Spoken Language Database'' (SLDB) is a treebank (a collection of
+trees annotated with a syntactic analysis, or ``trees'' for short)
+developed by ATR based on Japanese dialogue. A portion of the corpus
+has been revised through application of a more detailed phrasal
+grammar developed by Tanaka~et~al.~\cite{Tanaka:97}. We randomly
+selected about 5\% of the revised corpus to use as a test set and
+trained each parsing model with the remaining approximately 10,000
+trees. Table~\ref{tab:atr-corpus} describes a breakdown of the corpus.
+The range and average of sentence length in both the training and test
+sets are very close, from which it is plain that the test set was
+appropriately selected from the corpus.
+\begin{table}[htbp]
+  \vspace*{-1em}
+  \begin{center}
+    \caption{The ATR Corpus.}
+    \label{tab:atr-corpus}
+    \smallskip
+    \smallskip
+    \leavevmode
+    \begin{tabular}{|l|r|r|r|r|r|}
+      \cline{3-6}
+      \multicolumn{2}{c} {}&
+      \multicolumn{2}{|c|} {\bf \# of Morphemes}&
+      \multicolumn{2}{|c|} {\bf \# of Characters} \\ \hline
+      {\bf ATR Corpus} & {\bf \# of Sent.} & {\bf Range} & {\bf Average} &
+      {\bf Range} & {\bf Average} \\
+      \hline
+      Training set & 10,361 & 1-34 & 6.69 & 2-58 & 12.57 \\
+      Test set & 545 & 1-22 & 6.36 & 2-42 & 12.03 \\
+      \hline
+    \end{tabular}
+  \end{center}
+\end{table}
+
+We implemented all the models using a GLR parser. We generated an LALR
+table from the treebank governing context-free grammar of 762 production
+rules, comprised of 137 non-terminal symbols and 407 terminal
+symbols. The generated LALR table contained 856 states.
+
+\subsection{Parsing the ATR Corpus}
+\label{sec:parsing-result}
+We used PARSEVAL measures~\cite{Black:91} to compare the performance of
+the top-ranked parses for each model.
+\begin{table*}[htbp]
+  \vspace*{-1em}
+  \begin{center}
+    \caption{Performance on the ATR Corpus. {\bf PA} is the parse accuracy
+      and indicates the \\
+      percentage of top-ranked parses that match standard parses.
+      {\bf LP/LR} are label \\
+      precision/recall. {\bf
+      BP/BR} are bracket precision/recall.
+    {\bf 0-CB} and {\bf m-CB} are \\
+      zero crossing brackets and mean crossing brackets per
+      sentence, respectively.}
+    \label{tab:atr-performance}
+    \smallskip
+    \smallskip
+    \leavevmode
+    \begin{tabular}{|l|r||r|r||r|r|r|r|}
+      \hline
+      \multicolumn{1}{|c|} {} &
+      \multicolumn{7}{c|} {\bf 2-42 Characters (545 sentences)} \\
+      \cline{2-8}
+      \multicolumn{1}{|c|} {\bf Models}
+      & {\bf PA} & {\bf LP} & {\bf LR} & {\bf BP} &
+      {\bf BR} & {\bf 0-CB} & {\bf m-CB} \\
+      \hline
+      B\&C & 88.62 & 97.72 & 97.50 & 98.48 & 98.05 & 93.94
+      & 0.15 \\
+      Two-leval PCFG & 62.39 & 96.28 & 95.32 & 98.61 & 97.38 &
+      95.23 & 0.10 \\
+      PCFG & 53.03 & 95.67 & 94.54 & 98.77 & 97.35 & 94.86
+      & 0.08 \\
+      \hline
+      PGLR & 95.23 & 99.08 & 98.50 & 99.54 & 98.76 & 98.53 & 0.03 \\
+      \hline
+    \end{tabular}
+  \end{center}
+
+  \vspace*{0.5em}
+
+  \begin{center}
+    \begin{tabular}{|l|r||r|r||r|r|r|r|}
+      \hline
+      \multicolumn{1}{|c|} {} &
+      \multicolumn{7}{c|} {\bf 15-42 Characters (160 sentences)} \\
+      \cline{2-8}
+      \multicolumn{1}{|c|} {\bf Models}
+      & {\bf PA} & {\bf LP} & {\bf LR} & {\bf BP} &
+      {\bf BR} & {\bf 0-CB} & {\bf m-CB} \\
+      \hline
+      B\&C & 73.75 & 96.00 & 97.26 & 96.84 & 98.14 & 83.75
+      & 0.44 \\
+      Two-level PCFG & 56.25 & 97.44 & 97.31 & 98.90 & 98.76 &
+      93.13 & 0.18 \\
+      PCFG & 35.62 & 95.86 & 95.64 & 98.60 & 98.39 & 90.63
+      & 0.17 \\
+      \hline
+      PGLR & 90.00 & 98.98 & 98.99 & 99.49 & 99.50 & 96.25 & 0.08 \\
+      \hline
+    \end{tabular}
+  \end{center}
+  \vspace*{-1em}
+\end{table*}
+
+Table~\ref{tab:atr-performance} shows that the PGLR model outperformed
+the other models in every metric. Looking at the metrics of BP, BR, 0-CB
+and m-CB, where all structure labels are ignored, every model returned
+very good results ($>93\%$). The disparity between models becomes
+significant when bracket labels are taken into consideration, such as in
+LP/LR and PA. Therefore, the difficulty lies not in bracketing but in
+labeling, including determining pre-terminals which is an essential
+task in character-based parsing.
+
+One reason for this is that, the context-free grammar used for this
+corpus is relatively restricted in terms of terminal
+assignment. Information about word form (e.g. {\it
+sahen-meisi}---Sino-Japanese verbal noun), post position (e.g. {\it
+-/ga} and {\it -/ni}), for example, is explicitly included in
+non-terminal symbol labels. Therefore, word connection constraints
+within the rules can somehow exclude the invalid word
+combinations. Results from our preliminary test on part-of-speech input
+sequences showed that structural ambiguity hardly occurred. Most of the
+sentences had no ambiguity. From this study, it was observed that most
+of the sentences had only one parse if the parts-of-speech of the words
+in that sentence were defined. The ambiguity increases, however, when we
+consider parsing input strings of characters.
+
+The average parse base\footnote{Briscoe and Carroll~\cite{Briscoe:95}
+  defined APB as the measure of ambiguity for a given corpus. It is
+  the geometric mean over all sentences in the corpus of
+  $\sqrt[n]{p}$, where $n$ is the number of words in a sentence, and
+  $p$ is the number of parses for that sentence.}  (APB) of the test
+set is as high as 1.348 in the character-based measure. This is
+comparable with the SUSANNE corpus (1.256) and SEC corpus (1.239), as
+reported in~\cite{Briscoe:95}.  Therefore, the performance of
+character-based parsing in this test mainly depends on the accuracy of
+selecting words and their corresponding parts-of-speech.  This means
+that a model that can provide local context in addition to the global
+context would result in higher performance.
+
+As expected, the models which make effective use of the local context
+modeling nature of GLR parsing, namely B\&C and PGLR, returned
+significantly better results than PCFG-based parsing. Although the PCFG
+rule context in two-level PCFG extends a step higher (i.e. to the parent
+of the reduced rule), the model still failed to include appropriate
+context in some cases. One such case is shown in
+Section~\ref{sec:discussion}.
+
+Parse accuracy (PA) shows the percentage of correct parses that are
+ranked topmost according to the model probability. By this measure, PGLR
+maintained the highest accuracy in ranking parses, while the PCFG-based
+models dropped down to slightly higher than 50\%. Since the corpus is a
+kind of spoken language database, there are a lot of short response
+utterances i.e. ``yes'', ``no'' and ``take care''. The lower table in
+Table~\ref{tab:atr-performance} is added to show the performance on
+sentences ranging from 15 to 42 characters. The difference in
+performance becomes obvious in parsing longer sentences.
+
+Parse performance partly depends on the grammar and the corpus.
+According to the report of an experiment on the SUSANNE English corpus
+by Carroll~\cite{Carroll:97}, the difference between the performance
+of PGLR and B\&C was not significantly observed. However, the input
+test set was a set of part-of-speech sequences, excluding ambiguity in
+word and part-of-speech selection. Even here, though, PGLR returned
+the best result in terms of the m-CB metric.
+
+\section{Discussion}
+\label{sec:discussion}
+It is obvious that two-level PCFG shows the benefits of
+context-sensitivity and yields significant gains over the original PCFG
+model. However, the results are still far below those for the
+probabilistic GLR-based parsing models. One reason would be the
+advantages of local context, i.e. pre-terminal n-gram constraints
+encoded in the LR table. The n-gram constraints are distributed over the
+actions of the table. Therefore, the parse trees generated by
+probabilistic GLR-based parsers include pre-terminal n-gram constraints
+in the parse probabilities.
+
+The example below shows that probabilistic GLR-based parsing can
+successfully exploit the advantages of pre-terminal n-gram constraints,
+and assign parse probabilities in a more accurate manner. Based on
+Grammar-1, the three parse tree types in Figure~\ref{fig:train-tree} can
+be generated. Supposing that (S1) and (S2) are found one and two times
+respectively in our training set, but (S3) does not occur. (S3) can be
+found very rarely, or alternatively never occur because it may have no
+obvious meaning. This actually happens for most wide-coverage grammars.
+
+The case shown in Figure~\ref{fig:train-tree} is simplified from one of
+the cases we have found in our test set. It is the case of selecting the
+appropriate part-of-speech for a sentence-ending word ``su'', which can
+be ``infl-masu-su'' or ``infl-desu-su''. It must be assigned
+``infl-masu-su'', if it follows a word ``ma'' having the part-of-speech
+of ``auxstem-masu'', and assigned ``infl-desu-su'' if it follows a word
+``de'' having the part-of-speech of ``auxstem-desu''. In this case, only
+the pre-terminal n-gram constraints are effective, rather than the
+constraints from the parent node which are the same in both cases. In
+Figure~\ref{fig:train-tree}, `a', `b' and `c' correspond to
+``auxstem-masu'', ``auxstem-desu'' and ``infl-masu-su'', respectively.
+
+{\bf Grammar-1.} A context-free grammar.
+
+\begin{tabular}[t]{ll}
+  (1)& X\quad$\to$\quad U\quad c\\
+  (2)& X\quad$\to$\quad U\\
+  (3)& U\quad$\to$\quad a\\
+  (4)& U\quad$\to$\quad b\\
+\end{tabular}
+
+\begin{figure}[htbp]
+  \begin{center}
+    \leavevmode
+    \epsfbox{train-tree.eps}
+    \caption{Parse trees, with the frequency in the training set shown in
+      brackets.}
+    \label{fig:train-tree}
+  \end{center}
+\end{figure}
+
+\vspace*{1em}
+{\bf Probability-1.} Rule probabilities for two-level PCFG.
+
+  \begin{tabular}[t]{llll}
+    (1)& S & ; X\quad$\to$\quad U\quad c &\quad (1/3)\\
+    (2)& S & ; X\quad$\to$\quad U &\quad (2/3)\\
+    (3)& X & ; U\quad$\to$\quad a &\quad (1/3)\\
+    (4)& X & ; U\quad$\to$\quad b &\quad (2/3)\\
+  \end{tabular}
+\vspace*{1em}
+
+The bracketed values given for Probability-1 are the rule probabilities
+estimated according to the two-level PCFG model from the training set in
+Figure~\ref{fig:train-tree}. In fact, they are the same as for PCFG
+because the parents of rules (1) and (2) are not different, and neither
+are the parents of rules (3) and (4). This means that the extended
+context in two-level PCFG does not have any effect if direct parents are
+the same. We need more information to distinguish the
+cases. Unfortunately, however, there are no other parent nodes in this
+case.
+
+Table~\ref{tab:plr-table} is an LALR table generated from Grammar-1. The
+associated probabilities below each action are estimated according to
+B\&C and PGLR, indicated in the first and second lines of each state
+row, respectively. For the sake of brevity, we do not consider any
+smoothing technique in this table, although smoothing was performed in
+the experiments described in Section~\ref{sec:experiments}.
+
+\begin{table}[htbp]
+  \vspace*{-1em}
+  \begin{center}
+    \caption{The LALR table with its associated probabilities. Probabilities
+      in the first line \\
+      of each state row
+      are those estimated by B\&C
+      and the bracketed values in the \\
+      second line are those estimated by PGLR.}
+    \label{tab:plr-table}
+    \smallskip
+    \smallskip
+    \leavevmode
+    \begin{tabular}{|c|c|c|c|c|c|c|} \hline
+       &
+      \multicolumn{4}{c|} {\bf Action} &
+      \multicolumn{2}{c|} {\bf Goto} \\ \cline{2-7}
+      {\bf State} & a   & b   & c   & \$  & U & X \\
+      \hline
+                0 & sh3 & sh2 &     &     & 1 & 4 \\
+                  & 1/3 & 2/3 &     &     &   &   \\
+                  & (1/3) & (2/3) &     &     &   &   \\
+                1 &     &     & sh5 & re2 &   &   \\
+                  &     &     & 1/2 & 1/2 &   &   \\
+                  &     &     & (1) & (1) &   &   \\
+                2 &     &     & re4 & re4 &   &   \\
+                  &     &     & 0   & 1   &   &   \\
+                  &     &     & (0) & (1) &   &   \\
+                3 &     &     & re3 & re3 &   &   \\
+                  &     &     & 1   & 0   &   &   \\
+                  &     &     & (1) & (0) &   &   \\
+                4 &     &     &     & acc &   &   \\
+                  &     &     &     & 1   &   &   \\
+                  &     &     &     & (1) &   &   \\
+                5 &     &     &     & re1 &   &   \\
+                  &     &     &     & 1   &   &   \\
+                  &     &     &     & (1) &   &   \\
+                  \hline
+    \end{tabular}
+  \end{center}
+ \vspace*{-1em}
+\end{table}
+
+Applying the probabilities prepared in Prob\-a\-bil\-i\-ty-1 for
+two-level PCFG (as well as PCFG), and Table~\ref{tab:plr-table} for B\&C
+and PGLR, to estimate the parse probabilities of (S1), (S2) and (S3) in
+Figure~\ref{fig:train-tree}, we obtain the results shown in
+Table~\ref{tab:model-prob}. Two-level PCFG (and PCFG) wrongly assigned
+preference to (S3) over (S1), whereas (S3) never occurs in the training
+set. Although B\&C yields correct preference, the probabilities are
+smaller than what they should be. In this case, there is no difference
+between B\&C and PGLR in ranking the parses. The side-effects of
+inappropriate normalization of probabilities in B\&C has already been
+explored in \cite{Inui:97a} and empirically confirmed in the evaluation
+in Section~\ref{sec:experiments}.
+
+\begin{table}[htbp]
+  \vspace*{-1em}
+  \begin{center}
+    \caption{Probabilities of parse trees, (S1), (S2) and (S3),
+      estimated according to each model.}
+    \label{tab:model-prob}
+    \smallskip
+    \smallskip
+    \leavevmode
+    \begin{tabular}{|l|c|c|c|}
+      \hline
+      \multicolumn{1}{|c|} {\bf Models}
+      & {\bf (S1)} & {\bf (S2)} & {\bf (S3)} \\
+      \hline
+      PCFG   & 1/9  & 4/9  & 2/9  \\
+      Two-level PCFG   & 1/9  & 4/9  & 2/9  \\
+      B\&C   & 1/6  & 1/3  & 0   \\
+      \hline
+      PGLR   & 1/3  & 2/3  & 0   \\
+      \hline
+    \end{tabular}
+  \end{center}
+ \vspace*{-1.5em}
+\end{table}
+
+\section{Comparative Results for LALR and CLR Table-based PGLR}
+\label{sec:LALR-CLR}
+Canonical LR (CLR), or LR with one lookahead, is the most powerful and
+the most expensive. In the LR table generating process, one lookahead
+symbol is taken into account by adding as the second component in
+constructing an {\it item}, where the first component in the {\it item}
+is a dot notation, called the {\it core} of the {\it item}. An LR {\it
+item} of a grammar $G$ is a production of $G$ with a dot at some
+position of the right side.
+
+Table~\ref{tab:clr-lalr-table}~\cite{Aho:86}
+shows the CLR and LALR tables generated from the same grammar. It is
+obvious that the LALR table requires fewer states than the CLR table
+does. According to the process of generating the LALR table, state 1 and
+6, state 2 and 7, and state 5 and 9 in the CLR table are merged to be
+state 1, 2 and 5, respectively, because they have the same {\it core} in
+their LR {\it item}.
+
+\begin{table}[htbp]
+  \vspace*{-1em}
+  \begin{center}
+    \caption{The CLR table and the corresponding LALR table, generated from
+      the same grammar.}
+    \label{tab:clr-lalr-table}
+    \smallskip
+    \smallskip
+    \leavevmode
+    \begin{tabular}{|c|c|c|c|c|c|}
+      \multicolumn{6}{l} {\bf [CLR table]} \\
+      \hline
+       &
+      \multicolumn{3}{c|} {\bf Action} &
+      \multicolumn{2}{c|} {\bf Goto} \\ \cline{2-6}
+      {\bf State} & c   & d   & \$  & S   & C \\
+      \hline
+                0 & sh1 & sh2 &     & 3   & 4 \\
+                1 & sh1 & sh2 &     &     & 5 \\
+                2 & re3 & re3 &     &     &   \\
+                3 &     &     & acc &     &   \\
+                4 & sh6 & sh7 &     &     & 8 \\
+                5 & re2 & re2 &     &     &   \\
+                6 & sh6 & sh7 &     &     & 9 \\
+                7 &     &     & re3 &     &   \\
+                8 &     &     & re1 &     &   \\
+                9 &     &     & re2 &     &   \\
+                \hline
+    \end{tabular}
+    \hspace*{3em}
+    \begin{tabular}{|c|c|c|c|c|c|}
+      \multicolumn{6}{l} {\bf [LALR table]} \\
+      \hline
+       &
+      \multicolumn{3}{c|} {\bf Action} &
+      \multicolumn{2}{c|} {\bf Goto} \\ \cline{2-6}
+      {\bf State} & c   & d   & \$  & S   & C \\
+      \hline
+                0 & sh1 & sh2 &     & 3   & 4 \\
+                1 & sh1 & sh2 &     &     & 5 \\
+                2 & re3 & re3 & re3 &     &   \\
+                3 &     &     & acc &     &   \\
+                4 & sh1 & sh2 &     &     & 6 \\
+                5 & re2 & re2 & re2 &     &   \\
+                6 &     &     & re1 &     &   \\
+                \hline
+                \multicolumn{6}{c} {}\\
+                \multicolumn{6}{c} {}\\
+                \multicolumn{6}{c} {}\\
+    \end{tabular}
+  \end{center}
+ \vspace*{-1em}
+\end{table}
+
+Consequently, the degree of context sensitivity when parsing with an
+LALR and CLR table can be different,
+and the left context encoded in states in an LALR table can be decreased
+compared with that for states in a CLR table. However, the tremedous
+number of states in the CLR table can cause the data sparseness problem. 
+To verify our PGLR model on both tables, we thus extended our experiment
+to examine the performance of PGLR using an LALR table (PGLR(LALR))
+against using a CLR table (PGLR(CLR)).
+
+The CLR table contained 3,715 states, more than fourfold the number of
+states in the corresponding LALR table (856 states) for the same ATR
+Japanese grammar.
+Table~\ref{tab:atr-lalr-clr-performance} shows that PGLR(LALR) returned
+slightly better results than PGLR(CLR). However, the difference is not
+statistically significant.
+
+\begin{table*}[htbp]
+  \vspace*{-1em}
+  \begin{center}
+    \caption{Performance on the ATR Corpus. Comparative results for PGLR
+      using an LALR \\
+      and CLR table.}
+    \label{tab:atr-lalr-clr-performance}
+    \smallskip
+    \smallskip
+    \leavevmode
+    \begin{tabular}{|l|r||r|r||r|r|r|r|}
+      \hline
+      \multicolumn{1}{|c|} {} &
+      \multicolumn{7}{c|} {\bf 2-42 Characters (534 sentences)} \\
+      \cline{2-8}
+      \multicolumn{1}{|c|} {\bf Models}
+      & {\bf PA} & {\bf LP} & {\bf LR} & {\bf BP} & {\bf BR} & {\bf 0-CB}
+      & {\bf m-CB} \\
+      \hline
+      PGLR(CLR)  & 95.13 & 99.04 & 98.40 & 99.46 & 98.61 & 97.57 & 0.04 \\
+      PGLR(LALR) & 95.32 & 99.06 & 98.47 & 99.53 & 98.73 & 98.50 & 0.03 \\
+      \hline
+   \end{tabular}
+ \end{center}
+\end{table*}
+
+Based on the above, we may conclude that, empirically, PGLR using an
+LALR table can perform as well as one using a CLR table. State merging
+in generating an LALR table does not affect the parsing context a great
+deal. On the contrary, the drastic increase in states for the CLR table
+causes parameter sparseness. In PGLR, we distribute parse probabilities
+to each action appearing in the table, so that the number of training
+parameters is identical to the number of distinct actions in the LR
+table.
+
+Compared with PGLR using a CLR table, the percentage of trained actions
+for that using an LALR table increases more significantly, as shown in
+Figure~\ref{fig:train-para}. The percentage of actions (both shift and
+reduce) in the LALR table observed in parsing the training set is around
+three times higher than in the CLR table. This means that actions in the
+LALR table are trained more effectively than those in the CLR
+table. Although the number of trained actions tends to increase as the
+number of training sentences is increased, the number of actions
+observed only once in training becomes saturated at an early stage of
+training, with most of the observed actions repeated in the expansion of
+the training set.
+Perhaps most of the actions in the LR tables are not really used, though
+they are allowed under the original context-free grammar; this is
+especially the case for reduce actions with a very low learning
+curve. It may be possible to generate a more efficient LR table if we
+can drop the actions that cause the parser to generate practically
+unacceptable parses. However, it is beyond the scope of this paper to
+discuss this possibility.
+
+\begin{figure}[htbp]
+  \begin{center}
+    \leavevmode
+    \epsfxsize=12cm
+    \epsfbox{tbility-lalr-sr.eps}
+    
+    \vspace*{2.5em}
+    \epsfxsize=12cm
+    \epsfbox{tbility-clr-sr.eps}
+    \caption{Learning curve of the actions in PGLR using an LALR and
+      CLR table.}
+    \label{fig:train-para}
+  \end{center}
+\end{figure}
+
+Figure~\ref{fig:lalr-clr} explicitly shows that with a small training
+set, the results when using an LALR table are better than when using a
+CLR table. Training the model with only 1/8 of the training set, or
+about 1,250 sentences, PGLR(LALR) returned a parse accuracy as high as
+90\%, while PGLR(CLR) needed more training sentences to catch up with
+the performance of PGLR(LALR).
+
+\begin{figure}[htbp]
+  \begin{center}
+    \leavevmode
+    \epsfxsize=12cm
+    \epsfbox{lalr-clr.eps}
+    \caption{Trainability measure for PGLR using an LALR and CLR table.}
+    \vspace*{-1.5em}
+    \label{fig:lalr-clr}
+  \end{center}
+\end{figure}
+
+In the sense of context-sensitivity, states in a CLR table are more
+distinguishable than those in an LALR table, but the drastic increase in
+states for the CLR table causes data sparseness in training. Thus,
+whereas we would expect the predictability for a CLR table to be higher
+than that for an LALR table, LALR tables perform even better than CLR
+tables in some cases given the same size of training data. Considering
+the cost of table generation and parsing time, using an LALR table is
+much more efficient.
+
+\section{Conclusion}
+\label{sec:conclusion}
+The probabilistic generalized LR parsing model (PGLR) is formalized
+based on the nature of GLR parsing, aimed at inheriting the benefits of
+context-sensitivity inherent in the GLR parsing algorithm. The
+context-sensitivity of GLR parsing reflects both (i) {\it global
+context} over structures from the source context-free grammar, and (ii)
+{\it local n-gram context} from adjoining pre-terminal constraints. The
+context is encoded in the LR table states, and the parsing history of
+GLR is stored in stacks---in a form of GSS to record parsing
+ambiguity. Therefore, it is effective to concentrate on state
+transitions in LR parsing and view a parse as a sequence of stack or
+state transitions.  Since GLR parsing is a table-driven shift-reduce
+left-to-right parser for context-free grammars, we can efficiently
+incorporate state transition probabilities into parsing action
+probabilities.
+
+The results of our experiments clearly show that the PGLR model is able
+to make effective use of both global and local context provided in the
+GLR parsing framework. As a result, our model outperformed both Briscoe
+and Carroll's model and the two-level PCFG model in all tests. In
+addition, PGLR needs only the probability for each action in the LR
+table to compute the overall probability of each parse. It is thus
+tractable to training, with the degree of free parameters as small as
+the number of distinct actions, and associates a probability directly to
+each action. Empirical results also demonstrated that the effectiveness of
+PGLR(LALR) is comparable with that of PGLR(CLR).
+
+\acknowledgment
+We would like to thank Mr.~Masahiro Ueki for support in using MSLR and
+kindly adapting his parser to be able to accumulate action counts during
+the training phase. Mr.~Taiichi Hashimoto helped us with the
+implementation of the probabilistic GLR parser, and Mr.~Toshiki Ayabe
+aided with LR table generation, especially in computing the state list
+for use with the B\&C model. Dr.~Thanaruk Theeramunkong of JAIST
+provided helpful discussions on accumulating probabilities into a GLR
+packed shared parse forest. Mr.~Imai Hiroki helped revise the ATR
+corpus. We also would like to thank Dr.~John Carroll for his helpful
+discussions and efforts in evaluating different models on an English
+corpus by way of his parser and grammar, during his stay at our
+laboratory. Mr.~Timothy Baldwin revised and gave various valuable
+comments on the original version of this paper.
+
+\bibliographystyle{nlpbbl}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Aho, Sethi, \BBA\ Ullman}{Aho et~al.}{1986}]{Aho:86}
+Aho, A., Sethi, R., \BBA\ Ullman, J. \BBOP 1986\BBCP.
+\newblock {\Bem {Compilers: Principles, Techniques, and Tools}}.
+\newblock Addison-Wesley.
+
+\bibitem[\protect\BCAY{Black~et al.}{Black~et al.}{1992}]{Black:91}
+Black~et al., E. \BBOP 1992\BBCP.
+\newblock \BBOQ {A Procedure for Quantitatively Comparing the Syntactic
+  Coverage of English Grammars}\BBCQ\
+\newblock In {\Bem Proceedings of the DARPA Speech and Natural Language
+  Workshop}, \BPGS\ 306--311.
+
+\bibitem[\protect\BCAY{Briscoe \BBA\ Carroll}{Briscoe \BBA\
+  Carroll}{1993}]{Briscoe:93}
+Briscoe, T.\BBACOMMA\  \BBA\ Carroll, J. \BBOP 1993\BBCP.
+\newblock \BBOQ {Generalized Probabilistic LR Parsing of Natural Language
+  (Corpora) with Unification-Based Grammars}\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bem 19\/}(1), 25--59.
+
+\bibitem[\protect\BCAY{Briscoe \BBA\ Carroll}{Briscoe \BBA\
+  Carroll}{1995}]{Briscoe:95}
+Briscoe, T.\BBACOMMA\  \BBA\ Carroll, J. \BBOP 1995\BBCP.
+\newblock \BBOQ {Developing and Evaluating a Probabilistic LR Parser of
+  Part-Of-Speech and Punctuation Labels}\BBCQ\
+\newblock In {\Bem Proceedings of the 4th International Workshop on Parsing
+  Technologies}, \BPGS\ 48--58.
+
+\bibitem[\protect\BCAY{Carroll}{Carroll}{1997}]{Carroll:97}
+Carroll, J. \BBOP 1997\BBCP.
+\newblock \BBOQ {Report of Visit to Tanaka Laboratory, 1997/11/8 -
+  1997/12/8}\BBCQ\
+\newblock (unpublished).
+
+\bibitem[\protect\BCAY{Carroll \BBA\ Briscoe}{Carroll \BBA\
+  Briscoe}{1992}]{Carroll:92}
+Carroll, J.\BBACOMMA\  \BBA\ Briscoe, T. \BBOP 1992\BBCP.
+\newblock \BBOQ {Probabilistic Normalisation and Unpacking of Packed Parse
+  Forests for Unification-Based Grammars}\BBCQ\
+\newblock In {\Bem Proceedings of AAAI Fall Symposium on Probabilistic
+  Approaches to Natural Language}, \BPGS\ 33--38.
+
+\bibitem[\protect\BCAY{Charniak \BBA\ Carroll}{Charniak \BBA\
+  Carroll}{1994}]{Charniak:94}
+Charniak, E.\BBACOMMA\  \BBA\ Carroll, G. \BBOP 1994\BBCP.
+\newblock \BBOQ {Context-Sensitive Statistics for Improved Grammatical Language
+  Models}\BBCQ\
+\newblock In {\Bem Proceedings of AAAI-94}, \BPGS\ 728--733.
+
+\bibitem[\protect\BCAY{Chitrao \BBA\ Grishman}{Chitrao \BBA\
+  Grishman}{1990}]{Chitrao:90}
+Chitrao, M.\BBACOMMA\  \BBA\ Grishman, R. \BBOP 1990\BBCP.
+\newblock \BBOQ {Statistical Parsing of Messages}\BBCQ\
+\newblock In {\Bem Proceedings of the DARPA Speech and Natural Language
+  Workshop}, \BPGS\ 263--266.
+
+\bibitem[\protect\BCAY{Inui, Sornlertlamvanich, Tanaka, \BBA\ Tokunaga}{Inui
+  et~al.}{1997}]{Inui:97a}
+Inui, K., Sornlertlamvanich, V., Tanaka, H., \BBA\ Tokunaga, T. \BBOP
+  1997\BBCP.
+\newblock \BBOQ {A New Formalization of Probabilistic GLR Parsing}\BBCQ\
+\newblock In {\Bem Proceedings of the 5th International Workshop on Parsing
+  Technologies}.
+
+\bibitem[\protect\BCAY{Sornlertlamvanich, Inui, Shirai, Tanaka, Tokunaga, \BBA\
+  Takezawa}{Sornlertlamvanich et~al.}{1997}]{Virach:97c}
+Sornlertlamvanich, V., Inui, K., Shirai, K., Tanaka, H., Tokunaga, T., \BBA\
+  Takezawa, T. \BBOP 1997\BBCP.
+\newblock \BBOQ {Empirical Evaluation of Probabilistic GLR Parsing}\BBCQ\
+\newblock In {\Bem Proceedings of the Natural Language Processing Pacific Rim
+  Symposium}, \BPGS\ 169--174.
+
+\bibitem[\protect\BCAY{Takezawa}{Takezawa}{1997}]{Takezawa:97}
+Takezawa, T. \BBOP 1997\BBCP.
+\newblock \BBOQ {ATR Japanese Syntactic Structure Database and the
+  Grammar}\BBCQ\
+\newblock \BTR, ATR Interpreting Telecommunications Research Laboratories.
+\newblock (in Japanese).
+
+\bibitem[\protect\BCAY{Tanaka, Takezawa, \BBA\ Etoh}{Tanaka
+  et~al.}{1997}]{Tanaka:97}
+Tanaka, H., Takezawa, T., \BBA\ Etoh, J. \BBOP 1997\BBCP.
+\newblock \BBOQ {Japanese Grammar for Speech Recognition Considering the MSLR
+  Method}\BBCQ\
+\newblock \BTR\ 97-SLP-15-25, Information Processing Society of Japan, SIGNL.
+\newblock (in Japanese).
+
+\bibitem[\protect\BCAY{Tanaka, Tokunaga, \BBA\ Izawa}{Tanaka
+  et~al.}{1996}]{Tanaka:96}
+Tanaka, H., Tokunaga, T., \BBA\ Izawa, M. \BBOP 1996\BBCP.
+\newblock \BBOQ {Integration of Morphological and Syntactic Analysis Based on
+  GLR Parsing}\BBCQ\
+\newblock In {\Bem {Recent Advances in Parsing Technology}}, \BCH~17, \BPGS\
+  325--342. Kluwer Academic Publishers.
+
+\end{thebibliography}
+
+
+\begin{biography}
+
+\biotitle{}
+
+\bioauthor{Virach SORNLERTLAMVANICH}
+{
+  He is a researcher of the National Electronics and Computer
+  Technology (NECTEC) of Thailand since 1992. He received the B.Eng. and
+  M.Eng. degrees from Kyoto University, in 1984 and 1986,
+  respectively. From 1988 to 1992, he joined NEC Corporation and
+  involved in the Multi-lingual Machine Translation Project
+  supported by MITI. He received the D.Eng. degree from Tokyo
+  Institute of Technology in 1998. His research interests are
+  natural language processing, lexical acquisition and information 
+  retrieval.
+}
+
+\bioauthor{INUI Kentaro}
+{
+  He is an associate professor of Department of Artificial Intelligence,
+  Kyushu Institute of Technology. He received the B.S. degree in 1990
+  from Tokyo Institute of Technology, and the M.S. and the
+  Dr. Eng. degrees from Tokyo Institute of Technology in 1992 and 1995,
+  respectively. His work focuses on natural language processing.
+}
+
+\bioauthor{TANAKA Hozumi}
+{
+  He is a professor of Department of Computer Science, Tokyo Institute
+  of Technology. He received the B.S. degree in 1964 and the M.S. degree
+  in 1966 from Tokyo Institute of Technology. In 1966 he joined in the
+  Electro Technical Laboratories, Tsukuba. He received the
+  Dr. Eng. degree in 1980. He joined in Tokyo Institute of Technology in
+  1983. He has been engaged in artificial intelligence and natural
+  language processing research.
+}
+
+\bioauthor{TOKUNAGA Takenobu}
+{
+  He is an associate professor of Graduate School of Information Science
+  and Engineering, Tokyo Institute of Technology. He received the B.S.
+  degree in 1983 from Tokyo Institute of Technology, the M.S. and the
+  Dr. Eng. degrees from Tokyo Institute of Technology in 1985 and 1991,
+  respectively. His current interests are natural language processing
+  and information retrieval.
+}
+
+\bioauthor{TAKEZAWA Toshiyuki}
+{
+  He is a Senior Researcher of ATR Interpreting Telecommunications
+  Research Laboratories, Kyoto, Japan.  He received the B.E., M.E. and 
+  Dr. Eng. degrees from Waseda University, Tokyo, Japan, in 1984, 1986
+  and 1989, respectively.  His current research interests are spoken
+  language processing, speech translation, and interactive dialogue
+  systems.
+}
+
+\bioreceived{Received}
+\biorevised{Revised}
+\bioaccepted{Accepted}
+
+\end{biography}
+
+\end{document}

@@ -1,0 +1,480 @@
+\documentstyle[epsf,nlpbbl]{jnlp_e_b5}
+
+\newcommand{\er}[1]{}
+\def\bk{}
+\def\bK{}
+\def\bs{}
+\def\bS{}
+
+
+\setcounter{page}{55}
+\setcounter{巻数}{10}
+\setcounter{号数}{4}
+\setcounter{年}{2003}
+\setcounter{月}{7}
+\受付{July}{18}{2002}
+\再受付{September}{30}{2002}
+\採録{January}{10}{2003}
+
+\setcounter{secnumdepth}{2}
+
+\title{}
+\author{}
+\jkeywords{}
+
+\etitle{A Statistical Approach to Automatic Phonetic\\
+ Transcription of Japanese Orthographic Words}
+
+\eauthor{Wei-Bin Chang\affiref{NCTU} \affiref{PSP} \and Sachiko
+Morishita\affiref{Infocom} \affiref{PSP}}
+
+\headauthor{Chang and Morishita}
+\headtitle{Automatic Phonetic Transcription of Japanese Orthographic Words}
+
+\affilabel{NCTU}
+	{Department of Electrical and Control Engineering, National Chiao Tung University, Taiwan}
+        {Department of Electrical and Control Engineering, National Chiao Tung University, Taiwan}
+\affilabel{Infocom}
+	  {Mobile-Internet Division, Infocom Corporation, Japan}
+	  {Mobile-Internet Division, Infocom Corporation, Japan}
+\affilabel{PSP}
+	  {Work in this paper was performed while the authors were with Philips Electronics Industries (Taiwan) Ltd.}
+	{Work in this paper was performed while the authors were with Philips Electronics Industries (Taiwan) Ltd.} 
+
+\eabstract{
+We address the problem of automatically transcribing Japanese
+orthographic words into symbols representing their
+pronunciations. Such a function is necessary for commercial
+continuous speech recognition systems since there are constant needs to create new
+recognition lexica for new applications or purposes. Simple
+look-up schemes are not adequate to deal with Japanese, while
+methods based on morphological analysis require in-depth
+linguistic knowledge and development effort. In this paper, we
+propose a statistical approach which is based on an $N$-gram
+language model. It is assumed that the pronunciation of a
+character only depends on the previous one to two characters and
+their pronunciations. Given an orthographic word, our method
+outputs the most likely phonetic transcription. It is shown that
+our approach provides superior performance to the public-domain
+conversion tool KAKASI on ten out of twelve test sets.
+}
+
+\ekeywords{language model, phonetic transcription, speech recognition}
+
+
+\begin{document}
+
+\maketitle
+
+\thispagestyle{empty}
+
+
+\section{Introduction}
+\label{intro}
+
+Most continuous speech recognition systems require phonetic
+transcriptions of words in their recognition lexica. For
+commercial speech recognition products, whose users may need to
+create new recognition lexica for new applications or purposes, it
+would be desirable if phonetic symbols are automatically provided
+whenever a new lexicon is created since not every user is good at
+working with these symbols. A common practice is to ship with the
+products an extensive background lexicon and phonetic symbols for
+the recognition lexicon are looked up from the background lexicon.
+
+Such look-up schemes almost always suffer from coverage problems
+when dealing with such productive and inflectional languages as
+Japanese. Moreover, since the user may have a different idea about
+what constitutes an orthographic word in Japanese than the
+maker(s) of the background lexicon, look-up procedures may fail to
+yield any result. Finally, since it is well known that each kanji
+character usually has more than one common pronunciation and the
+correct pronunciation can only be determined by examining the
+expression in which the character is used \cite[p.~130]{Shibatani},
+look-up schemes are too simple to disambiguate. Normally a
+morphological analyzer is employed in conjunction with a look-up
+procedure to overcome these shortcomings. Despite its effectiveness,
+it requires deeper linguistic knowledge about the language.
+
+In this paper, we propose a statistical approach to automatically
+converting Japanese orthographic words into phonetic symbols
+representing their pronunciations, which we refer to as the
+SAMPA-J. This approach does not rely on any morphological analysis
+but is based on a language model. It is modified from the two-step
+approach we described in \cite{Chang}, where the orthographic word
+was first converted into its kana reading and then the kana
+reading was mapped to the phonetic symbols. We also present in
+this paper results from our extensive evaluations to show efficacy
+of our approach.
+
+In the English-written literature, \cite{PSKA} is the only paper
+we have seen so far that addresses a similar problem. It is hoped
+that, by publishing this paper in a Japan-based journal, we can
+draw more feedback from the Japanese research community, making us
+better aware of what has been achieved in this topic by Japanese
+researchers.
+
+We organize this paper as follows. In the next section, we
+formulate the phonetic transcription problem in mathematical terms
+to derive our approach and describe how to train the language
+model that is required by our method. We report results from our
+evaluations and compare performance to the public-domain tool
+KAKASI \cite{KAKASI} in Section~\ref{evaluation}. Finally, we
+conclude with Section~\ref{conclu}.
+
+
+\section{Mathematical Formulation}
+\label{formulation}
+
+\subsection{A Maximum a Posteriori Setup}
+Phonetic transcription of orthographic words can be posed as a
+maximum {\it a posteriori} problem as follows. Given an
+orthographic word consisting of $n$ characters $k_1,\ldots,k_n$,
+the transcription system outputs the SAMPA-J sequence
+$s_1^\ast,\ldots,s_n^\ast$ which is the solution to the following
+equation
+\begin{displaymath}
+s_1^\ast,\ldots,s_n^\ast \ = \ \arg\max_{s_1,\ldots,s_n}
+Pr(S_1=s_1,\dots,S_n=s_n|K_1=k_1,\ldots,K_n=k_n),
+\end{displaymath}
+where $s_i$ is a string of SAMPA-J symbols representing the
+pronunciation of the $i$th character $k_i$.
+
+Using Bayes rule and dropping the term independent of
+$s_1,\ldots,s_n$, we can rewrite the above equation as
+\begin{eqnarray*}
+s_1^\ast,\ldots,s_n^\ast & = & \arg\max_{s_1,\ldots,s_n}
+\frac{Pr(K_1=k_1,\ldots,K_n=k_n,S_1=s_1,\dots,S_n=s_n)}
+{Pr(K_1=k_1,\ldots,K_n=k_n)} \\
+& = & \arg\max_{s_1,\ldots,s_n}
+Pr(K_1=k_1,\ldots,K_n=k_n,S_1=s_1,\dots,S_n=s_n).
+\end{eqnarray*}
+With some abuse of notation, we write
+\begin{eqnarray}
+\lefteqn{Pr(K_1=k_1,\ldots,K_n=k_n,S_1=s_1,\dots,S_n=s_n)} \nonumber \\
+& = &
+Pr\big((K_1,S_1)=(k_1,s_1),\ldots,(K_n,S_n)=(k_n,s_n)\big) \nonumber \\
+& =: & p\big((k_1,s_1),\dots,(k_n,s_n)\big). \label{lm_definition}
+\end{eqnarray}
+Thus, the transcription system should decide in favor of the
+SAMPA-J sequence $s_1^\ast,\ldots,s_n^\ast$ satisfying
+\begin{equation}
+s_1^\ast,\ldots,s_n^\ast \ = \ \arg\max_{s_1,\ldots,s_n}
+p\big((k_1,s_1),\dots,(k_n,s_n)\big). \label{max_problem}
+\end{equation}
+We shall call the pair $(k_i,s_i)$ an {\it alignment}\/ in the
+following, since the character $k_i$ is aligned with its
+pronunciation $s_i$.
+
+Note that the term $p\big((k_1,s_1),\dots,(k_n,s_n)\big)$ as
+defined in \er{lm_definition} can be thought of as a language
+model for a ``language'' whose alphabet consists of the alignments
+$(k_i,s_i)$. In this paper, we consider $N$-gram models, $N=2, 3$,
+to estimate this probability:
+\begin{eqnarray*}
+\lefteqn{p\big((k_1,s_1),\dots,(k_n,s_n)\big)} \\
+& \approx & \left\{ \begin{array}{ll} \displaystyle\prod_{i=1}^n
+p\big((k_i,s_i)|(k_{i-1}, s_{i-1})\big),
+& \mbox{bigram model,} \\
+\displaystyle\prod_{i=1}^n p\big((k_i,s_i)|(k_{i-2}, s_{i-2}),
+(k_{i-1}, s_{i-1})\big), & \mbox{trigram model.}
+\end{array} \right.
+\end{eqnarray*}
+That is, we assume that the pronunciation of a character only
+depends on the previous one to two characters and their
+pronunciations. We believe that this assumption is quite close to
+the reality.
+
+Now, suppose that the language model is available. We can solve
+\er{max_problem} as follows: Starting with the first character in
+the input word, all hypothesized pronunciation $s_i$ for the $i$th
+character $k_i$ are looked up in a dictionary and then labeled
+together with $k_i$ on the arcs leading from node $i$ to node
+$i+1$. This procedure is repeated for the $(i+1)$th character
+until the end of the input word is reached. Next, all hypotheses
+on the arcs are evaluated with the language model. Then, a dynamic
+programming algorithm selects the optimal SAMPA-J sequence in
+sense of \er{max_problem} as the output. In the next sub-section,
+we describe how we train this language model.
+
+\subsection{Training the Language Model}
+\label{lm}
+
+The language model $p\big((k_1,r_1),\dots,(k_n,r_n)\big)$ can be
+trained with standard $N$-gram modeling techniques on the training
+data derived from Japanese dictionaries by aligning each kanji
+character in a dictionary word with its corresponding
+pronunciation in SAMPA-J. Since dictionaries normally only provide
+kana reading(s) of a word, we prepare the training data in the
+following three steps. Suppose the dictionary word to be aligned
+consists of $n$ orthographic characters $k_1,\ldots, k_n$ and the
+kana reading given by the dictionary has $m$ kana characters
+$h_1,\ldots, h_m$. First we apply a computer tool we developed to
+consistently associate each $k_i$ with the reading
+$r_i=(h_{i_1},\ldots,h_{i_l})$ such that
+$(r_1,\ldots,r_n)=(h_1,\ldots, h_m)$. If the tool fails to
+properly align the orthographic characters with the kana readings,
+we resort to manual work. Finally, the reading $r_i$ is mapped
+into the corresponding SAMPA-J string $s_i$ with a kana-to-SAMPA
+conversion tool that we also developed.
+
+On occasion we encountered words whose readings were only legal
+when kept as a whole and could not be further divided. Some
+examples of such words are shown in Figure~\ref{cluster}.
+\begin{figure}
+\begin{center}
+ \epsfile{file=word_example.eps,height=55mm}
+
+\end{center}
+\caption{Some of the words whose readings are only legal when kept
+as a whole.} \label{cluster}
+\end{figure}
+Therefore, we relaxed the definition of language model in
+\er{lm_definition} and allowed the alphabet of the language to
+also contain {\it clustered alignments} $(\bk_i^{i+j},
+\bs_i^{i+j}) = (k_i \ldots k_{i+j}, s_i \ldots s_{i+j})$. That is,
+\begin{eqnarray*}
+\lefteqn{p\big((k_1,s_1),\dots,(\bk_i^{i+j}, \bs_i^{i+j})
+,\ldots,(k_n,s_n)\big)} \\
+& = & Pr\big((K_1,S_1)=(k_1,s_1),\ldots,(\bK_i^{i+j},
+\bS_i^{i+j})=
+(\bk_i^{i+j}, \bs_i^{i+j}), \ldots, \\
+& & (K_n,S_n)=(k_n,s_n)\big).
+\end{eqnarray*}
+Consequently, in the optimization process to solve
+\er{max_problem}, there are possibly also arcs leading from node
+$i$ to node $i+j$.
+
+\section{Evaluations}
+\label{evaluation}
+
+\subsection{Set-up}
+In our evaluations, we used $288,197$ words plus their kana
+readings that we had collected from various sources as our
+training data. They were first processed as described in
+Section~\ref{lm} and then used to train both bigram and trigram
+backing-off language models \cite{KN95}.
+
+We developed the test sets from the IPA dictionaries provided in
+the ChaSen morphological analysis package \cite{Chasen} since they
+were divided according to lexical categories and so we could
+evaluate category-specific performance. To prepare the test sets,
+we excluded all words that had been observed in our training data,
+that consist of only a single character, and that contain Roman
+letters, Arabic digits, or symbols. Only those dictionaries with
+more than 100 words left after exclusion were used as the test
+sets. Their kana readings were then mapped to SAMPA-J with our
+kana-to-SAMPA conversion tool and used as the reference.
+Table~\ref{test_set_info} presents some information on the
+resulting twelve test sets, whose names are kept consistent with
+those in the ChaSen package. Note that nouns are further divided
+into several sub-categories.
+\renewcommand{\baselinestretch}{}
+\begin{table}[th]
+\begin{center}
+\caption{Test set information. } 
+\label{test_set_info}
+\vspace{1ex}
+\begin{tabular}{|c||l|r|}
+\hline
+ & \makebox[20ex][c]{Description} & \makebox[8ex][c]{$\#$ words}\\
+\hline\hline
+Adj & Adjectives & 1012\\
+
+Adverb & Adverbs & 1793\\
+
+Noun & Generic nouns & 14069\\
+
+Noun.adjv & Adjectival nouns & 488\\
+
+Noun.adverbal & Adverbal nouns & 104\\
+
+Noun.verbal & Verbal nouns & 743\\
+
+Noun.name & Personal names & 14404\\
+
+Noun.org & Organization names & 14642\\
+
+Noun.place & Place names & 52256\\
+
+Noun.proper & Other proper nouns & 20668\\
+
+Noun.others & Other nouns & 213\\
+
+Verb & Verbs & 8765\\
+\hline
+\end{tabular}
+
+\end{center}
+\end{table}
+\renewcommand{\baselinestretch}{}
+
+The public-domain tool KAKASI \cite{KAKASI} was chosen to compare
+performance. Since the main function of KAKASI is kanji-to-kana
+conversion, its output was converted into SAMPA-J by the same
+kana-to-SAMPA conversion tool we applied to the IPA dictionaries.
+In very few cases, the kana output by KAKASI erroneously contained
+kanji characters. These kanji characters were simply deleted
+before we applied the kana-to-SAMPA tool.
+
+\subsection{Results and Discussion}
+For each test set, we measured the word error rate (WER), which is
+the ratio of the number of incorrectly transcribed words to the
+total number of words in the test set, and the SAMPA-J phoneme
+error rate (PER), which is the ratio of the sum of deleted,
+inserted, and substituted phonemes to the total number of
+phonemes. The word error rate is an indication how often input
+words are incorrectly transcribed while the phoneme error rate is
+a measure of the effort that the user would have to spend on
+correcting. Table~\ref{error_rate} summarizes the error rates
+yielded by our statistical method incorporating the bigram model
+and the trigram model, respectively, and the error rates by
+KAKASI.
+\renewcommand{\baselinestretch}{}
+\begin{table}[hbtn]
+\begin{center}
+\caption{Word error rates and phoneme error rates ($\%$).}
+\label{error_rate}
+\vspace{1ex}
+\begin{tabular}{|c||r|r|r|r|r|r|}
+\hline
+ & \multicolumn{2}{|c}{Bigram} & \multicolumn{2}{|c}{Trigram}
+& \multicolumn{2}{|c|}{KAKASI}\\
+\cline{2-7}
+ & \makebox[6.5ex][c]{WER} & \makebox[6.5ex][c]{PER}
+ & \makebox[6.5ex][c]{WER} & \makebox[6.5ex][c]{PER}
+ & \makebox[6.5ex][c]{WER} & \makebox[6.5ex][c]{PER}\\
+\hline\hline
+Adj & 10.28 & 4.05 & 9.78 & 3.95 & 12.15 & 5.15\\
+
+Adverb & 6.02 & 2.67 & 6.25 & 2.66 & 5.02 & 2.33\\
+
+Noun & 16.73 & 6.68 & 16.48 & 6.61 & 24.95 & 11.34\\
+
+Noun.adjv & 15.16 & 6.82 & 14.96 & 6.66 & 18.24 & 8.89\\
+
+Noun.adverbal & 18.27 & 12.10 & 17.31 & 11.95 & 26.92 & 18.99 \\
+
+Noun.verbal & 19.92 & 8.96 & 20.73 & 9.78 & 24.23 & 11.46 \\
+
+Noun.name & 41.17 & 22.44 & 40.43 & 21.88 & 61.05 & 41.39\\
+
+Noun.org & 16.51 & 3.48 & 16.10 & 3.38 & 20.87 & 5.42\\
+
+Noun.place & 64.41 & 26.17 & 63.09 & 25.05 & 70.12 & 29.07\\
+
+Noun.proper & 51.10 & 17.57 & 50.94 & 17.32 & 67.61 & 25.81\\
+
+Noun.others & 6.57 & 2.68 & 6.10 & 2.60 & 14.55 & 8.14 \\
+
+Verb & 8.29 & 2.78 & 7.85 & 2.63 & 6.09 & 2.12\\
+\hline
+\end{tabular}
+
+\end{center}
+\end{table}
+\renewcommand{\baselinestretch}{}
+
+The results in Table~\ref{error_rate} show that the trigram
+language model resulted in lower error rates than the bigram
+language model in all but one test set (Noun.verbal). However, the
+performance gap between the two models is quite small, which may
+be because trigrams observed in training are sparse, thus forcing
+many backing-offs to occur. We also see that our method (using
+either models) yielded superior performance to KAKASI on all but
+two sets (Adverb and Verb). Since the evaluations were conducted
+in an open-set testing scenario, the results imply that the method
+we proposed has better capability of generalization.
+
+Overall, error rates on test sets corresponding to nouns
+(Noun$\ast$) are higher than those on other test sets. This is not
+entirely unexpected since non-noun words usually contain fewer
+kanji characters, which are directly related to pronunciation
+variability, than do nouns. In addition, pronunciations of kanji
+characters in adjectives, adverbs, and verbs are dominated by
+their {\it kun yomi} and thus are more or less fixed. On the other
+hand, pronunciations of nouns can vary among the multiplicity of
+{\it on yomi} or be mixtures of {\it kun} and {\it on yomi} and
+consequently are much less predictable.
+
+Among the test sets in various noun categories, error rates are
+higher on proper names, with the exception of organization names
+(Noun.org). This is because organization names are normally formed
+from generic nouns by compounding while many other proper names
+have unique pronunciations. In our opinion, there is probably no
+good solution for this problem.
+
+Due to the sheer number of words involved and limited resources
+available, we were unable to perform a thorough error analysis.
+Nonetheless, we found that many incorrect transcriptions
+containing only a single phoneme error were caused by the
+phenomenon of sequential voicing, or {\it rendaku}. If the bigram
+involving {\it rendaku} is not observed in training, then, for the
+second character, the language model will favor the most frequent
+pronunciation, usually without voicing. This is a limitation of
+our approach. It is probably easier to handle {\it rendaku} with
+rules.
+
+
+\section{Conclusions}
+\label{conclu}
+We have presented a statistical approach to automatically
+transcribing Japanese orthographic words into phonetic symbols. It
+incorporates an $N$-gram language model, which can be trained on
+processed Japanese dictionaries. We have shown that the
+performance gap between a bigram model and a trigram model was
+rather small and that our approach had superior performance than
+the public-domain KAKASI on all but two test sets.
+
+It is worth noting that to process dictionaries into training data
+does not require specialized skills or knowledge. Therefore, our
+method can be easily extended. Another advantage is that language
+modeling and hypothesis searching can re-use the corresponding
+routines from the intended speech recognition system, thus saving
+considerable development effort.
+
+
+
+\bibliographystyle{nlpbbl}
+
+\bibliography{ref}
+
+\begin{biography}
+\biotitle{}
+
+\bioauthor{Wei-Bin Chang} {Wei-Bin Chang received the B.S. degree
+in control engineering from National Chiao Tung University,
+Taiwan, in 1988, and the M.S. and Ph.D. degrees in electrical
+engineering from the University of Wisconsin--Madison, USA, in
+1991 and 1997, respectively.  From 1997 to 1999, he worked for the
+Industrial Technology Research Institute, Taiwan, as an Engineer.
+From 1999 to 2002, he was with Philips Electronics Industries
+(Taiwan) Ltd. as a Senior Research Engineer.  He is currently an
+Assistant Professor with the Department of Electrical and Control
+Engineering, National Chiao Tung University, Taiwan.  His research
+interests include statistical signal processing, digital signal
+processing, and natural language processing.}
+
+\bioauthor{Sachiko Morishita} {Sachiko Morishita received her B.S.
+and M.S. degrees in linguistics from State University of New York
+(SUNY) at Stony Brook, USA, in 1994 and 1995, respectively. She
+was re-located to Taiwan and started her new life there due to her
+marriage with a Taiwanese. From 1998 to 2002, she has been with
+Philips Electronics Industries (Taiwan) Ltd. as a computer
+linguist working on Mandarin/Japanese/Korean speech recognitions
+for telephony applications. Her work includes research and
+development of an efficient and accurate acoustic model for fast
+speech recognition, as well as its customization and application
+support to several selected customers. She is currently working
+for Mobile-Internet Division, Infocom Corp. in Japan. As an
+interest during spare time, she also taught Japanese at National
+Taiwan University of Science and Technology (NTUST), from 1998 up
+to now.}
+
+\bioreceived{Received}
+\biorevised{Revised}
+\bioaccepted{Accepted}
+
+\end{biography}
+
+\end{document}

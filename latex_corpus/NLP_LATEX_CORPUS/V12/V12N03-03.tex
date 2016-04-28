@@ -1,0 +1,848 @@
+
+
+
+
+\documentstyle[epsf,jnlpbbl]{jnlp_j}
+
+\setcounter{page}{3}
+\setcounter{巻数}{2}
+\setcounter{号数}{3}
+\setcounter{年}{1995}
+\setcounter{月}{7}
+\受付{1995}{5}{6}
+\再受付{1995}{7}{8}
+\採録{1995}{9}{10}
+
+\newcommand{\lw}[1]{}
+
+\setcounter{secnumdepth}{2}
+
+\title{SVMおよびTransductive SVMを用いた製品スペック情報の抽出}
+\author{嶋田 和孝\affiref{KYU} \and 林 晃司 \affiref{XER} \and 遠藤 勉 \affiref{KYU}}
+
+\headauthor{嶋田 和孝・林 晃司・遠藤 勉}
+\headtitle{SVMおよびTransductive SVMを用いた製品スペック情報の抽出}
+
+\affilabel{KYU}{九州工業大学 情報工学部 知能情報工学科}
+{Department of Artificial Intelligence, Kyushu Institute of Technology}
+\affilabel{XER}{九州工業大学 情報工学部 知能情報工学科．現在は富士ゼロックス株式会社}
+{Department of Artificial Intelligence, Kyushu Institute of Technology. He is now with Fuji Xerox Co.}
+
+\jabstract{
+ネットワークの普及により，今までは紙面で伝えられていた情報の電子化が進んでいる．
+本稿では，それら電子化された情報の一つである，製品のスペック情報の抽出について議論する．
+現在，製品情報を収集し，利用しているポータルサイトが数多く存在するため，膨大なWebページの中から製品のスペック情報を的確に抽出することは，そのようなポータルサイトの自動構築のために大きな意義を持つ．
+製品のスペック情報は，殆どの場合，表形式で記述されている．
+Web上の表はHTMLの\verb+<+TABLE\verb+>+タグを用いて記述されるが，\verb+<+TABLE\verb+>+タグは表を記述する以外にも，レイアウトを整えたりする場合に頻繁に用いられる．
+ある特定の領域においては，\verb+<+TABLE\verb+>+の70\%がレイアウト目的で使われているとの報告もある．
+そのため，HTML文書中の\verb+<+TABLE\verb+>+タグが表なのか，それとも他の目的で使用されているのかを判別する必要がある．
+提案手法では，Support Vector Machines (SVM) を用いて，Webページ中に存在する表領域が製品スペックかどうかの判定を行う．
+Transductive SVM を用いて，訓練データの削減についても考察する．
+パソコン，デジタルカメラ，プリンタの3種類の製品について，実験を行い，それぞれの製品について高い再現率と適合率を得た．
+訓練データが少ない場合，Transductive SVM を用いた手法の方が，通常の SVM と比べ，精度が改善されることを確認した．
+}
+
+\jkeywords{製品スペック，表抽出，分類，Transductive SVM}
+
+\etitle{Product Specification Extraction Using SVM \\ and Transductive SVM}
+\eauthor{}
+
+\eabstract{
+Tables are an efficient way to express relational information. Most of information about products is written in tabular form. Table (specification) extraction is a significant task to handle product information written in tabular form such as specifications.
+We are developing a multi-specifications summarization system.
+The specifications are written in \verb+<+TABLE\verb+>+ tags.
+The presence of the \verb+<+TABLE\verb+>+ tags in an HTML document does not necessarily indicate the presence of specifications.
+Less than 30\% of HTML \verb+<+TABLE\verb+>+ tags are real tables in one particular domain.
+In this paper, we propose a method for specification extraction using SVMs.
+To reduce the training data, we also evaluate this task by using transductive SVMs.
+For PC, digital still camera and printer specifications, we evaluate the performance of SVMs and transductive SVMs. Experimental results show the effectiveness of our methods.
+}
+
+\ekeywords{Product Specifications, Table Extraction, Classification, Transductive SVM}
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+
+近年のWrold Wide Web (WWW)の急速な普及により，世界中から発信された膨大な電子化文書へのアクセスが可能になった．
+しかしながら，そのような膨大な情報源から，必要な情報のみを的確に得ることは困難を極める．
+的確な情報を得るために，テキストを対象とした文書分類や情報の抽出などの様々な技術が注目され，研究されている．
+しかしながら，Web上に存在するのはテキスト情報だけではなく，表や画像など様々な表現形式が使用されている．
+ここで，表形式で記述された情報について着目する．
+従来の情報検索システムなどでは，表はテキストとして扱われることが多かった．
+表は属性と属性値によって構造化された情報であり，その特性を考えると，表をテキストとして扱うのではなく，テキスト部分と切り離し，表として認識し，利用することが情報検索システムなどの精度向上に繋がる．
+また表は情報間の関係を記述するのに適した表現形式であり，Web上に存在する文書から表を抽出することは，Web Miningや質疑応答システム，要約処理などのための重要なタスクの一つである \cite[など]{hurst,itai,pinto,shimada2,wang}．
+
+本稿では，電子化された情報の一つである，製品のスペック情報の抽出について議論する．
+一般に，パソコンやデジタルカメラ，プリンタなどの製品の機能や装備などのスペック情報は表形式で記述される．
+本稿ではこれらの表形式で記述されたスペック情報を性能表と呼ぶことにする．
+その例を図\ref{spec}に示す．
+性能表を扱う理由としては，
+\begin{itemize}
+\item ポータルサイトの存在\\
+現在，Web上には，数多くの製品情報に関するポータルサイトやオンラインショッピングサイトが存在する\footnote{価格.com (\verb+http://www.kakaku.com/+) や Yahoo! Shopping (\verb+http://shopping.yahoo.co.jp/+) など．}．
+これらのサイトで，ユーザが製品を比較する際に最も重要な情報の一つが性能表である．
+多くの製品は頻繁に最新機種が発表され，その度に性能表を人手で収集するのはコストがかかる．
+膨大なWebページの中から製品のスペック情報を的確に抽出することは，そのようなポータルサイトの自動構築のために大きな意義を持つ．
+
+\item 製品情報のデータベース化\\
+性能表は表形式で記述されているので，表領域が正しく特定されれば，属性と属性値の切り分けや対応付けなどの解析が比較的容易で，製品データベースの自動獲得が可能になる．
+これらのデータを利用し，ユーザの要求に合致した製品を選択するシステムなどの構築が可能になる\cite{shimada4}．
+\end{itemize}
+などが挙げられる．
+
+\begin{figure}
+\begin{center}
+\epsfile{file=base.eps,height=14.0cm}
+\end{center}
+\caption{パソコンの性能表の例}
+\label{spec}
+\end{figure}
+
+Web上での表の記述に関しては，いくつか問題点がある．
+その一つが，\verb+<+TABLE\verb+>+タグの一般的な使用方法である．
+Web上の表はHTMLの\verb+<+TABLE\verb+>+タグを用いて記述されるが，\verb+<+TABLE\verb+>+タグは表を記述する以外にも，レイアウトを整えたりする場合に頻繁に用いられる．
+ある特定の領域においては，\verb+<+TABLE\verb+>+の70\%がレイアウト目的で使われているとの報告もある\cite{chen}．
+そのため，HTML文書中の\verb+<+TABLE\verb+>+タグが表なのか，それとも他の目的で使用されているのかを判別する必要がある．
+また，実際のWeb文書では，\verb+<+TABLE\verb+>+の入れ子構造が頻繁に見られる．
+性能表抽出のタスクでは，入れ子構造になった\verb+<+TABLE\verb+>+の中で，どこまでが性能表を表しているかという表領域を特定する必要がある．
+
+提案手法では，(1) フィルタリング，(2) 表領域抽出，の2つのプロセスによってWeb文書群から性能表を獲得することを試みる．
+処理の流れを図\ref{outline}に示す．
+ここで，フィルタリングとは，製品メーカのサイトからHTMLダウンローダで獲得したWeb文書群を対象とし，その中から性能表を含む文書を抽出することを指す．
+フィルタリング処理では，文書分類などのタスクで高い精度を収めている Support Vector Machines (SVM) を用いる．
+また，少ない訓練データでも SVM と比較して高い精度を得ることができるといわれている Transductive SVM (TSVM) と SVM を比較する．
+一方，表領域抽出とは，フィルタリング処理で得られた文書中から，性能表の領域のみを抽出することを意味する．
+表領域抽出処理では，フィルタリングの際にSVMおよびTSVMのための素性として選ばれた語をキーワードとし，それらを基に表領域を特定する．
+
+以下では，まず，2節で，本稿で扱う性能表抽出のタスクに最も関連のある表認識などの関連研究について説明する．3節では，フィルタリングに用いる SVM と TSVM について述べ，学習に用いる素性選択の手法について説明する．続いて，4節で，各Web文書から表領域を特定する手法について述べ，5節で提案手法の有効性を検証し，6節でまとめる．
+
+\begin{figure}
+\begin{center}
+\epsfile{file=outline.eps}
+\end{center}
+\vspace{-3mm}
+\caption{処理の概要}
+\label{outline}
+\end{figure}
+
+\section{関連研究}
+本節では，本稿で扱う性能表抽出のタスクに最も関連のある表認識・抽出などについての先行研究について述べる．
+表やレイアウト構造を持つ文書からの構造解析および情報抽出に関する研究は，古くからなされている．
+しかしながら，従来の研究では，画像中の表領域の認識，箇条書きやプレインテキストで書かれた表の認識などが主な研究対象だった\cite[など]{hu,kawai,ng,pinto,sato}．
+
+一方で，近年，HTMLで記述された文書を対象とした表認識や表抽出に関する研究がなされている．
+Chenら\cite{chen}は，HTML文書中の表の認識手法について提案したが，表認識のためのルールが人手で作成されており，汎用性や拡張性に問題がある．
+Itaiら\cite{itai}は，表を対象としたHTML文書からの情報抽出とその統合について報告している．
+しかし，表領域の抽出手法については十分に議論されていない．
+Wangら\cite{wang}は，決定木や SVM などを用いて表抽出を試みている．
+しかし，これらの手法は，学習のために十分な訓練データが必要となる．
+Yoshidaら\cite{yoshida}は，EMアルゴリズムを用いることで，この問題を解消しているが，精度は，Wangらの手法の方が高い．
+本稿では，文書分類で高い精度を収めているSVMを性能表抽出のタスクに適用し，少ない訓練データでも比較的高い精度が得られるといわれるTSVMとSVMの精度を比較する．
+
+上に述べた従来のHTMLからの表抽出に関する研究は，一般的な表を抽出することを目的としていることが多い．
+すなわち，\verb+<+TABLE\verb+>+タグで記述された領域が表であるか否かのみを判定することである．
+このような一般的な表抽出タスクでは，その\verb+<+TABLE\verb+>+タグ中にどのような内容が記述されているかを対象としないため，言語情報よりも構造情報(例えば，縦および横のセルの一貫性など)を重視する．
+一方で，本タスクは表という構造情報を利用しながら，「ある特定の内容が記述された表」を抽出することを目的としている．
+内容にまで踏みいった抽出を行うには，構造情報だけではなく，言語情報も重要な手がかりとなる．
+本タスクが従来の表抽出と大きく異なる点は，上記の理由から，言語情報を重視した抽出処理を行うことである．
+
+先行研究において，Yoshidaら\cite{yoshida}は表抽出ののちに表のクラスタリングを行なっている．
+しかし，一般に1つの文書中に膨大な数の\verb+<+TABLE\verb+>+タグが存在するため，機械学習などのための訓練データとして，全ての表にその表の内容が何であるかというラベルを付ける作業が高コストとなる．
+この問題点を解消するために，本研究では文書をフィルタリングしたのちに特定の表を抽出するという手法を取る．
+この手法により，正例および負例のラベル付けは，\verb+<+TABLE\verb+>+タグ単位ではなく，ページ単位となり，人手によるコストを最小限に抑え，実用的な精度を得ることができるという利点がある．
+
+\section{フィルタリング}
+本節では，フィルタリング処理について述べる．
+フィルタリングとは，製品メーカのサイトからHTMLダウンローダで獲得したWeb文書群から，性能表を含む文書を抽出することを指す．
+フィルタリング処理では，SVMおよびTSVMを用いる．
+
+\subsection{Support Vector Machines}
+SVMはVapnikらが考案したOptimal Separating Hyperplaneを起源とする，超平面による特徴空間の分割法であり，現在，二値分類問題を解決するための最も優秀な学習モデルの一つとして知られている\cite{vapnik}．
+SVMは訓練サンプル集合からマージン最大化と呼ばれる戦略を用いて，線形識別関数
+\begin{equation}
+f(\mbox{\boldmath $x$})=\mbox{\boldmath $w$} \cdot \mbox{\boldmath $x$} + b
+\end{equation}
+のパラメータを学習する．
+ここで， \mbox{\boldmath $x$}は入力ベクトルである．
+\mbox{\boldmath $w$} と $b$ がマージン最大化戦略の際に学習されるパラメータであり，$f(\mbox{\boldmath $x$}) \in \{+1,-1\}$となる．
+
+図\ref{svm}にSVMの学習モデルを示す．
+＋は正のサンプル，−は負のサンプルである．
+図中の実線は $y = f(\mbox{\boldmath $x$}) = 0$ となる点の集合であり，分離超平面(hyperplane)と呼ばれる．
+サンプルは，この超平面を境界として2つのクラスに分類される．
+すなわち，識別関数は分離超平面によって入力素性空間を二分する．
+また，超平面に対して最近傍のサンプル間の距離をマージンと呼び，$|\mbox{\boldmath $w \cdot x$}+b|/||\mbox{\boldmath $w$}||$ で表す．
+図中の2つの破線上にある，分類を決定づける事例をサポートベクタと呼ぶ．
+
+\begin{figure}
+\begin{center}
+\epsfile{file=svm.eps}
+\end{center}
+\vspace{-3mm}
+\caption{SVMの学習モデル}
+\label{svm}
+\end{figure}
+
+訓練データが線形分離可能な場合，$\mbox{\boldmath $w$}$ および $b$ は複数存在することから，以下のような制約を与える．
+\begin{equation}
+\min_{i=1,\ldots,n} |{\mbox{\boldmath $w \cdot x$}}_{i}+b|=1 
+\end{equation}
+この制約により，距離は$1/||{\mbox{\boldmath $w$}}||$となり，結論として識別関数は
+\begin{equation}
+ \min~~\frac{1}{2}||{\mbox{\boldmath $w$}}||^{2} 
+\end{equation}
+\[subject~~to: \forall^{n}_{i=1}: y_{i}[{\mbox{\boldmath $w \cdot x$}}_{i}+b] \geq 1\]
+となる．
+本研究では，線形カーネルを利用した．
+
+\subsection{Transductive SVM}
+一般に，高精度の分類器生成には多量の訓練サンプルを必要とする．
+しかし，十分な量の訓練データを人手によってラベリングするのは非常に高コストな作業といえる．
+そこで，少量の訓練データで高精度の分類器を生成する手法が期待される．
+
+Vapnik \cite{vapnik}が提案した理論を基にJoachims \cite{joachims}によって具体化されたTransductive SVM (TSVM)は，Transductive法と呼ばれる，与えられたラベル無しデータの分布に注目し，ラベル無しデータの誤分類の最小化を目的とする学習方法をSVMに適用し，拡張したもので，学習時にラベル無しデータの分布を考慮する事で分類精度を上げる手法である．以下にTSVMのアルゴリズムを示す．
+\begin{description}
+\item[Step 1] 訓練データを基にSVMで分類器を生成する．
+
+\item[Step 2]得られた分類器を用いてラベル無しデータを分類する．
+得られた分類結果をそれぞれのラベル無しデータの仮クラスとする．
+
+\item[Step 3] 仮クラスの付与されたラベル無しデータを訓練データに含め，SVMによって分類器を再生成する．
+
+\item[Step 4] マージン内のラベル無しデータのうち，各々の仮クラスを入れ替えることでマージンを最大化できるペアを見つけ，入れ換える．
+入れ換えられたデータセットを用いて，SVMによる再学習を行う．
+この処理の際に，ラベル無しデータ中の正例および負例の分布を考慮する\footnote{一般には，ラベル無しデータ中の正例および負例の分布比率は未知なため，訓練データ中の正例と負例の比率などを参考にして求められた予測比率を利用し，パラメータが調整されることが多い．}．
+
+\item[Step 5] 入れ換えるペアがなくなるまで{\bf Step 4}を繰り返す．
+
+\end{description}
+\begin{figure}
+\begin{center}
+\epsfile{file=tsvm.eps,height=4.4cm}
+\end{center}
+\vspace{-3mm}
+\caption{TSVMの学習モデル}
+\label{tsvm}
+\end{figure}
+図\ref{tsvm}は，TSVMの学習過程の例である．
+図中の＋と−は，通常のSVMが分離超平面を生成する際に使用した正のサンプルと負のサンプルを表す(すなわち図\ref{svm}における＋および−と同じ意味を持つ)．
+ここで，$\circ$および$\bullet$はそれぞれ最初のSVMによる分離超平面によって正例および負例と判断されたラベル無しデータを表す．
+例では，マージン内にある \mbox{\boldmath $x^*_1$} と \mbox{\boldmath $x^*_2$} がアルゴリズム中の{\bf Step 4}の部分で入れ換えられ，再学習の結果，マージンが最大化された新しい分離超平面が得られる過程を示している．TSVMにおいても，通常のSVMと同様に線形カーネルを使用した．
+線形分離可能な場合，TSVMの識別関数および制約条件は下式に拡張される．
+\begin{equation}
+\min~~\frac{1}{2}||{\mbox{\boldmath $w$}}||^{2} 
+\end{equation}
+\[subject~~to: \forall^{n}_{i=1}: y_{i}[{\mbox{\boldmath $w \cdot x$}}_{i}+b] \geq 1\]
+\[\hspace*{6em}\forall^{n}_{i=1}:y_{i}^{*}[{\mbox{\boldmath $w \cdot x$}}_{i}^{*}+b] \geq 1\]
+ここで，${\mbox{\boldmath $x$}}_{j}^{*}$ および $y_{j}^{*}$ は，それぞれ仮クラスが与えられたラベル無データにおける入力ベクトルおよび仮クラスである．
+
+\subsection{素性選択}\label{sec3.3}
+続いて，SVMおよびTSVMのための素性選択について述べる．
+本研究では，以下の条件を全て満たすものを素性候補とした．
+\begin{description}
+\item[(1)] 表の属性欄中に出現する単語
+\item[(2)] 一定長以内の文章中に出現する単語 
+\item[(3)] 性能表が存在する文書および性能表が存在しない文書内で顕著または限定的に出現する単語 \vspace{-1cm}
+\end{description}\mbox{}\\
+これらの条件に基づき，素性となる候補をWeb文書から抽出する．
+条件{\bf (1)}では表中の要素を属性および属性値に切り分ける必要がある．
+ここでは，一般に殆どの性能表は第1列目(最左列)に属性が現れ，それより右側の列に属性値が存在するという経験則から，最左列の要素を属性だと解釈する．
+表の属性部分を素性に使い，属性値を素性として用いない理由は，製品の属性(例えば，パソコンならCPUやメモリなど)は，新しい機種が発売されても変更されにくいのに対し，属性値(例えば，CPUでいえば，800MHz，2GHzなど)は，その値や表現に揺れが生じやすいためである．
+素性候補の抽出は，以下の手順で行われる．
+\begin{enumerate}
+\item HTML文書から\verb+<+TABLE\verb+>+タグで記述された領域を抽出する．
+\item \verb+<+TABLE\verb+>+タグ中の各\verb+<+TR\verb+>+タグ中の初めの\verb+<+TD\verb+>+タグの内容を抽出する(図\ref{tdandtr})．
+\item 得られた文字列が25文字以内であれば，形態素解析\footnote{形態素解析には奈良先端科学技術大学で開発された「茶筌」を用いた．\verb+http://chasen.naist.jp/hiki/ChaSen/+}を行い，素性候補を抽出する．
+25文字という制約は経験的に定められた．
+\end{enumerate}
+
+\begin{figure}
+\begin{center}
+\epsfile{file=trandtd.eps,height=5.5cm}
+\end{center}
+\caption{素性候補の例}
+\label{tdandtr}
+\end{figure}
+
+続いて，素性候補について重み付けを行い，素性を選択する．
+本稿では，(1) 正規化 $tf \cdot idf$, (2) ベイズの定理 の2種類を用いて，その精度を比較，考察する．
+ここで，性能表を含んでいる文書中の\verb+<+TABLE\verb+>+タグ内で顕著に生起する語と，性能表を含んでいない文書中の\verb+<+TABLE\verb+>+タグ内で顕著に生起する語を素性とする．
+以下に各手法での素性選択の流れを示す．
+\begin{description}
+\item[正規化$tf \cdot idf$]\mbox{}\\
+$tf\cdot idf$は，文書群 $D=\{d_1,...,d_N\}$ について，文書 $d$におけるキーワード候補 $t$ の生起数 $tf(t,d)$，および候補が生起する文書数 $df(t)$ を基に重み付けを行う最も有名な手法の一つである．
+ここで，本研究では，素性候補の抽出条件を考慮する．
+すなわち，素性の候補となる単語$t$としては，文書$d$中の\verb+<+TABLE\verb+>+タグにおける最左列の単語のみを利用する．
+さらに，これを学習用に拡張し，$D=\{D_{real},~D_{no}\}$とする．
+ここで，$D_{real}$ は性能表を含む文書群，$D_{no}$ は求めている製品の性能表を含まないもしくは性能表以外のテーブルを含む文書群である．
+各々の文書群に生起する単語 $t$ について，Wangら\cite{wang}が表抽出で用いた式を基に重み付けを行う．
+\begin{equation}
+ w^{real}_t = \sum_{d_i \in D_{real}}tf(t, d_i) \times \log(\frac{df^{real}_t}{N_{real}}\frac{N_{no}}{df^{no}_t}+1)
+\end{equation}
+\begin{equation}
+w^{no}_t = \sum_{d_i \in D_{no}}tf(t, d_i) \times \log(\frac{df^{no}_t}{N_{no}}\frac{N_{real}}{df^{real}_t}+1)
+\end{equation}
+ここで， $df^{real}_{t},df^{no}_{t}$ は $D_{real}$ および $D_{no}$ における単語 $t$ の $df$ 値である．また，$N_{real}$および$N_{no}$は，$D_{real}$および$D_{no}$に属する文書の総数を表す．
+最終的な重みは以下の式で求める．
+\begin{equation}
+ws^{real}_t = \frac{w^{real}_t}{Norm_{real}},~~ws^{no}_t = \frac{w^{no}_t}{Norm_{no}}
+\end{equation}
+ただし，
+\begin{equation}
+Norm_{real} = \sqrt{\sum_{t \in D_{real}} w^{real}_t \times w^{real}_t},~~Norm_{no} = \sqrt{\sum_{t \in D_{no}} w^{no}_t \times w^{no}_t}
+\end{equation}
+ここで閾値以上の値を持つ $ws^{real}_t$ および $ws^{no}_t$ をSVMおよびTSVMのための素性として扱う．
+\item[ベイズの定理]\mbox{}\\
+素性選択のためのもう一つの手段として，パターン認識・分類の分野で広く知られているベイズの定理を用いる．
+事象$C={[C_{i}]}${\footnotesize $_{i=1}^M$}において，$P(C_{i})$ $(\sum${\footnotesize $^{M}_{i=1}$}$P(C_{i})=1)$は事前確率と呼ばれる．
+ここで，正規化$tf \cdot idf$と同様に素性候補の抽出条件を考える．
+すなわち，単語$t$としては，文書$d$中の\verb+<+TABLE\verb+>+タグにおける最左列に生じるもののみを利用する．
+事前確率と条件付き確率密度分布$p(t|C_i)$が事前に得られる場合，単語$t$が$C_i$に属する事後確率$P(C_i|t)$は次の式で求められる．
+\begin{equation}
+P(C_i|t) = \frac{P(C_i)p(t|C_i)}{\sum^M_{j=1}P(C_j)p(t|C_j)}
+\end{equation}
+ここで，$C=\{D_{real}, D_{no}\}$である．
+全単語に対して各クラスでの事後確率を求め，それらを単語の重みと考える．
+すなわち，$ws_t^{real}=P(D_{real}|t)$，および$ws_t^{no}=P(D_{no}|t)$である．
+ここで，$ws_t^{real}>0.75$を満たす語，$ws_t^{no}>0.75$でかつ5回以上生起した語を素性とする．
+\end{description}
+
+\section{表領域抽出}
+本節では，表領域抽出処理について述べる．
+表領域抽出処理とは，フィルタリング処理によって得られた性能表を含んでいる文書から性能表の領域を特定する処理を指す．
+一般に，1つのHTML文書中には複数の\verb+<+TABLE\verb+>+タグが存在するため，それらの中から特定の表のみを抽出する処理が必要となる\footnote{我々が実験で用いたデータでは，1つのHTML文書中に含まれる\verb+<+TABLE\verb+>+タグの数の平均は27.4個だった．}．
+
+\subsection{スコアリング}
+まず，文書内の全ての\verb+<+TABLE\verb+>+タグについて，それぞれにユニークなIDとその\verb+<+TABLE\verb+>+タグの深さに関する情報を付加する．
+深さは1から始まり\footnote{深さ 1 は，\verb+<HTML>+ $\cdots$ \verb+</HTML>+のレベル．}，\verb+<+TABLE\verb+>+タグが入れ子構造になれば，その値は大きくなる．
+例を図\ref{numbering}に示す．
+
+\begin{figure}
+\begin{center}
+\epsfile{file=numbering.eps,height=6cm}
+\end{center}
+\vspace{-3mm}
+\caption{IDと深さ}
+\label{numbering}
+\end{figure}
+
+次に，各\verb+<+TABLE\verb+>+$_{id}$についてスコアリングを行う．
+スコアリングには，前節で素性として選ばれた語 $t$ とその値 $ws^{real}_t$ を用いる．
+各\verb+<+TABLE\verb+>+$_{id}$の最左列の要素について，以下の式でスコアを計算する．
+\begin{equation}
+Score_{id}=\sum_{t \in W_{list}}ws^{real}_t \times \log(s)
+\end{equation}
+ここで，$W_{list}$ は各\verb+<+TABLE\verb+>+$_{id}$の最左列のセル中に存在する単語のリストを表し，$s$ は，\verb+<+TABLE\verb+>+$_{id}$の最左列の要素に生起したキーワード $t$ の総数を表す．
+この $Score_{id}$ が最大になる\verb+<+TABLE\verb+>+$_{id}$を性能表であると見なし，抽出する．
+
+また，1つの文書に複数の性能表が含まれていることもある\footnote{実験データでは，1つの文書に複数の性能表が存在した割合はデジタルカメラとプリンタの場合は1\%以下だったが，パソコンの場合は6\%であった．}．
+そこで，$Score$ が最大になる\verb+<+TABLE\verb+>+にマッチしたキーワードの$\frac{4}{5}$がマッチする\verb+<+TABLE\verb+>+も性能表だとして抽出する．
+
+\subsection{特殊な構造への処理}
+
+性能表が必ずしも1つの\verb+<+TABLE\verb+>+タグで構成されているとは限らない．
+実際に複数の表が入れ子構造になった性能表や複数の\verb+<+TABLE\verb+>+タグで分割されている性能表が多く存在する．
+前者の例は，図\ref{numbering}で $id=5$ および $id=6$ がまとまって1つの性能表である場合であり，後者の例は $id=1$ と $id=5$ が1つの性能表である場合である．
+
+入れ子構造になった\verb+<+TABLE\verb+>+タグの場合，ある\verb+<+TABLE\verb+>+$_{id}$が性能表と見なされたとすると，その\verb+<+TABLE\verb+>+より深さの深い\verb+<+TABLE\verb+>+は，性能表の一部だとして抽出する．
+さらに特殊な入れ子構造の例として，ブラウジングの際の視覚効果を狙い，\verb+<+TABLE\verb+>+タグ中の各\verb+<TD>...</TD>+内の要素が単一の\verb+<+TABLE\verb+>+タグで構成されている場合がある．
+このような場合は入れ子構造になっている\verb+<+TABLE\verb+>+タグ部分を通常の単一セルと見なして処理する．
+図\ref{nest}に例を示す．
+
+\begin{figure}
+\begin{center}
+\epsfile{file=nest.eps}
+\end{center}
+\vspace{-3mm}
+\caption{単一セルと見なされる入れ子構造}
+\label{nest}
+\end{figure}
+
+続いて，1つの性能表が複数の\verb+<+TABLE\verb+>+タグによって構成されている場合の処理について述べる．
+まず，次の条件を満たす\verb+<+TABLE\verb+>+$_{id}$を抽出する．
+\begin{itemize}
+\item \verb+<+TABLE\verb+>+タグの深さが等しい．
+\item 同じ親を持つ\verb+<+TABLE\verb+>+タグである．
+\end{itemize}
+図\ref{numbering}でいえば，$id=1$ と $id=5$ のペア，$id=2$ と $id=4$ のペアがこれにあたる．
+次に抽出された\verb+<+TABLE\verb+>+タグ群について，次の項目をチェックする．
+\begin{description}
+\item[(1)] 各行のセルの数が一致するか
+\item[(2)] \verb+<+TABLE\verb+>+タグに幅(width)が指定されている場合，その値が一致するか
+\item[(3)] \verb+<+TABLE\verb+>+タグの\verb+<TD>+タグについて，背景色(bgcolor)が指定されている場合，その使用パターンが一致するか
+\end{description}
+これらの項目のうち，2つ以上の項目に，抽出された\verb+<+TABLE\verb+>+群がマッチする場合は，それらを1つの\verb+<+TABLE\verb+>+として捉え，スコアリングの際に，それぞれのスコアの和をその\verb+<+TABLE\verb+>+のスコアとする．
+
+\section{実験}
+\begin{table}
+\caption{データセット}
+\label{dataset}
+\begin{center}
+\begin{tabular}{|c|c|c|c|}\hline
+& パソコン & デジタルカメラ & プリンタ \\ \hline \hline
+性能表を含んでいる文書数& 2090 & 236 & 520 \\ \hline
+性能表を含んでいない文書数& 50621 & 11215 & 22055\\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+本節では，提案したフィルタリングおよび表領域抽出処理に関する評価実験について述べる．
+実験対象となる製品は，パソコン，デジタルカメラおよびプリンタの3種類とした．
+28の製品メーカサイトからHTMLダウンローダを用いて獲得したHTML文書群を評価実験の対象とした．総データ数は86737文書であり，それら文書の製品ごとの内訳を表\ref{dataset}に示す．
+但し，性能表を含んでいない文書群中には，別の製品の性能表が含まれている．
+例えば，デジタルカメラの場合は，性能表を含んでいない文書にフィルムカメラやビデオカメラなどの性能表が含まれていることがある．
+
+
+\subsection{フィルタリングに関する実験}
+まず，フィルタリング処理について評価する．
+実装には，SVM$^{light}$を使用した\footnote{\verb+http://svmlight.joachims.org+}．
+評価の基準として，適合率，再現率，F値を用いる．それぞれの値は以下の式で算出される．
+\begin{equation}
+適合率(P) = \frac{抽出された文書中で性能表を含んでいる文書の数}{抽出された文書の総数}
+\end{equation}
+\begin{equation}
+再現率(R) = \frac{抽出された文書中で性能表を含んでいる文書の数}{性能表を含んでいる文書の総数}
+\end{equation}\vspace*{-0.3cm}
+\begin{equation}
+F値(F) = \frac{1}{\frac{1}{2P}+\frac{1}{2R}}
+\end{equation}
+フィルタリング処理では，訓練データ数を100文書，300文書，500文書，1000文書とした，4つの場合について評価した．
+それぞれの訓練データは全データからランダムに5セットずつ抽出され，適合率および再現率は5セットの実験結果の平均値とした．
+評価データは，ダウンローダによって獲得された全データから，サンプリングされた訓練データを除いたもので，訓練データと評価用のデータは重複しない．
+TSVMのためのラベル無しデータとしては，評価データからサンプリングした1000文書を用いた．
+ラベル無しデータと評価データは重複している．
+素性選択としてベイズの定理を用いた場合の実験結果を表\ref{fi-bay}に，正規化$tf \cdot idf$ を用いた場合の実験結果を表\ref{fi-tf}に示す．
+図\ref{keys}にベイズの定理もしくは正規化$tf \cdot idf$によって素性として選択された単語の例を示す．
+単語とともに記述されている数値は，それぞれの手法によって算出された，性能表を含む文書群($D_{real}$)もしくは性能表を含まない文書群($D_{no}$)における，その単語の重みを表す．
+例えば，図中の正規化$tf \cdot idf$の例では，メモリやスロットという単語は$D_{real}$で顕著に出現し，方法やロードなどは$D_{no}$で顕著に出現したことを表している．
+この値を基にSVMのための素性が選択された．
+\begin{figure}[!tb]
+\begin{center}
+\epsfile{file=key_example.eps,height=8cm}
+\end{center}
+\vspace{-3mm}
+\caption{選択された素性とその値の例(パソコンの場合)}
+\label{keys}
+\end{figure}
+
+フィルタリング処理で抽出された文書の例を示す\footnote{訓練データ数が1000文書の場合の実験結果からの抜粋．}．
+図\ref{ok}は，デジタルカメラを対象とした場合の正解例である．
+表の最左列に細分化された多くの属性が存在するため，訓練データから抽出された素性とマッチする．
+このように最左列に多く属性が存在する場合は，正しく分類される．
+一方で，図\ref{bad}は同じくデジタルカメラを対象とした場合の失敗例である．この失敗例は，ある製品で撮影した写真の画像サンプルに関する文書であり，この文書には性能表が含まれていない．しかし，文書中にあるいくつかの\verb+<+TABLE\verb+>+中の最左列に訓練データで抽出した素性がマッチしてしまい，誤抽出となった．
+図\ref{miss}は，性能表を含んでいるにもかかわらず，フィルタリングで獲得できなかった例である．
+この文書に含まれる性能表は，属性部分が細かく分類されておらず，属性値の欄に箇条書きで細分化された属性が記述されている．
+提案手法では，分類器のための素性を表の最左列に限定しているため，このような性能表は正しく獲得できない場合がある．
+
+\begin{figure}[!tb]
+\begin{center}
+\epsfile{file=ok.eps,height=13.5cm}
+\end{center}
+\vspace{-3mm}
+\caption{正しく獲得できた性能表を含む文書の例}
+\label{ok}
+\end{figure}
+
+\begin{figure}[!tb]
+\begin{center}
+\epsfile{file=bad.eps,height=13.5cm}
+\end{center}
+\vspace{-3mm}
+\caption{誤って獲得した性能表を含まない文書の例}
+\label{bad}
+\end{figure}
+
+\begin{figure}[!tb]
+\begin{center}
+\epsfile{file=miss.eps,height=13.5cm}
+\end{center}
+\vspace{-3mm}
+\caption{正しく獲得できなかった性能表を含む文書の例}
+\label{miss}
+\end{figure}
+
+
+\begin{table}[!bt]
+\caption{フィルタリング実験結果 - ベイズの定理 -}
+\label{fi-bay}
+\begin{center}
+\begin{tabular}{|c|c|c|c|c||c|c|c|}\hline
+\lw{製品} & \lw{訓練データ数} &\multicolumn{3}{|c||}{SVM} & \multicolumn{3}{c|}{Transductive SVM} \\ \cline{3-8}
+ & & 適合率 & 再現率 & F値 & 適合率 & 再現率 & F値 \\ \hline \hline
+パソコン & 100 & 0.9121 & 0.5318 & 0.6719 & 0.7946 & 0.7848 & \bf 0.7897 \\ \cline{2-8}
+& 300 & 0.8934 & 0.8885 & 0.8909 & 0.8507 & 0.8870 & 0.8685 \\ \cline{2-8} 
+& 500 & 0.9226 & 0.8284 & 0.8730 & 0.8924 & 0.8870 & \bf 0.8897 \\ \cline{2-8} 
+& 1000 & 0.9200 & 0.9028 & 0.9113 & 0.9037 & 0.9191 & \bf 0.9113 \\ \hline \hline 
+デジカメ & 100 & 0.8845 & 0.4383 & 0.5862 & 0.6426 & 0.8580 & \bf 0.7348 \\\cline{2-8} 
+& 300 & 0.8405 & 0.6668 & 0.7437 & 0.7389 & 0.8556 & \bf 0.7930 \\ \cline{2-8} 
+& 500 & 0.8751 & 0.7197 & 0.7898 & 0.8232 & 0.8196 & \bf 0.8214 \\ \cline{2-8} 
+& 1000 & 0.8830 & 0.8267 & 0.8539 & 0.8171 & 0.8785 & 0.8466 \\  \hline \hline
+プリンタ & 100 & 0.8772 & 0.2247 & 0.3577 & 0.6099 & 0.6077 & \bf 0.6088 \\ \cline{2-8} 
+& 300 & 0.9327 & 0.5132 & 0.6621 & 0.7647 & 0.7494 & \bf 0.7570 \\ \cline{2-8} 
+& 500 & 0.7263 & 0.5949 & 0.6540 & 0.8024 & 0.9098 & \bf 0.8527 \\ \cline{2-8} 
+& 1000 & 0.9245 & 0.8628 & 0.8926 & 0.8946 & 0.9147 & \bf 0.9045 \\ \hline  
+\end{tabular}
+\end{center}
+\end{table}
+
+\begin{table}[!bt]
+\caption{フィルタリング実験結果 - $tf \cdot idf$ -}
+\label{fi-tf}
+\begin{center}
+\begin{tabular}{|c|c|c|c|c||c|c|c|}\hline
+\lw{製品} & \lw{訓練データ数} &\multicolumn{3}{|c||}{SVM} & \multicolumn{3}{c|}{Transductive SVM} \\ \cline{3-8}
+ & & 適合率 & 再現率 & F値 & 適合率 & 再現率 & F値 \\ \hline \hline
+パソコン & 100 & 0.8532 & 0.7510 & 0.7988 & 0.7595 & 0.8427 & \bf 0.7990 \\ \cline{2-8}
+&300 & 0.8792 & 0.9318 & 0.9047 & 0.8564 & 0.9144 & 0.8845 \\ \cline{2-8} 
+&500 & 0.9142 & 0.8816 & 0.8976 & 0.9223 & 0.8776 & \bf 0.8994 \\ \cline{2-8} 
+&1000 & 0.9293 & 0.9329 & 0.9311 & 0.9140 & 0.8946 & 0.9042 \\ \hline \hline 
+デジカメ & 100 & 0.7510 & 0.7145 & 0.7323 & 0.6049 & 0.8211 & 0.6966 \\ \cline{2-8} 
+&300 & 0.8141 & 0.7870 & 0.8003 & 0.6856 & 0.8212 & 0.7473 \\ \cline{2-8} 
+&500 & 0.8793 & 0.7948 & 0.8349 & 0.7776 & 0.8392 & 0.8072 \\ \cline{2-8} 
+&1000 & 0.8532 & 0.8935 & 0.8729 & 0.8041 & 0.9200 & 0.8582 \\ \hline \hline
+プリンタ & 100 & 0.8684 & 0.5664 & 0.6856 & 0.6657 & 0.8145 & \bf 0.7326 \\ \cline{2-8} 
+&300 & 0.8755 & 0.7926 & 0.8320 & 0.7915 & 0.8859 & \bf 0.8360 \\ \cline{2-8} 
+&500 & 0.8620 & 0.9110 & 0.8859 & 0.8141 & 0.8907 & 0.8506 \\ \cline{2-8} 
+&1000 & 0.8973 & 0.9471 & 0.9215 & 0.8995 & 0.9040 & 0.9017 \\ \hline  
+\end{tabular}
+\end{center}
+\end{table}
+
+\begin{table}[!tb]
+\caption{テストデータの分布を使用した場合の実験結果}
+\label{right-dis}
+\begin{center}
+\begin{tabular}{|c|c|c|c|c|}\hline
+製品 & 訓練データ数 & 適合率 & 再現率 & F値 \\ \hline\hline
+パソコン & 100 & 0.8239 & 0.8763 & 0.8493 \\ \cline{2-5}
+ & 300 & 0.8518 & 0.9312 & 0.8897 \\ \cline{2-5}
+ & 500 & 0.8723 & 0.9106 & 0.8910 \\ \cline{2-5}
+ & 1000 & 0.9185 & 0.9392 & 0.9287 \\ \hline\hline
+デジカメ & 100 & 0.7173 & 0.7548 & 0.7356 \\ \cline{2-5}
+ & 300 & 0.8080 & 0.7904  & 0.7991 \\ \cline{2-5}
+ & 500 & 0.8065 & 0.7697 & 0.7877 \\ \cline{2-5}
+& 1000 & 0.8158 & 0.9198 & 0.8647 \\ \hline\hline
+プリンタ & 100 & 0.7280 & 0.7540 & 0.7408 \\ \cline{2-5}
+ & 300 & 0.7983 & 0.8893 & 0.8413 \\ \cline{2-5}
+ & 500 & 0.8438 & 0.8788 & 0.8609 \\ \cline{2-5}
+ & 1000 & 0.9151 & 0.9046 & 0.9098 \\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\begin{table}[!tb]
+\caption{全てのセルを使用した場合のSVMの結果}
+\label{all_fea}
+\begin{center}
+\begin{tabular}{|c|c|c|c|c|}\hline
+製品 & 訓練データ数 & 適合率 & 再現率 & F値 \\ \hline\hline
+パソコン & 100 & 0.8336 & 0.7679 & 0.7994 \\ \cline{2-5}
+ & 300 & 0.8665 & 0.8859 & 0.8761 \\ \cline{2-5}
+ & 500 & 0.9029 & 0.8651 & 0.8836 \\ \cline{2-5}
+ & 1000 & 0.9266 & 0.8742 & 0.8996 \\ \hline\hline
+デジカメ & 100 & 0.7030 & 0.5297 & 0.6041 \\ \cline{2-5}
+ & 300 & 0.7817 & 0.8461 & 0.8126 \\ \cline{2-5}
+ & 500 & 0.8004 & 0.7544 & 0.7767 \\ \cline{2-5}
+ & 1000 & 0.8269 & 0.8834 & 0.8542 \\ \hline\hline
+プリンタ & 100 & 0.7692 & 0.5640 & 0.6511 \\ \cline{2-5}
+ & 300 & 0.8463 & 0.7431 & 0.7913 \\ \cline{2-5}
+ & 500 & 0.8324 & 0.8557 & 0.8439 \\ \cline{2-5}
+ & 1000 & 0.8751 & 0.8545 & 0.8646 \\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+ベイズの定理と正規化$tf \cdot idf$によって選ばれた素性を比較すると，多くの場合，正規化 $tf \cdot idf$の方が高いF値を収めた．
+製品種別で比較すると，デジタルカメラの精度が低くなる傾向があり，プリンタもパソコンに比べると精度が落ちる．
+この理由としては，(1) パソコンの性能表は比較的大きな表であることが多く，有効なキーワードが得やすいこと，(2) デジタルカメラのメーカは，フィルムカメラやビデオカメラも扱っていることが多く，プリンタの場合にもコピー機やスキャナのような対象となる性能表によく似たノイズが同じサイト内に存在すること，などが挙げられる．
+しかしながら，このように非常に似た性能表が混在しているにもかかわらず，比較的高いF値を得ることができている．
+
+SVMとTSVMについて比較すると，ベイズの定理を用いて素性を選択した場合は殆どの実験でSVMに比べ，TSVMの方が高いF値を得た．
+正規化$tf \cdot idf$を用いた場合は，TSVMのF値の方が低くなることが多いが，両方の素性とも，訓練データが少ない場合は，TSVMのF値がSVMのF値を上回る傾向がみられた．
+これは，訓練データが少ない場合のTSVMの有効性を示している．
+TSVMがSVMのF値を上回っている殆どの場合では，再現率が大幅に向上している．
+これは，TSVMが正例と負例の分布に基づいて再学習を行うためである．
+今回の実験では，ラベル無しデータの正例と負例の分布については，訓練データ中の正例と負例の分布を用いたが，ここに全データから算出された正例と負例の比を適用すると実験結果は表\ref{right-dis}のようになる\footnote{素性には正規化 $tf \cdot idf$ で選ばれたものを利用した．使用した正例と負例の比は表\ref{dataset}の文書数の比である．}．
+TSVMで使用する正例と負例の比が正確であれば，少数の訓練データの場合，さらなる精度向上に繋がることが確認できた．
+実験結果より，本タスクでは，訓練データが少ない場合においてTSVMが有効に機能することが確認された．
+
+続いて，素性選択に使用した条件について考察する．
+\ref{sec3.3}節で示したように，素性は表の最左列のみを使用している．
+この条件の有効性を検証するために，素性選択に最左列という条件を除いた場合の結果を表\ref{all_fea}に示す．
+訓練および評価データは最左列に限定したものと同じものを使用しており，素性選択の手法には，正規化$tf \cdot idf$を用いた．
+表は，通常のSVMに関する実験結果である．
+一部で，表中の全ての要素を素性選択に用いた場合の方が良いF値を得ることがあるが，平均で3〜4\%程度，最大で約13\%，素性選択を最左列に限定した方が良いという実験結果が得られた．
+素性選択を最左列に限定しない場合にF値が落ちる原因は，1つの文書に含まれる\verb+<+TABLE\verb+>+タグが多いことが考えられる．
+我々が用いた実験データでは，1つの文書に30個程度の\verb+<+TABLE\verb+>+タグが存在する．
+最左列という条件を除くと，性能表を含む文書中の関係のない\verb+<+TABLE\verb+>+タグの中身まで素性候補としてしまう可能性が高くなり，それが精度に影響するものと考えられる．
+実験結果より，素性選択に関する条件の有効性も確認できた．
+
+\clearpage
+\subsection{表領域抽出に関する実験}
+続いて，表領域抽出処理について実験する．
+ここでは，SVMおよびTSVMの素性選択に使用した，性能表を含む文書群($D_{real}$)中で高い重みを持つ単語 $t$ をキーワードとし，その値 $ws^{real}_t$ を用いる．
+それらのキーワードによって，性能表を含む文書からどれだけの性能表の領域を正しく特定できるかを評価する．
+すなわち，実験データは，表\ref{dataset}の各製品の「性能表を含んでいる文書」に含まれる文書となる．
+実験には，フィルタリング処理で最もF値が良かった実験結果の素性をキーワードとして用いた．
+実験結果を表\ref{tableext}に示す．
+正解率は以下の式で算出される．
+\begin{equation}
+正解率 = \frac{正しく抽出された性能表の数}{全文書に含まれる性能表の数}
+\end{equation}
+表中で，部分成功とは，ある製品の性能表が複数の並列した\verb+<+TABLE\verb+>+タグで構成されており(例えば，図\ref{numbering}の$id=1$ と $id=5$ が1つの性能表である場合)，その内のどれかが欠けている場合を指す．
+過抽出は，正解領域だけでなく，別の\verb+<+TABLE\verb+>+タグも併せて抽出した場合を表しており，誤抽出は，性能表ではない\verb+<+TABLE\verb+>+タグを抽出した場合である．
+
+\begin{table}[t]
+\caption{表領域抽出実験の結果(フィルタリングの素性を利用)}
+\label{tableext}
+\begin{center}
+\begin{tabular}{|c|c|c|c|c|}\hline
+\lw{製品} & \lw{正解率} &\multicolumn{3}{c|}{不正解の内訳(文書数)} \\ \cline{3-5}
+　　　　　& 　　　　　& 部分成功 & 過抽出 & 誤抽出 \\ \hline\hline
+パソコン  & 0.991 & 5 & 5 & 8 \\ \hline
+デジカメ  & 0.907 & 17 & 0 & 5 \\ \hline
+プリンタ  & 0.887 & 24 & 5 & 30 \\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+実験結果より，パソコンの場合は非常に高い精度で表領域を特定できることがわかる．
+パソコンの性能表の領域抽出の精度が高い理由としては，一般にパソコンの性能表が (1) 比較的大きな表であること，(2) 性能表が複数の並列した\verb+<+TABLE\verb+>+タグで記述されることが少ないこと，などが挙げられる．
+それと比較すると，デジタルカメラとプリンタの表領域抽出精度は若干落ちる．
+デジタルカメラやプリンタは，(3) 性能表を含む文書中に存在する\verb+<+TABLE\verb+>+タグの数がパソコンに比べて若干多いこと\footnote{実験データにおいて，パソコンは1文書中の\verb+<+TABLE\verb+>+タグの数が平均24.8個であり，デジタルカメラとプリンタはそれぞれ29.4個，36.6個であった．}，(4) 複数の並列した\verb+<+TABLE\verb+>+タグで一つの性能表が記述されることが多いこと，などが精度が劣る原因である．
+プリンタの場合で，誤抽出が多く見られるのは，(3)が大きな原因だと考えられる．
+(4)に対しては，表領域抽出処理で，各\verb+<+TABLE\verb+>+の構造的な類似度を用いて結合処理を行っているが，並列する\verb+<+TABLE\verb+>+間に書式の異なる\verb+<+TABLE\verb+>+や性能表と関係のない\verb+<+TABLE\verb+>+が挿入されると，条件を満たさなくなり，\verb+<+TABLE\verb+>+が結合されない．
+その例を図\ref{missint}に示す．
+図\ref{missint}(b)の例では，3つの\verb+<+TABLE\verb+>+は同じ深さで存在するが，[スキャナ付属品]の表が[スキャナ部分]と[プリンタ部分]の表の構造(セルの数とセルの幅，対応するセルへの背景色)と異なるため，結合されず，最もスコアが高い\verb+<+TABLE\verb+>+のみが抽出されることになる．
+\begin{figure}
+\begin{center}
+\epsfile{file=missext.eps,height=6cm}
+(a) 正しく抽出される場合 \hspace{30mm}(b) 一部しか抽出されない場合
+\end{center}
+\vspace{-3mm}
+\caption{複数の\verb+<+TABLE\verb+>+による性能表}
+\label{missint}
+\end{figure}
+
+誤抽出や結合に失敗する場合の対処法として，スコアがある閾値以上の\verb+<+TABLE\verb+>+のみを性能表として抽出するという手法が考えられるが，一般的な閾値を見つけることは難しい．
+また，現在我々が対象としているデータは，負例($D_{no}$)に比べて，正例($D_{Real}$)の数が極端に少ないため，サンプリングする訓練データの数によっては，十分な正例が得られず，必ずしも十分なキーワードが得られるとは限らない．
+その結果，設定した閾値によっては多くの性能表が棄却される場合もある．
+精度向上のためには，訓練データ中の正例の数をいかに多く獲得するかが課題となる．
+
+性能表には製品ごとやメーカごとに，その書式や使われている用語にある程度一貫性がある場合が多い．
+精度向上のための別の手法としては，抽出処理に利用するキーワードを全データから獲得するのではなく，メーカごとに獲得し，それらを用いて表領域抽出処理を行うことなども今後の課題として考えられる．
+
+また，この実験とは別に，各製品に対して5分割交差検定を行った．
+すなわち，全データを5分割し，そのうち4つを性能表抽出のためのキーワード抽出処理の訓練データとし，残りの1つを評価データとした．
+実験結果を表\ref{5cross}に示す．
+5分割にして実験を行ったことにより，フィルタリングに使用した素性の場合に比べ，訓練データの数が多くなるため\footnote{例えば，PCでは，1000文書をサンプリングした場合(フィルタリングで使用した素性をキーワードとする場合)の平均正例数は41文書だが，5分割交差検定の場合，1672文書の正例から性能表抽出のためのキーワードを獲得したことになる．}，有効なキーワードが獲得できた結果，全体的に誤抽出の数が減少した．
+部分成功の数が増加したのは，フィルタリングに使用した素性ではキーワード不足で誤抽出となっていたものが，キーワードの増加によって抽出され，部分成功になったためである．
+
+
+\begin{table}
+\caption{表領域抽出実験の結果(5分割交差検定)}
+\label{5cross}
+\begin{center}
+\begin{tabular}{|c|c|c|c|c|}\hline
+\lw{製品} & \lw{正解率} &\multicolumn{3}{c|}{不正解の内訳(文書数)} \\ \cline{3-5}
+　　　　　& 　　　　　& 部分成功 & 過抽出 & 誤抽出 \\ \hline\hline
+パソコン  & 0.993 & 3 & 5 & 6 \\ \hline
+デジカメ  & 0.911 & 19 & 0 & 2 \\ \hline
+プリンタ  & 0.923 & 27 & 8 & 5 \\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+続いて，特殊な構造を持った文書について考察する．\verb+<TD>...</TD>+内の要素が単一の\verb+<+TABLE\verb+>+タグで構成されている場合(以下，単一セルと呼ぶ)と複数の\verb+<+TABLE\verb+>+によって1つの性能表が構成されている場合(以下，複数テーブルと呼ぶ)の内訳と全体に占める割合を表\ref{unicellandmulti}に示す．
+\begin{table}
+\caption{単一セルと複数テーブルの数と全体に占める割合}
+\label{unicellandmulti}
+\begin{center}
+\begin{tabular}{|c|c|c|c|c|}\hline
+& パソコン & デジカメ & プリンタ \\ \hline\hline
+性能表を含んでいる文書の数 & 2090 & 236 & 520\\ \hline
+単一セルの数 (割合) & 6 (0.3\%) & 32 (13.6\%) & 0 (0\%)\\ \hline
+複数テーブルの数 (割合) & 10 (0.4\%) & 23 (9.7\%) & 69 (13.3\%)\\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+パソコンの場合は，単一セル，複数テーブルが存在する文書は正例中の1\%以下だが，プリンタの場合は13\%の文書が，例え，抽出のための十分なキーワードを獲得できていたとしても，特殊構造への処理を行わないと根本的に抽出できないことになる．
+デジタルカメラの場合は単一セルと複数テーブルに重複があり，それを考慮すると，17\%の文書(42文書)が同じく根本的に抽出できないことになる．
+特殊構造への処理を行わなかった場合と行った場合の正解率を表\ref{nothing}に示す．
+実験では，表\ref{tableext}の実験で使用したキーワードを利用した．
+パソコンについては，単一セルと複数テーブルの数が全体に対して少ないため，正解率の上昇は1\%以下であった．
+一方で，特殊構造に対する処理を行わなかった場合，デジタルカメラの正解率は0.800，プリンタの場合は0.833となった．
+すなわち，提案手法による特殊構造への処理は，プリンタの場合で5\%程度，デジタルカメラの場合は約10\%の正解率の向上に繋がっている．
+特殊構造への対応にはいくつかの課題が残るが，この実験結果より，提案手法の有効性は確認できた．
+
+\begin{table}
+\caption{特殊構造への処理の有効性}
+\label{nothing}
+\begin{center}
+\begin{tabular}{|c|c|c|}\hline
+\lw{製品} & 特殊構造への処理を &  特殊構造への処理を\\ 
+ & 行わない場合の正解率 & 行う場合の正解率(表\ref{tableext}の正解率) \\ \hline\hline
+パソコン& 0.988 & 0.991\\ \hline
+デジカメ&0.800 & 0.907\\ \hline
+プリンタ&0.833 & 0.887\\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+本研究では，フィルタリングで性能表を含んでいる文書を絞り込み，続いて性能表を抽出するという流れを取った．
+提案手法以外にも，まず従来の表抽出の研究に基づき，一般的な表抽出を実行し，その表から特定の内容を含んだ表を抽出するという手法も考えられる．
+しかし，この手法を用いる場合，訓練データの獲得のために，全ての\verb+<+TABLE\verb+>+タグを人手でチェックし，正例もしくは負例のラベル付けをする必要がある．
+我々の使用した実験データでは，1つの文書中に30前後の\verb+<+TABLE\verb+>+タグが存在する．
+すなわち，膨大な数の\verb+<+TABLE\verb+>+タグへのチェックが必要になり，実用面を考えればコストが高い．
+一方で，提案手法は，そのページに性能表が含まれているかもしくは含まれていないかのチェックをするだけで良いという利点がある．
+また，表抽出処理では，フィルタリング処理で用いたSVMのような機械学習のアルゴリズムを使用しなかった．
+これは，上記の表抽出を行い，内容を分類するという手法における問題点と同様に，性能表の正確な領域を膨大な\verb+<+TABLE\verb+>+タグをチェックしながら，人手で正例のラベルを付けることが，高コストなためである．
+このように提案手法には，訓練データの作成に関して，実用的な面での大きな利点がある．
+
+
+
+\section{おわりに}
+本稿では，Webから製品のスペック情報を記述した表(性能表)の抽出方法について述べた．
+提案手法は，Webからの製品データベースの自動獲得や，オンラインショッピングサイトの自動構築などのために有効である．
+
+提案手法では，(1) フィルタリング，(2) 表領域抽出，の2つのプロセスによってWeb文書群から性能表を獲得することを試みた．
+フィルタリングでは，SVMとTSVMを用い，その精度を検証した．
+訓練データが少ない場合，TSVMが有効に機能することを確認した．
+TSVMの精度を向上させるには，ラベル無しデータ中の正例と負例の正確な比を推定することが有効である．
+少ない訓練データで，いかにラベル無しデータの正例と負例の分布を推測するかが今後の課題の一つとなる．
+表領域抽出処理では，パソコンの場合で，非常に高い抽出正解率を得た．デジタルカメラとプリンタの場合においても90\%程度の精度を得ている．
+並列した複数の\verb+<+TABLE\verb+>+タグからなる性能表をより正確に抽出するためには，訓練データ中の正例をいかに多く獲得できるかや，構造的類似度に関する新たな尺度の導入が課題となる．
+2つのプロセスにおいて，現在は一括して素性選択やキーワード抽出を行っているが，メーカや製品ごとの表の記述方法の一貫性などを利用することで，より高い抽出精度が得られる可能性がある．その実装と評価は，今後の課題の一つである．
+
+両プロセスとも90\%程度の精度を得ており，実験結果から本手法の有効性と実用性を確認できた．
+
+\acknowledgment
+実験の説明において，図\ref{ok}はオリンパス株式会社\footnote{http://www.olympus.co.jp/jp/news/2001a/nr010321c700uzspj.cfm}，図\ref{bad}は松下電器産業株式会社\footnote{http://panasonic.jp/dc/gallery/fz3.html}，図\ref{miss}はコダック株式会社\footnote{http://wwwjp.kodak.com/JP/ja/digital/cameras/dc80/spec.shtml}に，論文中でのデータの利用についてご許可いただきました．
+但し，図\ref{bad}では肖像権上の都合により一部の画像を差し替えている．
+また，本稿の改善に対して，査読者の方から数多くの有益なコメントをいただきました．
+ここに深く感謝いたします．
+
+
+\bibliographystyle{jnlpbbl}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Chen, Tsai, \BBA\ Tsai}{Chen et~al.}{2000}]{chen}
+Chen, H., Tsai, S., \BBA\ Tsai, J. \BBOP 2000\BBCP.
+\newblock \BBOQ Mining tables from large scale HTML texts\BBCQ\
+\newblock In {\Bem Proceedings of COLING2000}, \BPGS\ 166--172.
+
+\bibitem[\protect\BCAY{Hu, Kashi, Lopresti, \BBA\ Wilfong}{Hu
+  et~al.}{2000}]{hu}
+Hu, J., Kashi, R., Lopresti, D., \BBA\ Wilfong, G. \BBOP 2000\BBCP.
+\newblock \BBOQ Medium-independent table detection\BBCQ\
+\newblock In {\Bem Proceedings of Document Recognition and Retrieval VII},
+  \BPGS\ 23--28.
+
+\bibitem[\protect\BCAY{Hurst}{Hurst}{2001}]{hurst}
+Hurst, M. \BBOP 2001\BBCP.
+\newblock \BBOQ Layout and language: Challenges for table understanding on the
+  web\BBCQ\
+\newblock In {\Bem Proceedings of Workshop on Web Document Analysis, WDA01},
+  \BPGS\ 27--30.
+
+\bibitem[\protect\BCAY{Itai, Takasu, \BBA\ Adachi}{Itai et~al.}{2003}]{itai}
+Itai, K., Takasu, A., \BBA\ Adachi, J. \BBOP 2003\BBCP.
+\newblock \BBOQ Information extraction from HTML pages and its
+  integration\BBCQ\
+\newblock In {\Bem Proceedings of the 2003 Symposium on Application and the
+  Internet Workshops (SAINT03)}, \BPGS\ 276--281.
+
+\bibitem[\protect\BCAY{Joachims}{Joachims}{1999}]{joachims}
+Joachims, T. \BBOP 1999\BBCP.
+\newblock \BBOQ Transductive inference for text classification using Support
+  Vecor Machines\BBCQ\
+\newblock In {\Bem Proceedings of the Sixteenth International Conference on
+  Machine Learning}, \BPGS\ 200--209.
+
+\bibitem[\protect\BCAY{河合, 塚本, 山本, 椎野}{河合\Jetal }{1998}]{kawai}
+河合敦夫, 塚本雄之, 山本勝紀, 椎野務 \BBOP 1998\BBCP.
+\newblock \JBOQ 文書構造を利用した箇条書きや表形式文書からの内容抽出\JBCQ\
+\newblock \Jem{信学論(D-II)}, {\Bbf J81-D2}  (7), 1609--1619.
+
+\bibitem[\protect\BCAY{Ng, Lim, \BBA\ Koo}{Ng et~al.}{1999}]{ng}
+Ng, H., Lim, C., \BBA\ Koo, J. \BBOP 1999\BBCP.
+\newblock \BBOQ Learning to recognize tables in free text\BBCQ\
+\newblock In {\Bem Proceedings of the 37th Annual Meeting of ACL}, \BPGS\
+  443--450.
+
+\bibitem[\protect\BCAY{Pinto, McCallum, Wei, \BBA\ Croft}{Pinto
+  et~al.}{2003}]{pinto}
+Pinto, D., McCallum, A., Wei, X., \BBA\ Croft, W.~B. \BBOP 2003\BBCP.
+\newblock \BBOQ Table extraction using conditional random feilds\BBCQ\
+\newblock In {\Bem Proceedings of the 26th annual international ACM SIGIR
+  conference on Research and development in informaion retrieval}, \BPGS\
+  235--242.
+
+\bibitem[\protect\BCAY{佐藤, 佐藤, 篠田}{佐藤\Jetal }{1997}]{sato}
+佐藤円, 佐藤理史, 篠田陽一 \BBOP 1997\BBCP.
+\newblock \JBOQ 電子ニュースのダイジェスト自動生成\JBCQ\
+\newblock \Jem{情報処理学会論文誌}, {\Bbf 36}  (10), 2371--2379.
+
+\bibitem[\protect\BCAY{Shimada \BBA\ Endo}{Shimada \BBA\ Endo}{2003}]{shimada4}
+Shimada, K.\BBACOMMA\  \BBA\ Endo, T. \BBOP 2003\BBCP.
+\newblock \BBOQ Product Specifications Summarization and Product Ranking System
+  using User's Requests\BBCQ\
+\newblock In {\Bem Information Modelling and Knowledge Bases XV, IOS Press},
+  \BPGS\ 315--331.
+
+\bibitem[\protect\BCAY{Shimada, Ito, \BBA\ Endo}{Shimada
+  et~al.}{2003}]{shimada2}
+Shimada, K., Ito, T., \BBA\ Endo, T. \BBOP 2003\BBCP.
+\newblock \BBOQ Multiform Summarization from Product Specifications\BBCQ\
+\newblock In {\Bem Proceedings of PACLING 2003}, \BPGS\ 83--92.
+
+\bibitem[\protect\BCAY{Vapnik}{Vapnik}{1999}]{vapnik}
+Vapnik, V.~N. \BBOP 1999\BBCP.
+\newblock {\Bem Statistical Learning Theory}.
+\newblock Wiley.
+
+\bibitem[\protect\BCAY{Wang \BBA\ Hu}{Wang \BBA\ Hu}{2002}]{wang}
+Wang, Y.\BBACOMMA\  \BBA\ Hu, J. \BBOP 2002\BBCP.
+\newblock \BBOQ A machine learning based approach for table detection on the
+  Web\BBCQ\
+\newblock In {\Bem Proceedings of The Eleventh International World Web
+  Conference}.
+
+\bibitem[\protect\BCAY{Yoshida, Torisawa, \BBA\ Tsujii}{Yoshida
+  et~al.}{2001}]{yoshida}
+Yoshida, M., Torisawa, K., \BBA\ Tsujii, J. \BBOP 2001\BBCP.
+\newblock \BBOQ Extracting ontologies from World Wide Web via HTML tables\BBCQ\
+\newblock In {\Bem Proceedings of PACLING 2001}, \BPGS\ 332--341.
+
+\end{thebibliography}
+
+
+\begin{biography}
+\biotitle{略歴}
+\bioauthor{嶋田和孝}{
+1997年大分大学工学部知能情報システム工学科卒．1999年同大大学院博士前期課程了．2002年同大大学院博士後期課程単位取得退学．同年より九州工業大学情報工学部助手．博士(工学)．表抽出，テキスト処理などの研究に従事．言語処理学会，電子情報通信学会，情報処理学会各会員．
+}
+
+\bioauthor{林 晃司}{
+2002年九州工業大学情報工学部卒．2004年同大大学院修士課程了．現在は富士ゼロックス株式会社．在学中は表の分類・抽出に関する研究に従事．
+}
+
+\bioauthor{遠藤 勉}{
+1972年九州大学工学部電子工学科卒業．1974年同大学院修士課程修了．
+1977年同博士課程単位取得退学．同大助手を経て，1980年大分大学工学部講師．
+同大助教授，教授を経て，2000年より九州工業大学情報工学部知能情報工学科教授．
+工学博士．自然言語処理，コンピュータビジョンの研究に従事．電子情報通信学会，
+情報処理学会，人工知能学会，日本ロボット学会，日本ソフトウェア科学会，
+IEEE Computer Society 各会員．
+}
+
+\bioreceived{受付}
+\biorevised{再受付}
+\bioaccepted{採録}
+
+\end{biography}
+
+\end{document}
+

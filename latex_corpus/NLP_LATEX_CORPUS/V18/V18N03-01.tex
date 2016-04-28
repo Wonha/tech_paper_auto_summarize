@@ -1,0 +1,1476 @@
+    \documentclass[english]{jnlp_1.4}
+
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvips]{graphicx}
+\usepackage{hangcaption_jnlp}
+\usepackage{amsmath,amssymb}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+\usepackage{algorithmic}
+\usepackage{nicefrac}
+
+
+
+\Volume{18}
+\Number{3}
+\Month{June}
+\Year{2011}
+
+\received{2010}{9}{28}
+\revised{2010}{12}{26}
+\rerevised{2011}{3}{3}
+\accepted{2011}{3}{29}
+
+\setcounter{page}{217}
+
+\etitle{Construction of Context Models for\\
+	Word Sense Disambiguation}
+\eauthor{Bernard Brosseau-Villeneuve \affiref{udem}\affiref{nii} \and
+	Noriko Kando\affiref{nii} \and
+	Jian-Yun Nie\affiref{udem}} 
+\eabstract{
+This paper presents a study on the use of word context features for
+Word Sense Disambiguation (WSD). State-of-the-art WSD systems achieve
+high accuracy by using resources such as dictionaries, taggers, lexical
+analyzers or topic modeling packages. However, these resources are
+either too heavy or don't have sufficient coverage for large-scale
+tasks such as information retrieval. The use of local context for
+WSD is common, but the rationale behind the formulation of features
+is often based on trial and error. We therefore investigate the notion
+of relatedness of context words to the target word (the word to be
+disambiguated), and propose an unsupervised method for finding the
+optimal weights for context words based on their distance to the target
+word. The key idea behind the method is that the optimal weights should
+maximize the similarity of two context models constructed from diff{}erent
+context samples of the same word. Our experimental results show that
+the strength of the relation between two words follows approximately
+a power law. The resulting context models are used in Na\"{\i}ve Bayes
+classifi{}ers for word sense disambiguation. Our evaluation on Semeval
+WSD tasks in both English and Japanese show that our method can achieve
+state-of-the-art eff{}ectiveness even though it does not use external
+tools like most existing methods. The high efficiency makes it possible
+to use our method in large scale applications such as information
+retrieval.
+}
+\ekeywords{Computer science, Natural Language Processing, NLP, Word Sense Disambiguation, WSD, Word context, Word relation, Decaying function, Stop words, Na\"{i}ve Bayes}
+
+\headauthor{Brosseau-Villeneuve et al.}
+\headtitle{Construction of Context Models for WSD}
+
+\affilabel{udem}{}{Universit\'{e} de Montr\'{e}al}
+\affilabel{nii}{}{National Institute of Informatics}
+
+
+\begin{document}
+
+\maketitle
+\vspace{0.5\baselineskip}
+
+\section{Introduction\label{sec:Introduction}}
+
+Word Sense Disambiguation (WSD) is a process by which one identifies
+the sense of a word's occurrence. This process aims to alleviate the
+problem of semantic ambiguity underlying many applications of natural
+language processing (NLP) such as machine translation (MT) and information
+retrieval (IR). For example, if an IR system receives an ambiguous
+query such as {}``Orange'', better results could be obtained if
+the system could identify the sense of \emph{orange} (\emph{orange/fruit},
+\emph{orange/color}, \emph{orange/telecom-company}, etc.) both in
+the query and in the documents. 
+\pagebreak
+The general approach to WSD is to
+exploit elements (e.g. words and syntactic structure) in the context
+of the ambiguous word, which we call target word in this paper, in
+order to build a context model. The intuition is that a word with
+a particular sense has a higher chance to co-occur with certain context
+words or appear within some specifi{}c syntactic structures. For instance,
+\emph{orange} meaning the fruit is more likely to have ``juice''
+in its surroundings or to be plural, \emph{orange} meaning the color
+is more likely to have \emph{adjective} as its part-of-speech
+(POS), and \emph{orange} meaning the telecom-company is more likely
+to have an uppercase {}``O''. Such contextual elements can be used
+as features to help determine the sense of the target word.
+
+Features employed in WSD systems are of various nature. Common features
+include POS-tags, bag-of-words features, local collocations, syntactic
+relations and topical features. State-of-the-art approaches may also
+use external knowledge sources such as dictionaries and thesauri in
+order to obtain additional features. All these features have been
+found useful in previous studies. However, many of these features
+require sophisticated tools and resources, which are not always available
+or may be inefficient for large-scale applications. Therefore, a legitimate
+question is whether the approaches proposed in the literature can
+really help real world applications. In this study, our aim is to
+develop a method of WSD that is sufficiently efficient to be used
+in large scale applications such as IR. We thus turn to a simpler
+type of feature---co-occurring context words. This type
+of feature is used in almost all approaches to WSD. The basic assumption
+is that the meaning of a word can be defined by the words that accompany
+it in the text. This assumption sounds reasonable. However, in many
+previous studies, the context words are collected within a fixed size
+text window around the target word. Usually, all the occurrences of
+context words within the window are attributed the same importance.
+That is, a word at a distance of 5 from the target word is considered
+to be as important as another context word at a distance of 1. This
+implicitly assumes that the context words within the window have the
+same disambiguation power for the target word, which is counterintuitive.
+One would rather think that a context word closer to the target word
+is more important than a more distant context word.
+
+For example, in the sentence \textquotedblleft{}The government created
+a special fund to support the people affected by the collapse of Mississippi
+river bank\textquotedblright{}, the words \textquotedblleft{}Mississippi\textquotedblright{}
+and \textquotedblleft{}river\textquotedblright{} have a much larger
+impact on the meaning of \textquotedblleft{}bank\textquotedblright{}
+than the other words in the sentence. If the distance factor is ignored,
+and all the words in the sentence are attributed equal importance,
+the word \textquotedblleft{}bank\textquotedblright{} could be misclassified
+as a \textquotedblleft{}financial institution\textquotedblright{}
+as an effect of the context words \textquotedblleft{}fund\textquotedblright{}
+and \textquotedblleft{}government\textquotedblright{}.
+
+In general, the impact of a context word on the target word could
+be defined as a decaying function---a monotonically decreasing function
+of the distance from the target word. There are many such functions:
+linear, exponential, logarithmic, etc. It is difficult to select the
+right function to capture the impact of a context word on the target
+word. There is indeed no extensive investigation on what decaying
+function should be used for WSD, leaving this important question wide
+open.
+
+In this paper, we argue that the appropriate decaying function is
+dependent on the text collection and on the language. On the one hand,
+the appropriate decaying function for one language may be different
+from that of another language, for reasons such as specific language
+structures. On the other hand, a text collection in one area (e.g.
+medicine) could also require a different decaying function from that
+of another area (e.g. novels). Therefore, it seems likely that there
+is no universal decaying function. What we propose in this paper is
+to learn the optimal decaying function for the specific text collection
+in an unsupervised manner. In so doing, we hope to remove the burden
+of manually determining such a function.
+
+The main idea behind our approach is that, for the same target word,
+two context models constructed from different random samples should
+be similar, because the same word should have roughly the same meaning(s)
+in the two samples. Therefore, the decaying function that maximizes
+the similarity of the two context models should be selected. Following
+this idea, we propose to use a machine learning method (gradient descent)
+to determine the weights of context words so as to maximize the similarity
+of the two context models. One should note that we do not assume that
+a context model for a target word corresponds to a unique word sense.
+The contextual model may involve ambiguity; i.e., the contexts for
+its multiple senses are all encompassed within the same model. This
+does not affect our basic assumption, as both context models created
+from the two samples would be equally ambiguous, and their global
+similarity should still be high. 
+
+The above assumption will allow us to find the optimal decaying function
+for a text collection. The resulting weights can then be used to build
+a context model for each target word occurrence, which we then use
+in Na\"{\i}ve Bayes classifiers. We tested the resulting systems against
+several manually defined decaying functions on two WSD datasets: the
+Semeval-2007 English Lexical Sample (ELS), and the Semeval-2010 Japanese
+WSD (JWSD) task. Our method proved to be very effective on both datasets
+despite the simple features used; the results were not significantly
+different from the best system in ELS, and outperformed the best system
+in the JWSD task. This shows that simple context words, when used
+appropriately, can be as effective as more sophisticated features
+used in other approaches. 
+
+The remainder of this paper is organized as follows:
+We discuss the state of the art of WSD classifiers in Section \ref{sec:The-current-state-art}
+and present our context models and our approach to learn the weighting
+function in Section \ref{sec:Learning-the-optimal}. Our Na\"{\i}ve
+Bayes classifiers are presented in Section \ref{sec:Classifiers-for-supervised}.
+Experiments on English and Japanese are presented in Section \ref{sec:Experiments-English},
+and Section \ref{sec:Experiments-Japanese}. Sections \ref{sec:Future-research}
+and \ref{sec:Conclusion} are the discussion and conclusion. 
+
+
+\section{The state of the art of WSD}
+\label{sec:The-current-state-art}
+
+WSD has been studied for a long time, and various methods have been
+proposed for it. We do not intend to make a complete survey of these
+methods, but will rather discuss some of the most related studies.
+Interested readers can refer to \cite{IdeOldWSDReview} or \cite{NewWSDSurvey}
+for complete surveys. 
+
+
+\subsection{WSD using linguistic features}
+\label{sub:Using-linguistic-features-NUSML}
+
+Many previous studies try to exploit different types of linguistic
+feature. NUS-ML \cite{paperCaiELS} is a typical supervised system
+in this category. We will describe this particular system in detail
+because it uses most of the features used in other studies and it
+was the top-performing system in the Semeval-2007 English WSD tasks.
+
+NUS-ML is based on a previous system by \cite{LeeNg2002WSD}, onto
+which topical modeling features were added. In previous experiments,
+SVM has been shown to be a better classifier with these features.
+However, since the integration of the topical features within the
+framework of SVM is not straightforward, Na\"{\i}ve Bayes classifiers
+were used instead. The whole set of features it uses is as follows:
+\begin{description}
+\item [{POS-tags}] of words at each position in a window of size 3, including
+the target word. As we have seen with our \emph{orange }example, POS-tags
+are often related to word sense. 
+\item [{Bag-of-words~features}] in a window of size 3. All the words in
+the window are given equal weights, and they are used to form a context
+vector. As mentioned in Section \ref{sec:Introduction}, it is counterintuitive
+to assign uniform weights to window words, and completely ignore farther
+words outside the window. This type of bag-of-words feature has been
+used in most WSD studies starting from Lesk \cite{LeskAlgo}.
+\item [{Local~collocations.}] Collocation in this case does not have the
+usual meaning, but simply refers to a pair of words at a certain position.
+The rationale is the common idea of \emph{one sense per collocation}
+\cite{YarowskyOneSenseCollocation}. The positions used in NUS-ML
+are the unigrams (collocations with the target word) at positions
+$-2$, $-1$, 1, 2, bigrams at $(-2,-1)$, $(1,2)$ and skip-grams
+at positions $(-3,-1)$, $(-2,1)$, $(-1,1)$, $(-1,2)$,
+$(1,3)$. As we can see, they are symmetric around the target
+word. The selection of these pairs was originally proposed in previous
+work \cite{NgLeeExemplarWSD,NgExemplarImprovements}. 
+\item [{Syntactic~relations}] are a way to go further than the local context.
+In the NUS-ML system, certain features of related words are are extracted
+using a set of predefined patterns. For example, for a noun, we fetch
+its headword, the headword's POS-tag and a Boolean feature representing
+if its relation is over or under the target word in the parse tree.
+As mentioned above, the use of POS-tags or syntactic parsing is problematic
+for tasks such as IR, which deal with very large datasets.
+\item [{Topical~features}] are used as a means to reduce vocabulary mismatch.
+To compute them, one first run latent Dirichlet allocation (LDA) \cite{Blei03latentdirichlet}
+on a corpus and infers topic mixture for the task's training data.
+The allocations to topics of the context words in a window of size
+3 around the tagged word are then summed for each sense. The mixture
+of topics of these allocations can then be used to compute the likelihood
+of a new window for each word sense.
+\end{description}
+One can notice several potential problems with the use of the above
+features. First, the word pairs used in the NUS-ML system are intended
+to cover all possible collocations within a distance of 3. However,
+many of the pairs do not form meaningful collocations. The inclusion
+of these pairs would introduce noisy features that would not be easy
+to discard during the disambiguation (or classification) process.
+Second, the distance between the words composing each pair is not
+taken into account. Intuitively, a closer pair of words would have
+a greater chance of forming a true collocation than a more distant
+pair of words. This is the aspect that our method considers.
+
+A general observation on the use of sophisticated linguistic tools
+and resources for WSD is that they are not always available in practice
+(e.g. POS-taggers are unavailable for many languages). Moreover, even
+when they are available, their accuracy, coverage and reliability
+could be questionable. In addition, the processing time is often too
+long for real applications. For example, the construction of topic
+models with LDA is very demanding on computing time, and more problematically
+in memory. Unfortunately, their use does not scale well for large-scale
+applications. Therefore, in this study, we will turn to a much simpler
+approach, which uses only context words that co-occur with the target
+word. In the next subsection, we will describe some of the approaches
+related to it.
+
+
+\subsection{Weighted context models}
+\label{sec:Context-models}
+
+The general idea behind context models is to use the words that co-occur
+with the target word to resolve its sense. Once a context model is
+constructed for a target word to be disambiguated, one can compare
+it with the context model of each sense in order to select the one
+that is the closest.
+
+Behind the above general idea is the important issue of how the context
+model is constructed. As we stated earlier, the basic method is to
+build a context model (or vector) using the context words in a fixed-size
+window around the target word. Generally, each word occurrence in
+such a window has a count value of 1. In other words, all the context
+words in the window are assumed to be equally important for the meaning
+of the target word. As we discussed earlier, this is counterintuitive.
+In reality, we would expect that closer context words have more impact
+on the meaning of the target word than farther ones. This observation
+motivates approaches that use a decaying function to decrease the
+importance (weight) of context words farther from the target word.
+
+Several decaying weighting functions have been proposed in different
+NLP tasks. \cite{GaoDecayingWeight} proposes the use of an exponential
+decay function to model the strength of dependency between words in
+IR experiments. The strength of dependence between two words $x$
+and $y$ is defined as $e^{-\delta(avgDist(x,y)-1)}PMI(x,y)$.
+In this equation, $avgDist(x,y)$ is the average distance between
+the two words in the corpus, and $PMI(x,y)$ is the pointwise mutual
+information between the two words, based on fixed window co-occurrence
+statistics. This measure is used to maximize the cohesion of a set
+of translation words for a query in cross-lingual IR (CLIR).
+
+\cite{OhChoiWsdStaticDynamicVector} proposes to represent one sense
+by the centroid of the context vectors of sense tagged instances.
+The used context vectors are limited to co-occurrences statistics
+of context words. In order to improve the quality of the representation,
+the term frequencies are multiplied by several factors, one of which
+is to divide the term frequency by the square root of the average
+distance of occurrences. The use of this factor resulted in a 3\%
+improvement in disambiguation accuracy. Since we could expect that
+there will be only one instance of a context word in one sample in
+most cases, this basically means that the factor applies a power law
+$d^{\delta}$ where $d$ is the distance and $\delta=-\nicefrac{1}{2}$
+controls the decay rate. However, as we will see in our experiments,
+the parameter $\delta$ strongly depends on the language and the text
+collection. Setting this parameter at a fixed value is not the best
+choice.
+
+\cite{SongBruzaHAL} uses the hyperspace analog to language (HAL),
+which uses a fixed-size sliding window to determine word co-occurrence
+statistics. This is equivalent to using a linear decay function for
+context words since the weight of a context word is defined as $N-d$,
+where $N$ is the size of the window and $d$ the distance from the
+context word to the target word. The context vectors defined this
+way can be used to estimate the similarity of words. See \cite{BaiJingSong}
+for its use in query expansion in IR.
+
+In a more recent study, \cite{KernelDistanceIR} proposes positional
+language models for IR, which propagates the weight of word occurrences
+to their surrounding positions. At a position $i$, the propagated
+count of a word $x$ is calculated as follows: $c^{\prime}(x,i)=\sum_{j}c(x,j)K(\left|i-j\right|)$,
+with $c(x,j)$ being the count for word $x$ at position $j$ in the
+document, and $K$ being a decaying kernel function. Using this value,
+one can determine scores for query words at any position in the document
+and combine them heuristically. It is shown that such a weighting
+function can improve retrieval effectiveness. Since it was not clear
+what kernel function would work best, the authors of that study experimented
+with various kernel functions: Gaussian ($e^{-\delta d^{2}}$), Linear
+($\max\{0,1-\delta d\}$), Cosine ($\cos(\delta d)$ up to $d=\nicefrac{\pi}{2\delta}$),
+and Circle ($\sqrt{1-\delta d^{2}}$ up to $d=\delta^{-\nicefrac{1}{2}}$)
+where $d$ is the distance and $\delta$ a parameter determined manually.
+Among these functions, the Gaussian performed the best.
+
+As we can see, all these studies used predefined weighting functions.
+However, these functions have not been thoroughly compared on the
+same task and it is still unclear which function performs the best.
+In particular, no study has compared multiple functions for WSD. We
+do not know how much of an improvement may be brought by using a decaying
+function instead of a simple uniform weighting. In addition, a unique
+decaying function cannot fit various text collections and languages.
+This will be clearly shown in our experiments, in which we show that
+the best decaying functions for a collection in English is very different
+from the one for a collection in Japanese. Rather than defi{}ning
+such a function manually and test a large number of possible functions
+for a given collection, in this study, we try to learn the optimal
+weighting function from the data. In the next section we will describe
+our proposed context models, together with the unsupervised method
+to compute weights for context words based on their distance.
+
+
+\section{Learning the optimal context model}
+\label{sec:Learning-the-optimal}
+
+
+\subsection{Context model}
+\label{sub:ContextModelDefinition}
+
+Our context models are composed of distributions of the words occurring
+around the target word. In this study, we limit ourselves to these
+simple features and discard more sophisticated ones, in order to be
+sufficiently efficient for large scale applications. However, this
+does not mean that other features cannot be combined within the model
+later. We assume that a context word at different distance from the
+target word has a different importance, which we capture by means
+of a count---the number of occurrence within the window. Notice that
+this count could be fractional. We define $\alpha_{i}$ as being the
+count that one word occurrence takes when it occurs at a distance
+$i$ from the target word. This view of weighted context words generalizes
+any weight setting. For instance, uniform weighting within a fixed
+window of size $s$ can be expressed as $\alpha_{i}=1$ if $1\leq i\leq s$,
+0 otherwise. We will later describe the way to define our function
+$\alpha_{i}$.
+
+In this study, we will use the language modeling approach to define
+context models. However, the basic idea can also be implemented within
+other frameworks. Once the function $\alpha$ is defi{}ned, we can
+defi{}ne a context model as follows. Let $W$ be a set of text windows
+containing the target word $t$, and $c_{W,i,x}$ be the number of
+occurrences of word $x$ at distance $i$ in $W$, the maximum likelihood
+(ML) context model for $W$ is
+\begin{equation}
+P_{\mathrm{ML},W}(x)=\frac{\sum_{i}\alpha_{i}c_{W,i,x}}{\sum_{x^{\prime}}\sum_{i}\alpha_{i}c_{W,i,x^{\prime}}}
+\label{eq:MakeML}
+\end{equation}
+Such a probability function will then form a context model for the
+target word. The above formulation suffers from the zero probability
+problem; to avoid it, we propose to add Dirichlet priors to the distribution,
+to the proportion of the global collection probabilities $P(x|\mathcal{C})$.
+Let $\mu_{W}$ be a pseudo-count controlling the prior's contribution,
+the smoothed distribution is as follows:
+\begin{equation}
+P_{\mathrm{Dir},W}(x)=\frac{\sum_{i}\alpha_{i}c_{W,i,x}+\mu_{W}P(x|\mathcal{C})}{\sum_{x^{\prime}}\sum_{i}\alpha_{i}c_{W,i,x^{\prime}}+\mu_{W}}
+\label{eq:MakeDir}
+\end{equation}
+
+
+\subsection{Estimation of appropriate Dirichlet priors}
+\label{sub:Estimation-Dir-prior}
+
+When using Dirichlet priors, the pseudo-count $\mu_{W}$ is usually
+assumed to be a constant to be determined manually. However, since
+its value strongly depends on the collection and the size of context
+model, we can expect better results by estimating it for each language
+model. To do so we propose the use of cross-validation, maximizing
+the following leave-one-out log-likelihood:
+\begin{equation}
+\mathcal{L}_{-1}(\mu_{W})=\sum_{x}\sum_{i}\alpha_{i}c_{W,i,x}\log P_{\mathrm{Dir},W}^{-1,i}(x)\label{eq:leave-one-out-ll}\end{equation}
+where
+\[
+P_{\mathrm{Dir},W}^{-1,k}(x)=\frac{\sum_{i}\alpha_{i}c_{W,i,x}+\mu_{W}P(x|\mathcal{C})-\alpha_{k}}{\sum_{x^{\prime}}\sum_{i}\alpha_{i}c_{W,i,x^{\prime}}+\mu_{W}-\alpha_{k}}
+\]
+is the probability of $x$ in the set of windows $W$ with one instance
+at distance $k$ left out. This probability is estimated using Dirichlet
+smoothing with a prior $\mu_{W}$.
+
+The probability estimated above is used to estimate the likelihood
+($\mathcal{L}_{-1}$) of the instance left out. Our goal here is to
+determine a pseudo-count that maximizes the likelihood of the left-out
+instance \cite{TwoStepSmooghing}. To find the optimum we use Newton's
+method for gradient descent:
+\[
+\mu^{(0)}=1\qquad\mu^{(i+1)}=\mu^{(i)}-\frac{\mathcal{L}_{-1}^{\prime}(\mu^{(i)})}{\mathcal{L}_{-1}^{\prime\prime}(\mu^{(i)})}\qquad\mbox{repeated until}\quad\left|\mu^{(i+1)}-\mu^{(i)}\right|<\Delta\]
+where $\Delta$ is a parameter controlling the ending of the process.
+We can set it to a small value such as $\Delta=10^{-4}$. As we can
+see, equation (\ref{eq:leave-one-out-ll}) was adapted to handle the
+non-uniform weights of occurrences. This in turn results in the following
+derivatives:
+
+Let $C_{W,x}=\sum_{j}\alpha_{j}c_{W,j,x},\qquad C_{W}=\sum_{x}C_{W,x}$,
+\begin{align*}
+\mathcal{L}_{-1}^{\prime}(\mu) & = \hphantom{-}\sum_{x}\sum_{i}\alpha_{i}c_{W,i,x}\left[\left(\frac{P(x|\mathcal{C})}{C_{W,x}+\mu_{W}P(x|\mathcal{C})-\alpha_{i}}\right)^{\phantom{2}}-\left(\frac{1}{C_{W}+\mu_{W}-\alpha_{i}}\right)^{\phantom{2}}\right]\\
+\mathcal{L}_{-1}^{\prime\prime}(\mu) & =  -\sum_{x}\sum_{i}\alpha_{i}c_{W,i,x}\left[\left(\frac{P(x|\mathcal{C})}{C_{W,x}+\mu_{W}P(x|\mathcal{C})-\alpha_{i}}\right)^{2}-\left(\frac{1}{C_{W}+\mu_{W}}\right)^{2}\right]
+\end{align*}
+Using this estimation method removes the need for an extra parameter.
+
+
+\subsection{Learning the decaying function}
+\label{sub:Learning-the-decaying}
+
+The basic idea behind our approach is very simple. If we assume that
+the context models as defined above are representations of the meaning
+of a word, then, if words $a$ and $b$ are synonymous, the context
+models made from two sets of windows $A$ and $B$ containing samples
+of the two words should be similar. Starting from uniform weights,
+we could then try to maximize some distribution similarity measure
+over $\alpha$. Let $T$ be the set of all windows for our target
+word $t$, we can define $A$ and $B$ as random partitions of $T$
+in two subsets (we will use $W$ to denote one of such subsets). As
+we mentioned earlier, even if the actual word $t$ is polysemous,
+if the samples are randomly taken from the same corpus, the mixture
+of the senses should be similar, and this mixture would represent
+the aggregated sense of the word. So, the two context models should
+still be similar.
+
+
+\subsubsection{Evaluating similarity~}
+
+In the context of language modeling, a well known measure is the \emph{Kullback-Leibler
+}(KL)\emph{ divergence}, also known as relative entropy. It is an
+information theoretic divergence measure indicating how many extra
+bits it would take on average to use some encoding $P$, given that
+the real distribution is $Q$. It is defined as follows:
+\begin{align*}
+D_{\mathrm{KL}}(P,Q) & = \sum_{x}P(x)\log\frac{P(x)}{Q(x)}\\
+ & = -\sum_{x}P(x)\log Q(x)+\sum_{x}P(x)\log P(x)\\
+ & = H(P,Q)-H(P)
+\end{align*}
+As we can see above, it is equivalent to the difference between the
+cross-entropy of $P$ and $Q$ (i.e. $H(P,Q)$) and the entropy of
+P (i.e. $H(P)$). The distribution $Q$ must be smoothed because of
+the logarithm present in the cross-entropy equation. 
+
+Another popular measure is \emph{information radius} (IRad), also
+known as the \emph{Jensen-Shannon} (JS) \emph{divergence} or the \emph{total
+divergence to the average}. It is the average of the KL-divergence
+of each distribution against the average of the two distributions:
+\[
+IRad(P,Q) = \frac{1}{2}D_{\mathrm{KL}}\left(P,\frac{P+Q}{2}\right)+\frac{1}{2}D_{\mathrm{KL}}\left(Q,\frac{P+Q}{2}\right)
+\]
+ This measure has the advantage that that it is bounded; it is zero
+when the distributions are the same, and one when they differ completely,
+and it is symmetric. $1-IRad(P,Q)$ behaves like a cosine, thus the
+name information radius. A second advantage is that this measure is
+self-smoothed. 
+
+However, both above measures have some problems due to the fact that
+the base entropy is removed from it. Both measures only consider how
+close two distributions are, without taking into account their usefulness
+for the given data. For instance, the KL-divergence is minimal (i.e.
+0) when the two distributions are identical, whatever these distributions
+are. These distributions can be the one that fit the data (i.e. a
+true distribution) or a uniform distribution. KL-divergence is unable
+to make a difference between them. From the point of view of creating
+a model to describe a data, the true distribution is obviously preferred.
+This, however, cannot be determined by minimizing KL-divergence alone.
+Similar problem occurs when information radius is used.
+
+The above observation shows that the measure we have to maximize in
+our context should combine the following two aspects: the similarity
+between the resulting models obtained from the two samples, and the
+description power of these models. In other words, to KL-divergence
+or information radius, we have to add a penalty component according
+to the model's descriptive power. We can define the model's descriptive
+power by its entropy: The lower its entropy, the better the model.
+Therefore, the measure we have to minimize could be:\[
+D_{\mathrm{KL}}(P,Q)+H(P)=H(P,Q)\]
+Now we use the above measure in both directions like information radius.
+This leads us to:
+\[
+H(P,Q)+H(Q,P)
+\]
+As we mentioned earlier, the measure of cross entropy $H(P,Q)$ requires
+us to smooth the second distribution due to the zero probability problem.
+So, finally, we propose the following loss function to minimize between
+the two models obtained from the two samples:
+\[
+l(\alpha)=H(P_{\mathrm{ML},A},P_{\mathrm{Dir},B})+H(P_{\mathrm{ML},B},P_{\mathrm{Dir},A})
+\]
+where $P_{\mathrm{ML},A}$ and $P_{\mathrm{ML},B}$ are the maximum
+likelihood models for the samples $A$ and $B$ weighted using $\alpha$,
+and $P_{\mathrm{Dir},A}$ and $P_{\mathrm{Dir},B}$ are the models
+smoothed using a Dirichlet prior.
+
+With this function, the models will still need to be similar to achieve
+a high cross-entropy, but additionally, models will be penalized if
+this similarity is obtained by increasing the entropies of the models.
+The reader will notice that this value is compatible with the Na\"{\i}ve
+Bayes WSD approach (Section \ref{sec:Classifiers-for-supervised}),
+in which the likelihood of the context words of one sample is computed
+according to the smoothed context model of one class. Defi{}ning the
+optimal weighting function according to this value is thus logical. 
+
+
+\subsubsection{Gradient descent on similarity}
+
+We use gradient descent to fi{}nd the optimal weights. Here are the
+derivatives needed for a gradient descent ($W$ and $T-W$ are respectively
+$A$ and $B$, or the reverse):
+\begin{align*}
+\frac{\partial H\left(P_{\mathrm{ML},W},P_{\mathrm{Dir},(T-W)}\right)}{\partial\alpha_{i}} 
+ & = -\sum_{x\in V}\left[\vphantom{\frac{\partial P_{\mathrm{ML},W}(x)}{\partial\alpha_{i}}}\right.\frac{\partial P_{\mathrm{ML},W}(x)}{\partial\alpha_{i}}\log P_{\mathrm{Dir},(T-W)}(x)+\\
+ &  \hphantom{-\sum_{x\in V}\left[\vphantom{\frac{\partial P_{\mathrm{ML},W}(x)}{\partial\alpha_{i}}}\right.}\left.\frac{\partial P_{\mathrm{Dir},(T-W)}(x)}{\partial\alpha_{i}}\times\frac{P_{\mathrm{ML},W}(x)}{P_{\mathrm{Dir},(T-W)}(x)}\right]\\
+\frac{\partial P_{\mathrm{ML},W}(x)}{\partial\alpha_{i}} 
+ & =  \frac{c_{W,i,x}-P_{\mathrm{ML},W}(x)c_{W,i}}{\sum_{j}\alpha_{j}c_{W,j}}\\
+\frac{\partial P_{\mathrm{Dir},W}(x)}{\partial\alpha_{i}} 
+ & =  \frac{c_{W,i,x}-P_{\mathrm{Dir},W}(x)c_{W,i}}{\sum_{j}\alpha_{j}c_{W,j}+\mu_{W}}
+\end{align*}
+Now, as the reader may already notice, the optimal value of this function
+(or those of the other similarity measures) depends on the quantity
+of data (number of instances) contained in the models. Sometimes,
+it may be possible that there are few instances for a target word.
+In this case, the above learning process tend to result in stable
+uniform weights. In contrast, having many instances will result in
+weights achieving a lower cross-entropy by shifting most of the weight
+to shorter distances. In the most extreme case---the degenerate
+case, all the weights will end on the distance 1. 
+
+In order to reduce the risk of occurrence of the degenerate case,
+we do not use only one target word, but rather the weights are learnt
+over a set of target words. The detailed process will be described
+in the next sub section. Furthermore, we propose to use early stopping,
+stopping the process before it starts to degenerate. The key question
+is now to know when to stop the process. It is unrealistic to use
+a strategy that relies on an evaluation on the test data to decide
+whether the process should stop. The strategy we use here is based
+on the observation that the weights assigned to positions at large
+distances should be small: when any of the weights (usually the weights
+of large distances) falls below a small threshold $\epsilon=0.001$,
+then we consider that the weights have become reasonable, so the learning
+process can stop. Indeed, this approach is equivalent to a form of
+regularization: we integrate a penalty in the loss function corresponding
+to the weight of context words at large distances.
+
+
+
+\subsubsection{Stochastic gradient descent}
+
+Earlier, we described the process for one target word. This process
+is repeated for a number of target words 
+    (see Algorithm 1).
+We randomly select one word (ambiguous or not) from the corpus, compute
+its gradient, make a small gradient step $\eta$, and the process
+is repeated. 
+    In Algorithm 1, 
+RandomPartition splits the
+set of target word windows in two, MakeML combines the word occurrences
+and weight function into a maximum likelihood unigram language model
+(Equation \ref{eq:MakeML}), ComputePseudoCount uses Newton's method
+to compute a pseudo-count to control the smoothing (Section \ref{sub:Estimation-Dir-prior})
+and MakeDir adds the collection language model prior to the maximum
+likelihood (Equation \ref{eq:MakeDir}). The stop condition is what
+we described above: any weight is lower than $\epsilon<0.001$.
+
+    \begin{table}[t]
+    \begin{center}
+    \textbf{Algorithm 1}\hspace{1zw}LearnWeight($\mathcal{C},\eta,\epsilon$)
+    \par\vspace{1zw}
+\input{01algo01.txt}
+    \end{center}
+    \end{table}
+    \setcounter{table}{0}
+
+
+We applied the above weight learning process to the English collection
+and Japanese collection with $\eta=0.001$. 
+
+
+\section{Classifiers for supervised WSD tasks}
+\label{sec:Classifiers-for-supervised}
+
+We used the same system in the English and Japanese tasks, so we will
+explain it before going into details about each tasks. We chose to
+employ Na\"{\i}ve Bayes (NB) classifiers for the following reasons.
+
+First, although Support Vector Machine (SVM) classifiers work better
+than Na\"{\i}ve Bayes in many cases \cite{LeeNg2002WSD}, integrating
+somes types of features such as the topical features of NUS-ML (Section
+\ref{sub:Using-linguistic-features-NUSML}) is problematic. Moreover,
+as the use of real valued counts makes the data even sparser, smoothing
+becomes very important. Unfortunately, smoothing is incompatible with
+hyperplane-based classifiers.
+
+Second, when dealing with large datasets, the effi{}ciency of the
+classifi{}cation becomes an important factor. This very efficiency
+reason is the one that motivated our study. NB classifiers are attractive
+in such regard, since they function with a simple sparse set of counts.
+As we will see in our experiments, the NB approach with a well defined
+context model can rival approaches using other classification models
+using more sophisticated features.
+
+
+\subsection{Features}
+
+Although tools such as parsers and taggers, or resources such as dictionaries,
+thesauri and ontologies, can be used to extract features, their use
+in large-scale applications inevitably raises performance and coverage
+issues. We therefore use alternative features that can be easily extracted:
+the target word form, the context content words, and the local stop
+words.
+\begin{description}
+\item [{Target~word~form~features}] The senses of the target word are
+often distinguishable from the various forms of the word. Some forms
+are not ambiguous, and some allow us to capture POS-tag components
+related to the word sense. Stemming the target words would thus lead
+to important losses of information. For example, the {}``fast''
+equivalence class may contain the forms {}``fasting'' and {}``fastest''.
+To preserve this information we use these forms as-is, without stemming.
+To smooth them, we can use Dirichlet priors in the proportion of the
+subset of the collection-level probabilities containing the possible
+forms of the target word. If $F$ is the set the forms of the target
+word that are present in the task data, the target word prior can
+be defined as:
+\[
+p(x|targetPrior)=\left\{ \begin{array}{cl}
+\frac{P(x|\mathcal{C})}{\sum_{x^{\prime}\in F}P(x^{\prime}|\mathcal{C})} & \mbox{\,\ if \ensuremath{x\in F}}\\
+0 & \mbox{\,\ otherwise}\end{array}\right.
+\]
+We defi{}ne the probability of the target word form for the word instance
+$w$ and a set of instances $S$ for a specific sense class as follows
+(where $target(w)$ is the form of the target word in $w$, and $\mu_{Tar}$
+is a Dirichlet pseudo-count):
+\[
+P_{Tar}(w|S)=\frac{\left|\left\{ w^{\prime}\in S\,:\, target(w)=target(w^{\prime})\right\} \right|+\mu_{Tar}P(target(w)|targetPrior)}{\left|\vphantom{target(w^{\prime})}S\right|+\mu_{Tar}}
+\]
+\item [{Local~stop~words~features}] Stop words are lexically related
+to their surrounding words. They hint at some of the POS-tag components
+and the syntactic role of their neighboring words. Stop words that
+are farther away from the target words are very likely to be unrelated
+to it. For that reason, the context models should incorporate only
+stop words that are very close to the target. Another important point
+is that stop words have distinct implications whether they occur before
+or after the target word. For example, the \textquotedblleft{}a\textquotedblright{}
+before \textquotedblleft{}plant\textquotedblright{} in \textquotedblleft{}a
+plant\textquotedblright{} indicates that \textquotedblleft{}plant\textquotedblright{}
+is a noun, whereas the {}``a'' after {}``plant'' in \textquotedblleft{}plant
+a\textquotedblright{} indicates that {}``plant'' is likely to be
+a verb. Therefore, we can use the occurrences of stop words before
+and after the target word as a simple and robust way to approximate
+POS-tagging. Obviously, the syntactic role of the target word in the
+sentence could also have an impact on its meaning. \textquotedblleft{}Plant\textquotedblright{}
+in \textquotedblleft{}a plant\textquotedblright{} could mean \emph{facility}
+or \emph{vegetation}, whereas it means \emph{put, set or insert} in
+\textquotedblleft{}plant a''. Therefore, we use the stop words that
+occur right before or after the target; we stop adding them when a
+content word is found. For example, {}``... put it \emph{in} \emph{the}
+    \underline{bank} 
+\emph{for} safety \emph{in} ...'' (stop
+words in italic) gives us the set of features \{in-before, the-before,
+for-after\}. We do not consider the distance of the stop words and
+consider consecutive stop words to be independent to reduce sparsity.
+Since the presence of a stop word does not imply the absence of others,
+we chose to model them as Bernoulli variables, scoring both their
+presence and absence. Since these features are very frequent, a simple
+Laplace smoothing (adding $\delta$ occurrences uniformly) of $\delta=1$
+is sufficient to smooth their models. If $x$ is a variable representing
+the presence of one such feature, the probability that it is present
+($x=1$) or absent ($x=0$) is thus
+\begin{gather*}
+P(x=1|S)=\frac{\left|\left\{ w^{\prime}\in S\,:\, x\in w^{\prime}\right\} \right|+1}{\left|S\right|+2} \\
+P(x=0|S)=1-P(x=1|S)
+\end{gather*}
+Let $w$ be one window instance, and $stopFeatures$ the stop word
+features vocabulary, the likelihood of the stop word features for
+sense $S$ is:
+\[
+P_{Stop}(w|S)=\prod_{x\in stopFeatures}\left\{ \begin{array}{cl}
+P(x=1|S) & \mbox{if \ensuremath{x\in w}}\\
+P(x=0|S) & \mbox{otherwise}\end{array}\right.
+\]
+\item [{Context~model~features}] The context model features are as defined
+in Section \ref{sub:ContextModelDefinition}. We define thelikelihood
+of the context words for the sample $w$ and class $S$ as follows:
+\[
+P_{Con}(w|S)=\prod_{x\in context(w)}P_{\mathrm{Dir},S}(x)^{\alpha_{dist(x)}}
+\]
+$context(w)$ is the set of observed context word features, and $dist(x)$
+is the distance of one such feature to the target word. A weighting
+function $\alpha$ is also used in the scoring since the samples to
+be classified follows the same distribution as the rest of the data.
+Note that the sum of the $\alpha_{dist(x)}$ factors for one vocabulary
+word are proportional to $P_{\mathrm{ML},\{w\}}$. Seen this way,
+the score for these features is identical to the similarity measure
+we used for learning the weights. 
+\end{description}
+
+
+
+\subsection{Combining the features}
+
+The fi{}nal score for the sample $w$ and the class $S$ combines
+the features we defined above. It is defined as follows:
+\[
+Score(w,S)=P(S)P_{Tar}(w|S)^{\lambda_{Tar}}P_{Stop}(w|S)^{\lambda_{Stop}}P_{Con}(w|S)^{\lambda_{Con}}
+\]
+with $P(S)$ being the class priors, and $P_{Tar}$, $P_{Stop}$,
+$P_{Con}$ being as defined above. For NB classifiers, it is a common
+practice to apply more or less smoothing to features in order to control
+their impacts. The traditional use of Laplace smoothing (uniform priors
+adding typically one to the counts) for NB classifi{}ers indeed over-smoothes
+features in order to get around feature dependence problems. Such
+over-smoothing is, however, less than ideal. For instance, picture
+the case of two highly correlated features. The impact of such features
+should be reduced to compensate their overlap, but it is not clear
+how this should be done by controlling the smoothing. We thus use
+automatic Dirichlet smoothing (using the estimation method described
+in Section \ref{sub:Estimation-Dir-prior}) to fix probabilities,
+then scale them with the factors $\lambda_{Tar}$, $\lambda_{Stop}$
+and $\lambda_{Con}$. These parameters will be determined so as to
+maximize the performance on the training data using leave-one-out.
+For our trials, we tried both the automatic estimation of the prior,
+and the manual selection of a pseudo-count, keeping the case resulting
+in the highest cross-validation accuracy. Since the selection of a
+manual pseudo-count has the same objective as to scale the log-likelihood,
+when a manual value is used, the associated scaling factor is set
+to 1.
+
+
+\section{Experiments on Semeval-2007 English Lexical Sample}
+\label{sec:Experiments-English}
+
+Semeval (previously called Senseval) is a semantic evaluation workshop
+held every three years. Our first WSD experiment uses data from the
+2007 English Lexical Sample (ELS) task \cite{semeval07ELS}. The task
+consisted of building WSD classifiers maximizing the WSD accuracy
+of held-out test data. The details of the data are as follows:
+\begin{itemize}
+\item The word samples were extracted from the one million-word Wall Street
+Journal (WSJ) Treebank. 
+\item One hundred lemmas (65 verbs and 35 nouns) were chosen for their polysemy
+and number of annotated instances. 
+\item The original data was annotated using WordNet senses, but as this
+sense inventory is too fine to get a good annotator agreement, the
+organizers fusioned some senses using groupings of WordNet senses
+defined in the OntoNotes project \cite{OntoNotes}. The resulting
+inventories have an average of 3.6 senses per word.
+\item Table \ref{tab:Number-of-instancesSemeval07} lists the number of
+tagged instances. The average annotator agreement is claimed to be
+over 90\%. 
+\end{itemize}
+
+\begin{table}[b]
+\caption{Number of instances in the ELS data.}
+\label{tab:Number-of-instancesSemeval07}
+\input{01table01.txt}
+\end{table}
+
+
+
+\subsection{Baselines}
+\label{sub:English-Baselines}
+
+The \emph{most frequent sense} (MFS) baseline always assigns
+the most probable sense found in the training data. It acts as a lower
+bound for classification accuracy. A change in accuracy between cross-validation
+on the training data and trials on the test data can also hint at
+differences in the nature of the two sets. 
+
+For the sake of comparison, we also used a SVM baseline with the same
+features as the ones stated above. We used the SVM-light package with
+linear kernels and used the grid-search script to automatically select
+the regularization parameters. Our trials indicated that the SVM classifiers
+had serous issues in dealing with the sparsity present the count data.
+We tried various formulations for them, such as normalizing the counts
+for one sample, inputting them as log-of-count, etc. In the end, the
+best results were obtained with Boolean features indicating the presence
+of a word in a fixed-size window (of size 3). 
+
+For our NB systems, we chose various baselines using weighting functions
+proposed in previous studies:
+\begin{description}
+\item [{Uniform:}] $\alpha_{i}=1$ if $1\leq i\leq\delta$, 0 otherwise,
+where $\delta$ is the window size.
+\item [{Linear:}] $\alpha_{i}=\max\{0,1-(i-1)\delta\}$, where $\delta$
+controls the decay rate.
+\item [{Gaussian-0:}] $\alpha_{i}=e^{-\delta\left(i^{2}-1\right)}$, a
+Gaussian whose center is distance 0. $\delta$ controls the decay
+rate.
+\item [{Gaussian-1:}] $\alpha_{i}=e^{-\delta(i-1)^{2}}$, a Gaussian whose
+center is distance 1. $\delta$ controls the decay rate.
+\item [{Exponential:}] $\alpha_{i}=e^{-(i-1)\delta}$, where $\delta$
+is the exponential parameter.
+\end{description}
+Our method is named \emph{Learned}:
+\begin{description}
+\item [{Learned:}] $\alpha_{i}$ is the weight learned in the manner shown
+in Section \ref{sub:Learning-the-decaying}.
+\end{description}
+Seeing the resulting curve from the leaning process, we also add the
+\emph{power law} function, which is defined as follows:
+\begin{description}
+\item [{Power:}] $\alpha_{i}=i^{\delta}$, where $\delta$ controls the
+decay rate. 
+\end{description}
+This function was implicitly suggested in \cite{OhChoiWsdStaticDynamicVector},
+where the term frequencies were divided by the square root of the
+average distance of occurrences. This is roughly equivalent to a power
+law with a parameter $\delta=-\nicefrac{1}{2}$.
+
+The parameters for these functions were selected after extensive trials,
+as to maximize the accuracy on leave-one-out cross-validation on the
+training data.
+
+
+\subsection{Computing the weights}
+\label{sub:Computing-weights-ELS}
+
+The Semeval data was insufficient to compute weights for our system.
+To compute the weights, we used an external corpus from the Associated
+Press 88--90 corpus of the TREC collection (CD 1 \& 2), containing
+242,918 documents. The collection was stemmed with the Porter stemmer
+and each stem was considered as a target word while learning the weights.
+Full windows of 100 words were collected for every stem. This window
+size was considered big enough to build context models. We used an
+upper bound of 1,000 window samples per model since we considered it
+sufficient for the estimation of the models. A stoplist was made from
+the top 10 most frequent words, and place holders were left in the
+windows to preserve the distances. Consecutive stop words (ex: {}``of
+the'') were merged in one place holder token. This resulted in 32,650
+target words containing 5,870,604 windows. 
+
+Figure \ref{fig:Weight-functions-for-english} shows the first portion
+of the resulting curve, together with the best settings for the baselines.
+All the curves initially have roughly the same decay, but the learned
+curve differs from the others in its long tail. The \emph{power} curve
+bears a striking resemblance to the \emph{learned} curve. As we will
+see, the \emph{power law} curve also gives a very good accuracy. 
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{18-3ia1f1.eps}
+\end{center}
+\caption{Weight functions for English}
+\label{fig:Weight-functions-for-english}
+\vspace{1\baselineskip}
+\end{figure}
+
+
+\subsection{Results}
+
+Table \ref{Flo:EnglishResults} lists the results (the original top
+systems are shown to the right). 
+The context words were processed the same way as the external corpus.
+The target word was not stemmed but was converted to lowercase. The
+Semeval data contains only the small passages containing the target
+words, making words related to them unusually frequent. Therefore,
+we use a collection language model based on the concatenation of the
+AP collection and the Semeval data. The class priors used an absolute
+discounting of 0.5. Table \ref{Flo:System-settings} lists the parameters
+for each system. These parameters were determined so as to maximize
+the accuracy in leave-one-out trials on the training data. As we can
+see, the best power law function for this collection has the parameter
+$\delta=-1.1$. This is different from $\delta=-\nicefrac{1}{2}$
+set manually in \cite{OhChoiWsdStaticDynamicVector}. 
+
+\begin{table}[t]
+\caption{WSD accuracy for Semeval-2007 ELS.}
+\label{Flo:EnglishResults}
+\input{01table02.txt}
+\vspace{-1\baselineskip}
+\end{table}
+
+\begin{table}[t]
+\caption{System settings for Semeval-2007 ELS.}
+\label{Flo:System-settings}
+\input{01table03.txt}
+\end{table}
+
+
+The results shown in Table \ref{Flo:EnglishResults} confi{}rmed our
+intuition that decaying weighting functions are benefi{}cial for WSD:
+all NB classifiers with a decaying function work beter than the NB
+classifier with uniform weighting. However, different decaying functions
+lead to different WSD accuracies. This confirms the importance of
+choosing an appropriate decaying function for WSD. The learned weighting
+function worked better than the baseline functions of the previous
+work. The accuracy of our system also compared well to the current
+state of the art. All but the best one of the 14 original submissions
+of the task \cite{semeval07ELS} were outperformed. A randomization
+test (one-way, no tie splitting, 2M passes) between \emph{Power NB
+}and NUS-ML gives a p-value of 0.1818. We can therefore conclude that
+our system is comparable in accuracy to the best system in the literature,
+even though it does not use features such as local collocations, positional
+word features or POS-tags. 
+
+We also noticed that the negative power curve worked slightly better
+than the learned function, although the difference between them was
+not statistically significant. This result clearly shows that the
+power law is the right function to use if we have to choose a manually
+defined function.
+
+
+
+\section{Experiments on Semeval-2010 Japanese WSD}
+\label{sec:Experiments-Japanese}
+
+Last year's Semeval Japanese WSD task \cite{Semeval2010JWSD} is a
+lexical sample type task like ELS. Its details are as follows:
+\begin{itemize}
+\item The word samples were extracted from the Balanced Corpus of Contemporary
+Written Japanese (BCCWJ) \cite{BccwjCorpus}. This corpus, much like
+the Brown corpus \cite{BrownCorpus}, contains various types of document
+genres such as books, magazines, newspapers, white papers, transcripts
+from the diet and websites (blogs and QA sites).\\
+The task data contains a subset of these: books, white papers and
+newspapers are in the training data and the test data also contains
+Q\&A web pages.
+\item There are 50 lemmas (22 nouns, 23 verbs and 5 adjectives) that were
+chosen for the entropy of their sense distribution. This is half the
+number chosen for the ELS, but the proportion may be better since
+it gives fewer lemmas to verbs.
+\item The middle level of the Iwanami Kokugo dictionary entries was used
+to make sense inventories. The definitions in this dictionary have
+a tree-like structure, with one level under the middle level containing
+precise details. For the target words to be disambiguated, there is
+an average of 3.58 senses per word, which practically is the same
+as the ELS task.
+\item When none of the inventory senses would fit a sample, the annotators
+attached an {}``out-of-dictionary'' tag, which is then seen as an
+additional sense class. 
+\item There are 50 training and 50 test instances for each of the target
+words. This is different from the ELS in two regards. (1) The number
+of tagged samples in the ELS varied with every task word and followed
+their frequency in the corpus. (2) The ELS had around four times the
+amount of training instances. The inter-annotator agreement had a
+kappa value of 0.678.
+\end{itemize}
+Since Japanese does not employ word separators, the organizers treated
+the documents with the ChaSen syntactic analyzer and manually corrected
+the errors. This provided participants with gold-standard word segmentation,
+POS-tagging, word reading, and base form reading for conjugated words.
+The proportions of the instances with regard to genre are listed in
+Table \ref{Flo:tagged-instances-per-genre}. As we can see, the genre
+distribution is quite different between test and training data, the
+main difference being the addition of Q\&A web pages to the test data.
+
+\begin{table}[b]
+\caption{Number of tagged instances per genre.}
+\label{Flo:tagged-instances-per-genre}
+\input{01table04.txt}
+\end{table}
+
+
+\subsection{Treatment of Japanese text}
+
+We tried to give a similar treatment to the Japanese as we did to
+the English data, but the languages are quite different. Stemming
+doesn't apply to Japanese, so we used lemmatization. Since we had
+parsing information, we converted context words into their surface
+form readings or base form readings when present, and appended the
+\emph{kanjis} (Chinese characters) in the surface form. This treatment
+is motivated by the following aspects of Japanese:
+\begin{itemize}
+\item Japanese has many homophones, so using only the reading would result
+in too strong a conflation. The use of \emph{kanjis }is very related
+to the used sense. For instance, some verbs have different characters
+to specialize their meanings. A good example of this is the verb \textquotedblleft{}to
+meet\textquotedblright{} (\emph{au}), which can take different characters
+depending on whether it means to meet with someone, to have an encounter,
+an accident, a bad experience, or to fit together. In some cases,
+the word can be written without\emph{ kanji} (i.e. in \emph{hiragana
+}or \emph{katakana}) in order to give a broader or more abstract sense. 
+\item Some words can be written sometimes with \emph{kanjis}, sometimes
+with \emph{kanjis} and in-between \emph{okurigana }({}``accompanying
+letters''). These \emph{okurigana} act as phonetic complements to
+disambiguate the used reading. One example of this is the word \textquotedblleft{}sales\textquotedblright{}
+(\emph{uriage}) which can be written 
+    \underline{uri}-\underline{\mbox{age}} or \underline{u}-ri-\underline{a}-ge 
+(the underline means the reading
+is inside one \emph{kanji}).
+\item The presence of different readings for the same surface form can alter
+the meaning of the word. For instance, in Japanese like in English,
+the word \textquotedblleft{}market\textquotedblright{} has both the
+\textquotedblleft{}supermarket\textquotedblright{} and \textquotedblleft{}stock
+market\textquotedblright{} senses. The two are written the same, but
+they have different readings. The Japanese reading ``\emph{ichiba}''
+has the ``stock market'' sense, and the Chinese reading ``\emph{shij\^{o}}''
+means the location where one can buy goods.
+\end{itemize}
+Appending the \emph{kanjis }and the reading had the purpose of conflating
+some of these forms.
+
+As a replacement to a stop list, we used the parsing information to
+strip all conjugations (\emph{setsuzoku-to}, \emph{jod\^{o}-shi},
+etc.), particles (all \emph{jo-shi}), symbols (blanks, \emph{kig\^{o}},
+etc.), and numbers. Note that this could also have been done by using
+word frequencies. We used the top 10 most frequent words as the stop
+word features. These were all particles (\emph{jo-shi}).
+
+
+\subsection{Computing weights}
+
+The data for the JWSD task did not contain enough text to compute
+the weights. As a supplement, we used the Mainichi 2008 corpus of
+NTCIR-8 as an external corpus with the Chasen${}+{}$Unidic parser that was
+used to create the task data. This is less than ideal since it results
+in a different parse than the manually corrected task data. The resulting
+weights for the first 10 positions are shown in Figure \ref{fig:Weight-functions-for-japanese}.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{18-3ia1f2.eps}
+\end{center}
+\caption{Weight functions for Japanese}
+\label{fig:Weight-functions-for-japanese}
+\end{figure}
+
+
+A general observations is that these curves are similar to the English
+case. However, we do observe a few differences. The weights fall much
+faster in Japanese than in English. The differences may be explained
+partly by the different treatments of the text. There are also linguistic
+reasons. For instance, the order of the sentence components is more
+flexible in Japanese. Moreover, the subject is often omitted in Japanese.
+Another difference is that the Japanese language is a subject-object-verb
+type of language, whereas English is subject-verb-object. That is,
+verbs in English are usually between their subject and complements,
+but they are almost always on opposite ends of the sentence in Japanese.
+These factors may make non-local dependencies more frequent in Japanese.
+If we assume that words in English and Japanese have on average as
+many dependencies, if more are non-local, fewer of them will be nearby,
+reducing the relation of close context words. The non-local dependencies
+will be within the noisy farther context, and thus the weight will
+decay faster.
+
+
+\subsection{Results}
+
+Table \ref{tab:WSD-accuracy-Jap} lists the results, with the formal
+runs results for the task to the right. Our participation systems
+were RALI-1 and RALI-2 \cite{brosseauvilleneuve-kando-nie:2010:SemEval,brosseauvilleneuve-nie-kando:2010:PAPERS}.
+The diff{}erence between the two is that RALI-1 uses a constant pseudo-count
+determined by cross validation to smooth context words. RALI-2 uses
+automatic Dirichlet smoothing. The automatically determined Dirichlet
+prior worked better than the manually determined one. This means that
+automatic smoothing gives a better fit to the data. The differences
+between our scores to the left, and our participating systems to the
+right, are caused by a simpler handling of the target word. In RALI-1
+and RALI-2, the target word was put in the same language model as
+the context model features, while they are separated in the systems
+listed on the left. This shows that the target word better handled
+separately. Another difference is the addition of stop word features.
+
+\begin{table}[t]
+\caption{WSD accuracy on Semeval-2010 Japanese WSD.}
+\label{tab:WSD-accuracy-Jap}
+\input{01table05.txt}
+\end{table}
+
+The baseline made by the task organizers was an SVM classifier using
+the following features:
+\begin{itemize}
+\item POS and detailed POS at every positions in a window of size 2 around
+the target word.
+\item Bag-of-words features in a window of size 2.
+\item Basic Syntactic relations: for a noun get the associated verb, and
+for a verb get the head word of its subject.
+\item Figures in the Bunrui Goi Hyou for the content words neighboring the
+target word.
+\end{itemize}
+It is a quite strong system even in comparison with most of the participants.
+Indeed, no participating systems except ours outperformed the baseline.
+However our SVM baseline fared much better thanks to its use of the
+stop word features. Without them, however, our accuracy fell to 74.92,
+below that of the baseline. The improvement achieved by adding the
+stop word features is much greater for the SVM than for the NB systems.
+A possible reason for this is that the SVM classifier can assign different
+weights to individual stop word features. 
+
+The other teams tried to address the particularities of the dataset,
+such as new sense detection and the use of genre tags. These attempts
+did not yield positive results. This is not surprising, considering
+that the document genres did not have any Q\&A pages in the training
+data, despite them being the most prevalent genres in the test data.
+The detection of new senses is also problematic, since without using
+the dictionary, it is impossible to differentiate new sense instances
+from non-occurring dictionary entries. The new sense class was also
+quite rare in the training data and may have contained instances having
+multiple {}``new'' senses.
+
+The learned weighting function outperformed the baseline methods.
+However, its gains were much lower than in ELS. This can be explained
+by the rapid fall of the weights for Japanese. Indeed, most of the
+weight was on the distance 1, and words farther away didn't have much
+impact. The fixed windows baselines also had similar changes: the
+window size 3 or 4 gave the best results for English whereas windows
+of size 1 gave the best results for Japanese.
+
+On the other hand, as in the ELS, the power law function had a very
+similar shape to the learned weighting function, and their performances
+were also very similar. This shows once again that the power law function
+captures well the impact of neighboring words on the target word.
+
+\begin{table}[t]
+\caption{System settings for Semeval 2010 JWSD.}
+\label{tab:System-settings-for-JWSD}
+\input{01table06.txt}
+\end{table}
+
+The settings for the systems are listed in Table \ref{tab:System-settings-for-JWSD}.
+The automatic Dirichlet smoothing gave better results only for \emph{Learned}
+\emph{NB} and \emph{Power NB}. Possible explanations for this are
+that there were fewer tagged instances in comparison with the ELS
+task, making the pseudo-count estimation less accurate. The two latter
+function having long tails, they {}``use'' more word instances,
+and thus the estimation may have been more accurate. This may have
+made the pseudo-count estimation more accurate. \emph{Learned NB}
+did a bit better on the test data, although the resulting differences
+were not statistically significant. Again, we observe that the best
+power law function has the parameter $\delta=-1.6$, which is different
+from that in ELS and the one used in \cite{OhChoiWsdStaticDynamicVector}.
+This confirms our hypothesis that there is no unique weight curve
+that will fit all the data. Different data (languages) will require
+different decaying functions. This is the very reason of our study. 
+
+
+
+\section{Discussion}
+\label{sec:Future-research}
+
+Our experiments show that Japanese WSD is more difficult than English,
+probably because it has more non-local dependencies. In order to capture
+such dependencies without the use of lexical parsers, we will try
+merging simple patterns with our weight learning method. As our method
+basically groups word occurrences into bins, we do not have to limit
+ourselves to the simplistic window distance and can define more specialized
+bins that can reflect the average relations of the features. 
+
+Also, as we now have an idea of the nature of the optimal weighting
+function, we may investigate one of the pitfalls of the window distance:
+the uniform increase in distance without regard to the words encountered.
+We believe that some words, such as stop words, should add less distance
+than others. On the other hand, we can easily see that tokens such
+as commas, full stops, parentheses and paragraph should add more distance
+in comparison with regular words. We could therefore make use of a
+\emph{congruence} score for a word, an indicator showing on average
+how much what comes before is similar to what comes after the word.
+One of the difficulties of computing such value is that we would have
+to compare the context before and after singles instances. Although
+this would lead to a terrible sparsity problem, we believe that the
+use of dimension reduction methods such as LDA would alleviate it. 
+
+The weighting curve and context models resulting from our method could
+be used in various fields. The context models can be seen as a conditional
+probability $P(x|t)$ of a word given an occurrence of the target
+word $t$. Such probabilities are often used in co-occurrence-based
+methods, such as query expansion in IR.
+
+Translating a word is a task that has some similarity to WSD. Indeed,
+a recent Semeval task was to evaluate disambiguation accuracy via
+a parrallel corpus \cite{Semeval2010CrossLingualWSD}. The context
+models we propose would fit very well in such a task, and this could
+lead to improvements in statistical machine translation and cross-language
+IR, since in both these domains the use of context information is
+limited.
+
+Lastly, the weights resulting from our process can be interpreted
+as the expected strength of relation between two words in a document
+as a function of their distance from each other. The word relationship
+between words in documents and words in queries is a current research
+topic in IR. The new weighting schema could be easily integrated with
+a dependency model in IR. We plan to perform such an integration in
+the future. 
+
+
+\section{Conclusion}
+\label{sec:Conclusion}
+
+In WSD, context words are often used to constructed a bag-of-words
+model for the target word. However, the context words are weighted
+either uniformly or according to a manually selected decaying function.
+No study had investigated whether such a decaying function is the
+most appropriate for WSD. In this paper, we presented a principled
+method to weight context words in a bag-of-words model of word sense.
+To investigate what the optimal function would be, we proposed an
+unsupervised method for finding optimal weights for context words
+in function of their distance to the target word. The general idea
+is to find the weights that best fit the data, in such a way that
+the context models for the same target word generated from two random
+samples become similar. Our experiments on WSD in English and Japanese
+suggest the validity of the principle. 
+
+In our experiments, we observed that the learned functions have very
+similar shapes to power law functions. This function has not been
+suggested in previous studies on WSD. This function could suggest
+some proprties of word dependency within text window and helps us
+understand true dependencies between neighboring words.
+
+We also proposed the use of alternatives features as replacements
+for local collocations, syntactic parser and lexical analyzer data.
+We found that the local stop words are highly related to the sense
+distribution. These features, combined with the context models, and
+smoothing estimation techniques results in a lightweight and scalable
+WSD system with state-of-the-art performance.
+
+The English and Japanese experiments showed that the decaying function
+is language-dependent, but it roughly follows the same background
+function. For languages such as Japanese, where the writing style
+changes greatly with the document genre, this function could also
+be corpus-dependent. Our approach has the advantage of being able
+to adapt to such differences and it could be easily adapted to other
+NLP tasks such as IR and MT. These are subjects that we will investigate
+in our future research.
+
+
+\acknowledgment
+This work is partially supported by a Japanese MEXT Grant-in-Aid for
+Scientific Research on Info-plosion (\#21013046) and the Japanese
+MEXT Research Student Scholarship program. The authors are thankful
+to the anonymous reviewers for their constructive reviews.
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Bai, Song, Bruza, Nie, \BBA\ Cao}{Bai
+  et~al.}{2005}]{BaiJingSong}
+Bai, J., Song, D., Bruza, P., Nie, J.-Y., \BBA\ Cao, G. \BBOP 2005\BBCP.
+\newblock \BBOQ Query Expansion using Term Relationships in Language Models for
+  Information Retrieval.\BBCQ\
+\newblock In {\Bem CIKM '05 Proceedings}, \mbox{\BPGS\ 688--695}, New York, NY,
+  USA. ACM.
+
+\bibitem[\protect\BCAY{Blei, Ng, \BBA\ Jordan}{Blei
+  et~al.}{2003}]{Blei03latentdirichlet}
+Blei, D.~M., Ng, A.~Y., \BBA\ Jordan, M.~I. \BBOP 2003\BBCP.
+\newblock \BBOQ Latent dirichlet allocation.\BBCQ\
+\newblock {\Bem Journal of Lachine Learning Research}, {\Bbf 3}, \mbox{\BPGS\
+  993--1022}.
+
+\bibitem[\protect\BCAY{Brosseau-Villeneuve, Kando, \BBA\
+  Nie}{Brosseau-Villeneuve
+  et~al.}{2010a}]{brosseauvilleneuve-kando-nie:2010:SemEval}
+Brosseau-Villeneuve, B., Kando, N., \BBA\ Nie, J.-Y. \BBOP 2010a\BBCP.
+\newblock \BBOQ RALI: Automatic Weighting of Text Window Distances.\BBCQ\
+\newblock In {\Bem Proceedings of the 5th International Workshop on Semantic
+  Evaluation}, \mbox{\BPGS\ 375--378}, Uppsala, Sweden. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Brosseau-Villeneuve, Nie, \BBA\
+  Kando}{Brosseau-Villeneuve
+  et~al.}{2010b}]{brosseauvilleneuve-nie-kando:2010:PAPERS}
+Brosseau-Villeneuve, B., Nie, J.-Y., \BBA\ Kando, N. \BBOP 2010b\BBCP.
+\newblock \BBOQ Towards an Optimal Weighting of Context Words Based on
+  Distance.\BBCQ\
+\newblock In {\Bem Proceedings of the 23rd International Conference on
+  Computational Linguistics (Coling 2010)}, \mbox{\BPGS\ 107--115}, Beijing,
+  China. Coling 2010 Organizing Committee.
+
+\bibitem[\protect\BCAY{Cai, Lee, \BBA\ Teh}{Cai et~al.}{2007}]{paperCaiELS}
+Cai, J.~F., Lee, W.~S., \BBA\ Teh, Y.~W. \BBOP 2007\BBCP.
+\newblock \BBOQ NUS-ML: Improving Word Sense Disambiguation using Topic
+  Features.\BBCQ\
+\newblock In {\Bem SemEval '07 Proceedings}, \mbox{\BPGS\ 249--252},
+  Morristown, NJ, USA. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Gao, Zhou, Nie, He, \BBA\ Chen}{Gao
+  et~al.}{2002}]{GaoDecayingWeight}
+Gao, J., Zhou, M., Nie, J.-Y., He, H., \BBA\ Chen, W. \BBOP 2002\BBCP.
+\newblock \BBOQ Resolving Query Translation Ambiguity using a Decaying
+  Co-occurrence Model and Syntactic Dependence Relations.\BBCQ\
+\newblock In {\Bem SIGIR '02 Proceedings}, \mbox{\BPGS\ 183--190}, New York,
+  NY, USA. ACM.
+
+\bibitem[\protect\BCAY{Hovy, Marcus, Palmer, Ramshaw, \BBA\ Weischedel}{Hovy
+  et~al.}{2006}]{OntoNotes}
+Hovy, E., Marcus, M., Palmer, M., Ramshaw, L., \BBA\ Weischedel, R. \BBOP
+  2006\BBCP.
+\newblock \BBOQ OntoNotes: the 90\% Solution.\BBCQ\
+\newblock In {\Bem NAACL '06: Proceedings of the Human Language Technology
+  Conference of the NAACL, Companion Volume: Short Papers on XX}, \mbox{\BPGS\
+  57--60}, Morristown, NJ, USA. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Ide \BBA\ V\'{e}ronis}{Ide \BBA\
+  V\'{e}ronis}{1998}]{IdeOldWSDReview}
+Ide, N.\BBACOMMA\ \BBA\ V\'{e}ronis, J. \BBOP 1998\BBCP.
+\newblock \BBOQ Introduction to the special issue on word sense disambiguation:
+  the state of the art.\BBCQ\
+\newblock {\Bem Comput. Linguist.}, {\Bbf 24}  (1), \mbox{\BPGS\ 2--40}.
+
+\bibitem[\protect\BCAY{Kucera \BBA\ Francis}{Kucera \BBA\
+  Francis}{1967}]{BrownCorpus}
+Kucera, H.\BBACOMMA\ \BBA\ Francis, W.~N. \BBOP 1967\BBCP.
+\newblock {\Bem Computational Analysis of Present-Day American English}.
+\newblock Brown University Press, Providence, RI.
+
+\bibitem[\protect\BCAY{Lee \BBA\ Ng}{Lee \BBA\ Ng}{2002}]{LeeNg2002WSD}
+Lee, Y.~K.\BBACOMMA\ \BBA\ Ng, H.~T. \BBOP 2002\BBCP.
+\newblock \BBOQ An Empirical Evaluation of Knowledge Sources and Learning
+  Algorithms for Word Sense Disambiguation.\BBCQ\
+\newblock In {\Bem EMNLP '02: Proceedings of the ACL-02 Conference on Empirical
+  Methods in Natural Language Processing}, \mbox{\BPGS\ 41--48}, Morristown,
+  NJ, USA. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Lefever \BBA\ Hoste}{Lefever \BBA\
+  Hoste}{2009}]{Semeval2010CrossLingualWSD}
+Lefever, E.\BBACOMMA\ \BBA\ Hoste, V. \BBOP 2009\BBCP.
+\newblock \BBOQ SemEval-2010 Task 3: Cross-Lingual Word Sense
+  Disambiguation.\BBCQ\
+\newblock In {\Bem DEW '09: Proceedings of the Workshop on Semantic
+  Evaluations: Recent Achievements and Future Directions}, \mbox{\BPGS\
+  82--87}, Morristown, NJ, USA. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Lesk}{Lesk}{1986}]{LeskAlgo}
+Lesk, M. \BBOP 1986\BBCP.
+\newblock \BBOQ Automatic Sense Disambiguation using Machine Readable
+  Dictionaries: How to Tell a Pine Cone from an Ice Cream Cone.\BBCQ\
+\newblock In {\Bem Proceedings of the 5th SIGDOC}, \mbox{\BPGS\ 24--26}.
+
+\bibitem[\protect\BCAY{Lv \BBA\ Zhai}{Lv \BBA\ Zhai}{2009}]{KernelDistanceIR}
+Lv, Y.\BBACOMMA\ \BBA\ Zhai, C. \BBOP 2009\BBCP.
+\newblock \BBOQ Positional Language Models for Information Retrieval.\BBCQ\
+\newblock In {\Bem SIGIR '09 Proceedings}, \mbox{\BPGS\ 299--306}, New York,
+  NY, USA. ACM.
+
+\bibitem[\protect\BCAY{Maekawa}{Maekawa}{2008}]{BccwjCorpus}
+Maekawa, K. \BBOP 2008\BBCP.
+\newblock \BBOQ Compilation of the Balanced Corpus of Contemporary Written
+  Japanese in the KOTONOHA Initiative (Invited Paper).\BBCQ\
+\newblock In {\Bem ISUC '08 Proceedings}, \mbox{\BPGS\ 169--172}, Washington,
+  DC, USA. IEEE Computer Society.
+
+\bibitem[\protect\BCAY{Navigli}{Navigli}{2009}]{NewWSDSurvey}
+Navigli, R. \BBOP 2009\BBCP.
+\newblock \BBOQ Word sense disambiguation: A survey.\BBCQ\
+\newblock {\Bem ACM Comput. Surv.}, {\Bbf 41}  (2), \mbox{\BPGS\ 1--69}.
+
+\bibitem[\protect\BCAY{Ng}{Ng}{1997}]{NgExemplarImprovements}
+Ng, H.~T. \BBOP 1997\BBCP.
+\newblock \BBOQ Exemplar-Based Word Sense Disambiguation: Some Recent
+  Improvements.\BBCQ\
+\newblock In {\Bem Proceedings of the Second Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 208--213}.
+
+\bibitem[\protect\BCAY{Ng \BBA\ Lee}{Ng \BBA\ Lee}{1996}]{NgLeeExemplarWSD}
+Ng, H.~T.\BBACOMMA\ \BBA\ Lee, H.~B. \BBOP 1996\BBCP.
+\newblock \BBOQ Integrating Multiple Knowledge Sources to Disambiguate Word
+  Sense: An Exemplar-Based Approach.\BBCQ\
+\newblock In {\Bem Proceedings of the 34th annual meeting on Association for
+  Computational Linguistics}, \mbox{\BPGS\ 40--47}, Morristown, NJ, USA.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Oh \BBA\ Choi}{Oh \BBA\
+  Choi}{2002}]{OhChoiWsdStaticDynamicVector}
+Oh, J.-H.\BBACOMMA\ \BBA\ Choi, K.-S. \BBOP 2002\BBCP.
+\newblock \BBOQ Word Sense Disambiguation using Static and Dynamic Sense
+  Vectors.\BBCQ\
+\newblock In {\Bem Proceedings of the 19th International Conference on
+  Computational Linguistics - Volume 1}, \mbox{\BPGS\ 1--7}, Morristown, NJ,
+  USA. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Okumura, Shirai, Komiya, \BBA\ Yokono}{Okumura
+  et~al.}{2010}]{Semeval2010JWSD}
+Okumura, M., Shirai, K., Komiya, K., \BBA\ Yokono, H. \BBOP 2010\BBCP.
+\newblock \BBOQ SemEval-2010 Task: Japanese WSD.\BBCQ\
+\newblock In {\Bem SemEval '10 Proceedings}. Association for Computational
+  Linguistics.
+
+\bibitem[\protect\BCAY{Pradhan, Loper, Dligach, \BBA\ Palmer}{Pradhan
+  et~al.}{2007}]{semeval07ELS}
+Pradhan, S.~S., Loper, E., Dligach, D., \BBA\ Palmer, M. \BBOP 2007\BBCP.
+\newblock \BBOQ SemEval-2007 Task 17: English Lexical Sample, SRL and all
+  Words.\BBCQ\
+\newblock In {\Bem SemEval '07 Proceedings}, \mbox{\BPGS\ 87--92}, Morristown,
+  NJ, USA. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Song \BBA\ Bruza}{Song \BBA\ Bruza}{2003}]{SongBruzaHAL}
+Song, D.\BBACOMMA\ \BBA\ Bruza, P.~D. \BBOP 2003\BBCP.
+\newblock \BBOQ Towards context sensitive information inference.\BBCQ\
+\newblock {\Bem Journal of the American Society for Information Science and
+  Technology}, {\Bbf 54}  (4), \mbox{\BPGS\ 321--334}.
+
+\bibitem[\protect\BCAY{Yarowsky}{Yarowsky}{1993}]{YarowskyOneSenseCollocation}
+Yarowsky, D. \BBOP 1993\BBCP.
+\newblock \BBOQ One Sense per Collocation.\BBCQ\
+\newblock In {\Bem HLT '93: Proceedings of the Workshop on Human Language
+  Technology}, \mbox{\BPGS\ 266--271}, Morristown, NJ, USA. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Zhai \BBA\ Lafferty}{Zhai \BBA\
+  Lafferty}{2002}]{TwoStepSmooghing}
+Zhai, C.\BBACOMMA\ \BBA\ Lafferty, J. \BBOP 2002\BBCP.
+\newblock \BBOQ Two-Stage Language Models for Information Retrieval.\BBCQ\
+\newblock In {\Bem SIGIR '02 Proceedings}, \mbox{\BPGS\ 49--56}, New York, NY,
+  USA. ACM.
+
+\end{thebibliography}
+
+
+\begin{biography}
+
+\bioauthor[:]{Bernard Brosseau-Villeneuve}{
+is an M. Sc. student at the University of Montreal, Canada, under the direction
+of Jian-Yun Nie. He is currently at the Japanese National Institute of
+Informatics under the supervision of Noriko Kando and is a recipient of a 
+context of the Japanese MEXT research student scholarship.
+}
+
+\bioauthor[:]{Noriko Kando}{
+is a professor at the National Institute of Informatics (NII), Japan,
+and at the Department of Informatics of the Graduate
+University for Advanced Research (Sokendai), Japan. She obtained
+her Ph.D. degree from Keio University, Japan in 1995. She joined NII in 1994.
+Her research interests include information retrieval evaluation, IR systems
+supporting exploratory searches, faceted search, and cross-lingual information
+retrieval.
+}
+
+\bioauthor[:]{Jian-Yun Nie}{
+is a professor at the University of Montreal. He obtained a Ph.D. from
+the University Joseph Fourier of Grenoble, France, in 1990 and a B. Sc. from
+Southeast University, China, in 1983. His main research areas are information
+retrieval and natural language processing.
+}
+
+\end{biography}
+
+
+\biodate
+
+\end{document}

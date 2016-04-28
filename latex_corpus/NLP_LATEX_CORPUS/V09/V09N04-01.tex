@@ -1,0 +1,1490 @@
+\documentstyle[epsf,jnlpbbl]{jnlp_j_b5}
+\newcommand{\comment}[1]{}
+
+
+\setcounter{page}{3}
+\setcounter{巻数}{9}
+\setcounter{号数}{4}
+\setcounter{年}{2002}
+\setcounter{月}{7}
+\受付{2001}{9}{28}
+\再受付{2001}{12}{20}
+\採録{2002}{4}{5}
+
+\title{検索結果表示向け文書要約における\\
+       情報利得比に基づく語の重要度計算}
+\author{森 辰則\affiref{YNUEIS}}
+\headauthor{森}
+\headtitle{検索結果表示向け文書要約における情報利得比に基づく語の重要度計算}
+\affilabel{YNUEIS}{横浜国立大学大学院環境情報研究院}
+{Graduate School of Environment and Information Sciences,
+Yokohama National University}
+
+\jabstract{
+  本稿では，情報検索の結果として得られた文書集合中の各々の文書を要約す
+る一手法を提案する．この場合の要約の質は，検索質問-要約文書間の
+関連性判定が，検索質問-原文書の間の関連性判定に一致する度合で評価され
+るので，検索を考慮した要約が必要となる．
+検索質問により語の重みにバイアスを与え，語の重要度を求める従来手法とは異なり，
+我々の方法では，
+検索された文書間の表層的類似性を適切に説明する語に高い重みを付与する．
+具体的には，検索文書集合に階層的クラスタリングを適用することにより，
+文書間の類似性構造を抽出するとともに，各クラスタにおける各語の出現確率から，その構造
+を説明するのに寄与する単語により高い重みを与える．
+我々は，その重みづけに情報利得比を用いることを提案する．
+そして，この語の重み付けに基づき重要文抽出方式による検索文書要約システムを実装した．
+このシステムを評価型情報検索ワークショップであるNTCIR2におけるText Summarization Challengeの情報検索タスクにより評価した結果，
+関連性判定において検索質問バイアス付きTF方式，リード文方式によるベースライン手法ならびに，他参加システムよりも，良好な結果を示した．
+}
+
+\jkeywords{文書要約，重要文抽出，情報利得比，情報検索，文書クラスタリング}
+
+\etitle{A Term Weighting Method based on Information\\
+Gain Ratio for Summarizing Documents retrieved\\
+ by IR Systems}
+\eauthor{Tatsunori Mori\affiref{YNUEIS}}
+
+\eabstract{
+This paper proposes a new term weighting method for summarizing
+documents retrieved by IR systems. Unlike query-biased summarization
+methods, our method utilizes not the information of query, but the
+similarity information among original documents by hierarchical
+clustering. In order to map the similarity structure of the
+clusters into the weight of each word, we adopt the information gain
+ratio (IGR) of probabilistic distribution of each word as a term weight.
+If the amount of information of a word in a cluster increases
+after the cluster is partitioned into sub-clusters, we may
+consider that the word contributes to determine the structure of
+the sub-clusters.  The IGR is a measure to express the degree of such
+contribution. We show the effectiveness of our method based on
+the IGR by comparison with other systems in Text Summarization Challenge
+ of NTCIR2.
+}
+\ekeywords{Text Summarization, Extraction of Important Sentences,
+Information Gain Ratio, Information Retrieval, Document clustering}
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+
+近年，Internet上の検索エンジンなど，情報検索システムが広く利用されるよう
+になってきた．システムが提示する検索結果には，文書の表題やURIだけではなく，
+対応する文書の内容を示す短い要約文書が併せて提示されていることが多い．
+これは，利用者に対して要約文
+書を提示することが，原文書が実際に利用者の欲するものかを判断する際に有力な手掛かりとなるためである．
+この際，情報検索結果文書に対する要約の質の良さは，
+要約文書-検索質問間の関連性判定と原文書-検索質問間の関連性判定の一致の良さで測ることができよう．
+
+しかしながら，現在実用に供されている多くの検索エンジンでは，原文書の最初
+の数バイトを出力したり，検索要求文に含まれる語の周囲を提示するといった単
+純な方法が採用されている．このような単純な戦略により生成された要約の品質
+は関連性判定の観点からみると，十分な品質であるとは言い難い．そのため，多
+くの場合，利用者はシステムの提示した検索結果が適切なものであるかどうかを
+原文書を見て判断せざるを得ない．このような状況を改善するためには，関連性
+判定を重視した，より質の高い自動要約技術が必要となる．
+
+自動要約の手法としては，
+Luhn\cite{Luhn:TheAutomaticCreationOfLiteratureAbstracts}の研究に端を発
+する重要文抽出法が基本かつ主要な技術であり，
+依然として様々なシステムで利用されている．
+これは，文書の中から重要な文を，所望の要約文書の長さになるまで順に選び，
+それら抽出された文を文書中での出現順に並べて出力することで，
+要約とする手法である．
+このとき，文の重要度は，語の重要度，文書中での位置，
+タイトルや手がかり表現などに基づいて計算している
+\cite{奥村:テキスト自動要約に関する研究動向,奥村:テキスト自動要約に関する最近の話題}．
+その中でも，重要文は主要キーワードを多く含むという経験則により，
+語の重要度に基づく重要文抽出が最も基本的な手法となっている．
+特に，語の出現頻度は，簡単に求められ，
+語の重要性と比較的高い相関にあるために語の重みとして広く利用されている．
+
+語の出現頻度は個別文書によって決まる性質であるが，一方で，
+検索文書の要約においては，原文書が検索要求の結果として得られた複数の文書で
+あることを考慮することが要約の品質向上につながる．
+例えば従来提案されている基本的な考え方として，
+検索要求中の語の重要度を高くするという「検索質問によるバイアス方式」がある\cite{Tombros:AdvantagesOfQueryBiasedSummariesInInformationRetrieval}．
+この手法は直観的であり，かつ，比較的良好に機能するが，
+検索された文書自身の情報を考慮しないなど幾つかの欠点が存在する．
+
+以上の点を踏まえて，本稿では，検索文書集合から得られる情報を語の重みづけ
+に利用し，検索文書の要約に役立てる新しい手法を提案する．検索質問によるバ
+イアス方式とは異なり，我々の手法では語の重みづけにおいて検索質問の情報を陽に利用しない．そ
+の代わりに，複数の検索文書の間に存在する類似性の構造を階層的クラスタリン
+グにより抽出し，その構造を適切に説明するか否かに応じて語に重みをつける．
+文書間の類似性構造を語の重みに写像する方法として，我々は，各クラスタ内で
+の語の確率分布に注目し，情報利得比(Information Gain Ratio,
+IGR)\cite{C4.5-E}と呼ばれる尺度を用いる．
+そして，この重みと従来提案されている他の重みづけを組み合わせることにより，
+最終的な語の重みとし，これを用いて各文の重要度を計算する．
+
+特に，情報利得比に基づく語の重みづけについては，次のように考えることができる．
+あるクラスタにおける語の情報量
+に注目した場合，そのクラスタを部分クラスタに分割した後のその語の持つ情報
+量の増分(情報利得)が，クラスタの分割自身により得られる情報量に比して大きけ
+れば，その語は部分クラスタの構造を決定する際に役立っていると考えられる．
+その度合を定量化した値が情報利得比である．
+情報利得比自身は機械学習において属性の品質の尺度として，すでに提案されて
+いるものである．また，種々のクラスタリングアルゴリズムの過程からすれば，
+文書のクラスタ構造の決定に際して，各々の語の確率分布が部分的な要因となっ
+ていることは自明である．しかしながら，あるクラスタ構造が確定した時に，あ
+る語がそのクラスタ構造の決定に際して最終的に寄与したか否かに注目し，定量
+化するという研究は，我々の知る限り従来存在しない．そして，本稿は，その定
+量化において，情報利得比が利用できることを示すものである．
+
+
+\section{検索文書集合中の語に対する情報利得比に基づく重みづけ}
+  \label{Sec:検索文書集合中の語に対する情報利得比に基づく重みづけ}
+
+\subsection{検索文書要約の特質}
+  \label{Sec:検索文書要約の特質}
+
+検索文書の要約は，以下の点で通常の文書要約と異なる．
+\begin{itemize}
+ \item 検索質問文が与えられている．
+ \item 複数の要約文書が同時に得られている．
+       そして，ある一度の検索の結果という点において文書間に類似性が認め
+       られる．
+\end{itemize}
+いずれの情報も，検索文書の要約においては有効な手がかりと考えられる．
+ここでは，これらの手掛かりを語の重みづけに用いることを考察する．
+
+まず初めに考えられる手法は，Tombrosら
+\cite{Tombros:AdvantagesOfQueryBiasedSummariesInInformationRetrieval}が
+提案するように，検索質問中の語を重要語として考え，他の語よりも重みを高す
+る方法である．これは，検索質問中の語や句は利用者の情報要求を端的に示すので，
+要約文書にもその語や句が含まれるべきであるという直観に基づくもので，
+「検索質問バイアス方式に基づく要約(Query-biased Summarization)」と呼ばれる．
+
+この方法は，検索質問を考慮するだけであるので，実装が簡単であり，
+ある程度の効果が報告されているが，次の欠点が存在する．
+\begin{itemize}
+ \item 検索質問中の表現をそのまま用いるために，
+       検索エンジンにおける工夫が要約文書に反映されない．
+       例えば，各種フィードバックや検索質問の拡張などは，
+       検索質問を修正/更新することによって検索効率を上げている
+       \footnote{
+       ここでは，既存の情報検索システムに対するバックエンドとして要約生成
+       システムを利用する場合を想定している．この場合，情報検索システムを
+       運用している組織と要約サービスを提供している組織が必ずしも一致しな
+       い．この状況においては，情報検索システムが行なっている工夫に関する
+       情報が利用できない．一方，もしも情報検索システムの行なうフィードバッ
+       クや検索質問拡張の情報が利用できるのであれば，更新後の検索要求に基
+       づき，検索質問によるバイアス手法を適用することも可能である．
+       }．
+ \item 検索エンジンは検索質問文に関連する文書ばかりではなく，
+       関連性の低い文書も結果として返すことがある．検索質問との関連性が
+       低い文書に対しては，検索質問バイアス方式は通常の文書要約になって
+       しまう．
+\end{itemize}
+
+そこで，我々は二番目の選択肢である，
+検索質問文を使わずに，検索文書集合のみを用いて重みづけることを考える．
+検索結果の質が非常に悪くない限り，検索文書集合には検索質
+問に関する情報が暗に含まれていると期待できるので，
+その情報を引き出すのである．
+しかし，各文書に共通する語を抽出するといった単純な方法では精
+度が良くないことは容易に想像される．なぜならば，検索結果の文書集合には，
+もちろん検索質問との関連性が高い文書も含まれるが，関連性の低い文書も含ま
+れるからである．しかも，その度合は検索エンジンの精度に依存してしまう．よっ
+て，単純に文書に共通する語などを取り出すだけでは達成できない．
+我々は以上の点を踏まえて次節に示す枠組を提案する．
+
+\subsection{提案手法の概略}
+
+我々の提案手法の概略を図\ref{Fig:Overview}に示す．
+これは，次の2つの指針の組み合わせたものである．
+\begin{enumerate}
+ \item 検索文書集合に対し階層的クラスタリングを行ない，文書間の類似性の構造を抽出する．\label{step:clustering}
+ \item 文書間の類似性の構造と語の確率分布に基づいて各語の重み付けを行なう．\label{step:weighting}
+\end{enumerate}
+
+\begin{figure}[htbp]
+\begin{center}
+\epsfile{file=overview.eps,scale=0.6}
+\end{center}
+\caption{提案手法の枠組}\label{Fig:Overview}
+\end{figure}
+ステップ\ref{step:clustering}においては，
+検索質問に関連する文書とそうで
+ない文書がクラスタ構造の中で分離されることが期待され，なおかつ，それらの
+文書部分集合においても類似性に基づく細分類がなされると考えられる．
+我々の手法では，語を次元とする文書ベクトルの類似度による階層的クラスタリン
+グを用い，クラスタリングアルゴリズムとしては最大距離アルゴリズムを採用した．
+
+ここで注意すべきことは，検索されなかった文書，すなわち，文書データベース中の残りの文書の存在を類似性構造の中に組み
+込む必要があることである．なぜならば，クラスタ構造において，一番上位のク
+ラスタは与えられた構造として扱う以外になく，類似性の解析の対象とならない
+からである．検索文書全体の類似性構造は，検索されなかった文書集合との対比によって，初めて明らかになる．この類似性構造は，全文書集合と検索質問との間の類似性を反映するので，非常に重要なものである．
+このため，図\ref{Fig:SuperCluster}に示すように検索文書集合から得られたクラスタ構造の根の上にもう一つ仮想的なクラスタを設ける．
+そのクラスタには，検索文書の属する部分クラスタとそれ以外の文書が属する部分クラスタが存在する．
+ここで，我々の方法では，検索文書の属する部分クラスタだけが，
+クラスタリングアルゴリズムにる部分クラスタ解析の対象となる(図
+\ref{Fig:SuperCluster}の左部分木)のに対し，
+検索されなかった文書の属するクラスタ(図\ref{Fig:SuperCluster}の右部分木)に
+ついてはそれ以上の解析が不要である点に注意されたい．
+後に述べる情報利得比の計算においては，検索されなかった文書の属するクラスタについては，その中に存在する語の頻度だけが分かればよい．これは，あらかじめ求めておいた文書データベース中の語の頻度より，簡単に求めることができる．
+よって，我々の手法において実際に文書クラスタリングが行なわれるのは，検索結
+果として利用者に提示する文書に限定される．これは通常数十文書程度であるから，文書クラスタリングにおける計算量はあまり問題とならない．
+
+\begin{figure}[htbp]
+\begin{center}
+\epsfile{file=highest_cluster_en.eps,scale=0.5}
+\end{center}
+\caption{検索文書に対するクラスタ構造}\label{Fig:SuperCluster}
+\end{figure}
+
+このようにして求められた類似性構造は文書を一つの単位とする巨視的な情報で
+あるので，要約のためには，これを文や句，単語を単位とするより微視的な情報
+に還元する必要がある．これが ステップ\ref{step:weighting}である．このス
+テップにおいては，各クラスタが部分クラスタに分割されるにあたって，
+句や単語などより微視的な単位がどれ位寄与しているかを表す指標を定め，これを
+その語句の重要度とする．我々はその指標として情報利得比を用いる．
+
+このようにして求められた情報利得比を，既存の方法でも用いられている重みである，
+語の文書内頻度(term frequency, TF)，文書頻度の逆数(inverse document
+frequency,
+IDF)\cite{Salton:TermWeightingApproachesInAutomaticTextRetrieval,Baeza-Yates:ModernInformationRetrieval}
+と組み合わせることにより，総合的な語の重要度をとする．こ
+れら三種類の重みは，以下の通り，異なる文書情報から得られるものであること
+に注意されたい．よって，これらの組み合わせにより，検索文書の要約に適した
+総合的な重みが得られると期待できる．
+
+\begin{itemize}
+ \item 語の文書内頻度
+
+       個別の文書における各語の分布より決まる重要度で，
+       ある文書中でのその語の重要度を表す．
+
+ \item クラスタ分割に対する語の出現確率に関する情報利得比
+
+       検索文書の類似性構造であるクラスタの分割により決まる重要度で，そ
+       のクラスタ構造におけるその語の重要度を表す．
+
+ \item 文書頻度の逆数
+
+       検索対象の全文書により決まる重要度で，全検索対象文書集合における
+       その語の重要度を表す．
+\end{itemize}
+
+
+\subsection{最大距離アルゴリズムによる階層的クラスタリング}
+
+検索された文書集合の類似性の解析には，文書間の距離の定義とその距離に基づ
+く文書集合の構造化が必要となる．これには様々な方法が考えられるが，本稿で
+は文書間の距離として，様々な場面で利用され，かつ，簡便なTF・IDF法ならび
+にベクトル空間法に基づく方法を採用する\cite{Baeza-Yates:ModernInformationRetrieval}．また，文書集合の類似性に関する解
+析には，階層的クラスタリングを用いる．
+
+階層的クラスタリングアルゴリズムには，併合法などが良く用いられる\cite{Frakes:InformationRetrieval}．しかし，
+この種の方法はクラスタ構造を無理に二分木に当てはめるため，文書間距離の順
+序関係は構造に反映されるものの，その絶対値については捨象されてしまう．
+ここでは，
+文書の類似度に応じて多分岐構造を生成でき，文書間距離の絶対値情報がなるべ
+く保存されるアルゴリズムが望ましい．そのようなアルゴリズムとして，我々は
+最大距離アルゴリズム\cite{長尾:パターン情報処理}を採用した．
+この最大距離アルゴリズムは，本来，非階層
+的なクラスタを生成するものであるが，これを分割の結果得られた部分クラスタ
+に再帰的に適用することにより階層構造を得る．この方法では，各クラスタが3
+以上のクラスタに分割されることもある．
+
+\subsubsection{文書間距離}
+\label{Sec:文書間距離}
+
+ベクトル空間モデルに基づき，各文書$D_i$をn次元空間上の点$(weight_{i1},weight_{i2},\ldots,weight_{in})$により表現する．
+$weight_{ik}$ は文書$D_i$において語$w_k$に割り当てられた重みである．
+重み$weight_{ik}$としては語$w_k$のTF・IDF値とする．
+このとき，文書$D_i$と文書$D_j$の距離dを文書ベクトル間のユークリッド距離を用いて，次のように定義する．
+\begin{eqnarray}
+  d(D_i, D_j) & = &\sqrt{\sum_{k} (weight_{ik} - weight_{jk})^2},\\
+ weight_{ik} & = & tf(D_i,w_k)idf(w_k), \nonumber\\
+ tf(D_i,w_k) & = & \frac{freq(D_i,w_k)}{|D_i|}, \nonumber\\
+ idf(w_k)  & = & 1 + \log_2 \frac{N}{df(w_k)},\nonumber
+\end{eqnarray}
+ただし，
+\begin{quote}
+  \begin{tabular}{ll}
+   $freq(D_i,w_k)$ : & 文書$D_i$での語$w_k$の出現頻度\\
+   $|D_i|$ :& 文書$D_i$中の形態素数\\
+   $df(w_k)$  :& 検索対象の全文書集合における語$w_k$を含む文書数\\
+   $N$ :& 検索対象の全文書の数
+  \end{tabular}
+\end{quote}
+である．
+\comment{
+後に述べる実験においては，語として，名詞のみを扱った．
+文書からの名詞抽出には形態素解析器JUMAN3.61\cite{juman3.61}を用いた\footnote{品詞細分類において，普通名詞，サ変名詞，固有名詞，地名，人名，組織名，数詞，名詞接尾辞，未定義語-その他，未定義語-カタカナ，未定義語-アルファベットをもつ形態素を取り出した．また，これらが連続した場合には，その形態素列を複合語として認定し，一単語としても取り出した．よって，複合語については，複合語自身とその構成素となった形態素の両者が文書ベクトルの成分として考慮されている}．
+また，$df(w_k)$, $N$は検索対象である毎日新聞94年，95年，97年，98年のすべての記
+事から求めた．
+}
+
+\subsubsection{最大距離アルゴリズム}
+
+最大距離アルゴリズムにおいては，まず文書集合から2個以上のクラスタ中心を
+選択し，次に，残りの文書を最近のクラスタ中心と同じクラスタに配置する．
+その主要部分はクラスタ中心を求める部分であり，以下の手続きからなる．
+\begin{enumerate}
+ \item 文書集合$DS$から距離の最も大きい二文書を取り出し，これらを要素とする
+       集合を作成する．これを初期のクラスタ中心の集合$C$とする．
+ \item クラスタ中心集合$C$において，クラスタ中心間での最大距離を求める．
+       これを，$d_{max}$ とする．
+ \item $DS$中の各文書$D_i$について，すべてのクラスタ中心との距離を求め，
+       その最小値を既存クラスタ中心からの距離 $d(D_i,C)$とする．
+        既存クラスタ中心からの距離が最も大きい文書$D_d$を$DS$から取り出す．
+ \item もし，$d(D_d,C) \ge \alpha\cdot d_{max}$ならば，
+       その文書をクラスタ中心集合$C$に追加する．
+       そうでなければ，終了．
+\end{enumerate}
+なお，$\alpha$は $0.5 \leq \alpha < 1.0$なる定数であり，値が大きいほどクラ
+スタの分割数が少なくなる．一般には$0.5$とすることが多い．
+
+以上のアルゴリズムは，単一の文書集合を文書間距離にしたがって複数個の部分
+クラスタに分割する非階層的なアルゴリズムである．これを各部分クラスタに対
+して再帰的に適用することにより，階層的なクラスタ構造を生成する．
+
+\subsection{情報利得比に基づく語の重要度}
+
+クラスタの木における各接点(内点)は，あるクラスタとそれを分割して得られた
+互いに素な部分クラスタの関係，すなわち，クラスタの分割の仕
+方を表現している．この分割の仕方はクラスタ内の文書の類似度に従って決定され
+るので，これを文書内の語の重みに反映させることができれば，複数文書間の類
+似性という巨視的な情報を，文書内の語の重みという微視的な情報に還元できる
+と考えられる．
+
+我々は，この考え方に基づき，次の2つの段階から構成される方法を提案する．
+\begin{enumerate}
+ \item 各クラスタについて，その部分クラスタの構造から，各語の重みを決定する．
+       \label{Step:IGR}
+ \item 一つの文書は，クラスタの木の根接点から対応する葉接点に至るクラスタ分
+       割の系列によって指し示される．よって，各文書における語の重みは，
+       各分割で得られた語の重みを統合して得る．\label{Step:IGRintegrate}
+\end{enumerate}
+このうち，特に重要なのは\ref{Step:IGR}である．その基本的な考え方は，クラ
+スタの分割構造を決定することに寄与する語に高い重みを与えるというものである．
+例として，図\ref{Fig:PartitionWordDist}のように，あるクラスタ$C_0$が3つの
+部分クラスタ($C_1$,$C_2$,$C_3$)に分割されている場合を考える．図中，記号
+$A$,$B$,$D$〜$G$は各々単語に対応するとする．
+さて，語$A$はクラスタ$C_0$における頻
+度が最も高いので，このクラスタの特徴を表す語と考えることができる．しかし，
+各部分クラスタに注目すると，いずれも均等に出現しているため，部分クラスタの
+選択においては役立たないことがわかる．
+一方，語$F$はクラスタ$C_0$において頻度はさほど高
+くはないが，部分クラスタ$C_3$に集中して登場している．この場合，語$F$が出現
+しているか否かを調べることによって，部分クラスタを言い当てることができるの
+で，クラスタの分割構造に対する寄与度は，語$F$は語$A$よりも高いと考え
+られる．我々はこの寄与度を適切に表す尺度として，次に述べる情報利得比を用いる．
+\begin{figure}[htbp]
+\begin{center}
+\epsfile{file=term_dist_ex.eps,scale=0.8}
+\end{center}
+\caption{語の出現分布とクラスタの分割}
+\label{Fig:PartitionWordDist}
+\end{figure}
+
+
+\subsubsection{情報利得比}
+
+情報利得比は，決定木学習システムC4.5において属性選択を行なうために導入され
+た\cite{C4.5-E,Mitchell:MachineLearning}．C4.5においては，ある属性を決定木
+の分岐におけるテストとしたときに，その属性がどれくらい適切にクラスの出現を
+予測できるかを表す尺度として用いられている．我々は，表
+\ref{Table:OurMethod_VS_C4.5}に示す対応の下，クラスタの構造を決定木の構造
+と見なすことにより，情報利得比を用いる．
+\begin{table}[htbp]
+\caption{提案手法とC4.5における計算方法の対応}
+\label{Table:OurMethod_VS_C4.5}
+\begin{center}
+\begin{tabular}{|l|l|}
+\hline
+提案手法         &  C4.5\\
+\hline
+クラスタの分割構造 & 属性によるテスト\\
+単語の出現確率     & クラスの出現確率\\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+C4.5においては属性の評価値として情報利得比を用いていたが，我々の方法にお
+いては，属性ではなくクラスに対応する単語に対する評価値として情報利得比を
+用いる．
+
+クラスタ$C$における単語$w$の情報利得比$gain\_r(w,C)$は次の様に求められる．
+\begin{eqnarray}
+ gain\_r(w,C) & = & \frac{gain(w,C)}{split\_info(C)} \label{Eq:IGR}\\
+ gain(w,C) & = & entropy(w,C) - entropy_{p}(w,C)\nonumber\\
+ entropy(w,C) & = & -p(w|C)\log_2 p(w|C) \nonumber\\
+           &   & - (1-p(w|C))\log_2 (1-p(w|C))\nonumber\\
+ p(w|C)    & = & freq(w,C)/|C|\nonumber\\
+ entropy_{p}(w,C) & = & \sum_{i} \frac{|C_i|}{|C|} entropy(w,C_i)\nonumber\\
+ split\_info(C) & = & - \sum_{i} \frac{|C_i|}{|C|} \log  \frac{|C_i|}{|C|}\nonumber\\
+ freq(w,C) & : & \mbox{クラスタ$C$中の語$w$の頻度}\nonumber\\
+ C_i & : & \mbox{$C$における$i$番目の部分クラスタ}\nonumber\\
+ |C_i| & :& \mbox{クラスタ$C_i$中の総形態素数}\nonumber
+\end{eqnarray}
+
+情報利得$gain(w,C)$ は，クラスタ$C$の分割の前後における，語$w$の確率分布に関するエントロピーの減少量を表す．
+$split\_info(C)$は，クラスタ$C$の分割に関するエントロピーである．
+情報利得比 $gain\_r(w,C)$ は，これらの比として定義される．
+
+例として，図\ref{Fig:PartitionWordDist}における各語について，上述の方法によ
+り情報利得比を計算してみると次の通りとなる．
+{\small
+\[
+ gain\_r(\mbox{B},C_0) \simeq gain\_r(\mbox{F},C_0) >
+ gain\_r(\mbox{E},C_0) = gain\_r(\mbox{G},C_0) > gain\_r(\mbox{D},C_0) >
+ gain\_r(\mbox{A},C_0)
+\]
+\[
+ gain\_r(\mbox{A},C_0) = 0.000,
+ gain\_r(\mbox{B},C_0) = 0.161,
+ gain\_r(\mbox{D},C_0) = 0.031,
+\]
+\[
+ gain\_r(\mbox{E},C_0) = 0.080,
+ gain\_r(\mbox{F},C_0) = 0.157,
+ gain\_r(\mbox{G},C_0) = 0.080
+\]
+}
+$B$や$F$のようにクラスタ構造に沿って現れる語は値が大きく，語$A$のように網
+羅的に分布する場合には値が小さいことは既に述べたとおりである．
+一方，語$D$のように一部のクラスタに集中してはいるものの，他のクラ
+スタにも低い確率ではあるが出現する場合には，値が低くなることがみてとれる．
+さらに，語$F$とほぼ同じく偏りがあるが出現確率が低い語$E$については，
+その値が相対的に低くなる．
+
+\subsubsection{情報利得比に基づく語の重要度}
+
+式(\ref{Eq:IGR})に示される情報利得比は，各クラスタの分割毎に得られる．
+これらを，ある文書中のある語の重みとして利用する方法には，
+利用者向けインタフェースの設計に応じて，
+いくつか考えられる．
+
+例えば，クラスタ構造を利用者に提示しながら，部分クラスタを順次利用者に選
+択してもらうような対話的インタフェースにおいては，各選択点において利用者
+が注目しているクラスタにおける情報利得比を利用し，語の重みを求めることが
+考えられる．
+
+また，すべての検索文書を同時に要約し，一覧形式で利用者に提示するというイ
+ンタフェースにおいては，クラスタの木の根接点からその文書に対応する葉接点
+に至るすべての分割で得られたの情報利得比を何らかの形で統合し，これを語の
+重みとすることが考えられる．
+この時，統合の方法には様々な方法が考えられ得る．
+例えば，ある階層の値を採用する，最大値を採る，すべての値を和もしくは積に
+より統合する，などである．
+
+本稿では，すべての検索文書を同時に要約し，一覧形式で利用者に提示するとい
+う最も基本的なインタフェースを想定し，図\ref{Fig:IGRSum}ならびに式
+(\ref{Eq:IGRsum})に示す情報利得比の重みなしの和を採用する．
+この方法では，すべてのクラスタ分割における情報利得比を等しく考慮することになる．
+
+\begin{eqnarray}
+  igr(w,D) & = & \sum_{C \in Cset(D)} gain\_r(w,C) \label{Eq:IGRsum}\\
+  Cset(D)  & : & \mbox{文書$D$の属するすべてのクラスタの集合} \nonumber
+\end{eqnarray}
+\begin{figure}[htbp]
+\begin{center}
+\epsfile{file=add_igr_en.eps,scale=0.4}
+\end{center}
+\caption{情報利得比による各文書中の語の重みづけ}
+\label{Fig:IGRSum}
+\end{figure}
+
+以上で定義された情報利得比$igr(w,D)$に基づく重みにより，
+文書$D$中の語$w$の重要度 $weight(w,D)$ を定義する．
+以前述べたように，語の重要度には TF，IDF，IGRの各値の組み合わせを考えるが，
+各値が独立に重要度に寄与するものとし，
+組み合わせ方法として積を用いる．
+\begin{eqnarray}
+  weight(w,D) & = & igr(w,D)\cdot tf(w,D)\cdot idf(w)
+\end{eqnarray}
+
+なお，上記の重みを求めるにあたって，変更可能なパラメタを導入し，訓練事例な
+どを用いて，これを適切な値に設定する(チューニングする)ことも考えられる．例
+えば，情報利得比の統合を，各階層の情報利得比の重み付き和により実現し，その
+重みをパラメタとすることが考えられる．また，上述の$weight(w,D)$の式を積で
+はなく，重み付き和として定義し，重みをパラメタとすることも一案である．
+
+しかし，本稿では以下に述べる理由によりパラメタのチューニングが難しいと判断
+したために素朴な統合方式を採用した．
+
+情報検索タスクにおける要約では外的な評価(特定タスクの遂行精度により行なう
+要約手法の評価)によっているために，評価結果を再利用して，このタスクに適合
+したより良いパラメタ値を求めるといった方向に発展させることがし難い．例えば，
+節\ref{Sec:評価}で述べる評価に用いたTSC Task Bでは，
+生成された要約文章に対して被験者による適合性評価が行なわれるものの，適合性
+判定を適切に行なうことができる要約文章を人間に生成してもらうという段階はな
+いために，いわゆる「正解要約」がない．また，仮にそのような「正解要約」を作
+成したとしても，適合性判定を正しく行なうことができる要約には様々な亜種が考
+えられるので，「正解要約」と同じ要約を作成することがこのタスクの本質的であ
+るかという疑問が残る．もちろん，評価・パラメタ再設定・再評価といったチュー
+ニングのためのループに被験者の評価を組み入れることも不可能ではないが，膨大
+な人的資源を必要とするために，我々はこの手法を採用しなかった．
+
+
+
+\section{重要文抽出に基づく要約文書生成}
+
+語の重みは要約生成における基本要素であるから，ほとんどの要約手法に我々の
+手法を組み込むことができると考えられる．しかし，我々の目的は，前節で述べ
+た語の重みづけが検索文書要約において有効であることを示すことである．そこ
+で，次に示す，
+語の重要度だけによる最も基本的な要約手法を以降の評価実験で用いる．
+\begin{enumerate}
+ \item 文書$D$中の文$s$の重要度は次式の通り，文中のキーワードの重みの和を文の長さで正規化したものとする．
+       \begin{eqnarray}
+	s\_imp(s,D) & = & \frac{\displaystyle\sum_{w \in keyw(s)} weight(w,D)}{|s|} \\
+	keyw(s) & : & \mbox{文$s$中のキーワードのリスト}\nonumber\\
+        |s| & : & \mbox{文$s$の総形態素数}\nonumber
+       \end{eqnarray}
+
+ \item ある決められた要約の長さに達するまで，
+       原文書から重要度の高い順に文を取り出していく．
+ \item 取り出した文を原文書における出現順に並べ変えて要約文書を得る．
+\end{enumerate}
+
+\section{評価}
+\label{Sec:評価}
+
+本節では，我々の要約方式について，二通りの視点から評価を行なう．
+
+まずは，
+検索タスクの精度・効率の良さと言う観点から，評価型情報検索ワークショップで
+あるNTCIR2\cite{NTCIR}におけるTSC(Text Summarization Challenge)における
+「課題B IRタスク用要約」(以下，TSC Task Bと呼ぶ)に基づいて評価を行なう\cite{TSC_new_J,難波:第2回NTCIRワークショップ自動要約タスクの結果および評価法の分析}．
+
+つぎに，
+幾つかの例により，我々の方式が各語に与える重要度を，検索質問を考
+慮しない語の重みづけ手法(TF値，TF・IDF値)と比較することにより，我々の重要度
+計算手法の特徴を定性的に評価する．
+
+なお，我々の評価実験においては，要約生成の手順に以下の条件を加えた．
+\begin{itemize}
+ \item 記事の表題(見出し文．Headline)と本文を区別せずに要約の入力とする．
+ \item 名詞をキーワードとする．
+       文書からの名詞抽出には形態素解析器JUMAN3.61\cite{juman3.61}を用いた
+       \footnote{品詞細分類において，普通名詞，サ変名詞，固有名詞，地名，
+       人名，組織名，数詞，名詞接尾辞，未定義語-その他，未定義語-カタカナ，
+       未定義語-アルファベットをもつ形態素を取り出した．また，これらが連続
+       した場合には，その形態素列を複合語として認定し，一単語としても取り
+       出した．クラスタリングにおいて，複合語については，複合語自
+       身とその構成素となった形態素の両者が文書ベクトルの成分として考慮さ
+       れている．一方，各文の重要度計算におい
+       ては，複合語を構成せず，各形態素の重みのみを利用している．}．
+ \item IDF値等の計算においては，当初TSC実行委員会から発表された使用
+       新聞記事データである毎日新聞1994年，1995年，1998年に加えて，
+       手元にあった1997年を全文書集合とした．
+ \item 最大距離アルゴリズムにおけるパラメタ$\alpha$は0.5とする．
+ \item 要約を一覧形式で提示することを想定すると，要約文書の長さが統一されているほうが，見やすい．
+       そのため，要約文書の長さは要約率ではなく，絶対的な長さにより決定する．
+       具体的には，150形態素をしきい値とする．
+ \item 文書の総形態素数が150より短い場合には要約をせずに原文書を提示する．
+ \item 要約生成に当たって，原文書の文が省略されている箇所には「…」を加え，
+       原文書の段落箇所には改行を加える．
+\end{itemize}
+
+
+\subsection{情報検索タスクにおける要約品質の評価実験の概要}
+
+図\ref{Fig:SummaryInIR}に情報検索タスクにおける要約品質の評価実験の概要を
+示す．
+TSC Task Bにおいては，TSC実行委員会より配布されたデータセットに，12のトピッ
+クがあり，それぞれ，検索要求1，検索文書50文書から構成されている．検索文書
+は1998年の毎日新聞の記事集合から検索されたものである．
+
+TSCへの参加者は各自のシステムを用いて，これらの文書を要約し，実行委員会に提出
+する．提出された要約文書に対して，TSC実行委員会による被験者を用いた評価が
+行なわれた．被験者は学生36名で，各検索要求につき，3人が割り当てられている．
+被験者は各要約を読むことによって，それが検索要求に適合しているか否かの判
+断を行う．その判断と，あらかじめ原文書に対して付与されている関連性評価
+\footnote{当然，参加者には，当初，非公開である．}(以下，関連度ともいう)を比較することにより，要約の品質が評価される．すなわち，
+両者が一致する度合が高いシステムほど有効な要約を生成すると考えることができ
+る．
+原文書に付与されている関連性評価はA,B,Cの三段階である．
+ここで，Aはその文書が検索要求に適合すること，Bは関係のある文書であること，Cは関係のない文書であることを表す．
+これに対して，被験者らには関連性の有無(YES/NO)という二段階で提示してもらう．
+よって，両者の一致の判定においては，
+A判定の文書だけを関連文書とする場合(Answer Level A)と，
+A判定に加えてB判定の文書も関連文書とする場合(Answer Level B)が考えられる．
+\begin{figure}[htbp]
+\begin{center}
+\epsfile{file=eval-based-on-irtask-mori-en.eps,scale=0.8}
+\end{center}
+\caption{情報検索タスクにおける要約品質の評価}\label{Fig:SummaryInIR}
+\end{figure}
+
+\subsection{総合評価}
+
+表\ref{Table:EvaluationResultAll}に個別の評価尺度についての結果を他の参加
+システム(8システム)ならびにTSC実行委員会が準備したベースラインシステム(3システム)と比較して示す．
+ベースラインシステムは，
+「全文提示(Fulltext)」(要約率100\%)，
+「質問バイアス付きTFに基づく方式(TF with QB)」(要約率20\%)，
+「文書の先頭を採るリード方式(Lead)」(要約率20\%)である．
+質問バイアス付きTF法は，TFを語の重みとして重要文抽出を行なうものであるが，
+この時に，検索質問に現れる語について2倍の重みを与えている．
+これらのシステムの概略については，付録
+\ref{Appendix:NTCIR2 TSC Task B に参加した他システムの概要}を参照されたい．
+
+評価尺度には以下のものを用いた．いずれの値も，全てのトピックを通じて集計した
+ものである．
+\begin{itemize}
+  \item 被験者が1検索要求に関するタスク(50文書)に要した時間(TIME)
+  \item タスクをどの程度適切に行なえたかを示す指標．
+	すなわち，再現率(Recall)，適合率(Precision)，F値
+	(F-measure)\footnote{
+	$\mbox{再現率(Recall)} =\frac{\mbox{被験者が正しく適合と判断した文書数}}{\mbox{実際の適合文書の総数}}$,\\
+	$\mbox{適合率(Precision)} =\frac{\mbox{被験者が正しく適合と判断した文書数}}{\mbox{被験者が適合と判断した文書の総数}}$,\\
+	$\mbox{F値(F-measure)} = \frac{2\cdot Recall\cdot Precision}{Recall + Precision}$．
+	}．
+  \item 要約文書の長さ(1文書あたりの平均文字数,LENGTH)
+\end{itemize}
+\begin{table}[htbp]
+\caption{総合評価一覧}
+\label{Table:EvaluationResultAll}
+\footnotesize
+\begin{center}
+\comment{
+\begin{tabular}{|l*{9}{c}|ccc|}
+\hline
+ & \shortstack[c]{Proposed} & Sys 1 & Sys 2 & Sys 3 & Sys 4 & Sys 6
+ & Sys 7 & Sys 8 & Sys 9 & Fulltext & \shortstack{TF\\ with QB} & Lead\\
+\hline
+\shortstack[l]{Recall\\(Ans.  A)}  & 
+{\bf 0.907} & 0.833 & 0.899 & 0.793 & 0.818 & 0.858 & 0.831 & 0.824 & 0.849 & 0.843 & 0.798 & 0.740\\
+\shortstack[l]{Precision\\(Ans.  A)} &
+0.751 & 0.728 & 0.717 & 0.685 & 0.674 & 0.718 & 0.739 & 0.738 & 0.741 & 0.711 & 0.724 & {\bf 0.766}\\
+\shortstack[l]{F-Measure\\(Ans.  A)} &
+{\bf 0.808} & 0.761 & 0.785 & 0.715 & 0.718 & 0.763 & 0.766 & 0.749 & 0.768 & 0.751 & 0.738 & 0.731\\
+\shortstack[l]{Recall\\(Ans.  B)} &
+0.754 & 0.741 & {\bf 0.793} & 0.715 & 0.737 & 0.745 & 0.719 & 0.719 & 0.752 & 0.736 & 0.700 & 0.625\\
+\shortstack[l]{Precision\\(Ans.  B)} &
+0.897 & 0.921 & 0.904 & 0.898 & 0.875 & 0.892 & 0.908 & 0.913 & {\bf 0.923} & 0.888 & 0.913 & 0.921\\
+\shortstack[l]{F-Measure\\(Ans.  B)} &
+0.797 & 0.808 & {\bf 0.828} & 0.776 & 0.773 & 0.785 & 0.779 & 0.775 & 0.805 & 0.773 & 0.776 & 0.712\\
+TIME & 8:33 & 9:41 & 12:48 & {\bf 6:25} & 6:44 & 9:01 & 10:16 & 9:16 & 9:31 & 13:46 & 8:44 & 7:32\\
+LENGTH &  234.4 & 297.8 & 585.7 & {\bf 89.5} & 136.4 & 288.4 & 292.9 & 266.1 & 262.5 & 819.4 & 253.6 & 174.5\\
+\hline
+\end{tabular}
+}
+\begin{tabular}{|l*{9}{@{\hspace{0.8em}}c}|*{3}{@{\hspace{0.2em}}c}|}
+\hline
+ & Proposed & Sys 1 & Sys 2 & Sys 3 & Sys 4 & Sys 6 & Sys 7 & Sys 8 & Sys 9 & Fulltext & \shortstack{TF\\ with QB} & Lead\\
+\hline
+\shortstack[l]{Recall\\(Ans.  A)}  & 
+{\bf 0.907} & 0.833 & 0.899 & 0.793 & 0.818 & 0.858 & 0.831 & 0.824 & 0.849 & 0.843 & 0.798 & 0.740\\
+\shortstack[l]{Precision\\(Ans.  A)} &
+0.751 & 0.728 & 0.717 & 0.685 & 0.674 & 0.718 & 0.739 & 0.738 & 0.741 & 0.711 & 0.724 & {\bf 0.766}\\
+\shortstack[l]{F-Measure\\(Ans.  A)} &
+{\bf 0.808} & 0.761 & 0.785 & 0.715 & 0.718 & 0.763 & 0.766 & 0.749 & 0.768 & 0.751 & 0.738 & 0.731\\
+\shortstack[l]{Recall\\(Ans.  B)} &
+0.754 & 0.741 & {\bf 0.793} & 0.715 & 0.737 & 0.745 & 0.719 & 0.719 & 0.752 & 0.736 & 0.700 & 0.625\\
+\shortstack[l]{Precision\\(Ans.  B)} &
+0.897 & 0.921 & 0.904 & 0.898 & 0.875 & 0.892 & 0.908 & 0.913 & {\bf 0.923} & 0.888 & 0.913 & 0.921\\
+\shortstack[l]{F-Measure\\(Ans.  B)} &
+0.797 & 0.808 & {\bf 0.828} & 0.776 & 0.773 & 0.785 & 0.779 & 0.775 & 0.805 & 0.773 & 0.776 & 0.712\\
+TIME & 8:33 & 9:41 & 12:48 & {\bf 6:25} & 6:44 & 9:01 & 10:16 & 9:16 & 9:31 & 13:46 & 8:44 & 7:32\\
+LENGTH &  234.4 & 297.8 & 585.7 & {\bf 89.5} & 136.4 & 288.4 & 292.9 & 266.1 & 262.5 & 819.4 & 253.6 & 174.5\\
+\hline
+\end{tabular}
+
+\begin{tabular}{ll}
+Sys 1〜9: & TSC参加の他システム(付録
+\ref{Appendix:NTCIR2 TSC Task B に参加した他システムの概要}
+参照)\\
+Ans. A, Ans. B: & Answer Level A, Answer Level Bにそれぞれ対応\\
+Fulltext: & 原文書\\
+TF with QB: & ベースラインその1．質問バイアス付きTFによる重要文抽出手法．\\
+            & 検索要求中の単語に2倍の重み．要約率20\%(文ベース)\\
+Lead: & ベースラインその2．先頭から20\%の文を抽出する手法．タイトルは出力しない．
+\end{tabular}
+\end{center}
+\end{table}
+
+\subsection{適合性判断のための所要時間とその精度に関する評価}
+
+情報検索の結果の文書に対する要約においては，利用者が行なう適合性判断のため
+の時間の短さと，適合性判断の正確さが共に達成されることが必要である．一方で，
+両者はトレードオフの関係にある．例えば，長い要約文書を提示すれば，タスク遂
+行の時間が長くなるが，一方で，精度は概ね向上すると考えられる．よって，両者
+を同時に評価する尺度が必要とされるが，未だ良いものが提案されていない．そこ
+で，我々のシステムを含む各システムの再現率，適合率，F値について，
+適合性判断のための所要時間との関係
+をプロットした．Answer Level A,Bの場合を図\ref{Fig:Time-RPF}にぞれぞれ示す．
+
+\begin{figure}[htbp]
+\begin{center}
+\begin{tabular}{ccc}
+\begin{minipage}{0.3\hsize}
+\begin{center}
+\epsfile{file=L_A-Time-Recall.eps,scale=0.5}\\
+再現率\\
+\end{center}
+\end{minipage}&
+\begin{minipage}{0.3\hsize}
+\begin{center}
+\epsfile{file=L_A-Time-Precision.eps,scale=0.5}\\
+適合率\\
+\end{center}
+\end{minipage}&
+\begin{minipage}{0.3\hsize}
+\begin{center}
+\epsfile{file=L_A-Time-F.eps,scale=0.5}\\
+F値\\
+\end{center}
+\end{minipage}\\
+\multicolumn{3}{c}{(A) Answer Level A}\\
+
+\begin{minipage}{0.3\hsize}
+\vspace*{5mm}
+\begin{center}
+\epsfile{file=L_B-Time-Recall.eps,scale=0.5}\\
+再現率\\
+\end{center}
+\end{minipage}&
+\begin{minipage}{0.3\hsize}
+\vspace*{5mm}
+\begin{center}
+\epsfile{file=L_B-Time-Precision.eps,scale=0.5}\\
+適合率\\
+\end{center}
+\end{minipage}&
+\begin{minipage}{0.3\hsize}
+\vspace*{5mm}
+\begin{center}
+\epsfile{file=L_B-Time-F.eps,scale=0.5}\\
+F値\\
+\end{center}
+\end{minipage}\\
+\multicolumn{3}{c}{(B) Answer Level B }\\
+\multicolumn{3}{c}{\vspace{-5mm}}\\
+\multicolumn{3}{c}{Proposed:我々の手法，Fulltext:原文書，TF with QB:質問バイアス付き}\\
+\multicolumn{3}{c}{TFによる重要文抽出手法，Lead: 先頭から20\%の文を抽出する手法，}\\
+\multicolumn{3}{c}{無印: 他の参加システム}\\
+\end{tabular}
+\caption{判定時間と再現率，適合率，F値の関係}\label{Fig:Time-RPF}
+\end{center}
+\end{figure}
+
+
+  
+  
+  
+  
+  
+  
+
+また，判定時間と要約文書の平均文字数の間の関係を図\ref{Fig:Time-Length}に
+示す．
+
+\begin{figure}[htbp]
+ \begin{center}
+  
+  \epsfile{file=Time-Length.eps,scale=0.5}
+ \end{center}
+ \caption{判定時間と要約文書の平均長(文字単位)の関係}\label{Fig:Time-Length}
+\end{figure}
+
+\subsection{トピック毎の適合性判断の精度に関する評価}
+
+これまで示した結果では，全てのトピックに亙る平均値を用いてタスクの遂行精度を議
+論してきたが，当然，トピックによって各システムの精度が異なるはずである．
+そこで，我々の手法と各ベースライン手法による要約に
+おいて，トピック毎のタスク遂行精度をプロットした．
+Answer Level A,Bの場合をそれぞれ図\ref{Fig:Topic-RPF}に示す．
+なお，図中`Ave.'は全トピックに亙る平均値である．
+
+  
+  
+  
+  
+  
+  
+
+\begin{figure}[htbp]
+\begin{center}
+\begin{tabular}{ccc}
+\begin{minipage}{0.3\hsize}
+\begin{center}
+\epsfile{file=Topic_L_A_recall.eps,scale=0.33}\\
+再現率\\
+\end{center}
+\end{minipage}&
+\begin{minipage}{0.3\hsize}
+\begin{center}
+\epsfile{file=Topic_L_A_precision.eps,scale=0.33}\\
+適合率\\
+\end{center}
+\end{minipage}&
+\begin{minipage}{0.3\hsize}
+\begin{center}
+\epsfile{file=Topic_L_A_F.eps,scale=0.33}\\
+F値\\
+\end{center}
+\end{minipage}\\
+\multicolumn{3}{c}{(A) Answer Level A}\\
+
+\begin{minipage}{0.3\hsize}
+\vspace*{5mm}
+\begin{center}
+\epsfile{file=Topic_L_B_recall.eps,scale=0.33}\\
+再現率\\
+\end{center}
+\end{minipage}&
+\begin{minipage}{0.3\hsize}
+\vspace*{5mm}
+\begin{center}
+\epsfile{file=Topic_L_B_precision.eps,scale=0.33}\\
+適合率\\
+\end{center}
+\end{minipage}&
+\begin{minipage}{0.3\hsize}
+\vspace*{5mm}
+\begin{center}
+\epsfile{file=Topic_L_B_F.eps,scale=0.33}\\
+F値\\
+\end{center}
+\end{minipage}\\
+\multicolumn{3}{c}{(B) Answer Level B }\\
+\end{tabular}
+\caption{トピック毎の再現率，適合率，F値}\label{Fig:Topic-RPF}
+\end{center}
+\end{figure}
+
+
+
+\subsection{適合と判断した被験者の数による要約の質の定量的評価}
+
+要約文書の質を今少し詳細に検討するために，各々の文書に対して，
+関連性有り(YES)と答えた被験者の人数を調べる．
+この人数はトピックに対する生成された要約文書の関連度の高さを表す尺度と考え
+られる．そこで，原文書を関連性判定(A,B,C)によって分類し，
+その要約に対してYESと判定した人数毎に文書頻度を集計し，プロットした．
+結果を図\ref{Fig:Rel-Judge}に示す．
+
+ 
+  
+  
+  
+  
+ 
+
+\begin{figure}[htbp]
+\begin{center}
+\begin{tabular}{ccc}
+\begin{minipage}{0.3\hsize}
+\begin{center}
+\epsfile{file=YES_A.eps,scale=0.33}\\
+(A) 原文書関連度A\\
+\end{center}
+\end{minipage}&
+\begin{minipage}{0.3\hsize}
+\begin{center}
+\epsfile{file=YES_B.eps,scale=0.33}\\
+(B) 原文書関連度B\\
+\end{center}
+\end{minipage}&
+\begin{minipage}{0.3\hsize}
+\begin{center}
+\epsfile{file=YES_C.eps,scale=0.33}\\
+(C) 原文書関連度C\\
+\end{center}
+\end{minipage}\\
+\end{tabular}
+\end{center}
+\caption{原文書の関連度と要約文書に対する適合性判断の関係}
+\label{Fig:Rel-Judge}
+\end{figure}
+
+\subsection{語の重み付けに対する評価}
+
+語の重みづけについては正解というものがないので，定量的にその評価をすること
+が難しい．ここでは，最も基本的な重みづけである，TF値，TF・IDF値による重みと，
+本手法の重みづけを実例により比較し，定性的に我々の語の重要度決定手法の特徴
+を検討する．
+
+ここでは，典型的な語の重みがどの様になっているかを調べることが主眼であるの
+で，我々のシステムで最もF値の高かったトピック1027に注目した．このトピック
+の内容を表\ref{Table:Topic1027}に示す．
+\begin{table}[htbp]
+ \caption{TSC Task Bのトピック1027}
+ \label{Table:Topic1027}
+ \begin{tabular}{|lp{100mm}|}
+  \hline
+  {\sc description}フィールド: & ハイビジョンテレビ\\
+  \hline
+  {\sc narrative}フィールド: & ハイビジョンテレビ（高精細度テレビ、ＨＤＴ
+  Ｖ）に関する政治、企業、ユーザーなどからの情報を含む記事。ハイビジョンの
+  標準化、実験、放送やハイビジョンの売れ行き、国内外の動向、各種論議も含む。\\
+  \hline
+ \end{tabular}
+\end{table}
+このトピックについて，原文書の関連度がそれぞれ，A，B，Cであるものを一つず
+つ選択し，各種の語の重みけを行なった結果について，上位10位までを求めた．
+表
+\ref{Table:weight1027A},\ref{Table:weight1027B},\ref{Table:weight1027C}に
+その結果を示す．
+表においてIGRsumは式(\ref{Eq:IGRsum})に示される情報利得比の和であり，
+TFIDFIGRsumはTF・IDF値にIGRsumを乗じた値である．
+
+\begin{table}[htbp]
+\caption{文書に対する語の重みの例(Topic 1027，記事番号980822075，関連度A)}
+\label{Table:weight1027A}
+\footnotesize
+\begin{center}
+\begin{tabular}{|r|ll|ll|ll|ll|}
+  \hline
+  \hspace{-1mm}順位\hspace{-1mm}	  & \multicolumn{2}{c|}{TF}& \multicolumn{2}{c|}{TF・IDF} & \multicolumn{2}{c|}{IGRsum} & \multicolumn{2}{c|}{TFIDFIGRsum}\\
+  \hline 
+& & & & & & & & \\[-8pt]
+  1	  & 放送     & \hspace{-2mm}8\hspace{-1.0mm}	  & 放送       & \hspace{-2mm}$1.14\times 10^{-4}$\hspace{-1.5mm} & 放送         & \hspace{-2mm}$9.52\times 10^{-3}$\hspace{-1.5mm} & 放送         & \hspace{-2mm}$1.09\times 10^{-6}$\hspace{-1.5mm} \\
+  2	  & 申請     & \hspace{-2mm}6\hspace{-1.0mm}	  & ＢＳ       & \hspace{-2mm}$9.68\times 10^{-5}$\hspace{-1.5mm} & デジタル     & \hspace{-2mm}$3.10\times 10^{-3}$\hspace{-1.5mm} & ＢＳ         & \hspace{-2mm}$2.54\times 10^{-7}$\hspace{-1.5mm} \\
+  3	  & 番組     & \hspace{-2mm}5\hspace{-1.0mm}	  & 申請       & \hspace{-2mm}$9.41\times 10^{-5}$\hspace{-1.5mm} & ＢＳ         & \hspace{-2mm}$2.63\times 10^{-3}$\hspace{-1.5mm} & 番組         & \hspace{-2mm}$1.87\times 10^{-7}$\hspace{-1.5mm} \\
+  4	  & ＢＳ     & \hspace{-2mm}4\hspace{-1.0mm}	  & ＳＤＴＶ   & \hspace{-2mm}$8.23\times 10^{-5}$\hspace{-1.5mm} & 番組         & \hspace{-2mm}$2.38\times 10^{-3}$\hspace{-1.5mm} & デジタル    & \hspace{-2mm}$1.22\times 10^{-7}$\hspace{-1.5mm} \\
+  5	  & 衛星     & \hspace{-2mm}3\hspace{-1.0mm}	  & 番組       & \hspace{-2mm}$7.86\times 10^{-5}$\hspace{-1.5mm} & テレビ       & \hspace{-2mm}$2.20\times 10^{-3}$\hspace{-1.5mm} & ＨＤＴＶ    & \hspace{-2mm}$1.10\times 10^{-7}$\hspace{-1.5mm} \\
+  6	  & １番組   & \hspace{-2mm}2\hspace{-1.0mm}	  & １番組     & \hspace{-2mm}$7.66\times 10^{-5}$\hspace{-1.5mm} & ハイビジョン & \hspace{-2mm}$2.13\times 10^{-3}$\hspace{-1.5mm} & 申請         & \hspace{-2mm}$8.37\times 10^{-8}$\hspace{-1.5mm} \\
+  7	  & ＨＤＴＶ & \hspace{-2mm}2\hspace{-1.0mm}	  & ＨＤＴＶ   & \hspace{-2mm}$6.44\times 10^{-5}$\hspace{-1.5mm} & ＨＤＴＶ     & \hspace{-2mm}$1.70\times 10^{-3}$\hspace{-1.5mm} & 衛星         & \hspace{-2mm}$7.95\times 10^{-8}$\hspace{-1.5mm} \\
+  8	  & ＳＤＴＶ & \hspace{-2mm}2\hspace{-1.0mm}	  & 衛星       & \hspace{-2mm}$5.42\times 10^{-5}$\hspace{-1.5mm} & 郵政省       & \hspace{-2mm}$1.66\times 10^{-3}$\hspace{-1.5mm} & 郵政省      & \hspace{-2mm}$6.20\times 10^{-8}$\hspace{-1.5mm} \\
+  9	  & テレビ   & \hspace{-2mm}2\hspace{-1.0mm}	  & 各３番組   & \hspace{-2mm}$4.34\times 10^{-5}$\hspace{-1.5mm} & 衛星         & \hspace{-2mm}$1.47\times 10^{-3}$\hspace{-1.5mm} & テレビ      & \hspace{-2mm}$5.55\times 10^{-8}$\hspace{-1.5mm} \\
+  10	  & デジタル & \hspace{-2mm}2\hspace{-1.0mm}	  & 計２２番組 & \hspace{-2mm}$4.34\times 10^{-5}$\hspace{-1.5mm} & デジタル放送 & \hspace{-2mm}$1.37\times 10^{-3}$\hspace{-1.5mm} & ハイビジョン & \hspace{-2mm}$5.44\times 10^{-8}$\hspace{-1.5mm} \\
+  \hline
+\end{tabular}
+\end{center}
+\end{table}
+\begin{table}[htbp]
+\caption{文書に対する語の重みの例(Topic 1027，記事番号981215216，関連度B)}
+\label{Table:weight1027B}
+\footnotesize
+\begin{center}
+\begin{tabular}{|r|ll|ll|ll|ll|}
+  \hline
+  \hspace{-1mm}順位\hspace{-1mm}	  & \multicolumn{2}{c|}{TF}& \multicolumn{2}{c|}{TF・IDF} & \multicolumn{2}{c|}{IGRsum} & \multicolumn{2}{c|}{TFIDFIGRsum}\\
+  \hline
+& & & & & & & & \\[-8pt]
+  1	  & 関西     & \hspace{-2mm}8\hspace{-1.0mm} & 関西           & \hspace{-2mm}$1.08\times 10^{-4}$\hspace{-1.5mm} & 放送       & \hspace{-2mm}$9.52\times 10^{-3}$\hspace{-1.5mm} & 放送       & \hspace{-2mm}$8.14\times 10^{-7}$\hspace{-1.5mm} \\
+  2	  & 放送     & \hspace{-2mm}6\hspace{-1.0mm} & 放送           & \hspace{-2mm}$8.55\times 10^{-5}$\hspace{-1.5mm} & 企業       & \hspace{-2mm}$3.15\times 10^{-3}$\hspace{-1.5mm} & ＢＳ       & \hspace{-2mm}$1.27\times 10^{-7}$\hspace{-1.5mm} \\
+  3	  & 情報     & \hspace{-2mm}4\hspace{-1.0mm} & ＣＳ           & \hspace{-2mm}$7.17\times 10^{-5}$\hspace{-1.5mm} & 情報       & \hspace{-2mm}$2.95\times 10^{-3}$\hspace{-1.5mm} & ＣＳ       & \hspace{-2mm}$1.20\times 10^{-7}$\hspace{-1.5mm} \\
+  4	  & ＣＳ     & \hspace{-2mm}3\hspace{-1.0mm} & 番組制作会社   & \hspace{-2mm}$6.59\times 10^{-5}$\hspace{-1.5mm} & ＢＳ       & \hspace{-2mm}$2.63\times 10^{-3}$\hspace{-1.5mm} & 関西       & \hspace{-2mm}$1.20\times 10^{-7}$\hspace{-1.5mm} \\
+  5	  & 衛星     & \hspace{-2mm}3\hspace{-1.0mm} & 発信           & \hspace{-2mm}$5.77\times 10^{-5}$\hspace{-1.5mm} & 番組       & \hspace{-2mm}$2.38\times 10^{-3}$\hspace{-1.5mm} & 情報       & \hspace{-2mm}$1.19\times 10^{-7}$\hspace{-1.5mm} \\
+  6	  & 発信     & \hspace{-2mm}3\hspace{-1.0mm} & 衛星           & \hspace{-2mm}$5.42\times 10^{-5}$\hspace{-1.5mm} & チャンネル & \hspace{-2mm}$1.72\times 10^{-3}$\hspace{-1.5mm} & 衛星       & \hspace{-2mm}$7.95\times 10^{-8}$\hspace{-1.5mm} \\
+  7	  & １程度   & \hspace{-2mm}2\hspace{-1.0mm} & １程度         & \hspace{-2mm}$5.33\times 10^{-5}$\hspace{-1.5mm} & ＣＳ       & \hspace{-2mm}$1.68\times 10^{-3}$\hspace{-1.5mm} & 番組       & \hspace{-2mm}$7.48\times 10^{-8}$\hspace{-1.5mm} \\
+  8	  & ＢＳ     & \hspace{-2mm}2\hspace{-1.0mm} & ＢＳ           & \hspace{-2mm}$4.84\times 10^{-5}$\hspace{-1.5mm} & 衛星       & \hspace{-2mm}$1.47\times 10^{-3}$\hspace{-1.5mm} & 企業       & \hspace{-2mm}$7.19\times 10^{-8}$\hspace{-1.5mm} \\
+  9	  & 会社     & \hspace{-2mm}2\hspace{-1.0mm} & 関西電力       & \hspace{-2mm}$4.34\times 10^{-5}$\hspace{-1.5mm} & 通信       & \hspace{-2mm}$1.40\times 10^{-3}$\hspace{-1.5mm} & 発信       & \hspace{-2mm}$3.83\times 10^{-8}$\hspace{-1.5mm} \\
+  10	  & 関西電力 & \hspace{-2mm}2\hspace{-1.0mm} & 関西チャンネル & \hspace{-2mm}$4.34\times 10^{-5}$\hspace{-1.5mm} & 関西       & \hspace{-2mm}$1.11\times 10^{-3}$\hspace{-1.5mm} & チャンネル & \hspace{-2mm}$3.69\times 10^{-8}$\hspace{-1.5mm} \\
+  \hline
+\end{tabular}
+\end{center}
+\end{table}
+\begin{table}[htbp]
+\caption{文書に対する語の重みの例(Topic 1027，記事番号981108028，関連度C)}
+\label{Table:weight1027C}
+\footnotesize
+\begin{center}
+{\footnotesize
+\begin{tabular}{|r|ll|ll|ll|ll|}
+  \hline
+  \hspace{-1mm}順位\hspace{-1mm}	  & \multicolumn{2}{c|}{TF}& \multicolumn{2}{c|}{TF・IDF} & \multicolumn{2}{c|}{IGRsum} & \multicolumn{2}{c|}{TFIDFIGRsum}\\ \hline
+& & & & & & & & \\[-8pt]
+  1       & 放送           & \hspace{-2mm}7\hspace{-1.0mm} & 自由ヨーロッパ & \hspace{-2mm}$1.30\times 10^{-4}$\hspace{-1.5mm} & 放送    & \hspace{-2mm}$9.52\times 10^{-3}$\hspace{-1.5mm} & 放送            & \hspace{-2mm}$9.50\times 10^{-7}$\hspace{-1.5mm} \\
+  2	  & チェコ         & \hspace{-2mm}6\hspace{-1.0mm} & チェコ         & \hspace{-2mm}$1.26\times 10^{-4}$\hspace{-1.5mm} & 企業    & \hspace{-2mm}$3.15\times 10^{-3}$\hspace{-1.5mm} & 番組            & \hspace{-2mm}$1.12\times 10^{-7}$\hspace{-1.5mm} \\
+  3	  & 自由           & \hspace{-2mm}5\hspace{-1.0mm} & 放送           & \hspace{-2mm}$9.98\times 10^{-5}$\hspace{-1.5mm} & 情報    & \hspace{-2mm}$2.95\times 10^{-3}$\hspace{-1.5mm} & チェコ          & \hspace{-2mm}$1.09\times 10^{-7}$\hspace{-1.5mm} \\
+  4	  & イラク         & \hspace{-2mm}4\hspace{-1.0mm} & プラハ         & \hspace{-2mm}$7.95\times 10^{-5}$\hspace{-1.5mm} & 番組    & \hspace{-2mm}$2.38\times 10^{-3}$\hspace{-1.5mm} & 自由ヨーロッパ  & \hspace{-2mm}$7.03\times 10^{-8}$\hspace{-1.5mm} \\
+  5	  & イラン         & \hspace{-2mm}4\hspace{-1.0mm} & イラン         & \hspace{-2mm}$7.64\times 10^{-5}$\hspace{-1.5mm} & 局      & \hspace{-2mm}$1.21\times 10^{-3}$\hspace{-1.5mm} & 自由            & \hspace{-2mm}$5.01\times 10^{-8}$\hspace{-1.5mm} \\
+  6	  & ヨーロッパ     & \hspace{-2mm}4\hspace{-1.0mm} & ヨーロッパ     & \hspace{-2mm}$7.32\times 10^{-5}$\hspace{-1.5mm} & 開始    & \hspace{-2mm}$9.89\times 10^{-4}\hspace{-1.5mm}$ & ヨーロッパ      & \hspace{-2mm}$4.24\times 10^{-8}$\hspace{-1.5mm} \\
+  7	  & 政府           & \hspace{-2mm}4\hspace{-1.0mm} & 自由           & \hspace{-2mm}$7.32\times 10^{-5}$\hspace{-1.5mm} & チェコ  & \hspace{-2mm}$8.70\times 10^{-4}$\hspace{-1.5mm} & イラク          & \hspace{-2mm}$4.23\times 10^{-8}$\hspace{-1.5mm} \\
+  8	  & プラハ         & \hspace{-2mm}3\hspace{-1.0mm} & イラク         & \hspace{-2mm}$7.29\times 10^{-5}$\hspace{-1.5mm} & 政府    & \hspace{-2mm}$8.05\times 10^{-4}$\hspace{-1.5mm} & イラン          & \hspace{-2mm}$4.22\times 10^{-8}$\hspace{-1.5mm} \\
+  9	  & 自由ヨーロッパ & \hspace{-2mm}3\hspace{-1.0mm} & チェコ政府     & \hspace{-2mm}$7.10\times 10^{-5}$\hspace{-1.5mm} & 米国    & \hspace{-2mm}$7.58\times 10^{-4}$\hspace{-1.5mm} & プラハ          & \hspace{-2mm}$3.62\times 10^{-8}$\hspace{-1.5mm} \\
+ 10	  & 番組           & \hspace{-2mm}3\hspace{-1.0mm} & 召             & \hspace{-2mm}$5.29\times 10^{-5}$\hspace{-1.5mm} & 自由    & \hspace{-2mm}$6.84\times 10^{-4}$\hspace{-1.5mm} & 企業            & \hspace{-2mm}$3.59\times 10^{-8}$\hspace{-1.5mm} \\
+  \hline
+\end{tabular}
+}
+\end{center}
+\end{table}
+
+\section{考察}
+
+
+\subsection{タスク遂行の精度}
+
+TSC Task Bは，利用者(被験者)が要約文書を読むことにより，原文書のト
+ピックに対する関連度を推定するタスクであった．よって，この場合の要約は報知
+的(informative)である必要はなく，指示的(indicative)でありさえすれば良い．
+
+このような要約においては，原文書に関する細かいニュアンスが伝達されるエレガ
+ントな要約文書が生成される必要はなく，適切なキーワードの選択とそのキーワー
+ドがどのような文脈で現れているかを説明する文書部分の抽出が適切にできればよい
+と考えられる．この考え方に従えば，キーワードの抽出の精度が高ければ，我々が
+用いた程度の文抽出による要約機構でもタスクを十分遂行できる要約文書が得られるはずである．
+
+以下ではAnswer Level A,B に分けて，上記の観点からタスク遂行の精度を考察す
+る．
+
+\subsubsection{Answer Level A}
+\label{Sec:Answer Level A}
+
+本節では検索質問に対して適合文書(A判定)のみを正解とした評価(Answer Level
+A)について考察を行なう．表\ref{Table:EvaluationResultAll}によると，我々の
+手法は，再現率，適合率，F値すべてにおいて，他のすべての参加システムよりも
+高い値を示している．
+
+ベースラインシステムとの比較においては，我々のシステムの適合率はLead手法よ
+りも1.5ポイント低い値を示しているものの，それ以外は勝っている．Lead手法は，
+再現率が他の手法に比べて一番低いため総合指標であるF値においてはさほど高く
+なく，我々のシステムよりも7.7ポイント低い．すなわち，Lead手法は適合率重視
+の手法と見なすことができる．
+
+質問バイアス付きTF法と比較してみると，再現率において
+10.9ポイント，適合率において2.7ポイント，F値において7.0ポイント勝っている．
+このことは，検索文書の要約においては，必ずしも検索要求を直接使用しなくても，
+検索文書群だけで同等以上の質を持つ要約が可能であることを示している．
+
+次に，適合性判断の所要時間とタスク遂行の精度について考える．まず，表
+\ref{Table:EvaluationResultAll}によると，所要時間単独についていえば，我々
+のシステムが生成した要約に対し，被験者が適合性判定に要した時間は，1トピッ
+ク(50文書)あたり8分33秒であった．これは，TSCに参加した9システム中，3番めに
+短いものであった．また，すべての参加システムの平均タスク時間は1トピック当
+たり 9分8秒 であり，我々の要約の適合性判定に要する時間はこれよりも短い．そ
+して，所要時間と各種評価値の関係を示す図\ref{Fig:Time-RPF}(A)においては，
+概ね，左上に位置するシステムの性能が良いと考えられるので，我々のシステムは
+他のシステムに勝っていると言えよう．特に，再現率は適合率に比べてシステム間
+での格差が大きく，我々のシステムの再現率の高さが見てとれる．
+
+図\ref{Fig:Topic-RPF}(A)によれば，他のベースラインシステムはトピックによっ
+て，再現率が大きく変動しているが，我々のシステムはトピックにあまり依
+存せず安定して高い再現率を示している．これは，被験者が，関連文書(関連度A)の
+要約に対して適合すると概ね正しく判断したことを示す．一方，適合率についてい
+えば，他のベースラインシステムとほぼ同様の傾向で，我々のシステムもトピック
+によってその精度が大きく変動している．これは，トピックによっては，我々のシ
+ステムが，非関連文書(関連度B,C)に対して一見すると関連性があると見誤る文を抽
+出し，要約の一部として提示していることを表す．以上をまとめると，まず，我々
+の手法は，トピックに関連する文を原文書から積極的に抽出していることがわかる．
+一方，そのような文の周囲の文脈については，抽出を促す戦略を採っていないこと
+から，それらの抽出洩れにより，非関連文書に対して関連性があると見誤るような
+要約を生成する可能性もあることがわかる．
+
+なお，図\ref{Fig:Time-Length}をみると，要約文書長と適合性判定の所要時間は
+一定時間のオフセット(5分52秒)がついているものの，システムの違いによらず，
+ほぼ，比例関係となっている．一方，各システムの出力する要約文書については，
+適合性判定の精度にばらつきが見られる．よって，要約文書の適合性判定時間は適
+合性判定の結果によらず，要約文書の長さのみに依存していると考えられる．
+
+
+\subsubsection{Answer Level B}
+\label{Sec:Answer Level B}
+
+本節ではB判定まで含めた評価(Answer Level B)について考察を行なう．他のシ
+ステムと比較して，再現率が第2位と高いものの，適合率は第7位，F値は第4位と
+相対順位が低くなった．Answer Level B の評価においては，Answer Level Aよ
+りも正解の数が多くなるので，一般に，Answer Level Aに比べて，再現率が下降
+し，適合率が高くなる．再現率についていえば，Answer Level Aにおいて，高い
+適合率となったシステムほど減少が激しくなる．一方，適合率については，B判
+定のものがAnswer Level A での誤判定となっているのであれば，その値の上昇
+が著しい．
+
+我々のシステムの場合，再現率が 0.907 から 0.754 へと激しく低下しており，
+図\ref{Fig:Topic-RPF}(B)に示される通り，トピック毎の変動が大きくなっている．
+しかし，その順位について言えば，2位であるので相対的には他のシステムよりも高いことがわかる．
+つまり，関連文書(評価A,B)に対して正しく関連性の判定が行なわれた要約文書の数は他のシステムよりも多い．
+
+一方で，適合率の上昇は他のシステムより低いので，被験者が関連度評価Cの文書
+の要約に対しても適合であると判定を下した数が多かったことになる．これは，
+Answer Level Aの考察で述べたことを裏付けており，トピックに関連する文の抽出
+は成功しているものの，その文脈が脱落する場合も少なからずあることを示してい
+る．ただし，図\ref{Fig:Time-RPF}(B)や図\ref{Fig:Topic-RPF}(B)が示すとおり，
+適合率のシステム間の差異は再現率ほど大きくなく，また，Answer Level Aの適合
+率に比べてもシステム間の格差が小さくなっている．
+
+\subsubsection{提案手法とベースラインとの差異に関する検定}
+
+前節までに述べたタスクの遂行精度において，提案手法と他の手法の間に有意な差
+があるか否かを検証するためには，統計検定を行なう必要がある．
+
+しかし，TSC実行委員会が提供する結果情報において，トピック毎の個別の評価が
+得られるのは自システムならびにベースライン三種のみだけである．そこで，ここ
+では，提案手法がベースライン三種との間に有意な差があるかを検証する．
+
+総合性能を表すF値についてトピック毎の値の差に基づきWilcoxonの符号順位検定
+を行なった．提案手法と各ベースラインを比較した時に「F値に差が無い」という
+帰無仮説に対する有意確率pを表\ref{Table:Wilcoxon}に示す．
+
+\begin{table}[htbp]
+ \caption{本手法とベースラインとの間の差異に関するWilcoxon符号順位検定の結果}
+ \label{Table:Wilcoxon}
+ \begin{center}
+  \begin{tabular}{|l|l|l|l|}
+   \hline
+                & 対 TF with QB	 & 対 Lead  & 対 Fulltext\\
+   \hline
+   Answer Level A & $\bf{p=0.0161 < 0.05}$  &
+                       $\bf{p=0.0400 < 0.05}$ & $p=0.0522 > 0.05$\\
+   \hline
+   Answer Level B	& $p=0.4238 > 0.05$ &
+                       $\bf{p=0.0332 < 0.05}$& $p=0.9097 > 0.05$\\
+   \hline
+   \end{tabular}\\
+  \vspace*{5pt}
+  太字は有意水準5\%の下で差があることが示されたもの．
+  \end{center}
+\end{table}
+
+この表によると，Answer Level Aにおいては，
+提案手法がベースラインTF with QBならびにLeadに対して，有意水準5\%の下で，
+差を持つことが示されている．Fulltextとの比較については，有意水準5\%の下での差
+異を示すことができなかったが，帰無仮説を採択する確率が5.2\%程度で同有意水
+準との差は僅差である．
+
+一方，Answer Level Bにおいては，ベースラインとの差が Answer Level Aほど顕
+著ではない．有意水準5\%の下で差がある事が示されたのはLead手法との対比だけ
+であった．
+
+
+\subsection{適合と判断した被験者の数による要約の質の定量的評価}
+
+図\ref{Fig:Rel-Judge}(A)についてみると，トピックに対する原文書の関連度が
+Aの場合には，いずれのシステムにおいても，当然ながら，3人が一致してYESとす
+る場合が最も多く，2人，1人，0人と順に頻度が低くなっていく．我々の手法につ
+いてみ
+ると，他のベースライン手法に比べて，3人が一致してYESと答えた頻度が高くなっ
+ており，一方，1人，2人がYESと答えた頻度が低くなっている．すなわち，関連性
+のある文書については，他の手法より質の高い要約が生成されていたと考えられる．
+また，Lead手法については，3人が一致してNOとつけた件数が他のベースラインよ
+りも多くなっている．つまり，関連判定に重要な部分は必ずしも文頭にあるわけで
+はなく，一般的な新聞記事の要約で良い戦略の一つとされるLead手法が情報検索タ
+スクにおいては，必ずしも有効ではないことがわかる．
+
+一方，関連度Bが与えられている原文書についていえば，
+本来はNOであるべきであるから，YESとした人数が0の場合の頻度が大きく，
+3人の場合の頻度が少なくなる傾向にあるはずである．
+ただし，関連性が一部認められる記事の要約に対する評価であるから，
+要約の仕方によっては1〜2人程度の人がYESと判定する頻度も(C)の場合に比べて
+多くなることが予想される．
+図\ref{Fig:Rel-Judge}(B)をみると，TF手法を除いて，この傾向がみられ，
+特にLead手法において顕著である．
+TF手法においては，0人の頻度が少なく，被験者3人のうち1人以上が関連性があると判定
+していることがわかる．
+
+そして，図\ref{Fig:Rel-Judge}(C)についてみると，概ね，0人，1人，2人，3人と
+順に頻度が低くなっていく．
+誤った判定の箇所，すなわち1人，2人，3人の箇所をみると，
+ベースライン手法よりも我々の手法のほうが上方にグラフが描かれている．
+すなわち，他のベースライン手法よりも関連度Cの文書に対して誤って関連性があ
+ると判断した被験者が多かったことを示している．
+これは，節\ref{Sec:Answer Level A}ならびに
+節\ref{Sec:Answer Level B}で考察したことを再確認するものである．
+
+
+\subsection{語の重み付けに関する考察}
+
+我々の提案する語の重みづけについてその特徴を実例(検索トピック1027,「ハイビ
+ジョンテレビ」)により考察する．
+表\ref{Table:weight1027A}において，
+我々が最終的に用いる語の重みであるTFIDFIGRsumの列に示されるように，
+関連度Aの文書においては，検索トピックに陽に示されて
+いる語はもちろんのこと，「BS」，「番組」，「デジタル」，「申請」，「衛星」，
+「郵政省」など，そのトピックに関連する語も上位に重み付けられていることが分
+かる．その一方で，TF・IDF値では上位にあった非関連語「SDTV」(標準テレビ)につ
+いては，上位10位から姿を消している．
+これらの効果は，TF・IDFの列とIGRsumの列を比較すれば分かるが，
+IGRsumの成分が主に寄与している．
+そして，このような重みづけは質問バイアス付きTF手法では，質問拡張
+\cite{Baeza-Yates:ModernInformationRetrieval,Salton:ImprovingRetrievalPerformanceByRelevanceFeedback}
+などを別途行なわない限り実現できないものである．
+
+関連度BやCの文書についても，表
+\ref{Table:weight1027B},\ref{Table:weight1027C}に示されるとおり，トピック
+に関連の深い語が上位に重み付けられていることが見てとれる．
+また，関連度Cの例では，IGRsumの値が低いものも上位に見られるが，いずれもトピッ
+クとは関係の薄い語である．
+
+\subsection{語の重みづけの品質と検索文書の数ならびに品質に関する考察}
+\label{Sec:語の重みづけの品質と検索文書の数ならびに品質に関する考察}
+
+本手法による重みづけは，クラスタリングの対象となる文書の件数ならびに検索結
+果の質と密接な関係にある．
+
+本来ならば，TSC Task Bと同一条件の下で，要約の対象となる文書数ならびに検索
+結果の質を変化させての追加検証が必要であるが，TSC Task Bと同一被験者による
+再実験が困難であるため，ここでは，定性的な考察を行なう．定量的な考察は今後
+の課題としたい．
+
+さて，本手法で語の重みに用いている情報利得比の和は，クラスタ構造に則した分
+布をしている語に高い重みを与えるものであるから，検索文書をクラスタリングし
+た結果，どのようなクラスタ構造が形成されるかによって，各語の重みが決まる．
+
+クラスタ構造は対象となる文書間の類似性により求めるので，検索文書のうち，クラ
+スタリングの対象となる文書群(以下，単に検索文書群と呼ぶ)について，その数と
+文書間の類似度に密接な関係がある．さらに，本手法では，図
+\ref{Fig:SuperCluster}に示すように文書データベース中の全文書が所属するクラ
+スタを最上位に考え，検索文書群とそれ以外の文書群の間の差異についても重みに
+反映しているので，全体のクラスタ構造は情報検索の精度とも関係がある．
+
+そこで，以下では，上記二点について個別に考察を行なう．
+
+
+\subsubsection{語の重みづけの品質と検索文書数に関する考察}
+\label{Sec:語の重みづけの品質と検索文書数に関する考察}
+
+採用する文書が少ない場合と多い場合について考察する．
+まず，採用する文書数が少ない場合について，検索文書群と残りの文書群との対比
+から得られる重み，ならびに，検索文書群をクラスタリングした結果から得られる
+重みがどのようになるかを考える．最終的な語の重みはこれらの和である．
+
+文書数が少ない場合には，文書集合中の総単語数ならびに個々の単語の頻度も小さ
+くなるので， 平滑化(smoothing)をせずに単語頻度から語の出現確率を直接推定す
+ると，語の頻度の小さな差異が語の出現確率の大きな変化となることがある．この
+時，残りの文書群における単語の出現確率との差が大きくなれば，その語の重みが
+不当に高くなる可能性がある．本稿では用いてはいないが，単語出現確率の推定に
+おいては平滑化を考慮すべきであろう．
+
+検索文書のクラスタリングについては，クラスタ中の文書数ならびにクラスタ構造
+の枝分かれが少なくなるので，各文書間の類似性関係がクラスタ構造に大きな影響
+を与える．そして，情報利得比の計算においては，語の重要度が個別文書における
+語の現れ方に敏感になる．
+           
+一方，採用する文書数が大きい場合には，個々の単語の出現頻度が相対的に大きく
+なることと，個々の文書間の類似度がクラスタ構造に与える効果が分散・平滑化さ
+れることにより，上記と逆の傾向があると考えられる．
+
+ただし，検索質問との関連性が低い文書が数多くなってくると，検索質問に述べら
+れたトピックとは関連性の低い語がクラスタ形成の際に支配的になる事も有り得る．
+この場合は，本来のトピックに関連する語には相対的に低い重みしか与えられない．
+これは，検索文章群において，より重要な項目を強調するという点では正しい重み
+の付き方ではあるが，本来のトピックとの関連性判定という観点からは，誤らせる
+方向にバイアスがかかってしまう．このような場合にはTombrosら
+\cite{Tombros:AdvantagesOfQueryBiasedSummariesInInformationRetrieval}の提
+案するような検索質問によるバイアス方式の方が適切な結果を与えるので，両者を
+併用する方法も検討すべきであろう．
+
+
+\subsubsection{語の重みづけの品質と情報検索の品質に関する考察}
+
+検索結果の質も，検索文書群と残りの文書群との対比から得られる語の重み，なら
+びに，検索文書群をクラスタリングした結果から得られる語の重みの両者に影響を
+与える．
+
+まず，検索文書群と残りの文書群との対比から得られる語の重みについて考える．
+この段階で検索質問に関連する語に比重がおかれた適切な重みづけがなされるため
+には，残りの文書集合と比較して検索文書集合側に関連文書が多く存在し，それに
+伴い関連する語の出現確率が偏る必要がある．情報検索の質が非常に悪く，文書集
+合からほぼランダムに検索文書が取り出されるのであれば，検索文書集合とそれ以
+外の文書集合の間で各語の出現確率に見られる差異は小さく，対比によって得られ
+る語の重みはいずれも小さな値に留まる．一方，検索エンジンが，検索質問に従っ
+て，ある程度分布の偏った文書集合を返すとすれば，その度合に応じて，検索質問
+に関連する語の重みも高くなる．
+
+次に検索文書群をクラスタリングした結果から得られる語の重みについて考える．
+節\ref{Sec:語の重みづけの品質と検索文書数に関する考察}でも述べた通り，検索
+質問との関連性が低い文書が多くなると，検索質問に述べられたトピックとは関連
+性の低い語が，クラスタ形成の際に支配的になる事も有り得る．この場合は，本来
+のトピックに関連する語とは別の語に高い重みが与えられる．この時には，検索質
+問によるバイアス方式の方が性能が良いと考えられる．
+
+前項とともに以上をまとめると，我々の重み付け方式が十分な効果を発揮するためには，
+\begin{description}
+ \item[条件 1] 情報検索エンジンの精度が悪くない事
+ \item[条件 2] 検索質問に関連する文書が検索結果中にある程度存在する事
+\end{description}
+の二点を満足することが必要であると考えられる．また，
+これらの条件を満足しない場合，特に，条件2を満たさない場合にも対応できるた
+めには，検索質問によるバイアス方式との併用を検討することも重要であろう．
+本節の定量的な評価とともに今後の課題としたい．
+
+
+\section{関連研究}
+\label{Sec:関連研究}
+
+節\ref{Sec:検索文書要約の特質}でも述べたように，検索結果の文書要約は，
+通常の文書要約とは次の点で異なる．
+\begin{enumerate}
+ \item 検索要求文が与えられている．\label{step:query}
+ \item 複数の文書が同時に得られている．そして，ある一度の検索の結果と
+       いう点において文書間に類似性が認められる．\label{step:doc}
+\end{enumerate}
+
+本研究においては(\ref{step:doc})の情報を用いたが，
+(\ref{step:query})の情報を利用した手法もある．
+
+Tombrosら\cite{Tombros:AdvantagesOfQueryBiasedSummariesInInformationRetrieval}は, 文書中のタイトル情報，文書中での位置情報，
+文書中での単語の出現頻度に基づいた，従来通りの文の重要度に，
+検索要求文中の単語が文中に出現する頻度に応じたスコアを加味することで，
+検索要求文に依存した重要文抽出を実現している．
+塩見ら\cite{塩見:視点を考慮した文書要約手法の提案}も，文書中の単語の出現頻度に基づいた文の重要度に，
+検索要求中の単語が文中に出現する頻度に応じた
+スコアを加味する手法を提案している．
+しかし，これらの手法は，スコアの制御が難しいことが問題点である．
+また，節\ref{Sec:検索文書要約の特質}で述べた通り，各種フィードバック，検索要求中の単語のシソーラスによる拡張などといった
+情報検索システムにおける工夫が反映されないという問題点がある．
+
+
+また，(\ref{step:doc})の情報を利用するという点では，
+Eguchiら
+\cite{Eguchi:AdaptiveQueryExpansionBasedOnClusteringSearchResults}，
+Fukuharaら
+\cite{Fukuhara:Multiple-textSummarizationForCollectiveKnowledgeFormation}，
+Radevら\cite{Radev:Centroid-basedSummarizationOfMultipleDocuments,Radev:Centroid-basedSummarizationOfMultipleDocuments}の手法が関連する．
+Eguchiらは，適合性フィードバックに基づく検索システムを構築している．
+このシステムでは，検索結果を文書間の類似度に基づいてクラスタリングし，
+各クラスタごとにクラスタに多く含まれる語と，そのクラスタを代表する
+文書のタイトルを，そのクラスタの要約として出力する．ユーザに，出力された
+クラスタの中から選択してもらい，そのクラスタに含まれる文書を用いて
+適合性フィードバックを行なっている．
+FukuharaらやRadevらも，Eguchiらと同様に検索結果を文書間の類似度に基づいて
+クラスタリングし，各クラスタごとに要約を出力している．
+Fukuharaらの手法では，まず，文書中の単語の出現頻度を考慮し，
+クラスタごとのトピックを表す語を抽出する．
+そして，それらトピックを含む文を抽出し，焦点−主題連鎖を考慮して並べ替え，
+各クラスタの要約としている．
+Radevらの手法では，各クラスタについて，その重心ベクトルをTF・IDF値を用いて計
+算し，その重心における各語の成分を語の重みの主要な成分としている．
+
+これらの手法では，クラスタリングを文書のグループ分けのみに利用しており，
+グループ化された後では，各クラスタにおける語の分布だけを用いて重みを計算し
+ている．また，語の重要度としては単純にクラスタ内の
+TFやIDFを用いているだけである．直接の比較は今後の課題とするが，我々の手法
+においては，文書間の類似性構造の情報も取り入れて重みづけしているので，より
+高い分解能ならびに精度が得られていることが期待される．
+
+TSC Task B における評価では，検索文書集合が与えられてはいるものの，
+最終的には個別文書の要約になっていた．一方，
+\cite{Mani:SummarizingSimilaritiesAndDifferencesAmongRelatedDocuments,McKeown:GeneratingSummariesOfMultipleNewsArticles}
+に代表されるように，複数文書から一つの要約文書を生成するという研究も近年注
+目を集めている．
+特にCarbonellら\cite{Carbonell:TheUseOfMMR:Diversity-BasedRerankingforReorderingDocumentsAndProducingSummaries}
+は，極大限界適合度(Maximal Marginal Relevance,MMR)という概念を導入し，検索質問
+と検索文書の類似度ならびに，ある文書とそれよりも上位の文書との間の冗長性に基づいて，
+検索文書の再順位づけを行なうとともに，これを，パッセージ検索に利用すること
+によって要約生成を行なう手法を提案している．
+
+我々の重み付け手法は複数文書を一つの要約にする場合にでも，効果を発揮す
+ることが期待されるが，文書間の融合過程においては，冗長性の制御を陽に行なう
+MMRのような手法との組み合わせも必要になってくるであろう．
+
+
+\section{おわりに}
+
+本稿では，複数の検索文書の間に存在する類似性の構造を階層的クラスタリングに
+より抽出し，その構造を適切に説明するか否かに応じて情報利得比に基づき語に重
+みをつける手法を提案した．TSCでの実験の結果，この方法に基づく重要文抽出型
+の要約手法は，検索文書の要約において，非常に有効であることが示された．
+
+今後の課題としては，節
+\ref{Sec:語の重みづけの品質と検索文書の数ならびに品質に関する考察}
+に述べたように本手法と検索文書の数ならびに品質の間の定量的な関係を明らかに
+することが挙げられる．また，情報利得比に基づく語の重みを，
+対話型の情報検索インタフェース中で利用することを検討することも課題である．
+本稿では，クラスタ構造の全部分を均一に語の重みに反映させて要約を作成した．
+一方で，対話型のインタフェースとしては，
+利用者が部分クラスタを選択しながら，目的の情報に辿りつくというものも考えられる．
+この場合，提示された箇所のクラスタ構造のみを考慮して，
+要約を生成することができると考えられる．
+さらに，複数文書の要約において我々の枠組がどの様に役立つのかも検討したい．
+
+\acknowledgment
+
+本研究を進めるにあたり，本学大学院生であった菊池美和さん(現在，(株)NTTデータ)ならびに吉田和史さん(現在，三菱電機(株))に多大なる御協力を頂きました．ここに感謝いたします．
+また，国立情報学研究所主催のNTCIRならびにTSC1を企画・運営し，
+評価用データを作成していただいた皆様に感謝致します．
+なお，本研究を遂行するにあたって，CD-毎日新聞94年版，95年版，97年版，98年版を利用させていただきました．使用許諾をしていただいた毎日新聞社，ならびに，
+同データの研究利用に対して御尽力いただいた皆様に感謝致します．
+最後になりましたが，数多くの有益なコメントを頂いた査読者の方に感謝いたします．
+
+本研究の一部は文部科学省科学研究費特定領域研究「ITの深化の基盤を拓く情報学
+研究」(課題番号 13224041，14019041)により支援を受けております．
+
+\bibliographystyle{jnlpbbl}
+\bibliography{summarization,InformationRetrieval,learning,algorithms,manual}
+
+\appendix
+\section{NTCIR2 TSC Task B に参加した他システムの概要}
+\label{Appendix:NTCIR2 TSC Task B に参加した他システムの概要}
+
+NTCIR2 TSC Task B に参加した他システムについて，
+NTCIR2 Workshop論文集に基づきその概略を述べる\cite{
+Nobata:SentenceExtractionSystemAssemblingMultipleEvidence,
+Nakao:HowSmallADistinctionAmongSummariesCanTheEvaluationMethodIdentify,
+Hirao:TextSummarizationBasedOnHanningWindowAndDependencyStructureAnalysis,
+Oka:PhraseRepresentationSummarizationMethodAndItsEvaluation
+}．
+なお，システム Sys 7 については，その詳細は不明である．
+
+\subsection{ベースライン TF with QB}
+TSC実行委員会が提供するベースラインの一つで，
+文抽出型でスコアの上位の文から指定の要約率になるまで抽出．
+要約率は20\%(文を単位とする)．
+各文のスコアは，内容語(名詞，動詞，形容詞，未定義語)のTFの和であるが，
+検索トピック中の語にはバイアスが与えられ，2倍の重みとする．
+この「2倍」という定数がどのように決定されたか，
+例えば，何らかのチューニングが施されているかなどは不明である．
+
+
+\subsection{ベースライン Lead}
+TSC実行委員会が提供するベースラインの一つで，
+文抽出型で本文の先頭から指定の要約率になるまで抽出．
+要約率は20\%(文を単位とする)．
+
+\subsection{ベースライン Fulltext}
+TSC実行委員会が提供するベースラインの一つで，
+原文書のうち，表題(見出し文)ならびに本文をそのまま返すもの．
+要約率は100\%(文を単位とする)．
+
+
+\subsection{システム Sys 1, Sys 2} \comment{CRL+NYUグループ}
+文抽出型でスコアの上位の文から指定の要約率になるまで抽出．
+要約率は10\%(Sys 1)ならびに50\%(Sys 2)．
+文のスコアは，次の3つの値を重み付きで加算したものである．
+(1)文書中の文の位置に基づくスコアで，文書の先頭ならびに文末に高い重みを付与
+する．
+(2)文長に基づくスコアで長いものに高い重みをつける．
+(3)名詞のTF・IDF値の和をスコアとしたもの．ただし，
+   見出しに含まれる名詞ならびに固有表現(Named Entity)については，
+   そのTF・IDF値を加算し，
+   トピック中のDESCRIPTIONおよびNARRATIVEフィールドの名詞に対しては，さらに，
+   TF・IDF値を2倍にする．
+
+\subsection{システム Sys 3, Sys 4} \comment{富士Xerox}
+
+語と語の間の重要な関係を見つけ出し，それを元に要約を句レベルで生成する．
+その関係の重みは各語の重みの和に関係の重みを乗じたものである．
+各語の重みは TF・IDF値で求めるが，
+トピック中の語については高い重みを与える(詳細は不明)．
+語の間の関係については，格による依存関係には高い値を，
+等位接続などには低い値を与える．
+要約文書の長さは文字数で与えられ，100文字以内(Sys 3)もしくは150文字以内(Sys 4)である．
+
+\subsection{システム Sys 6} \comment{NTT通信研}
+文抽出型で，ハニング関数を用いた窓により各パッセージの重要度を計算し，その	中から重要文を抽出する．
+パッセージの重要度計算においてはトピック内の語のみに注目する．
+また，文書の先頭部分は無条件に加える．
+要約率は明示されていないが，35\%程度である．
+
+
+\subsection{システム Sys 8, Sys 9}\comment{富士通研グループ}
+
+文抽出型で，与えられたキーワードを網羅する文を優先しつつ，
+全てのキーワードが要約文書に出現するまで文を抽出する．
+キーワードは，文書タイトル，文書の先頭段落(Sys 8のみ)，
+話題構造の境界にある文中の語(Sys 9のみ)，
+トピック中のDESCRIPTIONならびにNARRATIVEから，それぞれ，
+名詞，動詞，形容詞 を取り出したものである．
+
+
+\begin{biography}
+\biotitle{略歴}
+\bioauthor{森 辰則}{
+1986年横浜国立大学工学部情報工学科卒業．
+1991年同大学大学院工学研究科博士課程後期修了．
+工学博士．
+同年，同大学工学部助手着任．
+同講師を経て現在，同大学大学院環境情報研究院助教授．
+この間，1998年2月より11月までStanford大学客員研究員．
+自然言語処理，情報検索，情報抽出などの研究に従事．
+言語処理学会，情報処理学会，人工知能学会，日本ソフトウェア科学会，日本認知
+ 科学会，ACM, AAAI各会員．
+}
+
+\bioreceived{受付}
+\biorevised{再受付}
+\bioaccepted{採録}
+
+\end{biography}
+\end{document}

@@ -1,0 +1,802 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+
+
+\newcommand{\figref}[1]{} 
+\newcommand{\tabref}[1]{} 
+\newcommand{\argmax}{} 
+\newcommand{\argmin}{} 
+
+
+\Volume{20}
+\Number{2}
+\Month{June}
+\Year{2013}
+
+\received{2012}{10}{12}
+\revised{2012}{12}{26}
+\accepted{2013}{3}{6}
+
+\setcounter{page}{161}
+
+\jtitle{文書分類のためのNegation Naive Bayes}
+\jauthor{古宮嘉那子\affiref{Author_1} \and 伊藤　裕佑\affiref{Author_2} \and 佐藤　直人\affiref{Author_3} \and 小谷　善行\affiref{Author_1}}
+\jabstract{
+本論文は，文書分類のための新手法として，Negation Naive Bayes (NNB)を提案する．
+  NNBは，クラスの補集合を用いるという点ではComplement Naive Bayes (CNB) と等しいが，
+  Naive Bayes (NB) と同じ事後確率最大化の式から導出されるため， 事前確率を数学的に正しく考慮している点で異なっている．
+  NNBの有効性を示すため，オークションの商品分類の実験とニュースグループの文書分類の実験を行った．
+  ニュースグループの文書分類では，一文書あたりの単語数（トークン数）を減らした実験と，クラスごとの文書数を不均一にした実験を行い，NNBの性質を考察した．
+  NB，CNB，サポートベクターマシン (SVM) と比較したところ，特に一文書当たりの単語数が減り，クラスごとの文書数が偏る場合において，NNBが他のBayesianアプローチより勝る手法であること，
+また，時にはSVMを有意に上回り，比較手法中で最も良い分類正解率を示す手法であることが分かった．
+}
+\jkeywords{文書分類，Naive Bayes分類器，Complement Naive Bayes分類器}
+
+\etitle{Negation Naive Bayes for Text Classification}
+\eauthor{Kanako Komiya\affiref{Author_1} \and Yusuke Ito\affiref{Author_2} \and Naoto Sato\affiref{Author_3} \and Yoshiyuki Kotani\affiref{Author_1}} 
+\eabstract{
+In this study, we proposed negation naive Bayes (NNB), a new method for text classification. 
+Similar to complement naive Bayes (CNB), NNB uses the complement class. However, unlike CNB, NNB  properly considers the prior in a mathematical way  
+because NNB is derivable from the same equation (the maximum a posteriori equation) from which naive Bayes (NB) is derived. 
+We carried out classification experiments on products offered on an internet auction site and on the 20 Newsgroups data set. 
+For the latter, we carried out experiments in the following two settings and discussed the properties of NNB: 
+(1) settings in which the number of words in each document decreases and (2) settings in which the distribution of documents over classes is skewed. 
+We compared NNB with NB, CNB, and support vector machine (SVM). Our experiments showed that NNB outperforms other Bayesian approaches 
+when the number of words in each document decreases and when texts are distributed non-uniformly over classes. 
+Our experiments also showed that NNB sometimes provides the best accuracy and significantly outperforms SVM.
+}
+\ekeywords{text classification, Naive Bayes Classifier, Complement Naive Bayes Classifier}
+
+\headauthor{古宮，伊藤，佐藤，小谷}
+\headtitle{文書分類のためのNegation Naive Bayes}
+
+\affilabel{Author_1}{東京農工大学工学研究院}{Institute of Engineering, Tokyo University of Agriculture and Technology}
+\affilabel{Author_2}{東京農工大学工学部}{Faculty of Engineering, Tokyo University of Agriculture and Technology}
+\affilabel{Author_3}{東京農工大学工学府}{Graduate School of Engineering, Tokyo University of Agriculture and Technology}
+
+
+
+\begin{document}
+\maketitle
+
+
+
+\section{はじめに}
+
+文書分類においてNaive Bayes (NB) を利用するのは極めて一般的である．
+しかし，多項モデルを用いたNB分類器では，クラス間の文書数に大きなばらつきがある場合に，大きく
+性能が下がるという欠点があった．そのため，\citeA{Rennie}は
+「クラスに属する文書」ではなく「クラスに属さない文書」，つまり「補集合」を用いることによりNBの欠点を緩和
+したComplement Naive Bayes (CNB) を提唱した．
+しかし，CNBはNBと同じ式，つまり事後確率最大化の式から導くことができない．
+そこで我々は，事後確率最大化の式から導くことのできるNegation Naive Bayes (NNB) を提案し，その性質を他のBayesianアプローチと比較した．
+その結果，クラスごとの単語数（トークン数）が少なく，なおかつクラス間の文書数に大きなばらつきがある場合には
+分類正解率がNB，CNBをカイ二乗検定で有意に上回ること，また，これらの条件が特に十分に当てはまる場合には，事前確率を無視したCNBも同検定で有意に上回ることを示す．
+また，NNBは，Bayes手法以外の手法であるサポートベクターマシン (SVM) よりも，時に優れた結果を示した．
+
+本稿の構成は以下のようになっている．まず\ref{Sec:関連研究}節でBayes手法のテキスト分類
+の関連研究について紹介する．
+\ref{Sec:Negation Naive Bayesの導出}節では提案手法であるNNBの導出について述べる．
+\ref{Sec:実験}節では本研究で用いたデータと実験方法について述べ，
+\ref{Sec:結果}節に結果を，\ref{Sec:考察}節に考察を，\ref{Sec:まとめ}節にまとめを述べる．
+
+
+
+\section{関連研究} \label{Sec:関連研究}
+
+これまでに数多くの文書分類に関する研究がなされており，これらの中でも，Bayesの手法はよく用いられている\cite{持橋}．
+
+\citeA{井筒}はhtmlファイルの自動分類でNBを使用し，ルールベースの手法や判別分析に比べて，プログラム開発者にかかる負担の低さとスケーラビリティの高さを指摘している．
+\citeA{Andrew}はNBを適用してテキスト分類を行う際に使用する事象モデルとして，多項モデルと多変量ベルヌーイモデルの違いを述べ，分類結果から多項モデルの優位性を示している．
+\citeA{Lewis}は，文書分類問題において単語と句，単語と句のクラスタ化の有無，全ての索引語を用いるか一部を用いるかの違いについて，分類精度の比較を行った．
+\citeA{花井}は，NBが前提とする単語間の独立が成り立たないとし，依存性の強い 2 単語の組が同時に生起する確率を NB に適用することによって分類精度の向上を図った．Church (2000) は，単語の重み付け方法として IDF 値のかわりに``Adaptation''という概念を用い，文書に含まれていないが内容に関連している単語を``Neighbor''として定義して，
+テキスト内の特徴的な単語の抽出を行った．
+さらに\citeA{持橋06}は，NBにおけるクラス$c$を未知として拡張したDM (Dirichlet Mixtures) やInfinite DMを提案し，
+    高村, Roth (2007)\nocite{高村}は，予測的尤度を用いて超変数を設定することなく，加算スムージングのパラメータを求めた．
+
+NBを発展させた研究として，補集合を用いて学習を行うCNBが有名である\cite{Rennie}．
+CNBは，「クラスに属する文書」ではなく「クラスに属さない文書」，つまり「補集合」を用いることによりNBの欠点を緩和した手法である．
+
+本研究では，多項モデルを用いたNBとCNBに注目し，その分類における特徴を考慮して，Bayesのアプローチを用いた新しい分類手法NNBを提案する．
+
+
+
+\section{Negation Naive Bayesの導出} \label{Sec:Negation Naive Bayesの導出}
+
+NNBはCNBと同様に補集合を利用して文書分類を行うが，CNBと異なってNBと同じ事後確率最大化の式から導出が可能である．
+その結果，事前確率を数学的に正しく考慮することで，クラスごとの文書数が異なっているときにもより正確な文書分類を行えるようにした．
+本節ではNBの導出と，CNBの概念について触れた後，提案手法であるNNBの導出について述べる．
+
+
+\subsection{Naive Bayes分類器}\label{Sec:Naive Bayes分類器}
+
+一般に確率モデルによる文書分類では，分類対象となる文書を$d$，ある一つのクラスを$c$としたとき，
+事後確率$P(c|d)$を最大化するクラス$\hat{c}$を求める\cite{Zhang}．
+NB分類器を用いた文書分類では，事後確率にBayesの定理を適用する．
+文書の取り出される確率$P(d)$はすべてのクラスについて一定であることを考慮すると，
+事後確率が最大のクラスを推定することは，クラスの出現確率$P(c)$と各クラスでの文書の出現確率$P(d|c)$の積を最大化するクラスを推定することと等しくなる．
+\begin{equation}
+\begin{aligned}[b]
+\hat{c} & = \argmax_{c} P(c|d)  \\
+ & = \argmax_{c} \frac{P(c)P(d|c)}{P(d)}  \\
+ & = \argmax_{c} P(c) P(d|c) 
+\end{aligned}
+\label{eq:bayes}
+\end{equation}
+
+式(\ref{eq:bayes})において，$P(c)$は全文書中でクラス$c$に属する文書の割合を用いて容易に推定ができるが，$P(d|c)$を直接推定するのは難しい．
+そこで，まず文書$d$を単語列$w_1, w_2, \ldots , w_n$で近似する．
+\begin{equation}
+P(d|c) \approx P(w_1,w_2,\ldots,w_n|c) \label{eq:bayes2}
+\end{equation}
+
+次に，各クラスで単語が独立に生起すると仮定すると，式(\ref{eq:bayes2})は
+\begin{equation}
+P(w_1,w_2,\ldots,w_n|c)\approx\prod_{i=1}^{n} P(w_i|c) \label{eq:bayes3}
+\end{equation}
+と近似される．
+
+したがって，$d$の属するクラス$\hat{c}$は最終的に以下の式で求められる．
+\begin{equation}
+\hat{c}=\argmax_{c} P(c) \prod_{i=1}^{n} P(w_i|c) \label{eq:rnb}
+\end{equation}
+
+
+\subsection{Complement Naive Bayes分類器}
+\label{Sec:Complement Naive Bayes分類器}
+
+多項モデルを用いたNB分類器では，クラス間の文書数に大きなばらつきがある場合に，
+文書数の小さいクラスで$P(w_i|c)$が大きくなる傾向がある．
+$P(w_i|c)$は「そのクラス中に出てきたそのトー
+クン$w_i$の数／そのクラス中に出てきたそのトークンの総数」であるため，訓練事例の単語トー
+クン数に大きな差ができた結果，大きいクラスの$P(w_i|c)$は比較的小さく，小さいクラスの
+$P(w_i|c)$はかなり大きくなることが予想できる．その結果，小さいクラスに出現した単語を含む
+文書が出現した場合，その文書は，その単語をもつ小さなクラスに割り当てられることになる．
+
+また，文書数の少ないクラスでは，新規文書に出現した単語がそのクラスに含まれていない割合が多くなり，データがスパースになりやすい．
+
+そこで，学習する文書数のばらつきを抑え，スパースネス問題を緩和するようNBを改良したのが\citeA{Rennie}のCNBである．
+具体的には，「クラス$c$に属す訓練事例」ではなく「クラス$c$に属さない訓練事例」
+すなわち「$\bar{c}$に属する訓練事例（補集合）」を用いて学習を行う\footnote{Rennieらは文献の中でCNBのほかに5種類のヒューリスティックを導入しているが，本研究では純粋に式の変更による違いを見るため，ヒューリスティックは使用しなかった．}．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{20-2ia4f1.eps}
+\end{center}
+\caption{NBとCNBでの学習に用いる文書数の違い}
+\label{Fig:コンプ文書数変化}
+\end{figure}
+
+図\ref{Fig:コンプ文書数変化}は，NBとCNBでの学習に用いる文書数の違いを表している．
+文書数10，10，20，40の4つのクラスがある場合，NBではこの文書数を自身のクラスの学習に使う．
+そのため，文書数が最も少ないクラスと最も多いクラスでは学習に使用する文書数に4倍の差がある．
+
+一方，CNBでは自身のクラスに属する文書以外の文書から学習を行うため，
+学習に用いる文書数は最小のもので40，最大のもので70となり，NBに比べてばらつきが小さくなる．
+
+CNBは，文書内にある単語の出現確率の積から尤度を計算し，分類するクラスを決めるという点ではNBと同じである．
+つまり，式(\ref{eq:rnb})を用いて文書$d$の属するクラス$\hat{c}$を推定する．
+しかし，CNBでは$P(w_i|c)$を最尤推定で求めるのではなく，$c$以外のクラス$\bar{c}$の尤度の積から推定する．
+つまり，$d$の属するクラス$\hat{c}$は最終的に以下の式で求められる．
+\begin{equation}
+\hat{c}=\argmax_{c} P(c) \prod_{i=1}^{n} \frac{1}{P(w_i|\bar{c})} \label{eq:cnb}
+\end{equation}
+
+
+\subsection{Negation Naive Bayes分類器}
+\label{Sec:Negation Naive Bayes分類器}
+
+前節で説明したCNBは，NBの持つ「クラス間の文書数のばらつきによって分類結果が偏る」という特徴を緩和する手法である．
+しかし，CNBはヒューリスティックによる解決法であって，事後
+確率最大化の式から導出することはできない．
+
+そこで本研究では，事後確率最大化の式から導出でき，かつ，CNBの「訓練にクラスの補集合を
+利用する」という長所をもつ分類器を作成する．
+以下でNBと同様の，事後確率最大化の式（式
+(\ref{eq:bayes})）からの式の変形について述べる．
+
+まず，事後確率$P(c|d)$を最大化するクラス$\hat{c}$を求める式を補集合を利用するように変形する．
+\begin{equation}
+\begin{aligned}[b]
+\hat{c}  & = \argmax_{c} P(c|d) \\
+  & =  \argmax_{c} (1-P(\bar{c}|d)) \\
+  & =  \argmin_{c} P(\bar{c}|d) 
+\end{aligned}
+\label{eq:eqnnb1}
+\end{equation}
+次に，Bayesの定理を用いて式(\ref{eq:eqnnb1})を変形する．
+\begin{equation}
+\begin{aligned}[b]
+ \hat{c} & =  \argmin_{c} \frac{P(\bar{c})P(d|\bar{c})} {P(d)} \\
+   & =  \argmin_{c} P(\bar{c})P(d|\bar{c}) 
+\end{aligned}
+\label{eq:eqnnb2}
+\end{equation}
+
+そして，式(\ref{eq:eqnnb2})を近似する．$P(d|\bar{c})$は式(\ref{eq:bayes2})，(\ref{eq:bayes3})と同様に
+\begin{equation}
+P(d|\bar{c})\approx\prod_{i=1}^{n} P(w_i|\bar{c}) \label{eq:eqnnb3}
+\end{equation}
+と近似される．
+したがって，文書$d$の属するクラス$\hat{c}$を以下の式で推定する．
+\begin{equation}
+\hat{c} =\argmin_{c} P(\bar{c}) \prod_{i=1}^{n} P(w_i|\bar{c}) \label{eq:nnb}
+\end{equation}
+
+なお，$P(\bar{c})=1-P(c)$であり，CNBと同じく最大化で表現すると以下の式になる．
+\begin{equation}
+\hat{c} =\argmax_{c} \frac{1}{1-P(c)} \prod_{i=1}^{n} \frac{1}{P(w_i|\bar{c})} \label{eq:nnb2}
+\end{equation}
+
+式 (\ref{eq:cnb}) と比較すると，$\frac{1}{1-P(c)}$の最大化の部分，つまり事前確率$P(c)$の部分が異なっていることが分かる．
+式(\ref{eq:nnb2})は事後確率最大化の式から求められたため，事前確率を数学的に正しく考慮し
+た式となっている．なお，Rennie らの研究では，式(\ref{eq:cnb})において事前確率の扱いについてあま
+り注意を払っていないが，我々はクラスごとに単語数の偏りが大きいデータセットについて分
+類を行う場合には，$P(c)$を利用するか$\frac{1}{1-P(c)}$を利用するかの影響は必ずしも無視して良いとは
+言えないと考える．また，Rennieらの研究では，$P(c)$は$P(w_i|\bar{c})$に比べて分類結果への影響が
+小さいと判断し，事前確率は計算してもしなくても結果は同じと考え，実際の分類には$P(c)$を
+無視して$P(w_i|\bar{c})$のみを計算しているため，P(c)なしのCNBについても参考として実験を行う．
+
+
+
+\section{実験}
+\label{Sec:実験}
+
+NNBの性能を測りその特色を調べるため，ふたつのコーパスを用いた実験を行った．
+一つ目はオークションの商品分類の実験であり，二つ目はニュースグループの文書分類の実験である．
+これらの二つの実験において，形態素解析により得た表層形のbag-of-wordsを用いてNB，CNB，NNBの文書分類の性能を比較した．
+また，NBBとCNBの差は事前確率$P(c)$と$ \frac{1}{1-P(c)}$の部分であるため，CNBとNNBから第一項を省略した形の式（$P(c)$なしのCNB）でも実験を行った．
+
+なお，形態素解析ソフトにはMeCab\footnote{http://mecab.sourceforge.net/}を利用した．
+
+また，スムージング手法としては，予備実験によりラプラススムージング\cite{ラプラス,ラプラス2}とJeffreys Perks法\cite{JeffreysPerks}を
+試し，Jeffreys Perks法の方が結果がよかったため，これを採用した．
+
+さらに，Bayesではない手法の比較対象として，SVMについても実験を行った．
+この際，分類器としてはマルチクラス対応のSVM (libsvm\footnote{http://www.csie.ntu.edu.tw/{\textasciitilde}cjlin/libsvm/}) を使用した．
+カーネルは予備実験の結果，線形カーネルが最も高い正解率を示したため，これを採用した．
+また，学習の素性はBayesの手法とそろえ，表層形のbag-of-wordsの頻度ベクトルを使用した．すべての実験には五分割交差検定を用いた．
+
+
+\subsection{オークションの商品分類の実験}
+\label{Sec:オークションの商品分類の実験}
+
+オークションの商品分類の実験は，
+Yahoo! オークション\footnote{http://auctions.yahoo.co.jp/}の商品タイトルを商品カテゴリに分類する実験である．
+詳細は\citeA{佐藤}にならった．
+
+本実験では，「デスクトップ」「記念切手」「赤ちゃん用の玩具」の
+三つのジャンルカテゴリ\footnote{オークション $>$ コンピュータ $>$ パソコン $>$ Windows $>$ デスクトップの例では，「デスクトップ」だけでなく，「コンピュータ」や「パソコン」，「Windows」もジャンルカテゴリであるが，本実験ではデータサイズの観点から「デスクトップ」を対象として実験を行った．}
+に含まれる商品を対象に実験を行った．
+これらのジャンルカテゴリは，以下のようにトップカテゴリ（オークション）から絞り込むことができる．
+\begin{itemize}
+ \item オークション $>$ コンピュータ $>$ パソコン $>$ Windows $>$ デスクトップ
+ \item オークション $>$ アンティーク，コレクション $>$ 切手，官製はがき $>$ 日本 $>$ 特殊切手，記念切手
+ \item オークション $>$ おもちゃ，ゲーム $>$ ベビー用
+\end{itemize}
+ここで，$>$の左が親カテゴリ，右が子カテゴリを示す．
+「デスクトップ」と「記念切手」は2012年6月26日に，「赤ちゃん用の玩具」は2012年6月29日に取得したデータである．
+ひとつの商品はひとつの葉カテゴリにのみ属しているものとし，
+出品者によって登録されたカテゴリを正しいカテゴリとして実験を行った．
+なお，例えばジャンルカテゴリが「デスクトップ」の場合，「ASUSの1,000円〜1,099円」や「IBMパソコン単体31,000円〜34,999円」といったものが葉カテゴリである．
+また，\citeA{佐藤}にならい，出品者個人による商品情報表記の癖などの偏りをなくすため，各カテゴリにつき 1 人
+の出品者の商品は 1 つしか使用しないものとし，商品タイトルの全単語を利用した実験と名詞のみを使用した二つの実験を行った．
+
+\begin{table}[b]
+\hangcaption{それぞれのジャンルカテゴリ中の葉カテゴリ数，同じ出品者による商品をひとつにする前と後の商品数}
+\label{Tab:同じ出品者による商品をひとつにする前と後の商品数}
+\input{04table01.txt}
+\end{table}
+
+\tabref{Tab:同じ出品者による商品をひとつにする前と後の商品数}に
+それぞれのジャンルカテゴリ中の葉カテゴリ数，同じ出品者による商品をひとつにする前と後の商品数を示す．
+ここで，商品数（処理前），商品数（処理後）はそれぞれ，同じ出品者による商品をひとつにする前と後の商品数である．
+なお，「赤ちゃん用の玩具」の商品数（処理後）には8205，8204と二つ数字があるが，8205は全ての品詞の分類，8204は名詞のみの分類による商品数を示している．
+「赤ちゃん用の玩具」のデータには，形態素解析の結果，全ての形態素が名詞以外の品詞に割りつけられた商品が1件あったため，このような結果になっている．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{20-2ia4f2.eps}
+\end{center}
+\caption{「デスクトップ」のカテゴリごとの文書数，単語トークン数，名詞のトークン数}
+\label{Fig:pc}
+\end{figure}
+\begin{figure}[b]
+\begin{center}
+\includegraphics{20-2ia4f3.eps}
+\end{center}
+\caption{「記念切手」のカテゴリごとの文書数，単語トークン数，名詞のトークン数}
+\label{Fig:stamp}
+\end{figure}
+
+また，\figref{Fig:pc}，\figref{Fig:stamp}，\figref{Fig:toy}に
+それぞれ「デスクトップ」，「記念切手」，「赤ちゃん用の玩具」のカテゴリごとの文書数，単語トークン数，名詞のトークン数を
+折れ線グラフにしたものを示す．横軸のカテゴリindexは，カテゴリを文書数で並べ替えたときに降順につけたものである．
+これらの図から，カテゴリの分類実験において，カテゴリごとに文書数，トークン数が非常に
+偏っていることが分かる．特に，「記念切手」が最も偏っていることが読みとれる．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{20-2ia4f4.eps}
+\end{center}
+\caption{「赤ちゃん用の玩具」のカテゴリごとの文書数，単語トークン数，名詞のトークン数}
+\label{Fig:toy}
+\end{figure}
+\begin{table}[t]
+\hangcaption{オークションのカテゴリ分類実験の訓練事例中の商品数の標準偏差，標準偏差／平均，トークン数，1商品当たりの平均単語数}
+\label{Tab:オークションのカテゴリ分類実験のデータ}
+\input{04table02.txt}
+\end{table}
+
+
+また，\tabref{Tab:オークションのカテゴリ分類実験のデータ}に
+オークションのカテゴリ分類実験の訓練事例中の商品数の標準偏差，訓練事例中の文書数の標準偏差を訓練事例中の総文書数の平均で割った値（以降，標準偏差／平均と表記），
+トークン数，1商品当たりの平均単語数を示す．
+標準偏差／平均は，カテゴリ（またはクラス）ごとの商品数（または文書数）のばらつきを見るために示した．
+ばらつきを測るのには標準偏差を用いるのが一般的であるが，本実験のように全商品数（または文書数）が異なる実験設定同士を比べる際には，全商品数（文書数）の
+絶対値が大きくなるにつれて標準偏差も大きくなるという問題があったためである\footnote{例えば，1，2，3，4，5の五つの値の標準偏差は約1.58になるが，0.1，0.2，0.3，0.4，0.5の五つの値の標準偏差は約0.158になる．}．
+標準偏差を平均で割ることによって，全商品数（文書数）のスケールに左右されないデータのばらつきを測った．
+\tabref{Tab:オークションのカテゴリ分類実験のデータ}のこの「訓練事例中の商品数の標準偏差／平均」を見てみると，
+「記念切手」の値が「デスクトップ」や「赤ちゃん用の玩具」より高いことから，
+\figref{Fig:pc}〜\figref{Fig:toy}から読みとったように，「記念切手」が最も偏っていることが読みとれる．
+
+
+\subsection{ニュースグループの文書分類の実験}
+\label{Sec:ニュースグループの文書分類の実験}
+
+ニュースグループの文書分類の実験の
+コーパスには20 Newsgroups\footnote{http://people.csail.mit.edu/jrennie/20Newsgroups/}を利用した．20 Newsgroupsは，全20クラス，18774件のニュース記事からコーパスが構成されており，
+文書数はどのクラスもおよそ1000件である(cf.~\tabref{Tab:クラスごとの文書数を不均一にした実験のクラスごとの文書数})．
+
+\begin{table}[b]
+\caption{クラスごとの文書数を不均一にした実験のクラスごとの文書数}
+\label{Tab:クラスごとの文書数を不均一にした実験のクラスごとの文書数}
+\input{04table03.txt}
+\end{table}
+
+
+\subsubsection{一文書あたりの単語数を減らした実験}
+
+CNBとNNBの式，式 (\ref{eq:cnb}) と式 (\ref{eq:nnb2}) を比較してみると，事前確率$P(c)$と$ \frac{1}{1-P(c)}$の部分が異なっていることが分かる．
+残りの$\prod_{i=1}^{n} \frac{1}{P(w_i|\bar{c})}$については等しい．
+しかし，単語数が少ない文書を分類する際には，単語数が多い文書を分類する際よりも，相対的に事前確率の影響が大きくなることが予想される．
+そのため，一文書あたりの単語数を減らして実験を行い，その分類正解率を比較する．
+この際，一文書あたりの単語数を$n$とし，パラメータを$x$とすると，一文書あたりの単語数を$n/2^{x}$（ただし割り切れない場合には1を加算する）として実験した．
+パラメータ$x$は，0〜4を試した．$x$が0のときには，オリジナルの20 Newsgroupsと等しい．
+
+ニュースグループの分類実験において一文書あたりの単語数を減らした実験の訓練事例中の単語数，1文書当たりの平均の単語トークン数を
+\tabref{Tab:一文書あたりの単語数を減らした実験のデータ}に示す．なお，このとき訓練事例中の総文書数はすべて18,774であり，
+訓練事例中の文書数の標準偏差はすべて95.95である．また，訓練事例中の文書数の標準偏差／平均は0.10になる．
+
+
+
+\subsubsection{クラスごとの文書数を不均一にした実験}
+
+NNBは事前確率を数学的に正しく考慮しているため，文書分類ではクラスごとの文書数が不均一である際に効果を発揮すると考えられる．
+そのため，20 Newsgroupsにおいて，クラスごとに文書を間引きすることによって，クラスごとの文書数を不均一にして
+実験を行い，比較する．
+この際，クラスのインデックスを$i=1...20$，パラメータを$y$とすると，$i=1$ だけは常にオリジナルの文書数を保ったままとし，$i=2$から文書数を
+$1/((i-1)y)$に減らして実験を行った．例えば，$y=1$のときには，$i=2，3，4$の時にはそれぞれ$1/1，1/2，1/3$となり，
+$y=2$のときには，$i=2，3，4$の時にはそれぞれ$1/2，1/4，1/6$となる．パラメータ$y$は，1〜4を試した．
+
+\begin{table}[b]
+\hangcaption{ニュースグループの分類実験において一文書あたりの単語数を減らした実験の訓練事例中の単語トークン数，1文書当たりの平均の単語トークン数}
+\label{Tab:一文書あたりの単語数を減らした実験のデータ}
+\input{04table04.txt}
+\end{table}
+\begin{table}[b]
+\hangcaption{ニュースグループの分類実験においてクラスごとの文書数を不均一にした実験の訓練事例中の総文書数，文書数の標準偏差，標準偏差／平均，単語トークン数，1文書当たりの平均の単語トークン数}
+\label{Tab:クラスごとの文書数を不均一にした実験のデータ}
+\input{04table05.txt}
+\end{table}
+
+\tabref{Tab:クラスごとの文書数を不均一にした実験のクラスごとの文書数}に，クラスごとの文書数を不均一にした実験のクラスごとの文書数を
+示す．また，\tabref{Tab:一文書あたりの単語数を減らした実験のデータ}に
+ニュースグループの分類実験においてクラスごとの文書数を不均一にした実験の訓練事例中の総文書数，文書数の標準偏差，標準偏差／平均，単語トークン数，1文書当たりの平均の単語トークン数
+を示す．また，ニュースグループの分類実験においてクラスごとの文書数を不均一にした実験の訓練事例中の総文書数，文書数の標準偏差，標準偏差／平均，単語トークン数，1文書当たりの平均の単語トークン数を
+\tabref{Tab:クラスごとの文書数を不均一にした実験のデータ}に示す．
+
+
+\section{結果} \label{Sec:結果}
+
+\tabref{Tab:全ての品詞を使用したオークションのカテゴリ分類実験の分類正解率}と\tabref{Tab:全ての品詞を使用したオークションのカテゴリ分類実験の分類正解率（マクロ）}に
+全ての品詞を使用したオークションのカテゴリ分類実験の分類正解率のマイクロ平
+均とマクロ平均をそれぞれ示し，
+\tabref{Tab:名詞だけを使用したオークションのカテゴリ分類実験の分類正解率}と\tabref{Tab:名詞だけを使用したオークションのカテゴリ分類実験の分類正解率（マクロ）}に
+名詞だけを使用したオークションのカテゴリ分類実験の分類正解率のマイクロ平均とマクロ平均をそれぞれ示す．
+また，\tabref{Tab:一文書あたりの単語数を減らした実験の分類正解率}と\tabref{Tab:一文書あたりの単語数を減らした実験の分類正解率（マクロ）}に
+ニュースグループの分類実験において，一文書あたりの単語数を減らした実験の分類正解率のマイクロ平均
+とマクロ平均をそれぞれ示し，
+\tabref{Tab:クラスごとの文書数を不均一にした実験の分類正解率}と\tabref{Tab:クラスごとの文書数を不均一にした実験の分類正解率（マクロ）}に
+同分類実験において，クラスごとの文書数を不均一にした実験の分類正解率のマイクロ平均とマクロ平均をそれぞれ示す．
+なお，正解率は，（分類
+に成功したもの）／（実験データ数）として求めた．
+同じ文書集合の実験で，NB，CNB，NNBのうちで最も良かった正解率を太字で示した．さらに，次に良かった正解率との差がカイ二乗検定で有意だったものに関しては
+下線を引いた．また，$P(c)$なしのCNBとSVMに関しては，上記の三手法のうち最も良かった手法と同じか，それよりも良いものは太字で示し，
+その優劣にかかわらず，差がカイ二乗検定で有意だったものに関しては下線を引いた．
+さらに，参考として最頻出カテゴリ（クラス）を答えた場合の正解率も併記した．
+
+\begin{table}[b]
+\caption{全ての品詞を使用したオークションのカテゴリ分類実験の分類正解率（マイクロ平均）}
+\label{Tab:全ての品詞を使用したオークションのカテゴリ分類実験の分類正解率}
+\input{04table06.txt}
+\end{table}
+\begin{table}[b]
+\caption{全ての品詞を使用したオークションのカテゴリ分類実験の分類正解率（マクロ平均）}
+\label{Tab:全ての品詞を使用したオークションのカテゴリ分類実験の分類正解率（マクロ）}
+\input{04table07.txt}
+\end{table}
+
+
+\begin{table}[p]
+\caption{名詞だけを使用したオークションのカテゴリ分類実験の分類正解率（マイクロ平均）}
+\label{Tab:名詞だけを使用したオークションのカテゴリ分類実験の分類正解率}
+\input{04table08.txt}
+\end{table}
+\begin{table}[p]
+\caption{名詞だけを使用したオークションのカテゴリ分類実験の分類正解率（マクロ平均）}
+\label{Tab:名詞だけを使用したオークションのカテゴリ分類実験の分類正解率（マクロ）}
+\input{04table09.txt}
+\end{table}
+\begin{table}[p]
+\hangcaption{ニュースグループの分類実験において一文書あたりの単語数を減らした実験の分類正解率{\break}（マイクロ平均）}
+\label{Tab:一文書あたりの単語数を減らした実験の分類正解率}
+\begin{center}
+\input{04table10.txt}
+\end{table}
+\begin{table}[p]
+\hangcaption{ニュースグループの分類実験において一文書あたりの単語数を減らした実験の分類正解率{\break}（マクロ平均）}
+\label{Tab:一文書あたりの単語数を減らした実験の分類正解率（マクロ）}
+\input{04table11.txt}
+\end{table}
+
+\tabref{Tab:全ての品詞を使用したオークションのカテゴリ分類実験の分類正解率}と
+\tabref{Tab:名詞だけを使用したオークションのカテゴリ分類実験の分類正解率}から，オークションのカテゴリ分類実験において，
+マイクロ平均を比較した際，
+NNBが常にNBとCNBを有意に上回っていることが分かる．
+また同じ二つの表から，NNBが$P(c)$なしのCNBよりも大抵（名詞だけの実験の
+「デスクトップ」が例外である）上回っていることが分かる．このうち，「記念切手」の実験では，全単語使用した場合，名詞だけを使用した場合に拘わらず，カイ二乗検定によりその差が有意であった．
+しかし，これらの実験において最も良い結果なのはSVMであり，NNBを有意に上回っている．
+
+\begin{table}[t]
+\hangcaption{ニュースグループの分類実験においてクラスごとの文書数を不均一にした実験の分類正解率{\break}（マイクロ平均）}
+\label{Tab:クラスごとの文書数を不均一にした実験の分類正解率}
+\input{04table12.txt}
+\end{table}
+\begin{table}[t]
+\hangcaption{ニュースグループの分類実験においてクラスごとの文書数を不均一にした実験の分類正解率{\break}（マクロ平均）}
+\label{Tab:クラスごとの文書数を不均一にした実験の分類正解率（マクロ）}
+\input{04table13.txt}
+\end{table}
+
+また，\tabref{Tab:全ての品詞を使用したオークションのカテゴリ分類実験の分類正解率（マクロ）}と\tabref{Tab:名詞だけを使用したオークションのカテゴリ分類実験の分類正解率（マクロ）}
+から，
+オークションのカテゴリ分類実験において，マクロ平均においても，
+有意ではないながら，NNBが常にNBとCNBを上回っていることが分かる．また同じ二つの
+表から，$P(c)$なしのCNBが有意ではないものの，NNBを上回っていることが分かる．さらに，
+SVMは「デスクトップ」と「記念切手」においては有意に，「赤ちゃん用の玩具」では有意
+ではないものの，NNBを上回った．
+
+また，\tabref{Tab:一文書あたりの単語数を減らした実験の分類正解率}と\tabref{Tab:クラスごとの文書数を不均一にした実験の分類正解率}から，ニュースグループの分類実験においても，
+マイクロ平均で比較した場合，
+常にNBBがNBとCNBを上回ることが分かる．ただし，その差が有意なのは，クラスごとの文書数を不均一にした実験（\tabref{Tab:クラスごとの文書数を不均一にした実験の分類正解率}）
+のパラメータが1のときと3のときだけである．
+また，これらの実験において，$P(c)$なしのCNBはしばしばNNBを上回っているが，有意に上回っていることは一度もなかった．
+さらに\tabref{Tab:一文書あたりの単語数を減らした実験の分類正解率}の一文書あたりの単語数を減らした実験では，
+パラメータ0，1，2のとき，NNBの分類正解率がSVMを有意に上回っている．しかし，パラメータ3，4のときはSVMが最高であり，NNBと比較してその差は有意であった．
+一方，\tabref{Tab:クラスごとの文書数を不均一にした実験の分類正解率}から，クラスごとの文書数を不均一にした実験では，
+全ての実験設定のときにNNBがSVMを上回っている．この差はカイ二乗検定により有意であった．
+
+これに対し，\tabref{Tab:一文書あたりの単語数を減らした実験の分類正解率（マクロ）}と\tabref{Tab:クラスごとの文書数を不均一にした実験の分類正解率（マクロ）}
+から，ニュースグループの分類実験において，マクロ平均におい
+ても，NNBが常にNBとCNBを上回っていることが分かる．また同じ二つの表から，$P(c)$な
+しのCNBがNNBを上回っていることが分かるが，これらの差はいずれも有意ではない．さら
+に，\tabref{Tab:一文書あたりの単語数を減らした実験の分類正解率（マクロ）}の一文書あたりの単語数を減らした実験では，
+常に有意でないながらもNNBの分類正解率がSVMを上回っている．しかし，パラ
+メータ3，4のときは，マイクロ平均と同様にSVMが最高であり，NNBと比較してその差は有
+意であった．一方，\tabref{Tab:クラスごとの文書数を不均一にした実験の分類正解率（マクロ）}から，クラスごとの文書数を不均一にした実験では，全ての実験設定
+のときにNNBがSVMを上回っている．この差はパラメータ0と1のとき，カイ二乗検定に
+より有意であった．
+
+
+
+\section{考察} \label{Sec:考察}
+
+オークションのカテゴリ分類実験の結果とニュースグループの分類実験の結果を総合してNNBの特色について考察する．
+まず，\tabref{Tab:全ての品詞を使用したオークションのカテゴリ分類実験の分類正解率}〜\tabref{Tab:クラスごとの文書数を不均一にした実験の分類正解率（マクロ）}から，
+全ての実験を通して，NNBはNBとCNBを上回っていること，また$P(c)$なしのCNBに有意に勝っていることはあっても有意に負けていることはないことが
+読みとれる\footnote{ただし，有意ではないものの，\tabref{Tab:全ての品詞を使用したオークションのカテゴリ分類実験の分類正解率（マクロ）}と\tabref{Tab:名詞だけを使用したオークションのカテゴリ分類実験の分類正解率（マクロ）}では常に$P(c)$なしのCNBがNNBを上回っている．$P(c)$は事前確率であるため，カテゴリ間のデータ数に偏りがあり，なおかつ単語トークン数が少ない場合には，NNBは大きなカテゴリに分類されやすいことが予想できる．そのため，マイクロ平均は$P(c)$なしのCNBを有意に上回ったが，マクロ平均は$P(c)$なしのCNBが高くなる傾向がある可能性がある．}
+．
+このことから，NNBは他のBayesの定理を利用した文書分類手法に比較しても引けを取らない文書分類手法であると言える．特にNBと比較したときには，マイクロ平均では常に有意に，
+マクロ平均ではオークションのカテゴリ実験において「デスク
+トップ」と「記念切手」の全品詞を使った分類実験以外の実験で有意に勝っていた．
+なお，
+マクロ平均ではサンプル数の減少から，NNBと比較した際，SVMとNBだけにしか有意差が
+認められなかったため，今後は主にマイクロ平均について考察する．
+
+オークションのカテゴリ分類実験とニュースグループの分類実験の実験設定の違いのうち，NNBの式に大きく関わりそうな点は二点あるだろう．
+一つ目は第一項の事前確率に関わる，クラスごとの文書数（またはカテゴリごとの商品数）のばらつき，
+二つ目はそれ以外の部分に関わる，一文書ごとの単語トークン数である．
+\ref{Sec:ニュースグループの文書分類の実験}節でも述べたように，
+CNBとNNBの式，式 (\ref{eq:cnb}) と式 (\ref{eq:nnb2}) を比較してみると，事前確率$P(c)$と$ \frac{1}{1-P(c)}$の部分が異なっており，
+残りの$\prod_{i=1}^{n} \frac{1}{P(w_i|\bar{c})}$については等しい．
+NNBは事前確率を数学的に正しく考慮しているため，文書分類ではクラスごとの文書数が不均一である際に効果を発揮すると考えられる．
+また，単語数が少ない文書を分類する際には，単語数が多い文書を分類する際よりも，相対的に事前確率の影響が大きくなることが予想される．
+
+
+クラスごとの文書数のばらつきを見るために，
+\figref{Fig:標準偏差／平均}に同実験においてクラスごとの文書数を不均一にした実験の，クラスごとの文書数の標準偏差／平均を横軸とした
+分類正解率の散布図を示す．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{20-2ia4f5.eps}
+\end{center}
+\hangcaption{ニュースグループの分類実験においてクラスごとの文書数を不均一にした実験の，
+	クラスごとの文書数の標準偏差／平均を横軸とした分類正解率の散布図}
+\label{Fig:標準偏差／平均}
+\end{figure}
+\begin{figure}[b]
+\begin{center}
+\includegraphics{20-2ia4f6.eps}
+\end{center}
+\hangcaption{ニュースグループの分類実験において一文書あたりの単語数を減らした実験の，一文書あたりの単語トークン数を横軸とした分類正解率の散布図}
+\label{Fig:1文書ごとに平均した単語数}
+\end{figure}
+
+また，単語トークン数の影響を見るために，\figref{Fig:1文書ごとに平均した単語数}にニュースグループの分類実験において一文書あたりの単語数を減らした実験の，
+一文書あたりの単語トークン数を横軸とした分類正解率の散布図を示す．その上でNNBの特徴をNB，CNB（$P(c)$のないものを含む），SVMの順で比較しつつ考察する．
+
+\figref{Fig:標準偏差／平均}から，NBはクラスごとの文書数のばらつきが多い際にその分類正解率が著しく低下することが分かる．
+また，商品のカテゴリ分類実験において，NBの分類正解率がとても低いのも
+同じ原因によるものであることがうかがえる．商品のカテゴリ分類実験において，標準偏
+\linebreak
+差／平均は「デスクトップ」，「記念切手」，「赤ちゃん用の玩具」
+がそれぞれ1.44，2.84，1.33と高く，
+カテゴリごとの商品数のばらつきが大きいからである．
+この原因として，クラスごとの$P(w_i|c)$のデータスパースネスの差が考えられる．ここでNBの式を再掲する．
+\begin{equation}
+\hat{c}=\argmax_{c} P(c) \prod_{i=1}^{n} P(w_i|c) \label{eq:rnb2}
+\end{equation}
+NBではクラスごとの文書数のばらつきが大きい際には，クラスによって訓練事例の単語トークン数に大きな差ができる．
+例えば最も大きなクラスでは，その訓練事例となるトークン数が一万となり，小さなクラスでは10トークンといった具合である．
+その結果，小さなクラスではデータがス
+パースになり，より頻繁にスムージングが行われる．そのため，NBでは，個々の分類問題と
+相性の良いスムージング手法を用いることが求められるが，今回のジェフリー・パークス法は
+ラプラス法よりは良いとはいえ，まだ実際よりも大きな値を小さなクラスに与えていたと思わ
+れる\footnote{\citeA{佐藤}のスムージング（頻度0の時には0.1/Nを用いる．このNは訓練事例中の全単語トークン数．）を用いるとNBだけ飛躍的に正解率が上昇した．ただし，本論文の主張との矛盾はない結果であった．}．
+このように，NBではデータスパースネスによって誤分類が起きて分類正解率が著しく
+下がることがあるが，この
+問題を補集合を用いることで解決したのがCNBであり，この点についてNNBはCNBと全く同じ特色を持っている．
+
+次に，NNBとCNBの差について考察する．
+\figref{Fig:標準偏差／平均}を見てみると，$P(c)$を考慮しないCNBとNNBの差はあまりないが，NNBはCNBより若干
+良いことが分かる．
+これは，クラスごとの文書数に偏りが出てくると，CNBとNNBの違いである事前確率が異なってくるため，
+その分類正解率に差がつくからであると考えられる．
+
+次に\figref{Fig:1文書ごとに平均した単語数}を見てみると，一文書当たりの平均の単語数が減ると，どの手法を用いても全体的に分類正解率が低下することが分かる．
+これは，単語数が減ることで，統計の材料となる$w_i$が減っているためであると考えられる．
+これに対し，一文書当たりの単語数を変化させても，CNBとNNBの差が大きくなることはなかった．
+これは，ニュースグループのオリジナルのコーパスでは，そもそもクラスごとの文書数に偏りがあまり見られないため，事前確率に偏りがなく，CNBとNNBがそう違わない結果になったためであると考えられる．
+
+ここで，オークションのカテゴリ分類実験の実験設定も共に比較してみる．
+\figref{Fig:CNBとNNB}に縦軸を標準偏差／平均，横軸をクラスごとの単語数にした，実験設定ごとのCNBとNNBの差の散布図を示す．
+左の図が事前確率を考慮したCNBとNNBの差が有意であるかを表しており，右の図が事前確率を考慮しないCNBとNNBの差が有意であるかを表している．
+なお，両方の図において，縦軸の値が0.10である五つの点が，ニュースグループの一文書当たりの単語数を減らした一連の実験であり，
+横軸の値が128.71である五つの点が，ニュースグループのクラスごとの文書数を不均一にした一連の実験である．
+オークションのカテゴリ分類実験の実験設定では，
+ニュースグループの実験よりも，ひとつの文書（商品）ごとのトークン数が少なく（一文書当たりの単語数を最も減らした実験と同じくらいである），
+なおかつクラス（カテゴリ）ごとの文書数（商品数）の偏りが，クラスごとの文書数を不均一にしたニュースグループの実験と同じくらい，またはそれ以上に偏っていることが分かる．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{20-2ia4f7.eps}
+\end{center}
+\hangcaption{横軸を標準偏差／平均，縦軸をクラスごとの単語数にした，実験設定ごとのCNBとNNBの差の散布図}
+\label{Fig:CNBとNNB}
+\end{figure}
+
+\figref{Fig:CNBとNNB}により，標準偏差／平均が小さい時にはCNBとNNBの差はほとんどないこと，また，標準偏差／平均が大きくなるにつれてNNBが有意にCNBを上回るようになる傾向がうかがえる．
+また，一文書あたりの単語数が少ない時に，なおかつ標準偏差／平均が大きければ，NNBが有意に事前確率を考慮しないCNBに対しても有意に上回ることが分かる．
+オークションのカテゴリ分類実験の「記念切手」（左上の二点）のときには，両方の条件が共に十分当てはまったため，NNBの分類正解率が，CNBにも事前確率を考慮しないCNBにも有意に上回ったものと
+思われる．
+
+次に，SVMとの比較を行う．
+残念ながら，NNBの分類正解率が，CNBにも事前確率を考慮しないCNBにも有意に上回った「記念切手」の実験設定を含む，オークションのカテゴリ分類実験では，SVMの分類正解率がいつも他手法を有意に上回った．
+しかし，ニュースグループの文書分類実験では，一文書あたりの文書数を減らした場合のパラメータが3と4の実験を除き，NNBがSVMを有意に上回った．
+上述したように，$w_i$の数が減ってしまうと，Bayesianアプローチの正解率は下がることが一文書当たりの単語数が減った際にSVMを有利にしたと考えられる．
+しかし，ニュースグループのオリジナルのコーパスの実験では，CNBとの差は有意ではないながらも，NNBが全ての分類器の中で最も高い分類正解率となっている．
+このことから，NNBは時にはSVMを有意に上回り，他手法と比較しても最も良い分類正解率を示しうる手法であることが分かる\footnote{\citeA{Gabrilovich}では，ニュースグループの分類実験において素性選択をする前でも76.9\%，素性選択後は85.3\%という正解率を報告している．また，\citeA{Siolas}では，同実験において素性選択を行うと86.44\%となっている．このように，SVMは素性選択などによってもっと性能をあげることが可能であるため，それらの手法を用いればSVMの方が性能が良くなる可能性が高い．また，五分割交差検定の分割法を変えて実験してみると，SVMの正解率が75.79\%となったことから，SVMの性能は，選択されるテストセットの選び方によって変化することが分かった．NNBなどのベイズの手法の正解率も，五分割交差検定の分割法により変化することが予想される．}．
+
+\begin{table}[t]
+\caption{ニュースグループの分類実験にかかった時間}
+\label{Tab:ニュースグループの分類実験にかかった時間}
+\input{04table14.txt}
+\end{table}
+
+また，最後に，提案手法の速度についての目安を知るために，最も実行時間がかかるオリジ
+ナルのニュースグループの分類実験において，それぞれの手法の実行時間を測った．
+\tabref{Tab:ニュースグループの分類実験にかかった時間}に
+その結果を示す．SVMはC言語により実装されたツールによるものであり，それ以外の
+BayesianアプローチはPerlにより個人的に実装したものであるため，一概に比較は難しいが，
+NNBがCNBとほぼ同じ速度で実行されることが分かる．
+
+
+
+\section{まとめ} \label{Sec:まとめ}
+
+本稿では，文書分類のための新手法として，Negation Naive Bayes (NNB)を提案し，その性質を他のBayesianアプローチである
+Naive Bayes (NB)，Complement Naive Bayes (CNB) と比較した．
+NNBは，CNBと同様にクラスの補集合を用いるが，NBと同じ事後確率最大化の式から導出されるため，事前確率を数学的に正しく考慮している点で異なっている．
+NNBの性質を見るために，ふたつのコーパスを用いた実験を行った．
+一つ目はオークションの商品分類の実験であり，二つ目はニュースグループの文書分類の実験である．
+このうち，ニュースグループの文書分類の実験では，一文書あたりの単語数を減らした実験と，クラスごとの文書数を不均一にした実験を行い，
+オリジナルの文書集合の実験に加え，それぞれパラメータを変えて四通りを試した．
+その結果，すべての実験においてNNBとCNBがNBの分類性能を上回ること，また，一文書当たりの単語数が減り，クラスごとの文書数が偏るときに
+マイクロ平均でNNBはCNBを上回ることが分かった．事前確率を無視したCNBと比較しても，これらの条件が共に当てはまる際には，NNBがCNBを有意に上回った．
+これは，CNBとNNBの違いは事前確率にあるため，クラスごとの文書数が偏るときにその影響が見られ，なおかつ一文書当たりの単語数が減る際には
+相対的に事前確率の影響が大きくなるためであると考えられる．
+また，CNBまたは事前確率を無視したCNBがNNBを有意に上回ることはなかった．
+さらに，ニュースグループの分類実験においては，その際のCNBとの差は微小ながら，参考として比較したサポートベクターマシン (SVM) をカイ二乗検定で有意に上回り，
+比較手法中で最も良い分類正解率を示す結果も見られた．
+
+これらのことから，特に一文書当たりの単語数が減り，クラスごとの文書数が偏る場合において，NNBが他のBayesianアプローチより勝る手法であること，
+また，時にはSVMを有意に上回り，比較手法中で最も良い分類正解率を示す手法であることが分かった．
+
+
+
+\acknowledgment
+
+本研究の一部は，文部科学省科学研究費補助金［若手B (No: 24700138)］の助成により行われた.
+ここに，謹んで御礼申し上げる．また，本論文の内容の一部は，Recent Advances in Natural Language Processing 2011で発表した
+ものである \cite{Komiya}．
+
+
+\nocite{Kenneth}
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Box \BBA\ Tiao}{Box \BBA\ Tiao}{1973}]{JeffreysPerks}
+Box, G. E.~P.\BBACOMMA\ \BBA\ Tiao, G.~C. \BBOP 1973\BBCP.
+\newblock {\Bem Bayesian Inference in Statistical Analysis}.
+\newblock Reading, MA: Addison-Wesley.
+
+\bibitem[\protect\BCAY{Church}{Church}{2000}]{Kenneth}
+Church, K.~W. \BBOP 2000\BBCP.
+\newblock \BBOQ Empirical Estimates of Adaptation: The chance of Two Noriegas
+  is closer to $p/2$ than $p^2$.\BBCQ\
+\newblock In {\Bem Proceedings of the COLING '00}, \mbox{\BPGS\ 182--191}.
+
+\bibitem[\protect\BCAY{Gabrilovich \BBA\ Markovitch}{Gabrilovich \BBA\
+  Markovitch}{2004}]{Gabrilovich}
+Gabrilovich, E.\BBACOMMA\ \BBA\ Markovitch, S. \BBOP 2004\BBCP.
+\newblock \BBOQ Text Categorization with Many Redundant Features: Using
+  Aggressive Feature Selection to Make SVMs Competitive with C4.5.\BBCQ\
+\newblock In {\Bem Proceedings of the The Twenty-First International Conference
+  on Machine Learning}, \mbox{\BPGS\ 321--328}.
+
+\bibitem[\protect\BCAY{花井\JBA 山村}{花井\JBA 山村}{2005}]{花井}
+花井拓也\JBA 山村毅 \BBOP 2005\BBCP.
+\newblock
+  単語間の依存性を考慮したナイーブベイズ法によるテキスト分類(類似性の発見).\
+\newblock \Jem{情報処理学会研究報告 自然言語処理研究会報告, 2005(22)},
+  \mbox{\BPGS\ 101--106}.
+
+\bibitem[\protect\BCAY{井筒\JBA 横澤\JBA 篠原}{井筒 \Jetal }{2005}]{井筒}
+井筒清史\JBA 横澤誠\JBA 篠原健 \BBOP 2005\BBCP.
+\newblock Web文書タイプ自動分類手法の比較評価と適用.\
+\newblock In {\Bem IPSJ SIG Notes 2005(32)}, \mbox{\BPGS\ 25--32}.
+
+\bibitem[\protect\BCAY{Komiya, Sato, Fujimoto, \BBA\ Kotani}{Komiya
+  et~al.}{2011}]{Komiya}
+Komiya, K., Sato, N., Fujimoto, K., \BBA\ Kotani, Y. \BBOP 2011\BBCP.
+\newblock \BBOQ Negation Naive Bayes for Categorization of Product Pages on the
+  Web.\BBCQ\
+\newblock In {\Bem Proceedings of the RANLP 2011}, \mbox{\BPGS\ 586--591}.
+
+\bibitem[\protect\BCAY{Lewis}{Lewis}{1992}]{Lewis}
+Lewis, D.~D. \BBOP 1992\BBCP.
+\newblock \BBOQ An Evaluation of Phrasal and Clustered Representations on a
+  Text Categorization Task.\BBCQ\
+\newblock In {\Bem Proceedings of the 15th Annual International ACM SIGIR
+  Conference on Research and Development in Information Retrieval},
+  \mbox{\BPGS\ 37--50}.
+
+\bibitem[\protect\BCAY{marquis~de Laplace}{marquis~de Laplace}{1814}]{ラプラス}
+marquis~de Laplace, P.~S. \BBOP 1814\BBCP.
+\newblock {\Bem Essei philosophique sur les probabilites}.
+\newblock Paris: Mme. Ve. Courcier.
+
+\bibitem[\protect\BCAY{marquis~de Laplace}{marquis~de
+  Laplace}{1995}]{ラプラス2}
+marquis~de Laplace, P.~S. \BBOP 1995\BBCP.
+\newblock {\Bem Philosophical Essay On Probabilities}.
+\newblock New York: Springer-Verlag.
+
+\bibitem[\protect\BCAY{McCallum \BBA\ Nigam}{McCallum \BBA\
+  Nigam}{1998}]{Andrew}
+McCallum, A.\BBACOMMA\ \BBA\ Nigam, K. \BBOP 1998\BBCP.
+\newblock \BBOQ A Comparison of Event Models for Naive Bayes Text
+  Classification.\BBCQ\
+\newblock In {\Bem Proceedings of the AAAI/ICML-98 Workshop on Learning for
+  Text Categorization}, \mbox{\BPGS\ 41--48}.
+
+\bibitem[\protect\BCAY{持橋}{持橋}{2006}]{持橋}
+持橋大地 \BBOP 2006\BBCP.
+\newblock 自然言語処理におけるベイズ統計.\
+\newblock \Jem{電子情報通信学会技術研究報告 NC, ニューロコンピューティング},
+  \mbox{\BPGS\ 25--30}.
+
+\bibitem[\protect\BCAY{持橋\JBA 菊井}{持橋\JBA 菊井}{2006}]{持橋06}
+持橋大地\JBA 菊井玄一郎 \BBOP 2006\BBCP.
+\newblock 無限混合ディリクレ文書モデル.\
+\newblock \Jem{自然言語処理研究会報告 2006-NL-172}, \mbox{\BPGS\ 47--53}.
+
+\bibitem[\protect\BCAY{Rennie, Shih, Teevan, \BBA\ Karger}{Rennie
+  et~al.}{2003}]{Rennie}
+Rennie, J. D.~M., Shih, L., Teevan, J., \BBA\ Karger, D.~R. \BBOP 2003\BBCP.
+\newblock \BBOQ Tackling the Poor Assumptions of Naive Bayes Text
+  Classifiers.\BBCQ\
+\newblock In {\Bem Proceedings of the ICML2003}, \mbox{\BPGS\ 616--623}.
+
+\bibitem[\protect\BCAY{佐藤\JBA 藤本\JBA 小谷}{佐藤 \Jetal }{2010}]{佐藤}
+佐藤直人\JBA 藤本浩司\JBA 小谷善行 \BBOP 2010\BBCP.
+\newblock ウェブ上の商品情報を利用した商品のカテゴリ分類.\
+\newblock \Jem{人工知能学会 第87回知識ベースシステム研究会}, \mbox{\BPGS\
+  7--10}.
+
+\bibitem[\protect\BCAY{Siolas \BBA\ d'Alch\'{e}{-}Buc}{Siolas \BBA\
+  d'Alch\'{e}{-}Buc}{2000}]{Siolas}
+Siolas, G.\BBACOMMA\ \BBA\ d'Alch\'{e}{-}Buc, F. \BBOP 2000\BBCP.
+\newblock \BBOQ Support Vector Machines based on a Semantic Kernel for Text
+  Categorization.\BBCQ\
+\newblock In {\Bem Proceedings of the nternational Joint conference on Neural
+  Networks}, \mbox{\BPGS\ 205--209}.
+
+\bibitem[\protect\BCAY{高村\JBA {Roth, D.}}{高村\JBA {Roth, D.}}{2007}]{高村}
+高村大也\JBA {Roth, D.} \BBOP 2007\BBCP.
+\newblock Predictive Naive Bayes Classifierの提案と言語処理への適用.\
+\newblock \Jem{言語処理学会第13回年次大会発表論文集}, \mbox{\BPGS\ 546--549}.
+
+\bibitem[\protect\BCAY{Zhang}{Zhang}{2004}]{Zhang}
+Zhang, H. \BBOP 2004\BBCP.
+\newblock \BBOQ The Optimality of Naive Bayes.\BBCQ\
+\newblock In {\Bem Proceedings of the the 17th International FLAIRS conference
+  (FLAIRS2004)}, \mbox{\BPGS\ 562--567}.
+
+\end{thebibliography}
+
+\begin{biography}
+\bioauthor{古宮嘉那子}{
+2005年東京農工大学工学部情報コミュニケーション工学科卒．2009年同大大学院
+博士後期課程電子情報工学専攻修了．博士（工学）．同年東京工業大学精密工学研究所研究員，
+2010年東京農工大学工学研究院特任助教，現在に至る．自然言語処理の研究に従事．
+情報処理学会，人工知能学会，言語処理学会各会員．
+}
+\bioauthor{伊藤　裕佑}{
+2012年東京農工大学工学部情報工学科卒．在学中に自然言語処理の研究に従事．
+}
+\bioauthor{佐藤　直人}{
+2009年東京農工大学工学部情報工学科卒．2011年同大大学院
+博士前期課程情報工学科修了．在学中にゲーム研究と自然言語処理の研究に従事．
+}
+\bioauthor{小谷　善行}{
+東京農工大学大学院教授．工学研究院先端情報科学部門・情報工学科．人工知能，知識処理，ゲームシステム，
+ソフトウェア工学，教育工学の研究に従事．情報処理学会，電子情報通信学会，人工知能学会等会員．コンピュータ将棋協会副会長．
+最近では，多量データからの知識獲得に興味を持っている．
+}
+
+\end{biography}
+
+
+\biodate
+
+\end{document}

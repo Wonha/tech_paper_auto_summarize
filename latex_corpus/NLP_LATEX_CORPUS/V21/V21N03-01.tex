@@ -1,0 +1,1233 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{array}
+
+
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{url}
+
+
+\Volume{21}
+\Number{3}
+\Month{June}
+\Year{2014}
+
+\received{2013}{4}{23}
+\revised{2014}{2}{25}
+\accepted{2014}{4}{8}
+
+\setcounter{page}{421}
+
+\jtitle{語順の相関に基づく機械翻訳の自動評価法}
+\jauthor{平尾　　努\affiref{Author_1} \and 磯崎　秀樹\affiref{Author_2} \and
+須藤　克仁\affiref{Author_1} \and Duh Kevin\affiref{Author_3} \and \\
+塚田　　元\affiref{Author_1} \and 永田　昌明\affiref{Author_1}
+}
+\jabstract{
+効率的に機械翻訳システムを開発していくためには，質の高い自動評価法が必要
+となる．
+これまでに様々な自動評価法が提案されてきたが，
+参照翻訳とシステム翻訳との間で一致するNグラムの割合に基づきスコアを決定
+する BLEU や最大共通部分単語列の割合に基づきスコアを決定するROUGE-Lなどがよく用い
+られてきた．
+しかし，こうした方法にはいつくかの問題がある．ルールベース翻訳(RBMT)の訳
+を人間
+は高く評価するが，従来の自動評価法は低く評価する．これは，RBMT
+が参照翻訳と違う訳語を使うことが多いのが原因である．
+これら従来の自動評価法は単語が一致しないと大きくスコアが下がるが，人間は
+そうとは限らない．
+一方，統計的機械翻訳
+(SMT)で英日，日英翻訳を行うと，「AなのでB」と訳すべきところを「BなのでA」
+と訳されがちである．この訳には低いスコアが与えられるべきであるが，Nグラム
+の一致割合に着目するとあまりスコアは下がらない．
+こうした問題を解決するため，本稿では，訳語の違いに寛大で，かつ，大局的な
+語順を考慮した自動評価法を提案する．大局的な語順は順位相関係数で測定し，
+訳語の違いは，単語適合率で測定するがパラメタでその重みを調整できるよう
+にする．
+NTCIR-7，NTCIR-9 の特許翻訳タスクにおける英日，日英翻訳のデータを
+用いてメタ評価を行ったところ，提案手法が従来の自動評価法よりも優れている
+ことを確認した．
+}
+\jkeywords{機械翻訳，自動評価法，順位相関}
+
+\etitle{Evaluating Translation Quality with Word Order Correlations}
+\eauthor{Tsutomu Hirao\affiref{Author_1} \and Hideki Isozaki\affiref{Author_2}
+\and Katsuhito Sudoh\affiref{Author_1} \and Kevin Duh\affiref{Author_3} \and \\
+Hajime Tsukada\affiref{Author_1} \and Masaaki Nagata\affiref{Author_1} 
+} 
+\eabstract{
+Automatic evaluation of Machine Translation (MT) quality is essential to
+develop high-quality MT systems.
+Various evaluation metrics have proposed, and among them, BLEU is widely
+used as the de facto standard metric. BLEU counts N-grams common between
+reference and hypothesis translation. 
+On the other hand, ROUGE-L counts longest common subsequences.
+However, these methods have some problems. 
+People give high scores to Rule-based MT (RBMT), but these methods do not,
+because RBMT tends to use alternative words. Conventional metrics are
+severe against the difference of words, but people accept them if the
+translation has the same 
+\linebreak
+meaning. Statistical MT (SMT) tends to
+translate ``A because B'' as ``B because A'' in case of translation
+between Japanese and English.
+BLEU does not care about global word order, and this severe mistake is
+not penalized very much. In order to consider global word order, this
+paper proposes a lenient automatic evaluation metric based on rank
+correlation of word order. By focusing on only words common between the
+two translations, 
+this method is lenient with the use of alternative words. The difference of words is
+measured by precision of words, and its weight is controlled by a parameter.
+By using submissions of NTCIR-7 \& 9's Patent Translation task, the
+proposed method outperforms conventional measures in terms of system
+level comparison.
+}
+\ekeywords{Machine Translation, Automatic Evaluation, Rank Correlation}
+
+
+\headauthor{平尾，磯崎，須藤，Duh, 塚田，永田}
+\headtitle{語順の相関に基づく機械翻訳の自動評価法}
+
+\affilabel{Author_1}{日本電信電話株式会社 NTT コミュニケーション科学基礎研究所}{NTT Communication Science Laboratories, NTT Corporation}
+\affilabel{Author_2}{岡山県立大学}{Okayama Prefectural University}
+\affilabel{Author_3}{奈良先端科学技術大学院大学}{Nara Institute of Science and Technology}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+
+機械翻訳システムの開発過程では，システムの評価と改良を幾度も繰り返さね
+ばならない．
+信頼性の高い評価を行うためには，人間による評価を採用することが理想ではあるが，
+時間的な制約を考えるとこれは困難である．
+よって，人間と同程度の質を持つ自動評価法
+，つまり，人間の評価と高い相関を
+持つ自動評価法を利用して人間の評価を代替することが実用上求められる\footnote{
+本稿では，100 文規模程度のコーパスを用いて翻訳システムの性能を評価すること，
+つまり，システム間の優劣を比較することを目的とした自動評価法について
+議論する．}．
+
+こうした背景のもと，
+様々な自動評価法が提案されてきた．BLEU \cite{bleu}, NIST \cite{nist},
+METEOR \cite{meteor}，Word Error Rate (WER) \cite{WER} などが広く利用されて
+いるが，
+そのなかでも BLEU \cite{bleu} は，
+数多くの論文でシステム評価の指標として採用されているだけでなく，
+評価型ワー
+クショップにおける公式指標としても用いられており，自動評価のデファクトス
+タンダードとなっている．
+その理由は，人間による評価との相関が高いと言われていること，計算法
+がシステム翻訳と参照翻訳（正解翻訳）との間で一致するNグラム（一般的に
+$\mathrm{N}=4$が用いられる）を数えあげるだけで実装も簡単なことにある．
+
+しかし，BLEUのように Nグラムという短い単語列にのみに着目してスコアを決定
+すると，システム翻訳が参照翻訳のNグラ
+ムを局所的に保持しているだけで，その意味が参照翻訳の意味と大きく
+乖離していようとも高いスコアを与えてしまう．
+局所的なNグラムは一致しつつも参照翻訳とは
+異なるような意味を持つ翻訳をシステムが生成するという
+現象は，翻訳時に大きな語順の入れ替えを必要としない
+言語間，つまり，構文が似ている言語間の翻訳ではほとんど起こらない．
+例えば，構文が似ている言語対である
+英語，仏
+語の間の翻訳では大きな語順の入れ替えは必要なく，
+BLEU と人間の評価結果との間の相関も高い \cite{bleu}．
+一方，日本語と英語のように翻訳時に大きな語順の入
+れ替えが必要となる言語対を対象とすると，先に示した問題が深刻となる．
+例えば，Echizen-ya らは日英翻訳において，BLEU \cite{bleu}，
+その変種であるNIST \cite{nist}と人間の評価との間の相関が低いことを
+報告している \cite{echizenya-wpt09}．
+
+文全体の大局的な語順を考慮する自動評価法としては，ROUGE-L \cite{ROUGEL}，
+IMPACT \cite{impact}がある．これらの手法は
+参照翻訳とシステム翻訳との間で一致する最長共通部分単語列(Longest
+Common Subsequence: LCS)に基づき評価スコアを決定する．
+LCS という文全体での大局的な語順を考慮していることから，英日，日英翻訳シス
+テムの評価において，Nグラム一致率に基
+づく自動評価法よりもより良い評価ができるだろう．しかし，Nグラム一致率に
+基づく自動評価法と同様，訳語の違いに敏感すぎるという問題がある．後に述べ
+るが，NTCIR-9 での特許翻訳タスクにおいては，人間が高い評価を与えるルールベー
+スの翻訳システムに高スコアを与えることができないという問題がある．
+
+
+本稿では日英，英日という翻訳時に大きな語順の入れ替えを必要とす
+る言語対を対象とした翻訳システムの自動評価法を提案する．
+提案手法の特徴は，Nグラムという文中の局所的な単語の並びに着目するのではなく，文
+全体における
+大局的な語順に着目する点と，参照翻訳とシステム翻訳との間で一致しない単語を
+採点から外し，別途，ペナルティとしてそれをどの程度重要視するかを調整でき
+るようにすることで訳語の違いに対して寛大な評価を行う点にある．
+より具体的には，システム翻訳と参照翻訳との間の語順の近さを測るため，
+両者に一致して出現する単語を同定した後，それらの出現順序の
+近さを順位相関係数を用いて計算し，これに重み付き単語正解率と
+短い翻訳に対するペナルティを乗じたものを最終的なスコアとする．
+
+近年，提案手法と同じく語順の相関に基づいた自動評価法である LRscore が
+Birch らによって独立に提案されている \cite{birch-acl}．
+LRscore は，参照翻訳とシステム
+翻訳との間で一致する単語の語順の近さを Kendall 距離で表し，それをさらに低レンジでの
+スコアを下げるために非線形変換した後，短い翻訳に対するペナルティを乗じ
+，さらに BLEU スコアとの線形補間で評価スコアを決定する．提
+案手法と LRscore は特殊な状況下では同一の定式化となるが，研究対象としてきた言語対が
+異なることから，相関係数と語彙の一致に対する考え方が大きく異なる．
+
+提案手法がどの程度人間の評価に近いかを調べるため，NTCIR-7，NTCIR-9の日
+英，英日，特
+許翻訳タスク \cite{ntcir7,ntcir9}のデータを用いて検証したところ，翻訳シ
+ステムの評価という観点から，従来の自動評価法より
+も人間の評価に近いことを確認した．
+
+以下，2章ではBLEUを例として，Nグラムという局所的な語順に着目してシステム
+を評価することの問題点，3章では LCS を用いてシステムを評価するこ
+との問題点を指
+摘する．そして，4章でそれら問題点の解決法として，訳語の違いに寛大，かつ，
+大局的な語順の相関に基づ
+く自動評価法を提案する．5章で実験の設定を詳述し，6章では実験結果を考
+察する．最後に7章でまとめ，今後の課題について述べる．
+
+
+\section{Nグラム一致率に基づく自動評価法の問題点}
+
+Nグラム一致率を用いてシステム翻訳を評価する際の問題点を以下に定義する
+BLEUを例として説明する．
+
+システム翻訳文集合を${\mathcal H}$，それに対応する参照翻訳文集合
+\footnote{
+BLEUでは，原文に対して複数の参照翻文があることを想定している．}を
+${\mathcal R}$とする．システム翻訳文$h_i \in \mathcal H$には，対応す
+る参照翻訳文の集合$R_i \in \mathcal R$が割り当てられており，
+$R_i$の$j$番目の参照翻訳文を$r_j$とする．
+なお，$S=|\mathcal H|=|\mathcal R|$とする．ここで，BLEUは，以下の式で定義される．
+\begin{equation}
+ \text{BLEU}(\mathcal{H},\mathcal{R})=\text{BP}\cdot\exp\left(\frac{1}{N}\sum_{n=1}^N \log P_n\right)
+\end{equation}
+
+$N$はNグラムの長さパラメタであり，一般的には$N=4$である．$P_n$は，Nグラム適
+合率であり，以下の式で定義される．
+\begin{equation}
+P_n=\frac{\displaystyle \sum_{i=1}^S\displaystyle\sum_{t_n \in h_i} \min(\text{count}(h_i,t_n),
+	\max\_\text{count}(R_i,t_n))}{\displaystyle \sum_{i=1}^S \displaystyle\sum_{t_n \in h_i}\text{count}(h_i,t_n)}
+\end{equation}
+
+count($h_i$,$t_n$)は，任意のNグラム ($t_n$) のシステム翻訳文$h_i$における出現頻
+度，
+max\_count($R_i$,$t_n$)は，$t_n$の参照翻訳文集合$R_i$における
+出現頻度の最大値，$\max_{r_j \in R_i}\text{count}(r_j,t_n)$
+である．BP (Brevity Penalty) は，短
+いシステム翻訳に対するペナルティであり，以下の式で定義される．
+\begin{equation}
+ \text{BP}=\min \left( 1,\exp \left( 1-\frac{\text{closest}\_\text{len}(\mathcal{R})}{\text{len}(\mathcal{H})}\right)\right)
+\end{equation}
+
+closest\_len($\mathcal R$)は，各$h_i \in {\cal H}$に対し，
+最も近い単語数の参照翻訳文 $r_j \in R_i$を決定した後，それらの単語数を全て
+の$i$で合計したもの，
+len($\mathcal{H}$)は，$h_i$単語数を全ての$i$で合計したものを表す．
+
+いま，原文 ($s$)，参照翻訳 ($r$)，システム翻訳 ($h_1$, $h_2$) が以下の通り与えられた
+としよう．
+
+\begin{description}
+ \item[{\mdseries $s$:}] 雨に濡れたので，彼は風邪をひいた．
+ \item[{\mdseries $r$:}] He caught a cold because he got soaked in the rain.
+ \item[{\mdseries $h_1$:}] He caught a cold because he had gotten wet in the rain.
+ \item[{\mdseries $h_2$:}] He got soaked in the rain because he caught a cold.
+\end{description}
+
+$r$は原文の直訳であり，$h_1$ はほぼそれと等しい訳であるが，$h_2$ は
+「風邪をひいたので，彼は雨に濡れた」という意味であり，原文が表す因果関係
+が逆転している．$h_1$ と $h_2$ を比較すると，
+翻訳としての流暢さ (fluency)，いわゆる言語
+モデル的な確からしさは同程度であ
+るが，内容の適切性 (adequacy)は，$h_1$ が $h_2$ よりも高くならねばならない．
+
+ここで，この2つのシステム翻訳を先に示したBLEUで評価してみよう\footnote{式(1)の定
+義から明らかなようにBLEUは文集合を引数として評価スコアを計算する．
+通常，1文を対象としてそのスコアを計算することはないが，ここでは
+説明のため1文でのBLEUスコアを計算する．}．
+$h_1$，$h_2$ とも$r$よりも長いため，ともに BPは1となる．$h_1$ の$P_1$〜$P_4$はそれぞれ，
+9/12，7/11，5/10，3/9なので，BLEUスコアは0.53となる．一方，$h_2$ の$P_1$〜$P_4$
+はそれぞれ，11/11，9/10，6/9，4/8なので，BLEUスコアは0.74となる．
+この結果は，我々の直感に反しており，BLEUを最大化するようにシステムを最適
+化することが，良い翻訳システムの開発に結びつくかどうかは疑問である．
+
+こうした問題が起こる原因はNグラムという局所的な語の
+並びにのみに着目してスコアを計算することにある．
+短い単語列のみを評価対象とすると，先の例のように，
+参照翻訳の節中のNグラムを保持していれば，節の順番が入れ替わったとして
+も十分高いスコアを獲得する．
+
+
+もちろん，$h_2$ のような翻訳をシステムが出力するようなことはほとんどあり得ない
+のではないかという疑問もあろう．
+確かに語順が似た言語対を対象とする場合や翻訳システムがルールベースで構築
+されている場合には起こりにくい問題であるが，
+語順が大きく異なる言語対を対象とした統計翻訳 (Statistical Machine
+Translation: SMT)
+システムでは十分起こり得る問
+題である．
+以下に Web 上の SMT による翻訳サービスの出力例を示す．
+
+\begin{description}
+ \item[原文：]ボブはメアリに指輪を買うためにジョンの店に行った．
+ \item[参照翻訳：]Bob went to John's store to buy a ring for Mary.
+ \item[SMT出力：]Bob to buy rings, Mary went to John shop.
+\end{description}
+
+SMT出力をみると，訳語という観点では参照翻訳と良く合致しており，バイグラム，
+トライグラムでもある程度の数が一致している．しかし，原文の「店に行く」
+の主体が「ボブ」であるという構造を捉えることができず，
+その主体が「メアリ」となってしまっている．
+SMTシステムでは，大
+きな語順の入れ替えを許すと探索空間は膨大になる．
+よって，現実的な時間で
+翻訳文を生成するため，
+語順の入れ替えにある程度の制限を設けざるを
+得ない．その結果，Nグラムでは参照翻訳と良く合致す
+るものの原文の意味とはかけ離れた翻訳を出力することがある．
+
+このような状況のもと，
+BLEUスコアで翻訳システムを比較すると，
+正しい評価ができない可能性が高い．なお，この問題は BLEU に限ったことでは
+なく，その変種であるNISTスコア，METEOR など Nグラム一致率を利用した自動
+評価法すべてに当てはまる問題である．
+
+
+\section{LCSに基づく自動評価法の問題点}
+
+ROUGE-L \cite{ROUGEL}，IMPACT \cite{impact}は，参照翻訳とシステム翻訳と
+の間の最長共通部分単語列 (LCS) に基づき評価スコアを決定する．先に挙げた
+例で説明する．
+
+\begin{description}
+ \item[{\mdseries $s$:}] 雨に濡れたので，彼は風邪をひいた．
+ \item[{\mdseries $r$:}] He caught a cold because he got soaked in the rain.
+ \item[{\mdseries $h_1$:}] He caught a cold because he had gotten wet in the rain.
+ \item[{\mdseries $h_2$:}] He got soaked in the rain because he caught a cold.
+\end{description}
+
+$r$と$h_1$との間のLCSは，``He caught a cold because he in the rain''であり，
+その長さ（単語数）は9である．$r$の長さは11，$h_1$の長さは12であることか
+ら，LCS の適合率は9/12，再現率は9/11となる．一方，$r$と$h_2$との間の
+LCS は，``he got soaked in the rain''であり，その長さは6である．$h_2$の
+長さは11なので，LCS の適合率は6/11，再現率は6/11 となる．ROUGE-L ス
+コアは LCS 適合率と再現率の調和平均，F値なので BLEU とは違い，$h_1$を
+$h_2$より高く評価することができる．
+
+IMPACT は ROUGE-L を改良したものであり，上述の LCS を一度見つけただけで
+やめるのではなく，見つかった LCS を削除した単語列に対し，再度 LCS を探すとい
+うことを繰り返す．つまり，$h_1$の例では，$r$と$h_1$から，
+``He caught a cold because he in the rain''を削除し，
+\begin{description}
+ \item[{\mdseries $r$:}] got soaked
+ \item[{\mdseries $h_1$:}] had gottten wet 
+\end{description}
+から，$h_2$の例では，``he got soaked in the rain''を削除し，
+\begin{description}
+ \item[{\mdseries $r$:}] caught a cold because he
+ \item[{\mdseries $h_2$:}] because he caught a cold
+\end{description}
+から，再度 LCS を探し出すという手順を繰り返す．
+
+これらの手法の問題点は，参照翻訳とシステム翻訳との間の LCS 適合率，再
+現率を計算するため，それらの間で一致しなかった単語を評価の対象に含めてい
+る点にある．例えば，以下のシステム翻訳$h_3$を考えると，$r$と$h_3$との間
+のLCSは，``he caught a cold the rain''となるので，LCS適合率，再現率はそれぞ
+れ，6/13，6/11 となり，適合率が$h_2$の場合より低い値をとってしまい， ROUGE-Lスコ
+アは$h_2$の場合よりも低くなる．
+
+\begin{description}
+ \item[{\mdseries $h_3$:}] He caught a cold as a result of getting hit by the rain
+\end{description}
+
+このように適合率，再現率といった参照翻訳とシステム翻訳との間で一致しない単語を評価
+に含めてしまう尺度を用いると訳語の違いに敏感になり過ぎ，システムを過
+小評価することがある．
+
+
+\section{語順の相関に基づく自動評価法}
+
+本稿では，Nグラム一致率に基づく自動評価法の問題点を解決するため，文内の
+局所的な語の並びに着目するのではなく，大局的な語の並びに着目する．
+つまり，参照翻訳とシステム翻訳との間で一致して出現する単語の出現順
+の近さに基づき評価する．さらに，訳語の違いに寛大な評価をするため，システ
+ム翻訳の単語適合率の重みを調整できるようにして別途ペナルティとして用いる．
+
+
+\subsection{単語アラインメント}
+
+
+参照翻訳とシステム翻訳の語順との間の相関を計算するため，双方の翻訳に一致
+して出現する単語を同定しなければならない．これは，参照翻訳とシステム翻訳
+との間の単語アラインメントを決定する問題となる．本稿では，単語の表層での
+一致に基づくアラインメント法を採用した．Algorithm \ref{wordalign}にその
+疑似コードを示す．
+
+\begin{algorithm}[b]
+ \caption{Word Alignment Algorithm}
+ \label{wordalign}
+ \footnotesize
+ \begin{algorithmic}[1]
+  \STATE Read hypothesis sentence $h=w_1^h,w_2^h,\ldots,w_m^h$
+  \STATE Read reference sentence $r=w_1^r,w_2^r,\ldots,w_n^r$
+  \STATE Initialize {\tt worder} with an empty list.
+
+  \FOR{each word $w_i^h$ in $h$}
+
+  \IF {$w_i^h$ appears only once each in $h$ and $r$}
+  \STATE append $j$ s.t. $w_i^h=w_j^r$ to {\tt worder}
+  \ELSIF
+
+
+  \FOR{$\ell$=2 to $m-i$}
+  \IF {$w_i^h,\ldots,w_{i+(\ell-1)}^h$ appears only once each in $h$ and $r$}
+  \STATE append $j$ s.t. $w_i^h,\ldots,w_{i+(\ell-1)}^h=w_j^r,\ldots,w_{j+(\ell-1)}^r$ to {\tt worder}
+  \STATE break the loop
+  \ENDIF
+  \ENDFOR
+  \ELSE
+  \FOR{$\ell$=2 to $i$}
+  \IF {$w_{i-(\ell-1)}^h,\ldots,w_i^h$ appears only once each in $h$ and $r$}
+  \STATE append $j$ s.t. $w_{i-(\ell-1)}^h,\ldots,w_i^h=w_{j-(\ell-1)}^r,\ldots,w_{j}^r$ to {\tt worder}
+  \STATE break the loop
+  \ENDIF
+
+  \ENDFOR
+
+  \ENDIF
+  \ENDFOR
+  \STATE Return {\tt worder}
+ \end{algorithmic}
+\end{algorithm}
+
+システム翻訳を長さ$m$，参照翻訳を長さ$n$の単語リストして読み込み，アライ
+ンメントを格納する配列{\tt worder}を初期化する（1〜3行目）．システム翻訳の
+単語リストの先頭から順に単語$w_i^h$を取り出し，その単語がシステム翻訳，参照翻
+訳の双方にただ1度のみ出現している場合，$i$と単語$w_i^h$の参照翻訳における出現
+位置$j$を対応づける（5, 6行目）．それ以外の場合，$w_i^h$を基準として右側にN
+グラムを伸長させ，システム翻訳と参照翻訳の双方における出現頻度が1となっ
+た時点で$i$と$j$を対応づける（8〜13行目）．それでも対応がつかない場合，
+$w_i^h$を基準として左側にNグラムを伸長させ，システム翻訳
+と参照翻訳の双方における出現頻度が1となった時点で$i$と$j$を対応づける（15〜
+20行目）．これでも曖昧性が残る（システム翻訳と参照翻訳での頻度が1にならな
+い）場合，あるいは対応先が見つからない場合は単語対応付けを行わない．
+図\ref{figalign}に2章の例文に対する単語アラインメントを示す．上段の例か
+ら，\texttt{worder}の1番目の要素，つまり，$h_1$の1単語目
+が$r$の1番目の要素（単語）に対応することがわかる．
+下段の例から，$h_2$の1単語目が$r$の6番目の単語と対応していることがわかる．
+
+ \begin{figure}[t]
+   \begin{center}
+\includegraphics{21-3ia985f1.eps}
+   \end{center}
+    \caption{単語アラインメントの例}
+    \label{figalign}
+\end{figure}
+
+
+\subsection{単語出現順の相関}
+
+1対1の単語アラインメントを決定することができれば，参照翻訳とシステム翻訳
+から単語出現位置IDを要素とするリストを得ることができる．図\ref{figalign}の例では，
+$r$:[1,2,3,4,5,6,9,10,11]，$h_1$:[1,2,3,4,5,6,9,10,11]および
+$r$:[1,2,3,4,5,6,7,8,9,10,11]，$h_2$:[6,7,8,9,10,11,5,1,2,3,4]という2つ
+のリストペアを得る．こうした順序列間の順位相関係数を計算することで参照翻訳とシ
+ステム翻訳との間で一致して出現する単語の出現順の近さを測ることができる．
+本稿では以下に示すKendallの順位相関係数 ($\tau$) \cite{kendall}を採用した．
+順位相関係数としては，Spearman の順位相関係数 ($\rho$) もよく知られ
+ている．しかし，
+$\tau$と比べて$\rho$は，順位の小さな入れ替わりには寛容すぎ，大きな入れ替
+わりには厳しすぎる．
+予備実験の結果では，人間の評価との間の相関が$\tau$よりも低い傾向
+を示したため，
+\pagebreak
+本稿では$\tau$を採用した．
+\begin{equation}
+ \tau =\frac{\displaystyle \sum_{i=1}^{n-1} T_i - \displaystyle \sum_{i=1}^{n-1}U_i}{\frac{n(n-1)}{2}}
+\end{equation}
+
+$T_i$は，アラインメント手続きを用いてシステム翻訳から得た単語出現位置の
+IDリスト (\texttt{worder}) につ
+いて，$i$番目の要素の値よりも大きな要素が$i+1$番目から$n$番目の要
+素までの間に出現
+する数，$U_i$はその逆に，
+$i$番目の要素の値よりも小さな要素が$i+1$番目から$n$番目の要素まで
+の間に出現する数を表す．表\ref{tau}に図\ref{figalign}の$h_2$から得た{\tt
+worder}と$T_i$，$U_i$をそれぞれ示す．この表より，$r$ と $h_2$ との間の語順の
+相関をKendallの$\tau$で計算すると，
+$\tau(r,{h_2})=(21-34)/((11\cdot10)/2)=-0.236$となる．
+同様に図\ref{figalign}の$h_1$から得た \texttt{worder}を用いて$\tau(r,{h_1})$を
+計算すると
+$\tau(r,{h_1})=(36-0)/((9\cdot8)/2)=1$となる．
+$\tau$は参照翻訳と
+システム翻訳との語順が完全一致する場合に1，逆順の場合に$-1$をとる．
+
+\begin{table}[t]
+  \caption{Kendall の順位相関係数の計算例}
+  \label{tau}
+\input{0985table01.txt}
+\end{table}
+
+BLEUでは，$h_2$が$h_1$よりも高いスコアを獲得したが，文全体での語順に着目
+し，システム翻訳と参
+照翻訳との間の語順の順位相関を計算すると，$h_1$が$h_2$よりも高いスコアを獲得
+でき，我々の直感に合致した結果を得ることができた．
+
+ただし，$\tau$は負の値をとり得るため，従来の自動評価法が出力するスコアレ
+ンジと同様[0,1]の値をとるよう以下の式で正規化する．
+\begin{equation}
+ \text{Normalized Kendall's $\tau$: NKT} =\frac{\tau+1}{2}
+\end{equation}
+
+
+\subsection{ペナルティ}
+
+参照翻訳とシステム翻訳との間の語順の相関を
+計算するためには，単語アラインメントを決定し，双方に一致して出現する単語
+のみを評価の対象としなければならない．しかし，
+参照翻訳とシステム翻訳との間で一致する単語のみを評価対象とすることには以
+下の2つ問題がある．
+
+\begin{enumerate}
+ \item システム翻訳の単語数に対し，参照翻訳との間で一致する単語の割合が
+       少ない場合，過剰に高いスコアを与える可能性がある．
+ \item システム翻訳の単語数が少ない場合，過剰に高いスコアを与える可能性
+       がある，
+\end{enumerate}
+
+(1) に関して，以下の例を考えよう．
+
+\begin{description}
+ \item[{\mdseries $r$:}] John went to a restaurant yesterday
+ \item[{\mdseries $h$:}] John read a book yesterday
+\end{description}
+
+$h$は5単語からなる訳であり，そのうち``John''，``a''，``yesterday''
+のみしか参照翻訳と一致していない．しかし，その出現順が参照翻訳と一致していることから
+NKT は1となる． つまり，システムが出力した単語数に関係なく順位相関だけを
+みていると不当に高いスコアを獲得する可能性がある．
+
+次に (2) に関して，以下の例を考えよう．
+
+\begin{description}
+ \item[{\mdseries $r$:}] John went to a restaurant yesterday
+ \item[{\mdseries $h$:}] to a
+\end{description}
+
+システム翻訳は2単語しかない意味の無い訳であるにもかかわらず，
+単語正解率は1であり，2単語の出現順序も参照翻訳と一致しているこ
+とから，NKTも1となる．
+つまり，単語数が少
+ない場合，順位相関と単語正解率だけでは不当に高いスコアを獲得する可能性
+がある．
+
+このように，順位相関係数を用いると，システム翻訳の2単語のみが参照翻訳と
+出現順まで一致すると，不当に高いスコアを獲得する可能性がある．
+よって，
+本稿では，前者に対して単語正解率 ($P$)，後者に対してはBLEUの
+BPをペナルティとして導入する．それぞれの定義を以下に示す．
+\begin{gather}
+ P(h_i,r_i)=\frac{\text{len (\texttt{worder})}}{\text{len}(h_i)} \\
+ \text{BP}_s(h_i,r_i)=\min\left(1,\exp \left(1-\frac{\text{len}(r_i)}{\text{len}(h_i)}\right)\right)
+\end{gather}
+
+単語正解率は，システム翻訳の単語のうちアラインメントをとることが
+できた単語数 (len({\tt worder})) の割合であり，
+len($r$)は，参照翻訳の単語数，len($h$)はシステム翻訳の単語数で
+ある．
+BLEU の BP は文集合全体で計算していたが，ここでは，文単位で
+計算することに注意されたい．
+これらを用いて最終的な自動評価スコアを以下の式(\ref{ribes})で定義する．
+なお，{\bf この手法を RIBES (Rank-based Intuitive Bilingual Evaluation Score) と名付け，
+\url{http://www.kecl.ntt.co.jp/icl/lirg/ribes/}にてオープンソースソフトウェ
+アとして公開している．}
+\begin{equation}
+\mbox{RIBES}(\mathcal{H},\mathcal{R})=\frac{\displaystyle\mathop\sum_{h_i \in \mathcal{H}}
+\max_{r_j \in R_i} \{ \mbox{NKT}(h_i,r_j) \cdot P(h_i,r_j)^{\alpha}\cdot
+\mbox{BP}_s(h_i,r_j)^{\beta}\}}{|\mathcal{H}|}
+\label{ribes}
+\end{equation}
+
+$\alpha (\ge 0)$は単語適合率の重みであり，$\alpha$が大きいほど訳語の違い
+に敏感になる．
+
+\begin{itemize}
+ \item 参照翻訳が1つしかない場合，参照翻訳にはない訳語をシステムが出力す
+       る可能性が高いため，$\alpha$は小さめに設定した方がよいだろう．
+ \item 参照翻訳が複数の場合，参照翻訳のいずれかに出現する単語をシステム
+       が出力する可能性が高くなる．そこで，不適切な訳語を厳しく採点するため
+       $\alpha$は高めに設定した方がよいだろう．
+\end{itemize}
+
+$\beta (\ge 0)$は BP の重みであり，$\beta$が大きいほど訳文の長さに敏感に
+なる．
+
+\begin{itemize}
+ \item 参照翻訳が1つしかない場合，それよりも短い翻訳があり得る可能性が高
+       いので，$\beta$は小さめに設定してよいだろう．
+ \item 参照翻訳が複数ある場合，一番短い翻訳を基準にして考えれば，$\beta$
+       を高めに設定してよいだろう．
+\end{itemize}
+
+
+\section{実験の設定}
+
+
+\subsection{実験データ}
+
+RIBES の有効性を示すため，NTCIR-7，NTCIR-9の特許翻訳タスク (PATMT) の
+データを用いて評価実験（評価指標の評価なので，以降メタ評価と呼ぶ）を行った．
+言語対は英日 (EJ)，日英 (JE)とした．
+それぞれのデータセットの文数，1文あたりの参照翻訳の数，評価者の数，参加
+システム数
+を表\ref{data}に示す．なお，カッコ内の数字はルールベースシステムの数を示
+す．
+
+\begin{table}[b]
+  \caption{実験データの詳細}
+  \label{data}
+\input{0985table02.txt}
+\end{table}
+
+NTCIRワークショップの事務局から公開されてい
+るデータには，EJ，JEタスクとも1つの参照翻訳しか含まれていない．
+そこで，NTCIR-7のデータに対してのみ，特許翻訳の専門家に依頼し，参照翻訳を
+独自に追加した．
+また，NTCIR-7のEJタスクに関しては，5システムだけにしか人間の主観
+評価の結果が与えられていなかったため，特許に精通した被験者5名で再度 JE
+タスクと同様，5段階評価で主観評価を行った．
+さらに，評価対象とする翻訳システムに著者のグループの英日翻訳システム\cite{headfinal}を追加
+し，計14システムで実験を行った．
+
+全てのデータに対し，メタ評価の対象は翻訳の内容としての適切性 (adequacy) のみ
+とした．これは，翻訳の流暢さよりも内容の適切性を
+自動評価できた方がより良い翻訳システムの開発に貢献できると考えたからである．
+
+なお，各システム翻訳文に対し複数の人間の評価スコアが与えられている場合に
+は，その平均値を文に対する評価スコアとした．このように各システム翻訳
+文に対して評価値を決定し，これを文集合全体での平均したものを人
+間がシステムに与えた評価スコアとした．
+
+
+\subsection{比較した自動評価手法}
+
+比較評価には，Nグラム一致率に基づく評価手法として先に説明したBLEU，
+大局的な単語列を考慮した評価法として同じく先に説明した
+ROUGE-L \cite{ROUGEL}，
+その改良版である IMPACT \cite{impact}を用いた．
+IMPACTには，LCS の長さに応じた重みパラメタ，語順の入れ替えに応じた
+重みパラメタがある．詳細については文献 \cite{impact} を参照されたい．
+なお，ROUGE-L，IMPACTとも参
+照翻訳
+が複数ある場合には個々の参照翻訳を用いて求めたスコアの最大値を評価スコア
+として採用した．BLEU の計算には {\tt mteval-v13a}，ROUGE-L 
+には，\texttt{ROUGE-1.5.5}，IMPACT には \texttt{IMPACT version 4}を利用した．
+
+また，LRscore \cite{birch,birch-wmt2010,birch-acl}も比較評価の対象とした．
+LRscore は，参照翻訳とシステム翻訳との間の語順の近さを表すスコアとBLEUス
+コアとの間の線形補間で評価スコアを決定する．
+語順の近さを表す尺度としては，ハミング距離$d_h(h,r)$を利用する
+ものと Kendall の$\tau$に基づく$d_k(h,r)$を利用するものがあるが，以降で
+は，本稿との
+関連が深い後者について述べる．
+LRscore の定義を以下に示す．
+\begin{equation}
+ \mbox{LRscore}(\mathcal{H},\mathcal{R})=\gamma R(\mathcal{H},\mathcal{R})+(1-\gamma)\mbox{BLEU}(\mathcal{H},\mathcal{R})
+\end{equation}
+
+$R({\mathcal H},{\mathcal R})$は以下の式で定義される．
+\begin{equation}
+ R(\mathcal{H},\mathcal{R})=\frac{\displaystyle\mathop\sum_{h_i \in \mathcal{H}} d(h_i,r_i)\mbox{BP}_s(h_i,r_i)}{|\mathcal{H}|}
+\end{equation}
+
+$d_k(h,r)$は，文献\cite{birch-acl} に従うと
+$d_k(h,r)=1-\sqrt{1-\mbox{NKT}(h,r)}$で定義されるが，それ以前の文献
+\cite{birch,birch-wmt2010} では，$d_k(h,r)=\mbox{NKT}(h,r)$も用いられて
+いる．以降，前者を${d_k}_1$，後者を${d_k}_2$とよぶ．
+RIBES で $\alpha=0$, $\beta=1$と設定したときと，LRscore に ${d_k}_2$ を採用，
+$\gamma=1$と設定したとき，これら2つの手法は一致する．しかし，LRscore
+は日本語，英語のような大きな語順の入れ替えがある言語対を対象として考案
+された手法ではなく，ヨーロッパ言語間，中英\footnote{
+もちろん，英語，フランス語ほど語順が近くはないが，英語も中国語も SVO
+型の言語であり，日本語，英語ほどの語順の違いはない．}翻訳という比較的語順が似た言語を対象として考案されたため，最終的には
+${d_k}_1$を採用することで順位相関の低レンジスコアの感度を下げ，さらに語順の近い言語対を
+対象としたときに実績のある BLEU \footnote{
+実際，NTCIR-9 の中英翻訳タスクにおいて，BLEUは人間の評価結果との相関が
+0.9以上の非常に高い値を記録している \cite{ntcir9}．} の恩恵を受けるため，それとの間の線形補間という定式化に至ったのであろう．
+後述するが，英日，日英翻訳の評価では BLEU を利用するメリットは期待できな
+い．さらに，NKT を${d_k}_1$によって非線形変換することで低レンジスコアの
+感度をさらに下げるメリットも元々高いNKTを得ることが難しい英日，日英翻訳タ
+スクでは期待できない．
+以上より，LRscore は確かに RIBES と良く似た手法といえるが，
+ BLEU を補うために派生した評価指標と捉えた方が自然であり， 
+RIBES とはその根底にある研究の動機に大きな違いがある．
+なお，LRscore には，参照翻訳とシステム翻訳との間の単語
+アラインメントを決定する手段が提供されないため，
+以降の実験では本稿での単語アラインメントを利用した．
+
+
+\subsection{メタ評価の指標}
+
+本稿では，メタ評価の指標として広く用いられている Pearson の積率相関係数，
+Spearman の順位相関係数，Kendall の順位相関係数を用いた．Pearson の積率
+相関係数は人間の評価と自動評価の結果がどの程度線形の関係にあるかを評価し，
+Spearman，Kendall の相関係数は人間の評価と自動評価の結果の順位がどの程度
+近いかを評価する．
+Spearman と Kendall の違いは，先にも説明したように
+順位の差に対して重みをどのように与えるかという点にある．
+
+
+\subsection{実験の手順}
+
+RIBES に対してはシステム翻訳の長さに対する重みパラメタと単語正解率に対
+する重みパラメタ，IMPACT に対してはLCSに対する重みパラメタと語順の違いに
+対する重みパラメタ，LRscore には順位相関係数とBLEUスコアの重みを調整する
+パラメタがある．
+これらの手法に対しては，以下の手順でパラメタの最適化を行い，メタ評価を行った．
+
+\begin{enumerate}
+ \item 文のIDをランダムに10個選択する．
+ \item 選択したIDによる10文の集合を用いて，文集合全体での人間の評価スコアと自動
+       評価スコアとの間の Spearman の順位相関係数が最大となるようパラメタを決定する．
+ \item (2) で決定したパラメタを用いて (1) の残りの文集合全体を用いてメタ評
+       価を行い，相関係数を記録する．
+ \item (1) から (3) を100回繰り返し，相関係数の平均値を求める．
+\end{enumerate}
+
+なお，パラメタが存在しないBLEUとROUGE-Lに対しては，(2) をスキップし，同様
+の手順でメタ評価を行った．
+
+
+\section{実験結果と考察}
+
+\subsection{NTCIR-7データ}
+
+表 \ref{NTCIR7-single}にオーガナイザから配布された参照翻訳のみを用いた時
+の相関係数の平均値，表 \ref{NTCIR7-multi}に複数参照翻訳を用いた時の相関係
+数の平均値を示す．
+平均値の差の
+検定には，ペアワイズの比較に Wilcoxon の符号順位検定\cite{wilcox}を採用し，Holm
+法 \cite{holm} による多重比較を用いた．
+
+\begin{table}[t]
+  \caption{メタ評価の結果（NTCIR-7データ，単一参照翻訳）}
+  \label{NTCIR7-single}
+\input{0985table03.txt}
+\vspace{4pt}\small
+表中，1はRIBES，2は
+  LRscore(${d_k}_1$)，3はLRscore(${d_k}_2$)，4はROUGE-L，5はIMPACT，6はBLEUに対し，
+  有意水準5\%で有意差があることを示す．
+\par
+\end{table}
+\begin{table}[t]
+  \caption{メタ評価の結果（NTCIR-7データ，複数参照翻訳）}
+  \label{NTCIR7-multi}
+\input{0985table04.txt}
+\vspace{4pt}\small
+表中，1はRIBES，2は
+  LRscore(${d_k}_1$)，3はLRscore(${d_k}_2$)，4はROUGE-L，5はIMPACT，6はBLEUに対し，
+  有意水準5\%で有意差があることを示す．
+\par
+\end{table}
+
+表 \ref{NTCIR7-single}，\ref{NTCIR7-multi} より，
+どの手法に対しても Spearman の順
+位相関係数の方が Kendall の順位相関係数よりも高い．
+Kendall の順位相関係数は，2つの順序列の間で一致する半順序関係の
+数に基づき決定されるため，細かな順位の間違いに敏感である．
+一方，Spearman の順位相関係数は順序列の間の
+順位の差に基づき決定されるため，細かな順位の間違いには鈍感である．
+本稿で用いたデータでは，
+自動評価法にとって，明らかに良いシステムと悪いシステムの区別が容易であっ
+たため，大きな差での順位の不一致が減少し，
+Spearman の順位相関係数が
+Kendall の順位相関係数よりも相対的に高い値を記録
+したのであろう．ただし，全体の傾向としては両者の間に大きな違いはない．
+Pearson の積率相関係数は順位相関係数より高い値を示しており，
+BLEUではその差が特に大きい．
+たとえば，表 \ref{NTCIR7-multi}の英日
+タスクでは，Pearsonが0.9以上であることに対し，Spearmanは0.7程度でしかない．
+これは，人間の評価との順位付けはやや強い程度相関でしか示していないにも関
+わらず，
+線形の相関は非常に強いことを意味する．
+Pearson の積率相関係数は外れ値がある
+場合，その値が過剰に高く見積もられるということが知られているが，その影響が
+強く出ているのではないかと考える．よって，以降では主に順位相関に焦点をあ
+てて議論する．
+
+表\ref{NTCIR7-single}より，
+日英翻訳に関しては，RIBES が他のすべての手法に対して統計的有意に優れてい
+る．
+英日翻訳に関しては，RIBES とLRscore(${d_k}_1$)が同程度で優れて
+おり，十分強い相関である．
+ROUGE-L，IMPACTが，RIBES ほどではないものの比較的よい相関を得ているこ
+とに対し，
+BLEUは双方の言語対において，相関係数の平均値が他のほぼ全ての手法に対し統
+計的に有意な差で劣っ
+ている．さらに，順位相関係数は弱い相関程度でしかない．
+この結果は，英日，日英翻訳という大きな語順の入れ替えを必要とする言語対を対象
+とした場合，Nグラム一致率で自動評価を行うことが不適切であることを示唆し
+ている．
+
+表 \ref{NTCIR7-multi}より，
+参照翻訳の数が増えると相関係数の平均値は上昇する傾向にある．
+BLEUの相関係数が他の手法よりも有意に劣っていることは単一参照翻訳の場合と同
+様であるが，順位相関係数はやや強い相関程度にまで上昇している．
+ROUGE-L，IMPACTの相関係数も上昇しており，ROUGE-Lは日英翻訳に関しては，
+他のすべての手法に対して，英日翻訳に関しては，RIBES 以外の手法に対して
+統計的有意に優れている．
+RIBES は，日英翻訳ではROUGE-Lに次いでIMPACTと同程度，英日翻訳では
+ROUGE-Lと同程度であるが，十分強い相関を示している．
+
+BLEU，ROUGE-L，IMPACT の相関係数が複数参照翻訳が与えられた場合に顕著に改
+善される理由は，語彙のバリエーションが増えたことであろう．
+これらの手法は，N グラ
+ム一致率，LCS 適合率，再現率を利用しているため，参照翻訳とシステム翻訳と
+の間で一致しない単語も評価対象となる．よって，
+語彙の一致判定を単に文字列としての一致だけで判定すると，意味的には一致す
+るはずのものが一致せずに不当に低いスコアを得るという問題が起こる．
+しかし，複数参照翻訳の場
+合には，語彙のバリエーションが増えるためこうした問題は軽減される
+のであろう．
+一方，RIBES でもシステム翻訳と参照翻訳との間の単語一致率は利用するため，
+一致しない単語を評価対象として用いているが，パラメタによりその影響を小さ
+く抑えることができる．よって，単一参照翻訳でも複数参照翻訳でも安定して高い相関を示
+すことができた．
+
+
+\subsection{NTCIR-9データ}
+
+表 \ref{NTCIR9}に相関係数の平均値を示す．
+NTCIR-7 のデータとは異なり，どの手法も相関係数の平均値は大幅に低下してい
+る．特にROUGE-L，IMPACT，BLEUは，非常に弱い相関，あるいは無相関と言える
+ほどである．この原因は先の実験結果と同様，参照翻訳の数が1つであること
+に加え，評価対象となる翻訳システムの中でのルールベースの翻訳システム（SMT
+とのハイブリッドも含む）の占める
+割合が増したことにある．NTCIR-7と比較すると，日英翻訳に関しては
+ルールベースシステムは2システムから6システムへ，英日翻訳に関しては1シス
+テムから5システムへと増えた．
+
+\begin{table}[t]
+  \caption{メタ評価の結果（NTCIR-9データ，単一参照翻訳）}
+  \label{NTCIR9}
+\input{0985table05.txt}
+\vspace{4pt}\small
+表中，1はRIBES，2は
+  LRscore(${d_k}_1$)，3はLRscore(${d_k}_2$)，4はROUGE-L，5はIMPACT，6はBLEUに対し，
+  有意水準5\%で有意差があることを示す．
+\par
+\end{table}
+\begin{figure}[t]
+   \begin{center}
+\includegraphics{21-3ia985f2.eps}
+   \end{center}
+    \caption{ユニグラム適合率と人間のスコアの関係}
+    \label{uniprec}
+\end{figure}
+
+図\ref{uniprec}にユニグラム適合率と人間のスコア
+の関係を示す．図中四角のマーカ(RBMT-1〜6，JAPIO，TORI，EIWA)がルールベース
+の翻訳システムである．図か
+ら明らかなように，ルールベースの翻訳システムはユニグラム適合率が低いにも
+関わらず人間の評価では高いスコアを獲得している．つまり，これらのシステム
+の翻訳
+は，参照翻訳と一致する単語の割合が少ないにも関わらず人間の評価では高いスコアを獲
+得している．
+ルールベースの翻訳システムは，
+訓練データから訳語を推定するSMTシステムほど語彙の統制がとれていない．
+よって，翻訳対象のドメインに合致した語彙，すなわち，特許特有の語彙を用い
+て翻訳できるとは限らない．
+しかし，SMTシステムにとって大きな問題となる語順の入れ替えに関しては，記述され
+たルールに当てはまる限りは問題となり得ない．
+よって，特許の訳語として多少おかしくとも文全体で意味が通る翻訳となり，そ
+の結果，人間が高いスコアを与えたのであろう．
+先にも説明した通り，
+BLEUは，Nグラムの適合率，ROUGE-LとIMPACTはLCSの適合率・再現率に基づきスコア
+を決定する．つまり，
+参照翻訳と一致する単語の割合が大きいシステム翻訳にしか
+高いスコアを与えることができない．よって，ルールベースシステム
+に高いスコアを与えることはできず，それらの性能を低く見積もってしまったこ
+とにより，相関が著しく低下したと考える．
+
+一方，RIBES とLRscoreはこれらの手法とは異なり，単語正解率，BLEUスコアをパラメタで
+軽減することで単語一致率の低いシステムであっても高いスコアを与
+えること
+ができるという特徴がある．
+実際，日英，英日の双方においてROUGE-L，IMPACT，BLEUといった従来の自動評価法に
+対し，統計的有意に高い相関係数を獲得していることがそれの有効性を示唆してい
+る．
+
+ユニグラム適合率が低いところでの自動評価法の性能をより詳細に調べるため，
+ルール
+ベースの翻訳システムのみを取り出し，同様の実験を行い相関係数の平均値を
+求めたところ，表\ref{rbmt}を得た．翻訳システム数は日英翻訳タスクで6，英
+日翻訳タスク
+で5である．サンプル数が少ないため，相関係数の値に対する信頼性がこれまで
+の実験よりも劣ることに注意されたい．表\ref{rbmt}より，RIBES は日英翻訳タス
+クで ROUGE-L，IMPACT に劣るものの全体を通してみれば他の手法より良い相関
+を得ている．参照翻訳が1つしかないという影響もあるが，英日翻訳タスクでは
+ROUGE-L，IMPACT，BLEU は負の相関でしかない．さらに，先に示したとおり，
+表\ref{NTCIR9}において RIBES がルールベースシステム，SMT システム双方
+を含む場合でも良い相
+関を得たこともふまえると，参照翻訳とシステム翻訳との間で一致す
+る単語が少ない場合でも RIBES は有効であると考える．
+
+\begin{table}[b]
+  \caption{RBMTだけを用いたメタ評価の結果（NTCIR-9データ，単一参照翻訳）}
+  \label{rbmt}
+\input{0985table06.txt}
+\vspace{4pt}\small
+  表中，1はRIBES，2は
+  LRscore(${d_k}_1$)，3はLRscore(${d_k}_2$)，4はROUGE-L，5はIMPACT，6はBLEUに対し，
+  有意水準5\%で有意差があることを示す．
+\par
+\end{table}
+
+以上より，BLEU，ROUGE-L，IMPACTといった単語の一致に強く依存する従来の自
+動評価法は，単一参照翻訳時，評価対象としてルールベースシステムが多く混在
+する場合には著しく信頼性が低下することを示した．特に，参照翻訳は常に
+複数与えられるとは限らないため，自動評価法としては単一参照翻訳でも人間の
+評価結果との間の相関が高いことが望ましい．
+RIBES は，参照翻訳数，ルールベースシステムの数が変化した場合でも
+安定して高い相関であることから，従来の自動評価法よりも優れていると考える．
+ただし，RIBES には単語正解率と短い翻訳に対するペナルティを調整するため
+の重みパラメタがある．
+これらパラメタを最適化するためには，いわゆる教師データが必要となることか
+ら，
+それを必要としない BLEU，ROUGE-Lよりもコストのかかる手法とも言える．
+しかし，実験結果より，
+各システムに対し10文を人間が評価した結果を教師データとしてパラメタを最適
+化できることを示した．よって，十分低いコストでパラメタの最適が可能である．
+
+
+\subsection{獲得されたパラメタに関する考察}
+
+ \begin{figure}[b]
+   \begin{center}
+\includegraphics{21-3ia985f3.eps}
+   \end{center}
+    \caption{獲得されたパラメタの分布(RIBES)}
+    \label{parm}
+\end{figure}
+
+最後に RIBES と LRscore について獲得されたパラメタ，
+$\alpha$, $\beta$, $\gamma$の違いから考察する．図 \ref{parm}に$\alpha$, $\beta$の
+分布，図 \ref{lr-parm}に$\gamma$の分布を示す．
+
+ \begin{figure}[t]
+   \begin{center}
+\includegraphics{21-3ia985f4.eps}
+   \end{center}
+    \caption{獲得されたパラメタの分布(LRscore)}
+    \label{lr-parm}
+\end{figure}
+
+図 \ref{parm}より，パラメタ最適化のための訓練事例が10文と少ないことも影響
+してか，獲得されたパラメタにばらつきがあるが，単一参照翻訳の場合には小
+さな$\alpha$が選択されている割合が多く，4.3 節の仮説と一致する．また，
+NTCIR-9 のように単一参照翻訳かつルールベースシステムの数が多い場合には，
+$\alpha=0$の場合が非常に多い．一方，複数参照翻訳がある場合，比較的大きな
+$\alpha$が選択されている．$\beta$に関しては，複数参照翻訳時には高い値が
+選ばれている割合が高く，4.3 節の仮説と一致するが，単一参照翻訳時には必ず
+しも低い値が選ばれておらず先の仮説と一致しない．
+しかし，人間の
+評価との間の相関をみる限り，RIBES は従来法よりも比較的高い相関を得てい
+ることから，これは大きな問題ではないと考える．
+
+図 \ref{lr-parm}より，LRscore の NTCIR-9 では，$\gamma=1$付近が多く選択
+されており，
+語順の相関に対する重みを上げ，
+語彙の一致（BLEUスコア）に対する重みを下げるようにパラメタを選択しており，
+RIBES と同様の傾向を示している．しかし，NTCIR-7 では，単一参照翻訳，複数参
+照翻訳に関わらず0.3から0.6までの値が多く選ばれており，NTCIR-9 の場合ほど
+BLEU スコアに対する重みを下げるようなパラメタが選択されていない．
+NTCIR-7
+では RIBES の相関が概ね LRscore の相関を上回っていたが，その原因はこうした語彙の
+一致に対する重みの違いによると考える．
+さらに RIBES は2つのパラメタ$\alpha$, $\beta$があることに対し，LRscoreは1つの
+パラメタ$\gamma$しかない．よって，RIBES はLRscoreよりもより柔軟に
+データにフィットできる点が双方の手法のパラメタ選択，相関係数の差に影響を
+与えたとも考える．
+
+5.2 節でも述べたが，$\alpha=0$, $\beta=1$，$\gamma=1$とした場合，RIBES も
+LRscoreも語彙の一致スコアを考慮せず順位相関と短い翻訳に対するペナルティ
+だけを考慮することになり，両者はほぼ一致する．図 \ref{lr-parm}より，
+LRscore では$\gamma=1$が試行の半数近くで選択されているが，
+図 \ref{parm}
+の NTCIR-9 でそうした例がみられるものの全体に占める割合は決して多
+くはない．
+また，LRscore の語順相関の計算法として${d_k}_1$と${d_k}_2$の双方を試した
+が，一貫して，${d_k}_1$の方がよい相関を示した．
+こうしたことから，基本的には RIBES と LRscore は違うものと捉えて差し支え
+ないだろう．
+
+
+\section{まとめと今後の課題}
+
+本稿では，翻訳時に大きな語順の入れ替えが必要となる英日，日英翻訳システム
+を対象として，文全体での大局的な語順の相関を Kendall の順位相
+関係数に基づき決定し，これと単語適合率，短い翻訳に対するペナル
+ティを重み付きで乗じた自動評価法である RIBES (Rank-based Intuitive
+Bilingual Evaluation Score) を提案した．
+NTCIR-7，NTCIR-9の特許翻訳タスクのデータを用いてメタ評価を行っ
+たところ，BLEU，ROUGE-L，IMPACTといった従来の自動評価法は，参照翻訳の数
+が少ない場合，
+評価対象シス
+テムにおけるルールベースシステムの割合が大きい場合に相関が低下する
+ことに対し，
+RIBES は，こうした状況でも
+安定して高い相関を示すことを確認した．
+また，RIBES と同じくKendallの順位相関
+係数に基づく自動評価手法であるLRscoreと比較しても RIBES が少なくとも同
+等以上の性能であることを確認した．評価実験では，英日，日英翻訳システムを対
+象としたが，これ以外にも翻訳時に大きな語順の入れ替えを必要とする言語対を対象とした翻
+訳システムの評価時には有効であると考える．
+
+本稿では，100 文規模程度のコーパスを用いて翻訳システム間の優劣を人間と同様に
+自動評価すること，つまり，システム単位での人間の評価結果に対して相関が高
+ い自動評価法を実現することを目的としたが，
+こうした粗い評価だけではなく，翻訳システ
+ムの特徴をより詳細に分析するため，
+個々の文に対して人間が与えたスコアと自動評価法が与えたスコアと
+の間の相関を向上させることを目的とした研究もある
+\cite{Kulesza04,Gamon05,echizenya:ACL2010}．
+機械翻訳システムが発展
+していくにつれ，文単位で細かな評価をしたいという要求はより増していく
+と考えられるので，こうした着眼点は極めて重要である．
+ROUGE-L，IMPACT と同様，RIBES は文単位でも自動評価スコアを計算できるので，
+これらの手法の文単位での自動評価スコアと人間の評価スコアとの間のSpearman
+の順位相関係数を計算した．
+その結果を表\ref{persent}に示す．
+NTCIR-7 データでの相関が NTCIR-9 データでの相関よりも高いという傾向はシ
+ステム単位での実験結果と同様であるが，相関係数の値は大きく下がっている．
+この原因は，
+個々の文に対する人間の評価にはゆれがあることだろう．
+3手法とも，NTCIR-7 の日英翻訳タスクではやや弱い相関，英日翻訳タスクではやや強い相関
+である．RIBES は ROUGE-L とほぼ同程度で，日英翻訳タスクで IMPACT に4ポ
+イント程度劣るものの英日翻訳タスクでは IMPACT に9ポイント程度勝っている．
+一方， NTCIR-9 データの場合，もともとシステム単位での相関もNTCIR-7デー
+タほど高くはなかったが，文単位での相関は，どの手法でもほぼ無相関という結果
+であった．この原因には，評価のゆれに加え，各翻訳文に対する評価者が1名であることから，人
+間の評価の信頼性が低いこと，スコアが5段階のカテゴリカルデータになってしまっ
+たこと，参照翻訳数が1つしかないことが考えられる．
+今後，より良い自動評価法を開発するため，こうした文単位での相関をシステム
+単位での相関程度まで向上させることは自動評価法の大きな課題だと考える．
+
+\begin{table}[t]
+  \caption{文単位でのメタ評価の結果}
+  \label{persent}
+\input{0985table07.txt}
+\small
+表中の数値は Spearman の順位相関係数を表す．
+\par
+\end{table}
+
+
+\acknowledgment
+
+本論文の内容の一部は，\textit{EMNLP 2010: Conference on Empirical Methods in Natural Language
+Processing} で発表したものである \cite{isozaki:emnlp2010} ．
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Banerjee \BBA\ Lavie}{Banerjee \BBA\
+  Lavie}{2005}]{meteor}
+Banerjee, S.\BBACOMMA\ \BBA\ Lavie, A. \BBOP 2005\BBCP.
+\newblock \BBOQ {Meteor}: An Automatic Metric for {MT} Evaluation with Improved
+  Correlation with Human Judgements.\BBCQ\
+\newblock In {\Bem Proceedings of ACL Workshop on Intrinsic and Extrinsic
+  Evaluation Measures for {MT} and Summarization}, \mbox{\BPGS\ 65--72}.
+
+\bibitem[\protect\BCAY{Birch \BBA\ Osborne}{Birch \BBA\
+  Osborne}{2010}]{birch-wmt2010}
+Birch, A.\BBACOMMA\ \BBA\ Osborne, M. \BBOP 2010\BBCP.
+\newblock \BBOQ LRscore for Evaluating Lexical and Reordering Quality in
+  {MT}.\BBCQ\
+\newblock In {\Bem Proceedings of the Joint 5th Workshop on Statistical Machine
+  Translation and {MetricsMATR}}, \mbox{\BPGS\ 327--332}.
+
+\bibitem[\protect\BCAY{Birch \BBA\ Osborne}{Birch \BBA\
+  Osborne}{2011}]{birch-acl}
+Birch, A.\BBACOMMA\ \BBA\ Osborne, M. \BBOP 2011\BBCP.
+\newblock \BBOQ Reordering Metrics for MT.\BBCQ\
+\newblock In {\Bem Proceedings of the 49th Annual Meeting of the Association
+  for Computational Linguistics: Human Language Technologies}, \mbox{\BPGS\
+  1027--1035}.
+
+\bibitem[\protect\BCAY{Birch, Osborne, \BBA\ Blunsom}{Birch
+  et~al.}{2010}]{birch}
+Birch, A., Osborne, M., \BBA\ Blunsom, P. \BBOP 2010\BBCP.
+\newblock \BBOQ Metrics for {MT} Evaluation: Evaluating Reordering.\BBCQ\
+\newblock {\Bem Machine Translation}, {\Bbf 24}  (1), \mbox{\BPGS\ 15--26}.
+
+\bibitem[\protect\BCAY{Doddington}{Doddington}{2002}]{nist}
+Doddington, G. \BBOP 2002\BBCP.
+\newblock \BBOQ Automatic Evaluation of Machine Translation Quality Using
+  N-gram Co-Occurrence Statistics.\BBCQ\
+\newblock In {\Bem Proceedings of the 2nd International Conference on Human
+  Language Technology Research}, \mbox{\BPGS\ 138--145}.
+
+\bibitem[\protect\BCAY{Echizen-ya \BBA\ Araki}{Echizen-ya \BBA\
+  Araki}{2007}]{impact}
+Echizen-ya, H.\BBACOMMA\ \BBA\ Araki, K. \BBOP 2007\BBCP.
+\newblock \BBOQ Automatic Evaluation of Machine Translation based on Recursive
+  Acquisition of an Intuitive Common Parts Continuum.\BBCQ\
+\newblock In {\Bem Proceedings of the {MT Summit XII} Workshop on Patent
+  Translation}, \mbox{\BPGS\ 151--158}.
+
+\bibitem[\protect\BCAY{Echizen-ya \BBA\ Araki}{Echizen-ya \BBA\
+  Araki}{2010}]{echizenya:ACL2010}
+Echizen-ya, H.\BBACOMMA\ \BBA\ Araki, K. \BBOP 2010\BBCP.
+\newblock \BBOQ Automatic Evaluation Method for Machine Translation Using
+  Noun-Phrase Chunking.\BBCQ\
+\newblock In {\Bem Processings of the 48th Annual Meeting of the Association
+  for Computational Linguistics}, \mbox{\BPGS\ 108--117}.
+
+\bibitem[\protect\BCAY{Echizen-ya, Ehara, Shimohata, Fujii, Utiyama, Yamamoto,
+  Utsuro, \BBA\ Kando}{Echizen-ya et~al.}{2009}]{echizenya-wpt09}
+Echizen-ya, H., Ehara, T., Shimohata, S., Fujii, A., Utiyama, M., Yamamoto, M.,
+  Utsuro, T., \BBA\ Kando, N. \BBOP 2009\BBCP.
+\newblock \BBOQ Meta-Evaluation of Automatic Evaluation Methods for Machine
+  Translation using Patent Translation Data in NTCIR-7.\BBCQ\
+\newblock In {\Bem Proceedings of the 3rd Workshop on Patent Translation},
+  \mbox{\BPGS\ 9--16}.
+
+\bibitem[\protect\BCAY{Fujii, Utiyama, Yamamoto, \BBA\ Utsuro}{Fujii
+  et~al.}{2008}]{ntcir7}
+Fujii, A., Utiyama, M., Yamamoto, M., \BBA\ Utsuro, T. \BBOP 2008\BBCP.
+\newblock \BBOQ Overview of the Patent Machine Translation Taks at the NTCIR-7
+  Workshop.\BBCQ\
+\newblock In {\Bem Proceedings of NTCIR-7 Workshop Meeting}, \mbox{\BPGS\
+  389--400}.
+
+\bibitem[\protect\BCAY{Gamon, Aue, \BBA\ Smets}{Gamon et~al.}{2005}]{Gamon05}
+Gamon, M., Aue, A., \BBA\ Smets, M. \BBOP 2005\BBCP.
+\newblock \BBOQ Sentence-level MT Evaluation Without Reference Translations:
+  Beyond Language Modeling.\BBCQ\
+\newblock In {\Bem Proceedings of the European Association for Machine
+  Translation (EAMT)}, \mbox{\BPGS\ 103--111}.
+
+\bibitem[\protect\BCAY{Goto, Lu, Chow, Sumita, \BBA\ Tsou}{Goto
+  et~al.}{2011}]{ntcir9}
+Goto, I., Lu, B., Chow, K.~P., Sumita, E., \BBA\ Tsou, B.~K. \BBOP 2011\BBCP.
+\newblock \BBOQ Overview of the Patent Machine Translation Task at the NTCIR-9
+  Workshop.\BBCQ\
+\newblock In {\Bem Proceedings of NTCIR-9 Workshop Meeting}, \mbox{\BPGS\
+  559--573}.
+
+\bibitem[\protect\BCAY{Holm}{Holm}{1979}]{holm}
+Holm, S. \BBOP 1979\BBCP.
+\newblock \BBOQ A Simple Sequentially Rejective Multiple Test Procedure.\BBCQ\
+\newblock {\Bem Scandinavian Journal of Statistics}, {\Bbf 6}, \mbox{\BPGS\
+  65--70}.
+
+\bibitem[\protect\BCAY{Isozaki, Hirao, Duh, Sudoh, \BBA\ Tsukada}{Isozaki
+  et~al.}{2010a}]{isozaki:emnlp2010}
+Isozaki, H., Hirao, T., Duh, K., Sudoh, K., \BBA\ Tsukada, H. \BBOP 2010a\BBCP.
+\newblock \BBOQ Automatic Evaluation of Translation Quality for Distant
+  Language Pairs.\BBCQ\
+\newblock In {\Bem Proceedings of the Conference on Empirical Methods in
+  Natural Language Processing (EMNLP)-2010}, \mbox{\BPGS\ 944--952}.
+
+\bibitem[\protect\BCAY{Isozaki, Sudoh, Tsukada, \BBA\ Duh}{Isozaki
+  et~al.}{2010b}]{headfinal}
+Isozaki, H., Sudoh, K., Tsukada, H., \BBA\ Duh, K. \BBOP 2010b\BBCP.
+\newblock \BBOQ {Head Finalization}: A Simple Reordering Rule for {SOV}
+  Languages.\BBCQ\
+\newblock In {\Bem Proceedings of the Joint 5th Workshop on Statistical Machine
+  Translation and {MetricsMATR}}, \mbox{\BPGS\ 250--257}.
+
+\bibitem[\protect\BCAY{Kendall}{Kendall}{1975}]{kendall}
+Kendall, M.~G. \BBOP 1975\BBCP.
+\newblock {\Bem Rank Correlation Methods}.
+\newblock Charles Griffin.
+
+\bibitem[\protect\BCAY{Kulesza \BBA\ Shieber}{Kulesza \BBA\
+  Shieber}{2004}]{Kulesza04}
+Kulesza, A.\BBACOMMA\ \BBA\ Shieber, S.~M. \BBOP 2004\BBCP.
+\newblock \BBOQ A Learning Approach to Improving Sentence-Level MT
+  Evaluation.\BBCQ\
+\newblock In {\Bem Proceedings of the 10th International Conference on
+  Theoretical and Methodological Issues in Machine Translation (TMI)},
+  \mbox{\BPGS\ 75--84}.
+
+\bibitem[\protect\BCAY{Leusch, Ueffing, \BBA\ Ney}{Leusch et~al.}{2003}]{WER}
+Leusch, G., Ueffing, N., \BBA\ Ney, H. \BBOP 2003\BBCP.
+\newblock \BBOQ A Novel String-to-String Distance Measure with Application to
+  Machine Translation Evaluation.\BBCQ\
+\newblock In {\Bem Proceedings of the MT Summit IX}, \mbox{\BPGS\ 240--247}.
+
+\bibitem[\protect\BCAY{Lin \BBA\ Och}{Lin \BBA\ Och}{2004}]{ROUGEL}
+Lin, C.-Y.\BBACOMMA\ \BBA\ Och, F.~J. \BBOP 2004\BBCP.
+\newblock \BBOQ Automatic Evaluation of Machine Translation Quality Using
+  Longest Common Subsequence and Skip-Bigram Statistics.\BBCQ\
+\newblock In {\Bem Proceedings of the 42nd Annual Meeting on Association for
+  Computational Linguistics}, \mbox{\BPGS\ 311--318}.
+
+\bibitem[\protect\BCAY{Papineni, Roukos, Ward, \BBA\ Zhu}{Papineni
+  et~al.}{2002}]{bleu}
+Papineni, K., Roukos, S., Ward, T., \BBA\ Zhu, W.-J. \BBOP 2002\BBCP.
+\newblock \BBOQ BLEU: a Method for Automatic Evaluation of Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 40th Annual Meeting of the Association
+  for Computational Linguistic (ACL)}, \mbox{\BPGS\ 311--318}.
+
+\bibitem[\protect\BCAY{Wilcoxon}{Wilcoxon}{1945}]{wilcox}
+Wilcoxon, F. \BBOP 1945\BBCP.
+\newblock \BBOQ Individual Comparisons by Ranking Methods.\BBCQ\
+\newblock {\Bem Biometrics Bulletin}, {\Bbf 1}  (6), \mbox{\BPGS\ 80--83}.
+
+\end{thebibliography}
+
+\begin{biography}
+\bioauthor{平尾　　努}{
+1995年関西大学工学部電気工学科卒業．1997年奈良先端科学技術大学院大学情
+報科学研究科博士前期課程修了．同年株式会社 NTT データ入社．2000年より
+NTT コミュニケーション科学基礎研究所に所属．博士（工学）．自然言語処理の
+研究に従事．言語処理学会，情報処理学会，ACL各会員．
+}
+\bioauthor{磯崎　秀樹}{
+1983年東京大学工学部計数工学科卒業．1986年同大学院修士課程修了．
+同年日本電信電話株式会社入社．2011年より岡山県立大学情報工学部教授．
+博士（工学）．言語処理学会，ACM，情報処理学会，人工知能学会，電子情報通信学会各会員．
+}
+\bioauthor{須藤　克仁}{
+2000年京都大学工学部卒．2002年同大大学院情報学研究科修士課程修了．同年日
+本電信電話株式会社入社．現在に至る．
+音声言語処理，統計的機械翻訳に関する研究に従事．
+}
+\bioauthor[:]{Duh Kevin}{
+2003年米国ライス大学工学部電気工学専攻卒業．2006年米国ワシントン大学大
+学院電気工学研究科修士課程修了．2009年同大学院博士後期課程修了．同年
+NTTコミュニケーション科学基礎研究所リサーチアソシエイト．2012年奈良先
+端科学技術大学院大学助教．自然言語処理に関する研究に従事．
+}
+\bioauthor{塚田　　元}{
+1987年東京工業大学理学部情報科学科卒業．1989年同大学院理工学研究科修士課
+程修了．同年日本電信電話株式会社入社．現在，NTT コミュニケーション科学基礎
+研究所に所属．統計的機械翻訳の研究に従事．言語処理学会，人工知能学会，
+情報処理学会，電子情報通信学会，日本音響学会，ACL各会員．
+}
+\bioauthor{永田　昌明}{
+1987年京都大学大学院工学研究科修士課程修了．
+同年，日本電信電話株式会社入社．現在，コミュニケーション科学研究所主
+幹研究員（上席特別研究員）．工学博士．統計的自然言語処理の研究に従事．電
+子情報通信学会，情報処理学会，人工知能学会，言語処理学会，ACL各会員．
+}
+
+\end{biography}
+
+
+\biodate
+
+
+
+\end{document}

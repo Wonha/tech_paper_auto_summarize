@@ -1,0 +1,1282 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.2}
+\usepackage[dvips]{graphicx}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+
+\newcommand{\norm}[1]{} 
+\newcommand{\AL}{}
+\newcommand{\NAL}{}
+\newcommand{\align}{}
+\newcommand{\ADE}{}
+\newcommand{\FLU}{}
+\newcommand{\HUM}{}
+\newcommand{\MT}{} 
+\newcommand{\SVM}{}
+\newcommand{\PROP}{}
+\newcommand{\ACC}{} 
+
+\newcommand{\MTS}{} 
+\newcommand{\MTF}{} 
+\newcommand{\MTL}{} 
+
+\newcounter{sentcounter}
+\newenvironment{SENT}{}{}
+
+\newenvironment{SENT2}{}{}
+
+\newenvironment{SENT3}{}{}
+
+\newenvironment{ALIGN}{}{}
+
+\newenvironment{LIST}{}{}
+
+
+
+
+\Volume{17}
+\Number{1}
+\Month{January}
+\Year{2010}
+
+\received{2008}{4}{22}
+\revised{2009}{4}{4}
+\rerevised{2009}{9}{7}
+\accepted{2009}{10}{27}
+
+\setcounter{page}{7}
+
+\jtitle{単語アライメントを用いた英日機械翻訳文の流暢さの自動評価}
+\jauthor{吉見　毅彦\affiref{Ryukoku} \and 小谷　克則\affiref{KGU} \and 九津見　毅\affiref{SHARP} \and 佐田いち子\affiref{SHARP} \and 井佐原　均\affiref{NICT}}
+\jabstract{
+本稿では，人間による翻訳({\HUM})と機械翻訳システムによる翻訳({\MT})を
+訓練事例とした機械学習によって構築した識別器を用いて{\MT}の{\FLU}を
+自動評価する手法について述べる．
+提案手法では，{\HUM}と{\MT}の{\FLU}の違いを表わす手がかりとして，
+逐語訳（原文と翻訳文での単語同士の対応）に着目した．
+{\HUM}と{\MT}における逐語訳の違いを捉えるために，
+原文と{\HUM}との間，および原文と{\MT}との間で{\align}を行ない，
+その結果を機械学習のための素性とする．
+提案手法は，識別器を構築する際に対訳コーパスを必要とするが，評価対象の
+{\MT}の{\FLU}を評価する際には参照訳を必要としない．
+さらに，大量の訓練事例に人手で{\FLU}の評価値を付与する必要もない．
+検証実験の結果，提案手法によってシステムレベルでの自動評価が可能である
+ことが示唆された．
+また，{\SVM}による機械学習で各素性に付与される重みに基づいて
+{\MT}に特徴的な素性を特定できるため，このような素性を含む文を
+観察することによって文レベルでの{\MT}の特徴分析を行なうこともできる．
+}
+\jkeywords{機械翻訳，自動評価，{\FLU}，逐語訳，{\align}，機械学習}
+
+\etitle{Automatic Evaluation of the Fluency of English-to-Japanese Machine Translation \\
+	Using Word Alignment}
+\eauthor{Takehiko Yoshimi\affiref{Ryukoku} \and Katsunori Kotani\affiref{KGU} \and Takeshi Kutsumi\affiref{SHARP} \and \\
+	Ichiko Sata\affiref{SHARP} \and Hitoshi Isahara\affiref{NICT}}
+\eabstract{
+This paper presents a method of automatically evaluating the fluency of 
+machine-translated sentences. 
+We constructed a classifier that would distinguish machine translations 
+from human translations, using Support Vector Machines as machine 
+learning algorithms. 
+In order to obtain a clue to the distinction, we focused on literal 
+translations (word-for-word translations). 
+The classifier was constructed based on features derived from word 
+alignment distributions between source sentences and human/machine 
+translations. 
+Our method employed parallel corpora to construct the classifier but 
+required neither manually labeled training examples nor multiple 
+reference translations to evaluate new sentences. 
+We confirmed that our method could assist evaluation on system level. 
+We also found that this method could identify the qualitative 
+characteristics of machine translations, which would greatly help 
+improve the translation quality. 
+}
+\ekeywords{Machine Translation, Automatic Evaluation, Fluency, Word-for-Word Translation, Word Alignment, Machine Learning}
+
+\headauthor{吉見，小谷，九津見，佐田，井佐原}
+\headtitle{単語アライメントを用いた英日機械翻訳文の流暢さの自動評価}
+
+\affilabel{Ryukoku}{龍谷大学}{Ryukoku University}
+\affilabel{KGU}{関西外国語大学}{Kansai Gaidai University}
+\affilabel{SHARP}{シャープ（株）}{SHARP Corporation}
+\affilabel{NICT}{豊橋技術科学大学}{Toyohashi University of Technology}
+
+
+
+\begin{document}
+\maketitle
+
+
+
+\section{はじめに}
+\label{sec:introduction}
+
+
+機械翻訳システムの研究開発において，システムの翻訳品質の評価は重要な
+プロセスの一つである．
+人手による翻訳品質評価では，機械翻訳システムによる翻訳（以下，{\MT}）
+に対して{\ADE}と{\FLU}の二つの側面から評価値が付与される\cite{Sumita05}．
+{\ADE}は，
+原文によって読者に伝わる情報のうちどの程度が翻訳文によって伝わるかを測る
+尺度である．
+一方，{\FLU}は，
+翻訳文が目的言語の文としてどの程度流暢（自然）であるかを原文とは独立に測る
+尺度である．
+本研究では，対象を英日機械翻訳に絞り，
+まず，現状の一般的な英日機械翻訳システムの翻訳品質を把握する
+ために，市販されている英日機械翻訳システムで得られた{\MT}を
+{\ADE}と{\FLU}の側面から評価した．
+その結果，\ref{sec:experiment:setting}節で述べるように，{\ADE}の評価値
+に比べて{\FLU}の評価値のほうが低く，{\MT}の{\FLU}を向上させることが
+より重要な課題であることが判明した．
+
+このため，特に{\FLU}の向上に重点を置いた
+システム改善を支援することを目的として，{\FLU}の評価の効率化を図るための
+自動評価手法を提案する．
+{\FLU}を低下させる要因はいくつか考えられるが，その一つに
+不自然な逐語訳
+がある．
+辞書と規則に基づく方式の機械翻訳システムは，現状では，
+逐語訳
+をすべきでない場合でもそのような訳し方をすることがある．
+このため，{\MT}には不自然な逐語訳が含まれている可能性が高い．
+従って，{\MT}と人間による翻訳（以下，{\HUM}）における逐語訳の違いを
+捉えることによって{\MT}の{\FLU}（の一部）の自動評価が可能になると
+期待できる．
+
+
+
+
+
+既存の自動評価手法の中には，機械学習によって識別器を構築する
+手法\cite{Oliver01,Kulesza04,Gamon05,Tanaka08}がある．
+この手法では，良い翻訳とは{\HUM}に近いものであり，
+そうでない翻訳とは{\MT}に近いものであると仮定される．
+このような仮定の下で，対訳コーパスにおける{\HUM}（正例）と，
+原文を機械翻訳システムで翻訳して得られる{\MT}（負例）とを
+訓練事例として識別器が構築される．
+この識別器を用いて，評価対象の{\MT}から抽出した素性に基づいて，
+その{\MT}が良い翻訳であるかそうでないかの二値判定が行なわれる．
+
+
+本研究では，このような先行研究に倣い，{\HUM}と{\MT}を訓練事例とした
+機械学習によって構築した識別器を用いて自動評価を行なう．
+このような自動評価手法においては，
+{\HUM}での逐語訳と{\MT}での逐語訳の違いを適切に捉えることができる
+手がかりを機械学習で用いる素性として選ぶ必要がある．
+本稿では，
+このような素性として{\align}結果を利用することを提案する．
+具体的には，\ref{sec:feats}節で述べるように，
+英文と{\HUM}の間，および英文と{\MT}の間で{\align}を行ない，その結果を
+機械学習のための素性とする．
+従来，{\FLU}の評価には$N$グラムが用いられることが多いが，
+{\HUM}と{\MT}での逐語訳の違いを捉えるには$N$グラムよりも
+{\align}結果を利用するほうが適切であると考えられる．
+
+
+検証実験の結果，提案手法によってシステムレベルでの自動評価が可能である
+ことが示唆された．
+また，{\SVM}\cite{Vapnik98}による機械学習で各素性に付与される
+重みに基づいて{\MT}に特徴的な素性を特定できるため，このような素性を含む
+文を観察することによって文レベルでの{\MT}の特徴分析を行なうこともできる．
+
+
+
+
+
+
+
+
+
+\section{先行研究}
+\label{sec:related_work}
+
+
+
+
+
+自動評価に関する研究は活発に行なわれ，これまでに様々な手法が
+示されている．
+このうち，BLEUやNIST，METEORなどの既存手法
+\cite{Papineni02,Doddington02,Banerjee05}では，
+{\FLU}の評価は，{\MT}と参照訳の間での高次の$N$グラムの照合によって
+行なわれる．
+これらの手法によって信頼できる評価結果を得るためには，（新規）評価対象文
+についての参照訳を通常複数用意する必要がある．
+しかし，大量の評価対象文について複数の参照訳を入手することは容易ではない．
+
+近年，機械学習を利用する手法がいくつか示されている
+\cite{Oliver01,Kulesza04,Quirk04,Gamon05,Albrecht07a,Albrecht07b,Paul07a,Tanaka08}．
+これらの手法は，モデルを構築する際に訓練事例集を必要とするが，
+（新規）評価対象文の{\FLU}を評価する際には参照訳を必要としない．
+機械学習を利用する手法は，機械学習によって回帰モデルを構築する手法と
+識別モデルを構築する方法に分けることができるが，
+両者では学習に必要な訓練事例集を用意するのに要する負担が異なる．
+回帰モデルは，{\MT}から抽出された素性に基づいて，その{\MT}の良さを表わす
+評価値を予測する．
+従って，回帰モデルを構築する手法
+\cite{Quirk04,Albrecht07a,Albrecht07b,Paul07a}では，大量の訓練事例に
+人手で評価値を付与する必要があり，訓練事例集の作成に要する負担が比較的
+大きい．
+一方，
+識別器を構築する手法\cite{Oliver01,Kulesza04,Gamon05,Tanaka08}では，
+識別器に入力された評価対象の{\MT}が{\MT}であるか{\HUM}であるかの
+二値判定を行なう．
+このため，対訳コーパスにおける{\HUM}と，
+原文を機械翻訳システムで翻訳して得られる{\MT}を訓練事例とすることが
+できる．
+従って，大量の訓練事例に人手評価値を付与する必要がなく，
+負担は比較的小さく抑えられる．
+本稿では後者のアプローチを採るため，識別器を構築する先行研究
+について概観する．
+
+文献\cite{Oliver01}では，言語的な素性として，構文木の分岐に関する情報，
+文中での内容語の数に対する機能語や代名詞の数の割合，
+文の構成要素（名詞句や副詞句，形容詞句，前置詞句など）の長さなどが
+用いられている．
+この他に，パープレキシティが統計的な素性として利用されている．
+スペイン語から翻訳された英文からこれらの素性を抽出して，決定木学習
+によって識別器を構築し，試験事例に対して82.9\%の{\ACC}を得ている．
+また，構築された決定木を観察することによって，機械翻訳システムが抱える
+問題点をシステム開発者が把握できることが示されている．
+さらに，{\MT}の翻訳品質が向上すれば{\HUM}との識別が困難になるため，
+識別器の{\ACC}が低下するという予想を示している．
+しかし，予想の提示に止まっており，検証結果は示されていない．
+
+文献\cite{Kulesza04}では，評価対象文と参照訳の間の$N$グラム適合率や
+単語誤り率などを素性として，{\SVM}による機械学習が行なわれている．
+{\ACC}は，{\MT}だけから成る試験事例に対しては70.0\%，{\HUM}だけから成る
+試験事例に対しては58.7\%，両者から成る試験事例に対しては64.4\%であったと
+報告されている．
+この文献では，評価対象文が{\MT}であるか{\HUM}であるかの二値判定を行なう
+だけでなく，{\SVM}による機械学習の結果得られる分離超平面と事例
+との距離をその{\MT}に対する評価値とみなしている．
+この評価値と人手による評価値の間の相関係数は，既存の自動評価尺度（BLEU値
+や単語誤り率など）と人手評価値の間の相関係数よりも高かったという実験結果
+が示されている．
+
+
+
+
+
+文献\cite{Gamon05}では，素性として，
+品詞トライグラム，構文解析で使用された文脈自由文法規則，
+文構成要素の意味標識，文構成要素とその支配要素の間の意味的関係
+などが利用されている．
+英語から翻訳されたフランス語文からこれらの素性を抽出して{\SVM}による
+機械学習で識別器を構築し，訓練事例に対して77.8\%，試験事例に対して77.6\%
+の{\ACC}をそれぞれ得ている．
+
+文献\cite{Tanaka08}では，{\MT}の{\FLU}の自動評価を目的として，
+品詞の出現比率，品詞$N$グラム($N=1,2,3$)，単語トライグラムに着目し，
+これらの素性を個別に用いて識別器を構築している．
+ロイター英日対訳コーパス\cite{Uchiyama03}における和文を{\HUM}とし，
+英文を市販の機械翻訳システムで翻訳した結果を{\MT}として実験を行ない，
+品詞の出現比率による識別器で78.6\%，
+品詞$N$グラムによる識別器で94.9\%，
+単語トライグラムによる識別器で97.7\%の{\ACC}を得ている．
+さらに，{\MT}を{\FLU}の観点から上位群と下位群の2群に分けたとき，
+これらの素性を用いた識別器の正解率は，{\FLU}が上がるにつれて低下する
+という文献\cite{Oliver01}の仮説を確認している．
+
+
+
+\section{着目した素性}
+\label{sec:feats}
+
+
+{\MT}の{\FLU}を低下させる要因はいくつか考えられるが，その一つに
+不自然な逐語訳がある．
+本研究ではこの不自然な逐語訳を捉えることをめざしている．
+人間は，柔軟性に富む多様な表現上の工夫を施した翻訳を行なうことが
+できるため，{\HUM}に不自然な逐語訳が含まれている可能性は低い．
+一方，人間の様々な翻訳技術が十分に反映されていない，
+辞書と規則に基づく方式の機械翻訳システムは，現状では，
+逐語訳
+をすべきでない場合でもそのような訳し方をすることがあるため，
+{\MT}には不自然な逐語訳が含まれている可能性が高い．
+このため，{\HUM}の{\FLU}と{\MT}の{\FLU}の違いを適切に捉えることができる
+手がかりとして逐語訳に着目した．
+例えば，次の英文(E\ref{SENT:failure})に対する{\HUM}は，
+無生物主語他動詞構文の構造変換が行なわれ，
+(H\ref{SENT:failure})のようになるだろう．
+これに対して，英文(E\ref{SENT:failure})を，
+本研究の実験で用いた3つの市販機械翻訳システムで処理すると
+(Ma\ref{SENT:failure})，(Mb\ref{SENT:failure})，(Mc\ref{SENT:failure})の
+ような{\MT}がそれぞれ得られる．
+\begin{SENT3}
+\sentE His failure to fulfill the promise made the voters suspicious.
+\sentH 彼が約束を果たさなかったので，有権者は疑い深くなりました．
+\sentMa 彼が約束を実現させないことで，有権者は疑わしげになりました．
+\sentMb 彼が約束を果たすことができなかったことは，投票者を疑わしくした．
+\sentMc 約束を果たすことについての彼の失敗は投票者を疑い深くしました．
+\label{SENT:failure}
+\end{SENT3}
+
+{\MT}(Ma\ref{SENT:failure})と{\HUM}(H\ref{SENT:failure})を比べると，
+両者は非常に近いことが分かる．
+
+{\MT}(Mb\ref{SENT:failure})と{\HUM}(H\ref{SENT:failure})を比べると，
+両者の主な違いとして，makeを主辞とする動詞句の翻訳が挙げられる．
+英語では行為者が対象に能動的に働きかけるという捉え方がされる傾向が
+強い．
+これに対して，日本語では物事が自然にある状態になるという表現が好まれる．
+{\HUM}(H\ref{SENT:failure})では，このことを考慮してmakeが「なる」と
+訳されている．
+一方，{\MT}(Mb\ref{SENT:failure})では「する」という逐語訳に
+なっている．
+
+{\MT}(Mc\ref{SENT:failure})と{\HUM}(H\ref{SENT:failure})を比べると，
+makeを主辞とする動詞句の翻訳の違いに加え，
+failureを主辞とする名詞句の翻訳の違いも見られる．
+{\HUM}(H\ref{SENT:failure})では，英語が名詞文体であり日本語が動詞文体
+であることを考慮して，
+動詞的意味を含む名詞句を文に展開するという工夫がされて自然な翻訳になって
+いる．
+一方，{\MT}(Mc\ref{SENT:failure})ではそのまま「失敗」という
+逐語訳になっている．
+以上のような違いが主な原因で，特に{\MT}(Mc\ref{SENT:failure})の{\FLU}が
+{\HUM}(H\ref{SENT:failure})の{\FLU}よりも低くなっていると考えられる．
+
+
+{\HUM}と{\MT}の間には以上のような違いがあるため，
+英文と{\HUM}の間で単語同士の対応付け
+を行なった場合と英文と{\MT}の間で行なった場合を
+比べると，後者の場合のほうが単語対応が付きやすいと予想される．
+実際，英文(E\ref{SENT:failure})と{\HUM}(H\ref{SENT:failure})に対して，
+本研究の実験で用いた{\align}ソフトウェアで{\align}を行なうと，
+表\ref{tab:align}\,の左側のような結果が得られる．
+また，英文(E\ref{SENT:failure})と{\MT}(Mc\ref{SENT:failure})の間の
+{\align}結果は表\ref{tab:align}の右側のようになる．
+表\ref{tab:align}において，align($A$, $B$)は$A$と$B$が対応付けられた
+単語の対であることを表わし，
+nonalign\_eng($C$)は$C$が対応付けられずに残った英語単語であること，
+nonalign\_jpn($D$)は$D$が対応付けられずに残った日本語単語であることを
+表わす．
+以下，align($A$, $B$)を{\AL}と呼び，
+nonalign\_eng($C$)あるいはnonalign\_jpn($D$)を{\NAL}と呼ぶ．
+
+\begin{table}[t]
+\caption{英文(E\ref{SENT:failure})と{\HUM}(H\ref{SENT:failure})
+の{\align}結果と
+英文(E\ref{SENT:failure})と{\MT}(Mc\ref{SENT:failure})の{\align}結果}
+\label{tab:align}
+\input{02table01.txt}
+\end{table}
+
+表\ref{tab:align}を見ると，{\HUM}(H\ref{SENT:failure})より
+{\MT}(Mc\ref{SENT:failure})のほうが，{\AL}の比率が高いことが分かる．
+また，{\HUM}(H\ref{SENT:failure})ではfailureもmakeも単語対応が
+付いていないのに対して，
+{\MT}(Mc\ref{SENT:failure})では両方とも単語対応が付いている．
+さらに，{\HUM}(H\ref{SENT:failure})には「ない」，「ので」，「なる」
+などの{\NAL}が含まれている．
+
+これらのことから，{\HUM}における様々な表現上の工夫と{\MT}における逐語訳と
+の違い（の一部）を{\AL}と{\NAL}によって捉えることができると考えられる．
+{\AL}と{\NAL}によって捉えることができる{\HUM}と{\MT}の違いは，
+{\AL}は主に{\HUM}と{\MT}の類似点（人間でも行なうような逐語訳）を
+表わしており，
+{\NAL}は主に{\HUM}と{\MT}の相違点（主に人間しか行なわないような翻訳）を
+表わしていると解釈することができる．
+
+{\AL}と{\NAL}によって捉えることができる{\HUM}と{\MT}の違いとしては，
+無生物主語他動詞構文の構造変換以外に代名詞の訳語選択などがある．
+{\HUM}では，英語の代名詞は日本語の代名詞としては表わされず，
+ゼロ代名詞化されたり，他の表現に置き換えられたりすることがある．
+これに対して，{\MT}では，英語の代名詞はそのまま
+日本語の代名詞に訳され，不自然な翻訳文となることが多い．
+例えば，次の{\HUM}(H\ref{SENT:indef-pron})では，
+hisは「自分」という表現に置き換えられ，heとitはゼロ代名詞化されている．
+これに対して，{\MT}(Ma\ref{SENT:indef-pron})，(Mb\ref{SENT:indef-pron})，
+(Mc\ref{SENT:indef-pron})では，「彼」や「それ」と訳されている．
+このように，代名詞が他の表現に置換されている{\HUM}と代名詞の逐語訳が
+含まれている{\MT}との違いは，{\AL}と{\NAL}によって捉えることができると
+考えられる． 
+\begin{SENT3}
+\sentE Mr. Smith does his work when he feels like doing it.
+\sentH スミス氏は，したいと思うときに，自分の仕事をする．
+\sentMa スミス氏は，それをしたいと思うとき，彼の仕事をする．
+\sentMb スミスさんがそれをしたい気がするとき，彼は仕事します．
+\sentMc スミス氏がそれをしたい気がするとき，彼は彼の仕事をします．
+\label{SENT:indef-pron}
+\end{SENT3}
+
+
+{\HUM}において様々な表現上の工夫がされていればいるほど，
+{\HUM}と逐語訳による不自然な{\MT}との違いがより鮮明になる．
+従って，このような場合，{\AL}と{\NAL}によって{\HUM}と{\MT}の違いを
+より確実に捉えることができるようになり，有効性が高まると考えられる．
+
+他方，{\HUM}と{\MT}における語順の違いについては，{\AL}と{\NAL}では捉える
+ことができない．
+しかし，この問題は，句対応付けを今後利用することなどによって解決できると
+考えられる．
+また，助詞についても，{\HUM}と{\MT}での{\AL}と{\NAL}の違いとして
+現れにくいため，捉えることは困難である．  
+
+{\MT}に非対応単語が現れる原因として，
+機械翻訳システムによる
+無生物主語他動詞構文の構造変換の他に，翻訳処理の失敗などが想定される．
+非対応単語が構文構造変換によるものか翻訳処理失敗によるものかの区別は，
+{\MT}に現れる非対応単語と{\HUM}に現れる非対応単語を比較することによって
+可能な場合もある．
+なぜならば，構文構造変換による非対応単語は{\MT}集合にも
+{\HUM}集合にも現れうるのに対して，処理失敗によるものは
+{\HUM}集合には現れにくいと考えられるからである．
+
+本稿での{\SVM}による機械学習では，{\HUM}(H\ref{SENT:failure})と
+{\MT}(Mc\ref{SENT:failure})を，それぞれ，
+表\ref{tab:align}に示した{\AL}と{\NAL}を成分とする素性ベクトルで表わす．
+具体的には，{\HUM}と{\MT}に現れる{\AL}と{\NAL}を素性名番号（整数）に変換し，
+その素性値を1とする．
+
+
+\section{実験と考察}
+\label{sec:experiment}
+
+提案手法の有効性を確認するための実験について述べる．
+今回の実験は，報道記事を対象とし，
+辞書と規則に基づく方式の英日機械翻訳システムを用いて
+行なったものである．
+
+
+
+\subsection{実験方法}
+\label{sec:experiment:setting}
+
+
+提案手法の検証実験に必要な言語資源は，原文とそれに対する{\HUM}である．
+今回の実験では，ロイター英日対訳コーパスを利用した．
+このコーパスは，文献\cite{Uchiyama03}に示されている類似度を用いて
+文対応が付けられたコーパスである．
+文対応付けの結果には1対1のものと1対多のものがあるが，
+今回の実験では1対1に対応付けられている文の組を用いた．
+ロイター英日対訳コーパスには同一の英文や同一の和文が複数回出現することが
+ある．
+このような重複がある場合には1文だけを残し他の文は削除した．
+
+{\MT}は，ロイター英日対訳コーパスの英文を，
+辞書と規則に基づく方式を採用している考えられる
+3つの市販機械翻訳システムで処理して得た．
+以下，{\MTS}，{\MTF}，{\MTL}とする．
+英文と{\HUM}の{\align}および英文と各{\MT}の{\align}は，
+{\MTS}を得るために使用した機械翻訳システムの開発企業で試作された
+ソフトウェア
+\footnote{民間企業で開発された非公開ソフトウェアであるため，
+アルゴリズムは開示できない．
+このため，公開ソフトウェアを用いた場合に
+どの程度の{\ACC}が得られるかを明らかにするための追加実験を行なった．
+追加実験にはGIZA++\cite{Och03}を用いた．
+GIZA++は，隠れマルコフモデルと統計的翻訳モデル（IBMモデル）
+に基づく統計的{\align}手法である．
+実験の結果，
+{\MTS}で99.0\%，{\MTF}で98.5\%，{\MTL}で99.6\%，
+3つの{\MT}の平均で99.0\%の{\ACC}が得られた\cite{Kotani09b}．
+これは，\ref{sec:experiment:accuracy_mt}節で示す本稿の実験結果と
+同程度の{\ACC}である．
+}を用いて行なった．
+このソフトウェアでは，まず和文を形態素に分割し，日本語の形態素と英語の
+単語を対応付ける．
+{\align}処理は，対訳辞書，シソーラス，係り受け規則などを利用して
+行なわれる．
+各機械翻訳システムに約15,000文を入力文として与え，
+すべての機械翻訳システムで処理が正常に終了し，
+さらに{\align}処理が正常に終了した文を選択した結果，
+3つの機械翻訳システムに共通する文として最終的に12,900文ずつが得られた．
+
+{\SVM}による機械学習にはTinySVM
+\footnote{http://chasen.org/{\textasciitilde}taku/software/TinySVM/}を利用した．
+カーネル関数は1次の多項式とした．
+カーネル関数以外のパラメータは，標準設定されている値を使用した．
+
+
+
+3つの{\MT}のうち{\MTS}を対象として，
+著者ら以外の評価者3名による人手評価を行なった．
+評価者は全員日本語母語話者であり，平均で約6年の
+英日機械翻訳用辞書の開発経験がある．
+評価対象文として{\MTS}から500文を無作為に抽出した．
+3つの{\MT}すべてから500文ずつ抽出して合計1,500文を人手評価する労力は
+大きいため，評価の負担を抑えるために{\MTS}だけを評価対象とした．
+評価の観点は，{\MT}の{\FLU}と{\ADE}とした．
+{\FLU}については，{\MT}の日本語としての{\FLU}を100点満点で採点し
+その点数に該当する評価値（表\ref{tab:ade-flu}の左側）を付与するよう
+評価者に指示した．
+{\FLU}の評価では{\MT}だけを評価者に示した．
+{\ADE}については，英文と{\MT}を比較し，英文で伝わる情報のうち
+どの程度が{\MT}で伝わるかを表わす評価値（表\ref{tab:ade-flu}の右側）を
+付与するよう指示した．
+3名による評価値の中央値を評価対象文の最終的な評価値とした．
+100点満点での評価における1点の持つ意味は規定せずに，評価者の主観的判断に
+委ねた．
+評価型国際ワークショップIWSLTなどでの評価基準のように
+5段階程度での評価の場合には1段階の持つ意味を規定することができるが，
+100点満点での評価における1点の持つ意味を規定することは現実的に困難である．
+それでも100満点での評価を行なった理由は，
+将来人手評価値を5段階あるいは10段階などに細分化して実験を行なうときに
+今回の人手評価結果を再利用できることである．
+また，通常のテストの採点では100点満点で点数付けされることが
+多いためでもある．
+なお，{\MT}に評価値4が付与されるのは75点から100点のときであるので，
+評価値4が付与された{\MT}がすべて人間訳並に流暢あるいは適切であるとは
+限らない．
+
+
+\begin{table}[b]
+\caption{人手評価での評価基準}
+\label{tab:ade-flu}
+\input{02table02.txt}
+\end{table}
+\begin{table}[b]
+\caption{人手評価値の度数分布表}
+\label{tab:freq-ade-flu}
+\input{02table03.txt}
+\end{table}
+
+
+人手評価結果を表\ref{tab:freq-ade-flu}に示す．
+{\ADE}については，評価値が3以上である{\MT}が51.4\%を占める．
+一方，{\FLU}については，評価値が3以上である{\MT}は21.6\%しかない．
+このことから，評価対象とした機械翻訳システムに関しては，{\MT}の{\FLU}を
+向上させることが重要な課題であると言える．
+
+
+
+
+{\MT}の{\FLU}の評価結果を評価者ごとに
+表\ref{tab:freq-flu-each}に示す．
+表\ref{tab:freq-flu-each}と
+表\ref{tab:freq-ade-flu}の左側（3名による評価値の中央値の集計）
+を比較すると，
+評価者1と評価者2は比較的甘い評価を行ない，
+評価者3は比較的厳しい評価を行なったことが分かる．
+
+
+
+\subsection{{\AL}と{\NAL}の分布}
+\label{sec:experiment:align_distri}
+
+\ref{sec:feats}節で示した作業仮説（{\HUM}より{\MT}のほうが単語対応が付
+きやすい）の妥当性を，
+実験に使用したソフトウェアによる{\align}結果において検証する．
+英文とその{\HUM}の間での{\align}結果に含まれる素性の延べ数と，
+英文とその各{\MT}の間での{\align}結果に含まれる素性の延べ数を
+表\ref{tab:align_distri}に示す．
+
+{\HUM}と{\MT}の間で
+{\AL}と{\NAL}の比率に差があるかどうかを検証するために，
+表\ref{tab:align_distri}の分布に対して
+$\chi^2$検定
+\footnote{$\chi^2$検定は，1条件で，各測定値が2つ以上のカテゴリの
+いずれか一方に分類されるときに，それぞれのカテゴリの度数の母比が，
+理論的に導出される特定の値と異なると言えるか否かを吟味する
+検定である\cite{Mori06}．}を行なった．
+その結果，比率の差は有意水準5\%で有意であった．
+さらに，{\HUM}とどの{\MT}との間で比率に差があるのかを検証するために，
+Ryan法による多重比較
+\footnote{Ryan法による多重比較は，誤差の割合の概念的単位を比較の集合に設
+定する際に，ステップ数によって個々の比較における有意水準を直接変化させて
+一対比較を行なう多重比較法である\cite{Mori06}．}を行なった．
+その結果，{\HUM}とすべての{\MT}の間において有意水準5\%で有意であった．
+このことから，{\HUM}よりも{\MT}のほうが単語対応が付きやすい傾向
+にあると言える．
+
+
+\begin{table}[b]
+\caption{各評価者の評価値の度数分布表}
+\label{tab:freq-flu-each}
+\input{02table04.txt}
+\end{table}
+\begin{table}[b]
+\caption{{\AL}と{\NAL}の出現比率}
+\label{tab:align_distri}
+\input{02table05.txt}
+\end{table}
+
+
+
+\subsection{機械翻訳システムと{\ACC}}
+\label{sec:experiment:accuracy_mt}
+
+
+提案手法の{\ACC}が使用した機械翻訳システムに影響を受ける
+かどうかを，{\MTS}，{\MTF}，{\MTL}を用いて検証する．
+これらの各{\MT}と{\HUM}を合わせた合計25,800件をそれぞれ事例集合として
+3つの識別器を構築した．
+{\HUM}はどの事例集合においても同一のものを使用した．
+各事例集合を5分割し，交差検定を行なった．
+素性としては{\AL}と{\NAL}の両方を使用した．
+
+試験事例の{\MT}に対する{\ACC}を表\ref{tab:accuracy_mt}に示す．
+数値は5分割交差検定の平均値である．
+表\ref{tab:accuracy_mt}より，使用した機械翻訳システムによらず
+いずれも高い{\ACC}が得られていることが分かる．
+
+\ref{sec:related_work}節で述べた先行研究\cite{Tanaka08}によると，
+本稿と同じ実験条件において，
+品詞$N$グラム($N=1,2,3$)を素性として構築した識別器で94.9\%，
+単語トライグラムを素性とした識別器で97.7\%の{\ACC}が得られている．
+本稿で得られた平均{\ACC}99.3\%は，この先行研究での{\ACC}と同程度である．
+
+
+\subsection{素性の種類の{\ACC}への影響}
+\label{sec:experiment:accuracy_feats}
+
+識別器の構築に使用する素性の種類が{\ACC}に与える影響を明らかにするために，
+素性として{\AL}だけを使用した場合と{\NAL}だけを使用した場合について
+{\ACC}を求めた．
+試験事例の{\MT}に対する{\ACC}’（5分割交差検定の平均値）を，
+{\AL}と{\NAL}の両方を用いた場合の{\ACC}と共に
+表\ref{tab:accuracy_feat}に示す．
+
+\begin{table}[b]
+\caption{提案手法の{\ACC}}
+\label{tab:accuracy_mt}
+\input{02table06.txt}
+\end{table}
+\begin{table}[b]
+\caption{素性の種類と{\ACC}}
+\label{tab:accuracy_feat}
+\input{02table07.txt}
+\end{table}
+
+
+{\AL}だけを用いた識別器，
+{\NAL}だけを用いた識別器，
+{\AL}と{\NAL}の両方を用いた識別器で
+{\ACC}の間に有意な差があるかどうかを見るために，
+McNemar検定\footnote{McNemar検定は，2条件における対応がある測定値が，ある特性の有無
+によって二分されるときに，その特性を有する母比が条件間で異なるか否か
+について検定する手法である\cite{Mori06}．}を行なった．
+有意水準は，Bonferroni法により，比較する群数3で5\%を割った値とした．
+その結果，{\MTS}，{\MTF}，{\MTL}のいずれにおいても，
+すべての識別器の間で{\ACC}に有意水準1.7\%で有意差が見られた．
+
+表\ref{tab:accuracy_feat}を見ると，
+{\AL}と{\NAL}の両方を用いることによって最も高い{\ACC}が得られている
+ことが分かる．
+また，すべての{\MT}において
+{\NAL}だけを用いた場合の
+{\ACC}が{\AL}だけを用いた場合の{\ACC}よりも高くなっている．
+このことから，{\HUM}と{\MT}を区別する手がかりとしては，{\NAL}のほうが
+{\AL}よりも有効であると言える．
+{\NAL}を用いたほうが{\ACC}が高くなる理由は，
+\ref{sec:feats}節で述べたように，
+{\AL}が主に{\HUM}と{\MT}の類似点を表わしているのに対して
+{\NAL}は主に{\HUM}と{\MT}の相違点を表わしていることであると考えられる．
+
+
+
+\subsection{事例数の{\ACC}への影響}
+\label{sec:experiment:accuracy_datasize}
+
+十分な{\ACC}を得るために必要な{\HUM}の数即ち対訳コーパスの量を
+明らかにするために，
+{\HUM}の数を12,900文，10,000文，7,000文，4,000文，1,000文と3,000文ずつ
+変化させて{\ACC}を求めた．
+それぞれの{\HUM}数において，
+{\HUM}とそれに対応する同数の{\MT}から成る事例集合を作成した．
+
+各{\HUM}数における{\ACC}（5分割交差検定の平均値）を
+図\ref{fig:datasize}に示す．
+{\HUM}の数を1,000文（{\MT}と合わせた事例全体では2,000文）まで減少させても
+{\ACC}は95\%以上となっている．
+従って，比較的小規模な対訳コーパスでも十分な{\ACC}が得られると言える．
+
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{17-1ia2f1.eps}
+\end{center}
+\caption{{\HUM}の数と{\ACC}の関係}
+\label{fig:datasize}
+\end{figure}
+
+
+
+\subsection{{\FLU}の評価値と{\ACC}の関係}
+\label{sec:experiment:accuracy_hum_eval}
+
+
+
+文献\cite{Oliver01}によると，{\MT}はその翻訳品質が向上すれば，{\HUM}との
+違いが小さくなるため，{\HUM}との識別が困難になり，識別器の{\ACC}は
+低下すると予想されている．
+実際，文献\cite{Sun07}や文献\cite{Tanaka08}では，{\MT}を翻訳品質が上位の
+ものと下位のものに分けたとき，下位群での{\ACC}より
+上位群での{\ACC}のほうが低いことが確認されている．
+もし，本稿で提案する手法においても{\MT}の翻訳品質が向上する（人手評価値が
+高くなる）につれて{\ACC}が低下することが確認できれば，
+提案手法の{\ACC}が低下するかどうかによって翻訳品質が向上したかどうかを
+判断できることになり，システム開発において提案手法を用いた自動評価が可能
+になる．
+提案手法においてこのような{\ACC}の低下が生じるかを検証する．
+検証には，\ref{sec:experiment:setting}節で述べた{\MTS} 500文に
+付与された{\FLU}の評価値を利用する．
+
+
+検証は，
+{\AL}と{\NAL}の両方を用いて構築した識別器，
+{\AL}だけを用いた識別器，
+{\NAL}だけを用いた識別器のそれぞれについて行なった．
+各識別器について，{\MTS} 500文の{\FLU}の評価値別に，
+正しく{\MT}と識別された文数と誤って{\HUM}と識別された文数を集計した．
+それらの結果を表\ref{tab:flu_both}, \ref{tab:flu_align}, 
+\ref{tab:flu_nonalign}にそれぞれ示す．
+
+
+\begin{table}[b]
+\caption{{\AL}と{\NAL}による識別器の{\ACC}と{\FLU}}
+\label{tab:flu_both}
+\input{02table08.txt}
+\end{table}
+\begin{table}[b]
+\caption{{\AL}のみによる識別器の{\ACC}と{\FLU}}
+\label{tab:flu_align}
+\input{02table09.txt}
+\end{table}
+\begin{table}[b]
+\caption{{\NAL}のみによる識別器の{\ACC}と{\FLU}}
+\label{tab:flu_nonalign}
+\input{02table10.txt}
+\end{table}
+
+正しく{\MT}と識別された文数と誤って{\HUM}と識別された文数の間に
+差があるかどうかを検証するために，
+表\ref{tab:flu_both}, \ref{tab:flu_align}, 
+\ref{tab:flu_nonalign}の各分布に対して
+Fisherの正確確率検定\footnote{Fisherの正確確率検定は，$\chi^2$検定と同様に対応がない
+2条件間の比率の比較を行なう方法であるが，
+周辺度数に0に近い値（10以下程度）があるときに適用される\cite{Mori06}．}を
+行なった．
+その結果，正しい識別件数と誤った識別件数の割合は，
+{\AL}と{\NAL}の両方を用いた場合（表\ref{tab:flu_both}）と
+{\NAL}だけを用いた場合（表\ref{tab:flu_nonalign}）は有意水準5\%で
+有意でなかったが，
+{\AL}だけを用いた場合（表\ref{tab:flu_align}）は有意水準5\%で有意であった．
+そこで，{\AL}だけを用いた場合について残差分析
+\cite{Tanaka05}
+を行なった結果，
+表\ref{tab:flu_align_zansa}に示すように，
+{\HUM}と誤識別される{\MT}の数は，{\FLU}の評価値が1か2である
+場合に有意水準5\%で有意に少なく，
+逆に，評価値が3か4である場合に有意水準5\%で有意に多かった．
+このことから，{\AL}だけを用いて構築した識別器の{\ACC}は，
+{\MT}の{\FLU}が高くなるにつれて低下すると言える．
+表\ref{tab:accuracy_feat}から分かるように，
+{\AL}のみによる識別器は，平均{\ACC}では，
+{\NAL}のみによる識別器にも
+{\AL}と{\NAL}の両方を用いた識別器にも劣る．
+しかし，{\ACC}の低下が見られることから，
+機械翻訳システムの開発において
+翻訳品質評価尺度として利用できることが示唆される．
+ただし，{\MTF}や{\MTL}を実験対象とした場合にも同様の結果が得られるかどう
+かの一般性の検証は今後の課題である．
+
+
+\begin{table}[t]
+\caption{表\ref{tab:flu_align}の調整済み残差}
+\label{tab:flu_align_zansa}
+\input{02table11.txt}
+\end{table}
+
+{\MT}は，その{\FLU}の評価値が高くなれば，{\HUM}との相違点
+が減少すると考えられる．
+このため，{\HUM}と{\MT}の相違点に相当する{\NAL}を素性とした場合も，
+{\FLU}の評価値が高い{\MT}は{\HUM}と誤って識別されやすくなり，
+{\ACC}が低下するはずである．
+しかし，実験では，機械学習に使用する素性に{\NAL}を含めて（{\NAL}だけを用
+いて，あるいは{\NAL}と{\AL}の両方を用いて）構築した識別器で{\MT}の識別を
+行なった場合，{\FLU}の評価値が高い
+{\MT}でも低い{\MT}でも{\ACC}にほとんど差は出なかった．
+この原因は，
+たとえ{\FLU}の評価値が高い{\MT}であっても，{\HUM}との明らかな相違点
+が含まれており，{\HUM}との識別が容易に行なえることにあるのではないかと
+考えられる．
+
+
+
+\subsection{既存手法との比較}
+\label{sec:experiment:accuracy_hum_eval_meteor}
+
+
+提案手法を，代表的な既存手法の一つであるMETEOR \cite{Banerjee05}と
+比較する．
+比較対象をBLEUやNISTではなくMETEORとした理由は，
+文単位での自動評価ではMETEORのほうが良いとされている
+からである\cite{Banerjee05}．
+METEORでは，評価対象文が参照訳と照合され，両者の類似度が評価値として
+評価対象文に付与される．
+評価値は0から1の範囲をとる．
+一方，提案手法は，
+評価対象文が良い翻訳であるかそうでないかの二値判定を行なう識別器であり，
+評価対象文に評価値を付与するものではない．
+このため，提案手法とMETEORを比較するために，
+次のような考えでMETEORを識別器とみなすことにする．
+すなわち，ある閾値を設け，評価対象文に対するMETEORによる評価値が
+その閾値以上であれば，その評価対象文を良い翻訳であると判定する識別器
+とする．
+
+METEORに基づく識別器の振る舞いは，設定する閾値によって異なる．
+閾値が高過ぎれば厳し過ぎる評価尺度になり，
+逆に，低過ぎれば甘過ぎる評価尺度になる．
+適切な閾値を決定するために，
+閾値を0.1から0.9まで0.1刻みで変化させて，
+\ref{sec:experiment:accuracy_hum_eval}節で行なった方法で
+{\MTS}~500文の{\FLU}の評価値別に，
+閾値未満の類似度が付与された文数と
+閾値以上の類似度が付与された文数を集計した．
+適切な閾値とは，集計結果に対して
+正確確率検定と残差分析を行ない，
+最も多くの{\FLU}の階級において有意水準5\%で有意差が確認できるときの閾値
+であるとした．
+参照訳には，ロイター英日対訳コーパスにおいて英文500文に対応する
+和文を用いた．
+{\MTS}と参照訳を``茶筅''
+\footnote{http://chasen.naist.jp/hiki/ChaSen/}で形態素解析した結果を
+METEORへの入力とした．
+{\MTS}と参照訳の照合には，形態素の表記を照合するexactモジュールを
+使用した．
+この結果，閾値が0.4のときに{\FLU}の3つの階級(2，3，4)において
+有意水準5\%で有意差が確認できた．
+このため，閾値を0.4に設定したときのMETEORに基づく識別器を提案手法との
+比較対象とする．
+閾値を0.4としたときの，閾値未満の類似度が付与された文数と
+閾値以上の類似度が付与された文数，および
+閾値以上の類似度が付与された文の割合を表\ref{tab:flu_meteor}に示す．
+括弧内の数値は調整済み残差である．
+
+
+\begin{table}[b]
+\caption{METEORに基づく識別器（閾値0.4）による判定と{\FLU}}
+\label{tab:flu_meteor}
+\input{02table12.txt}
+\end{table}
+
+表\ref{tab:flu_meteor}から，METEORに基づく識別器は，
+{\FLU}の評価値が4である文のうち33.3\%を良くない翻訳であると
+みなすことが分かる．
+一方，提案手法は，{\FLU}の評価値が4である文のうち55.6\%を良くない
+翻訳であるとみなすことが表\ref{tab:flu_align}から分かる．
+従って，{\FLU}が高い文を正しくそのように自動評価しなければならない
+場合（評価の効率化が重要な場合）には，提案手法は望ましくない．
+しかし，{\FLU}の評価値が1である文については，
+METEORに基づく識別器は31.5\%を良い翻訳であるとみなすのに対して，
+提案手法は{\FLU}の評価値が1である文のうち4.3\%しか良い翻訳であると
+みなさない．
+従って，機械翻訳システムの評価において
+{\FLU}が低い文を見落としてはならない
+場合には，提案手法のほうが望ましいと言える．
+
+
+\subsection{文レベルでの{\MT}の特徴分析}
+\label{sec:experiment:likeness}
+
+
+\ref{sec:experiment:accuracy_hum_eval}節では，提案手法が
+システムレベルでの自動評価に使える可能性があることを示した．
+しかし，機械翻訳システムの翻訳品質を高めていくためには，
+単にシステム全体として{\FLU}が向上したかどうかを評価するだけでなく，
+{\MT}と{\HUM}の間にどのような違いがあるのかを発見し，
+その違いを埋めていくために取り組むべき 課題を明らかにする必要がある．
+{\MT}と{\HUM}の間の違いを見い出す方法の一つとして，{\MT}に特徴的な素性を
+（{\HUM}に特徴的な素性と見比べながら）観察するという方法が考えられる．
+
+{\MT}あるいは{\HUM}に特徴的な素性は，{\SVM}による機械学習で各素性に
+付与される重みに基づいて特定することができる．
+この重みの値が正ならば{\HUM}らしさを表わし，
+負ならば{\MT}らしさを表わす．
+重みの絶対値が大きいほど，{\HUM}らしさあるいは{\MT}らしさをより強く
+特徴付ける素性である．
+
+{\MTS}を分析対象とし，{\AL}と{\NAL}の両方を素性として用いた場合について
+各素性の重みを求めた．
+重みの絶対値が大きい素性の上位30個を表\ref{tab:effective_feats}に示す．
+
+
+まず，表\ref{tab:effective_feats}に示した素性のうち，一般にテキストで
+の出現頻度が高いと考えられる代名詞，冠詞，接続詞に関連する素性で示される
+特徴について議論する．
+\begin{enumerate}
+\item
+表\ref{tab:effective_feats}を見ると，
+{\HUM}には，第1位の{\NAL}nonalign\_jpn（同）や第3位のnonalign\_jpn（同氏）
+という素性や，第14位のnonalign\_eng(he)，第20位のnonalign\_eng(we)という
+素性が現れている．
+このことは，英語の代名詞が日本語の代名詞としては表わされず，
+「同首相」や「同グループ」のような接頭辞「同」を持つ照応表現や
+「同氏」という照応表現に訳されていることを示している．
+一方，{\MTS}には，第6位の{\AL}align(it, それ)や第21位の
+lign(its, その)という素性が現れている．
+このことから，英語の代名詞が日本語の代名詞として直訳されていることが
+読み取れる．
+このような違いは，例えば，次の英文(E\ref{SENT:pron})に現れるweやheの訳し
+方に見られる．
+\begin{SENT2}
+\sentE ``We have an exchange rate which seems to me to make sense,'' he 
+told foreign journalists in Rome. 
+\sentH 同首相は，ローマで外国特派員に対し，「為替レートについては妥当な
+ものと判断している」と述べた．
+\sentM 「我々は，私には意味をなすように思われる為替レートを持つ」と，彼
+は，ローマの外国人記者に告げた．
+\label{SENT:pron}
+\end{SENT2}
+代名詞を直訳すると，原文が伝えている意味と異なる意味を伝える翻訳文が
+生成されたり，
+文意は同じでも不自然で読みにくい翻訳文が生成されてしまうという問題が
+生じることがある． 
+従って，英語での代名詞による照応を日本語では他の表現による照応として
+翻訳できるようにすることが重要な課題である\cite{Yoshimi01a}．
+
+\begin{table}[t]
+\caption{重みの絶対値が大きい素性}
+\label{tab:effective_feats}
+\input{02table13.txt}
+\end{table}
+
+
+\item
+{\MTS}では，第10位にalign(the, その)という素性が現れている．
+これは，{\MTS}では冠詞theが「その」と訳される傾向があることを意味して
+いる．
+{\MTS}においてtheが常に「その」と訳されるわけではないが，
+例えば次の英文(E\ref{SENT:the_say})に対する{\MT}(M\ref{SENT:the_say})
+では，the countryが「その国」と訳されている．
+一方，{\HUM}(H\ref{SENT:the_say})は，代名詞の場合と同様に
+theが接頭辞「同」と訳されているため，自然な翻訳文となっている．
+\begin{SENT2}
+\sentE Mexican agriculture minister Francisco Labastida Ochoa said the 
+country needs to raise coffee productivity to boost foreign export 
+incomes.
+\sentH メキシコのラバスティダ農牧・農村開発相は，輸出収入を増加するため，
+同国はコーヒーの生産性を高める必要がある，と述べた．
+\sentM メキシコの農業大臣Francisco Labastida Ochoaは言った．その国は，コ
+ーヒー生産性を増大対外輸出収入に上げる必要があると．
+\label{SENT:the_say}
+\end{SENT2}
+
+\item
+{\MTS}における第2位のalign（and, そして）と第4位のalign（and, 及び）と
+いう素性に着目して，{\MTS}と{\HUM}での接続詞andの訳し方を比較する．
+まず，andが複数の名詞句$NP$を結合している表現
+``$NP_1$ and $NP_2$''を含む英文の{\HUM}と{\MTS}を調査した．
+{\HUM}では，andは読点や「と」，「や」，「および」などに訳し分けられて
+いた．
+一方，{\MTS}では，(M\ref{SENT:and_np})のように常に「，及び，」と
+訳されており，やや大袈裟な印象を受ける．
+\begin{SENT2}
+\sentE Virat said investors were worried about the Thai economy and the 
+coalition government's stability.
+\sentH Virat氏は，投資家は，タイ経済と連立政権の安定性を懸念している，と
+指摘した．
+\sentM Viratによれば，投資家は，タイの経済，及び，連立政権の安定性につい
+て心配した．
+\label{SENT:and_np}
+\end{SENT2}
+
+{\MTS}以外の二つの{\MT}についても同様の調査をしたところ，
+{\MTF}では「と」，「，および」，「そして」などにほぼ適切に訳し分けられて
+いた．
+また，{\MTL}では常に「と」と訳されていた．
+{\MTS}においても，{\MTF}や{\MTL}のような訳し分けを実現することはそれほど
+困難ではないと考えられる．
+
+次に，andが複数の動詞句を結合している表現を含む英文の
+{\HUM}と{\MTS}を調査した．
+その結果，{\HUM}ではandは動詞の連用形に訳されているのに対して，
+{\MTS}では(M\ref{SENT:and_vp})のように
+常に「〈動詞の連用形〉，そして，」と訳されていた．
+\begin{SENT2}
+\sentE Japan is the world's leading consumer of palladium and Russia is 
+the world's largest exporter.
+\sentH 日本は世界的にも大口のパラジウム消費国であり，ロシアは世界最大の
+輸出国．
+\sentM 日本は，パラジウムの世界の主要な消費者であり，そして，ロシアは，
+世界で最も大きな輸出業者である．
+\label{SENT:and_vp}
+\end{SENT2}
+
+また，我々の調査範囲では，{\MTF}と{\MTL}では常に
+「〈動詞の終止形〉，そして，」と訳されていた．
+andが複数の動詞句を結合している場合，動詞を連用形にして，andを
+「そして」と訳さないようにすることもそれほど困難ではないと考えられる．
+
+
+\end{enumerate}
+
+次に，表\ref{tab:effective_feats}\,に示した素性のうち，
+実験に使用したコーパスが報道記事であることに起因すると考えられる
+動詞の訳し分けと時間表現について議論する．
+\begin{enumerate}
+\item
+{\MTS}では，第11位にalign(say, 言う) という素性が現れている．
+一方，{\HUM}では，第23位のnonalign\_jpn(述べる) や第24位の
+nonalign\_jpn(語る) という素性が現れている．
+「述べる」や「語る」を含む{\HUM}（例えば(H\ref{SENT:the_say})など）
+を調査したところ，「述べる」や「語る」に対応する英語表現はsayであること
+が多かった．
+実験に用いたコーパスには記者会見やインタビューでの発言が含まれているが，
+このような発言では，sayを「言う」と訳すより「述べる」や「語る」
+などと訳したほうが適切であることが多いため，sayの柔軟な訳し分けを実現
+する必要がある．
+
+\item
+{\MTS}では，第17位にalign(on Wednesday,  水曜日に), 
+第20位にalign（on Thursday, 木曜日に），第26位align(on Tuesday, 火曜日に) 
+という素性が現れている．
+このことから，{\MTS}では(M\ref{SENT:time})のように曜日が忠実に
+訳されていることが読み取れる．
+一方，{\HUM}では，第7位にnonalign\_eng(Wednesday)，
+第11位にnonalign\_eng(Monday)，第17位にnonalign\_eng(Thursday)という素性
+が現れている．
+このことは，次の{\HUM}(H\ref{SENT:time})のように，曜日が直訳されていない
+ことを示している．
+\begin{SENT2}
+\sentE The senate is expected to begin debate on the amendment on 
+Wednesday. 
+\sentH 上院での同案の審議は，5日から開始される見通し．
+\sentM 上院は，水曜日に修正に関して討論を始めることを期待されている．
+\label{SENT:time}
+\end{SENT2}
+{\HUM}で曜日が直訳されていない理由は，
+英語の報道記事では時間を曜日で表わすのに対して，日本語の記事では
+日付で表わすという文体上の違いにある．
+{\align}結果という素性によってこのような文体的な違いも浮き彫りになる
+ことは興味深い．
+\end{enumerate}
+
+
+
+\section{おわりに}
+
+本稿では，{\HUM}と{\MT}を訓練事例とした機械学習によって構築した識別器を
+用いて{\MT}の{\FLU}を自動評価する手法について述べた．
+提案手法では，{\HUM}と{\MT}の{\FLU}の違いを捉える手がかりとして，
+英文と{\HUM}の間，および英文と{\MT}の間で{\align}を行なった結果
+を利用した．
+提案手法は，識別器を構築する際に対訳コーパスを必要とするが，評価対象文
+を評価する際には参照訳を必要としない．
+さらに，大量の訓練事例に{\FLU}の評価値を付与する必要もない．
+
+検証実験の結果，
+(1) 提案手法は，素性として{\AL}だけを使用した場合，
+93.7\%の{\ACC}で{\HUM}と{\MT}の識別が可能であることと，
+(2) {\MT}を{\FLU}の側面から4段階に分けて{\ACC}の低下を
+正確確率検定と残差分析で検定したところ，
+{\FLU}の評価値が上がるにつれて，
+{\AL}だけを素性とした場合の提案手法の
+{\ACC}が有意水準5\%で有意に低下することが確認できた．
+この{\ACC}の低下傾向は，提案手法によってシステムレベルでの評価を支援
+できることを示唆している．
+さらに，{\SVM}による機械学習で各素性に付与される重みに基づいて{\MT}に
+特徴的な素性を特定することができるため，このような素性を含む文を観察する
+ことによって文レベルでの特徴分析を行なうこともできる．
+
+今後の課題は，
+辞書と規則に基づく方式以外の機械翻訳システム，
+英語と日本語以外の言語対，
+報道記事以外のテキストなど
+様々な設定条件の下で提案手法の有効性の検証を行なうことである．
+
+
+\bibliographystyle{jnlpbbl_1.4}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Albrecht \BBA\ Hwa}{Albrecht \BBA\
+  Hwa}{2007a}]{Albrecht07a}
+Albrecht, J.~S.\BBACOMMA\ \BBA\ Hwa, R. \BBOP 2007a\BBCP.
+\newblock \BBOQ {A Re-examination of Machine Learning Approaches for
+  Sentence-Level MT Evaluation}.\BBCQ\
+\newblock In {\Bem Proceedings of the 45th Annual Meeting of the Association
+  for Computational Linguistics}, \mbox{\BPGS\ 880--887}.
+
+\bibitem[\protect\BCAY{Albrecht \BBA\ Hwa}{Albrecht \BBA\
+  Hwa}{2007b}]{Albrecht07b}
+Albrecht, J.~S.\BBACOMMA\ \BBA\ Hwa, R. \BBOP 2007b\BBCP.
+\newblock \BBOQ {Regression for Sentence-Level MT Evaluation with Pseudo
+  References}.\BBCQ\
+\newblock In {\Bem Proceedings of the 45th Annual Meeting of the Association
+  for Computational Linguistics}, \mbox{\BPGS\ 296--303}.
+
+\bibitem[\protect\BCAY{Banerjee \BBA\ Alon}{Banerjee \BBA\
+  Alon}{2005}]{Banerjee05}
+Banerjee, S.\BBACOMMA\ \BBA\ Alon, L. \BBOP 2005\BBCP.
+\newblock \BBOQ {METEOR: An Automatic Metric for MT Evaluation with Improved
+  Correlation with Human Judgments}.\BBCQ\
+\newblock In {\Bem Proceedings of the ACL Workshop on Intrinsic and Extrinsic
+  Evaluation Measures for Machine Translation and/or Summarization},
+  \mbox{\BPGS\ 65--72}.
+
+\bibitem[\protect\BCAY{Corston-Oliver, Gamon, \BBA\ Brockett}{Corston-Oliver
+  et~al.}{2001}]{Oliver01}
+Corston-Oliver, S., Gamon, M., \BBA\ Brockett, C. \BBOP 2001\BBCP.
+\newblock \BBOQ {A Machine Learning Approach to the Automatic Evaluation of
+  Machine Translation}.\BBCQ\
+\newblock In {\Bem Proceedings of the 39th Annual Meeting of the Association
+  for Computational Linguistics}, \mbox{\BPGS\ 148--155}.
+
+\bibitem[\protect\BCAY{Doddington}{Doddington}{2002}]{Doddington02}
+Doddington, G. \BBOP 2002\BBCP.
+\newblock \BBOQ {Automatic Evaluation of Machine Translation Quality Using
+  N-gram Co-Occurrence Statistics}.\BBCQ\
+\newblock In {\Bem Proceedings of the 2nd Human Language Technologies
+  Conference}, \mbox{\BPGS\ 128--132}.
+
+\bibitem[\protect\BCAY{Gamon, Aue, \BBA\ Smets}{Gamon et~al.}{2005}]{Gamon05}
+Gamon, M., Aue, A., \BBA\ Smets, M. \BBOP 2005\BBCP.
+\newblock \BBOQ {Sentence-level MT evaluation without reference translations:
+  Beyond language modeling}.\BBCQ\
+\newblock In {\Bem Proceedings of EAMT 10th Annual Conference}, \mbox{\BPGS\
+  103--111}.
+
+\bibitem[\protect\BCAY{Kotani, Yoshimi, Kutsumi, \BBA\ Sata}{Kotani
+  et~al.}{2009}]{Kotani09b}
+Kotani, K., Yoshimi, T., Kutsumi, T., \BBA\ Sata, I. \BBOP 2009\BBCP.
+\newblock \BBOQ {Validity of an Automatic Evaluation of Machine Translation
+  Using a Word-alignment-based Classifier}.\BBCQ\
+\newblock In {Wenjie Li and Diego Moll{\'a}-Aliod}\BED, {\Bem {Computer
+  Processing of Oriental Languages: Language Technology for the Knowledge-Based
+  Economy}}, \lowercase{\BVOL}\ 5459 of {\Bem {Lecture Notes in Artificial
+  Intelligence}}, \mbox{\BPGS\ 91--102}. {Springer}.
+
+\bibitem[\protect\BCAY{Kulesza \BBA\ Shieber}{Kulesza \BBA\
+  Shieber}{2004}]{Kulesza04}
+Kulesza, A.\BBACOMMA\ \BBA\ Shieber, S.~M. \BBOP 2004\BBCP.
+\newblock \BBOQ {A Learning Approach to Improving Sentence-Level MT
+  Evaluation}.\BBCQ\
+\newblock In {\Bem Proceedings of the 10th International Conference on
+  Theoretical and Methodological Issues in Machine Translation}, \mbox{\BPGS\
+  75--84}.
+
+\bibitem[\protect\BCAY{森\JBA 吉田}{森\JBA 吉田}{2006}]{Mori06}
+森敏昭\JBA 吉田寿夫（編著） \BBOP 2006\BBCP.
+\newblock \Jem{{心理学のためのデータ解析テクニカルブック}}.
+\newblock 北大路書房.
+
+\bibitem[\protect\BCAY{Och \BBA\ Ney}{Och \BBA\ Ney}{2003}]{Och03}
+Och, F.~J.\BBACOMMA\ \BBA\ Ney, H. \BBOP 2003\BBCP.
+\newblock \BBOQ {A Systematic Comparison of Various Statistical Alignment
+  Models}.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 29}  (1), \mbox{\BPGS\
+  19--51}.
+
+\bibitem[\protect\BCAY{Papineni, Roukos, Ward, \BBA\ Zhu}{Papineni
+  et~al.}{2002}]{Papineni02}
+Papineni, K., Roukos, S., Ward, T., \BBA\ Zhu, W. \BBOP 2002\BBCP.
+\newblock \BBOQ {BLEU: a Method for Automatic Evaluation of Machine
+  Translation}.\BBCQ\
+\newblock In {\Bem Proceedings of the 40th Annual Meeting of the Association
+  for Computational Linguistics}, \mbox{\BPGS\ 311--318}.
+
+\bibitem[\protect\BCAY{Paul, Finch, \BBA\ Sumita}{Paul et~al.}{2007}]{Paul07a}
+Paul, M., Finch, A., \BBA\ Sumita, E. \BBOP 2007\BBCP.
+\newblock \BBOQ {Translation quality prediction using multiple automatic
+  evaluation metrics}.\BBCQ\
+\newblock \Jem{言語処理学会第13回年次大会発表論文集}, \mbox{\BPGS\ 95--98}.
+
+\bibitem[\protect\BCAY{Quirk}{Quirk}{2004}]{Quirk04}
+Quirk, C.~B. \BBOP 2004\BBCP.
+\newblock \BBOQ {Training a Sentence-Level Machine Translation Confidence
+  Measure}.\BBCQ\
+\newblock In {\Bem Proceedings of the 4th International Conference on Language
+  Resources and Evaluation}, \mbox{\BPGS\ 825--828}.
+
+\bibitem[\protect\BCAY{隅田\JBA 佐々木\JBA 山本}{隅田 \Jetal }{2005}]{Sumita05}
+隅田英一郎\JBA 佐々木裕\JBA 山本誠一 \BBOP 2005\BBCP.
+\newblock 機械翻訳システム評価法の最前線.\
+\newblock \Jem{情報処理}, {\Bbf 46}  (5), \mbox{\BPGS\ 552--557}.
+
+\bibitem[\protect\BCAY{Sun, Liu, Cong, Zhou, Xiong, Lee, \BBA\ Lin}{Sun
+  et~al.}{2007}]{Sun07}
+Sun, G., Liu, X., Cong, G., Zhou, M., Xiong, Z., Lee, J., \BBA\ Lin, C. \BBOP
+  2007\BBCP.
+\newblock \BBOQ {Detecting Erroneous Sentences using Automatically Mined
+  Sequential Patterns}.\BBCQ\
+\newblock In {\Bem Proceedings of the 45th Annual Meeting of the Association
+  for Computational Linguistics}, \mbox{\BPGS\ 81--88}.
+
+\bibitem[\protect\BCAY{田中\JBA 南條\JBA 吉見}{田中 \Jetal }{2008}]{Tanaka08}
+田中元貴\JBA 南條浩輝\JBA 吉見毅彦 \BBOP 2008\BBCP.
+\newblock
+  {機械翻訳文と人間による翻訳文で構築した識別器による機械翻訳システムの自動評
+価}.\
+\newblock \Jem{言語処理学会第14回年次大会発表論文集}, \mbox{\BPGS\ 865--868}.
+
+\bibitem[\protect\BCAY{田中\JBA 山際}{田中\JBA 山際}{2005}]{Tanaka05}
+田中敏\JBA 山際勇一郎 \BBOP 2005\BBCP.
+\newblock \Jem{{新訂 ユーザーのための教育・心理統計と実験計画法}}.
+\newblock 教育出版.
+
+\bibitem[\protect\BCAY{Utiyama \BBA\ Isahara}{Utiyama \BBA\
+  Isahara}{2003}]{Uchiyama03}
+Utiyama, M.\BBACOMMA\ \BBA\ Isahara, H. \BBOP 2003\BBCP.
+\newblock \BBOQ {Reliable Measures for Aligning Japanese-English News Articles
+  and Sentences}.\BBCQ\
+\newblock In {\Bem Proceedings of the 41st Annual Meeting of the Association
+  for Computational Linguistics}, \mbox{\BPGS\ 72--79}.
+
+\bibitem[\protect\BCAY{Vapnik}{Vapnik}{1998}]{Vapnik98}
+Vapnik, V.~N. \BBOP 1998\BBCP.
+\newblock {\Bem {Statistical Learning Theory}}.
+\newblock Wiley-Interscience.
+
+\bibitem[\protect\BCAY{吉見}{吉見}{2001}]{Yoshimi01a}
+吉見毅彦 \BBOP 2001\BBCP.
+\newblock 英日機械翻訳における代名詞翻訳の改良.\
+\newblock \Jem{自然言語処理}, {\Bbf 8}  (3), \mbox{\BPGS\ 87--106}.
+
+\end{thebibliography}
+
+
+\begin{biography}
+
+\bioauthor{吉見　毅彦}
+{1987年電気通信大学大学院計算機科学専攻修士課程修了． 
+1999年神戸大学大学院自然科学研究科博士課程修了．
+（財）計量計画研究所（非常勤），シャープ（株）を経て，
+2003年より龍谷大学理工学部勤務．
+2004年より2008年まで（独）情報通信研究機構専攻研究員を兼任．}
+
+\bioauthor{小谷　克則}
+{2004年関西外国語大学外国語学研究科博士課程修了（英語学博士）．
+2002年より2008年まで（独）情報通信研究機構特別研究員．
+2004年より関西外国語大学外国語学部勤務．}
+
+\bioauthor{九津見　毅}
+{1990年大阪大学大学院工学研究科修士課程修了（精密工学—計算機制御）．
+同年シャープ株式会社に入社．
+現在，同社ビジネスソリューション事業本部要素技術開発センター
+新規事業開発室主事．
+1990年より機械翻訳システムの研究開発に従事．}
+
+\bioauthor{佐田いち子}
+{1984年北九州大学文学部英文学科卒業．
+同年シャープ（株）に入社．
+現在，同社ビジネスソリューション事業本部要素技術開発センター
+新規事業開発室副参事．
+1985年より機械翻訳システムの研究開発に従事．}
+
+\bioauthor{井佐原　均}
+{1978年京都大学工学部卒業．
+1980年同大学院修士課程修了．
+博士（工学）．
+1980年通商産業省電子技術総合研究所入所．
+1995年郵政省通信総合研究所関西支所知的機能研究室室長．
+情報通信研究機構上席研究員を経て，現在，
+豊橋技術科学大学情報メディア基盤センター教授．
+自然言語処理，機械翻訳の研究に従事．
+言語処理学会，情報処理学会，人工知能学会，日本認知科学会，各会員．}
+
+\end{biography}
+
+
+\biodate
+
+
+
+
+\end{document}

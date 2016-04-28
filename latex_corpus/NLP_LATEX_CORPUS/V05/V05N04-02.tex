@@ -1,0 +1,908 @@
+\documentstyle[epsf,nlpbbl]{jnlp_e_b5}
+\setcounter{page}{17}
+\setcounter{巻数}{5}
+\setcounter{号数}{4}
+\setcounter{年}{1998}
+\setcounter{月}{10}
+\受付{October}{30}{1997}
+\再受付{April}{2}{1998}
+\再々受付{June}{18}{1998}
+\採録{July}{10}{1998}
+
+\setcounter{secnumdepth}{2}
+
+\title{}
+\author{}
+\jkeywords{}
+
+\etitle{The Application of Classification Trees to\\
+ Bunsetsu Segmentation of Japanese Sentences}
+
+\eauthor{Yujie Zhang\affiref{ElecUniv}   \and
+         Kazuhiko Ozeki\affiref{ElecUniv} }
+
+\headauthor{Zhang and Ozeki}
+\headtitle{The Application of Classification Trees to Bunsetsu Segmentation}
+
+\affilabel{ElecUniv}
+          {The University of Electro-Communications,Department of Computer Science and Information}
+          {The University of Electro-Communications,Department of Computer Science and Information}
+
+\eabstract{
+In conventional bunsetsu segmentation methods  for  Japanese sentences，
+segmentation rules have been given manually. This causes
+difficulties in maintaining the consistency of the rules,
+and in deciding an efficient order of rule application.
+This paper proposes a method of automatic bunsetsu segmentation
+using a classification tree,
+by which knowledge about bunsetsu boundaries is automatically
+acquired from a corpus, and an  efficient order of rule application 
+ is realized automatically.
+ It can adapt quickly to a new system of parts of speech, and
+also to a new task domain without
+the need for changing the algorithm.
+Generation of classification
+trees for bunsetsu segmentation and  evaluation experiments  were
+carried out on an ATR corpus and an EDR corpus.
+The  segmentation  accuracy of 98.9\%   was achieved   for the ATR
+corpus, and 96.2\% for the EDR corpus. The method was compared  with
+a simple rule-based method and  the Bayes decision rule on the ATR  corpus. 
+The proposed method outperformed  the 
+rule-based method when the training data size was larger than about 20
+sentences, and outperformed the Bayes decision rule over the whole range of
+training data sizes.
+The superiority of the proposed method   was more evident
+over the former when the training data size was larger,  and  over the latter 
+ when the training data size was  smaller.
+}
+
+\ekeywords{classification tree, machine learning,
+linguistic knowledge, corpus, bunsetsu segmentation}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+{\em Bunsetsu},  which is comprised of a content word
+with or without being followed by a string of function words, is a
+convenient
+unit for dependency structure analysis of Japanese.
+Since there are no spaces indicating bunsetsu boundaries in the
+orthographic writing of Japanese, 
+a sentence must be segmented into bunsetsu's prior to
+dependency structure analysis.
+According to the elementary definition of bunsetsu \,(Nagao Ed. 1984, p.12), 
+such  segmentation might look simple.
+There are, in reality, many factors that complicate the problem.
+For example,\ Chinese characters can be concatenated to form a compound
+word.
+Some nouns and verbs have functions different from their original
+ones. For example, the noun ``$yoru$''(``$night$'')    functions also as
+ an adverb,  and the verb ``$aru$''(``$exist$'')  functions also as a 
+ formal verb, but some systems of parts of speech do not
+distinguish between common noun and temporal noun, or  between verb
+and formal verb.
+Also, there are many idiomatic usages of morpheme concatenations.
+All these matters cause difficulties in detecting bunsetsu
+boundaries.
+Moreover, there is no system of parts of speech 
+in Japanese
+that has received a general consensus.
+This situation gives rise to another obstacle to
+establishing a standard method of bunsetsu segmentation.
+
+There have been two approaches to the
+bunsetsu segmentation problem: one based on an
+automaton representing a definition of bunsetsu \,(Fujio and Matsumoto 1997), 
+and the other based on a set of
+handicraft rules\,(Suzuki 1996). In the former approach, one has to give a
+definition of bunsetsu manually. The latter
+involves handiwork in getting knowledge about
+bunsetsu boundaries. Thus both approaches
+have problems in keeping consistency, coverage and optimality
+of manually obtained knowledge.
+When  the system of parts of speech and/or the task domain are
+changed, one has to repeat the whole manual process
+to get new knowledge, which is rather laborious.
+
+This paper proposes a method of bunsetsu segmentation using a
+classification tree, by which knowledge about bunsetsu boundaries
+is automatically acquired from a small amount of training data (about 30 
+to 100 sentences)(Zhang and Ozeki\ \   1997). 
+ It can adapt quickly to a new system of parts of speech, and
+also to a new task domain without the need for changing the algorithm.
+ 
+Section 2 reviews the classification tree technique briefly. Section 3 
+gives an
+account of how to apply the classification tree technique to the 
+bunsetsu segmentation problem. Section 4 describes experiments on an
+ATR corpus, including generation and evaluation of a classification
+tree,
+together with  comparisons of the proposed method with a  simple rule-based
+method and the Bayes decision
+rule. Section 5 is
+devoted to the description of experiments on an EDR corpus with 
+detailed error analysis on each leaf of the generated tree.
+Section 6 summarizes the results, and suggests some directions for
+further improvement.
+\section{Classification Tree}
+A classification tree is a binary tree that classifies objects
+into classes\,(Breiman et al. 1984, Safavian and Landgrebe 1991). This technique has been well studied 
+in such fields as pattern recognition and machine learning.
+Through an automatic generation of a classification tree,
+one can rapidly acquire underlying regularities in a large amount of
+data,
+which are difficult or even impossible for a human to capture by
+intuition.
+ 
+The process of classification by a tree is shown in Fig.1.
+Associated with each non-terminal node of a classification tree is a 
+{\it test}.
+If an object passes a test, it reaches ``yes'' 
+child-node; otherwise ``no'' child-node.
+The process is repeated until the 
+object reaches some terminal node or
+{\em leaf},  which has been assigned to a class label.
+Only two classes, $c_{1}$ and $c_{2}$, will be considered here.
+\begin{center}
+\epsfile{file=fig1.ps,width=250bp,height=330bp}
+\end{center}
+\begin{center}
+\vspace{-30mm}
+{\bf Fig.1}\ A classification tree for two classes $c_{1}$ and
+$c_{2}$. An oval shows a non-terminal node, and a square a leaf. In
+each non-terminal node, a test is performed on input objects. A leaf is assigned to a
+class label.\vspace*{3mm}\\
+\end{center}
+
+In order to grow a classification tree from the  root, 
+objects with class labels,
+ or {\em training} objects, are necessary. Also a finite set
+of  tests must be prepared based on  problem-specific knowledge. 
+Suppose that a tree has been grown to  some size.
+It consists of three kinds of nodes: non-terminal nodes,
+leaves, and active nodes yet to be processed.
+ Let $t$ be an active node,
+ and $L(t)$ the number of training objects that reach  $t$,
+among which  the number of objects belonging to $c_{i}$
+is denoted as $L_{i}(t)$ ($i=1, 2$).
+Then the impurity of $t$, {\em Gini} index\,(Gelfand, Ravishankar, and 
+Delp 1991), 
+is defined as
+\begin{displaymath}
+I(t)= \frac{L_{1}(t)}{L(t)}\cdot \frac{L_{2}(t)}{L(t)}.
+\end{displaymath}
+Because of the constraint $L_{1}(t)/L(t)
++L_{2}(t)/L(t)=1$, $I(t)$ attains the maximum value of
+$1/4$
+(=$1/2 \times 1/2$)  when
+$L_{1}(t)/L(t)= L_{2}(t)/L(t)=1/2.$  
+
+ If the impurity is lower than a prescribed threshold $I_0$, then
+$t$ is decided to be a leaf. Otherwise all the tests
+are tried exhaustively. 
+By means of a test, the training objects that reach
+$t$ are divided into those that reach the ``yes'' child-node $t_{yes}$
+and those that reach the ``no'' child-node $t_{no}$. Let $L(t_{x})$
+denote the number of training
+objects that reach child-node $t_{x}$, where $x$ equals ``yes''
+ or ``no''.  Then the test that maximizes the reduction  of  impurity
+\begin{displaymath}
+\bigtriangleup I(t)=
+ I(t)-\frac{L(t_{yes})}{L(t)}I(t_{yes})-\frac{L(t_{no})}{L(t)}I(t_{no})
+\end{displaymath}
+is selected as the test associated with $t$,
+ and new active nodes, $t_{yes}$ and $t_{no}$,
+are appended under $t$.
+If there is no test that reduces  the impurity of $t$,
+ then $t$ is decided to be
+a leaf. With the root as the initial active node,
+the above procedure is recursively iterated until
+all the active nodes are turned into non-terminal nodes or leaves. 
+A leaf $t$ is assigned to class label $c_{i}$ 
+if the majority of training objects
+that reach $t$ belong to class $c_{i}$ ($i=1, 2$).
+
+\section{Application of Classification Trees to Bunsetsu Segmentation}
+By morphological analysis, a sentence is segmented into morphemes. 
+The attribute values of
+each morpheme such as the part of speech  and 
+the orthographic expression are also obtained.
+An object to be classified
+here is a  pair of consecutive morphemes  (left morpheme and right
+morpheme, henceforth) in a sentence with their
+attribute values.
+The purpose of classification is to decide whether the boundary
+between two consecutive morphemes (boundary in focus, henceforth)  
+is a bunsetsu boundary;
+this is a classification problem for two classes.
+A sentence consisting of $N$ morphemes yields $N-1$
+objects.
+
+Among the attributes of a morpheme, the part of speech is considered
+to be
+most important. In some cases, however, the part  of speech alone does
+not provide enough information
+for bunsetsu boundary detection.
+Let us take ``$ni\ aru$'' and ``$te\ aru$'' as examples. The boundary
+between ``$ni$'' and ``$aru$'' should be a bunsetsu boundary because 
+this ``$aru$''  functions as a verb, whereas  the boundary
+between ``$te$'' and ``$aru$'' should not be a bunsetsu boundary because
+this  ``aru''  functions as a formal  verb. Some systems of
+parts of speech, however, do not distinguish between verb and
+formal verb. By such a system both of ``$ni\ aru$'' and ``$te\ aru$''
+are tagged as ``particle verb'', which has no information 
+about the distinction between the above two cases.
+Therefore the orthographic
+expression is employed as another test attribute for some range of
+morphemes
+that are selected by a preliminary experiment. Also the wild card
+``$*$'' is introduced as a symbol to match any attribute values. 
+
+Let $pos_{i}$ be a part of speech, and $W(pos_{i})$ the set of
+orthographic expressions, including ``$*$'', of morphemes that belong
+to $pos_{i}$ and are selected by the preliminary experiment.
+Then the set of the pairs of $pos_{i}$ and its orthographic expressions
+is
+ denoted as $\{pos_{i}\}\times W(pos_{i})$. Let $S$ be the set of all such 
+pairs
+plus $(*,\,*)$:
+\begin{displaymath}
+S= [ \cup_{i} \{pos_{i}\}\times W(pos_{i})] \cup \{(*,\,*)\}.
+\end{displaymath}
+Then $S\times S$  is employed as the set of tests (classification rules)  in this work.
+A test takes the form 
+$\langle $ ($pos_{1}, e_{1}$ )($pos_{2}, *$) $\rangle $, for example.
+An object will pass this test
+if the part of speech of the left morpheme  
+ equals $pos_{1}$, its orthographic
+expression equals $e_{1}$, and the part of speech of the right
+morpheme
+equals $pos_{2}$.
+
+In the process of growing a classification tree,
+ an active node $t$ is decided to be a
+leaf if the condition $I(t) \leq I_0$ is satisfied,
+ or if there is no test that reduces the impurity
+of $t$. Since the maximum value of the impurity is $1/4$ as stated in
+the previous section,\ the
+threshold $I_0$ is set at a value  between 0 and 1/4.
+A threshold value  $I_0 \neq 0 $ allows  some amount of impurity
+lower than $I_0$ to remain at leaves, thereby controlling  the over-growth of 
+the classification tree.
+\section{Experiments on  ATR Corpus}
+By the procedure described above, classification trees
+for bunsetsu segmentation  were generated and  evaluated 
+on an ATR corpus\,(Abe et al. 1990).
+The ATR corpus contains 503 sentences taken from
+newspapers, magazines, and etc. The sentences 
+are  labeled with the bunsetsu boundary, and the morphemes are labeled with 
+the part of speech.
+For the sake  of open experiments,  randomly selected 100 sentences  were
+used  as  evaluation data, which  had 1298 objects,\ and the remaining
+403 sentences as  training data, from which training data of different sizes
+ were  defined as in Table 1.
+\begin{center}
+{\bf Table\ 1} Training data of different sizes.
+\vspace{10pt}\\
+\begin{tabular}{c|c|c|c|c|c|c|c|c|c|c}
+\#Sentences&5&10&20&30&40&50&100&200&300&403\\ \hline
+\#Objects& 90 &145&280 &411   &540   &673   & 1332 &2624   &4138   &5697 
+\end{tabular}
+\end{center}
+The attribute used for test here was the part of speech only; 
+the orthographic expression
+was not used because the ATR corpus's part of speech system
+distinguishes formal verbs and verbs. There are 25 parts of speech in the ATR corpus.
+\begin{flushleft}
+{\large \bf 4.1\ \ Optimum Value for the Threshold  $I_0$ }
+\end{flushleft}
+  The threshold $I_0$ controls the growth of a tree in the training
+stage.
+A smaller value of $I_0$ will produce more leaves, resulting in 
+finer classification of the training objects. However, there is a
+possibility
+that too fine classification of the training objects causes over-fitting,
+thereby giving an adverse effect on generalization power  of the
+generated tree.
+In order to decide the optimal value of  $I_0$, classification trees
+were generated with various values of $I_0$  ranging from $10^{-5}$ to 
+0.24, and 
+for training data of different sizes: 5, 50, and 403 
+sentences.  Table 2  shows the error rates of the generated trees for 
+  the evaluation data.
+\begin{center}
+{\bf Table\ 2}\ \ Error rate\ (\%) vs. $I_0$ for training data of different sizes.
+\vspace*{2mm}\\
+\begin{tabular}{|c|c|c|c|c|c|c|c|c|}
+\hline
+\makebox[30mm]{Training Data}&\multicolumn{8}{c|}{$I_0$}\\ 
+\cline{2-9}
+\makebox[30mm]{Size(\#Sentences)}
+&\makebox[9mm]{$10^{-5}$}&\makebox[9mm]{$10^{-4}$}&\makebox[9mm]{$10^{-3}$}&\makebox[9mm]{$10^{-2}$}&\makebox[9mm]{$10^{-1}$}&\makebox[9mm]{$0.15$}&\makebox[9mm]{$0.20$}&\makebox[9mm]{$0.24$}\\ \hline
+   5   & 5.7  & 5.7  &5.7  & 5.7 & 11.8 & 14.4 & 23.4 & 23.4 \\ \hline
+   50  & 2.3  & 2.3  & 2.3 & 3.4 & 8.3  & 12.1 & 23.4 & 23.4   \\ \hline
+   403 & 1.1  & 1.1  & 1.2 & 2.0 & 8.3  & 12.1 & 14.7 & 23.4  \\ \hline
+\end{tabular}
+\vspace*{10mm}
+\\
+\end{center}
+
+As far as this experiment shows, a  smaller value of $I_0$ gives  a
+better result for any training data size.
+Although we can not draw  a general  conclusion immediately from this
+result that the
+optimal value of $I_0$ is always 0, we  tentatively  set $I_0$ at 0 in the
+following experiments. This means that an active node
+is to be split into child-nodes as long as there is a test that reduces the
+impurity of the node.
+\begin{flushleft}
+{\large \bf 4.2\ \ Generation and Evaluation of a Classification Tree }
+\end{flushleft}
+As an  illustration, we take up  a    classification
+tree generated by  training data of the largest size, 403 sentences.
+The tree is formed with  77 nodes, in which 39 are leaves.
+A part of the tree near the root is illustrated in  Fig.2.
+There was a tendency that the tests related to parts of speech with  higher
+frequencies appeared in the nodes closer to the root.
+ Thus it can be said that an efficient order of tests
+was realized automatically.
+\begin{table}[t]
+\begin{center}
+\epsfile{file=fig2.ps,width=350bp,height=220bp}
+\end{center}
+\begin{center}
+{\bf Fig.2}\ Part of the tree generated on the ATR corpus.
+\end{center}
+\end{table}
+Table\ 3 shows the classification 
+result of the tree on the evaluation data. The symbol $Y$ signifies that the boundary in
+focus
+is a bunsetsu boundary, and $N$ signifies that is not.
+The arrow $\rightarrow$ denotes the classification operation by the
+tree.
+So, $|Y\rightarrow N|$ means the number of bunsetsu boundaries
+which were not judged as boundaries.
+
+\vspace{10pt}
+\begin{center}
+{\bf Table\ 3} Classification  result for the ATR corpus using the
+classification tree method.
+\vspace{10mm}\\
+\small
+\begin{tabular}{c|c|c|c|c|c}
+\#Objects&$|Y\rightarrow Y|$&$|N\rightarrow N|$&$|Y\rightarrow N|$&
+$|N\rightarrow Y|$&Accuracy\%\\ \hline
+1298&521&763&13&1&98.9
+\end{tabular}
+\end{center}
+\vspace{10pt}
+\normalsize
+About 93\% of the errors were of the type $Y\rightarrow N$.
+It was found that most of the errors of this type came from
+the boundaries   between  common nouns. The generated tree 
+decided a boundary  between common nouns not to be a bunsetsu
+boundary. However, many of the first common nouns
+in such boundaries  were in fact those that
+functioned as adverbs, and this kind of objects were labeled as
+ bunsetsu boundaries in the corpus. Thus, the coarseness of 
+sub-categorization of noun was a part of the causes of the errors.
+\begin{flushleft}
+{\large \bf 4.3\ \ Comparison with a  Rule-Based Method  }
+\end{flushleft}
+It will be meaningful to compare
+the performance of the proposed method with that of a rule-based
+method. The basic structure of a bunsetsu can be defined by using
+the four categories (prefix, suffix, content word, function word) 
+as follows (Nagao Ed. 1984, p.12):
+\[\ (\ [Prefix]\ (Content\ Word\ )\ [Suffix]\ )^*[Function\ Word\
+]^*,\]
+where ``[\ ]'' denotes  that the item is optional, 
+ and ``$*$''  denotes that the item appears once or 
+more than once. Based on this definition, we have constructed  a simple,
+basic rule for bunsetsu segmentation as  shown in Table 4.
+The boundary between content words  may or may not be a bunsetsu
+boundary. Therefore, two rules were considered: Rule I makes a
+bunsetsu boundary between content words, and Rule II does not.\\
+\begin{table}[t]
+\begin{center}
+{\bf Table\ 4}\ \  Segmentation rule based on the definition of
+bunsetsu. ``Y'' signifies ``Make a bunsetsu boundary'', and ``N'' 
+signifies ``Don't make a bunsetsu boundary'' between the two
+categories. The blank is  a combination of categories which violates
+the definition of bunsetsu.
+\vspace{5mm}\\
+\small
+\begin{tabular}{|c|c|c|c|c|}
+\hline
+Left &\multicolumn{4}{c|}{Right Category}\\
+\cline{2-5}
+Category& Prefix  &Content Word  &Suffix   &Function Word\\ \hline
+Prefix &  & N &   &\\ \hline
+Content Word & Y  &Y/N  & N  &N\\ \hline
+Suffix &Y  & Y &   &N\\ \hline
+Function Word & Y  &Y  &   &N\\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+\vspace{5pt}\\
+Each of the parts of speech of ATR corpus was assigned to one of the
+four  categories (Nagao Ed. 1984, p.92 ), and bunsetsu segmentation 
+experiments were carried out using the same evaluation data as in 4.2.
+The accuracy of 95.9\% for Rule I and 91.1\% for Rule II were
+obtained.
+ 
+Since Rule I gave a better result than Rule II,  the performance of
+Rule I was compared with that of the classification tree method.
+Fig.3 shows  that when the training data size is larger than about 20 
+sentences, the classification tree method outperforms the rule-based
+method.  The superiority of the classification tree method is more 
+evident when the training data size is larger.
+\begin{flushleft}
+{\large \bf 4.4\ \ Comparison with the Bayes Decision Rule  }
+\end{flushleft}
+It will also be of interest to compare the performance of the
+classification tree method with that  of a purely statistical learning 
+and decision method. For such a method, we take up the Bayes decision
+rule here.
+ The Bayes decision
+rule is well known for its minimum error property\,(Fukunaga 1990). That is, if the
+class
+conditional probability distribution of objects to be classified and
+the $a\ priori$ class probability distribution are known exactly, then it is
+possible
+to classify objects with smaller errors than any other
+methods. However, those
+probability distributions are not known in general, and have to be
+estimated
+from training data. Thus, it is possible that other methods outperform 
+the Bayes decision rule despite its optimum property in the ideal case.
+  The Bayes decision rule for bunsetsu segmentation is implemented in
+the
+following way. 
+
+Let $(pos_1, pos_2)$ be a boundary in focus of which
+the left and right morphemes have parts of speech, $pos_1$ and $pos_2$,
+respectively. Thus
+$P(Y|\ pos_1, pos_2)$ denotes the probability that the boundary $(pos_1, pos_2)$ 
+is a
+bunsetsu boundary. The probability $P(Y|\ pos_1, pos_2)$ can be estimated
+from the
+co-occurrence count as:
+\[P(Y\ |\ pos_1,pos_2) \approx \frac{Count[\ (pos_1,pos_2)\ is\ a\
+bunsetsu\ boundary]}{Count[\ (
+pos_1,pos_2)\ ]},
+\]
+where $Count[X]$ denotes the number of occurrences of the event $X$ in the training data.
+In the same way, \ $P(N\ |\ pos_1,pos_2)$,  the  probability that the
+boundary $(pos_1,pos_2)$ is not   a
+bunsetsu boundary, can  be estimated.
+The boundary $(pos_1,pos_2)$ is decided to be  a bunsetsu boundary
+if and only if
+\[ P(Y\ |\ pos_1,pos_2) \geq  P(N\ |\ pos_1,pos_2).\]
+The amount of training data to estimate the probability distributions
+was varied according to Table 1.
+
+We tried two different ways to deal with  the case $Count[\ (pos_1,pos_2)\ ]=0$: one that makes a bunsetsu boundary between such $pos_1$ and $\ pos_2$,
+and the other that  does not.
+Because the former gave a better performance than the latter when the
+training data size was larger than 50 sentences, 
+the result using  the former  was 
+compared  with that of the classification tree method.\\
+\begin{table}[t]
+\hspace*{10mm}
+\epsfile{file=fig3.ps,width=350bp,height=250bp}
+\begin{center}
+{\bf Fig.3}\ Comparison of error rates among the classification
+tree method,\ the rule-based method and the Bayes decision rule. 
+\end{center}
+\end{table}
+  Fig.3 shows that for any training data size, the classification tree method
+outperforms   the Bayes decision rule. The superiority of the
+classification tree method
+becomes
+more remarkable as the training data size decreases. Training data of 
+30 sentences is enough to achieve the error rate of 2.4\%; for that 
+training data size, the error rate of the Bayes decision rule is
+ 5.5\%. This shows that the classification tree method has a strong power of
+generalizing the knowledge beyond the training data so that unseen
+data can  be
+classified with high accuracy.
+
+  In order to check the statistical significance of the performance
+difference between the classification tree method and the Bayes decision rule, 
+the $a\ posteriori$ probability method\,(Ozeki 1997) was employed. In this method, the
+superiority of  one method to the other
+is measured by the $a\ posteriori$ probability  of the event that the true 
+classification rate of one method  is higher than that of the other, given the
+classification results of the two methods. It utilizes, not only the number of objects classified
+correctly by each method, but also the number of objects classified
+correctly by  both methods.
+The results are shown in Table 5.
+
+\begin{table}[b]
+\begin{center}
+{\bf Table\ 5} The superiority of the classification tree method to
+the Bayes decision rule for  training  data of different sizes.
+\vspace{15pt}\\
+\begin{tabular}{c|c|c|c|c}
+\#Sentences&5&50&200&403\\ \hline
+Superiority$(\%)$& 100 & 100 & 99 & 96
+\end{tabular}
+\end{center}
+\end{table}
+
+This confirms that the
+classification tree
+method is surely superior to the Bayes decision rule, and that the
+superiority becomes more prominent when the training data size becomes smaller.
+
+One problem of the Bayes decision rule is that it is vulnerable to 
+the sparseness of training data; when $Count[\ (pos_1,pos_2)\ ]$
+is equal to 0 or close to 0,  the estimation of $P(Y/N\ |\ pos_1,\
+pos_2)$  becomes impossible or unreliable.  
+Various methods  to alleviate this problem are conceivable. For example,  
+we could  estimate  $P(Y/N\ |\ pos_1,\ pos_2)$ with 
+$\alpha P(Y/N\ |\ pos_1,*) + (1- \alpha ) P(Y/N\ |\ *, pos_2)$, where $\alpha$
+is  a suitably
+chosen weight. It is easy to show that when $\alpha =1/2$, 
+ this linear interpolation  method is equivalent to a decision method
+based on comparison of the four probabilities
+$P(Y/N\ |\ pos_1,*)$ and $P(Y/N\ |\ *,\ pos_2)$.
+We could also use a coarser
+classification of the set of all the $(pos_1,pos_2)$ to replace
+$P(Y/N\ |\ pos_1,pos_2)$ with  $P(Y/N\ |\ \Phi(pos_1,pos_2))$, where
+$\Phi(pos_1,pos_2)$ is the
+class to which $(pos_1,pos_2)$ belongs. 
+All these methods might improve the performance of the Bayes
+decision rule.
+However, it is difficult to 
+decide which one   should serve as a baseline.
+For this reason we have compared the proposed method with the Bayes
+decision
+rule in its most primitive form, and left the problem of its
+improvement untouched.
+
+\section{Experiments on  EDR Corpus}
+In order to see the influence of
+different systems of parts of speech and
+different sentence materials on the results of classification tree,
+experiments on an EDR corpus\,(EDR 1996) were also carried out.
+\begin{flushleft}
+{\large \bf 5.1\ \  Labels and Parts of Speech in EDR  Corpus}
+\end{flushleft}
+The EDR corpus has  no labels indicating bunsetsu
+boundaries. Instead, it has detailed information about the
+syntactic structure of sentences.
+ By utilizing this information and the definition of
+bunsetsu\,(Nagao Ed. 1984, p.12), 400 sentences were labeled with the bunsetsu
+boundary. Then
+6984 objects for training were extracted from 
+randomly selected 200 sentences, and
+7110 objects for evaluation from the rest.
+The sub-categorization of noun
+in the EDR corpus seemed too coarse for the present
+purpose. Therefore it was augmented by using the semantic identifier,
+which was common to the corpus and the dictionary. The resulting
+number of parts of speech was 19, in which noun was sub-categorized
+into common noun,\ proper noun,\ numerals,\ temporal noun
+and formal noun.
+
+In the EDR corpus, sub-categorization of particle is coarser than that
+in the ATR corpus. Moreover, there is no such part of speech  as
+formal  verb, 
+which is employed as a part of speech  in the ATR corpus. 
+Although a large portion  of boundaries between particles  and verbs  are
+bunsetsu boundaries,\ quite a few  of them  are not. The  boundary 
+between a particle and a verb that functions as a formal  verb,
+for example, is not a bunsetsu boundary.
+ Therefore, as  was explained in Section 3, 
+the test of the form $\langle (particle,\, \ast )(verb,\, \ast)
+\rangle $
+has no power to distinguish between a bunsetsu boundary and
+a non bunsetsu boundary;
+the part of speech
+information alone, especially for boundaries related to particles and verbs, is  not enough
+for bunsetsu segmentation. For that reason, the orthographic
+expression
+was also used as an attribute for test
+together with the part of speech. 
+In this experiment the orthographic expressions of  
+morphemes, ``$aru$''\ (``$exist$''),\ ``$iru$''\ (``$exist$''),\
+``$kuru$''\ (``$come$'') for verb ,  ``$nai$'' (``$not$'')  for adjective,
+and ``$te$'',\ ``$de$'' for particle, were selected.
+\begin{flushleft}
+{\large \bf 5.2\ \ Experimental  Result}
+\end{flushleft}
+A classification tree with 175 nodes was generated in this experiment.
+It was found that segmentation rules related   to the 
+orthographic  expressions  employed were extracted.
+For example, the boundary between a particle and a verb 
+was decided not to be a bunsetsu boundary if the orthographic
+expression of the particle equals ``$de$'' and that of the verb 
+equals ``$aru$''.
+
+It was observed that the tree generated on the 
+EDR corpus (EDR tree, henceforth)
+ acquired new segmentation rules that were not acquired in
+the tree generated on the ATR corpus (ATR tree, henceforth):
+\begin{enumerate}
+\item The boundary between a temporal noun and a common noun
+was decided to be a bunsetsu boundary, while it was not by the ATR tree. 
+(Because the ATR corpus has no such part of speech
+as temporal noun, it makes no
+distinction between a temporal noun and a common noun.)
+\item The boundary between an auxiliary verb and a common noun was
+decided to be a bunsetsu boundary, and  
+the  boundary between an auxiliary verb and a formal noun was not.
+The ATR corpus  makes no distinction between a common noun and a formal noun.
+\item The boundary between a particle and a common noun was decided
+to be a bunsetsu boundary, 
+and   the boundary between a particle and a formal noun was
+not. The ATR corpus  makes no distinction between 
+a common noun and a formal noun.
+\item The boundary between two common nouns was
+decided to be a bunsetsu boundary, and the boundary
+between two proper nouns was not, while neither was decided to be a 
+bunsetsu boundary  by the ATR tree. 
+(The ATR corpus does not contain enough amount of data
+for extracting such a segmentation rule.)
+\item The EDR tree acquired 12 rules related to symbols, while
+the ATR tree acquired no such rules.
+(There were  no occurrences
+of symbols although it has a category  ``symbol''  as a part of speech 
+in the ATR corpus.)
+\end{enumerate}
+Thus, the classification tree extracted the new segmentation rules
+exploiting  the sub-categorization of noun and an increased amount of 
+training materials  available in  the EDR corpus.
+In this way
+a classification tree can adapt to a new system of parts of speech
+and a new task domain.
+
+The 200 sentences of the evaluation data were segmented by the tree, 
+and the classification  result was obtained as in  Table\ 6.
+\vspace{10pt}
+\begin{center}
+\small
+{\bf Table\ 6} Classification result  for the EDR Corpus.
+\vspace{10pt}\\
+\begin{tabular}{c|c|c|c|c|c}
+\#Objects&$|Y\rightarrow Y|$&$|N\rightarrow N|$&$|Y\rightarrow N|$&
+$|N\rightarrow Y|$&Accuracy\%\\ \hline
+7110&2502&4341&62&205&96.2
+\end{tabular}
+\end{center}
+
+\vspace{5pt}
+\begin{flushleft}
+{\large \bf 5.3\ \ Error Analysis on  Leaves }
+\end{flushleft}
+
+It is noted that the accuracy  of 96.2\% in Table 6 is a little lower
+than that  for   the ATR corpus in Table 3. In order to find out the causes of errors,
+every leaf $t$ of the EDR tree was examined in detail by measuring three quantities:
+the local error rate,\ i.e. the error rate  at leaf $t$, defined as
+\vspace{3pt}
+\[LER(t)\ = \frac{Number\ of\ evaluation\ objects\ misclassified\ at\ 
+t}{Number\ of\ evaluation\ objects\ that\ reach\ t},\]
+the number of training objects that reach $t\ (NTO(t))$,\ and the impurity of
+$t$ on the training objects$(IMP(t))$.
+Fig.4 and Fig.5 are scatter plots of $LER(t)$ versus $NTO\ (t)$,
+and $LER(t)$ versus $IMP(t)$, respectively.
+\begin{table}[t]
+\begin{center}	
+\epsfile{file=fig4.ps,width=350bp,height=250bp}
+\end{center}
+\begin{center}
+{\bf Fig.4}\  Local error rate vs. number of training objects  at
+leaves. The black marks show leaves with $IMP=0$.
+\end{center}
+\end{table}
+\begin{table}[t]
+\begin{center}
+\epsfile{file=fig5.ps,width=350bp,height=250bp}
+\end{center}
+\begin{center}
+{\bf Fig.5}\  Local error rate vs. impurity of leaves on  training objects. 
+\end{center}
+\end{table}
+
+ Fig.4 shows that a leaf formed 
+with  a smaller number of training objects is likely to have a higher
+local error
+rate. Fig.5 indicates that a leaf with  greater impurity on training 
+objects tends to have a higher local error rate. 
+The point $IMP= 0$ is an
+exception. At this point the local error rates distribute from
+0 to 100\%. The black marks in Fig.4 show the leaves with $IMP=0$. As 
+seen   here, a leaf with $IMP= 0$ is very reliable as long as there are
+enough number of training objects reaching that leaf. However, leaves
+formed with less than 30 training objects are unreliable
+and the local error rates  become unpredictable. 
+
+ These results lead to a conclusion that the classification accuracy
+of a leaf 
+is affected by both the number of training objects
+reaching the leaf and the impurity of the leaf on the training
+objects.
+
+ It was found that in the EDR tree there were quite a number of leaves 
+formed with small number  of training objects  or with high impurity. It was just
+at these leaves that many of the errors occurred. The high impurity
+remained  because there was no test that could reduce  it. The information
+carried in two consecutive morphemes  and 
+the attribute values tested in this experiment could not make 
+further reduction on impurity. So one solution to this problem would be to
+widen the window size and  test a longer  morpheme sequence, and  to test  more  attribute values.
+There were, in fact, some cases where
+testing more than two morphemes and adding some other orthographic 
+expressions, such as  ``$oku$'' (``$put$'') and  ''$iku$'' (``$go$''), would improve the result. 
+Some leaves with high impurity, however, obviously resulted from
+mislabeling in the corpus. A leaf formed with very small number  of
+training objects  was often a result of
+mislabeling in the corpus or rare exceptions. 
+\section{Conclusion}
+A bunsetsu segmentation method using a classification tree was
+proposed. It has been
+shown that linguistic knowledge about bunsetsu boundaries can be
+acquired automatically by this method. It can adapt quickly to a new 
+system of parts of speech and
+also to a new task domain. An efficient order of tests is
+automatically realized under the criterion of maximum impurity reduction. All these
+are advantages of the proposed method over conventional handicraft methods. The
+classification accuracy  of 98.9\%  was achieved for the ATR corpus, and 96.2\% for the EDR corpus.
+
+The performance of  the proposed method  was compared  with a 
+rule-based method and 
+the Bayes decision rule.
+The classification tree method 
+outperformed the rule-based method when the training data size was
+larger than about 20 sentences,  and the
+superiority was more prominent when the training data size was larger.
+The classification tree method outperformed the Bayes decision rule
+over the whole range of training data sizes, and the superiority 
+was more prominent when the training data size was
+smaller.  Training data of as little as 30
+sentences  was enough to achieve 2.4\% error rate, whereas
+ in  the Bayes decision rule the error rate was
+ 5.5\%  for  the same training data.
+This fact is a good
+evidence that the method has a strong power of generalizing the
+knowledge beyond the 
+training data.
+Furthermore, the knowledge acquired by the classification tree method
+is easier to interpret and more compact to store than that acquired by the Bayes
+decision rule.
+
+  Error analysis was conducted by evaluating the local error rates.
+From this analysis it has been made clear  that a leaf formed with  
+a smaller number  
+of training objects is likely to have a higher  local error  rate. In order to
+prevent the formation of a  leaf with a small number  of training
+objects, the
+control method for growing a classification tree must be improved. The 
+threshold $I_0$ is a parameter intended to control the growth of a
+tree, but it  did not work in these experiments. When  the set of
+tests becomes larger, over-growth may occur.
+In such a case, the threshold $I_0$ may function  to  control the  
+over-growth of the classification tree. 
+Another solution to the over-growth  problem may be to incorporate another quantity,
+the number of training objects  that reach an active node, into the stopping condition
+to  control the splitting of the node.
+
+  Another conclusion from the error analysis is that a leaf with higher 
+impurity on the
+training objects is also likely to cause a higher  local error rate.
+On a leaf with high impurity, the difference between the majority
+and the minority is small, which makes the selected class  label
+unreliable.
+In order to further reduce the impurity, new testing information is
+necessary.
+Testing  a morpheme sequence longer than two morphemes is one such possibility. Another
+solution may be
+to improve the set of orthographic expressions for the attribute
+values. 
+Therefore it is desirable to develop a method for automatic
+acquisition of morphemes
+whose orthographic expressions are effective in bunsetsu boundary
+detection.
+
+\acknowledgment
+
+The authors are grateful to the anonymous referees for the detailed and
+constructive comments which were useful to improve the paper.
+
+\begin{thebibliography}{19}
+\bibitem{Abe90} Abe, M.,  {\it et al.}(1990).\ \ {\it Speech Database User's Manual.}
+ {\rm ATR Interpreting Telephony Research Laboratories}. (in
+Japanese).
+\bibitem{Breiman84} Breiman, L., Friedman, J. H., Olshen, R. A. and Stone,
+C. J.(1984).\ \ {\it Classification  and Regression Trees.} {\rm
+Chapman \& Hall}.
+\bibitem{EDR96} EDR(1996). \ \ {\it Specification of EDR Electronic Dictionary}
+\,{\rm Ver.1.5.}\,
+Japan Electronic Dictionary Research Institute. (in Japanese).
+\bibitem{Fujio97} Fujio, M. and Matsumoto, Y.(1997).\ \ ``Statistical
+Japanese Dependency Structure Analysis Using an
+EDR Bracketed Corpus.''
+{\rm In} {\it Proc. of Symposium on Applications of EDR Electronic
+Dictionary}, 49-55. (in Japanese).
+\bibitem{Fukunaga90} Fukunaga, K.(1990). \ {\it Introduction to Statistical Pattern
+Recognition(2nd edition).}
+{\rm Academic Press}. 
+\bibitem{Gelfand91} Gelfand, S. B., Ravishankar, C. S. 
+and Delp, E. D.(1991).\ ``An Iterative Growing and Pruning Algorithm
+for Classification Tree Design." {\it IEEE Trans. PAMI}, 
+13(2), 163-174.
+\bibitem{Nagao84} Nagao, M. Ed.(1984).\ \ {\it Japanese Language Information
+Processing.} {\rm The Institute of Electronics, Information and
+Communication Engineers}. (in Japanese).
+\bibitem{Ozeki97} Ozeki, K.(1997). ``
+Performance Comparison of Recognition Systems Based on the a
+Posteriori Probability of the True Recognition Rate.''
+{\it Technical Report of IEICE.},\ SP97-62, 35-42.(in
+Japanese).
+\bibitem{Safavian91} Safavian, S. R. and Landgrebe, D.(1991). ``
+A Survey of Decision Tree Classifier Methodology.''{\it IEEE Trans. on 
+Systems, Man, and Cybernetics}, 21(3), 660-674.
+\bibitem{Suzuki96} Suzuki, M.(1996). ``
+Japanese Sentence Segmentation Algorithm Using Character Patterns
+Based on the Statistical Investigation." 
+{\it IEICE Trans. on Information and Systems},
+J79-D-II(7), 1236-1243. (in Japanese).
+\bibitem{Zhang97} Zhang, Y. and Ozeki, K.(1997).\ ``Automatic Bunsetsu Segmentation of
+Japanese Sentences Using a Classification Tree
+.'' {\it Technical Report of Information Processing Society of Japan}, 
+97(85), 1-8. (in Japanese).
+
+\end{thebibliography}
+
+\begin{biography}
+
+\biotitle{}
+
+\bioauthor{Yujie Zhang}
+{
+Yujie Zhang received the B.E. degree from Northern-Jiaotong  University
+in 1983, and the M.E. degree from  Graduate School of Academia Sinica
+in 1986, both in computer science.
+From 1986 to 1992, she worked at  the Institute of Computing Technology,
+ Academia  Sinica,
+where she was involved in the development of a machine translation  system.
+ She received the 
+National Award for the Progress of Science and Technology in China in 1995.
+She is currently pursuing the doctoral degree at Department of Computer
+ Science and
+ Information Mathematics, the  University of Electro-Communications.
+Her current research interests include corpus linguistics and  natural
+ language processing.
+}
+
+\bioauthor{Kazuhiko Ozeki}
+{Kazuhiko Ozeki received the B.E. degree in electrical engineering
+from the University of Tokyo in  1965. He joined  Japan Broadcasting
+ Corporation in  1965. He was
+a visiting researcher at Department of Phonetics and Linguistics,
+ the University of Edinburgh in 1968-1969.
+He received the Dr. Eng. degree from the University of Tokyo in 1977.
+Since 1989, he has been a professor of applied computer science
+ at Department of Computer Science and Information Mathematics,
+the  University of Electro-Communications. 
+ His research activities are in the areas of 
+ statistical methods for spoken language processing 
+and theory of pattern recognition and learning. He received the Paper Award 
+from IEICE in 1984. He is a member of IEICE, IPSJ, ASJ, and IEEE.
+}
+
+\bioreceived{Received}
+\biorevised{Revised}
+\biorerevised{Rerevised}
+\bioaccepted{Accepted}
+
+\end{biography}
+
+\end{document}
+
+

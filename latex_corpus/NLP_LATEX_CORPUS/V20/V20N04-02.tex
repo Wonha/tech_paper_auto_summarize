@@ -1,0 +1,876 @@
+\documentclass[english]{jnlp_1.4}
+
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvips]{graphicx}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+\usepackage{amsmath}
+\usepackage{array}
+
+\usepackage{algorithm2e}
+\newcommand{\phrase}[1]{}
+\SetAlgoCaptionSeparator{}
+\renewcommand{\shortcite}{}
+
+\Volume{20}
+\Number{4}
+\Month{September}
+\Year{2013}
+
+\received{2013}{1}{30}
+\revised{2013}{3}{29}
+\accepted{2013}{4}{30}
+
+\setcounter{page}{563}
+
+\etitle{How to Translate Dialects: \\ A Segmentation-Centric Pivot Translation Approach}
+\eauthor{Michael Paul\affiref{AFFI} \and Andrew Finch\affiref{AFFI} \and Eiichiro Sumita\affiref{AFFI}} 
+\eabstract{
+ Recent research on multilingual statistical machine translation (SMT) focuses on the usage of {\em pivot languages}
+ in order to overcome resource limitations for certain language pairs. 
+ This paper proposes a new method to translate a {\em dialect} language into a foreign
+ language by integrating transliteration approaches based on Bayesian alignment (BA) models
+ with pivot-based SMT approaches.
+ The advantages of the proposed method with respect to standard SMT approaches are threefold:
+ (1) it uses a standard language as the pivot language and acquires knowledge about the relation between
+     dialects and a standard language automatically,
+ (2) it avoids segmentation mismatches between the input and the translation model by mapping
+     the character sequences of the dialect language to the word segmentation of the standard language, and
+ (3) it reduces the translation task complexity by using monotone decoding techniques.
+ Experiment results translating five Japanese dialects (Kumamoto, Kyoto, Nagoya, Okinawa, Osaka)
+ into four Indo-European languages (English, German, Russian, Hindi) and two Asian languages (Chinese, Korean)
+ revealed that the proposed method improves the translation quality of dialect translation tasks
+ and outperforms standard pivot translation approaches concatenating SMT engines for the majority
+ of the investigated language pairs.
+}
+\ekeywords{Dialect Languages, Pivot Translation, Word Segmentation}
+
+\headauthor{Paul et al.}
+\headtitle{How to Translate Dialects}
+
+\affilabel{AFFI}{}{National Institute of Information and Communications Technology}
+
+\begin{document}
+
+\maketitle
+
+
+\section{Introduction}
+\label{sec:intro}
+
+ The translation quality of SMT approaches heavily depends on the amount and coverage of the bilingual language
+ resources available to train the statistical models.
+ There are several data collection initiatives\footnote{LDC: http://www.ldc.upenn.edu, ELRA: http://www.elra.info}
+ amassing and distributing large amounts of textual data.
+ For frequently used language pairs like {\em French-English}, large text data sets are readily available. 
+ However, for less frequently used language pairs, only a limited amount of resources are available, if any at all.
+
+ In order to overcome language resource limitations, recent research on multilingual SMT
+ focuses on the use of {\em pivot languages} \shortcite{lrec06:gispert,hlt07:utiyama,acl07:wu,iwslt08:TP:bertoldi}.
+ Instead of a direct translation between two languages where only a limited amount of bilingual resources is available,
+ a {\em pivot translation} approach makes use of a third language that is more appropriate due to the availability
+ of more bilingual corpora and/or its relatedness to the source/target language.
+ In most of the previous research, {\em English} has been the pivot language of choice due to the richness
+ of available language resources. However, recent research on pivot translation has shown that
+ the usage of non-English pivot languages can improve translation quality in certain language pairs,
+ especially when translating from or into Asian languages \shortcite{naaclhlt09:paul}.
+
+ This paper focuses on the translation of {\em dialects}, i.e., a variety of a language that is characteristic of a particular
+ group of the language's speakers, into a foreign language. A {\em standard dialect} (or {\em standard language})
+ is a dialect that is recognized as the ``correct'' spoken and written form of the language.
+ Dialects typically differ in terms of morphology, vocabulary and pronunciation.
+ Various methods have been proposed to measure relatedness between dialects using phonetic distance measures \shortcite{nerbonne:1997}, 
+ string distance algorithms \shortcite{heeringa:2006,scherrer:2007}, or statistical models \shortcite{chitturi:2008}.
+
+ In data-driven natural language processing (NLP) applications like machine translation (MT),
+ linguistic resources and tools usually are available for the standard language, but not for dialects.
+ In order to create dialect language resources, previous research utilized explicit knowledge about the relation
+ between a standard language and a dialect using rule-based and statistical models \shortcite{habash:2005,sawaf:2010}.
+ \shortcite{naaclhlt12:zbib} addresses the data sparseness problem by creating bilingual language resources using crowdsourcing
+ where dialectic sentence were selected from Arabic web resources and translated by workers of Amazon's Mechanical Turk.
+
+ Moreover, applying the linguistic tools for a standard language to dialect
+ resources is often insufficient. For example, the task of {\em word segmentation}, i.e., the identification of word boundaries in continuous text,
+ is one of the fundamental preprocessing steps of MT applications, especially for languages like Japanese that do not use a white space character
+ to separate meaningful word units.
+ However, the application of a linguistically motivated standard language word segmentation tool to a dialect corpus results in poor
+ segmentation quality due to morphological differences in verbs and adjectives, thus resulting in a lower translation quality for
+ SMT systems that acquire the translation knowledge automatically from a parallel text corpus \shortcite{lncs:2011:paul}.
+ 
+     This paper extends work described in \cite{emlp:2011:paul} and makes the following novel contributions: 
+ \begin{itemize}
+   \item it reduces the data sparseness problem of direct translation approaches by translating
+         a resource-limited dialect language into a foreign language by using the resource-richer
+         standard language as the pivot language; 
+   \item it is language independent and acquires knowledge about the relationship between the standard language
+         and the dialect automatically; 
+   \item it avoids segmentation mismatches between the input and the translation model by\linebreak mapping
+         the dialect input to the word segmentation of the standard language;
+   \item it investigates in detail the dependency of the proposed pivot-based dialect translation method
+         on the amount of bilingual resources for a large variety of Japanese dialects. 
+  \end{itemize}
+
+ The details of the proposed dialect translation method are described in Section~\ref{sec:dialect}.
+ Experiments were carried out for the translation of five Japanese dialects (Kumamoto, Kyoto, Nagoya, Okinawa, Osaka)
+ into four Indo-European languages (English, German, Russian, Hindi) and two Asian languages (Chinese, Korean).
+ The utilized language resources and the outline of the experiments are summarized in Section~\ref{sec:experiments}.
+ The results reveal that the integration of Bayesian alignment models with pivot-based SMT
+ (1) is a robust method overcoming the data sparseness issues of direct translation approaches,
+ (2) outperforms standard pivot translation approaches concatenating SMT engines that translate the dialect
+     into the standard language and the stand\-ard language MT output into the foreign language, and 
+ (3) improves the translation quality of dialect-to-target language translation tasks for the majority of
+     the investigated language pairs.
+ 
+
+
+\section{Dialect Translation}
+\label{sec:dialect}
+
+ Spoken language translation technologies attempt to bridge the language barriers between
+\linebreak
+ people with different native languages who each want to engage in conversation by using
+ their mother-tongue.
+ For standard languages, multilingual speech translation services
+ like the\linebreak \textit{VoiceTra}\footnote{http://mastar.jp/translation/voicetra-en.html} system for travel conversations
+ are readily available.
+ However, such technologies are not capable of dealing with dialect languages due to
+ the lack of language resources and the high development costs of building
+ speech translation components for a large number of dialect variations.
+
+ In order to reduce such problems, the dialect translation method proposed in this paper integrates
+ two different methods of transducing a given dialect input sentence into a foreign language.
+ In the first step, the close relationship between the local and standard language is exploited
+ to directly map character sequences in the dialect input to word segments
+ in the standard language using a Bayesian alignment approach, details of which are given in Section~\ref{sec:dialect:segmentation}.
+ The proposed transliteration method is described in Section~\ref{sec:dialect:transduct}.
+ The advantages of the proposed Bayesian alignment approach are twofold: it reduces the translation complexity
+ and it avoids segmentation inconsistencies between the input and the translation models.
+ In the second step, a state-of-the-art phrase-based SMT system trained on a larger amount of bilingual data
+ is applied to obtain high-quality foreign language translations as described in Section~\ref{sec:dialect:pivot}.
+
+
+
+\subsection{Bayesian Alignment}
+\label{sec:dialect:segmentation}
+
+ The method for mapping the dialect sentences into the standard language word segments
+ is a direct character-to-character mapping between the languages. This process is known as {\em transliteration}.
+ Many transliteration methods have previously been proposed, including methods based on string-similarity measures
+ between character sequences \shortcite{noeman-madkour:2010:NEWS} or generation-based models
+ \shortcite{Lee:2003:AET,jiampojamarn-EtAl:2010:NEWS}.
+
+ In this paper, we use a generative Bayesian model \shortcite{DeNero-Bouchard-Klein:2008:SamplingAlignment,iwslt10:TP:finch},
+ which offers several benefits over standard transliteration techniques:
+ (1) the technique has the ability to train models whilst avoiding over-fitting the data,
+ (2) compact models that have only a small number of well-chosen parameters are constructed,
+ (3) the underlying generative transliteration model is based on the joint source-channel model \shortcite{Li_joint_04}, and
+ (4) the model is symmetric with respect to source and target language. 
+
+ Intuitively, the model described in Equation~\ref{eqn:dpm} has two basic components: a model for generating a transliteration unit,
+ i.e., a bilingual character sequence pair, that has already been generated at least once before, and a second model that assigns
+ a probability to a transliteration unit that has not yet been produced.
+ Ideally, to encourage the re-use of model parameters, the probability of generating a novel bilingual sequence pair
+ should be considerably lower than the probability of generating a previously observed sequence pair. 
+ The probability distribution over these transliteration units (including an infinite number of unseen sequence pairs)
+ can be learned directly from unlabeled data by Bayesian inference of the hidden alignment of the corpus. 
+
+ The alignment process is driven by a Dirichlet process, which is a stochastic process defined over a set {\em S}
+ (in our case, the set of all possible bilingual sequence pairs) whose sample path is a probability distribution on {\em S}. 
+ The underlying stochastic process for the generation of a corpus composed of bilingual phrase pairs ($\phrase{s}_{k}$,$\phrase{t}_{k}$)
+ can be written in the following form:
+\begin{align}
+   G|_{\alpha,G_0} & \sim  DP(\alpha, G_0) \nonumber \\
+   (\phrase{s}_{k}, \phrase{t}_{k})|G & \sim  G
+\end{align}
+
+ $G$ is a discrete probability distribution over all the bilingual sequence pairs according to
+ a {\em Dirichlet process prior} with a {\em base measure} $G_0$ and concentration parameter $\alpha$.
+ The parameter $\alpha > 0$ controls the variance of $G$;
+ intuitively, the larger $\alpha$ is, the more similar $G_0$ will be to $G$.
+
+ For the {\em base measure} that controls the generation of novel sequence pairs,
+ we use a joint spelling model that assigns probability to new sequence pairs
+ according to the following joint distribution:
+\begin{align}
+   G_0((\phrase{s}, \phrase{t})) & = p(|\phrase{s}|)p(\phrase{s}||\phrase{s}|) \times p(|\phrase{t}|)p(\phrase{t}||\phrase{t}|) \nonumber \\
+	& = \frac{{\lambda}_{s}^{|\phrase{s}|}}{|\phrase{s}|!} e^{-{\lambda}_{s}}v_{s}^{-|\phrase{s}|} 
+	\times \frac{{\lambda}_{t}^{|\phrase{t}|}}{|\phrase{t}|!} e^{-{\lambda}_{t}}v_{t}^{-|\phrase{t}|}
+\end{align}
+ where $|\phrase{s}|$ and $|\phrase{t}|$ are the length in characters of the source and target sides of the bilingual
+ sequence pair; $v_{s}$ and $v_{t}$ are the vocabulary sizes of the source and target languages respectively;
+ and $\lambda_{s}$ and $\lambda_{t}$ are the expected 
+lengths\footnote{Following \shortcite{xu:08}, we assign the parameters $\lambda_{s}$, $\lambda_{t}$ and $\alpha$, the values 2, 2 and 0.3 respectively.}
+ of the source and target.
+ According to this model, source and target sequences are generated independently: in each case the sequence length is
+ chosen from a Poisson distribution, and then the sequence itself is generated given the length\footnote{Note that this model is able to assign a probability to arbitrary bilingual sequence pairs of any length in the source and target sequence, but favors shorter sequences in both.}.
+
+ The generative model is given in Equation~\ref{eqn:dpm}. The equation assigns a probability to the $k^\mathrm{th}$ bilingual
+ sequence pair $(\phrase{s}_k, \phrase{t}_k)$ in a derivation of the corpus, given all of the other sequence pairs in the history so far
+ $(\phrase{s}_{-k}, \phrase{t}_{-k})$. Here $-k$ is read as: ``up to but not including $k$''.
+\begin{align}
+   & p((\phrase{s}_k, \phrase{t}_k)) | (\phrase{s}_{-k}, \phrase{t}_{-k})) \nonumber \\
+   & \quad = \frac{N( (\phrase{s}_k, \phrase{t}_k) ) + \alpha G_0( (\phrase{s}_k, \phrase{t}_k) )}{N + \alpha}
+   \label{eqn:dpm}
+\end{align}
+
+ In this equation, $N$ is the total number of bilingual sequence pairs generated so far
+ and $N((\phrase{s}_k, \phrase{t}_k))$ is the number of times the sequence pair
+ $(\phrase{s}_k, \phrase{t}_k)$ has occurred in the history.
+ $G_0$ and $\alpha$ are the base measure and concentration parameter as before.
+
+ We used a blocked version of a Gibbs sampler for training, which is similar
+ to that of\linebreak \shortcite{mochihashi:09}. We extended their forward filtering/backward sampling (FFBS)
+ dynamic programing algorithm in order to deal with bilingual segmentations (see Algorithm~\ref{algo:gibbs}). 
+
+ \begin{algorithm}[t]
+   \footnotesize
+   \KwIn{Random initial corpus segmentation}
+   \ForEach{iter=1 to NumIterations} {
+   \ForEach{ bilingual sequence-pair $w$ $\in$ randperm$( \mathcal{W} )$ } {
+   \ForEach{alignment ${\gamma}_i$ of $w$} {
+            Compute probability
+            $p({\gamma}_i | h )$ \\
+            where $h$ is the set of data (excluding $w$) and its hidden alignment 
+            }
+    Sample an alignment $\gamma_i$ from the distribution $p({\gamma}_i | h )$ \\
+    Update counts
+    }
+   }
+   \KwOut{Unsupervised alignment of the corpus according to the model \\ \hfill \\}
+   \caption{Blocked Gibbs Sampling} 
+   \label{algo:gibbs} 
+ \end{algorithm}
+
+ We found the sampler converged rapidly without annealing. The number of iterations was set by
+ hand after observing the convergence behavior of the algorithm in pilot experiments.
+ We used a value of 75 iterations through the corpus in all experiments reported in this paper.
+
+
+
+\subsection{Dialect-to-Standard Language Transduction}
+\label{sec:dialect:transduct}
+
+ A Bayesian segmentation model is utilized to transform unseen dialect sentences into tokens in 
+ the standard language by using the joint-source channel framework proposed by \shortcite{Li_joint_04}.
+ The joint-source channel model, also called the {\em n-gram transliteration model}, is a joint probability model
+ that captures information on how the source and target sentences can be generated simultaneously
+ using transliteration pairs, i.e., the most likely sequence of source characters and target words
+ according to a joint language model built from the alignment of Bayesian model.
+
+ Suppose that we have a dialect sentence $\sigma=l_{1}l_{2} \ldots l_{L}$ and a standard language sentence
+ $\omega=s_{1}s_{2} \ldots s_{S}$ where $l_{i}$ are dialect characters, $s_{j}$ are word tokens of the standard language,
+ and there exists an alignment $\gamma= \langle l_{1} \ldots l_{q}, s_{1}\rangle ,\ldots,\langle l_{r} \ldots l_{L}, s_{S}\rangle$,
+ $1 \le q < r \le L$ of $K$ transliteration units.
+ Then, an n-gram transliteration model is defined as the transliteration probability of a transliteration pair $\langle l,s\rangle_{k}$
+ depending on its immediate $n$ preceding transliteration pairs:
+\begin{equation}
+    P(\sigma,\omega,\gamma) = \prod^{K}_{k=1} P(\langle l,s\rangle_{k} \mid \langle l,s\rangle^{k-1}_{k-n+1} )
+   \label{eqn:jsct}
+\end{equation}
+
+ Equation~\ref{eqn:jsct} only considers many-to-one mappings of dialect characters to standard language words.
+ The case of many-to-zero mapping is implicitly covered, because multiple source dialect characters,
+ that would be explicitly aligned to nothing using a many-to-zero mapping model,
+ can be aligned to a single target word. Therefore, we do not explicitly model these mappings.
+ The case of many-to-many mappings is more interesting, although computationally
+ more expensive. For the given task, however, the many-to-one mapping approach should
+ be sufficient as dialect character sequences are mapped to standard language words in a monoton way.
+ For more complex tasks, however, it would be interested to investigate the potential gain of
+ integrating many-to-many mappings.
+
+ For the experiments carried out in this paper, we implemented the joint-source channel model approach as
+ a weighted finite state transducer (FST) using the {\em OpenFst} toolkit \shortcite{openfst}.
+ A language model is build from the Bayesian alignments using the SRILM toolkit \shortcite{Stolcke02},
+ whereby $n$ was set to 6 for all experiments reported in Section~\ref{sec:experiments}.
+ It is used directly to create an FST that takes a sequence of dialect characters as its input
+ and outputs a sequence of transliteration units from which the standard language segments are extracted.
+
+
+
+\subsection{Pivot-based Statistical Machine Translation}
+\label{sec:dialect:pivot}
+
+ Recent research on speech translation focuses on corpus-based approaches, and in particular on SMT,
+ which is a machine translation paradigm where translations are generated on the basis of statistical
+ models whose parameters are derived from the analysis of bilingual text corpora. SMT formulates the problem of translating
+ a source language sentence $\mathit{src}$ into a target language sentence $\mathit{trg}$ as a maximization problem
+ of the conditional probability:
+\begin{equation}
+  \mathit{argmax}_\mathit{trg} \ p(\mathit{src}|\mathit{trg}) * p(\mathit{trg})
+\end{equation}
+where $p(\mathit{src}|\mathit{trg})$ is called a {\em translation model} ($TM$) and represents the generation probability from $\mathit{trg}$ into $\mathit{src}$,
+ and $p(\mathit{trg})$ is called a {\em language model} ($LM$) and represents the likelihood of the target language \shortcite{Brown_1993}.
+ During the translation process ({\em decoding}), a score based on the statistical model probabilities is assigned
+ to each translation hypothesis and the one that gives the highest probability is selected as the best translation.
+
+ The translation quality of SMT approaches heavily depends on the amount and coverage of the bilingual language
+ resources available to train the statistical models. In the context of dialect translation, where only
+ few bilingual language resources (if any at all) are available for the dialect and the foreign language,
+ only a relatively low translation quality can be obtained.
+ In order to obtain better translations, we apply a {\em Pivot translation} approach that translates
+ from a source language (SRC) to a target language (TRG) through an intermediate {\em pivot} (or {\em bridging})
+ {\em language} (PVT). In this paper, we select the standard language as the pivot language.
+
+ Within the SMT framework, the following coupling strategies have already been investigated:
+ \begin{enumerate}
+   \item {\em cascading of two translation systems} where the first MT engine translates the source language input into the pivot language
+         and the second MT engine takes the obtained pivot language output as its input and translates it into the target language.
+   \item {\em pseudo corpus} approach that (a) creates a ``noisy'' SRC-TRG parallel corpus by translating the pivot language parts
+         of the SRC-PVT training resources into the target language using an SMT engine trained on the PVT-TRG language resources
+         and (b) directly translates the source language input into the target language using a single SMT engine that is trained
+         on the obtained SRC-TRG language resources \cite{lrec06:gispert}.
+   \item {\em phrase-table composition} in which the translation models of the SRC-PVT and PVT-TRG translation engines are combined
+         to a new SRC-TRG phrase-table by merging SRC-PVT and PVT-TRG phrase-table entries with identical pivot language phrases
+         and multiplying posterior probabilities \cite{hlt07:utiyama,acl07:wu}.
+   \item {\em bridging at translation time} where the coupling is integrated into the SMT decoding process by modeling the pivot text
+         as a hidden variable and assuming independence between source and target language sentences \cite{iwslt08:TP:bertoldi}. 
+ \end{enumerate}
+
+ For the experiments reported in this paper, we utilized the {\em cascading} approach because it is computationally less expensive
+ in terms of training time, but still performs well compared to the other pivot translation approaches.
+ In the first step, the dialect input is transcribed into the standard language as described in Section~\ref{sec:dialect:transduct}.
+ Next, the obtained standard language MT output is translated into the target language using SMT models trained on larger language resources.
+
+
+
+\section{Experiments}
+\label{sec:experiments}
+
+ The effects of integrating Bayesian alignment models with pivot-based SMT are investigated
+ using the {\em Basic Travel Expressions Corpus} (BTEC), which is a collection of sentences that bilingual
+ travel experts consider useful for people traveling abroad \shortcite{Kikui06}.
+ For the dialect translation experiments, we selected Japanese (ja)
+ and the dialects from the Kumamoto (ja$_{ku}$), Kyoto (ja$_{ky}$), Nagoya (ja$_{na}$), Okinawa (ja$_{ok}$), and Osaka (ja$_{os}$) areas.
+ All dialect sentences were created by rewriting the same standard Japanese sentences.
+ Moreover all dialects share the same Japanese writing system that combines logographic Chinese characters and two syllabic scripts,
+ i.e., {\em hiragana} (used for native Japanese words) and {\em katakana} (used for foreign loanwords or onomatopoeia).
+ The language spoken in the Tokyo area is often considered as the standard Japanese form. Kyoto and Osaka dialect are spoken in the Kansai area.
+ In phonological terms, the Osaka dialect is characterized by strong consonants and the tendency to lengthen vowels at the end of nouns.  
+ Kyoto-ben is a soft and melodic variant using sentence endings like  ``{\em taharu}'' or ``{\em teharu}'' that are often considered to be more formal.
+ The dialect spoken in Nagoya is similar to the Osaka dialect in intonation but differs in accent, where unique suffixes are often attached to the end of sentences
+ to express emphasis (``{\em te}''), surprise (``{\em gaya}''), etc. The dialect spoken in Okinawa is said to comprise a separate branch of the Japonic language family.
+ Examples of the investigated Japanese dialects are given in Table~\ref{tab:samples}.
+
+\begin{table}[b]
+  \caption{Japanese Dialect Examples}
+  \label{tab:samples}
+\input{02table01.txt}
+ \end{table}
+ \begin{table}[b]
+  \caption{Language Resources}
+  \label{tab:corpus}
+\input{02table02.txt}
+\end{table}
+
+
+
+ For the target language, we investigated four Indo-European languages, i.e., English (en), German (de), Russian (ru), and Hindi (hi)
+ and two Asian languages, i.e., Chinese (zh) and Korean (ko).
+ The corpus statistics are summarized in Table~\ref{tab:corpus}, where {\em Voc} specifies the vocabulary size and {\em Len} the average sentence
+ length of the respective data sets.
+ These languages differ largely in word order (\textit{Order}: subject-object-verb ({\em SOV}), subject-verb-object (\textit{SVO})),
+ segmentation unit ({\em Unit}: phrase, word, none), and degree of inflection ({\em Infl}: high, moderate, light).
+
+ The corpora were preprocessed using language-specific word segmentation tools
+ that are widely-accepted within the MT community for languages that do not use white space to separate word/phrase tokens,
+ i.e., CHASEN\footnote{http://chasen-legacy.sourceforge.jp} for Japanese and ICTCLAS\footnote{http://www.nlp.org.cn} for Chinese.
+ For all other languages, simple tokenization tools were applied.
+ All data sets were processed case-sensitive with punctuation marks preserved.
+
+ The language resources were randomly split into three subsets for the evaluation of translation quality
+ ({\em eval}, 1k sentences), the tuning of the SMT model weights ({\em dev}, 1k sentences) and
+ the training of the statistical models ({\em train}, 160k sentences).
+ For the SRC-PVT translation engines, we distinguished two data set conditions:
+ (1) {\em\small LARGE}, i.e., the full 160k corpus, and
+ (2) {\em\small SMALL}, i.e., a subset of 20k sentences to simulate the resource-limited language pair scenario.
+ In order to avoid word segmentation errors from the standard language segmentation tool being applied to dialect resources,
+ these models are trained on bitext, where the local dialect source sentence is characterized and the target language is
+ segmented using language-specific segmentation tools. The PVT-TRG translation engines were trained on the full (=160k) corpus.
+
+ For the training of the SMT models, standard word alignment \shortcite{Och03}
+ and language modeling \shortcite{Stolcke02} tools were used.
+ Minimum error rate training (MERT) was used to tune the decoder's parameters on the {\em dev} set
+ using the technique proposed in \shortcite{Och03}.
+ For the translation, an inhouse multi-stack phrase-based decoder was used.
+ For the evaluation of translation quality, we applied the standard automatic evaluation metric
+ BLEU \shortcite{Papineni02}, which calculates the geometric mean of n-gram precision by the system output with respect
+ to reference translations with the addition of a brevity penalty to punish short sentences.
+ Scores range between 0 (worst) and 1 (best). For the experiments reported here, single translation references were used.
+
+ For both, SMT-based and BA-based, MT approaches, unknown source language words (\textit{OOV}) are simply passed through into the target language output.
+ For closely related languages and for certain types of OOVs like {\em person names}, the untranslated source language word might help increasing the acceptability
+ of the translation, but in general an untranslated Japanese language word will result in a lower automatic evaluation score for target languages with different writing schemes.
+ Therefore, unknown words are kept in the MT output for all dialect to standard Japanese transduction tasks reported in this paper.
+ However, for all other translation tasks, unknown words are marked and removed from the translation output prior to the MT evaluation.
+
+ In order to decide whether the translation output quality of the proposed method significantly differs from standard SMT approaches,
+ we used the {\em bootStrap}\footnote{http://projectile.sv.cmu.edu/research/public/tools/bootStrap/tutorial.htm}
+ method that (1) performs a random sampling with replacement from the evaluation data set,
+ (2) calculates the respective evaluation metric score of each engine for the sampled
+ test sentences and the difference between the two MT system scores, (3) repeats  the sampling/scoring step
+ iteratively, and (4) applies the {\em Student's t-test} at a significance level of 95\% confidence
+ to test whether the score differences are significant \cite{Zhang04}. For all experiments reported in this section,
+ score differences that are not statistically significant are marked with an asterisk (${}^{*}$).
+
+ In order to get an idea of how diverse the investigated dialect languages are,
+ we trained a standard 5-gram language model on the 160k training data sets.
+ Table~\ref{tab:perpl} lists the {\em language perplexity} and the {\em total entropy}, i.e., the entropy multiplied
+ by the number of words of the evaluation data set. The total entropy figures represent the entropy of the whole corpus
+ and the obtained figures indicate that the Kumamoto and Kyoto dialect translation tasks are easier than the
+ Osaka, Nagoya, and Okinawa tasks which is confirmed by the experimental results summarized
+ in the following sections.
+
+\begin{table}[t]
+  \caption{Translation Task Complexity}
+  \label{tab:perpl}
+\input{02table03.txt}
+ \end{table}
+ 
+
+
+\subsection{Direct Translation}
+\label{sec:experiments:direct}
+
+ Table~\ref{tab:eval:SMT} summarizes the translation performance of the SMT engines used to directly translate the
+ source language dialects into the target language. For the large training data condition (160k), the highest BLEU scores
+ are obtained for the translation of Japanese into Korean followed by English, German, and Russian with Chinese and Hindi
+ seeming to be the most difficult translation tasks.
+ For the small training data condition (20k), the difficulty levels of the translation tasks are confirmed aside from
+ the Chinese translations, which obtained relatively high scores for the resource-limited condition, indicating that
+ fewer gains in translation quality are to be expected for direct translations of dialect sentences into Chinese
+ compared to other translation directions if the amount of training resources is increased further.
+ For the Asian target languages, gains of 8$\sim$14 BLEU percentage points are obtained when increasing the training data size from 20k to 160k.
+ However, an even larger increase (24$\sim$27 BLEU percentage points) in translation quality can be seen for all Indo-European target languages.
+ Therefore, larger gains are to be expected when the pivot translation framework is applied to the translation of dialect languages
+ into Indo-European languages compared to Asian target languages.
+
+ Comparing the evaluation results of the standard and the dialect languages, the highest scores are achieved
+ for standard Japanese for all target languages, showing the difficulty in translating a dialect input
+ into a foreign language using conventional SMT approaches. Moreover, the Kumamoto and Kyoto dialects seem to be the easiest tasks,
+ followed by the Osaka and the Nagoya dialects. The lowest BLEU scores were obtained for the translation of the Okinawa dialect.
+
+\begin{table}[t]
+  \caption{SMT-based Direct Translation Quality}
+  \label{tab:eval:SMT}
+\input{02table04.txt}
+\end{table}
+
+
+\subsection{SMT-based Pivot Translation}
+\label{sec:experiments:pivot:smt}
+
+ The SMT engines of Table~\ref{tab:eval:SMT} are then utilized within the framework of the SMT-based pivot translation
+ by (1) translating the dialect input into the standard language using the SMT engines trained on the small as well as the
+ large data set conditions and (2) translating the standard language MT output into the foreign language using the SMT engines
+ trained on the full corpus (160k).
+ The results of the SMT-based pivot translation experiments are summarized in Table~\ref{tab:eval:SMT:pivot}.
+
+ Large gains of 6$\sim$25 BLEU percentage points compared to the direct translation results are obtained for all investigated
+ language pairs for the small data set condition, showing the effectiveness of pivot translation approaches for resource-limited language pairs.
+ The largest gains are obtained for ja$_{ku}$, followed by ja$_{ky}$, ja$_{na}$, ja$_{os}$, and ja$_{ok}$.
+
+ \begin{table}[t]
+  \caption{SMT-based Pivot Translation Quality}
+  \label{tab:eval:SMT:pivot}
+\input{02table05.txt}
+ \end{table}
+
+ Moreover, the gains of the pivot translation approach are also transferred to the large data set condition for the majority of language pairs,
+ although the gains are much smaller, e.g., for Hindi, an improvement of 4 BLEU percentage points was obtained,
+ but for Korean, the gain was less than 1 BLEU percentage point. 
+
+
+\subsection{Joint Source-Channel Model Built from Bayesian Alignment}
+\label{sec:experiments:ba}
+
+The proposed method differs from the standard pivot translation approach in that a joint-source channel transducer trained
+from a Bayesian alignment of the training corpus is used to transliterate the dialect input into the standard
+language, as described in Section~\ref{sec:dialect:transduct}.
+This process generates sequences of transliteration units monotonically.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{20-4ia2f1.eps}
+\end{center}
+\caption{Dialect-to-Standard Language Transduction}
+\label{fig:eval:loc2std}
+\end{figure}
+
+Similarly, the decoding process of the SMT approaches can also be carried out monotonically. In order to investigate
+the effect of word order differences for a given dialect-to-standard language transduction task,
+Figure~\ref{fig:eval:loc2std} compares the translation performance of SMT approaches with\linebreak (\textit{reorder})
+and without ({\em monotone}) reordering to the monotone Bayesian alignment approach ({\em BA}).
+Only minor differences between both SMT decoding methods are obtained. This indicates that the grammatical structure
+of the dialect sentences and the standard language sentences are very similar, thus supporting the use of
+a monotone decoding strategy.
+
+The comparison of the SMT-based and the BA-based transduction of the dialect sentences into the standard language given in Figure~\ref{fig:eval:loc2std} shows
+that the Bayesian alignment approach outperforms the SMT approach significantly,
+gaining 1.9 (ja$_{ky}$) / 2.2 (ja$_{os}$) / 3.2 (ja$_{ku}$) / 6.1 (ja$_{ok}$) / 7.4 (ja$_{na}$) BLEU percentage points in the small data set condition.
+For the large data set condition, similar gains for  ja$_{ky}$, ja$_{na}$, and ja$_{ok}$
+and even larger gains for ja$_{ky}$ and ja$_{os}$ were obtained, showing the robustness of the dialect-to-standard language transduction method. 
+
+
+
+\subsection{BA-based Pivot Translation}
+\label{sec:experiments:pivot:ba}
+
+The translation quality of the proposed method, i.e. the integration of the Bayesian alignment models into the pivot translation framework,
+are given in Table~\ref{tab:eval:proposed} where score differences that are not statistically significant are marked with an asterisk (${}^{*}$).
+The overall gains of the proposed method compared to (a) the direct translation approach (see Table~\ref{tab:eval:SMT}) and
+(b) the SMT-based pivot translation approach (see Table~\ref{tab:eval:SMT:pivot}) are summarized in Table~\ref{tab:eval:gains}.
+
+\begin{table}[b]
+  \caption{BA-based Pivot Translation Quality}
+  \label{tab:eval:proposed}
+\input{02table06.txt}
+\end{table}
+
+\begin{table}[t]
+  \caption{Gains of BA-based Pivot Translation}
+  \label{tab:eval:gains}
+\input{02table07.txt}
+\end{table}
+
+For the small data set condition, the results show that the BA-based pivot translation approach
+significantly outperforms the direct translation approach.
+Comparing the two pivot translation approaches, the proposed BA-based pivot translation method gains
+up to 0.8 BLEU percentage points over the concatenation of SMT engines for the Indo-European target languages
+where the proposed method is significantly better than the SMT-based pivot translation approach for the majority
+of the investigated language pairs. However, it is not able to improve the translation quality for translating into Korean and Chinese.
+
+Interestingly, the SMT-based pivot translation approach seems to be better for language pairs where only small relative gains from the pivot translation
+approach are achieved when translating the dialect into a foreign language. For example, Korean is a language closely related to Japanese and the SMT models
+from the small data condition already seem to cover enough information to successfully translate the dialect languages into Korean. In the case of Chinese, 
+the translation quality for even the large data condition SMT engines is relatively low. Therefore, improving the quality of the standard
+language input might have only a small impact on the overall pivot translation performance, if any at all.
+
+For the large data set condition, however, the proposed method outperforms the standard SMT-based pivot language approach
+for all investigated language pairs gaining up to 2.5 BLEU percentage points. These results indicate that although the proposed
+dialect-to-standard language transduction method may suffer from data sparseness issues, given a sufficient amount of data,
+a more accurate transduction of the dialect structure into the standard language can affect the overall translation performance positively.
+
+
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+In this paper, we proposed a novel dialect translation method for resource-limited dialect languages within the framework of
+pivot translation. In the first step, a Bayesian alignment model is learned to transduce character sequences in the dialect
+sentences into the tokens in the standard language. Next, an FST-based joint-source channel model is applied
+to unseen dialect input sentences to monotonically generate sequences of transliteration units from which the standard language
+segments are extracted. The obtained pivot sentence is then translated into the foreign language using a state-of-the-art phrase-based
+SMT engine trained on a large corpus.
+Experiments were carried out for the translation of five Japanese dialects into four Indo-European as well as into two Asian languages.
+
+The results revealed that the proposed dialect-to-standard language transduction method outperforms standard SMT-based translation approaches
+significantly, gaining 1.9$\sim$7.4 BLEU percentage points. The translation quality comparison of different dialects indicates that the more difficult
+the translation task, the larger the improvements of the Bayesian alignment-based transduction are expected to be.
+
+In addition, the pivot translation approach outperformed the direct translation of resource-low dialect-foreign language pairs due to the higher translation quality
+of the resource-rich standard-foreign MT outputs, especially for easier translation tasks with fewer error chaining side effects\footnote{Translation errors in the dialect-standard MT output causing a degradation in translation quality of the standard-foreign MT output}
+are expected to be.
+
+Although it might be difficult to transfer the gains obtained by the Bayesian alignment model to the outcomes for the pivot translation method
+for small data set conditions, significant improvements of up to 2.5 BLEU percentage points over standard SMT-based approaches were achieved 
+for the integration of the Bayesian alignment-based method into the pivot translation framework for all investigated language pairs.
+
+Further research will investigate features such as {\em language relatedness}, {\em structural differences},
+and {\em translation model complexity} to identify indicators of translation quality that could enable the selection
+of BA-based vs. SMT-based pivot translation approaches for specific language pairs to improve the overall system performance further.
+
+In addition, we would like to investigate the effects of using the proposed method for translating foreign languages
+into dialect languages. As the Bayesian alignment model is symmetric with respect to source and target language,
+we plan to reuse the models learned for the experiments presented in this paper and hope to obtain new insights into
+the robustness of the Bayesian alignment-based method when dealing with the noisy type of data that machine translation outputs.
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Allauzen, Riley, Schalkwyk, Skut, \BBA\ Mohri}{Allauzen
+  et~al.}{2007}]{openfst}
+Allauzen, C., Riley, M., Schalkwyk, J., Skut, W., \BBA\ Mohri, M. \BBOP
+  2007\BBCP.
+\newblock \BBOQ {OpenFst: A General and Efficient Weighted Finite-State
+  Transducer Library}.\BBCQ\
+\newblock In {\Bem Proceedings of the 9th International Conference on
+  Implementation and Application of Automata, (CIAA 2007)}, \lowercase{\BVOL}\
+  4783 of {\Bem Lecture Notes in Computer Science}, \mbox{\BPGS\ 11--23}.
+  Springer.
+\newblock {\tt http://www.openfst.org}.
+
+\bibitem[\protect\BCAY{Bertoldi, Barbaiani, Federico, \BBA\ Cattoni}{Bertoldi
+  et~al.}{2008}]{iwslt08:TP:bertoldi}
+Bertoldi, N., Barbaiani, M., Federico, M., \BBA\ Cattoni, R. \BBOP 2008\BBCP.
+\newblock \BBOQ {Phrase-Based Statistical Machine Translation with Pivot
+  Languages}.\BBCQ\
+\newblock In {\Bem Proceedings of the 5th International Workshop on Spoken
+  Language Translation (IWSLT)}, \mbox{\BPGS\ 143--149}, Hawaii, USA.
+
+\bibitem[\protect\BCAY{Brown, Pietra, Pietra, \BBA\ Mercer}{Brown
+  et~al.}{1993}]{Brown_1993}
+Brown, P., Pietra, S.~D., Pietra, V.~D., \BBA\ Mercer, R. \BBOP 1993\BBCP.
+\newblock \BBOQ {The Mathematics of Statistical Machine Translation: Parameter
+  Estimation}.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 19}  (2), \mbox{\BPGS\
+  263--311}.
+
+\bibitem[\protect\BCAY{Chitturi \BBA\ Hansen}{Chitturi \BBA\
+  Hansen}{2008}]{chitturi:2008}
+Chitturi, R.\BBACOMMA\ \BBA\ Hansen, J. \BBOP 2008\BBCP.
+\newblock \BBOQ {Dialect Classification for Online Podcasts Fusing Acoustic and
+  Language-based Structural and Semantic Information}.\BBCQ\
+\newblock In {\Bem {Proceedings of the 46th Annual Meeting of the Association
+  for Computational Linguistics - Human Language Technologies (ACL-HLT),
+  Companion Volume}}, \mbox{\BPGS\ 21--24}, Columbus, USA.
+
+\bibitem[\protect\BCAY{de~Gispert \BBA\ Marino}{de~Gispert \BBA\
+  Marino}{2006}]{lrec06:gispert}
+de~Gispert, A.\BBACOMMA\ \BBA\ Marino, J.~B. \BBOP 2006\BBCP.
+\newblock \BBOQ {Catalan-English Statistical Machine Translation without
+  Parallel Corpus: Bridging through Spanish}.\BBCQ\
+\newblock In {\Bem Proceedings of 5th International Conference on Language
+  Resources and Evaluation (LREC)}, \mbox{\BPGS\ 65--68}, Genoa, Italy.
+
+\bibitem[\protect\BCAY{DeNero, Bouchard-C\^{o}t\'{e}, \BBA\ Klein}{DeNero
+  et~al.}{2008}]{DeNero-Bouchard-Klein:2008:SamplingAlignment}
+DeNero, J., Bouchard-C\^{o}t\'{e}, A., \BBA\ Klein, D. \BBOP 2008\BBCP.
+\newblock \BBOQ {Sampling Alignment Structure under a Bayesian Translation
+  Model}.\BBCQ\
+\newblock In {\Bem Proceedings of Conference on Empirical Methods on Natural
+  Language Processing (EMNLP)}, \mbox{\BPGS\ 314--323}, Hawaii, USA.
+
+\bibitem[\protect\BCAY{Finch \BBA\ Sumita}{Finch \BBA\
+  Sumita}{2010}]{iwslt10:TP:finch}
+Finch, A.\BBACOMMA\ \BBA\ Sumita, E. \BBOP 2010\BBCP.
+\newblock \BBOQ {A Bayesian Model of Bilingual Segmentation for
+  Transliteration}.\BBCQ\
+\newblock In {\Bem Proceedings of the 7th International Workshop on Spoken
+  Language Translation (IWSLT)}, \mbox{\BPGS\ 259--266}, Paris, France.
+
+\bibitem[\protect\BCAY{Habash, Rambow, \BBA\ Kiraz}{Habash
+  et~al.}{2005}]{habash:2005}
+Habash, N., Rambow, O., \BBA\ Kiraz, G. \BBOP 2005\BBCP.
+\newblock \BBOQ {Morphological Analysis and Generation for Arabic
+  Dialects}.\BBCQ\
+\newblock In {\Bem Proceedings of the ACL Workshop on Computational Approaches
+  to Semitic Languages}, \mbox{\BPGS\ 17--24}, Ann Arbor, USA.
+
+\bibitem[\protect\BCAY{Heeringa, Kleiweg, Gosskens, \BBA\ Nerbonne}{Heeringa
+  et~al.}{2006}]{heeringa:2006}
+Heeringa, W., Kleiweg, P., Gosskens, C., \BBA\ Nerbonne, J. \BBOP 2006\BBCP.
+\newblock \BBOQ {Evaluation of String Distance Algorithms for
+  Dialectology}.\BBCQ\
+\newblock In {\Bem Proceedings of the Workshop on Linguistic Distances},
+  \mbox{\BPGS\ 51--62}, Sydney, Australia.
+
+\bibitem[\protect\BCAY{Jiampojamarn, Dwyer, Bergsma, Bhargava, Dou, Kim, \BBA\
+  Kondrak}{Jiampojamarn et~al.}{2010}]{jiampojamarn-EtAl:2010:NEWS}
+Jiampojamarn, S., Dwyer, K., Bergsma, S., Bhargava, A., Dou, Q., Kim, M.-Y.,
+  \BBA\ Kondrak, G. \BBOP 2010\BBCP.
+\newblock \BBOQ {Transliteration Generation and Mining with Limited Training
+  Resources}.\BBCQ\
+\newblock In {\Bem Proceedings of the 2010 Named Entities Workshop (NEWS)},
+  \mbox{\BPGS\ 39--47}, Uppsala, Sweden.
+
+\bibitem[\protect\BCAY{Kikui, Yamamoto, Takezawa, \BBA\ Sumita}{Kikui
+  et~al.}{2006}]{Kikui06}
+Kikui, G., Yamamoto, S., Takezawa, T., \BBA\ Sumita, E. \BBOP 2006\BBCP.
+\newblock \BBOQ {Comparative Study on Corpora for Speech Translation}.\BBCQ\
+\newblock {\Bem IEEE Transactions on Audio, Speech and Language}, {\Bbf 14}
+  (5), \mbox{\BPGS\ 1674--1682}.
+
+\bibitem[\protect\BCAY{Lee \BBA\ Chang}{Lee \BBA\ Chang}{2003}]{Lee:2003:AET}
+Lee, C.-J.\BBACOMMA\ \BBA\ Chang, J.~S. \BBOP 2003\BBCP.
+\newblock \BBOQ {Acquisition of English-Chinese Transliterated Word Pairs from
+  Parallel-Aligned Texts Using a Statistical Machine Transliteration
+  Model}.\BBCQ\
+\newblock In {\Bem Proceedings of the HLT-NAACL 2003 Workshop on Building and
+  Using Parallel Texts, Vol.~3}, \mbox{\BPGS\ 96--103}, Edmonton, Canada.
+
+\bibitem[\protect\BCAY{Li, Zhang, \BBA\ Su}{Li et~al.}{2004}]{Li_joint_04}
+Li, H., Zhang, M., \BBA\ Su, J. \BBOP 2004\BBCP.
+\newblock \BBOQ {A Joint Source-Channel Model for Machine
+  Transliteration}.\BBCQ\
+\newblock In {\Bem Proceedings of the 42nd ACL}, \mbox{\BPGS\ 159--166},
+  Barcelona, Spain.
+
+\bibitem[\protect\BCAY{Mochihashi, Yamada, \BBA\ Ueda}{Mochihashi
+  et~al.}{2009}]{mochihashi:09}
+Mochihashi, D., Yamada, T., \BBA\ Ueda, N. \BBOP 2009\BBCP.
+\newblock \BBOQ {Bayesian Unsupervised Word Segmentation with Nested Pitman-Yor
+  Language Modeling}.\BBCQ\
+\newblock In {\Bem Proceedings of the Joint Conference of the 47th Annual
+  Meeting of the ACL and the 4th International Joint Conference on Natural
+  Language Processing of the AFNLP (ACL-IJCNLP)}, \mbox{\BPGS\ 100--108},
+  Suntec, Singapore.
+
+\bibitem[\protect\BCAY{Nerbonne \BBA\ Heeringa}{Nerbonne \BBA\
+  Heeringa}{1997}]{nerbonne:1997}
+Nerbonne, J.\BBACOMMA\ \BBA\ Heeringa, W. \BBOP 1997\BBCP.
+\newblock \BBOQ {Measuring Dialect Distance Phonetically}.\BBCQ\
+\newblock In {\Bem Proceedings of the ACL Special Interest Group in
+  Computational Phonology}, \mbox{\BPGS\ 11--18}, Madrid, Spain.
+
+\bibitem[\protect\BCAY{Noeman \BBA\ Madkour}{Noeman \BBA\
+  Madkour}{2010}]{noeman-madkour:2010:NEWS}
+Noeman, S.\BBACOMMA\ \BBA\ Madkour, A. \BBOP 2010\BBCP.
+\newblock \BBOQ {Language Independent Transliteration Mining System Using
+  Finite State Automata Framework}.\BBCQ\
+\newblock In {\Bem Proceedings of the 2010 Named Entities Workshop (NEWS)},
+  \mbox{\BPGS\ 57--61}, Uppsala, Sweden.
+
+\bibitem[\protect\BCAY{Och \BBA\ Ney}{Och \BBA\ Ney}{2003}]{Och03}
+Och, F.~J.\BBACOMMA\ \BBA\ Ney, H. \BBOP 2003\BBCP.
+\newblock \BBOQ {A Systematic Comparison of Various Statistical Alignment
+  Models}.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 29}  (1), \mbox{\BPGS\
+  19--51}.
+
+\bibitem[\protect\BCAY{Papineni, Roukos, Ward, \BBA\ Zhu}{Papineni
+  et~al.}{2002}]{Papineni02}
+Papineni, K., Roukos, S., Ward, T., \BBA\ Zhu, W.-J. \BBOP 2002\BBCP.
+\newblock \BBOQ {BLEU: a Method for Automatic Evaluation of Machine
+  Translation}.\BBCQ\
+\newblock In {\Bem Proceedings of the 40th Annual Meeting on Association for
+  Computational Linguistics (ACL)}, \mbox{\BPGS\ 311--318}, Philadelphia, USA.
+
+\bibitem[\protect\BCAY{Paul, Finch, \BBA\ Sumita}{Paul
+  et~al.}{2011a}]{emlp:2011:paul}
+Paul, M., Finch, A., \BBA\ Sumita, E. \BBOP 2011a\BBCP.
+\newblock \BBOQ {Dialect Translation: Integrating Bayesian Co-segmentation
+  Models with Pivot-based SMT}.\BBCQ\
+\newblock In {\Bem Proceedings of the 1st Workshop on Algorithms and Resources
+  for Modelling of Dialects and Language Verieties}, \mbox{\BPGS\ 1--9},
+  Edingburgh, UK.
+
+\bibitem[\protect\BCAY{Paul, Finch, \BBA\ Sumita}{Paul
+  et~al.}{2011b}]{lncs:2011:paul}
+Paul, M., Finch, A., \BBA\ Sumita, E. \BBOP 2011b\BBCP.
+\newblock \BBOQ {Word Segmentation for Dialect Translation}.\BBCQ\
+\newblock {\Bem LNCS Lectures Note in Computer Science}, {\Bbf 6609},
+  \mbox{\BPGS\ 55--67}.
+\newblock Springer.
+
+\bibitem[\protect\BCAY{Paul, Yamamoto, Sumita, \BBA\ Nakamura}{Paul
+  et~al.}{2009}]{naaclhlt09:paul}
+Paul, M., Yamamoto, H., Sumita, E., \BBA\ Nakamura, S. \BBOP 2009\BBCP.
+\newblock \BBOQ {On the Importance of Pivot Language Selection for Statistical
+  Machine Translation}.\BBCQ\
+\newblock In {\Bem {Proceedings of the North American Chapter of the
+  Association for Computational Linguistics - Human Language Technologies
+  (NAACL HLT)}}, \mbox{\BPGS\ 221--224}, Boulder, USA.
+
+\bibitem[\protect\BCAY{Sawaf}{Sawaf}{2010}]{sawaf:2010}
+Sawaf, H. \BBOP 2010\BBCP.
+\newblock \BBOQ {Arabic Dialect Handling in Hybrid Machine Translation}.\BBCQ\
+\newblock In {\Bem Proceedings of the 9th Conference of the Association for
+  Machine Translation in the Americas (AMTA)}, \mbox{\BPGS\ 49--59}, Denver,
+  USA.
+
+\bibitem[\protect\BCAY{Scherrer}{Scherrer}{2007}]{scherrer:2007}
+Scherrer, Y. \BBOP 2007\BBCP.
+\newblock \BBOQ {Adaptive String Distance Measures for Bilingual Dialect
+  Lexicon Induction}.\BBCQ\
+\newblock In {\Bem Proceedings of the ACL Student Research Workshop},
+  \mbox{\BPGS\ 55--60}, Prague, Czech Republic.
+
+\bibitem[\protect\BCAY{Stolcke}{Stolcke}{2002}]{Stolcke02}
+Stolcke, A. \BBOP 2002\BBCP.
+\newblock \BBOQ {SRILM---an Extensible Language Modeling Toolkit}.\BBCQ\
+\newblock In {\Bem Proceedings of the International Conference on Spoken
+  Language Processing (ICSLP), Vol.~2}, \mbox{\BPGS\ 901--904}, Denver, USA.
+
+\bibitem[\protect\BCAY{Utiyama \BBA\ Isahara}{Utiyama \BBA\
+  Isahara}{2007}]{hlt07:utiyama}
+Utiyama, M.\BBACOMMA\ \BBA\ Isahara, H. \BBOP 2007\BBCP.
+\newblock \BBOQ {A Comparison of Pivot Methods for Phrase-Based Statistical
+  Machine Translation.}\BBCQ\
+\newblock In {\Bem Proceedings of Human Language Technologies (HLT)},
+  \mbox{\BPGS\ 484--491}, New York, USA.
+
+\bibitem[\protect\BCAY{Wu \BBA\ Wang}{Wu \BBA\ Wang}{2007}]{acl07:wu}
+Wu, H.\BBACOMMA\ \BBA\ Wang, H. \BBOP 2007\BBCP.
+\newblock \BBOQ {Pivot Language Approach for Phrase-Based Statistical Machine
+  Translation}.\BBCQ\
+\newblock In {\Bem Proceedings of the 45th Annual Meeting of the Association
+  for Computational Linguistics (ACL)}, \mbox{\BPGS\ 856--863}, Prague, Czech
+  Republic.
+
+\bibitem[\protect\BCAY{Xu, Gao, Toutanova, \BBA\ Ney}{Xu et~al.}{2008}]{xu:08}
+Xu, J., Gao, J., Toutanova, K., \BBA\ Ney, H. \BBOP 2008\BBCP.
+\newblock \BBOQ {Bayesian Semi-Supervised Chinese Word Segmentation for
+  Statistical Machine Translation}.\BBCQ\
+\newblock In {\Bem Proceedings of the 22nd International Conference on
+  Computational Linguistics (COLING)}, \mbox{\BPGS\ 1017--1024}, Manchester,
+  United Kingdom.
+
+\bibitem[\protect\BCAY{Zbib, Malchiodi, Devlin, Stallard, Matsoukas, Schwartz,
+  Makhoul, Zaidan, \BBA\ Callison-Burch}{Zbib et~al.}{2012}]{naaclhlt12:zbib}
+Zbib, R., Malchiodi, E., Devlin, J., Stallard, D., Matsoukas, S., Schwartz, R.,
+  Makhoul, J., Zaidan, O., \BBA\ Callison-Burch, C. \BBOP 2012\BBCP.
+\newblock \BBOQ {Machine Translation of Arabic Dialects}.\BBCQ\
+\newblock In {\Bem {Proceedings of the North American Chapter of the
+  Association for Computational Linguistics - Human Language Technologies
+  (NAACL HLT)}}, \mbox{\BPGS\ 49--59}.
+
+\bibitem[\protect\BCAY{Zhang, Vogel, \BBA\ Waibel}{Zhang
+  et~al.}{2004}]{Zhang04}
+Zhang, Y., Vogel, S., \BBA\ Waibel, A. \BBOP 2004\BBCP.
+\newblock \BBOQ {Interpreting Bleu/NIST Scores: How Much Improvement do We Need
+  to Have a Better System?}\BBCQ\
+\newblock In {\Bem Proceedings of 4th International Conference on Language
+  Resources and Evaluation (LREC)}, \mbox{\BPGS\ 2051--2054}.
+
+\end{thebibliography}
+
+
+
+\begin{biography}
+\bioauthor[:]{Michael Paul}{
+received an M.S. degree in Computer Science from the University of Saarland, Germany in 1994 and 
+a Ph.D. degree in Engineering from Kobe University, Japan in 2006. 
+He is currently affiliated with ATR-Trek Co.,Ltd, Osaka, Japan.
+Before joining ATR-Trek, he worked for the National Institute of Information and Communication Technology (NICT)
+and the Advanced Telecommunications Research Institute International (ATR) in Kyoto, Japan.
+His research interests include machine translation, evaluation of translation quality and machine learning.
+He serves as an Associate Editor for the ACM Transactions on Speech and Language Processing (TSLP)
+and serves as an Editorial Board member of Machine Translation Journal (MT).
+He is a co-recipient of the Maejima Hisoka Prize in 2013.
+}
+
+\bioauthor[:]{Andrew Finch}{
+received a B.S. degree in Mathematics and a M.Sc. degree in Cognition, Computing and
+Psychology, both from the University of Warwick, England in 1984 and 1990, respectively.
+He received a Ph.D. in computer science in 1995 from the University of York, England.
+In 1997, he received an Honorable Mention of the Pattern Recognition Society Award
+for Outstanding Contribution to the Pattern Recognition journal.
+He is currently a senior researcher in the NICT Universal Communication Research Institute.
+His current research interests include tagging, parsing, machine translation, and automatic paraphrasing.
+He is a co-recipient of the Maejima Hisoka Prize in 2013.
+}
+
+\bioauthor[:]{Eiichiro Sumita}{
+received his Ph.D. in Engineering from Kyoto University in 1999, and a Master's and Bachelor's in Computer Science
+from the University of Electro-Communications in 1982 and 1980, respectively.
+He is now a director of the National Institute of Information and Communication Technology (NICT).
+Before joining NICT, he worked for the Advanced Telecommunications Research Institute International (ATR) in Kyoto,
+Japan and for IBM Research in Tokyo, Japan. His research interests cover Machine Translation and e-Learning.
+He serves as a Vice-Chairperson and Editor in Chief for the Association for Natural Language Processing (NLP)
+and serves as an Associate Editor for the ACM Transactions on Asian Language Information Processing (TALIP).
+He is a co-recipient of the Maejima Hisoka Prize in 2013, the Commendation for Science and Technology
+by the Minister of Education, Culture, Sports, Science and Technology, Prizes for Science and Technology in 2010,
+and the AAMT Nagao Award in 2007.
+}
+
+\end{biography}
+
+
+\biodate
+
+
+
+\end{document}

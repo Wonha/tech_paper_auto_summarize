@@ -1,0 +1,774 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+
+\def\Bdma#1{}                
+\def\Conc#1#2{}        
+\def\MC#1#2#3{}
+\def\MCc#1{}
+\def\lineB#1#2{}
+\def\tabref#1{}
+\def\figref#1{}
+\def\subref#1{}
+\def\Cite#1{}
+
+
+\Volume{18}
+\Number{4}
+\Month{September}
+\Year{2011}
+
+\received{2011}{2}{28}
+\accepted{2011}{5}{11}
+
+\setcounter{page}{367}
+
+\jtitle{点予測による形態素解析}
+\jauthor{森　　信介\affiref{ACCMS} \and 中田　陽介\affiref{KU} 
+	\and Neubig Graham\affiref{KU} \and 河原　達也\affiref{ACCMS}}
+\jabstract{
+  本論文では，形態素解析の問題を単語分割と品詞推定に分解し，それぞれの処理で点予測を
+  用いる手法を提案する．点予測とは，分類器の素性として，周囲の単語境界や品詞等の推定
+  値を利用せずに，周囲の文字列の情報のみを利用する方法である．点予測を用いることで，
+  柔軟に言語資源を利用することができる．特に分野適応において，低い人的コストで，高い
+  分野適応性を実現できる．提案手法の評価として，言語資源が豊富な一般分野において，既
+  存手法である条件付き確率場と形態素$n$-gramモデルとの解析精度の比較を行い，同程度の
+  精度を得た．さらに，提案手法の分野適応性を評価するための評価実験を行い，高い分野適
+  応性を示す結果を得た．
+}
+\jkeywords{形態素解析，単語分割，品詞付与，点予測，系列予測}
+
+\etitle{Morphological Analysis with Pointwise Predictors}
+\eauthor{Shinsuke Mori\affiref{ACCMS} \and Yosuke Nnakata\affiref{KU} 
+	\and Graham Neubig\affiref{KU}  \and Tatsuya Kawahara\affiref{ACCMS}} 
+\eabstract{
+  This paper proposes a pointwise approach to Japanese morphological analysis that
+  decomposes the process into word segmentation and part-of-speech (POS) tagging.
+  The pointwise approach refers, as features, only to the surface information of the
+  input and not relies on any prediction results such as word boundaries or POS
+  tags. This design allows us to use a variety of linguistic resources flexibly.
+  This characteristic enables a fast and low-cost domain adaptation with a minimum
+  amount of annotation. An evaluation was performed on a well-resourced general
+  domain morphological task, and it was found that the proposed method achieved
+  results comparable to those of existing methods such as CRFs and morpheme $n$-gram
+  models. In addition, a domain adaptation experiment showed that the proposed
+  method is able to achieve an effective domain adaptation with a smaller amount of
+  annotations.
+}
+\ekeywords{Morphological analysis, Word segmentation, Part-of-speech tagging, Pointwise prediction, Sequence-based prediction}
+
+\headauthor{森，中田，Neubig, 河原}
+\headtitle{点予測による形態素解析}
+
+\affilabel{ACCMS}{京都大学学術情報メディアセンター}{Academic Center for Computing and Media Studies, Kyoto University}
+\affilabel{KU}{京都大学情報学研究科}{School of Informatic, Kyoto University}
+
+
+
+\begin{document}
+\maketitle
+
+
+
+\section{はじめに}
+\label{section:はじめに}
+
+\vspace{-0.5\baselineskip}
+形態素解析は，日本語における自然言語処理の基礎であり，非常に重要な処理である．形態素
+解析の入力は文字列であり，出力は単語と品詞の組（形態素）の列である．形態素解析の出力は，
+固有表現抽出や構文解析などの後段の言語処理の入力となるばかりでなく，情報検索システム
+やテキストマイニング等の自然言語処理の応用の入力として直接利用される．そのため，形態
+素解析の精度は自然言語処理やその応用に大きな影響を与える．昨今，自然言語処理の応用は
+医療\cite{電子カルテからの副作用関係の自動抽出}や法律\cite{日英特許コーパスからの専門
+用語対訳辞書の自動獲得}からWeb文書\cite{2ちゃんねる解析用の形態素解析器の作成}まで多
+岐に渡る．したがって，様々な分野のテキストに対して，高い形態素解析解析精度を短時間か
+つ低コストで実現する手法が望まれている．
+
+現在の形態素解析器の主流は，コーパスに基づく方法である．この方法では，統計的なモデル
+を仮定し，そのパラメータをコーパスから推定する．代表的な手法は，品詞$n$-gramモデル
+\cite{統計的言語モデルとN-best探索を用いた日本語形態素解析法}，全ての品詞を語彙化した
+形態素$n$-gramモデル\cite{形態素クラスタリングによる形態素解析精度の向上}，条件付き確
+率場(CRF) \cite{Conditional.Random.Fields.を用いた日本語形態素解析}などを用いている．
+これらの統計的手法は，パラメータをコーパスから推定することで，際限なきコスト調整とい
+う規則に基づく方法の問題を解決し，コーパス作成の作業量に応じて精度が確実に向上するよ
+うになった．
+
+一方，これらの既存の統計的手法による形態素解析器で，医療や法律などの学習コーパスに含
+まれない分野のテキストを解析すると実用に耐えない解析精度となる．この問題に対して，分
+野特有の単語を辞書に追加するという簡便な方法が採られるが，問題を軽減するに過ぎない．
+論文等で報告されている程度の精度を実現するには，解析対象の分野のフルアノテーションコー
+パスを準備しなければならない．すなわち，解析対象の分野のテキストを用意し，すべての文
+字間に単語境界情報を付与し，すべての単語に品詞を付与する必要がある\footnote{CRFのパラ
+メータを部分的アノテーションコーパスから推定する研究\cite{日本語単語分割の分野適応の
+ための部分的アノテーションを用いた条件付き確率場の学習}もあるが，能動学習などの際に生
+じる非常にスパースかつ大規模な部分的アノテーションコーパスからの学習の場合には，必要
+となる主記憶が膨大で，現実的ではない．}．この結果，ある分野のテキストに自然言語処理を
+適用するのに要する時間は長くなり，コストは高くなる．
+
+本論文では，上述の形態素解析の現状と要求を背景として，大量の学習コーパスがある分野で
+既存手法と同程度の解析精度を実現すると同時に，高い分野適応性を実現する形態素解析器の
+設計を提案する．具体的には，形態素解析を単語分割と品詞推定に分解し，それぞれを点予測
+を用いて解決することを提案する．点予測とは，推定時の素性として，周囲の単語境界や品詞
+情報等の推定値を参照せずに，周辺の文字列の情報のみを参照する方法である．提案する設計
+により，単語境界や品詞が文の一部にのみ付与された部分的アノテーションコーパスや，品詞
+が付与されていない単語や単語列からなる辞書などの言語資源を利用することが可能となる．
+この結果，従来手法に比して格段に高い分野適応性を実現できる．
+
+
+\section{点予測を用いた形態素解析}
+\label{sec:KyPt}
+
+本論文では，形態素解析を単語分割と品詞推定に分けて段階的に処理する手法を提案する
+（\figref{figure:flow}参照）．それぞれの処理において，単語境界や品詞の推定時に，推定結
+果しか存在しない動的な情報を用いず，周辺の文字列情報のみを素性とする点予測を用いる．
+
+\begin{figure}[b]
+  \begin{center}
+\includegraphics{18-4ia922f1.eps}
+  \end{center}
+  \caption{処理の流れ}
+  \label{figure:flow}
+\end{figure}
+\begin{figure}[b]
+  \begin{center}
+\includegraphics{18-4ia922f2.eps}
+  \end{center}
+  \caption{単語分割に使用する素性（窓幅が3，$n$-gram長の上限が3の場合）}
+  \label{figure:KyWS}
+\end{figure}
+
+
+
+
+\subsection{点予測を用いた単語分割}
+
+点予測による単語分割には先行研究\cite{点推定と能動学習を用いた自動単語分割器の分野適
+応}がある．提案手法での単語分割にはこれを採用する．以下では，この点予測による単語分割
+を概説する．
+
+点予測による単語分割の入力は文字列$\Bdma{x} = \Conc{x}{n}$であり，各文字間に単語境界
+の有無を示す単語境界タグ$\Bdma{t} = \Conc{t}{n-1}$を出力する．単語境界タグ$t_i$がとり
+うる値は，文字$x_{i}$と$x_{i+1}$の間に単語境界が「存在する」か「存在しない」の2種類で
+ある．したがって，単語境界タグの推定は，2値分類問題として定式化される．点予測による単
+語分割では，以下の3種類の素性を参照する線形サポートベクトルマシン(Linear SVM)
+\cite{LIBLINEAR:.A.Library.for.Large.Linear.Classification}による分類を行っている．参
+照する素性は以下の通りである（\figref{figure:KyWS}参照）．
+\begin{enumerate}
+
+\item 文字$n$-gram: 判別するタグ位置$i$の周辺の部分文字列である．窓幅$m$と長さ$n$のパ
+  ラメータがあり，長さ$2m$の文字列$x_{i-m+1}, \cdots, x_{i-1}, x_{i}, x_{i+1},
+  \cdots, x_{i+m}$の長さ$n$以下のすべての部分文字列である．
+
+\item 文字種$n$-gram: 文字を文字種に変換した記号列を対象とする点以外は文字$n$-gramと
+  同じである．文字種は，漢字(K)，片仮名(k)，平仮名(H)，ローマ字(R)，数字(N)，その他
+  (O)の6つである．
+
+\item 単語辞書素性: 判別するタグ位置$i$を始点とする単語，終点とする単語，内包する単語
+  が辞書にあるか否かのフラグと，その単語の長さである．
+
+\end{enumerate}
+
+
+
+\subsection{点予測を用いた品詞推定}
+
+様々な言語資源を有効活用するために，点予測による単語分割の考え方を拡張し，点予測を用
+いた品詞推定手法を提案する．提案手法による品詞推定の入力は単語列であるが，品詞推定対
+象の単語以外の単語境界情報を参照しない．この設計により，一部の単語にのみ単語境界や品
+詞情報が付与された部分的アノテーションコーパスが容易に利用可能となる．この点が，英語
+などの単語に分かち書きされた言語に対する品詞推定の既存手法
+\cite{Grammatical.Category.Disambiguation.by.Statistical.Optimization}との相違点であ
+る．
+
+提案手法における品詞推定は，注目する単語に応じて以下の4つの種類の処理を行う．
+\begin{enumerate}
+
+\item 学習コーパスに出現し，複数の品詞が付与されている単語は，後述する単語毎の分類器
+  で品詞を推定する．
+
+\item 学習コーパスに出現し，唯一の品詞が付与されている単語には，その品詞を付与する．
+
+\item 学習コーパスに出現せず，辞書に出現する単語には，辞書に最初に現れる品詞を付与す
+  る．
+
+\item 学習コーパスに出現せず，辞書にも出現しない単語は，その品詞を名詞とする．
+
+\end{enumerate}
+
+分類器で品詞を推定する(1)の場合は，点予測を用いることとする．点予測による品詞推定は，
+品詞を推定する単語$w$とその直前の文字列$\Bdma{x}_{-}$と直後の文字列$\Bdma{x}_{+}$を入
+力とし，これらのみを参照して単語$w$の品詞を推定する多値分類問題として定式化される．参
+照する文字列の窓幅を$m'$とすると，入力において参照される文脈情報は$\Bdma{x}_{-}, w,
+\Bdma{x}_{+} = x_{-m'} \cdots x_{-2} x_{-1}, w, \Conc{x}{m'}$となる．すなわち，この文
+字列と$w$の前後に単語境界があり内部には単語境界がないという情報のみから$w$の品詞を推
+定する．換言すれば，推定対象の単語以外の単語境界情報や周囲の単語の品詞などの推定結果
+を一切参照しない．この設計により，パラメータ推定時に様々な言語資源の柔軟な活用が可能
+となる．
+
+
+分類器品詞推定に利用する素性は以下の通りである（\figref{figure:KyPT}参照）．
+\begin{enumerate}
+
+ \item $\Bdma{x}_{-}\Bdma{x}_{+}$に含まれる文字$n$-gram
+
+ \item $\Bdma{x}_{-}\Bdma{x}_{+}$に含まれる文字種$n$-gram
+
+\end{enumerate}
+
+
+\begin{figure}[t]
+  \begin{center}
+\includegraphics{18-4ia922f3.eps}
+  \end{center}
+  \caption{品詞推定に使用する素性（窓幅が3，$n$-gram長の上限が3の場合）}
+  \label{figure:KyPT}
+\end{figure}
+
+単語分割とは異なり，品詞推定は多値分類である．したがって，各単語の品詞候補毎の分類器
+を作る．つまり，ある単語に品詞候補が3つ存在すれば分類器はその単語に対して3つ作り，推
+定には1対多方式(one-versus-rest)を用いて多値分類を行う．
+
+なお，全単語に対して1つの多値分類器を作るという方法も考えられる．予備実験で，この手法
+を能動学習で用いたところ，能動学習に対して頑健性が低く，偏ったデータを学習データに利
+用すると解析精度が大幅に下がる現象が起きたので本論文では利用しないこととした．
+
+
+
+\subsection{点予測による柔軟な言語資源利用}
+
+点予測を用いた単語分割，および品詞推定は，入力から計算される素性のみを参照し，周囲の
+推定値を参照しない．この設計により，様々な言語資源を柔軟に利用することが可能となる．
+
+系列ラベリングとして定式化する既存手法による形態素解析器のパラメータ推定には，一般的
+に次の2つの言語資源のみが利用可能である．これらは提案手法でも利用可能である．
+\begin{description}
+\item[1. フルアノテーションコーパス] すべての文字間に単語境界情報が付与され，すべての
+  単語に品詞が付与されている．既存手法の分野適応に際しては，適応対象の文に対して人手
+  によりこれらの情報を付与する必要があるが，各文の大部分の箇所は，一般分野のコーパス
+  にすでに出現している単語や表現であり，文のすべての箇所に情報を付与することは効率的
+  ではない．
+
+\item[2. 形態素辞書] この辞書の各見出し語は，フルアノテーションコーパスと同様の単語の
+  基準を満たし，品詞が付与されている．既存手法の分野適応に際しては，対象分野の形態素
+  解析や文字$n$-gramの統計結果\cite{nグラム統計によるコーパスからの未知語抽出}から，
+  頻度が高いと推測される単語から辞書に追加される．しかしながら，文脈情報が欠落するの
+  でコーパスほど有効ではない．
+
+\end{description}
+フルアノテーションコーパスを作成する作業者は，対象分野の知識に加えて，単語分割基準と
+品詞体系の両方を熟知している必要がある．現実にはこのような人材の確保は困難であり，比較的短時
+間の訓練の後に実作業にあたることになる．その結果，不明な箇所や判断に自信のない箇
+所が含まれる文に対しては，その文すべてを棄却するか，確信の持てない情報付与をすること
+となる．また，形態素辞書を作成する際にも，単語であることのみに確信があり，品詞の判断
+に自信がない場合，その単語を辞書に加えないか，確信の持てない品詞を付与するかのいずれ
+かしかない．
+
+このような問題は，言語資源作成の現場では非常に深刻であり，確信の持てる箇所で確信の持
+てる情報のみのアノテーションを許容する枠組みが渇望されている．提案する枠組みでは，以
+下のような部分的な情報付与の結果得られる言語資源も有効に活用することができる
+（\figref{figure:LR}参照）．
+
+\begin{description}
+
+\item[3. 部分的アノテーションコーパス] 文の一部の文字間の単語境界情報や一部の単語の品
+  詞情報のみがアノテーションされたコーパスである．形態素解析という観点では，単語境界
+  情報のみが付与された単語分割済みコーパスも部分的アノテーションコーパスの一種である．
+  ほかに，部分的単語分割コーパスや部分的品詞付与コーパスなどがある．
+
+ \item[4. 単語辞書] 単語の表記のみからなる辞書であり，比較的容易に入手可能である．自
+   動単語分割の際に単語境界情報として利用できる．
+
+\end{description}
+フルアノテーションコーパスは，各分野で十分な量を確保することは難しいが，上記の言語資
+源は比較的簡単に用意することができる．本手法では，これらの様々な言語資源を有効活用す
+ることにより，高い分野適応性を実現する．
+
+\begin{figure}[t]
+  \begin{center}
+\includegraphics{18-4ia922f4.eps}
+  \end{center}
+  \caption{提案手法で利用可能な言語資源}
+  \label{figure:LR}
+\end{figure}
+
+
+
+\subsection{分野適応戦略}
+\label{subsection:戦略}
+
+本項は，分野適応戦略について述べる．最も効果が高い分野適応の戦略は，適応分野のフルア
+ノテーションコーパスを用意することであるが，作成に必要な人的コストが膨大であるという
+問題がある．低い人的コストで高い効果を得るためには，推定の信頼度が低い箇所に優先的に
+アノテーションを行うことが望ましい．単語境界や品詞の推定の信頼度は，文内の各箇所で異
+なるので，アノテーションは文単位ではなく，推定対象となる最小の単位であるべきである．
+このようなアノテーションの結果，部分的アノテーションコーパスが得られる．既存手法の形
+態素解析器では，部分的アノテーションコーパスの利用は困難であるが，提案手法では周囲の
+文字列の情報のみを用いて形態素解析を行うので，部分的アノテーションコーパスの利用が容
+易である．
+
+そこで，分野適応戦略として，形態素解析器の学習と部分的アノテーションを交互に繰り返し
+行う能動学習を採択する．手順は以下の通りである（\figref{figure:AL}参照）．
+\begin{enumerate}
+
+\item 一般分野のフルアノテーションコーパスで分類器の学習を行う．
+
+\item 適応分野の学習コーパス（初期状態は生コーパス）に対して形態素解析を行い，後述する
+  方法で推定の信頼度が低い100箇所を選択する\footnote{理論的には，1箇所のアノテーショ
+  ン毎に分類器の再学習を行うべきであるが，それでは作業者の待ち時間の合計が非常に長く
+  なる．また，予備実験で1箇所を選んだ場合の精度は100箇所を選んだ場合の精度と有意な差
+  とならなかった．}．
+
+\item 選択した箇所を作業者に提示し，単語境界と品詞を付与してもらう．その結果，適応分
+  野の部分的アノテーションコーパスが得られる．
+
+\item 一般分野のフルアノテーションコーパスと適応分野の部分的アノテーションコーパスを
+  用いて分類器の再学習を行う．
+
+\item 上記の(2)〜(4)の手順を繰り返す．
+
+\end{enumerate}
+
+\begin{figure}[t]
+  \begin{center}
+\includegraphics{18-4ia922f5.eps}
+  \end{center}
+  \caption{能動学習}
+  \label{figure:AL}
+\end{figure}
+
+アノテーション箇所の候補は，分類器の判断の信頼度が低い単語分割箇所と品詞推定対象の単
+語である．信頼度の尺度は，SVMの分離平面からの距離であり，単語分割箇所と品詞推定の単語
+を一括して比較する．実際のアノテーションは，選択された箇所（選択箇所）に応じて以下のよ
+うに行う．
+\begin{enumerate}
+
+\item 選択箇所が単語分割箇所（文字間）の場合: 以下の2通りに分類する．
+  \begin{enumerate}
+  \item 選択箇所が単語内の場合: その単語の内部と前後の単語境界情報および品詞情報を付
+    与する．
+  \item 選択箇所が単語境界の場合: その前後の単語の内部と前後の単語境界情報および品詞
+    情報を付与する．
+  \end{enumerate}
+
+\item 選択箇所が品詞推定箇所（単語）の場合: その単語の内部と前後の単語境界情報および品
+  詞情報を付与する．
+
+\end{enumerate}
+
+\section{評価}
+
+提案手法の評価を行うために2つの評価実験を行った．1つ目の実験では，自然言語処理の適応
+対象を医薬品情報のテキストと想定し，言語資源が豊富な一般分野のコーパスで学習を行い，
+医薬品情報のテキストに対する形態素解析精度を既存手法と比較する．2つ目の実験は，能動学
+習による提案手法の分野適応性の定量的評価である．比較的大きなコーパスが存在する分野の
+テキストを対象に，一部をテストコーパスとし，残りを能動学習を模擬するための学習コーパ
+スとして利用し，アノテーション数と精度の関係を評価する．
+
+
+
+\subsection{コーパス}
+
+実験には「現代日本語書き言葉均衡コーパス」モニター公開データ（2009年度版）のコアデータ
+（以下BCCWJと呼ぶ）\cite{代表性を有する大規模日本語書き言葉コーパスの構築}と医薬品情報
+のテキスト（以下JAPICと呼ぶ）を用いた．これらのコーパスは，単語分割と品詞付与が人手で行
+われている．コーパスの諸元を\tabref{table:corpus}に示す．また，219,583形態素を収めた
+UniDic \cite{コーパス日本語学のための言語資源：形態素解析用電子化辞書の開発とその応用}
+を辞書として用いた．
+
+\begin{table}[b]
+  \caption{コーパス}
+\input{03table01.txt}
+  \label{table:corpus}
+\end{table}
+
+
+本論文で提案するのは，分野適応性の高い形態素解析器であり，1つ目の実験では，一般分野と
+JAPIC（適応分野）をテストコーパスとする評価を行う．この実験では，コーパスと同じ基準の辞
+書がある場合とない場合も比較した．それぞれの場合のカバー率は\tabref{table:coverage}の
+通りである．2つ目の実験では，提案手法と既存手法の代表であるCRFの能動学習を行ない，分
+野適応性を評価する．この実験でもJAPICを適応分野とするのが理想的であるが，我々は能動学
+習の実験に必要なアノテーションを模擬する学習コーパスを有していない．したがって，性質
+に応じてBCCWJを2つに分割し，能動学習の実験を行った．分割においては，文献
+\Cite{Design.Compilation.and.Preliminary.Analyses.of.Balanced.Corpus.of.Contemporary.Written.Japanese}
+を参考に，他の出典のデータと大きく性質が異なるYahoo!知恵袋を適応分野とし，白書と書籍
+と新聞を一般分野とした．分野適応性の評価のための実験で，UniDicを利用することも考えら
+れるが，\tabref{table:coverage}から分かるように，これを語彙に加えた場合のYahoo!知恵袋
+のカバー率は99.80\%とJAPICを対象とした場合の95.99\%に比べて非常に高く，実際の分野適応
+を模擬していることにはならない．したがって，分野適応性の評価実験においては，UniDicを
+使用しないこととした．なお，この場合のカバー率は96.29\%であり，この判断はおおむね妥当
+である．
+
+\begin{table}[t]
+  \caption{カバー率}
+\input{03table02.txt}
+  \label{table:coverage}
+\end{table}
+
+
+\subsection{評価基準}
+
+本論文で用いた評価基準は，文献\cite{EDRコーパスを用いた確率的日本語形態素解析}で用い
+られている再現率と適合率であり，次のように定義される．正解コーパスに含まれる形態素数
+を$N_{REF}$，解析結果に含まれる形態素数を$N_{SYS}$，単語分割と品詞の両方が一致した形
+態素数を$N_{COR}$とすると，再現率は$N_{COR}/N_{REF}$と定義され，適合率は
+$N_{COR}/N_{SYS}$と定義される．例として，コーパスの内容と解析結果が以下のような場合を
+考える．
+\begin{description}
+
+\item[コーパス] \ \\
+  \begin{tabular}{l}
+    外交/名詞 \ 政策/名詞 \ で/助動詞 \ は/助詞 \ な/形容詞 \ い/語尾
+  \end{tabular}
+
+\item[解析結果] \ \\
+  \begin{tabular}{l}
+    外交政策/名詞 \ で/助詞 \ は/助詞 \ な/形容詞 \ い/語尾
+  \end{tabular}
+
+\end{description}
+この場合，分割と品詞の両方が一致した形態素は「は/助詞」と「な/形容詞」と「い/形容詞語
+尾」であるので，$N_{COR}= 3$となる．また，コーパスには6つの形態素が含まれ，解析結果に
+は5つの形態素が含まれているので，$N_ {REF}=6,\,N_{SYS}=5$である．よって，再現率は
+$N_{COR}/N_{REF}=3/6$となり，適合率は$N_{COR}/N_{SYS}= 3/5$となる．また，再現率と適合
+率の調和平均であるF値も評価の対象とした．
+
+
+
+\subsection{各手法の詳細}
+
+提案手法においては，学習コーパスのみを用いた予備実験により，文字$n$-gram長の$n$の上限
+値，文字種$n$-gram長の$n$の上限値，窓幅$m,\;m'$をすべて3とした．なお，分類器には，精度
+と学習効率を考慮して線形SVM \cite{LIBLINEAR:.A.Library.for.Large.Linear.Classification}
+を用いた．
+
+比較対象とした既存手法は，品詞2-gramモデル(HMM) \cite{統計的言語モデルとN-best探索を用
+いた日本語形態素解析法}と，形態素$n$-gramモデル($n = 2,\;3$) \cite{形態素クラスタリング
+による形態素解析精度の向上}と，CRFに基づく方法
+(MeCab-0.98) \cite{Conditional.Random.Fields.を用いた日本語形態素解析}である．予備実験
+の結果，CRFに基づく方法において素性とする語彙は，学習コーパスに出現する全単語のうちの
+低頻度語500 語以外とした．また，学習コーパスの出現頻度上位5,000語を語彙化した．素性は
+，品詞，文字種，表記2-gram，品詞2-gram，形態素2-gramである．素性列から内部状態素性列に
+変換するマッピング定義の1-gramには，品詞と表記を用い，右文脈2-gramと左文脈2-gramには，
+品詞2-gram と語彙化された単語を用いた．
+
+
+
+\subsection{既存手法との比較}
+
+まず，一定量の言語資源がある状況での精度を既存手法と比較した．\tabref{table:L1T1}と
+\tabref{table:L1T3}は，各手法において学習コーパスのみを用いる場合の一般分野と適応分野
+のテストコーパスに対する精度である．また，\tabref{table:L2T1}と\tabref{table:L2T3}は，
+言語資源として辞書も用いる場合の結果である．
+
+\begin{table}[b]
+  \caption{一般分野に対する単語分割精度および形態素解析精度（UniDicなし）}
+\input{03table03.txt}
+  \label{table:L1T1}
+\end{table}
+\begin{table}[b]
+  \caption{JAPICに対する単語分割精度および形態素解析精度（UniDicなし）}
+\input{03table04.txt}
+  \label{table:L1T3}
+\end{table}
+
+まず，全体の傾向としては，多くの場合に表の上から順に精度が良くなっていく．品詞2-gram
+モデルと形態素2-gramモデルと形態素3-gramモデルの精度は，いずれの場合もこの順に向上す
+る．これは，文献\cite{形態素クラスタリングによる形態素解析精度の向上}に報告されている
+通りである．唯一の例外は，JAPICに対する単語分割精度である．これは，過学習が原因である
+と考えられる．
+
+\begin{table}[t]
+  \caption{一般分野に対する単語分割精度および形態素解析精度（UniDicあり）}
+\input{03table05.txt}
+  \label{table:L2T1}
+\end{table}
+\begin{table}[t]
+  \caption{JAPICに対する単語分割精度および形態素解析精度（UniDicあり）}
+\input{03table06.txt}
+  \label{table:L2T3}
+\end{table}
+
+次に，CRFに基づく方法と品詞2-gramモデルとの比較である．ある程度大きな辞書が利用可能で
+カバー率が高いという条件下ではCRFに基づく方法は品詞2-gramモデルより精度が高いことがわ
+かる．これは，文献\cite{Conditional.Random.Fields.を用いた日本語形態素解析}に述べられ
+ている結果と同じである．しかしながら，利用可能な辞書がなくカバー率が低い場合には，学習
+コーパスと異なる分野のテキストに対してほぼ同じ形態素解析精度になっている．この原因は，
+CRFに基づく方法の未知語処理が不十分で\footnote{CRFに基づく方法を提案している文献
+\cite{Conditional.Random.Fields.を用いた日本語形態素解析}には，「もし，辞書にマッチす
+る単語が存在せず，ラティスの構築に失敗した場合は，別の未知語処理が起動される.」と記述
+されており，既知語列に分解できない場合にのみ文字種に対するヒューリスティクスに基づく未
+知語処理が起動されると考えられる．この結果，例えば「投与/名詞」を「投/動詞 与/接頭辞」
+と誤って解析することが頻繁に起こっている．これはMeCab-0.98に固有の問題で，CRFに基づく
+方法一般の問題ではないかもしれない．しかしながら，我々の知る限り，適切な未知語モデルも
+含めたCRFに基づくモデルを提案し，その評価について日本語を対象として報告している論文は
+はない．}，単語分割精度が著しく低いことである．
+
+形態素$n$-gramモデルは，いずれの条件でも品詞2-gramモデルよりも高い精度となっている．
+これは，文献\cite{形態素クラスタリングによる形態素解析精度の向上}の結果を追認し，品詞
+列のみならず，表記列の情報をモデル化することの重要性を強く示唆する．形態素$n$-gramモ
+デルとCRFに基づく方法との比較では，単語分割においては形態素$n$-gramモデルがCRFを用い
+る方法よりも優れているが，品詞の一致も評価に含めた場合，CRFに基づく方法がより優れてい
+る．唯一の例外は，カバー率が最も低い\tabref{table:L1T3}の場合で，CRFに基づく方法の単
+語分割精度が低すぎて，形態素解析精度においても形態素$n$-gramモデルよりも低い精度となっ
+ている．
+
+最後に，本論文で提案する点予測に基づく方法と既存手法の比較についてである．品詞2-gram
+モデルや形態素$n$-gramモデルとの比較においては，唯一の例外（\tabref{table:L2T1}の単語分
+割の再現率）を除いて，提案手法が高い精度となっている．CRFに基づく方法との比較では，辞書
+を用いて学習コーパスと同一の分野のテストコーパスを解析対象とする\tabref{table:L2T1}の
+場合を除いて，提案手法が高い精度となっている．現実的な応用を想定したJAPICを対象とする
+場合（\tabref{table:L1T3}と\tabref{table:L2T3}参照）において，提案手法がいずれの既存手法
+よりも高い精度となっている点は注目に値する．特筆すべきは，コーパスと同じ基準で作成され
+た辞書がない\tabref{table:L1T3}の場合に，提案手法が他の手法と比べて圧倒的に高い精度と
+なっている点である．
+
+以上の結果から，点予測に基づく方法は，ある単語分割および品詞付与の基準に基づく言語資
+源作成の初期や，同じ分野の学習コーパスの存在が望めない実際の言語処理において非常に有
+効であることがわかる．
+
+
+
+\subsection{分野適応性の評価}
+
+提案手法の分野適応性を評価するために，以下の4つの手法を比較した．部分的アノテーション
+コーパスの作成手順は\subref{subsection:戦略}の通りである．なお，前述の通り，カバー率
+の観点から初期の言語資源として一般分野の学習コーパスのみを用い，適応分野をYahoo!知恵
+袋とする．
+
+\begin{description}
+
+\item[Pointwise:part] 適応分野の部分的アノテーションコーパスから構築した提案手法: 一
+  般分野コーパスで学習を行い，適応分野の学習コーパスを生コーパスとみなして形態素解析
+  を行う．単語境界推定または品詞推定の信頼度の低い100箇所に対して，単語アノテーション
+  を行い，部分的アノテーションコーパスを作成する．部分的アノテーションコーパスを一般
+  分野の学習コーパスに加えて，分類器の再学習を行う．同様の手順を，単語アノテーション
+  箇所が20,000になるまで繰り返す．
+
+\item[Pointwise:full] 適応分野のフルアノテーションコーパスから構築した提案手法: 適応
+  分野の学習コーパスに文単位でフルアノテーションを行う．この際，文の内容が偏らないよ
+  うに，ランダムに文を選択し，能動学習で単語アノテーションした単語数とほぼ同じになる
+  ようにアノテーションを行う．
+
+\item[CRF:part] 適応分野の部分的アノテーションコーパスから構築したCRFに基づく方法: 上
+  述の{\bf Pointwise:part}で得られる部分的アノテーションコーパスに含まれる単語をCRFに
+  基づく方法の語彙として追加する．
+
+\item[CRF:full] 適応分野のフルアノテーションコーパスから構築したCRFに基づく方法: 上述
+  の{\bf Pointwise:full}でフルアノテーションした文に出現する単語をCRFに基づく方法の語
+  彙として追加し，さらにそれらの文を学習コーパスに追加する．
+
+\end{description}
+以上のそれぞれで学習したモデルで適応分野のテストコーパスに対して形態素解析を行い，そ
+の精度を測定した．その結果を\figref{figure:res2}に示す．
+
+\begin{figure}[t]
+  \begin{center}
+\includegraphics{18-4ia922f6.eps}
+  \end{center}
+  \caption{形態素解析精度と適応分野のアノテーション形態素数の関係}
+  \label{figure:res2}
+\end{figure}
+
+まず，各形態素解析器において，フルアノテーションと部分的アノテーションでは，部分的ア
+ノテーションの方が解析精度の向上に貢献していることがわかる．また，フルアノテーション
+による解析精度向上に対する効果は，いずれの手法においてもほぼ同じであることがわかる．
+最後に，部分的アノテーションによる解析精度向上に対する効果は，提案手法においてより大
+きいことがわかる．このことから，点予測による形態素解析手法と部分的アノテーションによ
+る能動学習は，非常に良い組み合わせであり，本論文の提案により既存手法に比べて高い分野
+適応性が実現できることが分かる．このことは，ある分野のテキストに対して言語処理がどの
+程度有効かを迅速に示す必要があるようなプロジェクトの初期や，形態素解析がプロジェクト
+の一部に過ぎず，投資額が限られるような実際の言語処理において非常に大きな意味を持つ．
+
+
+
+\section{おわりに}
+\label{section:おわりに}
+
+本論文では，点予測による形態素解析手法を提案した．言語資源が豊富な一般分野のコーパス
+で学習を行い，一般分野と適応分野において提案手法と既存手法の解析精度の比較を行った．
+その結果，提案手法を用いた形態素解析は，実際の言語処理において非常に有効であることが
+示された．さらに，部分的アノテーションを用いる能動学習と提案手法を組み合わせることで，
+既存手法と比較して高い分野適応性が実現できることが示された．
+
+
+
+
+\acknowledgment
+
+本研究の一部は，科学研究費補助金・若手A（課題番号: 08090047）により行われました．
+
+
+
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{DeRose}{DeRose}{1988}]{Grammatical.Category.Disambiguat
+ion.by.Statistical.Optimization}
+DeRose, S.~J. \BBOP 1988\BBCP.
+\newblock \BBOQ Grammatical category disambiguation by statistical
+  optimization.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 14}  (1), \mbox{\BPGS\
+  31--39}.
+
+\bibitem[\protect\BCAY{Fan, Chang, Hsieh, Wang, \BBA\ Lin}{Fan
+  et~al.}{2008}]{LIBLINEAR:.A.Library.for.Large.Linear.Classification}
+Fan, R.-E., Chang, K.-W., Hsieh, C.-J., Wang, X.-R., \BBA\ Lin, C.-J. \BBOP
+  2008\BBCP.
+\newblock \BBOQ {LIBLINEAR}: A library for large linear classification.\BBCQ\
+\newblock {\Bem Journal of Machine Learning Research}, {\Bbf 9}, \mbox{\BPGS\
+  1871--1874}.
+
+\bibitem[\protect\BCAY{Maekawa, Yamazaki, Maruyama, Yamaguchi, Ogura, Kashino,
+  Ogiso, Koiso, \BBA\ Den}{Maekawa
+  et~al.}{2010}]{Design.Compilation.and.Preliminary.Analyses.of.Balanced.Corpu
+s.of.Contemporary.Written.Japanese}
+Maekawa, K., Yamazaki, M., Maruyama, T., Yamaguchi, M., Ogura, H., Kashino, W.,
+  Ogiso, T., Koiso, H., \BBA\ Den, Y. \BBOP 2010\BBCP.
+\newblock \BBOQ Design, Compilation, and Preliminary Analyses of Balanced
+  Corpus of Contemporary Written Japanese.\BBCQ\
+\newblock In {\Bem Proceedings of the Seventh International Conference on
+  Language Resources and Evaluation}.
+
+\bibitem[\protect\BCAY{Graham\JBA 中田\JBA 森}{Graham\Jetal
+  }{2010}]{点推定と能動学習を用いた自動単語分割器の分野適応}
+Graham Neubig\JBA 中田陽介\JBA 森信介 \BBOP 2010\BBCP.
+\newblock \JBOQ 点推定と能動学習を用いた自動単語分割器の分野適応\JBCQ\
+\newblock \Jem{言語処理学会年次大会}.
+
+\bibitem[\protect\BCAY{下畑\JBA 井佐原}{下畑\JBA
+  井佐原}{2007}]{日英特許コーパスからの専門用語対訳辞書の自動獲得}
+下畑さより\JBA 井佐原均 \BBOP 2007\BBCP.
+\newblock \JBOQ 日英特許コーパスからの専門用語対訳辞書の自動獲得\JBCQ\
+\newblock \Jem{自然言語処理}, {\Bbf 14}  (4), \mbox{\BPGS\ 23--42}.
+
+\bibitem[\protect\BCAY{前川}{前川}{2009}]{代表性を有する大規模日本語書き言葉コ
+ーパスの構築}
+前川喜久雄 \BBOP 2009\BBCP.
+\newblock \JBOQ 代表性を有する大規模日本語書き言葉コーパスの構築\JBCQ\
+\newblock \Jem{人工知能学会誌}, {\Bbf 24}  (5), \mbox{\BPGS\ 616--622}.
+
+\bibitem[\protect\BCAY{早藤\JBA 建石}{早藤\JBA
+  建石}{2010}]{2ちゃんねる解析用の形態素解析器の作成}
+早藤健\JBA 建石由佳 \BBOP 2010\BBCP.
+\newblock \JBOQ 2ちゃんねる解析用の形態素解析器の作成\JBCQ\
+\newblock \Jem{言語処理学会年次大会}.
+
+\bibitem[\protect\BCAY{三浦\JBA 荒牧\JBA 大熊\JBA 外池\JBA 杉原\JBA 増市\JBA
+  大江}{三浦\Jetal }{2010}]{電子カルテからの副作用関係の自動抽出}
+三浦康秀\JBA 荒牧英治\JBA 大熊智子\JBA 外池昌嗣\JBA 杉原大悟\JBA 増市博\JBA
+  大江和彦 \BBOP 2010\BBCP.
+\newblock \JBOQ 電子カルテからの副作用関係の自動抽出\JBCQ\
+\newblock \Jem{言語処理学会年次大会}.
+
+\bibitem[\protect\BCAY{伝\JBA 小木曽\JBA 小椋\JBA 山田\JBA 峯松\JBA 内元\JBA
+  小磯}{伝\Jetal
+  }{2007}]{コーパス日本語学のための言語資源：形態素解析用電子化辞書の開発とそ
+の応用}
+伝康晴\JBA 小木曽智信\JBA 小椋秀樹\JBA 山田篤\JBA 峯松信明\JBA 内元清貴\JBA
+  小磯花絵 \BBOP 2007\BBCP.
+\newblock \JBOQ
+  コーパス日本語学のための言語資源：形態素解析用電子化辞書の開発とその応用\JBCQ\
+\newblock \Jem{日本語科学}, {\Bbf 22}, \mbox{\BPGS\ 101--122}.
+
+\bibitem[\protect\BCAY{永田}{永田}{1995}]{EDRコーパスを用いた確率的日本語形態
+素解析}
+永田昌明 \BBOP 1995\BBCP.
+\newblock \JBOQ EDRコーパスを用いた確率的日本語形態素解析\JBCQ\
+\newblock \Jem{EDR電子化辞書利用シンポジウム}, \mbox{\BPGS\ 49--56}.
+
+\bibitem[\protect\BCAY{永田}{永田}{1999}]{統計的言語モデルとN-best探索を用いた
+日本語形態素解析法}
+永田昌明 \BBOP 1999\BBCP.
+\newblock \JBOQ 統計的言語モデルとN-best探索を用いた日本語形態素解析法\JBCQ\
+\newblock \Jem{情報処理学会論文誌}, {\Bbf 40}  (9), \mbox{\BPGS\ 3420--3431}.
+
+\bibitem[\protect\BCAY{森\JBA 長尾}{森\JBA
+  長尾}{1998a}]{nグラム統計によるコーパスからの未知語抽出}
+森信介\JBA 長尾眞 \BBOP 1998a\BBCP.
+\newblock \JBOQ $n$グラム統計によるコーパスからの未知語抽出\JBCQ\
+\newblock \Jem{情報処理学会論文誌}, {\Bbf 39}  (7), \mbox{\BPGS\ 2093--2100}.
+
+\bibitem[\protect\BCAY{森\JBA 長尾}{森\JBA
+  長尾}{1998b}]{形態素クラスタリングによる形態素解析精度の向上}
+森信介\JBA 長尾眞 \BBOP 1998b\BBCP.
+\newblock \JBOQ 形態素クラスタリングによる形態素解析精度の向上\JBCQ\
+\newblock \Jem{自然言語処理}, {\Bbf 5}  (2), \mbox{\BPGS\ 75--103}.
+
+\bibitem[\protect\BCAY{工藤\JBA 山本\JBA 松本}{工藤 \Jetal
+  }{2004}]{Conditional.Random.Fields.を用いた日本語形態素解析}
+工藤拓\JBA 山本薫\JBA 松本裕治 \BBOP 2004\BBCP.
+\newblock \JBOQ Conditional Random Fields を用いた日本語形態素解析\JBCQ\
+\newblock \Jem{情報処理学会研究報告}, NL161\JVOL.
+
+\bibitem[\protect\BCAY{坪井\JBA 森\JBA 鹿島\JBA 小田\JBA 松本}{坪井\Jetal
+  }{2009}]{日本語単語分割の分野適応のための部分的アノテーションを用いた条件付
+き確率場の学習}
+坪井祐太\JBA 森信介\JBA 鹿島久嗣\JBA 小田裕樹\JBA 松本裕治 \BBOP 2009\BBCP.
+\newblock \JBOQ
+  日本語単語分割の分野適応のための部分的アノテーションを用いた条件付き確率場の
+学習\JBCQ\
+\newblock \Jem{情報処理学会論文誌}, {\Bbf 50}  (6), \mbox{\BPGS\ 1622--1635}.
+
+\end{thebibliography}
+
+
+
+
+\clearpage
+\begin{biography}
+  \bioauthor{森　　信介}{
+    1998年京都大学大学院工学研究科電子通信工学専攻博士後期課程修了.
+    同年日本アイ・ビー・エム（株）入社.
+    2007年より京都大学学術情報メディアセンター准教授.
+    京都大学博士（工学）．
+    1997年情報処理学会山下記念研究賞受賞.
+    2010年情報処理学会論文賞受賞.
+    情報処理学会会員.
+    }
+  \bioauthor{中田　陽介}{
+    2009年香川大学工学部信頼性情報システム工学科卒業.
+    2011年京都大学大学院情報学研究科修士課程修了.
+    同年エヌ・ティ・ティ・コミュニケーションズ（株）入社.
+  }
+  \bioauthor[:]{Neubig Graham}{
+    2005年米国イリノイ大学アーバナ・シャンペーン校工学部コンピュータ・サイエンス専攻
+    卒業.
+    2010年京都大学大学院情報学研究科修士課程修了.
+    同年同大学院博士後期課程に進学.
+    現在に至る.
+    自然言語処理に関する研究に従事.
+  }
+  \bioauthor{河原　達也}{
+    1987年京都大学工学部情報工学科卒業.
+    1989年同大学院修士課程修了.
+    1990年博士後期課程退学.
+    同年京都大学工学部助手.
+    1995年同助教授.
+    1998年同大学情報学研究科助教授.
+    2003年同大学学術情報メディアセンター教授.
+    現在に至る.
+    音声言語処理, 特に音声認識及び対話システムに関する研究に従事.
+    京都大学博士（工学）．
+    1997年度日本音響学会粟屋潔学術奨励賞受賞.
+    2000年度情報処理学会坂井記念特別賞受賞.
+     2004年から2008年まで言語処理学会理事.
+    日本音響学会, 情報処理学会 各代議員.
+    電子情報通信学会, 人工知能学会, 言語処理学会, IEEE 各会員.
+  }
+\end{biography}
+
+\biodate
+
+
+
+
+
+\end{document}

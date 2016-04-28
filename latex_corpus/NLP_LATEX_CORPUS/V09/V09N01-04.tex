@@ -1,0 +1,2289 @@
+\newif\ifdraft \draftfalse
+\documentstyle[epsf,jnlpbbl]
+{ jnlp_j}
+\setcounter{page}{65}
+\setcounter{巻数}{9}
+\setcounter{号数}{1}
+\setcounter{年}{2002}
+\setcounter{月}{1}
+\受付{2001}{7}{3}
+\再受付{2001}{8}{23}
+\採録{2001}{9}{28}
+
+
+\headauthor{宇津呂，颯々野，内元}
+\headtitle{正誤判別規則学習を用いた複数の日本語固有表現抽出システムの出力の混合}
+
+\author{宇津呂 武仁\affiref{TUT} \and 颯々野 学\affiref{Fujitsu} \and 内元 清貴\affiref{CRL}}
+\eauthor{Takehito Utsuro\affiref{TUT} \and Manabu Sassano\affiref{Fujitsu} \and Kiyotaka Uchimoto\affiref{CRL}} 
+
+\affilabel{TUT}{
+豊橋技術科学大学 工学部 情報工学系\\}
+{Department of Information and Computer Sciences, 
+Toyohashi University of Technology}
+\affilabel{Fujitsu}{
+富士通研究所}
+{Fujitsu Laboratories, Ltd.,}
+\affilabel{CRL}{
+独立行政法人 通信総合研究所 
+けいはんな情報通信融合センター}
+{Keihanna Human Info-Communications Research Center,
+Communications Research Laboratory, 
+Independent Administrative Institution }
+
+\title{正誤判別規則学習を用いた\\複数の日本語固有表現抽出システムの出力の混合}
+
+\jabstract{
+本論文では，日本語固有表現抽出の問題において，複数のモデルの出力を混合す
+る手法を提案する．一般に，複数のモデル・システムの出力の混合を行なう際に
+は，まず，できるだけ振る舞いの異なる複数のモデル・システムを用意する必要
+がある．本論文では，最大エントロピー法に基づく統計的学習による固有表現抽
+出モデルにおいて，現在位置の形態素が，いくつの形態素から構成される固有表
+現の一部であるかを考慮して学習を行なう可変(文脈)長モデルと，常に現在位置の形態
+素の前後数形態素ずつまでを考慮して学習を行なう固定(文脈)長モデルとの間のモデル
+の挙動の違いに注目する．そして，複数のモデルの挙動の違いを調査し，なるべ
+く挙動が異なり，かつ，適度な性能を保った複数のモデルの出力の混合を行なう．
+次に，混合の方式としては，複数のシステム・モデルの出力(および訓練データ
+そのもの)を入力とする第二段目の学習器を用いて，複数のシステム・モデルの出
+力の混合を行なう規則を学習するという混合法(stacking法)を採用する．第二段目
+の学習器として決定リスト学習を用いて，固定長モデルおよび可変長モデルの出
+力を混合する実験を行なった結果，最大エントロピー法に基づく固有表現抽出モ
+デルにおいてこれまで得られていた最高の性能を
+上回る性能が達成された．
+}
+\jkeywords{日本語固有表現抽出，複数システム混合，stacking，可変文脈長，\\最大エントロピー法，決定リスト学習}
+
+\etitle{Learning to Combine Outputs of \\Multiple Japanese Named Entity Extractors}
+
+\eabstract{
+In this paper, we propose a method for learning a classifier which
+combines outputs of more than one Japanese named entity extractors.  
+The proposed combination method belongs to the family of {\it stacked generalizers},
+which is in principle a technique of combining outputs
+of several classifiers at the first stage by learning 
+a second stage classifier to combine those outputs at the first stage.
+Individual models to be combined are based on maximum
+entropy models, one of which always considers surrounding contexts of a fixed
+length, while the other considers those of variable lengths
+according to the number of constituent morphemes of named entities.
+As an algorithm for learning the second stage classifier,
+we employ a decision list learning method.
+Experimental evaluation shows that the proposed method achieves
+improvement over the best known results with Japanese named entity extractors
+based on maximum entropy models.
+}
+\ekeywords{Japanese named entity extraction, system combination, stacking,\\
+	variable context length, maximum entropy model, decision list learning}
+
+
+\def\argmax{}
+
+\setcounter{topnumber}{2}
+\def\topfraction{}
+\setcounter{bottomnumber}{1}
+\def\bottomfraction{}
+\setcounter{totalnumber}{3}
+\def\textfraction{}
+\def\floatpagefraction{}
+
+\def\argmax{}
+
+\def\sekine_encoding{}
+
+\begin{document}
+\maketitle
+
+\section{はじめに}
+\label{sec:intro}
+
+これまで，機械学習などの分野を中心として，複数のモデル・システムの出力を混合する手法が
+いくつか提案され，その効果が報告されている．
+それらの成果を背景として，近年，
+統計的手法に基づく自然言語処理においても，
+複数のモデル・システムの出力を混合する手法を様々な問題に適用することが試みられ，
+品詞付け~\cite{vanHalteren98a,Brill98a,Abney99a}，
+名詞句等の句のまとめ上げ~\cite{Sang00a,TKudo00ajx}，
+構文解析(前置詞句付加含む)~\cite{Henderson99a,Abney99a,KoInui00aj,Henderson00a}
+などへの適用事例が報告されている．
+一般に，複数のモデル・システムの出力を混合することの利点は，
+単一のモデル・システムでは，全ての現象に対して網羅的かつ高精度に対処できない場合でも，
+個々のモデル・システムがそれぞれ得意とする部分を選択的に組み合わせることで，
+全体として網羅的かつ高精度なモデル・システムを実現できるという点にある．
+本論文では，日本語固有表現抽出の問題に対して，複数のモデルの出力を混合する手法を適用し，
+個々の固有表現抽出モデルがそれぞれ得意とする部分を選択的に組み合わせることで，
+全体として網羅的かつ高精度なモデルを実現し，その効果を実験的に検証する．
+
+一般に，日本語固有表現抽出においては，前処理として形態素解析を行ない，
+形態素解析結果の形態素列に対して，人手で構築されたパターンマッチング
+規則や統計的学習によって得られた固有表現抽出規則を適用することにより，
+固有表現が抽出される~\cite{IREX99aj}．
+特に，統計的学習によって得られた固有表現抽出規則を用いる場合には，
+形態素解析結果の形態素列に対して，一つもしくは複数の形態素をまとめ上げる
+処理を行ない，同時にまとめ上げられた形態素列がどの種類の固有表現を
+構成しているかを同定するという手順が
+一般的である~\cite{Sekine98a,Borthwick99aj,Uchimoto00aj,Sassano00a,Sassano00bjx,Yamada01ajx}．
+このとき，実際のまとめ上げの処理は，現在注目している位置にある形態素および
+その周囲の形態素の語彙・品詞・文字種などの属性を考慮しながら，
+現在位置の形態素が固有表現の一部となりうるかどうかを判定することの組合わせによって
+行なわれる．
+
+一方，一般に，複数のモデル・システムの出力を混合する過程は，大きく以下の二つの部分に
+分けて考えることができる．
+\begin{enumerate}
+\item \label{enum:sub1}
+	できるだけ振る舞いの異なる複数のモデル・システムを用意する．
+	(通常，振る舞いの酷似した複数のモデル・システムを用意しても，
+	複数のモデル・システムの出力を混合することによる精度向上は望めないことが予測される．)
+	
+\item \label{enum:sub2}
+	用意された複数のモデル・システムの出力を混合する方式を選択・設計し，
+	必要であれば学習等を行ない，与えられた現象に対して，
+	用意された複数のモデル・システムの出力を混合することを実現する．
+\end{enumerate}
+複数の日本語固有表現抽出モデルの出力を混合するにあたっても，
+これらの(\ref{enum:sub1})および(\ref{enum:sub2})の過程をどう実現するかを決める必要がある．
+
+本論文では，まず，(\ref{enum:sub1})については，統計的学習を用いる固有表現抽出モデルをとりあげ，
+まとめ上げの処理を行なう際に，現在位置の周囲の形態素を何個まで考慮するかを区別することにより，
+振る舞いの異なる複数のモデルを学習する．
+そして，複数のモデルの振る舞いの違いを調査し，なるべく振る舞いが異なり，かつ，
+適度な性能を保った複数のモデルの混合を行なう．
+特に，これまでの研究事例~\cite{Sekine98a,Borthwick99aj,Uchimoto00aj,Yamada01ajx}でやられたように，
+現在位置の形態素がどれだけの長さの固有表現を構成するのかを全く考慮せずに，
+常に現在位置の形態素の前後二形態素(または一形態素)ずつまでを考慮して学習を行なう
+モデル(固定長モデル，\ref{subsubsec:3gram}~節参照)だけではなく，
+現在位置の形態素が，いくつの形態素から構成される固有表現の一部であるかを考慮して学習を行なうモデル
+(可変長モデル~\cite{Sassano00a,Sassano00bjx}，\ref{subsubsec:vgram}~節参照)も用いて
+複数モデルの出力の混合を行なう．
+
+次に，(\ref{enum:sub2})については，重み付多数決やモデルの切り替えなど，
+これまで自然言語処理の問題によく適用されてきた混合手法を原理的に包含し得る方法として，
+stacking法~\cite{Wolpert92a}と呼ばれる方法を用いる．
+stacking法とは，
+何らかの学習を用いた
+複数のシステム・モデルの出力(および訓練データそのもの)を入力とする第二段の
+学習器を用いて，複数のシステム・モデルの出力の混合を行なう規則を学習するという混合法である．
+本論文では，具体的には，
+複数のモデルによる固有表現抽出結果，およびそれぞれの固有表現がどのモデルにより
+抽出されたか，固有表現のタイプ，固有表現を構成する形態素の数と品詞などを素性として，
+各固有表現が正しいか誤っているかを判定する第二段の判定規則を学習し，
+この正誤判定規則を用いることにより複数モデルの出力の混合を行なう．
+
+以下では，まず，\ref{sec:JNE}~節で，本論文の実験で使用した
+IREX(Information Retrieval and Extraction Exercise)ワークショップ\cite{IREX99aj}の
+日本語固有表現抽出タスクの固有表現データについて簡単に説明する．
+次に，\ref{sec:NEchunk}~節では，個々の固有表現抽出モデルのベースとなる
+統計的固有表現抽出モデルについて述べる．
+本論文では，統計的固有表現抽出モデルとして，最大エントロピー法を用いた
+日本語固有表現抽出モデル~\cite{Borthwick99aj,Uchimoto00aj}を採用する．
+最大エントロピー法は，自然言語処理の様々な問題に適用されその性能が実証されているが，
+日本語固有表現抽出においても高い性能を示しており，
+IREXワークショップの日本語固有表現抽出タスクにおいても，
+統計的手法に基づくシステムの中で最も高い成績を達成している~\cite{Uchimoto00aj}．
+\ref{sec:combi}~節では，複数のモデルの出力の正誤判別を行なう規則を学習することにより，
+複数モデル出力の混合を行なう手法を説明する．
+本論文では，正誤判別規則の学習モデルとしては，決定リスト学習を用い，その性能を実験的に評価する．
+
+以上の手法を用いて，\ref{sec:experi}~節で，複数の固有表現抽出結果の混合法の実験的評価を行ない，
+提案手法の有効性を示す．
+\cite{Uchimoto00aj}にも示されているように，固定長モデルに基づく単一の
+日本語固有表現抽出モデルの場合は，現在位置の形態素の前後二形態素ずつを考慮して学習を行なう場合が
+最も性能がよい．
+また，\ref{sec:experi}~節の結果からわかるように，この，常に前後二形態素
+ずつを考慮する固定長モデルの
+性能は，可変長モデルに基づく単一のモデルの性能をも上回っている
+(なお，
+   \cite{Sassano00bjx}では，最大エントロピー法を学習モデルとして可変長モデルを用いた場合には，  
+   常に前後二形態素ずつを考慮する固定長モデルよりも
+   高い性能が得られると報告しているが，
+   この実験結果には誤りがあり，本論文で示す実験結果の方が正しい．
+)．
+ところが，可変長モデルと，現在位置の形態素の前後二形態素ずつを考慮する
+固定長モデルとを
+比較すると，モデルが出力する固有表現の分布がある程度異なっており，
+実際，これらの二つのモデルの出力を用いて複数モデル出力の混合を行なうと，
+個々のモデルを上回る性能が達成された．
+\ref{sec:experi}~節では，これらの実験について詳細に述べ，
+本論文で提案する混合法が有効であることを示す．
+
+\section{日本語固有表現抽出}
+\label{sec:JNE}
+
+固有表現抽出は，情報検索・抽出，機械翻訳，自然言語理解など
+自然言語処理の応用的局面における基礎技術として重要な技術の一つである．
+英語においては，特に米国において，
+MUC(Message Understanding Conference，例えば，MUC-7~\cite{MUC98aNLP})
+コンテストにおける課題の一つとして固有表現抽出がとりあげられ，
+集中的に研究が行なわれてきた．
+また，最近では，日本語においても，
+MET (Multilingual Entity Task, 例えば，MET-1~\cite{Maiorano96a}，
+MET-2~\cite{MUC98aNLP})や
+IREXワークショップ~\cite{IREX99aj}などのコンテストにおいて，
+固有表現抽出が課題の一つに取り上げられている．
+
+\subsection{IREXワークショップの固有表現抽出タスク}
+
+\begin{table}
+\begin{center}
+\caption{日本語固有表現の種類およびその頻度}
+\label{tab:irex_tag}
+\begin{tabular}{|c||c|c|} \hline
+        & \multicolumn{2}{|c|}{頻度 (\%)} \\ \cline{2-3}
+種類 & 訓練データ & 評価データ \\ \hline
+ORGANIZATION & 3676 (19.7) & 361 (23.9) \\
+PERSON & 3840 (20.6) & 338 (22.4) \\
+LOCATION & 5463 (29.2) & 413 (27.4) \\
+ARTIFACT & 747 (4.0) & 48 (3.2) \\
+DATE & 3567 (19.1) & 260 (17.2) \\
+TIME & 502 (2.7) & 54 (3.5) \\
+MONEY & 390 (2.1) & 15 (1.0) \\
+PERCENT & 492 (2.6) & 21 (1.4) \\ \hline
+合計 & 18677 & 1510 \\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+IREXワークショップの固有表現抽出タスクでは，
+表~\ref{tab:irex_tag}に示す八種類の固有表現の抽出が課題とされた\\
+\cite{IREX99aj}．
+表~\ref{tab:irex_tag}には，主催者側から提供された訓練データの主要部分を占める
+CRL(郵政省 通信総合研究所 --- 現，独立行政法人 通信総合研究所)
+固有表現データ(毎日新聞1,174記事の固有表現をタグ付け)，
+および本試験データのうちの一般ドメインのもの(毎日新聞71記事の固有表現をタグ付け)
+について，八種類の固有表現数を調査した結果を示す．
+
+\subsection{形態素と固有表現の対応パターン}
+
+
+次に，上記のIREXワークショップの固有表現抽出タスクの訓練データを
+形態素解析システム{\sc breakfast}\cite{Sassano97aj}
+\footnote{
+  {\sc breakfast}の品詞タグの種類数は約300であり，
+  新聞記事に対しては99.6\%の品詞正解率である．
+}
+で形態素解析し，その結果の形態素と固有表現の対応パターンを調査した結果を
+表~\ref{tab:MnNE}に示す．
+これからわかるように，半分近くの固有表現については，形態素と固有表現が一対一に
+対応しないことがわかる．
+また，そのうち，
+	一つの固有表現が複数の形態素から構成されている場合は
+	90\%近く(7175/ (7175+1022) = 87.5\%)を占めており，
+	これらの固有表現については，
+	各固有表現の区切り位置はいずれかの形態素の区切り位置と一致している，
+	すなわち，固有表現の開始位置は，先頭の構成要素となる形態素の開始位置と，
+	また，固有表現の終了位置は，末尾の構成要素となる形態素の終了位置と，
+	それぞれ一致する．
+図~\ref{fig:egMtoNE}にこのような場合の例を示す．
+また，表~\ref{tab:MnNE}の「その他」の場合の多くは，
+一つ以上の固有表現が一つの形態素の一部となる場合である．
+例えば，「訪米」という形態素に対して，その一部である「米」のみが
+LOCATION(地名)であるという例がこれに相当する．
+この「その他」の場合の固有表現については，その割合が少なく，
+また，先行研究\cite{Uchimoto00aj}において，ある程度の割合で抽出できる
+ことがわかっているので，本論文における考慮の対象には含めない．
+
+
+\begin{table}
+\begin{center}
+\caption{形態素と固有表現の対応パターン}
+\label{tab:MnNE}
+\begin{tabular}{|c|c||c|c|} \hline
+\multicolumn{2}{|c||}{対応パターン} 
+        & \multicolumn{2}{|c|}{固有表現タグ頻度(\%)} \\ \hline\hline
+\multicolumn{2}{|c||}{1対1} 
+        & \multicolumn{2}{|c|}{10480 (56.1)} \\ \hline
+         & $n=2$ & 4557 (24.4) & \\ \cline{2-3}
+$n (\geq 2)$ 形態素 対 1 固有表現   &   $n=3$ & 1658 (8.9) 
+                                      & 7175  (38.4) \\ \cline{2-3}
+          & $n\geq 4$ & 960 (5.1) & \\ \hline
+\multicolumn{2}{|c||}{その他} &   
+                \multicolumn{2}{|c|}{1022 (5.5)} \\ \hline\hline
+\multicolumn{2}{|c||}{合計} &   \multicolumn{2}{|c|}{18677} \\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\begin{figure}
+\begin{center}
+{\flushleft
+\hspace*{2cm}{\bf \framebox{2 形態素 対 1 固有表現}}\\
+}
+
+\begin{tabular}{c|cc|c}
+\multicolumn{1}{c}{} & \multicolumn{2}{c}{\tt <ORGANIZATION>} & \\ \cline{2-3}
+$\cdots$ & ロシア & 軍 & $\cdots$ \\ \cline{2-3}
+\multicolumn{3}{c}{}
+\end{tabular}
+\begin{tabular}{c|cc|c}
+\multicolumn{1}{c}{} & \multicolumn{2}{c}{\tt <PERSON>} & \\ \cline{2-3}
+$\cdots$ & 村山 & 富市 & 首相\ \ $\cdots$ \\ \cline{2-3}
+\multicolumn{4}{c}{}
+\end{tabular}
+
+\vspace*{.3cm}
+
+{\flushleft
+\hspace*{2cm}{\bf \framebox{3 形態素 対 1 固有表現}}\\
+}
+
+\mbox{\begin{tabular}{c|ccc|c}
+\multicolumn{1}{c}{} & \multicolumn{3}{c}{\tt <TIME>} & \\ \cline{2-4}
+$\cdots$ & 午前 & 九 & 時 &  $\cdots$ \\ \cline{2-4}
+\multicolumn{5}{c}{}
+\end{tabular}
+\begin{tabular}{c|ccc|c}
+\multicolumn{1}{c}{} & \multicolumn{3}{c}{\tt <ARTIFACT>} & \\ \cline{2-4}
+$\cdots$ & 北米 & 自由貿易 & 協定 &  $\cdots$ \\  \cline{2-4}
+\multicolumn{5}{c}{}
+\end{tabular}
+}
+\end{center}
+\caption{複数形態素が一つの固有表現に対応する例}
+\label{fig:egMtoNE}
+\end{figure}
+
+
+\section{最大エントロピー法を用いた固有表現抽出}
+\label{sec:NEchunk}
+
+本節では，まず，ベースモデルとなる，
+最大エントロピー法を用いた日本語固有表現抽出の手法~\cite{Borthwick99aj,Uchimoto00aj}を
+定式化する．
+ 
+\subsection{問題設定}
+\label{subsec:setting}
+
+ここでの固有表現抽出の問題は，
+固有表現まとめ上げおよび固有表現タイプ分類の問題ととらえることができる．
+いま，以下に示すような形態素列が与えられているとする．
+\[
+\begin{array}{c}
+\mbox{(左側文脈)}\ \ \ \ \ \ \ \  \ \ \ \ \ \mbox{(右側文脈)} \\
+\cdots M_{-k}^L\cdots M_{-1}^L  \ \ 
+	M_{0}\ \ 
+         M_{1}^R\cdots M_{l}^R\cdots  \\
+         \uparrow  \\
+         \mbox{(現在位置)}  
+\end{array}
+\]
+ここで，現在の位置が形態素$M_{0}$のところであるとすると，
+日本語固有表現まとめ上げおよび固有表現タイプ分類の問題とは，
+この現在位置の形態素$M_{0}$に，
+まとめ上げ状態および固有表現タイプ(詳細は\ref{subsec:tagck}~節で述べる)を
+付与することである．
+
+本論文の統計的固有表現抽出においては，訓練データからの教師あり学習により
+固有表現抽出モデルを学習する．その際には，
+各固有表現がどの形態素から構成されているかという情報が利用可能で，
+そのような情報を用いて固有表現抽出モデルを学習する．
+例えば，以下の例では，現在の位置に相当する形態素$M_{i}^{NE}$が
+$m$個の形態素からなる固有表現の一部であるという情報が利用可能である．
+\newpage
+{
+\begin{eqnarray}
+(左側文脈) & \mbox{(固有表現)} & (右側文脈) \nonumber\\
+\cdots M_{-k}^L\cdots M_{-1}^L & 
+        M_{1}^{NE}\cdots M_{i}^{NE}\cdots M_{m}^{NE}
+        & M_{1}^R\cdots M_{l}^R\cdots  \nonumber \\
+        & \uparrow\ \ \ & \label{eqn:NE-len} \\
+        & \mbox{(現在位置)}\ \ \  & \nonumber
+\end{eqnarray}
+}
+
+また，次節で述べる最大エントロピー法を用いて固有表現抽出モデルを学習する際には，
+現在位置および周囲の形態素の素性(\ref{subsec:ftr}~節)を条件として，
+現在位置の形態素に固有表現まとめ上げ状態およびタイプ(\ref{subsec:tagck}~節)
+をクラスとして付与するための条件付確率モデルを最大エントロピー法により学習する．
+
+なお，通常，学習された確率モデルを適用して，
+形態素に固有表現まとめ上げ状態および固有表現タイプを付与することにより，
+固有表現の抽出を行なう場合は，一文全体で，固有表現まとめ上げ状態および固有表現タイプの
+確率を最大とする固有表現の組合わせを求める必要がある．
+本論文では，この最適解探索の方法としては，\cite{Uchimoto00aj}のものをそのまま用いている．
+
+\subsection{最大エントロピー法}
+\label{subsec:ME}
+
+最大エントロピー法は，文脈を規定する制約を素性として与え，
+与えられた素性のもとでエントロピーを最大化するという条件によって求められる
+確率モデルである．確率モデルの学習においてエントロピーを最大化することにより，
+与えられた制約を満たす最も一様なモデルが学習されるため，
+データの過疎性に強いという特徴を持つ．
+
+ここでは，与えられた訓練集合から，
+文脈$x(\in {\cal X})$においてクラス$y(\in {\cal Y})$を出力するプロセスの
+確率的振舞い，すなわち条件付確率分布$p(y\mid x)$を
+最大エントロピー法に基づいて推定する方法の概略を説明する．
+
+まず，訓練集合中の事象$(x,y)$の観測値を大量に集め，
+$freq(x,y)$を事象$(x,y)$の訓練集合中での生起頻度として，
+訓練集合中の経験的確率分布$\tilde{p}(x,y)$を以下のように推定する．
+\begin{eqnarray*}
+  \tilde{p}(x,y) & \equiv & \frac{freq(x,y)}{\displaystyle \sum_{x,y}freq(x,y)}
+\end{eqnarray*}
+
+次に，訓練集合中のどのような現象に注目して確率分布を推定するのかを表す二値の関数
+$f(x,y)$を導入し，これを素性関数と呼ぶ．
+具体的には，各素性関数$f_i$について，この関数が真となる事象$x$および$y$の集合$V_{xi}$および$V_{yi}$が
+規定されていると考え，この集合にしたがって素性関数$f_i$が以下のように定義される．
+\begin{eqnarray*}
+  f_i(x,y) & = & 
+	\left\{ \begin{array}[c]{ll}
+	1 & \mbox{($x\in V_{xi}$かつ$y\in V_{yi}$の場合)} \\
+	0 & \mbox{(それ以外の場合)}	   
+	 \end{array}\right.
+\end{eqnarray*}
+また，一般に確率モデル学習の際には，大量の素性からなる素性の候補集合${\cal F}$から，
+活性化された素性の部分集合${\cal S}(\subseteq {\cal F})$が選択され，
+これらによって事象$(x,y)$および確率分布$p(y\mid x)$が記述される．
+
+次に，実際に確率モデル学習を行う際には，活性化された素性集合${\cal S}$中の各素性$f_i$について，
+学習すべき確率分布$p(y\mid x)$による素性$f_i$の期待値(左辺)と
+経験的確率分布$\tilde{p}(x,y)$による素性$f_i$の期待値(右辺)が等しいとする以下の制約等式を課す．
+\begin{eqnarray*}
+  \sum_{x,y}\tilde{p}(x)p(y\mid x)f_i(x,y)
+& = & \sum_{x,y}\tilde{p}(x,y)f_i(x,y) \mbox{\ \ \ for\ }\forall f_i\in {\cal S}
+\end{eqnarray*}
+そして，これらの制約等式を満たす確率分布$p(y\mid x)$のうちで，以下の条件付エントロピー$H(p)$
+を最大にする最も「一様な」モデルが，求めるべきモデル$p_{\ast}$であるとする．
+\begin{eqnarray}
+  H(p) & \equiv & -\sum_{x,y}\tilde{p}(x)p(y\mid x)\log p(y\mid x) \nonumber \\
+  p_{\ast} & = & \argmax_{p\in {\cal C(S)}}H(p) \label{eqn:me}
+\end{eqnarray}
+
+(\ref{eqn:me})式を満たす確率分布は必ず存在し，
+それは以下の確率分布$p_{\lambda}(y\mid x)$ で記述される．
+\begin{eqnarray*}\label{eqn:plambda}
+  p_{\lambda}(y\mid x) & = & 
+	\frac{\displaystyle \exp\Bigl(\sum_{i}\lambda_{i}f_i(x,y)\Bigr)}
+		{\displaystyle \sum_y\exp\Bigl(\sum_{i}\lambda_{i}f_i(x,y)\Bigr)}
+\end{eqnarray*}
+ただし，$\lambda_i$は各素性$f_i$のパラメータである．
+また，実際にエントロピーを最大にする最適なパラメータ${\lambda^{\ast}}_{i}$を推定するには，
+Improved Iterative Scaling(IIS)アルゴリズム\cite{Pietra97a,Berger96a}と呼ばれる
+アルゴリズムが用いられる．
+
+\begin{table*}
+\begin{center}
+\caption{固有表現まとめ上げ状態の表現法}
+\label{tab:NEcode}
+        \begin{tabular}{|c|cc|c|c|ccc|c|c|cc|} \hline
+        固有表現タグ & & \multicolumn{1}{c}{} & \multicolumn{1}{c}{\tt <ORG>} 
+                & \multicolumn{1}{c}{} & \multicolumn{3}{c}{\tt <LOC>} 
+                & \multicolumn{1}{c}{} & \multicolumn{1}{c}{\tt <LOC>}  & & 
+                \\ \cline{4-4}\cline{6-8}\cline{10-10}
+        形態素列 & $\cdots$ & $M$ & $M$ & $M$ 
+                & $M$ & $M$ & $M$ & & $M$ & $M$ & $\cdots$ 
+                \\ \cline{4-4}\cline{6-8}\cline{10-10}
+                & \multicolumn{11}{c|}{} \\ \hline 
+固有表現 & 
+                & \multicolumn{1}{c}{\tt O} & \multicolumn{1}{c}{\tt ORG\_U} 
+                & \multicolumn{1}{c}{\tt O}  
+                & \multicolumn{1}{c}{\tt LOC\_S} & \multicolumn{1}{c}{\tt LOC\_C} 
+                & \multicolumn{1}{c}{\tt LOC\_E} & \multicolumn{1}{c}{}
+                & \multicolumn{1}{c}{\tt LOC\_U} 
+                & \multicolumn{1}{c}{\tt O} &   \\
+まとめ上げ状態 &  \multicolumn{11}{|c|}{} \\ \hline
+        \end{tabular}
+\end{center}
+\end{table*}
+
+\subsection{固有表現まとめ上げ状態の表現法}
+\label{subsec:tagck}
+
+本論文では，固有表現まとめ上げの際のまとめ上げ状態の表現法として，
+日本語固有表現抽出の既存の手法\cite{Sekine98a,Borthwick99aj,Uchimoto00aj}に
+おいて用いられた\sekine_encoding法を採用する
+\footnote{
+  この他に，まとめ上げ問題でよく用いられるInside/Outside法が知られているが，
+  最大エントロピー法との組合わせで日本語固有表現抽出を行なう場合は
+  \sekine_encoding法よりも性能が劣る~\cite{Sassano00bjx}．
+}．
+この方法では，各固有表現タイプについて，以下の四種類のまとめ上げ状態を
+設定する．
+
+
+
+\begin{description} 
+\item[{\tt S}] -- 現在位置の形態素は，二つ以上の形態素から構成される固有表現の
+		先頭の形態素である．
+\item[{\tt C}] -- 現在位置の形態素は，三つ以上の形態素から構成される固有表現の
+		先頭・末尾以外の中間の形態素である．
+\item[{\tt E}] -- 現在位置の形態素は，二つ以上の形態素から構成される固有表現の
+		末尾の形態素である．
+\item[{\tt U}] -- 現在位置の形態素は単独で一つの固有表現を構成する．
+\end{description}
+また，固有表現を構成しない形態素のための状態として以下の状態を設定する．
+\begin{description} 
+\item[{\tt O}] -- 現在位置の形態素はどの固有表現にも含まれない．
+\end{description}
+結果として，この表現法では，固有表現まとめ上げ状態として，
+$4\times 8+1=33$の状態を設定する．
+この方法により日本語固有表現のまとめ上げを行なう様子を
+表~\ref{tab:NEcode}に示す．
+
+\subsection{各形態素の素性}
+\label{subsec:ftr}
+
+各形態素の素性としては，以下の三種類のものを用いる
+\footnote{
+   これらの素性のうち，語彙素性を抽出する条件は\cite{Uchimoto00aj}に従っている．
+   また，品詞素性については，\cite{Uchimoto00aj}とは，
+   利用している形態素解析システムの品詞体系が異なっているため，異なった素性になっている．
+   さらに，\cite{Uchimoto00aj}では，素性として文字種は用いていないが，
+   文字種を用いた方が高い性能が得られることが分かっている~\cite{Sassano00bjx}．
+}．
+\begin{enumerate}
+\item 語彙 --- 訓練コーパス中で，固有表現の位置および周囲二形態素以内に5回以上出現した
+	2,052語彙
+	\footnote{
+	例えば，頻度上位10位以内のものは，
+	助詞6種類，括弧等の記号3種類，読点，
+	11$\sim$20位は，助詞3種類，助動詞1種類，句点，
+	助数詞(``年''，``日'')，接尾辞(``さん'')，地名(``日本'')，時相名詞(``昨年'')，
+	21$\sim$30位は，助詞3種類，助動詞2種類，
+	助数詞(``％''，``円'')，接尾辞(``氏'')，地名(``ロシア''，``米国'')であった．
+	}
+	．
+\item 品詞 --- 形態素解析システム{\sc breakfast}の約300種類の品詞．
+\item 文字種 --- 平仮名・片仮名・漢字・数字・英語アルファベット・記号，およびそれらの組合わせ．
+\end{enumerate}
+
+
+\subsection{周囲の形態素のモデル化}
+\label{subsec:context}
+
+次に，本論文では，現在位置の形態素に対して固有表現のまとめ上げ状態を
+付与する際に，周囲のどれだけの形態素を考慮するか，つまり周囲の形態素をどのように
+モデル化するかについて，以下の二種類のモデルを用いる．
+
+\subsubsection{固定(文脈)長モデル}
+\label{subsubsec:3gram}
+
+一つ目のモデルは，現在位置の形態素がどれだけの長さの固有表現を
+構成するのかを全く考慮せずに，固有表現まとめ上げ状態を付与するモデルである．
+これは，学習時においても，現在の形態素が，いくつの形態素からなる固有表現
+の一部であるか(\ref{subsec:setting}~節，式(\ref{eqn:NE-len})参照)といった情報を全く考慮せず学習を行なうモデル
+である．このモデルにおいては，以下に示すように，現在位置の形態素$M_0$の左側および右側の
+文脈中の形態素については，学習時においても適用時においても，
+常に固定された数の形態素だけを考慮する．
+\[
+\begin{array}{c}
+\ \ \ \mbox{(左側文脈)}\ \ \ \ \  \ \ \ \ \ \mbox{(右側文脈)} \\
+\cdots M_{-k}\cdots M_{-1}  \ \ 
+	M_{0}\ \ 
+         M_{1}\cdots M_{l}\cdots  \\
+         \ \ \ \ \uparrow  \\
+         \ \ \ \ \mbox{(現在位置)}  
+\end{array}
+\]
+本論文ではこのモデルのことを，{\bf 固定長モデル}と呼ぶ．
+本論文では特に，現在位置の形態素$M_0$の左側および右側の文脈中の形態素をいくつ考慮するかに応じて，
+左右二形態素ずつを考慮する5グラムモデル
+\begin{eqnarray*}
+(左側文脈) & (現在位置)  & (右側文脈)  \nonumber \\
+\cdots\ \ M_{-2} M_{-1} & 
+        M_{0}
+        & M_{1} M_2 \ \ \cdots  
+\end{eqnarray*}
+左右三形態素ずつを考慮する7グラムモデル
+\begin{eqnarray*}
+(左側文脈) & (現在位置)  & (右側文脈)  \nonumber \\
+\cdots\ \ M_{-3} M_{-2} M_{-1} & 
+        M_{0}
+        & M_{1} M_2 M_3 \ \ \cdots  
+\end{eqnarray*}
+左右四形態素ずつを考慮する9グラムモデル
+\begin{eqnarray*}
+(左側文脈) & (現在位置)  & (右側文脈)  \nonumber \\
+\cdots\ \ M_{-4} M_{-3} M_{-2} M_{-1} & 
+        M_{0}
+        & M_{1} M_{2} M_{3} M_4 \ \ \cdots  
+\end{eqnarray*}
+を用いる．
+
+\subsubsection{可変(文脈)長モデル}
+\label{subsubsec:vgram}
+
+一方，もう一つのモデルは，
+学習時において，現在位置の形態素が，いくつの形態素から構成される固有表現
+の一部であるか(式(\ref{eqn:NE-len})参照)を考慮して学習を行なうモデルで，
+これを{\bf 可変長モデル}と呼ぶことにする~\cite{Sassano00bjx,Sassano00a}．
+
+\subsubsection*{モデルの学習}
+
+学習時には，現在位置の形態素が固有表現を構成しない場合には，
+5グラムモデルと同じく，現在位置およびその左右の二個ずつの形態素を考慮して
+学習を行なう．
+一方，現在位置の形態素$M_{i}^{NE}$が
+$m(ただし本論文では3以下)$個の形態素からなる固有表現の一部であるときには，
+固有表現を構成する形態素およびその左右の二個ずつの形態素を考慮して学習を行なう．
+つまり，現在注目している固有表現の長さ$m$に応じて，考慮する周囲の形態素の
+総数が可変となる．
+\begin{eqnarray*}
+(左側文脈) & (固有表現)  & (右側文脈)  \nonumber \\
+\cdots\ \  M_{-2}^L M_{-1}^L & 
+        M_{1}^{NE}\cdots M_{i}^{NE}\cdots M_{m(\leq 3)}^{NE}
+        & M_{1}^R M_{2}^R\ \ \cdots  \nonumber \\ 
+        & \uparrow\ \ \ \ \ \ \ & 
+				\\ 
+        & \mbox{(現在位置)}\ \ \ \ \ \  & \nonumber
+\end{eqnarray*}
+
+また，現在位置の形態素$M_{i}^{NE}$が
+4個以上の形態素から構成される固有表現の一部であるときには，
+本論文では，以下の手順で，
+固有表現を構成するとみなす形態素数を3に限定するという近似を行なう．
+\begin{enumerate}
+\item 現在位置の形態素が固有表現の先頭である場合は，
+	先頭から三形態素のみが固有表現を構成するとみなし，
+	四番目以降の形態素については右側文脈であるとみなす．
+\begin{eqnarray*}
+(左側文脈) & (固有表現)  & (右側文脈)  \nonumber \\
+\cdots\ \  M_{-2}^L M_{-1}^L & 
+        M_{1}^{NE}M_{2}^{NE}M_{3}^{NE}
+        & M_{4}^{NE}M_{?}^?\ \ \cdots  \nonumber \\ 
+        & \uparrow\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \  & 
+				\\
+        & \mbox{(現在位置)} \hspace*{2cm} & \nonumber 
+\end{eqnarray*}
+
+
+\item 現在位置の形態素が固有表現の末尾である場合は，
+	末尾の三形態素のみが固有表現を構成するとみなし，
+	末尾の三形態素以外については左側文脈であるとみなす．
+\begin{eqnarray*}
+(左側文脈) & (固有表現)  & (右側文脈)  \nonumber \\
+\cdots\ \  M_{?}^? M_{m-3}^{NE} & 
+        M_{m-2}^{NE}M_{m-1}^{NE}M_{m}^{NE}
+        & M_{1}^{R}M_{2}^R\ \ \cdots  \nonumber \\ 
+        & \ \ \ \ \ \ \ \ \ \ \ \ \ \uparrow  & 
+				\\
+        & \ \ \ \ \ \ \ \ \ \ \ \ \ \ \mbox{(現在位置)} & \nonumber 
+\end{eqnarray*}
+
+\item その他の場合は，現在位置の形態素およびその前後一形態素ずつのみが
+	固有表現を構成するとみなし，
+	それ以外の形態素については左側もしくは右側文脈であるとみなす．
+\begin{eqnarray*}
+(左側文脈) & (固有表現)  & (右側文脈)  \nonumber \\
+\cdots\ \  M_{?}^? M_{?}^{?} & 
+        M_{i-1}^{NE}M_{i}^{NE}M_{i+1}^{NE}
+        & M_{?}^{?}M_{?}^?\ \ \cdots  \nonumber \\ 
+        & \uparrow\ \ \   & 	
+				\\
+        & \mbox{(現在位置)} \ \ \ & \nonumber 
+\end{eqnarray*}
+
+\end{enumerate}
+\clearpage
+例えば，以下のように，現在位置の形態素$M_{i}^{NE}$が
+4個の形態素から構成される固有表現の一部である場合を考える．
+\begin{eqnarray*}
+(左側文脈) & (固有表現)  & (右側文脈)  \\
+\cdots\ \  M_{-2}^L M_{-1}^L & 
+        M_{1}^{NE}M_{2}^{NE}M_{3}^{NE}M_{4}^{NE}
+        & M_{1}^R M_{2}^R\ \ \cdots  \\ 
+        & \uparrow\ \ \ \ \ \ \ \ \ \  & \\
+        & \mbox{(現在位置)}\ \ \ \ \ \ \ \ \   & 
+\end{eqnarray*}
+この場合，固有表現を構成する末尾の形態素$M_{4}^{NE}$が，
+あたかも固有表現の直後の右側文脈に存在する形態素であるかのように
+みなされ，以下のように近似されてモデル化される．
+\begin{eqnarray*}
+(左側文脈) & (固有表現)  & (右側文脈)  \nonumber \\
+\cdots\ \  M_{-2}^L M_{-1}^L & 
+        M_{1}^{NE}M_{2}^{NE}M_{3}^{NE}
+        & M_{4}^{NE}M_{1}^R \ \ \cdots  \\
+        & \uparrow\ \ \  & \\
+        & \mbox{(現在位置)}\ \ \ & \nonumber
+\end{eqnarray*}
+
+\subsubsection*{モデルの適用}
+
+モデルの適用時には，現在位置の形態素がどのような固有表現を構成するかという情報が
+利用できないので，固定長の9グラムモデルの場合と同様に，
+現在位置の形態素，および，左右四形態素ずつの素性を考慮してモデルの適用を行なう
+\footnote{
+  可変長モデルでは，モデルの学習時と適用時で考慮する素性の集合が異なっているので，
+  単独での性能は高くないが，抽出される固有表現の分布が固定長モデルとは異なっている
+  (\ref{subsec:indiv}~節参照)．
+}．
+
+\subsubsection{周囲の形態素の素性}
+\label{subsubsec:ftr34}
+
+前節までで述べた固定長モデルおよび可変長モデルにおいて，
+特に現在位置の周囲の形態素の素性について，\ref{subsec:ftr}~節で述べた素性のうちの
+全部または一部のみを用いるモデルとして，以下の三種類のモデルを設定し，
+これらについて実験的評価を行なう
+\footnote{
+  実際に，実験で用いた訓練コーパスから学習したモデルのうち，
+  全素性を用いた5グラムモデルの素性数は13,200，素性関数の数は31,344(頻度3以上)，
+  全素性を用いた9グラムモデルの素性数は15,071，素性関数の数は35,311(頻度3以上)であった．
+}．
+\begin{itemize}
+\item 全素性を用いるモデル．
+\item 周囲の形態素$M_{l(\leq -3)}$および$M_{r(\geq 3)}$については，
+	語彙素性および品詞素性のみを考慮するモデル．
+\item 周囲の形態素$M_{l(\leq -3)}$および$M_{r(\geq 3)}$については，
+	語彙素性のみを考慮するモデル．
+\end{itemize}
+なお，\cite{Uchimoto00aj}と同様に，
+周囲の複数の形態素の素性を結合した結合素性は用いていない．
+
+\section{正誤判別規則学習を用いた複数システム出力の混合}
+\label{sec:combi}
+
+\subsection{訓練・評価データセット}
+\label{subsec:trts}
+
+本論文の複数システム出力の混合法では，以下の三種類の訓練・評価データセットを用いる．
+\begin{enumerate}
+\item $TrI$: 個々の固有表現抽出モデルを学習するための訓練データセット．
+\item $TrC$: 複数システムの出力の正誤判別規則を学習するための訓練データセット．
+\item $Ts$: 複数システムの出力の正誤判別規則を評価するための評価データセット．
+\end{enumerate}
+
+\subsection{訓練および評価手続きの概要}
+\label{subsec:proc}
+
+まず，以下に，訓練データセット$TrI$および$TrC$を用いて，
+複数システムの出力の正誤判別規則を学習するため手続きの概要を示す．
+\begin{enumerate}
+\item 訓練データセット$TrI$を用いて，
+	個々の固有表現抽出モデル$NEext_i$ $(i=1,\ldots,n)$を学習する．
+\item 個々の固有表現抽出モデル$NEext_i$ $(i=1,\ldots,n)$を，
+	それぞれ，訓練データセット$TrC$に適用し，
+	各固有表現抽出モデル$NEext_i$につき，
+	抽出結果の固有表現リスト$NEList_i(TrC)$を
+	それぞれ一つずつ得る．
+\item 訓練データセット(テキスト)$TrC$中での各固有表現の出現位置の情報を用いて，
+	抽出結果の固有表現リスト$NEList_i(TrC)$ $(i\!=\!1,\ldots,n)$を，
+	複数システム間$(i\!=\!1,\ldots,n)$で整列し，
+	訓練データセット$TrC$の事象表現$TrCev$を作成する．
+\item 訓練データセット$TrC$の事象表現$TrCev$を教師あり訓練データとして，
+	複数システムの出力の正誤判別規則$NEext_{cmb}$を学習する．
+\end{enumerate}
+
+次に，評価データセット$Ts$に，学習された正誤判別規則$NEext_{cmb}$を適用する手順の概要を示す．
+\begin{enumerate}
+\item\label{enum:evproc1}
+	個々の固有表現抽出モデル$NEext_i$ $(i=1,\ldots,n)$を，
+	それぞれ，評価データセット$Ts$に適用し，
+	各固有表現抽出モデル$NEext_i$につき，
+	抽出結果の固有表現リスト$NEList_i(Ts)$を
+	それぞれ一つずつ得る．
+\item 評価データセット(テキスト)$Ts$中での各固有表現の出現位置の情報を用いて，
+	抽出結果の固有表現リスト$NEList_i(Ts)$ $(i\!=\!1,\ldots,n)$を，
+	複数システム間$(i\!=\!1,\ldots,n)$で整列し，
+	評価データセット$Ts$の事象表現$Tsev$を作成する．
+\item 複数システムの出力の正誤判別規則$NEext_{cmb}$を
+	評価データセット$Ts$の事象表現$Tsev$に適用し，性能を測定する．
+\end{enumerate}
+
+\subsection{データ構造}
+\label{subsec:expr}
+
+本節では，訓練データセット$TrC$の事象表現$TrCev$，あるいは，
+評価データセット$Ts$の事象表現$Tsev$のデータ構造を説明し，
+複数システムの出力の正誤判別規則を学習する際の素性・クラスについて述べる．
+以下では，訓練データセット$TrC$の事象表現$TrCev$を例にして説明する．
+
+\subsubsection{事象}
+\label{subsubsec:event}
+
+訓練データセット$TrC$の事象表現$TrCev$は，
+訓練データセット(テキスト)$TrC$中での各固有表現の出現位置の情報を用いて，
+抽出結果の固有表現リスト$NEList_i(TrC)$ $(i\!=\!1,\ldots,n)$を
+複数システム間$(i\!=\!1,\ldots,n)$で整列することにより作成される．
+ここで，整列結果の事象表現$TrCev$は，セグメントの列$Seg_1,\ldots,Seg_N$で表現され，
+各セグメント$Seg_j$は，整列された固有表現の集合$\{ NE_1,\ldots,NE_{m_j} \}$に
+よって表現される． 
+\begin{eqnarray*}
+ TrCev & = & Seg_1,\ldots,Seg_N \\
+ Seg_j & = & \{ NE_1,\ldots,NE_{m_j} \} 
+\end{eqnarray*}
+ただし，この整列の際には，少なくとも一つの形態素を共有する複数の固有表現は，
+同じセグメントに含まれなければならない，という制約が課せられる．
+
+次に，各セグメント$Seg_j$中の固有表現の集合$\{ NE_1,\ldots,NE_{m_j} \}$は，
+固有表現の事象表現の集合$\{ NEev_1,\ldots,NEev_{l_j} \}$に変換され，
+これにより，各セグメント$Seg_j$は事象表現$SegEv_j$に変換される．
+\begin{eqnarray}
+ SegEv_j & = & \{ NEev_1,\ldots,NEev_{l_j} \}  \label{eqn:segev}
+\end{eqnarray}
+ここで，各事象表現$NEev_{k_j}$は，以下の二種類のうちのどちらかに対応し，
+それぞれ異なったデータ構造を持つ．
+\begin{enumerate}
+\item[i)] そのセグメント中で少なくとも一つのシステムにより出力された固有表現の事象表現．
+\item[ii)] そのセグメント中で一つも固有表現を出力しなかった一つのシステムに関する情報を
+	表す事象表現．
+\end{enumerate}
+i)のタイプの事象表現$NEev_{k_j}$は以下のようなデータ構造を持つ．
+\begin{eqnarray}
+NEev_{k_j} & = &	\Bigl\{
+	 systems =
+	 \langle p,\ldots,q\rangle,\nonumber  
+\ mlength = x\mbox{ morphemes},\nonumber \\
+& &	 \ \  NEtag = \cdots,\ 
+  		 POS = \cdots,\nonumber 
+\ class_{NE} = +/-
+	 \Bigr\} \label{eqn:NEnon-emp}
+\end{eqnarray}
+ここで，``$systems$''はこの固有表現を出力したシステムの指標のリストを，
+``$mlength$''はこの固有表現を構成する形態素の数を，
+``$NEtag$''はこの固有表現のタイプを，
+``$POS$''はこの固有表現を構成する形態素の数の品詞のリストを，
+それぞれ表す．
+また，``$class_{NE}$''は，正解データと比較して，この固有表現が正解であるか(``$+$'')，
+それとも，システムによる誤出力であるか(``$-$'')を示す．
+
+一方，ii)のタイプの事象表現$NEev_{k_j}$は，
+このセグメント中で，指標$r$を持つシステムが固有表現を出力しなかったことを示す，
+以下のようなデータ構造を持つ．
+\begin{eqnarray}
+NEev_{k_j} & = &   	
+       \Bigl\{
+	 systems =
+	 \langle r\rangle,  
+\  class_{sys} =
+	 \mbox{``no output''}
+	 \Bigr\} \label{eqn:NEemp}
+\end{eqnarray}
+
+\subsubsection{クラス}
+\label{subsubsec:class}
+
+複数システムの出力の正誤判別を行なう規則は，
+式(\ref{eqn:segev})で定義されるセグメントの事象表現$SegEv_j$を一つの事象単位として，
+学習および適用が行なわれる．
+ここで，正誤判別規則の学習および適用の際には，
+セグメント$SegEv_j$中の固有表現を各システムごとにまとめて，
+システム単位で正誤のクラスを参照する．
+そこで，式(\ref{eqn:segev})で定義される一つのセグメントの事象表現$SegEv_j$に対して，
+各システム$i$ごとにまとめた以下のクラス表現を設定し，
+正誤判別規則の学習および適用を行なう．
+\begin{eqnarray}
+class_{sys}^1  & = & 
+	\left\{\begin{array}{l}
+	  +/-,\ \ldots,\ +/- \\
+	 \mbox{``no output''} 
+	\end{array}\right. \nonumber \\
+         & \cdots & \label{eqn:segcl} \\
+class_{sys}^n  & = & 
+	\left\{\begin{array}{l}
+	  +/-,\ \ldots,\ +/- \\
+	 \mbox{``no output''} 
+	\end{array}\right. \nonumber 
+\end{eqnarray}
+ここで，一般に，一つのセグメント中で，各システムは一つも固有表現を出力しない場合もあれば，
+複数の固有表現を出力する場合もありえるので，
+各システム$i$のクラス$class_{sys}^i$は上記のような表現になる
+\footnote{
+  実際に，実験で用いた訓練コーパスから学習した正誤判別規則において，
+  クラスの種類が最も多かったのは，システム数$n\!=\!2$の場合で，
+  ``$+$''，``$++$''，``$+++$''，``$++++$''，``$++-$''，``$+-$''，
+  ``$+--$''，``$+---$''，``$-$''，``$--$''，``$---$''，
+  ``no output''，の12通りであった．
+}．
+
+\subsubsection{複数システムの出力の正誤判別規則}
+
+次に，前節の事象のデータ構造を用いて，複数システムの出力の正誤判別を行なう規則について説明する．
+複数システムの出力の正誤判別を行なう規則は，
+式(\ref{eqn:segev})で定義されるセグメントの事象表現$SegEv_j$を一つの事象単位として，
+各システム$i$ごとに，式(\ref{eqn:segcl})で示すクラス$class_{sys}^i$を判別するという形式をとる．
+この正誤判別規則の学習の際には，
+式(\ref{eqn:segev})で定義されるセグメントの事象表現$SegEv_j$から，次節で説明する素性を抽出し，
+この素性を用いて各システム$i$ごとのクラス$class_{sys}^i$を判別する規則を学習する
+(\ref{subsec:DL}~節)．
+この正誤判別規則の適用の際にも，事象表現$SegEv_j$から抽出される素性を用いて
+各システム$i$ごとにクラス$class_{sys}^i$を判別する(\ref{subsec:apl}~節)．
+
+\subsubsection{素性}
+\label{subsubsec:ftr}
+
+式(\ref{eqn:segev})で定義されるセグメントの事象表現$SegEv_j$から抽出される一つの素性$f$は，
+システムの指標のリスト$\langle p,\ldots,q\rangle$，および，固有表現の素性表現$F$の組
+$\langle systems\!=\! \langle p,\ldots,q\rangle,\ F \rangle$の集合によって表現される． 
+\begin{eqnarray}
+f & = &	\Bigl\{\
+	 \langle 
+	 systems\!=\!
+	 \langle p,\ldots,q\rangle,\ F \rangle, 
+\ \cdots, 
+\  
+	 \langle 
+	 systems\!=\!
+	 \langle p',\ldots,q'\rangle,\ F' \rangle 
+	 \ \Bigr\} \label{eqn:ftr} 
+\end{eqnarray}
+このうち，一つの組$\langle systems\!=\! \langle p,\ldots,q\rangle,\ F \rangle$は，
+指標$p,\ldots,q$に相当する(複数の)システムによって出力された一つの固有表現が，
+素性表現$F$を持つことを表している．
+固有表現の素性表現$F$は，集合
+$\{mlength\!=\!\cdots, NEtag\!=\!\cdots, POS\!=\!\cdots\}$の
+巾集合の任意の要素，
+あるいは，そのセグメント中で指標$p,\ldots,q$に相当する(複数の)システムが固有表現を
+出力しなかったことを表す集合の形式，のいずれかで表現される．
+\begin{eqnarray}
+F  & = & 
+ \left\{\begin{array}{l}
+      \Bigl\{
+       mlength\!=\!\cdots,\  NEtag\!=\!\cdots,\
+  		 POS\!=\!\cdots\Bigr\} \nonumber \\
+       \Bigl\{
+       mlength\!=\!\cdots,\  NEtag\!=\!\cdots\Bigr\} \nonumber \\
+       \Bigl\{
+       mlength\!=\!\cdots,\ POS\!=\!\cdots\Bigr\} \nonumber \\
+     \Bigl\{
+       NEtag\!=\!\cdots,\
+  		 POS\!=\!\cdots\Bigr\} \nonumber \\
+ 
+       \Bigl\{
+     mlength\!=\!\cdots \Bigr\} \nonumber \\
+       \Bigl\{
+      NEtag\!=\!\cdots \Bigr\} \nonumber \\
+       \Bigl\{
+       POS\!=\!\cdots \Bigr\} \nonumber \\
+       \emptyset \nonumber \\
+       \Bigl\{
+          class_{sys}\!=\! \mbox{``no outputs''} \Bigr\} \nonumber
+	\end{array}\right.
+\end{eqnarray}
+正誤判別規則の学習時には，
+式(\ref{eqn:segev})で定義されるセグメントの事象表現$SegEv_j$から，
+式(\ref{eqn:ftr})の形式のあらゆる可能な素性$f$のうち，
+以下の制約を含むいくつかの制約を満たすものだけが抽出される
+\footnote{
+  実際に，実験で用いた訓練コーパスから学習した正誤判別規則においては，
+  固有表現を構成する形態素数``$mlength$''の値は18通り，
+  固有表現のタイプ``$NEtag$''の値は8通り，
+  固有表現を構成する形態素の品詞のリスト``$POS$''の値は4926通りであった．
+  また，システム数$n\!=\!2$の場合で，可能な素性$f$の数の最大数は，
+  112,114であった．
+}． 
+詳細については，
+次節の例を参照．
+\begin{enumerate}
+\item[i)]	
+  システムの指標のリスト$\langle p,\ldots,q\rangle$については，
+  その固有表現を出力した全てのシステムの指標を記すこととし，
+  部分リストの形式は許さない．
+\item[ii)]
+  一つのシステムが，一つのセグメント中で複数個の固有表現を出力した場合は，
+  一つの素性$f$中で，それらの複数の固有表現のうちの一部のものだけの情報を
+  記述することは許さない．
+  それらの全ての固有表現について何らかの情報を記述するか，
+  どの固有表現についての情報も記述しないかのどちらかである．
+\end{enumerate}
+
+
+\subsubsection{例}
+\label{subsubsec:comb-eg}
+
+\ref{subsubsec:event}~節の手続きにしたがって，
+二つのシステムの固有表現抽出結果を整列し，
+その整列結果を事象表現に変換する例を表~\ref{tab:ev-eg}に示す．
+また，\ref{subsubsec:class}~節および\ref{subsubsec:ftr}~節の
+手続きにしたがって，それらの事象表現からクラスおよび素性を抽出する
+例を表~\ref{tab:ftr-eg}に示す．
+
+表~\ref{tab:ev-eg}では，形態素解析の結果の形態素列に対して，
+システム0およびシステム1の二つのシステムがそれぞれ単独で出力した
+固有表現を，「単独システムの固有表現出力」の欄に示す．
+それらの単独システムの固有表現出力を整列した結果は，
+$SegEv_i\sim SegEv_{i+3}$の四つのセグメントに分割されており，
+これらのセグメントを事象表現に変換した結果が
+「事象表現」の欄に示されている．
+各セグメントの特徴を簡単にまとめると以下のようになる．
+\begin{itemize}
+\item $SegEv_i$	:
+	システム0が連続する二つの固有表現を出力したのに対して，
+	システム1はそれらをまとめて一つの固有表現として出力している．
+	正解データとの比較では，システム1の出力結果の方が正解である．
+	このセグメントの事象表現は，いずれかの単独システムから出力された
+	三つの固有表現の事象表現から構成されている．
+\item $SegEv_{i+1}$ :
+	システム1のみが固有表現を出力したが，この固有表現は誤出力である．
+	このセグメントの事象表現は，システム0からの出力がなかったことを
+	表す事象表現と，
+	システム1が出力した一つの固有表現の事象表現から構成されている．
+\item $SegEv_{i+2}$ :
+	システム0が一形態素から構成される一つの固有表現を出力したのに対して，
+	システム1はその形態素を含む三形態素から構成される一つの固有表現を出力した．
+	正解データとの比較では，システム1の出力結果の方が正解である．
+	このセグメントの事象表現は，各々の単独システムから出力された
+	二つの固有表現の事象表現から構成されている．
+\item $SegEv_{i+3}$ :
+	システム0，システム1ともに二形態素から構成される同一の固有表現を出力した．
+	正解データとの比較では，この固有表現は正解である．
+	このセグメントの事象表現は，この一つ固有表現の事象表現から構成されている．
+\end{itemize}
+
+次に，表~\ref{tab:ftr-eg}においては，まずクラスについては，
+これらの各セグメントの事象表現において，
+各システムが出力した固有表現のクラス(もしくは出力がなかったことを表す事象表現のクラス)を
+システムごとにまとめたものになっている．
+一方，素性の方は，各セグメントについて，
+以下の制約を満たす可能な素性の一覧を表現したものになっている．
+\begin{itemize}
+\item $SegEv_i$	:
+	システム0は，このセグメント中で二つの固有表現を出力しているが，
+	この二つの固有表現のうちの一つだけの情報を記述した素性は許容しない．
+\item $SegEv_{i+1}$ :
+	ある単独システムからの出力がなかったことだけを記述した素性は許容しない．
+	例えば，	
+	$\Bigl\{\
+	 \langle 
+	 systems\!=\!
+	 \langle 0\rangle,
+	class_{sys}\!=\!
+	\mbox{``no outputs''}\rangle\ \Bigr\}$
+	という素性は許容しない．
+\item $SegEv_{i+3}$ :
+	システムの指標のリストにおいては，
+	このセグメントの固有表現を出力した二つのシステムの指標0および1の両方を
+	必ず記述する．
+\end{itemize}
+
+
+\begin{table}
+\begin{scriptsize}
+\begin{center}
+\caption{複数システムの出力の混合のための事象表現の例}
+\label{tab:ev-eg}
+\begin{tabular}{|c||c||c|c||c|} \hline
+セグ & 形態素列(品詞) & \multicolumn{2}{|c||}{単独システムの固有表現出力} & 事象表現 \\ \cline{3-4}
+メント	  & 	& 
+システム0 & 
+システム1 & \\ \hline\hline
+	&  $\vdots$ & 	&   &    \\ \hline
+ $SegEv_i$
+        & 
+	\begin{tabular}{c}
+	来年(時相名詞) \\ 
+	10月(時相名詞)
+	\end{tabular}
+	& 
+	\begin{tabular}{c}
+	来年 \\ (DATE)\\
+        10月\\ (DATE)
+	\end{tabular}
+	&  
+	\begin{tabular}{c}
+	来年10月  \\
+	(DATE) 
+	\end{tabular}
+ 	& 
+	\begin{tabular}{l}
+	$\Bigl\{
+		systems\!=\!\langle 0\rangle,
+		mlength\!=\!1,$ \\
+	\ \ 	$NEtag\!=\!{\rm DATE},$\\
+	\ \ $POS\!=\!時相名詞,
+		class_{NE}\!=\!-
+		\Bigr\}$\\
+	$\Bigl\{
+		systems\!=\!\langle 0\rangle,
+		mlength\!=\!1,$ \\
+	\ \ 	$NEtag\!=\!{\rm DATE},$\\
+	\ \ $POS\!=\!時相名詞,
+		class_{NE}\!=\!-
+		\Bigr\}$ \\
+	$\Bigl\{
+		systems\!=\!\langle 1\rangle,
+		mlength\!=\!2,$ \\
+	\ \ $NEtag\!=\!{\rm DATE},$\\
+	\ \ $POS\!=\!時相名詞$-$時相名詞,$\\
+	\ \ $class_{NE}\!=\!+
+		\Bigr\}$
+	\end{tabular}
+	  \\ \hline
+	& $\vdots$ & 	&   &    \\ 
+	\hline
+ $SegEv_{i+1}$
+	& 
+	\begin{tabular}{c}
+	生殖(名詞)\\
+	医療(名詞)\\
+	技術(名詞)
+	\end{tabular}
+	 & 	&
+	\begin{tabular}{c}
+	 生殖医療技術 \\
+	(ARTIFACT)
+	\end{tabular}
+	 &   	
+	\begin{tabular}{l}
+	$\Bigl\{
+	systems\!=\!\langle 0\rangle,$  \\
+	\ \ $class_{sys}\!=\!
+	\mbox{``no outputs''} \Bigr\}$\\
+	$\Bigl\{
+	systems\!=\!\langle 1\rangle,  
+	mlength\!=\!3,$ \\
+	\ \ $NEtag\!=\!{\rm ARTIFACT},$ \\
+	\ \ $POS\!=\!名詞$-$名詞$-$名詞,$\\
+	\ \ $class_{NE}\!=\!-
+		\Bigr\}$
+	\end{tabular}
+	\\ \hline
+	& について(助詞相当)& 	   &   & \\
+	& $\vdots$ & 	&   &    \\ 
+	& 調査(サ変名詞) & 	&   &    \\ 
+	& は(提題助詞) & 	   &   & \\ \hline
+$SegEv_{i+2}$
+	& 
+	\begin{tabular}{c}
+	厚生省(固有名詞)\\
+	研究(サ変名詞) \\
+	班(名詞)
+	\end{tabular}
+	 & 
+	\begin{tabular}{c}
+	厚生省 \\
+	(ORGANI- \\
+	ZATION)
+	\end{tabular}
+	&
+	\begin{tabular}{c}
+	厚生省研究班 \\
+	(ORGANI-\\
+	ZATION) 
+	\end{tabular}
+	  & 
+	\begin{tabular}{l}
+	$\Bigl\{
+		systems\!=\!\langle 0\rangle,
+		mlength\!=\!1,$ \\
+	\ \ $NEtag\!=\!{\rm ORGANIZATION},$\\
+	\ \ 	$POS\!=\!固有名詞,
+		class_{NE}\!=\!-
+		\Bigr\}$\\
+	$\Bigl\{
+	systems\!=\!\langle 1\rangle,
+		mlength\!=\!3,$ \\
+	\ \ $NEtag\!=\!{\rm ORGANIZATION},$\\
+	\ \ $POS\!=\!固有名詞$-$サ変名詞$-$名詞,$\\
+	\ \ $class_{NE}\!=\!+
+		\Bigr\}$
+	\end{tabular}
+	\\ \hline
+	& （(記号) & 	   &   & \\
+	& 主任(人称名詞) & 	   &   & \\
+	& 研究者(人称名詞) & 	   &   & \\
+	& 、(読点) & 	   &   & \\ \hline
+$SegEv_{i+3}$
+	& 
+	\begin{tabular}{c}
+	山田(人名)\\
+	太郎(人名)
+	\end{tabular}
+	 & 
+	\begin{tabular}{c}
+	 山田太郎  \\
+	(PERSON)
+	\end{tabular}
+	 & 
+	\begin{tabular}{c}
+	 山田太郎  \\
+	(PERSON)
+	\end{tabular}
+	 & 
+	\begin{tabular}{l}
+	$\Bigl\{
+		systems\!=\!\langle 0,1\rangle,
+		mlength\!=\!2,$ \\
+	\ \ $NEtag\!=\!{\rm PERSON},$\\
+	\ \ $POS\!=\!人名$-$人名,
+		class_{NE}\!=\!+ \Bigr\}$
+	\end{tabular}
+	\\ \hline
+	& $\vdots$ & 	&   &    \\ \hline
+\end{tabular}
+\end{center}
+\end{scriptsize}
+\end{table}
+
+
+
+\begin{table}
+\begin{scriptsize}
+\begin{center}
+\caption{表~\ref{tab:ev-eg}の事象表現の例から抽出される素性およびクラス}
+\label{tab:ftr-eg}
+\begin{tabular}{|c||c|c|} \hline
+事象表現 & 素性 & クラス \\ \hline\hline
+	\begin{tabular}{l}
+	$\Bigl\{
+		systems\!=\!\langle 0\rangle,
+		mlength\!=\!1,$ \\
+	\ \ 	$NEtag\!=\!{\rm DATE},$\\
+	\ \ $POS\!=\!時相名詞,
+		class_{NE}\!=\!-
+		\Bigr\}$\\
+	$\Bigl\{
+		systems\!=\!\langle 0\rangle,
+		mlength\!=\!1,$ \\
+	\ \ 	$NEtag\!=\!{\rm DATE},$\\
+	\ \ $POS\!=\!時相名詞,
+		class_{NE}\!=\!-
+		\Bigr\}$ \\
+	$\Bigl\{
+		systems\!=\!\langle 1\rangle,
+		mlength\!=\!2,$ \\
+	\ \ $NEtag\!=\!{\rm DATE},$\\
+	\ \ $POS\!=\!時相名詞$-$時相名詞,$\\
+	\ \ $class_{NE}\!=\!+
+		\Bigr\}$
+	\end{tabular}
+	&
+	\begin{tabular}{c}
+	$\Bigl\{\
+	 \langle 
+	 systems\!=\!
+	 \langle 0\rangle,\ F\rangle,
+	\langle 
+	 systems\!=\!
+	 \langle 0\rangle,\ F'\rangle,$\\
+	$ \langle systems\!=\!
+	 \langle 1\rangle,\ F''\rangle\ \Bigr\}$
+	\ \ \ \ または
+	\\
+	$\Bigl\{\
+	 \langle 
+	 systems\!=\!
+	 \langle 0\rangle,\ F\rangle,
+	\langle 
+	 systems\!=\!
+	 \langle 0\rangle,\ F'\rangle\ \Bigr\}$\\
+	または\ \ \ \ 
+	$\Bigl\{\
+	 \langle 
+	 systems\!=\!
+	 \langle 1\rangle,\ F''\rangle\ \Bigr\}$\\
+	ただし\\
+	$F,F'は\ \  \Bigl\{
+		mlength\!=\!1,
+	NEtag\!=\!{\rm DATE},$\\
+	$ POS\!=\!時相名詞
+		\Bigr\}$\\
+	の巾集合の任意の要素\\
+	$F''は\ \  \Bigl\{
+		mlength\!=\!2,
+		NEtag\!=\!{\rm DATE},$\\
+	\hspace*{0.7cm}$POS\!=\!時相名詞$-$時相名詞
+		\Bigr\}$\\
+	の巾集合の任意の要素
+	\end{tabular} 
+	& 
+	\begin{tabular}{c}
+	$class_{sys}^0\!=\!--$ \\
+	$class_{sys}^1\!=\!+$ 
+	\end{tabular} 
+	  \\ \hline
+	\begin{tabular}{l}
+	$\Bigl\{
+	systems\!=\!\langle 0\rangle,$  \\
+	\ \ $class_{sys}\!=\!
+	\mbox{``no outputs''} \Bigr\}$\\
+	$\Bigl\{
+	systems\!=\!\langle 1\rangle,  
+	mlength\!=\!3,$ \\
+	\ \ $NEtag\!=\!{\rm ARTIFACT},$ \\
+	\ \ $POS\!=\!名詞$-$名詞$-$名詞,$\\
+	\ \ $class_{NE}\!=\!-
+		\Bigr\}$
+	\end{tabular}
+	&
+	\begin{tabular}{c}
+	$\Bigl\{\
+	 \langle 
+	 systems\!=\!
+	 \langle 0\rangle,
+	class_{sys}\!=\!
+	\mbox{``no outputs''}\rangle,$\\
+	$ \langle 
+	 systems\!=\!
+	 \langle 1\rangle,\ F\rangle\ \Bigr\}$\\
+	または\ \ \ \ 
+	$\Bigl\{\
+	 \langle 
+	 systems\!=\!
+	 \langle 1\rangle,\ F\rangle\ \Bigr\}$\\
+	ただし\\
+	$Fは\ \  \Bigl\{
+		mlength\!=\!3,
+	NEtag\!=\!{\rm ARTIFACT},$\\
+	$ 	POS\!=\!名詞$-$名詞$-$名詞
+		\Bigr\}$\\
+	の巾集合の任意の要素
+	\end{tabular} 
+	& 
+	\begin{tabular}{c}
+	$class_{sys}^0\!=\!$ \\
+	``no outputs'' \\
+	$class_{sys}^1\!=\!-$ 
+	\end{tabular} 
+	\\ \hline
+	\begin{tabular}{l}
+	$\Bigl\{
+		systems\!=\!\langle 0\rangle,
+		mlength\!=\!1,$ \\
+	\ \ $NEtag\!=\!{\rm ORGANIZATION},$\\
+	\ \ 	$POS\!=\!固有名詞,
+		class_{NE}\!=\!-
+		\Bigr\}$\\
+	$\Bigl\{
+	systems\!=\!\langle 1\rangle,
+		mlength\!=\!3,$ \\
+	\ \ $NEtag\!=\!{\rm ORGANIZATION},$\\
+	\ \ $POS\!=\!固有名詞$-$サ変名詞$-$名詞,$\\
+	\ \ $class_{NE}\!=\!+
+		\Bigr\}$
+	\end{tabular}
+	&
+	\begin{tabular}{c}
+	$\Bigl\{\
+	 \langle 
+	 systems\!=\!
+	 \langle 0\rangle,\ F\rangle,
+	 \langle 
+	 systems\!=\!
+	 \langle 1\rangle,\ F'\rangle\ \Bigr\}$\\
+	または\ \ 
+	$\Bigl\{\
+	 \langle 
+	 systems\!=\!
+	 \langle 0\rangle,\ F\rangle\ \Bigr\}$\\
+	または\ \ 
+	$\Bigl\{\
+	 \langle 
+	 systems\!=\!
+	 \langle 1\rangle,\ F'\rangle\ \Bigr\}$\\
+	ただし\\
+	$Fは\ \  \Bigl\{
+		mlength\!=\!1,$\hspace*{3.2cm}\\
+	\hspace*{0.5cm} $NEtag\!=\!{\rm ORGANIZATION},$\\
+	\hspace*{2.2cm} $ 	
+	POS\!=\!固有名詞
+		\Bigr\}$\\
+	の巾集合の任意の要素\\
+	$F'は\ \  \Bigl\{
+		mlength\!=\!3,\hspace*{3.2cm}$\\
+	\hspace*{0.7cm} $ NEtag\!=\!{\rm ORGANIZATION},$\\
+	\hspace*{1.2cm} $ 	
+	POS\!=\!固有名詞$-$サ変名詞$-$名詞
+		\Bigr\}$\\
+	の巾集合の任意の要素
+	\end{tabular} 
+	& 
+	\begin{tabular}{c}
+	$class_{sys}^0\!=\!-$ \\
+	$class_{sys}^1\!=\!+$ 
+	\end{tabular} 
+	\\ \hline
+	\begin{tabular}{l}
+	$\Bigl\{
+		systems\!=\!\langle 0,1\rangle,
+		mlength\!=\!2,$ \\
+	\ \ $NEtag\!=\!{\rm PERSON},$\\
+	\ \ $POS\!=\!人名$-$人名,
+		class_{NE}\!=\!+ \Bigr\}$
+	\end{tabular}
+	&
+	\begin{tabular}{c}
+	$\Bigl\{\
+	 \langle 
+	 systems\!=\!
+	 \langle 0,1\rangle,\ F\rangle\ \Bigr\}$\\
+	ただし\\
+	$Fは\ \  \Bigl\{
+		mlength\!=\!2,
+	NEtag\!=\!{\rm PERSON},$\\
+	$POS\!=\!人名$-$人名
+		\Bigr\}$\\
+	の巾集合の任意の要素
+	\end{tabular} 
+	& 
+	\begin{tabular}{c}
+	$class_{sys}^0\!=\!+$ \\
+	$class_{sys}^1\!=\!+$ 
+	\end{tabular} 
+	\\ \hline
+\end{tabular}
+\end{center}
+\end{scriptsize}
+\end{table}
+
+
+
+
+\subsection{学習アルゴリズム}
+\label{subsec:DL}
+
+教師あり学習法としては，決定リスト学習を用いる
+\footnote{
+  \ref{subsec:comb-ME}~節では，
+  最大エントロピー法を用いて正誤判別規則学習を行なった結果との比較を行なっている．
+  本論文では，実装が容易，学習が高速で，かつ，一定の性能を達成できるという理由で決定リスト学習を
+  適用したが，より高性能な他の様々な教師あり学習法を適用することも十分可能である．
+}．
+決定リスト\cite{Rivest87a,Yarowsky94a}は，
+ある素性のもとでクラスを決定するという規則を優先度の高い順にリスト形式で
+並べたもので，適用時には優先度の高い規則から順に適用を試みていく．
+本論文では，各規則の優先度として，素性$f$の条件のもとでの，システム$i$のクラス$class_{sys}^i$の
+条件付確率$P(class_{sys}^i\!=\!c_i\mid f)$を用い，この条件付確率順に決定リストを構成する．
+ただし，決定リストを構成する際には，
+素性$f$の条件のもとでの，システム$i$のクラス$class_{sys}^i$の頻度$freq(f,class_{sys}^i)$に
+下限$L_f$を設け，
+\begin{eqnarray}\label{eqn:lbdF}
+ freq(f,class_{sys}^i) & \geq & L_f
+\end{eqnarray}
+の条件を満たす規則だけを用いて決定リストを構築する．
+頻度の下限$L_f$は，各規則の条件付確率$P(class_{sys}^i\!=\!c_i\mid f)$を推定する際に
+使用したデータセット以外のデータセットに対して，
+正誤判別規則の性能を最大にする値を用いる．
+
+\subsection{正誤判別規則の適用による複数システム出力の混合}
+\label{subsec:apl}
+
+学習された正誤判別規則を適用することにより複数システムの出力の混合を行なう場合は，
+式(\ref{eqn:segev})と同じ形式のセグメントの事象表現
+\begin{eqnarray*}
+ SegEv_j & = & \{ NEev_1,\ldots,NEev_{l_j} \} 
+\end{eqnarray*}
+に対して，決定リストの形式の正誤判別規則が参照され，
+素性$f$の条件のもとでの，システム$i$のクラス$class_{sys}^i$の
+条件付確率$P(class_{sys}^i\!=\!c_i\mid f)$の推定値を得る．
+そして，
+\begin{enumerate}
+\item 複数のシステムによって出力された単一の固有表現は，同一の正誤クラス
+      を持つ．
+\item 少なくとも一つの形態素を共有する複数の固有表現が，
+      正のクラス(``$+$'')を持ってはならない．
+\end{enumerate}
+という二つの制約のもとで，全システムについての
+条件付確率$P(class_{sys}^i\!=\!c_i\mid f)$の積を最大化するクラス割当ての組合わせが
+求められ，これが，セグメント中で各システム$i$
+ $(i=1,\ldots,n)$が出力した
+固有表現への正誤クラスの判別結果$\hat{class_{sys}^1},\ldots,\hat{class_{sys}^n}$となる
+\footnote{
+  システム$i$について，決定リスト中に照合する判別規則が存在しない場合には，
+  そのシステムが出力した固有表現を誤出力(``$-$'')とみなしている．
+}．
+\begin{eqnarray*}
+\hat{class_{sys}^1},\ldots,\hat{class_{sys}^n} & = &
+	\argmax_{c_i, f_i} \prod_{i=1}^{n} P(class_{sys}^i\!=\!c_i\mid f_i)
+\end{eqnarray*}
+
+
+
+
+\section{実験および評価}
+\label{sec:experi}
+
+本節では，
+IREXワークショップの固有表現抽出タスクの訓練データおよび試験データを用いて，
+複数の固有表現抽出結果の混合法の実験的評価を行なった結果について述べる．
+以下では，訓練データとして用いているCRL固有表現データの
+一般ドメインのものを$D_{CRL}$，
+評価データとして用いている本試験データのうちの一般ドメインのものを
+$D_{formal}$と記す．
+ただし，いずれも，表~\ref{tab:MnNE}の「その他」のものは除いている．
+
+\subsection{各モデル単独の出力の比較}
+\label{subsec:indiv}
+
+
+本節では，\ref{subsec:context}~節で述べた各モデル単独の性能について述べ，
+各モデルの出力を比較する．
+実験に用いたモデルは，\ref{subsubsec:3gram}~節の固定長モデルとしては，
+5グラムモデル，7グラムモデル，9グラムモデル，および，
+\ref{subsubsec:vgram}~節の可変長モデルである．
+また，7グラムモデル，9グラムモデル，および，可変長モデルについては，
+\ref{subsubsec:ftr34}~節の三種類の素性の設定も区別して実験を行なった．
+
+まず，表~\ref{tab:indivi_res}に，個々の固有表現抽出モデルを学習するための
+訓練データセット$TrI$を$D_{CRL}$とした場合の，
+本試験データ$D_{formal}$に対する各モデルのF値($\beta=1$)を示す．
+この結果からわかるように，単独のモデルでは，5グラムモデルが最も高い性能を示す．
+また，7グラムモデルおよび9グラムモデルは，素性の設定に関わらず，ほぼ同等の性能を示している．
+
+次に，最も性能のよい5グラムモデルの出力と，他のモデルの出力との違いを調べるために，
+5グラムモデル以外の各モデルの出力について，5グラムモデルの出力との和集合を求め，
+本試験データ$D_{formal}$の正解データに対する再現率を算出した．
+また，5グラムモデル以外の各モデルの誤出力と5グラムモデルの誤出力の間の重複率
+\begin{eqnarray*}
+ 誤出力の重複率 & = & 
+	\frac{\begin{tabular}{c}
+	二つのモデルの誤出力間で
+	重複する固有表現数
+	\end{tabular}}
+	{\begin{tabular}{c}
+	5グラムモデルの誤出力の
+	固有表現数
+	\end{tabular}}
+\end{eqnarray*}
+を求めた．これらの結果を表~\ref{tab:dif_indivi}に示す．
+特に，和の再現率が最も高く，誤出力の重複率が最も低い結果
+(この場合は，可変長モデル(形態素$M_{l(\leq -3)}$，$M_{r(\geq 3)}$の素性$=$全て)
+との差分)を{\bf 太字}で示す．
+
+表~\ref{tab:indivi_res}および表~\ref{tab:dif_indivi}の結果から分かるように，
+7グラムモデルおよび9グラムモデルは，5グラムモデルと比べて出力の和集合の再現率が低く，
+かつ誤出力の重複率も高いことから，相対的に5グラムモデルと似通ったモデルであると言える．
+一方，可変長モデルは，7グラムモデルおよび9グラムモデルと比べて，
+相対的に5グラムモデルとの類似性が小さいことがわかる．
+特に，誤出力の重複率が比較的小さい点が目立つ．
+
+
+\begin{table}
+\begin{center}
+\caption{本試験データ$D_{formal}$に対する各モデル単独の性能 (F値($\beta=1$) (再現率/適合率) (\%))}
+\label{tab:indivi_res}
+\begin{tabular}{|l||c|c|c|} \hline
+	& \multicolumn{3}{|c|}{形態素$M_{l(\leq -3)}$，$M_{r(\geq 3)}$の素性} \\ \cline{2-4} 
+        	& \ \ \ 全て\ \ \  & 語彙+品詞 & 語彙 \\ \hline\hline
+7グラムモデル  	& 80.78 (78.44/83.27)	& 80.81	(78.44/83.33) & 80.71 (78.51/83.03)	 \\ \hline
+9グラムモデル  	& 80.13	(77.87/82.54) & 80.53 (78.22/82.98) & 80.53 (78.37/82.82) \\ \hline
+可変長モデル  & 45.12 (51.50/40.15) & 77.02 (75.86/78.21) & 75.16 (73.78/76.58) \\ \hline\hline
+5グラムモデル  	& \multicolumn{3}{|c|}{\bf 81.16 (78.87/83.60)} \\ \hline
+\end{tabular}
+\vspace*{-.5cm}
+\end{center}
+\end{table}
+
+\begin{table}
+\begin{center}
+\caption{5グラムモデルの出力と各モデルの出力との差分 (和の再現率/誤出力の重複率) (\%)}
+\label{tab:dif_indivi}
+\begin{tabular}{|l||c|c|c|} \hline
+	& \multicolumn{3}{|c|}{形態素$M_{l(\leq -3)}$，$M_{r(\geq 3)}$の素性} \\ \cline{2-4} 
+        	& \ \ \ 全て\ \ \  & 語彙+品詞 & 語彙 \\ \hline\hline
+7グラムモデル  	& 79.8/85.2 & 	79.8/85.2  & 79.7/91.2 	 \\ \hline
+9グラムモデル  	& 79.7/84.7 & 79.7/86.1 & 79.5/90.7  \\ \hline
+可変長モデル	&	{\bf 82.6/27.3} &  81.4/63.4 & 80.4/72.7 \\ \hline
+\end{tabular}
+\vspace*{-.5cm}
+\end{center}
+\end{table}
+
+\subsection{複数システムの出力の混合の性能評価}
+
+\subsubsection{評価方法}
+
+次に，7グラムモデル，9グラムモデル，可変長モデルについて，
+それぞれ，\ref{subsubsec:ftr34}~節の三種類の素性の設定を区別して，
+合計9種類のモデルを考え，その各々について，5グラムモデルの出力との間で
+混合を行ない，その性能を評価した．
+ただし，個々の固有表現抽出モデルを学習するための訓練データセット$TrI$，
+複数システムの出力の正誤判別規則を学習するための訓練データセット$TrC$，
+\ref{subsec:DL}~節の(\ref{eqn:lbdF})式の頻度閾値$L_f$の設定の組合わせとしては，
+以下の二通りについて評価を行なった．
+なお，複数システムの出力の正誤判別規則を評価するための評価データセット$Ts$については，
+いずれも，本試験データ$D_{formal}$を用いた．
+\begin{center}
+\begin{tabular}{lll}
+(a) & $TrI$: & $D_{CRL}$から200記事$D^{200}_{CRL}$を除いた残り 
+ $D_{CRL}-D^{200}_{CRL}$\\
+    & $TrC$: & $D_{CRL}$中の200記事$D^{200}_{CRL}$\\
+    & $L_f$: & $D_{CRL}-D^{200}_{CRL}$中の200記事に対して，
+正誤判別規則の性能を最大にする値\\
+(b) & \multicolumn{2}{l}{$TrI=TrC=D_{CRL}$}\\
+    & $L_f$: & (a)と同じ値 
+\end{tabular}
+\end{center}
+このうち，設定(a)は，二つの訓練データセット$TrI$と$TrC$について，
+重複のないデータセットを用いたものに相当する．
+ただし，利用可能なデータ量に限界があることから，
+混合のための正誤判別規則学習の訓練データセット$TrC$のサイズが小さくなっている．
+一方，設定(b)の方は，個々の固有表現抽出モデルを訓練データ$TrI$自身に適用した
+インサイド適用の結果を利用した混合となるが，
+混合のための正誤判別規則学習の訓練データセット$TrC$のサイズは設定(a)よりもずっと大きい
+\footnote{
+  ここで，厳密に\ref{subsec:proc}~節の評価手続きに従うと，
+  評価手順(\ref{enum:evproc1})において，
+  評価データセット$Ts$に対する固有表現抽出結果のリスト$NEList_i(Ts)$ $(i=1,2)$を
+  得る場合には，訓練の段階で用いた個々の固有表現抽出モデル$NEext_i$ $(i=1,2)$
+  と同じものを用いる必要がある．
+  しかし，本論文では，設定(a)と(b)の間で，混合を行なう前の
+  固有表現抽出結果のリスト$NEList_i(Ts)$ $(i=1,2)$を統一して，
+  同一の条件で評価を行なうことを優先した．
+  そのため，設定(a)において用いる固有表現抽出結果のリスト$NEList_i(Ts)$ $(i=1,2)$
+  としては，設定(b)と同じく，$D_{CRL}$の全体を用いて学習された
+  各固有表現抽出モデルを適用して得られたものを用いた．
+  訓練データが$D_{CRL}$であるか$D_{CRL}-D^{200}_{CRL}$であるかの違いによる
+  固有表現抽出モデルの性能の差はそれほど大きくないので，
+  このことによる影響は小さいと考えられる．
+}．
+
+\begin{table}
+\begin{center}
+\caption{5グラムモデルの出力と各モデルの出力の混合結果の性能 (F値($\beta=1$) (再現率/適合率) (\%))}
+\label{tab:res-comb}
+\begin{tabular}{|l||c|c|c|} \hline
+	\multicolumn{4}{|c|}
+	{(a)\ \ \ $TrI=D_{CRL}-D^{200}_{CRL}$，$TrC=D^{200}_{CRL}$ ($D_{CRL}$中の200記事)} \\ \hline\hline
+	& \multicolumn{3}{|c|}{形態素$M_{l(\leq -3)}$，$M_{r(\geq 3)}$の素性} \\ \cline{2-4} 
+        	& \ \ \ 全て\ \ \  & 語彙+品詞 & 語彙 \\ \hline\hline
+7グラムモデル  	& 81.54 (78.15/85.23) & 81.53 (77.79/85.65)    & 80.60 (77.08/84.46)\\ \hline
+9グラムモデル  	& 81.31 (77.58/85.41) & 81.26 (77.51/85.40)  & 80.60 (77.08/84.46) \\ \hline
+可変長モデル	& {\bf 83.43} {\bf (80.23/86.89)} & 81.55 (76.29/87.58)  & 81.85 (78.51/85.49) \\ \hline
+ \multicolumn{4}{c}{} \\ \hline
+ \multicolumn{4}{|c|}{(b)\ \ \ $TrI=TrC=D_{CRL}$} \\ \hline\hline
+	& \multicolumn{3}{|c|}{形態素$M_{l(\leq -3)}$，$M_{r(\geq 3)}$の素性} \\ \cline{2-4} 
+        	& \ \ \ 全て\ \ \  & 語彙+品詞 & 語彙 \\ \hline\hline
+7グラムモデル  	& 81.97 (78.51/85.76) & 81.83 (78.22/85.78) & 81.58 (78.51/84.90) \\ \hline
+9グラムモデル  	& 81.53 (77.79/85.65) & 81.66 (78.15/85.50)  & 81.52 (78.51/84.76) \\ \hline
+可変長モデル	& {\bf 84.07} {\bf (81.45/86.86)} & 83.07 (79.94/86.44) & 82.50 (79.87/85.31) \\ \hline
+\end{tabular}
+\vspace*{-.5cm}
+\end{center}
+\end{table}
+
+\subsubsection{評価結果}
+
+評価結果を表~\ref{tab:res-comb}に示す．
+この結果から分かるように，設定(a)と(b)を比べると，一律に，設定(b)の方が高い性能が得られている．
+このことから，正誤判別規則の学習において，
+たとえ，インサイド適用の結果しか利用できなかったとしても，
+混合のための正誤判別規則学習の訓練データセット$TrC$のサイズはできるだけ大きい方がよいことがわかる．
+特に，設定(b)においては，どの混合結果においても5グラムモデル単独の性能を上回っていることから，
+混合規則学習のための十分な訓練データがあれば，
+混合により多少なりとも個々のモデルの出力の性能を向上できることが予想される．
+
+また，設定(b)の場合，7グラムモデル，9グラムモデルといった固定長モデルの出力と5グラムモデルの出力を
+混合した場合よりも，可変長モデルの出力と5グラムモデルの出力を混合した場合の方が圧倒的に高い
+性能向上を達成している．
+この結果は，表~\ref{tab:dif_indivi}の差分の傾向と合致しており，
+5グラムモデルとの類似性が相対的に小さい可変長モデルの出力との混合において，
+より高い性能向上が得られている．
+また，可変長モデル同士の間で，形態素$M_{l(\leq -3)}$，$M_{r(\geq 3)}$の素性の設定が
+異なる場合を比較しても，この傾向が成り立っており，5グラムモデルとの類似性が小さいほど
+混合結果における性能向上は大きい．
+これらの結果から，出力の和の再現率が高く，誤出力の重複率が小さくなるような，
+なるべく類似性の小さい複数の日本語固有表現抽出モデルの出力を用意して，
+本論文の手法により出力の混合を行なえば，単独のモデルの出力の性能向上が期待できることがわかる．
+
+
+
+\subsubsection{固有表現の形態素長/種類ごとの分析}
+
+次に，5グラムモデルの出力と可変長モデルの出力の混合の場合について，
+固有表現を構成する形態素数ごと，および，固有表現の種類ごとに，
+単独モデルの出力および混合結果の性能(F値，再現率，適合率)を
+列挙したものを，それぞれ，表~\ref{tab:res-len}，および，表~\ref{tab:res-netag}に示す．
+なお，表中で，固有表現を構成する形態素数ごと，あるいは，固有表現の種類ごとに，
+最も高いF値を達成した結果をそれぞれ{\bf 太字}で示す．
+
+表~\ref{tab:res-len}から分かるように，どの可変長モデルの出力との混合においても，
+ほぼ全ての形態素長の固有表現において，
+5グラムモデル単独の出力の再現率・適合率をともに上回っている．
+特に，最高の性能を示している「5グラムモデル+可変長モデル(全て)」の結果においては，
+5グラムモデルからの性能向上の度合は，形態素長が長くなるほど大きいことから，
+可変長モデルでしか出力されなかった長い固有表現を，混合によってうまく抽出できている
+ことがわかる．
+
+また，表~\ref{tab:res-netag}からは，どの可変長モデルの出力との混合においても，
+ほぼ全ての種類の固有表現において，5グラムモデルの出力の再現率・適合率とほぼ同等かそれ以上の
+性能が得られている．
+そのうち，TIME，MONEY，PERCENTの三種類については，他の種類と比較して，
+訓練データ・評価データともその頻度が小さく，また，5グラムモデルにおける性能もかなり高いことから，
+改善の余地があまりなかったと考えられる．
+ただし，その場合でも，混合結果においては，可変長モデルの低い性能の悪影響を受けることなく，
+5グラムモデルの高い性能が反映されている．
+
+
+
+
+
+\begin{table*}
+\begin{center}
+\caption{混合結果の性能: 固有表現の形態素長ごと，$TrI=TrC=D_{CRL}$\\ 
+(F値($\beta=1$) (再現率) (適合率) (\%))}
+\label{tab:res-len}
+\begin{tabular}{|c||c||c|c|c|c|} \hline
+        &                  \multicolumn{5}{c|}{$n$形態素 対 一固有表現} \\ \cline{2-6}
+        &                $n\geq 1$ & $n=1$ & $n=2$ & $n=3$ & $n\geq 4$  \\ \hline\hline
+	& 		
+	 81.16 & 83.60 &	86.94 & 68.42 &	50.59 \\ 
+5グラムモデル  	& (78.87) & (84.97) &	(85.90) & (63.64) &	(35.83) \\ 
+	& (83.60) & (82.28) &	(88.00) & (73.98) &	(86.00) \\ \hline
+	& 
+	  	45.12 & 53.77 &	56.63 & 33.74 &	16.78 \\ 
+可変長モデル & (51.50) & (38.69) & (71.37) & (57.34) & (40.00) \\ 
+(全て)	& (40.15) & (88.14) & (47.93) & (23.91) & (10.62) \\ \hline
+	&  	77.02 & 81.86 &	79.96 & 63.19 &	50.52 \\ 
+可変長モデル 	 & (75.86) & (78.57) &	(84.82) & (63.64) &	(40.83) \\
+(語彙+品詞) & (78.21) & (85.44) &	(75.63) & (62.76) &	(66.22) \\ \hline
+	& 75.16 & 79.11 &	83.02 & 50.46 &	22.38 \\ 
+可変長モデル 	& (73.78) & (87.05) & (81.13) & (38.46) & (13.33) \\ 
+(語彙)  	& (76.58) & (72.49) & (85.00) & (73.33) & (69.57) \\ \hline\hline
+5グラムモデル & {\bf 84.07} & 85.06 & {\bf 88.96} & {\bf 75.19} &	{\bf 65.96} \\ 
++ 可変長モデル	& {\bf (81.45)} & (85.12) & {\bf (87.42)} & {\bf (69.93)} & {\bf (51.67)} \\ 
+ (全て)  	& {\bf (86.86)} & (84.99) & {\bf (90.56)} & {\bf (81.30)} & {\bf (91.18)} \\ \hline
+5グラムモデル & 83.07 & 84.97 & 87.29 & 72.80 &	63.04 \\ 
++ 可変長モデル 
+	& (79.94) & (84.52) & (85.68) & (66.43) & (48.33) \\ 	
+(語彙+品詞)  	& (86.44) & (85.41) & (88.96) & (80.51) & (90.63) \\ 	\hline
+5グラムモデル & 
+	82.50 & {\bf 85.11} &	87.73 & 71.04 &	50.89 \\ 
++ 可変長モデル 
+	& (79.87) & {\bf (86.76)} & (86.12) & (64.34) & (35.83) \\ 
+(語彙)    & (85.31) & {\bf (83.52)} & (89.41) & (79.31) & (87.76) \\ \hline
+\end{tabular}
+\end{center}
+\end{table*}
+
+
+
+\begin{table*}
+\begin{scriptsize}
+\begin{center}
+\caption{混合結果の性能: 固有表現の種類ごと，$TrI=TrC=D_{CRL}$\\
+	 (F値($\beta=1$) (再現率) (適合率) (\%))}
+\label{tab:res-netag}
+\hspace*{-.3cm}
+\begin{tabular}{|c||c|c|c|c|c|c|c|c|} \hline
+        & ORGANI- & PER- & LOCA- & ARTI- & DATE & TIME & MONEY & PER- \\ 
+        & ZATION &  SON	   & TION & FACT &  &  &  		& CENT \\ \hline\hline
+	& 67.74 	& 81.82 & 77.04   & 30.43   & 91.49 & {\bf 93.20} & {\bf 92.86} & 87.18 \\ 
+5グラムモデル  	
+	& (58.45) & (79.88) &	(71.91) & (29.17) & (88.85) & {\bf (88.89)} & {\bf (86.67)} & (80.95) \\ 
+	& (80.53) & (83.85) &	(82.96) & (31.82) & (94.29) & {\bf (97.96)} & {\bf (100.00)} & (94.44) \\ \hline
+
+	& 35.48 	& 48.45 & 38.47   & 5.80   & 78.60 & 56.90 & 60.61 & 87.18 \\ 
+可変長モデル 
+	& (37.40) & (48.52) &	(32.93) & (22.92) & (81.92) & (61.11) & (66.67) & (80.95) \\ 
+(全て)	& (33.75) & (48.38) &	(46.26) & (3.32) & (75.53) & (53.23) & (55.56) & (94.44) \\ \hline
+
+	& 65.30     & 78.56    & 72.46   & 26.92   & 88.51  & 77.36  & 80.00    & {\bf 89.47} \\ 
+可変長モデル 
+	& (57.34)   & (77.51)  &(66.59) & (29.17) & (88.85) & (75.93) & (80.00) & {\bf (80.95)} \\ 
+(語彙+品詞)
+	& (75.82)   & (79.64)  &(79.48) & (25.00) & (88.17) & (78.85) & (80.00) & {\bf (100.00)} \\ \hline
+
+	& 63.96     & 76.81    & 72.29   & 25.00   & 86.96  & 54.21  & 73.33 & 81.08 \\ 
+可変長モデル 
+	& (54.57)   & (78.40)  &(68.52) & (20.83) & (84.62) & (53.70) & (73.33) & (71.43) \\ 
+(語彙)
+	& (77.25)   & (75.28)  &(76.49) & (31.25) & (89.43) & (54.72) & (73.33) & (93.75) \\ \hline\hline
+
+5グラムモデル  
+	& {\bf 72.18} 	& 84.15 & {\bf 79.58}   & {\bf 38.71}   & {\bf 92.86} & {\bf 93.20} & {\bf 92.86} & 87.18 \\ 
++ 可変長モデル 
+	& {\bf (62.88)} & (81.66) & {\bf (73.61)} & {\bf (37.50)} & {\bf (90.00)} & {\bf (88.89)} & {\bf (86.67)} & (80.95)
+									 \\ 
+(全て)	& {\bf (84.70)} & (86.79) & {\bf (86.61)} & {\bf (40.00)} & {\bf (95.90)} & {\bf (97.96)} & {\bf (100.00)} & (94.44)
+									 \\ 	\hline
+
+5グラムモデル  
+	& 70.19 	& 83.41 & 78.22   & 35.29   & 92.64 & 92.16 & {\bf 92.86} & 87.18 \\ 
++ 可変長モデル 
+	& (60.66) & (81.07) &	(72.15) & (31.25) & (89.62) & (87.04) & {\bf (86.67)} & (80.95) \\ 
+(語彙+品詞)
+	& (83.27) & (85.89) &	(85.39) & (40.54) & (95.88) & (97.92) & {\bf (100.00)} & (94.44) \\ \hline
+
+5グラムモデル  
+	& 68.82  & {\bf 84.46} & 77.50   & 31.46   & 91.85 	& {\bf 93.20} & {\bf 92.86} & {\bf 89.47} \\ 
++ 可変長モデル 
+	& (59.28) & {\bf (82.84)} &	(72.15) & (29.17) & (88.85) & {\bf (88.89)} & {\bf (86.67)} & {\bf (80.95)} \\ 
+(語彙)
+	& (81.99) & {\bf (86.15)} &	(83.71) & (34.15) & (95.06) & {\bf (97.96)} & {\bf (100.00)} & {\bf (100.00)} 
+				\\ \hline
+\end{tabular}
+\end{center}
+\end{scriptsize}
+\end{table*}
+
+\subsubsection{単独モデル・混合結果の出力のパターンの分析}
+
+
+
+\begin{table*}
+\begin{scriptsize}
+\begin{center}
+\caption{単独モデル・混合結果の出力のパターンの分析結果}
+\label{tab:res-syspat}
+\hspace*{-.3cm}
+\begin{tabular}{|c|c||c|c|c|c|c|c|c|c|c|c|c|c|} \hline
+\multicolumn{14}{|c|}{5グラムモデルと可変長モデル(形態素$M_{l(\leq -3)}$，$M_{r(\geq 3)}$の素性$=$全て)の出力の混合} 
+		\\ \hline\hline
+単独モデルの	& 5グラムモデル	     & 有 & 有 & 無 & 有 & 有 & 無 & 有 & 有 & 無 & 有 & 有 & 無 \\ \cline{2-14} 
+出力の有無	& 可変長モデル & 有 & 無 & 有 & 有 & 無 & 有 & 有 & 無 & 有 & 有 & 無 & 有 \\ \hline 
+\multicolumn{2}{|c||}
+{混合結果の出力の有無} & \multicolumn{3}{|c|}{有} & \multicolumn{3}{|c|}{無} 
+			& \multicolumn{3}{|c|}{有} & \multicolumn{3}{|c|}{無} \\ \hline
+\multicolumn{2}{|c||}
+{正解データにおける有無} & \multicolumn{3}{|c|}{有} & \multicolumn{3}{|c|}{無} 
+			& \multicolumn{3}{|c|}{無} & \multicolumn{3}{|c|}{有} \\ \hline\hline
+\multicolumn{2}{|c||}{割合 (\%)} 
+		& 28.0 & 18.2 & 1.5 & 0.04 & 1.8 & 42.5 	& 2.4 & 4.8 & 0 & 0 & 0 & 0.7 \\ \hline 
+\multicolumn{2}{|c||}{正誤判別率 (\%) (判別数/出力数)} 
+	& \multicolumn{6}{|c|}{(判別正解率)\ \ 92.1\ \ (2194/2382)} 
+	& \multicolumn{6}{|c|}{(判別誤り率)\ \ 7.9\ \ (188/2382)} \\ \hline
+\multicolumn{14}{c}{} \\ \hline
+\multicolumn{14}{|c|}{5グラムモデルと可変長モデル(形態素$M_{l(\leq -3)}$，$M_{r(\geq 3)}$の素性$=$語彙+品詞)の出力の混合} 
+		\\ \hline\hline
+単独モデルの	& 5グラムモデル	     & 有 & 有 & 無 & 有 & 有 & 無 & 有 & 有 & 無 & 有 & 有 & 無 \\ \cline{2-14} 
+出力の有無	& 可変長モデル & 有 & 無 & 有 & 有 & 無 & 有 & 有 & 無 & 有 & 有 & 無 & 有 \\ \hline 
+\multicolumn{2}{|c||}
+{混合結果の出力の有無} & \multicolumn{3}{|c|}{有} & \multicolumn{3}{|c|}{無} 
+			& \multicolumn{3}{|c|}{有} & \multicolumn{3}{|c|}{無} \\ \hline
+\multicolumn{2}{|c||}
+{正解データにおける有無} & \multicolumn{3}{|c|}{有} & \multicolumn{3}{|c|}{無} 
+			& \multicolumn{3}{|c|}{無} & \multicolumn{3}{|c|}{有} \\ \hline\hline
+\multicolumn{2}{|c||}{割合 (\%)} 
+		& 67.8 & 4.4 & 1.7 & 0.2 & 2.6 & 10.3 	& 8.9 & 2.6 & 0.1 & 0 & 0.7 & 0.7 \\ \hline 
+\multicolumn{2}{|c||}{正誤判別率 (\%) (判別数/出力数)} 
+	& \multicolumn{6}{|c|}{(判別正解率)\ \ 87.1\ \ (1315/1510)} 
+	& \multicolumn{6}{|c|}{(判別誤り率)\ \ 12.9\ \ (195/1510)} \\ \hline
+\multicolumn{14}{c}{} \\ \hline
+\multicolumn{14}{|c|}{5グラムモデルと可変長モデル(形態素$M_{l(\leq -3)}$，$M_{r(\geq 3)}$の素性$=$語彙)の出力の混合} 
+		\\ \hline\hline
+単独モデルの	& 5グラムモデル	     & 有 & 有 & 無 & 有 & 有 & 無 & 有 & 有 & 無 & 有 & 有 & 無 \\ \cline{2-14} 
+出力の有無	& 可変長モデル & 有 & 無 & 有 & 有 & 無 & 有 & 有 & 無 & 有 & 有 & 無 & 有 \\ \hline 
+\multicolumn{2}{|c||}
+{混合結果の出力の有無} & \multicolumn{3}{|c|}{有} & \multicolumn{3}{|c|}{無} 
+			& \multicolumn{3}{|c|}{有} & \multicolumn{3}{|c|}{無} \\ \hline
+\multicolumn{2}{|c||}
+{正解データにおける有無} & \multicolumn{3}{|c|}{有} & \multicolumn{3}{|c|}{無} 
+			& \multicolumn{3}{|c|}{無} & \multicolumn{3}{|c|}{有} \\ \hline\hline
+\multicolumn{2}{|c||}{割合 (\%)} 
+		& 67.3 & 6.1 & 1.1 & 0.1 & 1.5 & 10.6 	& 10.4 & 2.5 & 0 & 0 & 0.1 & 0.4 \\ \hline 
+\multicolumn{2}{|c||}{正誤判別率 (\%) (判別数/出力数)} 
+	& \multicolumn{6}{|c|}{(判別正解率)\ \ 86.6\ \ (1297/1497)} 
+	& \multicolumn{6}{|c|}{(判別誤り率)\ \ 13.4\ \ (200/1497)} \\ \hline
+\end{tabular}
+\end{center}
+\end{scriptsize}
+\end{table*}
+
+5グラムモデルの出力と可変長モデルの出力の混合の場合について，
+各単独モデルの出力における固有表現の有無，および，
+混合結果における固有表現の有無と，正解データにおける固有表現の有無のパターンの
+割合を調査した結果を表~\ref{tab:res-syspat}に示す．
+表中で，「有」「無」は，それぞれ，単独モデルの出力，混合結果，正解データに
+固有表現が存在する場合，および，存在しない場合を表す．
+例えば，「有」「有」「有」「有」のパターンは，
+両方の単独モデルの出力にその固有表現が存在し，混合結果においてもその固有表現が出力され，
+かつ，それが正解データにも存在する正解の固有表現である場合に相当する．
+また，割合(\%)の計算においては，両方の単独モデルの出力の和における固有表現数を分母，
+それぞれのパターンに該当する固有表現数を分子として，割合(\%)を計算している．
+さらに，混合における正誤判別結果が正解であるか否かについては，
+混合結果および正解データにおける出力の有無が一致する場合は正誤判別が正解，
+一致しない場合は正誤判別が誤りであるので，「正誤判別率」の欄にそれぞれの率を示した．
+
+形態素$M_{l(\leq -3)}$，$M_{r(\geq 3)}$の素性の設定が異なる場合についてこの結果を比較すると，
+「5グラムモデル+可変長モデル(全て)」において判別正解率が高くなっているが，
+これは，「可変長モデル(全て)」の性能が極端に悪く，
+「可変長モデル(全て)」のみが出力した固有表現の多くが誤りであり，その判別が比較的容易であったからである．
+全体では，どの可変長モデルの出力との混合においても，5グラムモデルの出力を覆すことで正解となった場合
+(「無」「有」「有」「有」および「有」「無」「無」「無」)が数\%あり，
+これが，5グラムモデルからの性能向上に寄与している．
+その一方で，判別誤りの内訳をみると，その多くは，誤出力の検出が十分できなかった場合で，
+ほとんどの場合，少なくとも5グラムモデルはその誤りの固有表現を出力している．
+このことから，より効果的な素性を用いる，あるいは，より高性能な学習器を用いるなどして，
+誤出力検出の精度を向上させることにより，適合率を向上できる余地があることがわかる．
+
+\subsection{最大エントロピー法による正誤判別規則学習}
+\label{subsec:comb-ME}
+
+最後に，正誤判別規則学習の学習法の比較のために，最大エントロピー法を用いて
+正誤判別規則学習を行なった．
+
+まず，最大エントロピー法を適用するために，\ref{subsubsec:event}~節の(\ref{eqn:segev})式の
+事象表現$SegEv_j$を，以下のように変換する．
+\begin{eqnarray}
+ SegEv_j & = & \{ NEListev_{p,\ldots,q},\ldots,NEListev_{p',\ldots,q'} \}\ \ \  \label{eqn:segev-ME}
+\end{eqnarray}
+ここで，各事象表現$NEListev_{p,\ldots,q}$は，システムの指標のリストごとに固有表現をまとめたもので，
+固有表現のリストの事象表現に相当する
+\footnote{
+  最大エントロピー法の適用における事象表現の形式は，
+  \ref{subsubsec:event}~節の決定リスト学習の場合の事象表現の形式とは異なっているが，
+  最大エントロピー法における素性の表現能力を必要以上に制限しているわけではない．
+  決定リスト学習において可能な素性を表現する際にも，
+  \ref{subsubsec:ftr}~節のi)およびii)の二つの制約を課しているため，
+  素性の表現能力について両者の間に意図的な差はない．
+}．
+\ref{subsubsec:event}~節の場合と同様に，以下の二種類のどちらかに対応し，
+それぞれ異なったデータ構造を持つ．
+\begin{enumerate}
+\item[i)] そのセグメント中で少なくとも一つのシステムにより出力された
+	固有表現のリストの事象表現．
+\item[ii)] そのセグメント中で一つも固有表現を出力しなかった一つのシステムに関する情報を
+	表す事象表現．
+\end{enumerate}
+i)のタイプの事象表現$NEListev_{p,\ldots,q}$は以下のようなデータ構造を持つ．
+\begin{eqnarray}
+NEListev_{p,\ldots,q} & = &	\Bigl\{
+	 systems =
+	 \langle p,\ldots,q\rangle,\ 
+mlengthList = y,\ldots,z\mbox{ morphemes},\nonumber \\
+& &	 \ \  NEtagList = \cdots,\ 
+  		 POSList = \cdots,\nonumber \\
+ & &  		 \ \ 
+classList_{NE} = +/-,\ldots,+/-
+	 \Bigr\} 
+\label{eqn:NEnon-emp-ME}
+\end{eqnarray}
+このデータ構造は，\ref{subsubsec:event}~節の(\ref{eqn:NEnon-emp})式のデータ構造とほぼ同じであるが，
+固有表現のリストを表現するために，各素性に相当する情報が全てリスト表現になっている点が異なる．
+一方，ii)のタイプの事象表現$NEList_{r}$は，\ref{subsubsec:event}~節の(\ref{eqn:NEemp})式と同じく，
+以下のデータ構造で表現される．
+\begin{eqnarray}
+NEListev_{r} & = &   	
+       \Bigl\{
+	 systems =
+	 \langle r\rangle,\ 
+class_{sys} =
+	 \mbox{``no output''}
+	 \Bigr\} \label{eqn:NEemp-ME}
+\end{eqnarray}
+
+このような事象表現を用いて正誤判別規則の学習および適用を行なう際には，
+上述の(\ref{eqn:segev-ME})式の事象表現を事象の単位とし，
+\ref{subsubsec:class}~節の場合と同様に，
+各システム$i$ごとにまとめた以下のクラス表現を設定し，
+各システム$i$ごとにクラスの判別を行なうための
+正誤判別規則の学習および適用を行なう．
+\begin{eqnarray*}
+class_{sys}^1  & = & 
+	\left\{\begin{array}{l}
+	  +/-,\ \ldots,\ +/- \\
+	 \mbox{``no output''} 
+	\end{array}\right. \nonumber \\
+         & \cdots &  \\
+class_{sys}^n  & = & 
+	\left\{\begin{array}{l}
+	  +/-,\ \ldots,\ +/- \\
+	 \mbox{``no output''} 
+	\end{array}\right. \nonumber 
+\end{eqnarray*}
+その際には，(\ref{eqn:NEnon-emp-ME})式の固有表現のリストの事象表現
+$NEListev_{p,\ldots,q}$の$mlengthList$，$NEtagList$，$POSList$，および，
+(\ref{eqn:NEemp-ME})式の固有表現の事象表現$NEList_{r}$の
+$class_{sys}$を，それぞれ文脈$x$とし，
+上式の，各システムごとにまとめた正誤のクラスのリストを付与するための
+条件付確率モデルを，最大エントロピーモデルとして学習する．
+この最大エントロピーモデルは，各システム$i$ごとに個別にモデルの学習・適用を行なう．
+
+\begin{table}
+\begin{center}
+\caption{5グラムモデル/その他の各モデルの出力の最大エントロピー法による\\ 
+	混合結果の性能
+	(F値($\beta=1$) (再現率/適合率) (\%))}
+\label{tab:res-comb-ME}
+\begin{tabular}{|l||c|c|c|} \hline
+	\multicolumn{4}{|c|}
+	{(a)\ \ \ $TrI=TrC=D_{CRL}$，結合素性なし} \\ \hline\hline
+	& \multicolumn{3}{|c|}{形態素$M_{l(\leq -3)}$，$M_{r(\geq 3)}$の素性} \\ \cline{2-4} 
+        	& \ \ \ 全て\ \ \  & 語彙+品詞 & 語彙 \\ \hline\hline
+7グラムモデル  	& 81.81 (78.80/85.07) & 81.70 (78.51/85.16)    & 81.47 (78.58/84.58)\\ \hline
+9グラムモデル  	& 81.21 (78.01/84.68) & 81.38 (78.30/84.73)  & 81.46 (78.51/84.63) \\ \hline
+可変長モデル	& 81.12 (76.65/86.15) & 81.48 (77.36/86.06)  & 81.37 (78.37/84.61) \\ \hline
+ \multicolumn{4}{c}{} \\ \hline
+	\multicolumn{4}{|c|}
+	{(b)\ \ \ $TrI=TrC=D_{CRL}$，結合素性あり} \\ \hline\hline
+	& \multicolumn{3}{|c|}{形態素$M_{l(\leq -3)}$，$M_{r(\geq 3)}$の素性} \\ \cline{2-4} 
+        	& \ \ \ 全て\ \ \  & 語彙+品詞 & 語彙 \\ \hline\hline
+7グラムモデル  	& 81.71 (78.72/84.93) & 81.58 (78.37/85.07) & 81.35 (78.44/84.49) \\ \hline
+9グラムモデル  	& 81.16 (78.08/84.50) & 81.22 (78.37/84.28)  & 81.29 (78.58/84.19) \\ \hline
+可変長モデル	& 80.94 (76.65/85.74) & 81.40 (77.29/85.98) & 81.24 (78.01/84.75) \\ \hline
+\end{tabular}
+\vspace*{-.5cm}
+\end{center}
+\end{table}
+
+このような方法で，7グラムモデル，9グラムモデル，可変長モデルについて，
+それぞれ，\ref{subsubsec:ftr34}~節の三種類の素性の設定を区別して，
+合計9種類のモデルを考え，その各々について，5グラムモデルの出力との間で
+混合を行ない，その性能を評価した．
+ただし，$TrI=TrC=D_{CRL}$とし，評価データセット$Ts$は本試験データ$D_{formal}$とした．
+最大エントロピーモデルの素性関数の頻度に下限を設け，
+評価データセット$Ts$に対して最も高い性能が得られた場合の結果を
+表~\ref{tab:res-comb-ME}(a)に示す．
+また，決定リスト学習との間で条件を揃えるために，
+\ref{subsubsec:ftr}~節の(\ref{eqn:ftr})式の形式の決定リスト学習の素性のうち，
+上述の実験結果(a)では用いていなかった結合素性を追加して最大エントロピーモデルの
+学習および適用を行なった結果を表~\ref{tab:res-comb-ME}(b)に示す．
+この場合は，決定リスト学習における各規則の条件付確率$P(class_{sys}^i\!=\!c_i\mid f)$に
+下限を設け，評価データセット$Ts$に対して最も高い性能が得られた場合の結果を示している．
+
+表~\ref{tab:res-comb-ME}の(a)と(b)の結果を比較すると，結合素性を用いた場合の方が性能が悪くなっている．
+また，いくかの結果を除いて，5グラムモデルの性能からの向上はみられるものの，
+決定リスト学習による可変長モデルの出力との混合の場合のような高い性能向上は達成できていない．
+
+この理由の一つとしては，最大エントロピーモデルと決定リスト学習の間のモデルの形式の違いの
+影響が挙げられる．
+最大エントロピーモデルは，あらゆる素性とクラスとの相関をそれぞれ別個のパラメータとし，
+モデル内では全パラメータを考慮する形式のモデルになっている．
+一方，決定リスト学習は，各々のクラス決定において最も寄与する素性の組合わせのみを考慮し，
+他の素性は全く考慮しない．
+したがって，素性間で寄与する度合の差がわずかしかない場合でも，
+決定リスト学習では，最も寄与する素性の組合わせのみが考慮されるのに対して，
+最大エントロピーモデルでは，全素性の寄与を総合的に考慮する．
+本論文の正誤判別規則学習による混合の問題では，素性の種類が比較的少なく，
+特に高頻度な素性
+\footnote{
+  例えば，複数の情報の結合でなく単独の情報のみから構成される素性など．
+}
+は，
+実際にクラス判別に寄与する度合に関係なく，
+どの事象においても常に一定の値以上の重みを持つと考えられる．
+そのような問題の場合には，最大エントロピーモデルのように全素性の寄与を
+総合的に考慮する学習法でなく，決定リスト学習のように各々のクラス決定に
+最も寄与する素性の組合わせのみを考慮する学習法が適していると考えられる．
+
+逆に，正誤判別規則学習による混合の前段階である，
+形態素への固有表現まとめ上げ状態付与の問題の場合には，
+\cite{Sassano00bjx,Sassano00a}に示されるように，決定リスト学習よりも
+最大エントロピーモデルの方が高い性能を示している．
+この問題の場合には，素性の種類が比較的多く，極端に高頻度な素性も少ないことから，
+最大エントロピーモデルのように全素性の寄与を総合的に考慮する学習法が
+適していると考えられる．
+
+
+
+
+
+
+
+\section{関連研究}
+\label{sec:rel}
+
+\subsection{複数モデルの出力の混合法}
+
+\ref{sec:intro}~節で述べたように，一般に，
+複数のモデル・システムの出力を混合する過程は，大きく以下の二つの部分に
+分けて考えることができる．
+\begin{enumerate}
+\item \label{enum:sub1-rel}
+	できるだけ振る舞いの異なる複数のモデル・システムを用意する．
+\item \label{enum:sub2-rel}
+	用意された複数のモデル・システムの出力を混合する方式を選択・設計し，
+	必要であれば学習等を行ない，与えられた現象に対して，
+	用意された複数のモデル・システムの出力を混合することを実現する．
+\end{enumerate}
+ここで，これまで自然言語処理の問題に適用された混合手法においては，
+これらの(\ref{enum:sub1-rel})および(\ref{enum:sub2-rel})の過程について，
+大体以下のような手法が用いられていた．
+
+まず，(\ref{enum:sub1})については，大きく分けて以下のような手法がある．
+\begin{enumerate}
+\item[i)] 学習モデルが異なる複数のシステム等
+	(原理的には，人手による規則に基づくシステムとデータからの学習に基づくシステム，
+	などの組合わせも可能)，
+	ある程度振る舞いの異なる既存のシステムを
+	用意する~\cite{vanHalteren98a,Brill98a,Henderson99a,KoInui00aj,Sang00a}．
+\item[ii)] i)と似ているが，学習モデルは単一のものを用い，データの表現法
+	(具体的には，まとめ上げ問題におけるまとめ上げ状態の表現法)として複数のものを
+	設定することにより，複数の出力を得る~\cite{Sang00a,TKudo00ajx}．
+\item[iii)] 単一の学習モデルを用いるが，訓練データのサンプリングを複数回行なうことにより
+	複数のモデルを学習するbagging法~\cite{Breiman96b}を用いる~\cite{Henderson00a}，
+	あるいは，単一の学習モデルを用い，誤り駆動型で訓練データ中の訓練事例の重みを操作しながら
+	学習と適用を繰り返すことにより，各サイクルの誤りに特化した複数のモデル
+	(およびそれらの重み)を学習する
+	boosting法~\cite{Freund99aj}を用いる~\cite{Haruno97a,Haruno99a,Abney99a,Henderson00a}．
+\end{enumerate}
+これに対して，本論文においては，振る舞いの異なる複数のモデルを得る方法として，
+学習モデルは単一のものを用い，固有表現まとめ上げの際に考慮する周囲の形態素の個数を
+区別することで複数のモデルを得るという方法をとった．
+この方法は，上記のうちでは，ii)でとられた方法と比較的似ている．
+
+次に，(\ref{enum:sub2})については，大きく分けて以下のような手法がある
+\footnote{
+  boostingは，複数のモデルを組合わせる際の重みまで含めて，全体として誤りが減少するように
+  複数モデルの生成法が設計されているので，以下の分類には含めない．
+}．
+\begin{enumerate}
+\item[i)] 重み付多数決など，何らかの多数決を行なうもの~\cite{Breiman96b,vanHalteren98a,Brill98a,Henderson99a,KoInui00aj,Sang00a,Henderson00a,TKudo00ajx}．
+\item[ii)] 複数のシステム・モデルの重みに応じて採用するシステムの切り替えを行なうもの~\cite{Henderson99a,KoInui00aj}．
+\item[iii)] 原理的に，上記のi)およびii)を包含し得る方法として，
+	複数のシステム・モデルの出力(および訓練データそのもの)を入力とする第二段の
+	学習器を用いて，複数のシステム・モデルの出力の混合を行なうstacking法~\cite{Wolpert92a}，
+	あるいは，それと同等の方法に基づくもの~\cite{vanHalteren98a,Brill98a,Sang00a}．
+\end{enumerate}
+これらの方法のうち，本論文では，原理的に，i)およびii)を包含し得るiii)のstacking法を用いている．
+特に，本論文では，個々のシステムの出力する重みの情報は利用せずstackingを行なっているので，
+規則に基づくシステムなどで重みを出力しない場合でも，そのまま本論文の手法を適用することができる．
+これに対して，重み付多数決や重みを用いたシステム切り替えの場合は，
+システム数が少なく(例えば，二種類のシステムの混合の場合)，かつ，個々のシステムが重みを出力しない
+場合などでは，適用が困難になると考えられる．
+また，通常のbagging法やboosting法を適用する場合でも，
+第一段としては何らかの学習モデルを採用する必要があるが，
+本論文の混合法にはそのような制約はないので，原理的には，
+第一段として任意のシステムを採用することが可能である．
+
+\subsection{Stacking法}
+
+次に，本節では，stacking法についての関連研究，および，
+stacking法と同等の手法を自然言語処理におけるシステム混合の問題に適用している
+研究事例について述べる．
+
+stacking法は，\cite{Wolpert92a}によってその枠組みが提案され，その後，機械学習の分野において
+いくつかの応用手法が提案されている~\cite{Breiman96a,Ting97a,Gama00a}．
+例えば，\cite{Breiman96a}は，回帰法を用いたstackingを提案している．
+\cite{Ting97a}は，第一段の学習器として，決定木学習，ナイーブベイズ，最近隣法を用い，
+第二段の学習器として，決定木学習，ナイーブベイズ，最近隣法，線形回帰法の一種を用いた
+実験を行ない，性能の比較をしている．
+一方，\cite{Gama00a}は，それまで提案されたstacking法を，$n$段の学習器の連鎖に拡張し，
+第$k$ $(1<k\leq n)$段の学習器は，第一段から第$k-1$段までの全ての学習器の入出力データを
+素性として学習を行なうというカスケード法を提案している．
+特に，それまでのstacking法は，第一段の学習器の出力のみを入力素性として第二段の
+学習器の学習を行なうものがほとんどであったのに対して，カスケード法では，
+前段までの学習器の出力だけでなく，入力素性もあわせて利用する点が特徴的である．
+
+一方，自然言語処理におけるシステム混合の問題にstacking法と同等の手法を適用している
+研究事例
+\footnote{
+  ``stacking''という用語を用いていない事例も多い．
+}
+としては，英語品詞付けにおいて，
+最大エントロピー法，変形に基づく学習，トライグラムモデル，メモリベース学習を
+第一段の学習器とし，決定木学習，メモリベース学習法などを第二段の学習器として
+stackingを行なうもの~\cite{Brill98a,vanHalteren98a}，
+英語名詞句まとめ上げにおいて，七種類の学習器を第一段に用い，
+決定木学習，メモリベース学習法を第二段の学習器として
+stackingを行なうもの~\cite{Sang00a}などがある．
+これらの事例においては，いずれも，第一段の入力素性および出力を用いて第二段の学習器の
+学習を行なった結果も報告している．
+また，\cite{Borthwick98a}は，英語の固有表現抽出において，
+単一の最大エントロピーモデルの素性として，通常の固有表現まとめ上げ・タイプ分類に用いる
+素性とあわせて，他の既存のシステムの出力を素性として用いて，
+個々の単語に固有表現まとめ上げ状態・タイプ分類を付与するための分類器の学習を行なっている．
+一方，\cite{Freitag00a}は，情報抽出におけるテンプレート・スロット埋め問題において，
+ナイーブベイズ法，帰納的論理プログラミング法などを第一段の学習器とし，
+回帰法を第二段の学習器としてstackingを行なっている．
+ここでは，第二段の学習器の入力は，第一段の学習器の出力のみとなっている．
+
+これらの事例と比較すると，本論文の日本語固有表現抽出の問題においては，
+第一段の学習器は，個々の形態素に固有表現まとめ上げ状態・タイプ分類を付与するための分類器の学習を
+行なっているのに対して，第二段の学習器は，個々のシステムの固有表現抽出結果，
+および，第一段の学習器の入力となった素性(の一部)を入力として，個々のシステムの固有表現抽出結果の
+正誤を判定するための分類器の学習を行なっている．
+このように，本論文のstacking法では，第一段と第二段の学習器の学習の単位が異なっている点が
+変則的である．
+ただし，このような構成をとることにより，第一段としては，
+任意の固有表現抽出システムを用いることが可能となっている．
+また，\cite{Borthwick98a}と比較すると，\cite{Borthwick98a}では，
+本論文の第二段に相当する学習器が，個々の単語に固有表現まとめ上げ状態・タイプ分類を
+付与するための分類器の学習を行なっている点が異なっている．
+
+
+\subsection{統計的手法に基づく日本語固有表現抽出}
+
+統計的手法に基づく日本語固有表現抽出の研究事例としては，
+我々がベースとした，最大エントロピー法を用いるもの\cite{Uchimoto00aj}の他に，
+決定木学習を用いるもの~\cite{Sekine98a,Nobata99aj}，
+最大エントロピー法を用いるもの~\cite{Borthwick99aj}，
+決定リスト学習を用いるもの~\cite{Sassano00a}， 
+SVM(support vector machines)を用いるもの~\cite{Yamada01ajx}などがある．
+これらは，いずれも，単一の学習モデルを用いている．
+決定リスト学習を用いる事例~\cite{Sassano00a} 
+では，
+可変長文脈素性を用いることにより，固定長モデルの性能の上回る結果が得られているが，
+ベースとなる決定リスト学習の性能は最大エントロピー法の性能よりも劣っている．
+その他の事例では，いずれも，固定長文脈素性を用いている．
+
+また，stacking法の研究事例においては，異なる数種類の学習器を第一段に用いるという構成が
+多く見られ，一定の効果が報告されているので，上記の複数の学習器を第一段としてstacking法を
+行なうことにより，精度の向上が期待できる可能性がある．
+その他には，\cite{Yamada01ajx}で報告されているように，解析の方向を文頭から文末と文末から文頭の
+二通り設定し，解析済の固有表現のタグを素性として利用する方法により，
+振る舞いの異なった出力が得られる可能性があり，stacking法でその出力を利用することで，
+精度の向上が期待できる可能性がある．
+また，\cite{Isozaki00ajx}では，
+決定木学習により学習された可読性の高い規則や人手による付加制約等を適用して
+複数の固有表現候補を生成し，最長一致法により複数の候補の選別を行なっている．
+ここで，複数の候補の選別を行なう際に，本論文の混合法を適用することにより，
+誤出力の棄却まで含めたより一般的な選別が自然な形で実現できる可能性があると
+考えられる．
+
+\section{おわりに}
+\label{sec:conc}
+
+本論文では，日本語固有表現抽出の問題において，複数のモデルの出力を混合する手法を提案した．
+まず，最大エントロピー法に基づく統計的学習による固有表現抽出モデルにおいて，
+現在位置の形態素が，いくつの形態素から構成される固有表現の一部であるかを考慮して
+学習を行なう可変長モデルと，
+常に現在位置の形態素の前後数形態素ずつまでを考慮して学習を行なう固定長モデルとの間の
+モデルの挙動の違いに注目し，
+なるべく挙動が異なり，かつ，適度な性能を保った複数のモデルの出力の混合を行なった．
+混合の方式としては，
+複数のシステム・モデルの出力(および訓練データそのもの)を入力とする第二段の
+学習器を用いて，複数のシステム・モデルの出力の混合を行なう規則を学習するという混合法
+(stacking法)を採用した．
+第二段の学習器として決定リスト学習を用いて，固定長モデルおよび可変長モデルの出力を
+混合する実験を行なった結果，
+最大エントロピー法に基づく固有表現抽出モデルにおいてこれまで得られていた最高の性能を
+上回る性能が達成された．
+
+今回の実験では，固定長モデル同士は出力される固有表現の分布がお互いに似通っており，
+可変長モデル同士も使用する素性の集合に包含関係があることから，
+出力する固有表現の傾向が大きく異なるモデルは，固定長モデルと可変長モデルの
+二種類だけであると仮定した．
+そのため，評価実験においても，二つのモデルの出力の混合の結果のみを報告したが，
+今後は、傾向の大きく異なる三種類以上のモデルの出力に対して，
+本論文の混合手法の有効性を評価したいと考えている．
+
+また，本論文の手法は，個々の単独システムに何らかの固有表現候補を出力させて，
+それらの固有表現候補を取捨選択するという方法であるので，
+再現率の観点からは，個々の単独システムの出力の和の再現率が上限となってしまう．
+したがって，本論文の方法によってより高い性能の固有表現抽出を実現するためには，
+個々の単独システムが少しでも多くの固有表現候補を出力することが不可欠である．
+今後は，既存のどの固有表現抽出モデルを用いても抽出が失敗する固有表現の
+特性を分析し，できるだけ網羅的に固有表現候補を出力し，その結果を本論文の
+混合法で利用する方式について検討を行なう予定である．
+その際，網羅的に固有表現候補を出力するためには，まず，何らかの方法によって，
+広範なテキストから固有表現候補を収集して蓄積する必要があるが，
+ここでは，新聞記事やWWW上のテキスト等の大規模テキストから未知語を獲得する，
+あるいは専門用語を抽出するなどの手法の適用が有効であると考えている．
+
+
+
+\bibliographystyle{jnlpbbl}
+\bibliography{myabbrv,mydb}
+
+\clearpage
+
+\begin{biography}
+\biotitle{略歴}
+\bioauthor{宇津呂 武仁}
+{1989年京都大学工学部 電気工学第二学科 卒業．
+1994年同大学大学院工学研究科 博士課程電気工学第二専攻 修了．
+京都大学博士（工学）．
+同年，奈良先端科学技術大学院大学 情報科学研究科 助手．
+1999年$\sim$2000年，米国ジョンズ・ホプキンス大学計算機科学科客員研究員．
+2000年，豊橋技術科学大学 工学部情報工学系 講師，現在に至る．
+自然言語処理の研究に従事．
+言語処理学会，情報処理学会，人工知能学会，日本ソフトウェア科学会，
+日本音響学会，ACL，各会員．
+}
+\bioauthor{颯々野 学}
+{1991年京都大学工学部 電気工学第二学科卒業．
+同年より富士通研究所研究員，現在に至る．
+1999年$\sim$2000年，米国ジョンズ・ホプキンス大学計算機科学科客員研究員．
+自然言語処理の研究に従事．
+言語処理学会，情報処理学会，各会員．
+}
+\bioauthor{内元 清貴}
+{1994年京都大学工学部 電気工学第二学科卒業．
+1996年同大学院工学研究科 修士課程電気工学第二専攻修了．
+同年郵政省通信総合研究所入所．
+現在，独立行政法人通信総合研究所研究員．
+自然言語処理の研究に従事．
+言語処理学会，情報処理学会，ACL，各会員．
+}
+\bioreceived{受付}
+\biorevised{再受付}
+\bioaccepted{採録}
+
+\end{biography}
+
+\end{document}
+

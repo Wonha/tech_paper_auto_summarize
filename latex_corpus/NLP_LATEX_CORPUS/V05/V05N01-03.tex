@@ -1,0 +1,542 @@
+
+
+
+\documentstyle[epsf,nlpbbl]{jnlp_e_b5}
+
+\setcounter{page}{37}
+\setcounter{巻数}{5}
+\setcounter{号数}{1}
+\setcounter{年}{1998}
+\setcounter{月}{1}
+\受付{April}{24}{1997}
+\再受付{June}{5}{1997}
+\採録{July}{18}{1997}
+
+\setcounter{secnumdepth}{2}
+
+\title{}
+\author{}
+\jkeywords{}
+
+\etitle{PP Attachment Ambiguity Resolution\\ through Supervised Learning}
+
+\eauthor{Jiri Stetina\affiref{KyotoUniv}   \and
+        Makoto Nagao\affiref{KyotoUniv}}
+
+\headauthor{Stetina,~J.~et~al.}
+\headtitle{PP Attachment Ambiguity Resolution through Supervised Learning}
+
+\affilabel{KyotoUniv}
+          {Kyoto University, Department of Electronics and Communications}
+          {Kyoto University, Department of Electronics and Communications}
+
+\eabstract{
+This paper deals with two important ambiguities of natural language: prepositional phrase attachment and word sense ambiguity. We propose a new supervised learning method for PP-attachment based on a semantically tagged corpus. Because any sufficiently big sense-tagged corpus does not exist, we also propose a new unsupervised context based word sense disambiguation algorithm which amends the training corpus for the PP attachment by word sense tags. We present the results of our approach, which not only surpasses any existing method but also draws near human performance.
+}
+
+\ekeywords{PP-attachment ambiguity, word sense ambiguity, semantic
+distance, context,
+unsupervised similarity based iterative 
+disambiguation, supervised learning,
+decision tree}
+
+
+\begin{document}
+
+\maketitle
+
+
+\section{Introduction}
+
+The problem with successful resolution of ambiguous prepositional phrase attachment is that we need to employ various types of knowledge. Consider, for example, the following sentence:
+
+\begin{center}
+{\it 1. Buy books for children.  }
+\end{center}
+
+The PP {\it for children} can be either adjectival and attach to the object noun {\it books} or adverbial and attach to the verb {\it buy}, leaving us with the ambiguity of two possible syntactic structures:
+
+\begin{center}
+adj) VP(VB=buy, NP(NNS=books, PP(IN=for,NP(NN=children))))
+
+adv) VP(VB=buy, NP(NNS=books), PP(IN=for,NP(NN=children))).
+\end{center}
+
+It is obvious that without some contextual information we cannot disambiguate such a sentence correctly. Consider, however, the next sentence: 
+
+\begin{center}
+{\it 2. Buy books for money.  }
+\end{center}
+
+In this case, we can almost certainly state that the PP is adverbial, i.e.attached to the verb. This resolution is based on our life time experience in which we much more often encounter the activity which can be described as "buying things for money" than entities described as "books for money"
+\footnote{This, of course, does not provide us with a hundred percent certainty.}. 
+
+At the moment, we do not have a computer database containing life time experiences, and therefore we have to find another way of how to decide the correct PP attachment. One of the solutions lies in the exploration of huge textual corpora, which can partially substitute world knowledge. Partially, because we do not know how wide a context, what type of general knowledge or how deep an inference has to be applied for a successful disambiguation.
+
+If we limit the context around the prepositional phrase to include only the verb, its object and the PP itself, the human performance on PP attachment would be approximately 88.2\% accurate \cite{RRR94}. Because people are capable of utilising their world knowledge, the remaining inaccuracy must be attributed to the lack of a wider context\footnote{Human performance with full sentential context is 93.2\% \cite{RRR94}.}. Statistically, each preposition has a certain percentage of occurrences for each attachment, relying on which would provide us with approximately 72.7\% of correct attachments \cite{CandB95}. If we manage to partially substitute the world knowledge, the resulting accuracy would lie in the range between 72.7 and 88.2\%. Then, we could regard our approach intelligent.
+
+\subsection{PP-Attachment}
+
+Altman and Steedman \cite{A&S88} have shown that in many cases \mbox{PP} can be attached correctly only if the context of the current discourse is used. Using the discourse context is, however, extremely difficult because we do not have enough theoretical background to decide which bits of context are needed to correctly disambiguate and which are irrelevant. 
+
+There have been numerous attempts to substitute context by superficial knowledge extracted from a large corpus \cite{H&R93}. Most of the methods are based on statistical frequencies and require storing of a huge table of probabilities which becomes computationally very expensive at run-time. The state-of-the art statistical corpus based method is the backed-off model proposed by Collins and Brooks in \cite{CandB95} which performs with 84.5\% accuracy on stand-alone quadruples. Another promising approach is the transformation-based rule derivation presented by Brill and Resnik in \cite{BandR94}, which is a simple learning algorithm that derives a set of transformation rules. These rules are then used for PP attachment and therefore, unlike the statistical methods, it is unnecessary to store huge frequency tables. Brill and Resnik had reported 81.8\% success of this method on 500 randomly-selected sentences.
+
+Both of these methods, however, suffer from a sparse data problem. All are based on matching the words from the analysed sentence against the words in the training set. The problem is that only exact matches are allowed. The back-off model showed an overall accuracy of 84.5\%, but the accuracy of full quadruple matches was 92.6\%! Due to the sparse data problem, however, the full quadruple matches were quite rare, and contributed to the result in only 4.8\% of cases. The accuracy for a match on three words was also relatively high (90.1\%), as shown in Table~\ref{tab:1} taken from \cite{CandB95}.
+
+\begin{table}[t]
+  \leavevmode
+    \caption{PP Attachment Accuracy at Each Stage of the Back-off Model}
+    \label{tab:1}
+  \begin{center}
+\begin{tabular}[c]{|c|c|c|c|}\hline
+{\bf Stage} & {\bf Total Number} & {\bf Number Correct} & {\bf Percent Correct}\\\hline
+Quadruples & 148 & 134 & 90.5\\\hline
+Triples & 764 & 688 & 90.1\\\hline
+Doubles & 1965 & 1625 & 82.7\\\hline
+Singles & 216 & 155 & 71.8\\\hline
+Defaults & 4 & 4 & 100.0\\\hline
+{\bf Totals} & {\bf 3097} & {\bf 2606} & {\bf 84.1}\\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+
+This originated our assumption that if the number of matches on four and three words was raised, the overall accuracy would increase as well. Because Collins and Brooks' backing-off model is very profound, we could not find a way of improving its accuracy unless we increased the percentage of full quadruple and triple matches by employing the semantic distance measure instead of word-string matching. We feel that the sentence {\it Buy books for children} should be matched with {\it Buy magazines for children} due to the small conceptual distance between books and magazines. What is unknown, however, is the limit distance for two concepts to be matched. Many nouns in the WordNet hierarchy share the same root (entity) and there is a danger of over-generalisation. We will try to overcome this problem through the supervised learning algorithm described herein. Another problem is that most of the words are semantically ambiguous and unless disambiguated, it is difficult to establish distances between them. The PP attachment also depends on the selection of word senses and vice versa, as will be shown in the result section.
+
+A number of other researchers have explored corpus-based approaches to PP attachment that make use of word classes. For examples, Weischedel \cite{W91} and Basili \cite{B91} both describe the use of manually constructed, domain specific word classes together with corpus-based statistics in order to resolve PP attachment ambiguity.\hspace{-0.2mm} Because these \mbox{papers} describe results obtained on different corpora, however, it is difficult to make a performance comparison.
+
+
+
+\subsection{Word Sense Ambiguity}
+
+We will now discuss the issues connected with matching two different words based on their semantic distance. Employing the notion of semantic ambiguity, it is necessary to address a number of problems. At first, we have to specify the semantic hierarchy. Second, we need to determine how to calculate the distance between two different concepts in the hierarchy. Finally, we must define the semantic ambiguity.
+
+\subsubsection{Semantic Hierarchy}
+
+The hierarchy we chose for semantic matching is the semantic network of WordNet \cite{MI90}, \cite{MI93}. WordNet is a network of meanings connected by a variety of relations. WordNet presently contains approximately 95,000 different word forms organised into 70,100 word meanings, or sets of synonyms. It is divided into four categories (nouns, verbs, adjectives and adverbs), out of which we will be using only verbs and nouns. Nouns are organised as 11 topical hierarchies, where each root represents the most general concept for each topic. Verbs, which tend to be more polysemous and can change their meanings depending on the kind of the object they take, are formed into 15 groups and have altogether 337 possible roots. Verb hierarchies are more shallow than those of nouns, as nouns tend to be more easily organised by the is-a relation, while this is not always possible for verbs. 
+
+\subsubsection{Semantic Distance}
+
+The traditional method of evaluating semantic distance between two meanings based \mbox{merely} on the length of the path between the nodes representing them, does not work well in WordNet, because the distance also depends on the depth at which the concepts appear in the hierarchy. For example, the root {\it entity} is directly followed by the concept of {\it life\_form}, while a {\it sedan}, a type of a car, is in terms of path more distant from the concept of {\it express\_train}, although they are both vehicles and therefore closer concepts. In the case of verbs, the situation is even more complex, because many verbs do not share the same hierarchy, and therefore there is no direct path between the concepts they represent. There have been numerous attempts to define a measure for semantic distance of WordNet contained concepts \cite{RE96}, \cite{SU95}, \cite{SU96}, etc.
+
+For our purposes, we have based the semantic distance calculation on a combination of the path distance between two nodes and their depth. Having ascertained the nearest common ancestor in the hierarchy, the distance is calculated as an average of the distances of the two concepts to their nearest common ancestor divided by the depth in the WordNet Hierarchy:
+
+\begin{center}
+$\displaystyle D = \frac{\strut\displaystyle 1}{\strut\displaystyle 2} ( L1/D2 + L2/D2 )$  
+\end{center}
+
+\noindent
+where L1, L2 are the lengths of paths between the concepts and the nearest common ancestor, and D1, D2 are the depths of each concept in the hierarchy (the distance to the root). The more abstract the nearest common ancestor (the higher in hierarchy) is, the bigger the distance. The same concepts have a distance equal to 0; concepts with no common ancestor have a distance equal to 1.
+
+\subsubsection{Semantic Ambiguity}
+
+In order to determine the position of a word in the semantic hierarchy, we have to determine the meaning of the word from the context in which it appears. For example, the noun {\it bank} can take any of the nine meanings defined in WordNet (financial institution, building, ridge, container, slope, etc.). It is not a trivial problem and has been approached by many researchers. We believe that the word sense disambiguation can be accompanied by \mbox{PP-attachment} resolution, and that they complement each other. At the same time we would like to note, that PP-attachment and sense disambiguation are heavily contextually dependent problems. Therefore, we know in advance that without incorporation of wide context, the full disambiguation will be never reached.
+
+We define the semantic ambiguity A(W) of a word W recursively as follows: 
+
+Let {\bf S = $[$S1,S2,...Sn$]$} be a set of senses corresponding to the word {\bf W} as defined in WordNet, and {\bf dist(S1,S2)} the semantic distance between two concepts (defined above). Then, {\bf A(W) = amb(S)} where
+
+\begin{center}
+{\bf amb(S) = 1}, if the set S = $[$S1$]$, i.e. contains only one sense,
+
+{\bf amb($[$S1,S2,...,Sn$]$) = amb($[$S1,S2,...,Sn-1$]$)+
+
+min$[$dist(S1,Sn), dist(S2,Sn),..., dist(Sn-1,Sn)$]$.}
+\end{center}
+
+In this definition, the word sense ambiguity depends not only on the number of senses the word has, but also on the distance between them. For example, the word {\it "client"} has two senses in WordNet ({\sf client\_{1}}={\it consumer}, {\sf client\_{2}}={\it person}). Since {\it consumer} and {\it person} are semantically very close concepts, then, although the word has two senses, its ambiguity is less than two. On the other hand, the word {\it "maker"} also has two senses but each belongs to a completely different class ({\sf maker\_{1}}={\it person}, {\sf maker\_{2}}={\it enterprise}). Therefore, the resulting ambiguity equals 2 (see Figure 1):
+
+\begin{figure}[t]
+  \leavevmode
+  \begin{center}
+	
+      \epsfile{file=fig1.ps,height=7cm,width=12cm}      
+    \caption{Distance and Ambiguity Evaluation Example}
+    \label{fig:1}
+  \end{center}
+\end{figure}
+
+
+\section{Word Sense Disambiguation}
+
+The supervised learning algorithm which we have devised for the PP-attachment resolution, and which is discussed in Chapter 3, is based on the induction of a decision tree from a large set of training examples which contain verb-noun-preposition-noun quadruples with disambiguated senses. Unfortunately, at the time of writing this work, a sufficiently big corpus which was both syntactically analysed and semantically tagged did not exist. Therefore, we used the syntactically analysed corpus \cite{MA93} and assigned the word senses ourselves. Manual assignment, however, in the case of a huge corpus would be beyond our capacity and therefore we devised an automatic method for the word sense disambiguation based on the following notions:
+
+Determining the correct sense of an ambiguous word is highly dependent on the context in which the word occurs. Even without any sentential context, the human brain is capable of disambiguating word senses based on circumstances or experience\footnote{Also a kind of context.}. In natural language processing, however, we rely mostly on the sentential contexts, i.e. on the surrounding concepts and relations between them. These two problems arise: {\bf 1.} The surrounding concepts are very often expressed by ambiguous words and a correct sense for these words also has to be determined. {\bf 2.} What relations and how deep an inference is needed for correct disambiguation is unknown.
+
+We based our word-sense disambiguating mechanism on the premise that two ambiguous words usually tend to stand for their most similar sense if they appear in the same context. In this chapter we present a similarity-based disambiguation method aimed at disambiguating sentences for subsequent PP-attachment resolution. Similar contextual situations (these include information on the PP-attachment) are found in the training corpora and are used for the sense disambiguation. If, for example, the verb {\it buy} (4 senses) appears in the sentence:
+
+\begin{center}
+\it The investor bought the company for 5 million dollars
+\end{center}
+
+and somewhere else in the training corpus there is a sentence\footnote{Both sentences have adverbial PP attachment.}:
+
+\begin{center}
+\it The investor purchased the company for 5 million dollars,
+\end{center}
+
+we can take advantage of this similarity and disambiguate the verb "buy" to its sense that is nearest to the sense of the verb {\it purchase}, which is not ambiguous. 
+
+The situation, however, might not be as simplistic as that, because such obvious matches are extremely rare even in a huge corpus. The first problem is that the sample verb in the training corpus may be also ambiguous. Which sense do we therefore choose? The second problem is that there may, in fact, be no exact match in the training corpus for the context surrounding words and their relations. To overcome both of these problems we have applied the concept of semantic distance discussed above. Every possible sense of all the related context words is evaluated and the best match chosen\footnote{Because our primary goal is PP attachment disambiguation, the related context words are those appearing in the verb-noun-preposition-noun quadruple.}.
+
+The proposed {\bf unsupervised similarity-based iterative algorithm} for the word sense disambiguation of the training corpus looks as follows:
+
+{
+\begin{enumerate}
+\item 
+From the training corpus, extract all the sentences which contain a prepositional phrase with a verb-object-preposition-description quadruple. Mark each quadruple with the corresponding PP attachment (explicitly present in the parsed corpus).
+
+\item 
+Set the Similarity Distance Threshold SDT = 0
+
+\item 
+{\bf Repeat}
+
+\begin{itemize}
+\item 
+  {\bf for each} quadruple {\bf Q} in the training set:
+
+\begin{itemize}
+\item 
+  {\bf for each} ambiguous word in the quadruple:
+
+\begin{itemize}
+\item 
+  among the remaining quadruples find a set {\bf S} of similar quadruples 
+
+  (those with quadruple distance $<$ SDT)
+
+\item 
+  {\bf for each} non-empty set {\bf S}:
+
+\begin{itemize}
+\item 
+  choose the nearest similar quadruple from {\bf S}
+
+\item 
+  disambiguate the ambiguous word to the nearest sense of the corresponding word of the chosen nearest quadruple 
+\end{itemize}
+\end{itemize}
+\end{itemize}
+
+\item
+  increase the Similarity Distance Threshold SDT = SDT + 0.1
+\end{itemize}
+
+{\bf Until} all the quadruples are disambiguated or SDT = 3.
+\end{enumerate}
+}
+
+The\hspace{0.25mm} above\hspace{0.25mm} algorithm\hspace{0.25mm} can\hspace{0.25mm} be\hspace{0.25mm} described\hspace{0.25mm} as\hspace{0.25mm} iterative\hspace{0.25mm} clustering,\hspace{0.25mm} because\hspace{0.25mm} at\hspace{0.25mm} first,\hspace{0.25mm} the\hspace{0.25mm} near-
+
+\noindent est quadruples are matched and disambiguated. Then, the similarity distance threshold is raised, and the process repeats itself in the next iteration. If a word is not successfully disambiguated, it is assigned its first, i.e. the most frequent sense. The reason for starting with the best matches is that these tend to provide better disambiguations.
+
+{\bf SIMILARITY DISTANCE THRESHOLD} defines the limit matching distance between two quadruples. The matching distance between two quadruples {\bf v1-n1-p-d1} and {\bf v2-n2-p-d2} is calculated as follows:
+
+\begin{center}
+{\bf Dq = (D(v1,v2)$^{2}$)+D(n1,n2)+D(d1,d2))/P}, when disambiguating verb
+
+{\bf Dq = (D(v1,v2)+D(n1,n2)$^{2}$+D(d1,d2))/P}, when disambiguating noun
+
+{\bf Dq = (D(v1,v2)+D(n1,n2)+D(d1,d2)$^2$)/P}, when disambiguating description
+noun,\end{center}
+
+\noindent
+where {\bf P} is the number of pairs of words in the quadruples which have a common semantic ancestor, i.e. {\bf P} = 1, 2 or 3 (if there is no such a pair, Dq = $\infty$). The distance of the currently disambiguated word is squared in order to have a bigger weight in the distance {\bf Dq}. The distance between two words {\bf D(w1,w2)} is defined as the minimum semantic distance between all the possible senses of the words {\bf w1} and {\bf w2}. Two quadruples are {\bf SIMILAR}, if their distance is less or equal to the current Similarity Distance Threshold, and if the currently disambiguated word is different in the matched quadruple\footnote{The same words have the same sets of senses and therefore would not allow for disambiguation.}. 
+
+The computational complexity of the algorithm is polynomial with the number of training examples because we have to calculate distances among all the quadruples in the training set. If {\bf n} is the number of quadruples, the number of required distance calculations is {\bf n$*$(n-1)/2} and hence the computational complexity of {\bf O(n2)}. The time requirements, however, also depend on the order in which these examples are disambiguated. The best case would be such in which the examples, which satisfy the similarity condition during the first iteration cycle of the algorithm, were disambiguated first. This is because it is necessary to calculate the semantic distance of each content word of the disambiguated quadruple with each sense of all the corresponding words of the remaining quadruples. The less senses the words of the training quadruple have, the faster the distance calculation. Therefore, the more words are disambiguated during the earlier iteration cycles (SDT=0,0.1,0.2,...3.0), the smaller the number of distance calculations for the following ones.\hspace{-0.4mm} Because each quadruple needs a different number of iteration cycles (quadruples need different Similarity Distance Thresholds (SDT) to find non-empty sets of similar quadruples) the worst case would be such in which the quadruples were organised in descending order by their SDT.
+
+The algorithm, however, could be speeded up by dynamic reordering of the disambiguated set according to the minimum similarity distance found for each disambiguated quadruple at each cycle. This could be realised by storing the distances of the currently disambiguated quadruple to all the remaining ones in a vector. However, whenever there is a quadruple found which satisfies the current Similarity Distance Threshold and one of its words is disambiguated, the values in the positions representing the distance to this quadruple have to be replaced by the distance to the newly disambiguated quadruple in all the previously stored vectors. This is because the current value represents the minimum distance to the ambiguous quadruple, whereas the minimum distance to the same quadruple with a disambiguated word may be higher (we cannot possibly store a matrix of all the distance combinations among all the senses of all the quadruples, because it would lead to a massive combinatorial explosion).
+
+
+
+\section{PP-Attachment}
+
+
+
+For the attachment of the prepositional phrases in unseen sentences, we have modified the ID3 algorithm \cite{BR91} from the family of inductive learning algorithms \cite{KO88}. Using a huge training set of classified examples, it uncovers the importance of the individual words (attributes) and creates a decision tree that is later used for classification of unseen examples\footnote{Classification in this case means deciding whether the PP is adjectival or averbial.}. The algorithm uses the concepts of the WordNet hierarchy as attribute values and creates the decision tree in the following way:
+
+\subsection{Decision Tree Induction}
+
+Let {\bf T} be a training set of classified quadruples.
+
+\noindent
+1. If all the examples in T are of the same PP attachment type then the result is a leaf labelled with this type,
+
+\begin{itemize}
+\item[]
+  {\bf else}
+
+\item[]
+  2. Select the most informative attribute A among verb, noun and         description among the attributes not selected so far (the attributes can be     selected repeatedly after all of them were already used in the current  subtree)
+
+\item[]
+  3. For each possible value Aw of the selected attribute A construct     recursively a subtree Sw calling the same algorithm on a set of         quadruples for which A belongs to the same WordNet class as Aw.
+
+\item[]
+  4. Return a tree whose root is A and whose subtrees are Sw and links
+  between A and Sw are labelled Aw.
+\end{itemize}
+
+
+\noindent
+Let us briefly explain each step of the algorithm.
+
+1. If the examples belong to the same class (set T is homogenous), the tree expansion terminates. However, such situation is very unlikely due to the non-perfect training data. Therefore, we relaxed the complete homogenity condition by terminating the expansion when more than 77\% of the examples in the set belonged to the same class (the value of 77\% was set experimentaly as it provided the best classification results). If the set T is still heterogeneous and there are no more attribute values to divide with, the tree is terminated and the leaf is marked by the majority class of the node. 
+
+2. We consider the most informative attribute to be the one which splits the set T into the most homogenous subsets, i.e. subsets with either a high percentage of samples with adjectival attachments and a low percentage of adverbial ones, or vice-versa. The optimal split would be such that all the subsets would contain only samples of one attachment type. For each attribute A, we split the set into subsets, each associated with attribute value Aw and containing samples which were unifiable with value Aw (belong to the same WordNet class). Then, we calculate the {\bf overall heterogeneity (OH)} of all these subsets as a weighted sum of their expected information:
+
+\begin{center}
+$OH=-{\displaystyle \sum_{w}}p(A=A_{w})[p(PP_{ADV}|A=A_{w})log_{2}p(PP_{ADV}|A=A_{w})$
+
+$+p(PP_{ADJ}|A=A_{w})log_{2}p(PP_{ADJ}|A=A_{w})],$
+\end{center}
+
+\noindent
+where $p(PP_{ADV}|A=Aw)$ and $p(PP_{ADJ}|A=Aw)$ represent the conditional probabilities of the adverbial and adjectival attachments, respectively. The attribute with the lowest overall heterogeneity is selected for the decision tree expansion. In the following example (Figure 2) we have to choose an attribute to split the node with 50 adjectival and 50 adverbial quadruples. Verbs of all the node quadruples belong to the WordNet class V, nouns to the class N and descriptions to the class D. We assume, in this example, that the WordNet hierarchy class V has three subclasses (V1, V2, V3), class N has two subclasses (N1, N2) and class D has also two subclasses (D1, D2)\footnote{At the top of the tree we use all the roots of the WordNet hierarchy as initial subnodes.}. We use the values V1, V2 and V3, N1 and N2, and D1 and D2 as potential values of the attribute A. Splitting by verb results in three subnodes with an overall heterogenity 0.56, splitting by noun in two subnodes with OH=0.99 and by description with OH=0.88. Therefore, in this case we would choose the verb as an attribute for the tree expansion.
+
+3. The attribute is either a verb, noun, or a description\footnote{We induce the decision tree separately for each preposition.}. The values of these attributes are the disambiguated senses, i.e. the concept identificators (synsets) associated with each attribute (word). When splitting the set by the attribute A according to its values Aw, the emerging subsets contain those quadruples whose attribute A value is lower in the WordNet hierarchy, i.e. belongs to the same class. If some quadruples had the attribute value equal to the values of A, an additional subset is added but its further splitting by the same attribute is prohibited.
+
+\begin{figure}[t]
+  \leavevmode
+  \begin{center}
+	
+      \epsfile{file=fig2.ps,height=7cm,width=14cm}      
+    \caption{Choosing an attribute for the decision tree expansion}
+    \label{fig:2}
+  \end{center}
+\end{figure}
+
+The computational complexity of the decision tree induction algorithm is of the order {\bf O(n)}, as it depends entirely on the size of the training corpus. It is, however, extremely difficult to estimate the time complexity of the algorithm, because this depends on the word sense distribution in the corpus. The decision trees are induced separately for each preposition and examples for each preposition have different word sense distributions. We can therefore only hypothesise on what would be the best and the worst case.
+
+If the word senses of the quadruples at the beginning node of the tree expansion had such a distribution that we could find an attribute that would split the node into homogenous sub-nodes, the tree expansion would terminate. If, on the other hand, the sense distribution was such that no attribute which would provide homogenous splitting was found, the algorithm is called recursively again on all the emerging heterogeneous sub-nodes. The worst case would be such in which the bottom of the WordNet hierarchy was reached, i.e. when all the possible attribute values were used for the tree expansion in all the tree branches. The number of used WordNet nodes grows rapidly with the number of training examples until a plateau is reached. This plateau represents the fact that certain prepositions take only certain senses for each content word in the quadruple. These senses are implicitly present in the resulting decision tree, but are distorted by the sense disambiguation error.
+
+In any case, however, the computational complexity is linear with the number of examples, because each example can follow only one branch and no matter how many sub-nodes emerge, the number of examples to compare in the recursive call of the algorithm is not related to the number of branches on each level of expansion, but only to the homogenities of the sub-nodes. The maximum number of times the algorithm is recursively called is given by the depth and the size of the WordNet hierarchy, which are constant factors in terms of computational complexity.
+
+\subsection{Classification}
+
+As soon as the decision tree is induced, classifying an unseen quadruple is a relatively simple procedure. At first, the word senses of the quadruple are disambiguated by the algorithm described in Chapter 2, which is modified to exclude the SDT iteration cycles. Then a path is traversed in the decision tree, starting at its root and ending at a leaf. At each internal node, we follow the branch labelled by the attribute value which is the semantic ancestor of the attribute value of the quadruple (i.e. the branch attribute value is a semantic ancestor\footnote{In the WordNet hierarchy.} of the value of the quadruple attribute). The quadruple is assigned the attachment type associated with the leaf, i.e. adjectival or adverbial. If no match is found for the attribute value of the quadruple at any given node, the quadruple is assigned the majority type of the current node.
+
+\section{Training and Testing Data}
+
+The training and testing data, extracted from the Penn Tree Bank \cite{MA93}, are identical to that used by \cite{RRR94}, \cite{CandB95} for comparison purposes. The data contained 20801 training and 3097 testing quadruples with 51 prepositions and ensured that there was no implicit training of the method on the test set itself. We have processed the training data in the following way:
+
+\begin{itemize}
+\item 
+converted all the verbs into lower cases
+
+\item 
+converted all the words into base forms
+
+\item 
+replaced four digit numbers by {\sf 'year'}
+
+\item 
+replaced all other numbers by {\sf 'definite\_quantity'}
+
+\item 
+replaced nouns ending by {\it -ing} and not in WordNet by {\sf 'action'}
+
+\item 
+eliminated examples with verbs that are not in WordNet
+
+\item 
+eliminated examples with lower-case nouns that are not in WordNet, except for 
+        pronouns, whose senses were substituted by universal pronoun synsets 
+
+\item 
+the upper-case nouns were assigned their lower case equivalent senses plus the
+senses of {\sf 'company'} and {\sf 'person'}
+
+\item 
+the upper-case nouns not contained in WordNet were assigned the senses of 
+{\sf 'company'} and {\sf 'person'}
+
+\item 
+disabled all the intransitive senses of verbs
+
+\item 
+assigned all the words the sets of WordNet senses (synsets)
+\end{itemize}
+
+The above processing together with the elimination of double occurrences and contradicting examples, reduced the training set to 17577 quadruples, with an average quadruple ambiguity of 86. The quadruple ambiguity here is calculated as a multiplication of the sense ambiguities of the three content words of that qaudruple, i.e. for qaudruple Q = v n p d, the qaudruple ambiguity is
+amb(q) = amb(v)$*$amb(n)$*$amb(d),
+where amb(w) was defined in section 1.2.
+
+\section{Evaluation and Experimental Results}
+
+\subsection{Word Sense Disambiguation}
+
+Because the induction of the decision tree for the PP attachment is based on a supervised learning from sense-tagged examples, it was necessary to sense-disambiguate the entire training set. This was done by the iterative algorithm described in Chapter 2. 
+
+To form an approximate evaluation of the quality of this disambiguation, we have randomly selected 500 words, manually\footnote{For the manual assignment we have used only the context of each quadruple plus the PP attachment information.}
+ assigned sets of possible senses to them (sets, because without a full sentential context a full disambiguation is not always possible), and compared these with the automatic disambiguation. If the automatically chosen sense was present in the manually assigned set, the disambiguation was considered correct. Out of these 500 words 362 could be considered correctly disambiguated, which represents slightly over 72\%.
+
+We can argue that the insufficient disambiguation context, sparse data problem and empirically set iteration step in the disambiguating algorithm lead to an unreliable disambiguation. However, it is necessary to maintain the understanding that it is the PP attachment rather than the sense disambiguation that is our primary goal. Additionally, because the words of the input sentences for the PP attachment are to be assigned senses in the same manner, the sense disambiguation error is concealed.
+
+Disambiguating the training set of 20801 training quadruples took approximately twelve hours on a SUN SS20 workstation. It must be noted, however, that the training set has to be disambiguated only once. The disambiguation of unseen (testing) examples is done by the same algorithm which is modified to exclude the SDT iteration cycles. The distances are only calculated for the three content words of the disambiguated quadruple with each quadruple in the training set. This involves {\bf 3$*$n} distance calculations, where {\bf n} is the size of the training set, and the computational complexity is therefore linear and the disambiguation reasonably fast for real-life applications.
+
+\subsection{PP-Attachment}
+
+The PP attachment using the decision tree is extremely efficient and reliable. We have induced the decision tree separately for each preposition in the training corpus, covering the 51 most common prepositions. The induced decision trees are relatively shallow and the classification of unseen sentences is rapid. As shown in Table 2, our algorithm appears to have surpassed all the existing methods and is very close to human performance. 
+\addtocounter{footnote}{1}
+\footnotetext{\label{foot:1}When tested only on the quadruples whose all words are found in WordNet.}
+
+\begin{table}[t]
+  \leavevmode
+    \caption{PP Attachment Accuracy and Comparison with Other Methods}
+    \label{tab:2}
+  \begin{center}
+\begin{tabular}[c]{|l|c|}\hline
+{\bf Method }& {\bf Percent Correct}\\\hline
+Always Adjectival & 59.0 \\\hline
+Most likely for each preposition & 72.2\\\hline
+\cite{RRR94} & 81.6\\\hline
+\cite{BandR94} (different data) & 81.8\\\hline
+\cite{CandB95} & 84.5\\\hline
+{\bf Induced decision tree} & {\bf 88.1}\\\hline
+Average human (quadruple context only) & 88.2\\\hline
+{\bf Induced decision tree (WordNet)}$^{\ref{foot:1}}$
+ & {\bf 90.8}\\\hline
+Average human (whole sentence context) & 93.2\\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+
+The fact that many words in both the training and the testing sets were not found in WordNet caused a reduction in the accuracy. This is because training examples with an error or with a word not found in WordNet could not fully participate on the decision tree induction. This reduced the original training set of 20801 quadruples to 17577. In the case of the testing set, many of the 3097 testing quadruples were also handicapped by having no entry in WordNet. Attachment of these had to be based on a partial quadruple and was usually assigned at a higher level of the decision tree, which reduced the overall accuracy. In order to conduct a fair comparison, however, we used the same testing set as the methods shown in Table \ref{tab:2}. If just the examples with full WordNet entries were used, the accuracy rose to {\bf 90.8\%}. 
+
+Although the algorithm does not provide high enough accuracy from the point of view of word sense disambiguation, it is more important to bear in mind that our main goal is the PP-attachment ambiguity resolution. The relatively low accuracy of the word sense disambiguation is compensated by the fact that the same sense disambiguation error is present in both the training set and the classified quadruple. The use of the same training set for both the PP attachment and the sense disambiguation provides a positive bias in favour of correct attachment.
+
+Until we have a sufficiently big enough word sense tagged corpus, we can only hypothesise on the importance of the correct sense disambiguation for the PP attachment. Experiments, however, show that if the positive bias between the word senses of the training set and the testing quadruples is removed, the accuracy of the PP attachment falls substantially, as shown in Table \ref{tab:3}. 
+
+
+\begin{table}[t]
+  \leavevmode
+    \caption{Relation between the Quality of the Word Sense Disambiguation and\\ the PP Attachment Accuracy}
+    \label{tab:3}
+  \begin{center}
+\begin{tabular}[c]{|l|l|c|}\hline
+{\bf Disambiguation of the} & {\bf Disambiguation of the} & {\bf PP attachment accuracy}\\
+{\bf training set} & {\bf testing set} & \\\hline
+First sense (69\%) & First sense & 66.5 \%\\\hline
+ & Biased & 76.5 \%\\\hline
+Disambiguated (72\%) & First sense & 69.0 \%\\\hline
+ & Biased & 88.1 \%\\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+
+The fact that 72\% correct disambiguation leads to 88.1\% correct PP-attachment is partly to be attributed to the positive bias of disambiguation of the testing examples against the same training set which is also used for the decision tree induction. However, comparison of the second and the third lines of the table shows that better disambiguation (and 72\% is better than using the first, i.e. the most frequent sense, which is about 69\% accurate in the case of Brown Corpus and WordNet \cite{MC94}), leads to a higher PP-attachment accuracy.
+
+As we have already mentioned, Collins and Brooks \cite{CandB95} based their method on matching the testing quadruples against the set of training examples. The decision on the attachment was made according to which attachment type had a higher count in the training corpus. If no match for the given quadruple was found, the algorithm backed-off to a combined frequency count of the occurences of matches on three words only, i.e. on the verb-noun-preposition, verb-preposition-description and noun-preposition-description. If no match was found on any of the three words combination, the algorithm backed-off to a combined match on two words, i.e. one of the content words with a preposition. If there was further no match found on two words, the attachment type was assigned according to the prepositional statistics, or, if the preposition was not present in the training corpus, the quadruple was assigned the adjectival default. The total count and accuracy at each of the backed-off stages is given in the Table 1. As we can see, there is a substantial decrease of accuracy between the triples and doubles stage. Our algorithm, on the other hand, has substantially reduced the number of classifications based on fewer words. This is because at the top of the decision tree all of the semantic tops of all of the content words of the given quadruple are compared with the semantic generalisations of the training examples represented through the nodes of the decision tree. Only if the homogenity termination condition is satisfied before all three content words are compared, the decision is based on less than a full quadruple. The decision tree therefore represents a very useful mechanism for determining the semantic level at which the decision on the PP-attachment is made.
+
+Collins and Brooks have also demonstrated the importance of low count events in training data by an experiment where all counts less than 5 were put to zero. This effectively made their algorithm ignore low count events which resulted in the decrease of accuracy from 84.1 to 81.6\%. This important feature is maintained in our approach by small homogenous leaves at higher levels of the decison tree, which usually accommodate the low count training examples.
+
+Figure 3 shows an interesting aspect of learning the prepositional phrase attachment from a huge corpus. We have selected five most common prepositions and compared their learning curves. It turned out that for the size of a training set smaller than 1000 examples, learning is rather unreliable and dependent on the quality of the chosen quadruples. For a bigger training set, the accuracy grows with its size until a certain maximum accuracy level is reached. This level is different for different prepositions and we hypothesise that it can be broken only when a wider sentential or discourse context is used.
+
+\begin{figure}[t]
+  \leavevmode
+  \begin{center}
+	
+      \epsfile{file=fig3.ps,height=7cm,width=12cm}      
+    \caption{Accuracy/Corpus Size Dependency Curve}
+    \label{fig:3}
+  \end{center}
+\end{figure}
+
+
+Our algorithm also provides a qualification certainty based on the heterogeneity of the decision tree leaves. The tree leaves are heterogeneous for two reasons: 1) the tree expansion is terminated when a node contains more than 77\% of examples belonging to the same class, or, 2) when there are examples in the node that cannot be further divided because the tree has reached the bottom of the WordNet hierarchy. The Table 4 shows that the incorrect attachments usually occur with a lower certainty than the correct ones, i.e. most of the incorrect attachments are marked as less certain.
+
+
+\begin{table}[t]
+  \leavevmode
+    \caption{Certainty Evaluation}
+    \label{tab:4}
+  \begin{center}
+\begin{tabular}[c]{|l|c|c|c|c|}\hline
+{\bf Certainty} & {\bf Number} & {\bf Percent} & {\bf Number Correct} & {\bf Accuracy $[\%]$}\\\hline
+1.0 & 1424 & 46.0  & 1226 & 86.1 \\\hline
+0.8 - 1.0  & 1261 & 40.7 & 1219 & 96.7 \\\hline
+0.5 - 0.8 & 233 & 7.5 & 143 & 61.4\\\hline
+Prepositional statistics & 176 & 5.7 & 137 & 77.8\\\hline
+Adjectival default & 3 & 0.1 & 3 & 100.0\\\hline
+{\bf TOTALS} & {\bf 3097} & {\bf 100.0} & {\bf 2728} & {\bf 88.1}\\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+
+The {\it prepositional statistics} indicates that there were no matches found for the given quadruple and the attachment was decided based on the statistical frequency of the given preposition. {\it Adjectival default} was used in three cases when the preposition was not found in the training set. The certainty between 0.5 and 0.8 accounts mostly for the examples whose attachment was made through the decision tree, but there was either a small number of examples that participated on the creation of the tree branch or the examples were not sufficiently representative (e.g. contradictory examples). Most of the examples in this category possibly require a wider sentential context for further improvement of accuracy. The certainty bigger than 0.8 and smaller than 1.0 accounts for the situations when the decision was based on a leaf whose further expansion was terminated by the homogeneity termination condition or simply some noisy or incorrectly disambiguated examples were involved in its creation
+\footnote{The relatively high accuracy of this certainty is due mostly to the preposition "of" which formes 29\% of the testing data and whose decision tree is terminated at the very top of the expansion bacause of the homogenity termination condition (over 99\% of the quadruples with the preposition "of" are adjectival). All the quadruples with preposition "of" were therefore classified with certainty 0.99 and are included in this group.}. 
+Examples, which did not reach the bottom of the decision tree and were assigned the majority class of the node from which there was no appropriate branch to follow, were all classified with certainty between 0.5 and 1.0. The decision with certainty 1.0 is always based on a homogenous leaf. It does not exhibit the highest accuracy because many of the homogenous leaves are formed from only very few examples and many of these are erroneous. 
+
+As Figure 3 shows, each preposition has a different saturation accuracy which cannot be surpassed unless a wider sentential context is used. We believe, however, that a bigger corpus would provide better word-sense disambiguation which in turn would allow to increase the homogeneity limit for the termination of the tree expansion. Heterogeneous nodes, which force the expansion of the decision tree to unnecessary extent, are caused by 1) examples with an error in the word sense disambiguation, or by 2) examples, that can be both adjectival and adverbial if taken out of context. The second case cannot be eliminated by a bigger training corpus, however, the reduction of noisy examples would contribute to an increase in accuracy mainly in the case of small nodes which can now contain more noisy examples than correct ones and thus force a wrong attachment. We feel that a bigger corpus, would provide us with an increase of accuracy of "certainty 1" attachments, which partly includes attachments based on the small leaves. Also, we believe that a bigger training corpus would increase performance in the case of less frequent prepositions which do not have enough training examples to allow for induction of a reliable decision tree. 
+
+\section{Conclusion and Further Work}
+
+The most computationally expensive part of the system is the word sense disambiguation of the training corpus. This, however, is done only once and the disambiguated corpus is stored for future classifications of unseen quadruples. As the Figure 4 shows, the time complexity of the decision tree induction is linear the corpus size and therefore adequate even when the size of the corpus grows (tested on SUN SS20).
+
+
+\begin{figure}[t]
+  \leavevmode
+  \begin{center}
+	
+      \epsfile{file=fig4.ps,height=7cm,width=12cm}      
+    \caption{Accuracy/Corpus Size Dependency Curve}
+    \label{fig:4}
+  \end{center}
+\end{figure}
+
+
+The above experiments confirmed the expectations that using the semantic information in combination with even a very limited context leads to a substantial improvement of NLP techniques. Although our method exhibits an accuracy close to the human performance, we feel that there is still a space for improvement, particularly in using a wider sentential context (human performance on full sentential context is 93.2\%), more training data and/or more accurate sense disambiguation technique. We believe that there is further space for elaboration of our method, in particular, it would be interesting to know the exact relations between the accuracy and the termination condition, and between the corpus size and the optimum termination condition separately for each preposition. At the moment, we are working on an implementation of the algorithm to work on with a wider sentential context and on its incorporation within a more complex NLP system.
+
+
+\bibliographystyle{nlpbbl}
+\bibliography{epaper}
+
+\begin{biography}
+
+\biotitle{}
+
+\bioauthor{Jiri Stetina}
+{
+Jiri Stetina graduated from the Czech Technical University in Prague
+where he received M.S. in Electrical Engineering in 1993. His \mbox{early}
+work in the field of Artificial Intelligence was in practical
+application of machine learning methods. Now he is pursuing Ph.D. at
+Nagao Laboratory, Department of Electronics and Communications of
+Kyoto University. His current reasearch interests in Natural Language
+Processing include corpus-based resolution of natural language
+ambiguities. His latest work focuses on prepositional phrase
+attachment and word sense ambiguity resolution.
+}
+
+\bioauthor{Makoto Nagao}
+{
+Makoto Nagao received the B.S., M.S., and a Ph.D. in Electrical
+Engineering from Kyoto University in 1959, 1961, and 1966,
+respectively. He has been a full professor of Electrical Engineering,
+Kyoto University since 1973. He was the director of the University
+Computing Center during 1986-1990, and the director of the University
+Library during 1995-1997. He is now the Dean of the Faculty of
+Engineering. He kept also a professor's chair of the ethnological
+study by computer at the National Museum of Ethnology during
+1976-1993. His research activities are in the areas of pattern
+recognition, image processing, natural language processing, machine
+translation, and artificial intelligence in general. Dr. Nagao is the
+President of the International Association for Machine Translation,
+and is a member of more than ten academic institutions. He received
+the IEEE Emanuel R. Piore Award in 1993, and several other awards in
+Japan.
+}
+
+\bioreceived{Received}
+\biorevised{Revised}
+\bioaccepted{Accepted}
+
+\end{biography}
+
+\end{document}
+

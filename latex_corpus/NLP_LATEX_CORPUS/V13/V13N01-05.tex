@@ -1,0 +1,1126 @@
+\documentstyle[epsbox,jnlpbbl]{jnlp_j}
+
+\setcounter{page}{3}
+\setcounter{巻数}{2}
+\setcounter{号数}{3}
+\setcounter{年}{1995}
+\setcounter{月}{7}
+\受付{1995}{5}{6}
+\再受付{1995}{7}{8}
+\採録{1995}{9}{10}
+
+\newcommand{\EJP}{}
+\newcommand{\CT}{}
+\newcommand{\NT}{}
+\newcommand{\ENP}{}
+\newcommand{\SVM}{}
+\newcommand{\MTNP}{}
+\newcommand{\JNP}{}
+\newcommand{\N}{}
+
+\newenvironment{LIST}{}{}
+
+
+\title{二言語コーパスからの語彙知識獲得のための\\
+対訳辞書登録候補の選別}
+\author{吉見 毅彦\affiref{Ryukoku}\affiref{NICT} \and 
+九津見 毅\affiref{SHARP} \and 小谷 克則\affiref{NICT} \and 
+佐田 いち子\affiref{SHARP} \and 井佐原 均\affiref{NICT}}
+
+\headauthor{吉見，九津見，小谷，佐田，井佐原}
+\headtitle{二言語コーパスからの語彙知識獲得のための対訳辞書登録候補の選別}
+           
+\affilabel{Ryukoku}{龍谷大学}{Ryukoku University}
+\affilabel{SHARP}{シャープ(株)}{SHARP Corporation}
+\affilabel{NICT}{情報通信研究機構}{National Institute of Information and 
+Communications Technology}
+
+\jabstract{機械翻訳システムの翻訳品質を改善するためなどに必要な語彙知識
+を獲得するためには，
+対訳コーパスにおいて二言語の表現を正しく対応付ける処理と，対応付けられた
+表現対を辞書に登録するか否かを判定する選別処理の二つが必要である．
+従来，対応付けに関する研究は数多く行なわれてきたが，辞書登録候補の選別に
+関する研究はほとんど行なわれていない．
+本稿では，従来あまり扱われてこなかった選別問題を採り上げ，この問題を機械
+学習によって解く方法を示す．
+学習に用いる素性として，二つの表現の間で異なる部分と両者に共通する部分に
+着目し，差分部分や共通部分を表現する手段として，表記(文字，形態素)，品詞，
+概念識別子を用いる．
+評価実験の結果，最も高い選別性能(F値)を示す表現方法は文字であることが明
+らかになった． }
+
+\jkeywords{選別，対訳獲得，対訳辞書，機械翻訳，差分(diff)，機械学習}
+
+\etitle{Selection of Dictionary Entries \\
+from Translation Equivalents \\
+for Acquisition of Lexical Knowledge \\
+from Bilingual Corpora}
+
+\eauthor{Takehiko Yoshimi\affiref{Ryukoku}\affiref{NICT} \and 
+Takeshi Kutsumi\affiref{SHARP} \and Katsunori Kotani\affiref{NICT} \and 
+Ichiko Sata\affiref{SHARP} \and Hitoshi Isahara\affiref{NICT}}
+
+\eabstract{This paper points out that constructing a bilingual 
+dictionary using translation equivalents obtained from bilingual corpora 
+needs not only correct alignment of two expressions but also judgment of 
+its appropriateness as an entry, 
+and addresses the latter task which has been paid little attention.
+We show a method of selecting a suitable entry using Support Vector 
+Machines, and propose to define the features by the common and the
+different parts between a current translation and a new translation.
+We examined how the selection performances are 
+affected by the four ways of representing the common and the different 
+parts: characters, morphemes, parts of speech, and semantic markers. 
+Our experimental result found that representation by characters marked 
+the best performance, F-measure of 0.837.}
+
+\ekeywords{Filtering, Acquisition of Bilingual Lexicon, 
+Bilingual Dictionary, Machine Translation, Difference (diff), 
+Machine Learning}
+
+\begin{document}
+\maketitle
+
+\section{はじめに}
+\label{sec:introduction}
+
+英日機械翻訳システムなどの対訳辞書を拡張するための手段の一つとして，
+対訳コーパスなどから語彙知識を自動的に獲得する方法が有望である．
+適切な語彙知識を獲得するためには，
+(1) 対訳コーパスにおいて英語表現と日本語表現を正しく対応付ける処理と，
+(2) 対応付けられた{\EJP}を辞書に登録するか否かを判定する処理の二つが必要
+である．
+後者の処理が必要な理由は，対応付けられた{\EJP}には，辞書に
+登録することによって翻訳品質が向上することがほぼ確実なものとそうでないも
+のがあるため，これらを選別する必要があるからである．
+例えば，対訳コーパスから次のような{\EJP}の対応付けが得られたとする．
+\begin{center}
+\begin{tabular}{ll}
+Customs and Tariff Bureau & 関税局 \\
+Minshuto and New Komeito  & 民主党や公明党 \\
+Miyagi and Yamagata       & 宮城，山形両県 \\
+\end{tabular}
+\end{center}
+これらのうち第一の{\EJP}は辞書に登録すべきであるが，第二，第三の{\EJP}は
+そうではない．
+なぜならば，``Minshuto and New Komeito''を我々の機械翻訳システムで処理す
+ると「民主党，及び，公明党」という翻訳が得られるが，この翻訳と「民主党や
+公明党」とでは翻訳品質に大きな差はないと判断できるからである．
+また，第三の{\EJP}は，``Miyagi''と``Yamagata''が県名を表わしていない文脈
+では不適切となり，文脈依存性が高いからである．
+このように，翻訳品質が変化しなかったり，低下することが予想されたりする
+{\EJP}はふるい落とさなければならない．
+
+我々が{\EJP}の対応付けと選別を分けて考えるもう一つの理由は，
+前者はシステム依存性が低いのに対して，後者は依存性が高いという違いがある
+からである．
+対応付けが正しいか否かは個々の機械翻訳システムにほとんど依存しない．
+このため，正しい対応付けを得るための判定基準を設定する際には特定のシステ
+ムを想定する必要がない．
+これに対して，対応付けられた{\EJP}(辞書登録候補)を登録するべきか否かは個々
+の機械翻訳システムに依存するため，選別は，特定の機械翻訳システムを想定し
+た判定基準に基づいて行なわれなければならない．
+例えば，我々の機械翻訳システムには``the Bank for $ABC$''を「$ABC$銀行」
+のように訳す(前置詞``for''を訳出しない)規則が存在しない．
+このため，``the Bank for International Settlements''が
+「国際決済のための銀行」と訳されてしまう．
+従って，我々のシステムの場合はこの{\ENP}と「国際決済銀行」の対を辞書に
+登録すると判定するのが妥当である．
+しかし，もし前置詞``for''を訳出しないという規則を持つシステムが存在すれ
+ば，そのシステムにとっては登録する必要がないと判定するのが妥当であろう．
+従って，対応付けと選別とでは異なる正解判定基準を導入する必要がある．
+
+従来の研究では，異なる言語の表現同士を正しく対応付けること
+に焦点が当てられていることが多く
+\cite{Smadja96,Melamed99,Le00,Mcewan02,Tufis02,Utsuro02,Sadat03,Sato03,Yamamoto03,Ayan04,Izuha04,Sahlgren04}，
+(正しく)対応付けられた表現対を辞書に登録するか否かを判定する処理につ
+いて，選別のシステム依存性を認識した上で明確に議論した研究はほとんど見当
+たらない．
+専門用語とその対訳を獲得することを目的とした場合
+\cite{Dagan94,Resnik97,Tiedemann00}は，表現がある程度定式化していること
+が多いため，選別の必要性は低いかもしれない
+\footnote{(単言語の)専門用語の収集においても選別が必要であることを指摘し
+た文献もある\cite{Sasaki05}．}． 
+しかし，本稿では``National Institute of Information and Communications 
+Technology''(情報通信研究機構)のような前置詞句と等位構造の両方または一方
+を持つ英語固有名詞句とそれに対応する日本語名詞句を対象とするが，このよう
+な英日表現対の場合には，選別処理は重要である．
+
+本稿では，対訳辞書に登録する目的で収集された英日表現対のうち，前置詞句と
+等位構造の両方または一方を持つ英語固有名詞句(以下では単に{\ENP}と呼ぶ)と
+それに対応する日本語名詞句を辞書登録候補とし，
+この辞書登録候補を自動的に選別して適切な語彙知識を獲得する方法を提案する．
+辞書登録候補を正しく選別するという課題の解決策としては，
+(1) 人間の辞書開発者が候補を選別する作業過程を分析し，その知見に基づいて
+選別規則を人手で記述する方法と，
+(2) 機械学習手法を利用して，人間の辞書開発者が選別した事例集から選別器を
+自動的に作成する方法とがある．
+候補を登録するか否かは様々な要因によって決まるため，複雑に関連し合う要因
+を人手で整理し，その結果に基づいて規則を記述するより，機械学習手法を利用
+するほうが実現が容易であると考えられる．
+このようなことから本稿では機械学習を利用した方法を採る．
+
+辞書登録候補は，翻訳品質の観点から，登録すれば翻訳品質が向上するものと，
+登録しても変化しないものと，登録によって低下するものの三種類に分けられる．
+このように分けた場合，翻訳品質が向上する候補は登録すべきものであり，
+翻訳品質に変化がない候補は登録する必要がないものであり，
+翻訳品質が低下する候補は登録すべきでないものであると言える．
+しかし，実際には，登録する必要がない場合と登録すべきでない場合はまとめて
+考えることができるので，行なうべき判定は登録するか否かの二値となる．
+この二値判定を行なうために{\SVM}を利用する．
+
+
+\section{着目した素性}
+\label{sec:feats}
+
+辞書登録候補の選別に機械学習手法を利用する場合，
+学習に用いる素性としてどのような情報に着目するかが重要となる．
+学習に用いる素性を決定するために，まず，人間の辞書開発者が候補の選別を
+どのように行なっているかについて考える．
+ある{\ENP}とそれに対応する日本語表現(以下では{\NT}と呼ぶ)から成る
+辞書登録候補を辞書に登録するか否かを判定する際に辞書開発者は開発に携わっ
+ているシステムの特性(辞書や規則など)を考慮に入れつつ様々な観点から検討を
+加え，最終的な判断を下している．
+そのうち最も重要な判断基準の一つは，辞書登録候補を登録した場合それに値す
+るだけの改善が翻訳品質に見られるかどうかであろう．
+もし十分な品質向上が達成できると辞書開発者が考えればその辞書登録候補を登
+録すると判定し，そうでなければ登録しないと判定する．
+辞書登録候補を登録することによって達成される改善の度合いは，
+その辞書登録候補が登録されていない状態での辞書を用いて{\ENP}を翻訳した結
+果(以下では{\CT}と呼ぶ)と{\NT}を比較することによって見極めることができる．
+
+本研究では，辞書開発者のこのような作業を機械的に模倣し，
+{\CT}と{\NT}を比較して得られる差異に着目して
+辞書登録候補を選別することを試みる．
+具体的には，{\CT}と{\NT}で異なる部分(差分部分)と両者に共通する部分(共通
+部分)が辞書登録候補の選別に影響しうる要因であると考え，それらを素性とす
+る．
+
+{\CT}と{\NT}の差分部分と共通部分を表現する手段としては，表記情報(文字，
+形態素)，品詞情報，意味情報などが挙げられる．
+まず，文字による表現について述べる．
+例えば``Special Committee on Medical Devices''という{\ENP}が辞書に登録さ
+れておらず，この{\ENP}の{\CT}が「医療用具上の特別委員会」であり，{\NT}が
+「医療用具特別部会」であるとする．
+このとき，「医療用具上の特別委員会」と「医療用具特別部会」の差分部分と
+共通部分を，文字を単位として差分検出ツールmdiff 
+\footnote{http://www2.nict.go.jp/jt/a132/member/murata/software/mdiff/
+mdiff.html}によって求めて出力形式を若干変更すると，図
+\ref{fig:mdiff_char}\,のような結果が得られる．
+従って，「医療用具上の特別委員会」と「医療用具特別部会」は，
+図\ref{fig:mdiff_char}\,に示す五つの素性
+comm(医療用具)，diff(上の, NIL)，comm(特別)，
+diff(委員, 部)，comm(会)の値を1，その他の素性の値を0とする素性
+ベクトルに写像される．
+なお，diff($A$, $B$)は$A$と$B$が差分部分であることを表わし，
+comm($C$)は$C$が共通部分であることを表わす．
+また，NILは対応する部分が存在しないことを意味する．
+\begin{figure}[htbp]
+\begin{center}
+\begin{tabular}{|c|}\hline
+comm(医療用具) \\
+diff(上の, NIL) \\
+comm(特別) \\
+diff(委員, 部) \\
+comm(会) \\\hline
+\end{tabular}
+\end{center}
+\caption{文字単位での差分・共通部分}
+\label{fig:mdiff_char}
+\end{figure}
+
+差分部分と共通部分を文字ではなく形態素で表現することも考えられる．
+例えば「医療用具上の特別委員会」と「医療用具特別部会」に対して茶筌
+\footnote{http://chasen.aist-nara.ac.jp/chasen/}
+によって形態素解析を行ない，形態素単位で差分部分と共通部分を求めると，図
+\ref{fig:mdiff_morph}\,のような結果が得られる．
+従って，「医療用具上の特別委員会」と「医療用具特別部会」は，形態素を単位
+とした場合，
+図\ref{fig:mdiff_morph}\,の四つの素性の値が1，その他の素性の値が0である素
+性ベクトルに写像される．
+なお，記号`/'は形態素の区切りを表わす．
+\begin{figure}[htbp]
+\begin{center}
+\begin{tabular}{|c|}\hline
+comm(医療/用具) \\
+diff(上/の, NIL) \\
+comm(特別) \\
+diff(委員/会, 部会) \\\hline
+\end{tabular}
+\end{center}
+\caption{形態素単位での差分・共通部分}
+\label{fig:mdiff_morph}
+\end{figure}
+
+さらには，{\CT}と{\NT}の差分部分や共通部分を表わす素性として，品詞や概
+念識別子などの，表記よりも抽象化された(粒度が粗い)情報を利用することも考
+えられる．
+{\CT}「医療用具上の特別委員会」と{\NT}「医療用具特別部会」に対して茶筌の
+品詞単位で差分部分と共通部分を求めた結果を図\ref{fig:mdiff_pos}\,に示す．
+図\ref{fig:mdiff_morph}\,と図\ref{fig:mdiff_pos}\,を比べると，
+形態素による表現では「特別」が共通部分であり「委員/会」と「部会」が差分
+部分であると解釈されていたのに対して，
+品詞による表現では「特別/委員」と「特別/部会」の品詞が共通部分であり，
+{\CT}の「会」の品詞に対応する品詞が{\NT}には存在しないと解釈されている.
+\begin{figure}[htbp]
+\begin{center}
+\begin{tabular}{|c|}\hline
+comm(名詞-一般/名詞-一般) \\
+diff(名詞-接尾-副詞可能/助詞-連体化, NIL) \\
+comm(名詞-形容動詞語幹/名詞-一般) \\
+diff(名詞-接尾-一般, NIL) \\\hline
+\end{tabular}
+\end{center}
+\caption{品詞単位での差分・共通部分}
+\label{fig:mdiff_pos}
+\end{figure}
+
+概念識別子による表現では，形態素に対応する概念識別子を用いるか，
+またはそれらより抽象的な上位概念を表わす概念識別子を用いるかという選択肢
+がある．
+さらに，上位概念を表わす概念識別子を用いる場合，どの程度まで概念識別子の
+抽象度を上げるかを決める必要がある．
+本稿では，形態素に対応する概念識別子を用いる場合と，
+上位下位意味体系においてそれよりも一段上位の概念識別子(以下では
+上位概念識別子と呼ぶ)を用いる場合について実験を行なう．
+なお，いずれの場合においても概念識別子の曖昧性は考慮しない．
+すなわち，ある形態素に対して概念識別子が二つ以上存在する場合それらの中から
+無作為に概念識別子を一つ選ぶ．
+また，ある概念識別子に対して上位概念を表わす概念識別子が二つ以上存在する
+場合にもそれらの中から無作為に概念識別子を一つ選ぶ．
+このように曖昧性の解消を放棄せざるを得ない理由は，処理対象の表現が文脈か
+ら切り離されているため，曖昧性解消に必要な情報が十分には得られないことに
+ある．
+概念識別子としてEDR日本語単語辞書
+\footnote{http://www2.nict.go.jp/kk/e416/EDR/J\_index.html}
+に記述されている識別子を用い，上位下位意味体系としてEDR概念体系辞書を
+利用する．
+EDR辞書から概念識別子が得られなかった場合は，未定義(undef)とする．
+なお，{\CT}や{\NT}の構成要素のうち茶筌品詞が名詞と未知語であるもののみ
+を概念識別子への写像の対象とし，それ以外の構成要素は削除する．
+{\CT}「医療用具上の特別委員会」と{\NT}「医療用具特別部会」の差分部分と
+共通部分を，形態素に対応する概念識別子で表現した場合の素性を
+図\ref{fig:mdiff_sem}\,に示し，
+上位概念識別子で表現した場合の素性を図\ref{fig:mdiff_upsem}\,に示す．
+\begin{figure}[htbp]
+\begin{center}
+\begin{tabular}{|c|}\hline
+comm(0fe1dd/3cedca) \\
+diff(1eb357, NIL) \\
+comm(2016ed) \\
+diff(3bcaa4/3ceda8, 107777) \\\hline
+\end{tabular}
+\end{center}
+\caption{概念識別子単位での差分・共通部分}
+\label{fig:mdiff_sem}
+\end{figure}
+\begin{figure}[htbp]
+\begin{center}
+\begin{tabular}{|c|}\hline
+comm(30f84f/3cfbb9) \\
+diff(4447c6, NIL) \\
+comm(201bb4) \\
+diff(44484c/444549, 444614) \\\hline
+\end{tabular}
+\end{center}
+\caption{上位概念識別子単位での差分・共通部分}
+\label{fig:mdiff_upsem}
+\end{figure}
+
+これまでに述べた差分部分と共通部分の表現では，差分部分や共通部分の
+出現順序が考慮されていない．
+そこで，差分部分や共通部分の出現順序を考慮するためにこれらの$N$グラムを
+考える．
+例えば，「医療用具上の特別委員会」と「医療用具特別部会」について
+文字単位で差分部分と共通部分を求める場合の二グラムを作成すると
+図\ref{fig:mdiff_char_bigram}\,のようになり，
+「医療用具上の特別委員会」と「医療用具特別部会」は，
+図\ref{fig:mdiff_char_bigram}\,に示す四つの素性
+comm(医療用具) \& diff(上の, NIL)，
+diff(上の, NIL) \& comm(特別)，
+comm(特別) \& diff(委員, 部)，
+diff(委員, 部) \& comm(会)
+の値を1，その他の素性の値を0とする素性ベクトルに写像される．
+なお，$A \& B$は$A$と$B$がこの順に出現していることを表わす．
+\begin{figure}[htbp]
+\begin{center}
+\begin{tabular}{|c|}\hline
+comm(医療用具) \& diff(上の, NIL) \\
+diff(上の, NIL) \& comm(特別) \\
+comm(特別) \& diff(委員, 部) \\
+diff(委員, 部) \& comm(会) \\\hline
+\end{tabular}
+\end{center}
+\caption{差分・共通部分の$N$グラム($N = 2$)}
+\label{fig:mdiff_char_bigram}
+\end{figure}
+
+二グラムの他に三グラムも作成する．
+また，形態素，品詞，概念識別子，上位概念識別子による表現についても同様に
+それぞれ二グラムと三グラムを作成する．
+
+差分部分と共通部分を表わす素性として，一グラムと二グラムを合成したものを
+用いることが考えられる． 
+一グラムと二グラムを合成した場合，「医療用具上の特別委員会」と「医療用具特
+別部会」について文字単位で差分部分と共通部分を求めると，図
+\ref{fig:mdiff_char_bugram}\,のような素性が得られる．
+また，一グラムと二グラムと三グラムを合成することも考えられる．
+形態素，品詞，概念識別子，上位概念識別子による表現についても同様である．
+\begin{figure}[htbp]
+\begin{center}
+\begin{tabular}{|c|}\hline
+comm(医療用具) \\
+diff(上の, NIL) \\
+comm(特別) \\
+diff(委員, 部) \\
+comm(会) \\
+comm(医療用具) \& diff(上の, NIL) \\
+diff(上の, NIL) \& comm(特別) \\
+comm(特別) \& diff(委員, 部) \\
+diff(委員, 部) \& comm(会) \\\hline
+\end{tabular}
+\end{center}
+\caption{差分・共通部分の$N$グラム($N \le 2$)}
+\label{fig:mdiff_char_bugram}
+\end{figure}
+
+まとめると，本稿では，文字，形態素，品詞，概念識別子，上位概念識別子とい
+う選択肢と$N$グラム($N = 1$，$N = 2$，$N = 3$，$N \le 2$，$N \le 3$)の選択肢の
+組み合わせについて，それぞれどれくらいの精度で
+辞書登録候補の選別が行なえる
+のかを検証する．
+
+
+\section{訓練事例集}
+\label{sec:traindata}
+
+教師あり機械学習を利用する手法で良好な結果を得るためには，大規模で一貫性
+のある訓練事例集が必要である．
+本研究では，訓練事例集を作成する労力を
+省くために，我々が保有している既存の言語資源を利用した．
+
+
+\subsection{正例の作成}
+\label{sec:traindata:pos}
+
+我々が実験に使用している機械翻訳システムの対訳辞書に登録されている
+英日表現対は，当然，これまでの辞書開発過程において辞書開発者によって登録
+すると判定されたものである．
+従って，このような英日表現対における日本語表現を{\NT}とみなすことができ
+る．
+また，この{\NT}に対する{\CT}は，この英日表現対をシステムの対訳辞書から
+削除した状態で{\ENP}を翻訳すれば得ることができる．
+
+今回の実験で利用する事例は，{\ENP}$NP$と{\CT}$CT$と{\NT}$NT$の三つ組
+$<NP$, $CT$, $NT>$のうち{\CT}と{\NT}の部分だけに着目して，
+{\CT}と{\NT}の対を取り出したものである．
+このため，$<$Dept. of Transport, トランスポートの部門, 運輸省$>$と
+$<$Department of Transport, トランスポートの部門, 運輸省$>$
+のように{\ENP}は異なるが{\CT}と{\NT}の部分は同じである三つ組から{\CT}と
+{\NT}の対を取り出すと，二つの事例が重複する．
+このような場合，重複は許さず，事例を一つだけ事例集に含めることにする．
+
+{\ENP}と{\NT}の{\EJP}をシステムの対訳辞書から削除しても{\ENP}の翻訳とし
+て{\NT}が得られることがある
+\footnote{このような場合，対訳辞書に登録されている{\ENP}と{\NT}の対は，
+翻訳品質の観点からは冗長な登録である．}．
+このような場合には，{\CT}と{\NT}の間に差分が全く生じない．
+{\CT}と{\NT}の間に差分がないような{\EJP}は翻訳品質の向上に貢献しておらず，
+このような対を正例とみなすのは適切ではない．
+このため，事例集には含めないことにする．
+
+以上の方法により10154件の正例が作成できた．
+正例の一部を表\ref{tab:traindata_pos}\,に示す．
+正例を200件無作為抽出して大まかに観察すると，
+前置詞が訳出されない傾向や，接続詞andが訳出されないか中黒「・」に訳され
+る傾向が見られた．
+\begin{table}[htbp]
+\caption{正例の一部}
+\label{tab:traindata_pos}
+\begin{center}
+{\footnotesize
+\begin{tabular}{|l|l|}\hline
+ & \multicolumn{1}{c|}{{\CT}(上段)} \\
+\multicolumn{1}{|c|}{\raisebox{1.5ex}[0pt]{\ENP}} & \multicolumn{1}{c|}{{\NT}(下段)} \\\hline
+ & 国際決済のための銀行 \\
+\multicolumn{1}{|l|}{\raisebox{1.5ex}[0pt]{the Bank for International Settlements}} & 国際決済銀行 \\\hline
+ & アメリカの音響の社会 \\
+\multicolumn{1}{|l|}{\raisebox{1.5ex}[0pt]{Acoustical Society of America}} & 米国音響協会 \\\hline
+ & 教育のための大臣 \\
+\multicolumn{1}{|l|}{\raisebox{1.5ex}[0pt]{Minister for Education}} & 文部大臣 \\\hline
+ & パレスチナの解放のための民主党のフロント \\
+\multicolumn{1}{|l|}{\raisebox{1.5ex}[0pt]{Democratic Front for the Liberation of Palestine}} & パレスチナ解放民主戦線 \\\hline
+ & 電離放射線ハザードの防止に関する条例 \\
+\multicolumn{1}{|l|}{\raisebox{1.5ex}[0pt]{Ordinance on the Prevention of Ionizing Radiation Hazards}} & 電離放射線障害防止規則 \\\hline
+ & パワー反応、及び、核燃料開発事業団 \\
+\multicolumn{1}{|l|}{\raisebox{1.5ex}[0pt]{Power Reaction and Nuclear Fuel Development Corporation}} & 動力炉・核燃料開発事業団 \\\hline
+\end{tabular}
+}
+\end{center}
+\end{table}
+
+
+\subsection{負例の作成}
+
+我々は，これまでの辞書開発過程で候補には挙がったが辞書に登録されなかった英
+日表現対の一覧表を保有している．
+このような一覧表に掲載されている日本語表現は負例における{\NT}とみなすこと
+ができる．
+また，この{\NT}に対する{\CT}は現状の機械翻訳システムで{\ENP}を翻訳して
+得られる日本語表現である． 
+
+正例作成の場合と同じく，{\ENP}と{\CT}と{\NT}の三つ組としては異なるが
+{\CT}と{\NT}の部分は同じであるものは，一つだけを事例集に含める．
+
+正例の場合，差分が全くない{\CT}と{\NT}の対は事例集に含めないが，負例の
+場合には，差分がないことが辞書に登録しないことの理由であると考えられる
+ため，事例集に含める．
+
+負例として事例集に含めようとしている{\CT}と{\NT}の対が，既に正例として
+存在している場合，この対は事例集に含めないことにする．
+これは，既に辞書に登録済みであるため，重複登録を避ける目的で登録しないと
+判断された可能性があるからである．
+
+以上の方法により8878件の負例が作成できた．
+負例の一部を表\ref{tab:traindata_neg}\,に示す．
+\begin{table}[htbp]
+\caption{負例の一部}
+\label{tab:traindata_neg}
+\begin{center}
+{\footnotesize
+\begin{tabular}{|l|l|}\hline
+ & \multicolumn{1}{c|}{{\CT}(上段)} \\
+\multicolumn{1}{|c|}{\raisebox{1.5ex}[0pt]{\ENP}} & \multicolumn{1}{c|}{{\NT}(下段)} \\\hline
+ & 喜劇の王 \\
+\multicolumn{1}{|l|}{\raisebox{1.5ex}[0pt]{The King of Comedy}} & キングオブコメディ \\\hline
+ & 英国、及び、スカンジナビア \\
+\multicolumn{1}{|l|}{\raisebox{1.5ex}[0pt]{United Kingdom and Scandinavia}} & 英国スカンジナビア経済同盟 \\\hline
+ & 私は、ひどくあなたを愛する \\
+\multicolumn{1}{|l|}{\raisebox{1.5ex}[0pt]{I Love You To Death}} & 殺したいほどアイラブユー \\\hline
+ & ブレシアのアーノルド \\
+\multicolumn{1}{|l|}{\raisebox{1.5ex}[0pt]{Arnold of Brescia}} & ブレシアのアルノルドゥス \\\hline
+ & 遺憾の土地 \\
+\multicolumn{1}{|l|}{\raisebox{1.5ex}[0pt]{Land of Regrets}} & 痛惜の地 \\\hline
+ & 財宝のための戦い \\
+\multicolumn{1}{|l|}{\raisebox{1.5ex}[0pt]{Battle For The Treasure}} & 財宝のための戦い \\\hline
+ & マーシャル諸島共和国 \\
+\multicolumn{1}{|l|}{\raisebox{1.5ex}[0pt]{Republic of the Marshall Islands}} & マーシャル諸島共和国 \\\hline
+\end{tabular}
+}
+\end{center}
+\end{table}
+
+
+\subsection{訓練事例集のシステム依存性}
+
+本研究で作成した訓練事例集は，我々の機械翻訳システムの特性(辞書や規則な
+ど)を反映したものであるため，他のシステムの対訳辞書の拡張に直接利用する
+ことは望ましくない．
+また，本研究で扱っている選別問題において一般的に利用可能な訓練事例集を見
+つけることは容易ではないであろう．
+しかしながら，この点は問題にならないと考える．
+なぜならば，我々が利用した言語資源と同様の資源は，機械翻訳システムの研究
+開発に携わる他の組織にも存在する可能性が高いため，その組織で開発されてい
+る機械翻訳システムの特性に合わせて訓練事例集を作成できるからである．
+このように，対象システムの辞書開発時の経験に基づいてそのシステムに適した
+訓練事例集を作成するという方針は，辞書登録候補の選別は個々のシステムに依
+存するものであり一般的に論じることは必ずしも適切ではないという，
+\ref{sec:introduction}\,節で述べた考えに基づくものである．
+
+
+\section{実験と考察}
+\label{sec:experiment}
+
+本節では，辞書登録候補の選別法の有効性を検証するために行なった実験の結果
+を示す．
+{\SVM}による機械学習にはTinySVM
+\footnote{http://chasen.org/~taku/software/TinySVM/}
+を利用した．
+カーネル関数は一次の多項式とした．
+いずれの実験でも五分割の交差検定を行なった．
+評価にはF値を用いた．
+ただし，再現率(辞書登録すべき{\EJP}のうち正しくそのように判定されたも
+のの割合)よりも適合率(
+辞書登録すると判定された{\EJP}のうち実際に辞書登録すべきものの割合
+)を重要視することにし，次の式(\ref{eq:fvalue})におい
+て$\beta=0.5$とした．
+\begin{equation}
+\mbox{F}値 = \frac{(1+\beta^2) \times 適合率 \times 再現率}
+{\beta^2 \times 適合率 + 再現率}
+\label{eq:fvalue}
+\end{equation}
+
+訓練事例集に現れた素性の異なり数を表\ref{tab:num_of_feats}\,に挙げる．
+一グラムの列($N = 1$)を見ると，表記(文字，形態素)，意味情報(概念識別子，
+上位概念識別子)，品詞の順に素性の異なり数が小さくなっており，この順に
+情報の粒度が粗くなっていることが確認できる．
+一グラムの場合よりも三グラムの場合のほうが素性の異なり数が少なくなっている
+が，これは差分部分や共通部分の三グラムを抽出できない事例が存在するためで
+ある．
+\begin{table}[htbp]
+\caption{訓練事例集に現れた素性の異なり数}
+\label{tab:num_of_feats}
+\begin{center}
+\begin{tabular}{|l|c|c|c|c|c|}\hline
+& $N = 1$ & $N = 2$ & $N = 3$ & $N \le 2$ & $N \le 3$ \\\hline
+文字           & 31316 & 37603 & 28888 & 68919 & 97807 \\
+形態素         & 28058 & 26214 & 16080 & 54272 & 70352 \\
+品詞           & 11379 & 18695 & 18582 & 30074 & 48656 \\
+概念識別子     & 23508 & 22711 & 12417 & 46219 & 58636 \\
+上位概念識別子 & 21330 & 22349 & 12559 & 43679 & 56238 \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+
+\subsection{差分・共通部分の表現方法と選別性能}
+\label{sec:experiment:performance_feats}
+
+{\CT}と{\NT}の間の差分部分と共通部分を
+文字，形態素，品詞，概念識別子，上位概念識別子と
+$N$グラム($N = 1$，$N = 2$，$N = 3$，$N \le 2$，$N \le 3$)の
+各組み合わせで表現したときの適合率，再現率，F値をそれぞれ
+表\ref{tab:pre}\,，表\ref{tab:rec}\,，表\ref{tab:fvalue}\,に示す． 
+数値は五分割の交差検定の平均値である．
+\begin{table}[htbp]
+\caption{各表現での適合率}
+\label{tab:pre}
+\begin{center}
+\begin{tabular}{|l|c|c|c|c|c|}\hline
+& $N = 1$ & $N = 2$ & $N = 3$ & $N \le 2$ & $N \le 3$ \\\hline
+文字           & 0.868 & 0.878 & 0.873 & 0.871 & 0.869 \\
+形態素         & 0.857 & 0.890 & 0.538 & 0.864 & 0.864 \\
+品詞           & 0.683 & 0.843 & 0.856 & 0.739 & 0.710 \\
+概念識別子     & 0.815 & 0.858 & 0.540 & 0.835 & 0.837 \\
+上位概念識別子 & 0.796 & 0.864 & 0.540 & 0.824 & 0.823 \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+\begin{table}[htbp]
+\caption{各表現での再現率}
+\label{tab:rec}
+\begin{center}
+\begin{tabular}{|l|c|c|c|c|c|}\hline
+& $N = 1$ & $N = 2$ & $N = 3$ & $N \le 2$ & $N \le 3$ \\\hline
+文字           & 0.733 & 0.350 & 0.123 & 0.700 & 0.692 \\
+形態素         & 0.640 & 0.192 & 0.995 & 0.610 & 0.605 \\
+品詞           & 0.810 & 0.638 & 0.419 & 0.755 & 0.887 \\
+概念識別子     & 0.566 & 0.170 & 0.996 & 0.518 & 0.515 \\
+上位概念識別子 & 0.611 & 0.212 & 0.995 & 0.570 & 0.566 \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+\begin{table}[htbp]
+\caption{各表現でのF値}
+\label{tab:fvalue}
+\begin{center}
+\begin{tabular}{|l|c|c|c|c|c|c|c|}\hline
+& $N = 1$ & $N = 2$ & $N = 3$ & $N \le 2$ & $N \le 3$ & 平均 & 標準偏差 \\\hline
+文字           & \underline{0.837} & 0.675 & 0.392 & 0.831 & 0.827 & 0.712 & 0.192 \\
+形態素         & 0.803 & 0.515 & 0.592 & 0.798 & 0.796 & 0.701 & 0.137 \\
+品詞           & 0.705 & 0.792 & 0.708 & 0.743 & 0.739 & 0.737 & 0.035 \\
+概念識別子     & 0.749 & 0.475 & 0.594 & 0.744 & 0.744 & 0.661 & 0.123 \\
+上位概念識別子 & 0.750 & 0.535 & 0.595 & 0.757 & 0.755 & 0.678 & 0.106 \\\hline
+平均           & 0.769 & 0.598 & 0.576 & 0.775 & 0.772 & \multicolumn{1}{|c}{} & \\
+標準偏差       & 0.052 & 0.132 & 0.114 & 0.039 & 0.038 & \multicolumn{1}{|c}{} & \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+表\ref{tab:fvalue}\,から，全体で最も高い選別性能(F値)を示す表現方法は
+文字一グラムであることが分かる．
+機械翻訳システムの対訳辞書に登録する必要がある表現には，新しく生み出された
+ものも含まれるが，このような表現は茶筌の辞書やEDR辞書にも登録されていな
+い可能性が高い．
+このような場合，形態素の区切りや品詞付与において誤りが生じたり，
+概念識別子が概念辞書に登録されていなかったりすることは避けられない． 
+従って，もし形態素解析誤りや辞書未登録の問題に選別性能低下の一因があると
+すれば，文字(一グラム)による表現は形態素解析器や概念辞書を必要としないこ
+とから，望ましい表現方法であると言える．
+
+
+\subsubsection{$N$グラムごとの比較}
+
+差分部分や共通部分の出現順序を考慮すると，選別性能にどのような影響が出る
+のかを表\ref{tab:fvalue}\,に基づいて検証する．
+一グラム($N = 1$)，二グラム($N = 2$)，三グラム($N = 3$)を用いた場合の各
+平均値を比較すると，一グラムの場合(0.769)よりも，
+二グラムの場合(0.598)，三グラムの場合(0.576)のほうが性能が大きく低下してい
+る．
+一グラムの場合と二グラムの場合をより詳しく比較すると，品詞による表現を除き，
+二グラムより一グラムのほうが性能が高い． 
+また，一グラムの場合と三グラムの場合をより詳しく見ると，
+品詞による表現のときに三グラムのほうが僅かに高いだけで，それ以外の表現の
+ときには一グラムのほうが高いことが分かる．
+これらのことより，$N$グラム($N = 2$，$N = 3$)を単独で用いることが選別性
+能の向上につながるとは限らないと言える．
+
+一グラムだけを用いた場合($N = 1$)の平均値，
+一グラムと二グラムを合成した場合($N \le 2$)の平均値，
+一グラムと二グラムと三グラムを合成した場合($N \le 3$)の平均値は，
+それぞれ0.769，0.775，0.772であり，その差はあまり大きくない．
+一グラムだけを用いた場合と，一グラムと二グラムを合成した場合をより詳しく比
+べると，品詞による表現と上位概念識別子による表現のときには後者のほうが性
+能が高いが，文字，形態素，概念識別子による表現のときには前者のほうが高い．
+また，一グラムだけを用いた場合と，一グラムと二グラムと三グラムを合成した場合
+を比較しても同様である．
+これらのことより，$N$グラムを合成することが選別性能の大幅な向上にはつな
+がっていないと言える．
+
+標準偏差を見ると，性能のばらつきは，二グラムの場合と三グラムの場合がそれ以
+外の場合よりも大きいことが分かる．
+
+
+\subsubsection{文字，形態素，品詞，概念識別子，上位概念識別子での比較}
+
+差分部分や共通部分を文字，形態素，品詞，概念識別子，上位概念識別子のそれ
+ぞれで表現した場合の選別性能を表\ref{tab:fvalue}\,に基づいて比較する．
+文字，形態素，品詞，概念識別子，上位概念識別子による表現での各平均値を比
+べると，品詞で表現した場合に最も高い選別性能が得られていることが分かる．
+品詞による表現での差分情報の粒度は，それ以外の表現での粒度よりも粗い．
+このため品詞による表現での選別性能が最も悪くなるだろうと当初予想していた
+が，平均値で比較する限りはこの予想に反する結果となった．
+ただし，一グラムの場合で比較すると，差分情報の粒度が細かい表現方法(文字，
+形態素)から粗い表現方法への順で性能が低下している．
+
+標準偏差を見ると，品詞による表現は，ばらつきが小さく，比較的安定した性能
+を示していることが分かる． 
+文字，形態素，概念識別子，上位概念識別子による表現では，二グラムと三グラム
+で性能の大幅な低下が見られるが，品詞による表現ではそのような低下は見られ
+ない．
+
+
+\subsection{素性の$N$グラムと$d$次の多項式関数による素性の組み合わせとの比較}
+
+\ref{sec:experiment:performance_feats}\,節では，素性の出現順序を考慮する
+ために素性の$N$グラムを導入したが，一グラム，二グラム，三グラムを合成し
+ても選別性能の大幅な向上は見られなかった．
+ところで，{\SVM}では，カーネル関数として$d$次の多項式を用いることによって$d$
+個までの素性の組み合わせを考慮することができる．
+そこで，$N$グラムを導入する代わりにカーネル関数をそれぞれ二次の多項式，
+三次の多項式として学習を行なった場合の選別性能を確認するための実験を行な
+った．
+その結果を表\ref{tab:fvalue_poly23}\,に示す．
+\begin{table}[htbp]
+\caption{二次，三次多項式での選別性能(F値)}
+\label{tab:fvalue_poly23}
+\begin{center}
+\begin{tabular}{|l|c|c|c|c|}\hline
+ & $d = 1$ & $d = 1$ & $d = 2$ & $d = 3$ \\
+ & $ N \le 2$ & $N \le 3$ & $N = 1$ & $N = 1$ \\\hline
+文字           & 0.831 & 0.827 & 0.831 & 0.819 \\
+形態素         & 0.798 & 0.796 & 0.801 & 0.792 \\
+品詞           & 0.743 & 0.739 & 0.633 & 0.668 \\
+概念識別子     & 0.744 & 0.744 & 0.206 & 0.415 \\
+上位概念識別子 & 0.757 & 0.755 & 0.695 & 0.628 \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+表\ref{tab:fvalue_poly23}\,より，二次や三次の多項式を用いて学習を行なっ
+た場合($d = 2, N = 1$と$d = 3, N = 1$)でも，素性の$N$グラムを用いた場合
+($d = 1, N \le 2$と$d = 1, N \le 3$)の選別性能を大きく上回ることはないこ
+とが分かる．
+
+
+\subsection{ベースラインとの比較}
+
+提案方法では，{\CT}と{\NT}の差分部分と共通部分が辞書登録候補の選別に影響
+しうる要因であると考え，それらを素性として{\SVM}による機械学習を行なう．
+これに対して，{\CT}と{\NT}の差分部分が多いほど辞書に登録する必要性が高
+いとの考えによる選別をベースラインの一つと考えることができる．
+このベースラインでは，{\CT}と{\NT}の差分部分の多さを示す指標として差分率
+を用いる．
+差分率$DR$は，{\CT}の文字数を$X$，{\NT}の文字数を$Y$とし，さらに{\CT}と
+{\NT}の差分部分の文字数$U$としたとき，次の式(\ref{eq:baseline})で計算す
+る．
+\begin{equation}
+DR = \frac{U}{X + Y}
+\label{eq:baseline}
+\end{equation}
+ここで，{\CT}と{\NT}の差分を文字単位で求めている理由は，
+\ref{sec:experiment:performance_feats}\,節の実験で{\CT}と{\NT}の差分部分
+と共通部分を文字一グラムで表現した場合に最も高い選別性能が得られたからで
+ある．
+例えば{\CT}「医療用具上の特別委員会」(11文字)と{\NT}「医療用具特別部会」
+(8文字)の差分部分diff(上の, NIL)とdiff(委員, 部)に含まれる文字は5文字で
+あるから，差分率は5/19となる．
+
+このような方法で全訓練事例について差分率を求め，差分率が閾値以上のものを
+辞書に登録するという基準によって選別を行ない，選別性能を式
+(\ref{eq:fvalue})によって評価する．
+ただし，$\beta=0.5$である．
+閾値を0から1まで0.1刻みで変化させ，最もF値が高くなるときの性能をベースラ
+インの性能とする．
+この方針により実験を行なったところ，閾値が0.1のときに適合率0.582，
+再現率0.959，F値0.632が得られた．
+
+このF値と表\ref{tab:fvalue}\,に挙げた提案手法によるF値を比較すると，
+一グラムだけを用いた場合($N = 1$)，
+一グラムと二グラムを合成した場合($N \le 2$)，
+一グラムと二グラムと三グラムを合成した場合($N \le 3$)
+はいずれもベースラインを上回っており，提案手法は有効であると考えられる．
+
+
+\subsection{素性の貢献度}
+
+各素性が事例の分類にどの程度貢献しているかについて考察する．
+評価事例{\bf x}を分類する{\SVM}の識別関数は，カーネル関数に一次多項式を
+用いた場合，次の式(\ref{eq:svm})で表わされる\cite{Tsuda03}．
+ただし，${\bf x}_i$は訓練事例の素性ベクトル，$y_i$は${\bf x}_i$が正例で
+あるか負例であるかを表わすラベルである($1 \le i \le n$)．
+$\alpha_i$は学習によって得られる重みであり，$b$はバイアス項と呼ばれる定
+数である．
+関数$sgn(z)$は，$z$が0以上のとき1を返し，0未満のとき-1を返す．
+\begin{equation}
+f({\bf x})=sgn(\displaystyle\sum_{i=1}^{n}
+\alpha_i y_i ({\bf x}_i\cdot{\bf x}+1)+b)
+\label{eq:svm}
+\end{equation}
+素性ベクトルを${\bf x} = (x^1, x^2, \ldots, x^m)$，
+${\bf x}_i = (x_i^1, x_i^2, \ldots, x_i^m)$として，
+式(\ref{eq:svm})の内積${\bf x}_i\cdot{\bf x}$を
+計算すると，
+次の式(\ref{eq:svm2})が得られる． 
+\begin{equation}
+f({\bf x})=sgn(\displaystyle\sum_{j=1}^{m}\sum_{i=1}^{n}\alpha_i y_i 
+x_i^j x^j + \displaystyle\sum_{i=1}^{n}\alpha_i y_i +b)
+\label{eq:svm2}
+\end{equation}
+式(\ref{eq:svm2})において$\displaystyle\sum_{i=1}^{n}\alpha_i y_i x_i^j$
+は素性$x^j$の重みである．
+素性$x^j$は，この重みの値が正ならば正例を選別することに貢献しており，
+負ならば負例を選別することに貢献している．
+また，重みの絶対値が大きいほど選別への貢献度が高い．
+
+\ref{sec:experiment:performance_feats}\,節の実験では，
+{\CT}と{\NT}の差分部分と共通部分を文字一グラムで表現した場合に最も高い
+選別性能が得られた．
+そこで，文字一グラムによる表現で選別を行なう場合について各素性の重みを求
+めた．
+正例の選別への貢献度が高い素性の上位20個を表
+\ref{tab:effective_feats_pos}\,に示し，
+負例の選別への貢献度が高い素性の上位20個を表
+\ref{tab:effective_feats_neg}\,に示す．
+なお，表\ref{tab:effective_feats_pos}\,と
+表\ref{tab:effective_feats_neg}\,に示した素性は，
+五分割の交差検定に用いた5種類の訓練事例集のうち最も高い性能が得られた訓
+練事例集に現われた素性である．
+
+\begin{table}[htbp]
+\caption{正例への貢献度が高い素性}
+\label{tab:effective_feats_pos}
+\begin{center}
+\begin{tabular}{|r|l|c|}\hline
+\multicolumn{1}{|c}{順位} & \multicolumn{1}{|c|}{素性} & 重み \\\hline
+1 & diff(の下院議員, 共和国) & 1.8627 \\
+2 & comm(銀行) & 1.5026 \\
+3 & comm(カリフォルニア大学) & 1.4865 \\
+4 & diff(アカデミー, 学会) & 1.4605 \\
+5 & diff(の下院, 家) & 1.4341 \\
+6 & comm(共産党) & 1.4250 \\
+7 & diff(のための協会, 研究所) & 1.4150 \\
+8 & diff(のオフィス, 局) & 1.3844 \\
+9 & comm(博士) & 1.3727 \\
+10 & diff(社, NIL) & 1.3701 \\
+11 & comm(局) & 1.3692 \\
+12 & comm(王国) & 1.3687 \\
+13 & diff(の協会, 研究所) & 1.3572 \\
+14 & comm(政務次官) & 1.3554 \\
+15 & diff(技術研究所, 工業大学) & 1.3548 \\
+16 & diff(のオフィス, 事務所) & 1.3353 \\
+17 & comm(湾) & 1.3275 \\
+18 & comm(博物館) & 1.3152 \\
+19 & diff(技術研究所, 工科大学) & 1.3140 \\
+20 & comm(大統領) & 1.3072 \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+\begin{table}[htbp]
+\caption{負例への貢献度が高い素性}
+\label{tab:effective_feats_neg}
+\begin{center}
+\begin{tabular}{|r|l|c|}\hline
+\multicolumn{1}{|c}{順位} & \multicolumn{1}{|c|}{素性} & 重み \\\hline
+1 & diff(NIL, 、) & -3.1121 \\
+2 & diff(NIL, の日本の社) & -2.0652 \\
+3 & diff(国家の貿易, 全米統一通商) & -1.9463 \\
+4 & diff(NIL, ；（社）) & -1.9144 \\
+5 & diff(に関する米国の会, 健康協) & -1.5846 \\
+6 & diff(NIL, 、財団法人) & -1.5709 \\
+7 & diff(NIL, ；《米》) & -1.5170 \\
+8 & diff(の煙草, たばこ) & -1.5121 \\
+9 & diff(NIL, の) & -1.5121 \\
+10 & diff(のための世界首脳会議, サミット) & -1.4938 \\
+11 & comm(、) & -1.4728 \\
+12 & diff(全, NIL) & -1.4262 \\
+13 & diff(NIL, 、日本) & -1.4186 \\
+14 & diff(旅行薬の, 、) & -1.3245 \\
+15 & diff(産業, NIL) & -1.3215 \\
+16 & diff(NIL, の日本社) & -1.3003 \\
+17 & diff(ヨーロッパの, 、欧州) & -1.2814 \\
+18 & diff(インターナショナル, 、国際) & -1.2646 \\
+19 & diff(NIL, 、及び、) & -1.2488 \\
+20 & diff(NIL, 、全米) & -1.2321 \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+表\ref{tab:effective_feats_pos}\,を見ると，
+正例の選別への貢献度が高い素性には，差分部分を表わす素性diff($A$,$B$)だ
+けでなく，共通部分を表わす素性comm($C$)も含まれていることが分かる．
+
+表\ref{tab:effective_feats_pos}\,に挙げた，差分部分を表わす素性を含む事
+例を調査したところ，これらの素性は，{\ENP}を構成する名詞の訳語の改善に
+関連するものであった．
+差分部分を表わす素性を含む事例には，
+$<$Rep. of Afghanistan, アフガニスタンの下院議員, アフガニスタン共和国$>$
+や
+$<$Institute for Advanced Technology, 先進技術のための協会, 先進技術研究
+所$>$などがある．
+貢献度第一位の素性diff(の下院議員, 共和国)は，``Rep. of $ABC$''と
+いう{\ENP}において``$ABC$''が国名(の一部)である場合に，``Rep.''を
+``Representative''(下院議員)ではなく``Republic''(共和国)と解釈することに
+よって翻訳品質が向上すると辞書開発者が判断した事例に多く現われていた．
+また，貢献度第七位の素性diff(のための協会, 研究所)も，同じように，
+``Institute for $ABC$''という{\ENP}の訳語を「$ABC$のための協会」ではなく
+「$ABC$研究所」とすることで翻訳品質が向上する事例に多く含まれていた．
+
+diff(の下院議員, 共和国)やdiff(のための協会, 研究所)などは，{\ENP}を構成
+する名詞の訳語の改善だけでなく，前置詞の訳語の改善にも貢献している．
+すなわち，{\CT}では，前置詞``of''や``for''は，それぞれ助詞「の」や「のた
+めに」と訳されているが，{\NT}では訳出されていない．
+\ref{sec:traindata:pos}\,節で，正例を概観すると前置詞が訳出されない傾向
+が見られたと述べたが，表\ref{tab:effective_feats_pos}\,に挙げた素性は
+この観察に沿うものにもなっている．
+
+表\ref{tab:effective_feats_pos}\,に挙げた，共通部分を表わす素性を含む事
+例には
+$<$Industrial Development Bank of India, インドの産業の開発銀行, インド
+産業開発銀行$>$や
+$<$Gulf of Mexico, メキシコの湾, メキシコ湾$>$などがある．
+これらの例から分かるように，共通部分を表わす素性は，主に，前置詞の訳語の
+改善に関連しているものであった．
+
+表\ref{tab:effective_feats_neg}\,を見ると，負例の場合は正例の場合と異
+なり，選別への貢献度が高い素性は差分部分を表わす素性がほとんどであること
+が分かる．
+
+負例の選別への貢献度が高い素性を含む事例を調査した結果，これらの事例は大
+きく二種類に分類できた．
+一つは，{\NT}よりも{\CT}のほうが適切な翻訳であるとみなせるものである．
+例えば，貢献度第二位の素性diff(NIL, の日本の社)を含む事例
+$<$The Japanese Society of Insurance Science, 日本保険学会, 保険科学の日
+本の社会$>$では明らかに{\CT}のほうが{\NT}よりも適切である．
+また，貢献度第三位の素性diff(国家の貿易, 全米統一通商)を含む事例
+$<$Committee for a National Trade Policy, 国家の貿易政策のための委員会, 
+全米統一通商政策委員会$>$における{\NT}は文脈依存性が高く，{\ENP}が米国
+以外の委員会を意味しているときには不適切である．
+
+もう一種類は，{\NT}に不要な語句が含まれているものである．
+例えば，貢献度第一位の素性diff(NIL, 、)を含む事例
+$<$Committee to Protect Journalists, ジャーナリストを保護するための委員
+会, 、ジャーナリスト保護委員会$>$において{\NT}の先頭に読点が付いている
+ために，この{\NT}をそのまま辞書に登録することは不適切であると判断された
+ものと考えられる
+\footnote{負例の中には，このような不要語句を取り除けば，正例となりうるも
+のも比較的多く存在するが，これまでの辞書開発過程では，そのような修正を行
+なわないという方針で選別が行なわれた．}．
+また，第四位の素性diff(NIL, ；（社）)を含む事例
+$<$Japan Society of Corrosion Engineering, 日本腐食防食協会, 腐食防食協
+会；（社）$>$においては{\NT}に「；（社）」という注釈が付いているために，
+不適切であると判断されたものと考えられる．
+
+
+\section{おわりに}
+
+機械翻訳システムなどで必要とされる語彙知識を獲得するためには，対訳コーパ
+スにおいて二言語の表現を正しく対応付ける処理と，対応付けられた表現対を
+辞書に登録するか否かを判定する選別処理の二つが必要であるが，対応付けと選
+別は特定のシステムへの依存性に関して性質の異なる問題である．
+本稿では，このような点を指摘し，従来あまり扱われてこなかった辞書登録候補
+の選別問題を採り上げ，この問題を機械学習によって解く方法を示した．
+学習に用いる素性として，{\CT}と{\NT}で異なる部分と両者に共通する部分に
+着目し，差分部分や共通部分を表現する手段として，表記(文字，形態素)，品詞，
+概念識別子を用いた．
+さらに，差分部分や共通部分の出現順序を考慮するためにこれらの$N$グラムを
+導入した．
+評価実験の結果，最も高い選別性能を示す表現方法は文字一グラムであることが
+明らかになった．
+文字による表現方法は，形態素解析器や概念識別子辞書を必要としないためこれ
+らに起因する誤りの影響を受けないという点で望ましいと言える．
+
+今回の実験では，選別処理の評価に焦点を絞りたいため，英日表現対の対応付け
+性能は100\%であると仮定した．
+今後，対応付けと選別の両処理を含む全体システムを構築し，評価を行なってい
+く必要がある．
+
+\acknowledgment
+
+本稿の改善に有益なコメントを頂いた査読者の方に感謝いたします．
+
+\bibliographystyle{jnlpbbl}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Ayan, Dorr, \BBA\ Habash}{Ayan et~al.}{2004}]{Ayan04}
+Ayan, N., Dorr, B., \BBA\ Habash, N. \BBOP 2004\BBCP.
+\newblock \BBOQ {Multi-Align: Combining Linguistic and Statistical Techniques
+  to Improve Alignments for Adaptable MT}\BBCQ\
+\newblock In {\Bem Proceedings of the 6th Conference of the Association for
+  Machine Translation in the Americas}, \BPGS\ 17--26.
+
+\bibitem[\protect\BCAY{Dagan \BBA\ Church}{Dagan \BBA\ Church}{1994}]{Dagan94}
+Dagan, I.\BBACOMMA\  \BBA\ Church, K. \BBOP 1994\BBCP.
+\newblock \BBOQ {Termight: Identifying and Translating Technical
+  Terminology}\BBCQ\
+\newblock In {\Bem Proceedings of the 4th Conference on Applied Natural
+  Language Processing}, \BPGS\ 34--40.
+
+\bibitem[\protect\BCAY{出羽達也}{出羽達也}{2004}]{Izuha04}
+出羽達也 \BBOP 2004\BBCP.
+\newblock \JBOQ
+  対訳文書から自動抽出した用語対訳による機械翻訳の訳語精度向上\JBCQ\
+\newblock \Jem{電子情報通信学会論文誌}, {\Bbf J87-D-II}  (6), 1244--1251.
+
+\bibitem[\protect\BCAY{Le, Youbing, \BBA\ Yufang}{Le et~al.}{2000}]{Le00}
+Le, S., Youbing, J., \BBA\ Yufang, S. \BBOP 2000\BBCP.
+\newblock \BBOQ {Word Alignment of English-Chinese Bilingual Corpus based on
+  Chunks}\BBCQ\
+\newblock In {\Bem Proccedings of the Joint SIGDAT Conference on Empirical
+  Methods in Natural Language Processing and Very Large Corpora}, \BPGS\
+  110--116.
+
+\bibitem[\protect\BCAY{McEwan, Ounis, \BBA\ Ruthven}{McEwan
+  et~al.}{2002}]{Mcewan02}
+McEwan, C., Ounis, I., \BBA\ Ruthven, I. \BBOP 2002\BBCP.
+\newblock \BBOQ {Building Bilingual Dictionaries from Parallel Web
+  Documents}\BBCQ\
+\newblock In {\Bem Proceedings of the 24th European Colloquium on Information
+  Retrieval Research}, \BPGS\ 303--323.
+
+\bibitem[\protect\BCAY{Melamed}{Melamed}{1999}]{Melamed99}
+Melamed, I. \BBOP 1999\BBCP.
+\newblock \BBOQ {Bitext Maps and Alignment via Pattern Recognition}\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 25}  (1), 107--130.
+
+\bibitem[\protect\BCAY{Resnik \BBA\ Melamed}{Resnik \BBA\
+  Melamed}{1997}]{Resnik97}
+Resnik, P.\BBACOMMA\  \BBA\ Melamed, I. \BBOP 1997\BBCP.
+\newblock \BBOQ {Semi-Automatic Acquisition of Domain-Specific Translation
+  Lexicons}\BBCQ\
+\newblock In {\Bem Proceedings of the 5th Conference on Applied Natural
+  Language Processing}, \BPGS\ 340--347.
+
+\bibitem[\protect\BCAY{Sadat, Yoshikawa, \BBA\ Uemura}{Sadat
+  et~al.}{2003}]{Sadat03}
+Sadat, F., Yoshikawa, M., \BBA\ Uemura, S. \BBOP 2003\BBCP.
+\newblock \BBOQ {Bilingual Terminology Acquisition from Comparable Corpora and
+  Phrasal Translation to Cross-Language Information Retrieval}\BBCQ\
+\newblock In {\Bem Proceedings of the Companion Volume to the Proceedings of
+  41st Annual Meeting of the Association for Computational Linguistics}, \BPGS\
+  141--144.
+
+\bibitem[\protect\BCAY{Sahlgren}{Sahlgren}{2004}]{Sahlgren04}
+Sahlgren, M. \BBOP 2004\BBCP.
+\newblock \BBOQ {Automatic Bilingual Lexicon Acquisition Using Random Indexing
+  of Aligned Bilingual Data}\BBCQ\
+\newblock In {\Bem Proceedings of the 4th International Conference on Language
+  Resources and Evaluation}, \BPGS\ 1289--1292.
+
+\bibitem[\protect\BCAY{佐々木靖弘, 佐藤理史, 宇津呂武仁}{佐々木靖弘\Jetal
+  }{2005}]{Sasaki05}
+佐々木靖弘, 佐藤理史, 宇津呂武仁 \BBOP 2005\BBCP.
+\newblock \JBOQ ウェブを利用した専門用語集の自動編集\JBCQ\
+\newblock \Jem{言語処理学会第11回年次大会発表論文集}.
+\newblock B4-7.
+
+\bibitem[\protect\BCAY{佐藤健吾 斎藤博昭}{佐藤健吾\JBA 斎藤博昭}{2003}]{Sato03}
+佐藤健吾\BBACOMMA\  斎藤博昭 \BBOP 2003\BBCP.
+\newblock \JBOQ サポートベクタマシンを用いた対訳表現の抽出\JBCQ\
+\newblock \Jem{自然言語処理}, {\Bbf 10}  (4), 109--124.
+
+\bibitem[\protect\BCAY{Smadja, Hatzivassiloglou, \BBA\ McKeown}{Smadja
+  et~al.}{1996}]{Smadja96}
+Smadja, F., Hatzivassiloglou, V., \BBA\ McKeown, K. \BBOP 1996\BBCP.
+\newblock \BBOQ {Translating Collocations for Bilingual Lexicons: A Statistical
+  Approach}\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 22}  (1), 1--38.
+
+\bibitem[\protect\BCAY{Tiedemann}{Tiedemann}{2000}]{Tiedemann00}
+Tiedemann, J. \BBOP 2000\BBCP.
+\newblock \BBOQ {Extracting Phrasal Terms using Bitext}\BBCQ\
+\newblock In {\Bem Proceedings of the Workshop on Terminology Resources and
+  Computation, held in conjunction with LREC}.
+
+\bibitem[\protect\BCAY{津田宏治}{津田宏治}{2003}]{Tsuda03}
+津田宏治 \BBOP 2003\BBCP.
+\newblock \JBOQ カーネル法の理論と実際\JBCQ\
+\newblock 甘利俊一\JED, \Jem{パターン認識と学習の統計学}, \BPGS\ 97--138.
+  岩波書店.
+
+\bibitem[\protect\BCAY{Tufis}{Tufis}{2002}]{Tufis02}
+Tufis, D. \BBOP 2002\BBCP.
+\newblock \BBOQ {A Cheap and Fast Way to Build Useful Translation
+  Lexicons}\BBCQ\
+\newblock In {\Bem Proceedings of the 19th International Conference on
+  Computational Linguistics}, \BPGS\ 1030--1036.
+
+\bibitem[\protect\BCAY{Utsuro, Horiuchi, \BBA\ Chiba}{Utsuro
+  et~al.}{2002}]{Utsuro02}
+Utsuro, T., Horiuchi, T., \BBA\ Chiba, Y.and~Hamamoto, T. \BBOP 2002\BBCP.
+\newblock \BBOQ {Semi-automatic Compilation of Bilingual Lexicon Entries from
+  Cross-Lingually Relevant News Articles on WWW News Sites}\BBCQ\
+\newblock In {\Bem Proceedings of the 6th Conference of the Association for
+  Machine Translation in the Americas}, \BPGS\ 165--176. Springer-Verlag.
+
+\bibitem[\protect\BCAY{Yamamoto, Kudo, Tsuboi, \BBA\ Matsumoto}{Yamamoto
+  et~al.}{2003}]{Yamamoto03}
+Yamamoto, K., Kudo, T., Tsuboi, Y., \BBA\ Matsumoto, Y. \BBOP 2003\BBCP.
+\newblock \BBOQ {Learning Sequence-to-Sequence Correspondences from Parallel
+  Corpora via Sequential Pattern Mining}\BBCQ\
+\newblock In {\Bem Proceedings of the HLT-NAACL Workshop: Building and Using
+  Parallel Texts Data Driven Machine Translation and Beyond}, \BPGS\ 73--80.
+
+\end{thebibliography}
+
+
+\begin{biography}
+\biotitle{略歴}
+\bioauthor{吉見毅彦}
+{1987年電気通信大学大学院計算機科学専攻修士課程修了．
+1999年神戸大学大学院自然科学研究科博士課程修了．
+(財)計量計画研究所(非常勤)，シャープ(株)を経て，
+2003年より龍谷大学理工学部情報メディア学科勤務．
+2004年より情報通信研究機構専攻研究員を兼任．}
+\bioauthor{九津見毅}
+{1965年生まれ．
+1990年，大阪大学大学院工学研究科修士課程修了(精密工学—計算機制御)．
+同年，シャープ株式会社に入社．
+以来，英日機械翻訳システムの翻訳エンジンプログラムの開発に従事．
+言語処理学会会員．}
+\bioauthor{小谷克則}
+{1974年生まれ．
+2002年より情報通信研究機構特別研究員．
+2004年，関西外国語大学より英語学博士取得．}
+\bioauthor{佐田いち子}
+{1984年北九州大学文学部英文学科卒業．
+同年シャープ(株) に入社．
+現在，同社情報通信事業本部情報商品開発センター技術企画室副参事．
+1985年より機械翻訳システムの研究開発に従事．}
+\bioauthor{井佐原均}
+{1978年京都大学工学部卒業．
+1980年同大学院修士課程修了．
+博士(工学)．
+同年通商産業省電子技術総合研究所入所．
+1995年郵政省通信総合研究所関西支所知的機能研究室室長．
+2001年情報通信研究機構(旧：通信総合研究所)けいはんな情報通信融合研究セン
+ター自然言語グループリーダー．
+自然言語処理，機械翻訳の研究に従事．
+言語処理学会，情報処理学会，人工知能学会，日本認知科学会，ACL，各会員．}
+
+\bioreceived{受付}
+\biorevised{再受付}
+\bioaccepted{採録}
+\end{biography}
+
+\end{document}

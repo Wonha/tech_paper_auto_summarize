@@ -1,0 +1,734 @@
+
+\documentstyle[theapa]{jnlp_b5e}
+
+\setcounter{page}{59}
+\setcounter{巻数}{1}
+\setcounter{号数}{1}
+\受付{4}{4}{4}
+\採録{4}{7}{11}
+
+\setcounter{secnumdepth}{2}
+
+\newcommand{\figref}[1]{}
+\newcommand{\secref}[1]{}
+\newtheorem{theorem}{}
+\newtheorem{definition}{}
+\newtheorem{property}{}
+\newcounter{aline}
+\newcommand{\aline}[1]{}
+\newcommand{\class}[1]{}
+\newcommand{\tuple}[1]{}
+\newcommand{\proofend}{}
+\newcommand{\Ss}{}
+\newcommand{\St}{}
+\newcommand{\Sc}{}
+\newcommand{\Ds}{}
+\newcommand{\Dt}{}
+\newcommand{\Dc}{}
+\newcommand{\Tp}{}
+\newcommand{\Mc}{}
+\newcommand{\Mt}{}
+\newcommand{\MSt}{}
+\newcommand{\MLt}{}
+\newcommand{\MSc}{}
+\newcommand{\MLc}{}
+\newcommand{\MS}{}
+\newcommand{\ML}{}
+\newcommand{\Mup}{}
+\newcommand{\Mdw}{}
+\newcommand{\SimTran}{}
+\newcommand{\bffor}{}
+\newcommand{\bfbegin}{}
+\newcommand{\bfend}{}
+\newcommand{\bfif}{}
+\newcommand{\bfelseif}{}
+\newcommand{\bfthen}{}
+\newcommand{\bfelse}{}
+\newcommand{\bfwhile}{}
+\newcommand{\TranPet}{}
+ 
+\title{}
+\author{}
+\jkeywords{}
+
+\etitle{A System for Finding Translation Patterns\\
+  by Comparing an MT Result and Its Correction}
+\eauthor{Hideo Watanabe\affiref{NihonIBM}}
+
+\headauthor{Hideo Watanabe}
+\headtitle{\scriptsize\bf
+  \shortstack[l]{A System for Finding Translation Patterns\\
+  by Comparing an MT Result and Its Correction}}
+
+\affilabel{NihonIBM}
+{IBM Research, Tokyo Research Laboratory (E-mail: watanabe@trl.ibm.co.jp)}
+{IBM Research, Tokyo Research Laboratory (E-mail: watanabe@trl.ibm.co.jp)} 
+
+\eabstract{When the example-based approach is used for machine
+  translation, it is important to collect a large volume of
+  translation patterns, because most systems use as a translation
+  example a pair of parsed structures in the source and target
+  languages. Such parsed translation pairs are hard to collect. This
+  paper describes a system for finding parsed translation pairs (or
+  translation patterns) that are valid for the translation pattern
+  base by comparing wrong translations and corresponding correct
+  translations.}
+ 
+\ekeywords{Machine Translation, Example-based Approach, 
+  Translation Pattern Extraction}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+\label{sec:intro}
+
+The example-based approach (EBA), an emerging technology proposed by Nagao
+\cite{nagao84}, has been extensively used in many areas of machine
+translation \cite{sumita90,sato90,wat90,sato91b,kaji92,furuse92,wat92,wat94}.
+A typical EBA transfer system uses a large volume of translation examples, or
+translation patterns, each of which is a pair of parsed structures in two
+languages. Collecting a large volume of such patterns is a difficult and
+time-consuming task, because it is mostly done manually. A method
+for collecting such patterns automatically is therefore needed.
+
+In considering the human task of acquiring translation patterns, we noticed
+that there are at least two different approaches: one is to find translation
+patterns by viewing many translation examples, and another is to find
+translation patterns by comparing a wrong translation and its correction. 
+Several studies \cite{kaji92,utsuro92,utsuro93,matsumoto93,ishimoto93} have
+followed the former approach. On the other hand, we have developed a system
+called \TranPet\ that follows the latter; that is, one that can identify new
+translation patterns by comparing an MT result and its correction.  In
+\figref{fig:introxmp}, (a) is the dependency structure of an input Japanese
+sentence, (r1), (r2), and (r3) are given translation patterns, and (b) is the
+English dependency structure produced by these patterns.  Clearly, (b) is not
+a correct translation of (a), whereas (c) is. \TranPet\ compares the current
+output (b) and a correct output (c), and finds a translation pattern (r4).
+\begin{figure*}[tb]
+\begin{center}
+\unitlength 1mm
+\begin{picture}(100,100)
+\put(5,5){\framebox(90,90){xmpintro.ps}}
+\end{picture}
+\end{center}
+\caption{Example of extracting a new translation pattern}
+\label{fig:introxmp}
+\end{figure*}
+
+Given an input string \Ss, let \St\ be an output string produced by a
+translation system $TS$, and let \Sc\ be a correct translation of \Ss. The
+purpose of the proposed method is to obtain translation patterns that produce
+the correct translation string \Sc. We assume the following:
+\begin{itemize}
+\item $TS$ is an example-based transfer system that can use 
+translation patterns directly.
+\item Parsing is error-free; that is, the parsed structures
+of the source and target languages are correct.
+\item The translation pattern base includes some translation patterns.
+\end{itemize}
+The second condition might sound rather severe. However it does not mean that parsing
+must be done entirely by a parsing program, but rather that human
+supervision is allowed.  Thus, we can break down the problem of obtaining
+translation patterns into the following two sub-problems:
+\begin{itemize}
+\item Making a mapping \Mc\ from \Ds\ to \Dc, 
+\item Finding translation patterns by comparing
+$\langle\Ds,\Mt,\Dt\rangle$ with $\langle\Ds,\Mc,\Dc\rangle$
+\end{itemize}
+where \Ds\ is a dependency structure of an input string \Ss, \Dt\ is a
+dependency structure produced by $TS$, \Dc\ is a dependency structure of
+\Sc, and \Mt\ is a mapping from \Ds\ to \Dt\ easily extracted from a set of
+translation patterns \Tp\ used in constructing \Dt\ by means of $TS$.
+
+An overview of the system \TranPet\ is given in the next section, and how an
+example-based transfer system works is described briefly in
+\secref{sec:ebtrn}.  A method for finding mappings is given in
+\secref{sec:mapping}, and a method for finding translation patterns in
+\secref{sec:findpat}.
+\secref{sec:example} gives an example of the system, and \secref{sec:discuss}
+discusses related work. This paper closes with some concluding remarks.
+
+\section{System Overview}
+\label{sec:overview} 
+
+The system flow of \TranPet\ is shown in \figref{fig:sysflow}.  An input
+Japanese sentence \Ss\ is translated into an English sentence \St\ by a
+Japanese-to-English machine translation system called {\bf JETS},\footnote
+{JETS is a Japanese-to-English translation system that IBM Tokyo Research Lab
+has been developping for over 10 years.} which uses an example-based transfer
+system called {\bf SimTran} \cite{wat92,wat94}.
+\begin{figure*}[tb]
+\begin{center}
+\unitlength 1mm
+\begin{picture}(100,120)
+\put(5,5){\framebox(90,110){sysflow.ps}}
+\end{picture}
+\end{center}
+\caption{Flow of the system}
+\label{fig:sysflow}
+\end{figure*}
+If the translation is wrong, a user gives the system a correct translation 
+\Sc\, which is then processed by a parser for the target language to give
+a dependency structure \Dc. Subsequently, the correspondence (mapping data)
+between \Ds\ and \Dc\ is determined by the Mapper. Finally, the Pattern
+Extractor finds relevant translation patterns by comparing \Dc\ and \Dt\
+with \Ds, $T_p$ translation patterns used when creating \Dt, and mapping data.
+
+\TranPet\ is an interactive system, which requires human interaction in
+all the sub-tasks, because these tasks (parsing, finding mappings, and finding
+translation patterns) are not error-free.
+
+\section{Example-Based Transfer System}
+\label{sec:ebtrn} 
+
+This section explains briefly how the example-based transfer system \SimTran\
+works.
+
+A dependency structure used in \SimTran\ is expressed as a rooted labeled
+directed acyclic graph (rldag for short) indicating a graph that has only one
+root node, and has labeled nodes and arcs, directed arcs, and no cyclic arc
+path.  Each node consists of several features, and each arc is labeled
+according to its grammatical relation.
+
+A translation pattern $r$ is expressed as the following 3-tuple:
+\begin{tabbing}
+xxxxx\=\+\kill
+$r = \langle G_s, M, G_t\rangle$
+\end{tabbing}
+where $G_s$ is a dependency structure of the source language and $G_t$ is a
+dependency structure of the target language. Further, $M$ is the following set
+of mappings:
+\begin{tabbing}
+xxxxx\=\+\kill
+$M = \langle$\ML, \Mup, \Mdw$\rangle$
+\end{tabbing}
+where \ML\ is a {\em lexical mapping} from a subset of $G_s$ nodes to a subset
+of $G_t$ nodes, which indicates a $G_t$ node that is a word used to translate
+a $G_s$ node, and \Mup\ and \Mdw\ are structural mappings from a subset of
+$G_s$ nodes to a subset of $G_t$ nodes, which indicate a connection point
+(node) in $G_t$ for a $G_s$ node, on which some $G_t$s are merged; \Mup\ is
+called a {\em upward mapping} and \Mdw\ is called a {\em downward mapping}.
+\begin{figure*}
+\begin{center}
+\unitlength 1mm
+\begin{picture}(100,40)
+\put(5,5){\framebox(90,30){mapping.ps}}
+\end{picture}
+\end{center}
+\caption{Example of a translation pattern}
+\label{fig:mapping}
+\end{figure*}
+\figref{fig:mapping} shows an example of a translation pattern according to 
+which the Japanese sentence ``kanojo ha kami ga nagai'' can be translated as
+the English sentence ``she has long hair.'' In this figure, dotted lines
+represent correspondences between words.  The Japanese word ``nagai''
+(``long'') has two corresponding nodes ``have'' and ``long,'' as an upward
+mapping and a downward mapping, respectively. Suppose that ``nagai'' has the
+modifiers ``totemo'' (``very'') and ``itsumo'' (``always''); then the English
+word ``very'' used to translate ``totemo'' should be related to ``long,'' but
+the word ``always'' used to translate ``itsumo'' should be related to
+``have.''  This is one of the reasons why upward and downward mappings are
+needed.
+
+\SimTran\ runs as follows:
+\begin{enumerate}
+\item Gather translation patterns all of whose $G_s$s cover
+the input dependency structure completely.
+\item Combine all the $G_t$s of the selected translation patterns so that
+the $G_t$ nodes whose corresponding $G_s$ node is the same.
+\end{enumerate}
+To find a corresponding $G_s$ node for a $G_t$ node,
+the above-mentioned structural mappings are used. 
+
+Even though an example-based transfer system does not use structural mappings,
+at least it has a lexical mapping. Therefore, in such systems, a lexical
+mapping is used instead of structural mappings to find a corresponding $G_s$
+node. For such example-based transfer systems, descriptions on structural
+mappings can be ignored.
+
+\section{Mapper}
+\label{sec:mapping} 
+
+This section describes how to find mappings between two dependency structures
+mentioned in the previous section.
+
+Utsuro et al. \cite{utsuro92} and Kaji et al. \cite{kaji92} proposed methods
+for finding the correspondences between translation pairs.  The former method
+finds a one-to-one correspondence between two feature structures of
+translation equivalents, and the latter method finds a one-to-one
+correspondence between two phrase structures. This one-to-one mapping
+corresponds to lexical mapping in \SimTran. Since finding structural mapping
+can reduce the imcompleteness of lexical mapping, the procedure for finding
+lexical mapping is simpler than Utsuro's method.
+
+\begin{figure*}
+\raggedright
+\small
+{\bf procedure} lexical-mapping(\Ds,\Dt) \bfbegin\ \\
+\hspace{5mm} $lexmap \leftarrow \phi;$ $openlist \leftarrow \phi$ \aline{al:ba} \\
+\hspace{5mm} $N_t \leftarrow$ nodes of \Dt\ \aline{al:bc} \\
+\hspace{5mm} \bffor\ each node $s$ in \Ds\ \bfbegin\ \aline{al:bd} \\
+\hspace{10mm} $ts \leftarrow getPossibleTranslationNodes(s,D_t)$ \aline{al:be} \\
+\hspace{10mm} \bfif\ $|ts|=1$ \bfthen\ 
+add $(s,first(ts))$ to $lexmap$ \aline{al:bg} \\
+\hspace{10mm} \bfelseif\ $|ts|>1$ \bfthen\ 
+add $(s,ts)$ to $openlist$ \aline{al:bh} \\
+\hspace{5mm} \bfend\ \aline{al:bdend} \\
+\hspace{5mm} \bffor\ each $(s,ts)$ in $openlist$ \bfbegin\ \aline{al:bi} \\
+\hspace{10mm} {\bf loop begin} \aline{al:bj} \\
+\hspace{15mm} $s^{\prime} \leftarrow getNeighborNotVisited(D_s,s)$ \aline{al:bk} \\
+\hspace{15mm} \bfif\ $s^{\prime}=\phi$ \bfthen\ break \aline{al:bl} \\
+\hspace{15mm} $t^{\prime} \leftarrow t$ such that $(s^{\prime},t)\in lexmap$
+\aline{al:bm} \\
+\hspace{15mm} $ts^{\prime} \leftarrow getMostNeighbor(D_t,ts,t^{\prime})$
+\aline{al:bn} \\
+\hspace{15mm} \bfif\ $|ts^{\prime}|=1$ \bfthen\ \bfbegin\ \aline{al:bo} \\
+\hspace{20mm} add $(s,first(ts^{\prime}))$ to $lexmap$ \aline{al:bp} \\
+\hspace{20mm} break \aline{al:bq} \\
+\hspace{15mm} \bfend\ \aline{al:boend} \\
+\hspace{10mm} \bfend\ \aline{al:bjend} \\
+\hspace{5mm} \bfend\ \aline{al:biend} \\
+\hspace{5mm} return $lexmap$ \\
+\bfend
+\normalsize
+\caption{Algorithm for finding a lexical mapping}
+\label{alg:mapping1} 
+\end{figure*}
+\begin{figure*}
+\raggedright
+\small
+{\bf procedure} mapping(\Ds,\Dt) \bfbegin\ \\
+\hspace{5mm} $\ML \leftarrow$ lexical-mapping(\Ds,\Dt)
+\aline{al:aa}\\
+\hspace{5mm} $\Mup \leftarrow \ML$ \aline{al:ab} \\
+\hspace{5mm} $\Mdw \leftarrow \ML$ \aline{al:ac} \\
+\hspace{5mm} \bffor\ any node pair $s_1$ and $s_2$ in \Ds\ such that $s_1$ is an
+ancestor node of $s_2$ \bfbegin \aline{al:ad} \\
+\hspace{10mm} $t_1 \leftarrow \ML(s_1)$ \aline{al:ae}\\
+\hspace{10mm} $t_2 \leftarrow \ML(s_2)$ \aline{al:af}\\
+\hspace{10mm} \bfif\ $t_2$ is an ancestor node of $t_1$ \bfthen \aline{al:ag}\\
+\hspace{15mm} remove $(s_1,t_1)$ from $\Mup$ \aline{al:ah}\\
+\hspace{15mm} $t_3 \leftarrow t_1$ \aline{al:ahh}\\
+\hspace{15mm} \bffor\ each $n$ in ancestors of $t_2$ in \Dt\ \bfbegin
+\aline{al:ai}\\  
+\hspace{20mm} \bfif\ $n$ is a root node, or a parent node of $n$ or $n$ is related by
+$\Mup$ or $\Mdw$ \bfthen\ \bfbegin\ \aline{al:aj}\\
+\hspace{30mm} $t_3 \leftarrow n$ \aline{al:ak}\\
+\hspace{30mm} break \aline{al:al}\\
+\hspace{20mm} \bfend\ \aline{al:am}\\
+\hspace{15mm} \bfend\ \aline{al:an}\\
+\hspace{15mm} add $(s_1,t_3)$ to $\Mup$ \aline{al:ao}\\
+\hspace{10mm} \bfend\ \aline{al:ap}\\
+\hspace{10mm} $R_s \leftarrow root(\Ds)$ \aline{al:aq}\\
+\hspace{10mm} $R_t \leftarrow root(\Dt)$ \aline{al:ar}\\
+\hspace{10mm} \bfif\ $\Mup(R_s) \neq R_t$ \bfthen\ \bfbegin \aline{al:as}\\
+\hspace{15mm} remove $(R_s,\Mup(R_s))$ from $\Mup$ \aline{al:at}\\
+\hspace{15mm} add $(R_s,R_t)$ to $\Mup$ \aline{al:au}\\
+\hspace{10mm} \bfend \aline{al:av}\\
+\hspace{5mm} \bfend\ \aline{al:awa}\\
+\hspace{5mm} return $\langle\ML,\Mup,\Mdw\rangle$ \aline{al:aw} \\
+\bfend\
+\normalsize
+\caption{Algorithm for finding a structural mapping}
+\label{alg:mapping2}
+\end{figure*}
+\begin{figure*}
+\begin{center}
+\unitlength 1mm
+\begin{picture}(100,50)
+\put(5,5){\framebox(90,40){mappingxmp.ps}}
+\end{picture}
+\end{center}
+\caption{Example of finding mapping and phrasal correspondence}
+\label{fig:mapxmp}
+\end{figure*}
+ 
+Our algorithm is shown in \figref{alg:mapping1} and \figref{alg:mapping2}. 
+Briefly, this algorithm first finds a lexical mapping for a given translation
+pair (line \ref{al:aa}), and then finds structural mappings (lines
+\ref{al:ad}-\ref{al:aw}). The lexical mapping is found as follows: First, for
+each node, possible translation nodes are checked by using a source-to-target
+dictionary (line \ref{al:be}). If the translation node is uniquely determined,
+then a pair of the source node and its translation node is added to the \ML\
+(line \ref{al:bg}). For each node that has multiple possible translation
+nodes, a check is made to establish whether the translation node of one of its
+neighbor nodes has already been determined, and if so, the translation node
+nearest to that of the neighbor node is used (lines
+\ref{al:bi}-\ref{al:biend}). The function $getNeighborNotVisited(D_s,s)$
+returns a neighbor node of $s$ in $D_s$ which is not visited with regard to
+$s$, and the function $getMostNeighbor(G_t,ts,t^{\prime})$ returns a node out
+of $ts$ which is the most neighbor to $t^{\prime}$ in $G_t$.  After that,
+structural mappings are found as follows: A search is made for two
+correspondences $(s_1,t_1)$ and $(s_2,t_2)$ causing head switching such that
+$s_1$ is an ancestor of $s_2$ while $t_1$ is a descendant of $t_2$ (lines
+\ref{al:ad}-\ref{al:ag}). If such node pairs are found, the algorithm searches
+ancestors of $t_2$ for a node $t_3$ such that (1) $t_3$ is a root node, or (2)
+a parent node of $t_3$ or $t_3$ itself is related by another source node (line
+\ref{al:aj}), and then makes $(s_1,t_1)$ an downward mapping and $(s_1,t_3)$
+an upward mapping (lines
+\ref{al:ah}-\ref{al:ao}). The last part (lines \ref{al:as}-\ref{al:av}) checks
+whether both root nodes are related by an upward mapping, because a \SimTran\
+translation pattern must satisfy this condition. If they are not related, then
+it relates them.
+
+For instance, in the case of \figref{fig:mapxmp}, dotted arrows
+gives the following lexical mappings: 
+\begin{tabbing}
+xxxxx\=\+\kill
+\ML: \{(shiru,know),(kirei,beautiful),(kanojo,she),(hitomi,eyes)\} 
+\end{tabbing}
+In this example, head switching takes place for the node pairs
+(kirei,beautiful) and (hitomi,eyes), and these nodes hold true for lines
+\ref{al:ad}-\ref{al:ag}. Therefore, (kirei,have) is found as an upward
+mapping. As a result, the following upward and downward mappings are obtained:
+\begin{tabbing}
+xxxxx\=\+\kill
+\Mup: \{(shiru,know),(kirei,have),(kanojo,she),(hitomi,eyes)\} \\
+\Mdw: \{(shiru,know),(kirei,beautiful),(kanojo,she),(hitomi,eyes)\} 
+\end{tabbing}
+
+For the sake of structural mapping, phrasal correspondence can be easily
+obtained by exploring around two distinct nodes projected by upward and
+downward mappings from one source node. For instance, in \figref{fig:mapxmp},
+the source node ``kirei'' is related to the target node ``have'' by upward
+mapping, and is related to the target node ``beautiful'' by downward mapping. 
+The minimum connected subgraph containing ``have'' and ``beautiful'' has
+another node ``eyes'' which is also related from the source node ``hitomi.'' 
+This gives the phrasal correspondence between the minimum subgraph including
+``kirei'' and ``hitomi'' and the minimum subgraph including ``have,''
+``eyes,'' and ``beautiful'' (both are surrounded by dotted lines).
+The algorithm for finding phrasal correspondence is shown in
+\figref{alg:phrasalmap}. In this algorithm, the function 
+$relatedNodes($\Mup,\Mdw,$s)$ returns a set of nodes related from $s$ by \Mup\
+or \Mdw. Lines \ref{al:cd}-\ref{al:ci} find a set of source nodes and a set
+of target nodes such that mappings whose sources are those source nodes and
+mappings whose destinations are those target nodes are identical. These
+phrasal correspondences are limited in that they cannot include extra elements
+in the target part, that is, elements that are not related from any elements
+in the source part.  This issue will be dealt with in the next section.
+
+\begin{figure*}
+\raggedright
+\small
+{\bf procedure} phrasal-correspondence(\Ds,\Dt,\Mup,\Mdw) \bfbegin\ \\
+\hspace{5mm} $phrases \leftarrow \phi$ \aline{al:ca}\\
+\hspace{5mm} \bffor\ each pair of a node $s_x$ and its child node $s_y$ of \Ds \bfbegin\ \aline{al:cb} \\
+\hspace{10mm} $N_s \leftarrow \{s_x,s_y\}$ \aline{al:cc}\\
+\hspace{10mm} \bfif\ there is any element $(N_s^{\prime},N_t^{\prime})$ in
+$phrases$ such that $N_s\subseteq N_s^{\prime}$ \bfthen\ continue \aline{al:ccc}\\
+\hspace{10mm} {\bf loop begin} \aline{al:cd}\\
+\hspace{15mm} $N_t \leftarrow \sum_{s\in N_s}relatedNodes($\Mup,\Mdw,$s)$ \aline{al:ce}\\
+\hspace{15mm} \bfif\ there is a \Ds\ node $s_z$ such that $s_z\not\in N_s$ and
+$relatedNodes($\Mup,\Mdw,$s_z)\cap N_t\neq\phi$ \aline{al:cf}\\
+\hspace{20mm} \bfthen\ $N_s \leftarrow N_s\cup\{s_z\}$ \aline{al:cg}\\
+\hspace{20mm} \bfelse\ break \aline{al:ch}\\
+\hspace{10mm} \bfend \aline{al:ci}\\
+\hspace{10mm} add $(N_s,N_t)$ to $phrases$ \aline{al:cl}\\
+\hspace{5mm} \bfend \aline{al:cm}\\
+\hspace{5mm} return $phrases$ \aline{al:cn} \\
+\bfend\
+\normalsize
+\caption{Algorithm for finding phrasal correspondence}
+\label{alg:phrasalmap}
+\end{figure*}
+
+\section{Pattern Extractor}
+\label{sec:findpat}
+
+This section describes how to find new translation patterns.  
+
+The basic idea for finding new translation patterns is to check whether each
+translation pattern used in MT is the same as the corresponding correct
+pattern.  If it is not the same, then it is a part of a new translation
+pattern. Therefore, we must construct a translation pattern corresponding to
+the correct translation for each translation pattern used in MT. Since the
+source dependency structure is the same, we must identify the target part in
+\Dc\ corresponding to a translation pattern.
+
+Given a set of nodes in \Ds, there is a set of nodes in \Dt\ or \Dc\
+projected by \Mt\ or \Mc\ from those \Ds\ nodes.  We call the minimum 
+connected subgraph containing all of these projected nodes in a target
+structure a {\em projected subgraph}. In \figref{fig:prjsg},
+the projected nodes of S1 and S2 are T3 and T4, respectively.
+Since the minimum connected subgraph including T3 and T4 must also
+include T2, a projected subgraph of \Ds\ becomes a subgraph consisting of
+\{T2, T3, T4\}.
+\begin{figure*}
+\begin{center}
+\unitlength 1mm
+\begin{picture}(100,50)
+\put(5,5){\framebox(90,40){prjsubgraph.ps}}
+\end{picture}
+\end{center}
+\caption{Example of projected subgraph}
+\label{fig:prjsg}
+\end{figure*}
+Hence, for a translation pattern $p$ used in MT, its corresponding translation
+pattern in the correct translation consists of the source part of $p$, a
+projected subgraph of $p$ on \Dc, and mappings between them (a subset of \Mc).
+
+Next, the equality of the two translation patterns must be checked.
+Given two translation patterns $P_i=\langle S_i,M_i,T_i\rangle$ and 
+$P_j=\langle S_j,M_j,T_j\rangle$, $P_i$ is identical to $P_j$ if
+and only if the following conditions are all satisfied:
+\begin{enumerate}
+\item $P_i$ and $P_j$ are structurally identical.\footnote{This means that
+node contents are ignored but arc labels must be checked.}
+\item $S_i$ and $S_j$ are identical. \footnote{In this case, node contents
+are checked, but which features should be checked depends on the
+application. In our system, the lexical-form and part-of-speech are checked.}
+\item For each node $s_i$ of $S_i$ and its corresponding node $s_j$ in $S_j$,
+let the node projected by $M\uparrow_i(s_i)$ be $tu_i$, let the node projected
+by $M\downarrow_i(s_i)$ be $td_i$, let the node projected by
+$M\uparrow_j(s_j)$ be $tu_j$, and let the node projected by
+$M\downarrow_j(s_j)$ be $td_j$; then $tu_i$ subsumes $tu_j$ and $td_i$
+subsumes $td_j$.\footnote{Since a node consists of several features, the
+subsumption relations on feature structures are used.}
+\end{enumerate}
+
+An algorithm for finding translation patterns is shown in \figref{alg:trapat}. 
+Lines \ref{al:mba}-\ref{al:mbz} check, for each translation pattern $p$ used
+to make \Dt, whether the corresponding translation pattern $p^{\prime}$ is the
+same as $p$ or not.  If $p^{\prime}$ is not identical to $p$, then it is
+stored in the new translation pattern list; otherwise, it is stored in the
+same translation pattern list.\footnote{Actually, mappings are not stored,
+because they are constructed later from a pair of source part and target
+part.} After that, the translation patterns in the new translation pattern
+list are merged if they share any common nodes (lines
+\ref{al:mca}-\ref{al:mcz}). Further, for each subgraph $g$ of \Dc\ that is
+included in neither the new translation pattern list nor the same translation
+pattern list, the minimum subgraph $g^{\prime}$ such that $g^{\prime}$
+contains both $g$ and any leaf node of $p_t$ in the new translation pattern
+list is found, and $g^{\prime}$ is merged with $p_t$ (lines
+\ref{al:mea}-\ref{al:mez}).
+
+\begin{figure*}
+\raggedright
+\small
+{\bf procedure} find-trnpat(\Ds,\Dt,\Dc,\Mt,\Mc,$T_p$) {\bf begin}\\
+\hspace{5mm} $New \leftarrow \phi$, $Same \leftarrow \phi$ \aline{al:maa}\\
+\hspace{5mm} \bffor\ each pattern $p$ in $T_p$ \bfbegin \aline{al:mba}\\
+\hspace{10mm} $p_s \leftarrow$ source part of $p$ \aline{al:mbb} \\
+\hspace{10mm} $p_t \leftarrow$ target part of $p$ \aline{al:mbc}\\
+\hspace{10mm} $m_t \leftarrow$ mappings between $p_s$ and $p_t$ \aline{al:mbcc}\\
+\hspace{10mm} $p_c \leftarrow$ projected subgraph of $p_s$ in \Dc\
+\aline{al:mbd}\\
+\hspace{10mm} $m_c \leftarrow$ mappings between $p_s$ and $p_c$
+\aline{al:mbdd}\\
+\hspace{10mm} \bfif\ identical$(\langle p_s,m_t,p_t\rangle,\langle
+p_s,m_c,p_c\rangle)$ \bfthen\ add $(p_s,p_c)$ to $Same$
+\bfelse\ add $(p_s,p_c)$ to $New$ \aline{al:mbe}\\ 
+\hspace{5mm} \bfend \aline{al:mbz}\\
+\hspace{5mm} \bffor\ each node $n$ in \Ds\ \bfbegin \aline{al:mca}\\
+\hspace{10mm} $P \leftarrow \{(p_s,p_c)|(p_s,p_c)\in New \wedge n\in p_s\}$ \aline{al:mcb}\\
+\hspace{10mm} remove $P$ from $New$ \aline{al:mcc}\\
+\hspace{10mm} $(p_s^{\prime},p_c^{\prime}) \leftarrow$ merge($P$) \aline{al:mcd}\\
+\hspace{10mm} add $(p_s^{\prime},p_c^{\prime})$ to $New$ \aline{al:mce}\\
+\hspace{5mm} \bfend \aline{al:mcz}\\
+\hspace{5mm} $D_c^{\prime} \leftarrow$ merge(all $p_t$s in $New$ and $Same$) \aline{al:md}\\
+\hspace{5mm} \bffor\ each disconnected subgraph $g$ in $D_c - D_c^{\prime}$
+\bfbegin \aline{al:mea}\\
+\hspace{10mm} $g^{\prime} \leftarrow$ minimum subgraph of $D_c$ that
+contains $g$ and any leaf node $x$ of $p_t$ in $New$ \aline{al:meb} \\
+\hspace{10mm} remove $(p_s,p_t)$ from $New$ \aline{al:mec}\\
+\hspace{10mm} add $(p_s,$merge$(p_t,g^{\prime}))$ to $New$ \aline{al:med}\\
+\hspace{5mm} \bfend \aline{al:mez}\\
+\hspace{5mm} return $New$ \aline{al:mezz}\\
+\bfend
+\caption{Algorithm for finding translation patterns}
+\label{alg:trapat}
+\end{figure*}
+
+\section{Example}
+\label{sec:example}
+ 
+This section gives an example of finding new translation patterns
+by using this system. 
+
+In \figref{fig:xmp2a}, \Ds\ is a dependency structure of the following 
+Japanese sentence: \\
+
+\begin{tabbing}{p{20mm}l}
+xxx \=\+\kill
+watashi no seibutugaku no tishiki ha hinjyakuda \\
+(I have little knowledge of biology.) 
+\end{tabbing} 
+
+and \Dt\ is a dependency structure produced by $TS$ as an output by using
+translation patterns $pt_1$, $pt_2$, and $pt_3$.  Dotted lines denote mappings
+between two structures.  For convenience, an unmarked dotted line is
+equivalent to a line marked \ML,
+\Mup, and \Mdw.
+
+\begin{figure*}
+\begin{center}
+\unitlength 1mm
+\begin{picture}(100,70)
+\put(5,5){\framebox(90,60){xmp2a.ps}}
+\end{picture}
+\end{center}
+\caption{Translation patterns and dependency structures of input and
+translation by $TS$}
+\label{fig:xmp2a}
+\end{figure*}
+\begin{figure*}
+\begin{center}
+\unitlength 1mm
+\begin{picture}(100,140)
+\put(5,5){\framebox(90,130){xmp2b.ps}}
+\end{picture}
+\end{center}
+\caption{Translation patterns and dependency structures of input and correct translation}
+\label{fig:xmp2b}
+\end{figure*}
+
+Suppose that \Dc\ in \figref{fig:xmp2b} is a correct English translation of 
+\Ds. Then the first step is to find mappings from \Ds\ to
+\Dc.  By using a procedure described in \secref{sec:mapping}, the mappings
+expressed by dotted lines in \figref{fig:xmp2b} are obtained. In these
+mappings, note that the Japanese word ``hinjyaku'' (``poor'') is related to
+the English word ``have'' even though it is not a translation word. This
+relationship can be established in the last part of the mapping algorithm.
+
+The next step is to find structural differences between the translation
+patterns for $\langle\Ds,\Dt\rangle$ and for $\langle\Ds,\Dc\rangle$. The
+translation patterns corresponding to $pt_1$, $pt_2$, and $pt_3$ are shown as
+$pt_1^{\prime}$, $pt_2^{\prime}$, and $pt_3^{\prime}$ in \figref{fig:xmp2b}.
+Comparison of these corresponding translation patterns shows that
+$pt_1^{\prime}$ and $pt_2^{\prime}$ are different, and they are stored in the
+new translation pattern list. \Dc\ contains a portion, ``little (mod),'' that
+is not covered by the translation patterns $pt_1^{\prime}$, $pt_2^{\prime}$, and
+$pt_3^{\prime}$.  This portion is attached to $pt_1^{\prime}$, and becomes
+$pt_1^{\prime\prime}$ in \figref{fig:xmp2b}.  Finally, a new translation
+pattern $pt_4$ is obtained by merging $pt_1^{\prime\prime}$ and
+$pt_2^{\prime}$ in the new translation pattern list.
+ 
+\begin{figure*}[tb]
+\begin{center}
+\unitlength 1mm
+\begin{picture}(100,130)
+\put(5,5){\framebox(90,120){screensave.ps}}
+\end{picture}
+\end{center}
+\caption{Screen image of TranPet}
+\label{fig:screen1}
+\end{figure*}
+\begin{figure*}[tb]
+\begin{center}
+\unitlength 1mm
+\begin{picture}(100,100)
+\put(5,5){\framebox(90,90){screensave2.ps}}
+\end{picture}
+\end{center}
+\caption{New translation pattern found by TranPet}
+\label{fig:screen2} 
+\end{figure*}
+
+The actual screen images of \TranPet\ about this example are shown in
+\figref{fig:screen1} and \figref{fig:screen2}. In \figref{fig:screen1}, the
+source dependency structure is presented in the upper left window, and the
+target dependency structure produced by \SimTran\ is presented in the lower
+left window. The upper right window contains a correct translation in English
+inputed by a user. By pushing {\em analysis} button, its parsed
+dependency structure appears in the middle right window. {\em Find
+Mapping} button executes the Mapper, and the mappings found by the Mapper
+appears in the lower right window. Finally, {\em Find Pattern} button
+executes the Pattern Extractor, and the new translation pattern is displayed
+in another window as shown in
+\figref{fig:screen2}. 
+
+\section{Discussion}
+\label{sec:discuss}
+
+Strong recent interest in corpus-based processing has produced some results
+concerning the extraction of relevant information from bilingual corpora. 
+There has been some research
+\cite{kaji92,utsuro92,utsuro93,matsumoto93,ishimoto93} on finding
+correspondences between translation pair sentences, and extracting translation
+patterns from them.  The method proposed in this paper differs from previous
+ones in that it extracts new relevant translation patterns (which are not
+contained in the current translation pattern base) by comparing the result
+output by a translation system with a correct translation.
+
+If we consider human processes for acquiring translation patterns, we can
+categorize them into two types: finding translation patterns by viewing many
+similar translations, and finding translation patterns by comparing a correct
+translation and a wrong translation.  An example of the former is that, given
+many translation instances of the Japanese word ``toru'' (``take''), one can
+obtain some translation patterns (or case frames) that are relevant for
+translating sentences containing ``toru.'' An example of the latter type has
+been given in this paper. The above-mentioned studies
+\cite{kaji92,utsuro92} deal with the former type of process, whereas the
+method proposed in this paper deals with the latter.  The former type of
+method is necessary for creating a new translation pattern base from
+scratch; on the other hand, the latter type is effective for
+enhancing an existing translation pattern base.
+
+Previous studies \cite{matsumoto93,ishimoto93} proposed a method for
+extracting not only one-to-one correspondence but also phrasal correspondence.
+As we mentioned in previous sections, our system also obtains structural
+correspondence; limited phrasal correspondence can be obtained in the mapping
+phase, and more global phrasal correspondence can be obtained by finding new
+translation patterns.
+
+Some may feel that the proposed method is peculiar to \SimTran. Admittedly, a
+method for finding structural mappings is unique to \SimTran, but a method for
+finding new relevant translation patterns is applicable to any type of
+example-based transfer system, if lexical mapping is substituted for
+structural mappings in the descriptions above.
+
+Since this system is an interactive tool to assist in creating translation
+patterns, it is not easy to evaluate.\footnote{ It is difficult to conduct an
+extensive test using many sentences, since the system depends heavily on the
+capability of the source and target parsers, and corrections are needed for
+the results of these parsers.} We have actually been using this system for
+several months to create \SimTran\ translation patterns. The experience
+indicates that, if the mapping is correct, the result of the system can mostly
+be used as a translation pattern after a little editing.  Most errors in the
+mapping phase are caused by (1) a word used in a correct translation sentence
+not being registered in the dictionary as a translation for its source word,
+and (2) a single source word, such as a compound noun phrase, being translated
+as several target words.  Further, creating a translation pattern by using
+this system takes half as much time as creating one from scratch.
+Therefore, this system improves the productivity of pattern creation largely.
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+In this paper, I have described a system called \TranPet\ that compares a
+wrong translation and a correct translation in order to extract relevant
+translation patterns that can be added to a current translation pattern base. 
+To find mappings between two parsed structures, I proposed a method for
+finding not only one-to-one correspondence but also structural mappings
+employed in \SimTran. To find new translation patterns, I proposed a method
+for finding translation patterns from the differences between translation
+patterns used in a wrong translation and those used in a correct translation. 
+This method is useful for extending or enhancing a current translation pattern
+base efficiently.
+
+This system has been actually used for creating \SimTran\ translation patterns
+in {\bf JETS} Japanese-to-English MT system. As for the future work,
+in addition to improving parsers, we must enhance a part finding mappings
+to reduce user interaction.
+
+
+\bibliography{jnlp94}
+\bibliographystyle{theapa}
+
+\begin{biography}
+  \biotitle{}
+  \bioauthor{Hideo Watanabe}{
+    Hideo Watanabe was born in Sapporo, Japan, on December 25, 1961.
+    He received the B.E., and M.E. degrees in Electrical Engineering,
+    from Kyoto University, Kyoto, Japan, in 1984 and 1986, respectively.
+    In 1986, he joined IBM Research, Tokyo Research Laboratory, and
+    has engaged in research of natural language processing.
+}
+
+\end{biography}
+
+\end{document}
+
+

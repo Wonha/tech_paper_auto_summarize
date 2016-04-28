@@ -1,0 +1,871 @@
+
+
+
+
+\documentstyle[epsf,jnlpbbl]{jnlp_j}
+
+\setcounter{page}{3}
+\setcounter{巻数}{2}
+\setcounter{号数}{3}
+\setcounter{年}{1995}
+\setcounter{月}{7}
+\受付{1995}{5}{6}
+\再受付{1995}{7}{8}
+\採録{1995}{9}{10}
+
+\setcounter{secnumdepth}{2}
+
+
+\title{直訳性を利用した機械翻訳知識の自動構築}
+\author{今村 賢治\affiref{ATR-SLT}\affiref{NAIST}
+	\and 隅田 英一郎\affiref{ATR-SLT}
+	\and 松本 裕治\affiref{NAIST}}
+
+\headauthor{今村，隅田，松本}
+\headtitle{直訳性を利用した機械翻訳知識の自動構築}
+
+
+\affilabel{ATR-SLT}{ATR音声言語コミュニケーション研究所}
+{ATR Spoken Language Translation Research Laboratories}
+\affilabel{NAIST}{奈良先端科学技術大学院大学}
+{Nara Institute of Science and Technology}
+
+
+\jabstract{
+機械翻訳知識を対訳コーパスから自動構築する際，コーパス中に存在する
+翻訳の多様性に起因して冗長な知識が獲得され，誤訳や曖昧性増大の原因とな
+る．本稿ではこの問題に対し，「機械翻訳に適した対訳文」に制限し，翻訳知
+識自動構築を試みる．機械翻訳に適した対訳文の指標として直訳性を提案し，
+これを測定する尺度として対訳対応率を定義した．
+\\ \indent
+この対訳対応率に従い，2つの知識構築法を提案する．第一は，翻訳知識構築
+の前処理としての，直訳性を用いた対訳文フィルタリング，第二は対訳文を直
+訳部／意訳部に分割し，部分に応じた汎化手法を適用する．これらの効果は，
+自動構築した知識を用いた機械翻訳による，訳文の品質という観点で評価を行っ
+た．その結果，後者の分割構築の場合で約8.6\%の入力文について翻訳品質が
+向上し，直訳性を用いた機械翻訳知識構築は，翻訳品質向上に有効であること
+が確認された．
+}
+
+
+\jkeywords{機械翻訳，翻訳知識自動構築，直訳性，翻訳の多様性，制限対訳}
+
+
+\etitle{Automatic Construction of \\
+Machine Translation Knowledge \\
+Using Translation Literalness}
+\eauthor{Kenji Imamura\affiref{ATR-SLT}\affiref{NAIST} 
+	 \and Eiichiro Sumita\affiref{ATR-SLT}
+	 \and Yuji Matsumoto\affiref{NAIST}} 
+
+
+\eabstract{
+When machine translation (MT) knowledge is automatically constructed
+from bilingual corpora, redundant rules are acquired due to
+translation variety. These rules increase ambiguity or cause incorrect
+MT results. To overcome this problem, we constrain the sentences used
+for knowledge extraction to ``the appropriate bilingual sentences for
+the MT.'' In this paper, we propose a method using translation
+literalness to select appropriate sentences or phrases. The
+translation correspondence rate (TCR) is defined as the literalness
+measure.
+\\ \indent
+Based on the TCR, two automatic construction methods are tested. One
+is to filter the corpus before rule acquisition.
+The other is to split the acquisition
+process into two phases, where a bilingual sentence is divided into literal
+parts and the other parts before different generalizations are
+applied. The effects are evaluated by the MT quality, and about 8.6\% of
+MT results were improved by the latter method. 
+}
+
+
+\ekeywords{Machine Translation, Knowledge Construction, 
+Translation Literalness, Translation Variety, Controlled Translation}
+
+
+\newcommand{\smalltable}{}
+
+
+\begin{document}
+\maketitle
+
+\section{はじめに}
+
+対訳コーパスの充実に伴い，コーパスから自動学習した知識を用いる機械翻訳
+システムが提案されてきている
+\cite{Brown:SMT1993,Menezes:PAandTranslation2001,
+Imamura:PatternGeneration2002}．しかし，対訳コーパスを無制限に用いて
+翻訳知識を自動構築すると，コーパスに内在する翻訳の多様性に起因して冗長
+な知識が獲得され，誤訳や曖昧性増大の原因となる．
+
+翻訳の多様性はコーパスサイズの拡大と共に増加する．たとえば，対訳コーパ
+スは大規模になるに従い，通常，同一の原文であるにも関わらず異なった翻訳
+文が含まれる．また，文脈や状況に依存した特異な翻訳も大規模コーパスでは
+増加する．我々の対象は，このような10万文以上を含んだ大規模対訳コーパス
+である．
+
+本稿では，このような翻訳の多様性に対し，機械翻訳に適した対訳(制限対訳
+と呼ぶ)に制限することを試みる．制限対訳には様々な指標が考えられるが，
+本稿では特に直訳性に着目する．そして直訳性を利用した2つの知識構築法を
+提案する．第一は，翻訳知識構築の前処理としての，直訳性を用いた対訳文フィ
+ルタリング，第二は一つの対訳文を直訳部／意訳部に分割し，部分に応じた汎
+化手法を適用する．このような制限を行いながら機械翻訳知識を自動構築する
+ことにより，機械翻訳の訳質が向上することを示す．
+
+以下，第\ref{sec-translation-variety}章では翻訳の多様性が引き起こす問
+題点について述べ，第\ref{sec-controlled-translation}章では機械翻訳に適
+した対訳とは，どのような対訳であるのか，議論する．続いて第
+\ref{sec-translation-literalness}章では，制限対訳の指標のうち，直訳性
+に着目し，その測定手法について提案する．第
+\ref{sec-construction-methods}章では直訳性を利用した機械翻訳知識構築方
+法について述べ，第\ref{sec-translation-experiments}章でその評価を行う．
+
+\section{翻訳の多様性}
+\label{sec-translation-variety}
+
+まず，コーパスに内在する翻訳の多様性と，翻訳知識自動構築の観点から見た
+場合の問題点について述べる．
+
+\subsection{文脈／状況依存訳}
+
+対訳コーパス中には通常，文脈や状況に依存した，言い換えると文脈や状況が
+変わると不適切となる対訳が存在する．たとえば，英語を日本語に翻訳する場
+合，定冠詞`{\it the}'は通常訳出されない．しかし，人間の翻訳でも，文内
+文脈では解決できない曖昧な表現となる場合，「私の」「その」など，限定表
+現が付与される場合がある．
+
+また，日本語「写真を撮っていただけますか」は，通常英語に翻訳した場合，
+``{\it Could you take our photograph?}''となるが，``{\it Could you
+press this shutter button?}''  と，写真撮影を人に依頼する状況でしか使
+用できない翻訳がされる場合がある．このように，文脈／状況依存訳は，強度
+な意訳になっていることが多い．
+
+このような文脈や状況に依存した対訳から構築した翻訳知識は，適合しない文
+脈／状況で使用されると，過剰な省略や冗長語が発生し，誤訳の原因となりうる．
+
+\subsection{言い換え表現}
+
+一般的に，原言語の表現は，様々な目的言語表現に翻訳することができるため，
+同じ原文であっても複数種類の対訳がコーパス中に存在する．たとえば，日
+本語「このトラベラーズチェックを現金にしてください」は，英語では，
+
+\begin{itemize}
+\item {\it I'd like to cash these traveller's checks.} (平叙文)
+\item {\it Could you change these traveller's checks into cash?} (疑問文)
+\item {\it Please cash these traveller's checks.} (命令文)
+\end{itemize}
+
+\noindent
+などと翻訳することができる．これらは文脈や状況に依存せず，常に正しい翻
+訳である．実際，BTEC コーパス
+\cite{Takezawa:PBCorpus2002,Kikui:BTECandMADCorpus}では，上記日本語の
+対訳は10種類存在する．このような多様性を含むコーパスから翻訳知識を学習
+すると過剰に知識が生成される．たとえば，
+\shortciteA{Imamura:PatternGeneration2002}が使用したパターンベース翻訳
+システムの場合，言い換え表現から，すべて異なる変換規則が作成される．し
+かし，実際の翻訳処理では1規則だけで十分であるため，冗長な規則は曖昧性
+の増大や翻訳速度の低下を招く\cite{Meyers:PAandTranslation2000}．
+
+
+\section{機械翻訳に適した対訳}
+\label{sec-controlled-translation}
+
+\subsection{制限対訳}
+
+単言語の処理においては，コーパス中の多様性を排除する方法として，制限言語
+が提案されている
+\cite{Mitamura:ControlledLanguage1991,Mitamura:ControlledLanguage1995,
+Huijsen:ControlledLanguage1998}．これは使用語彙や文法を制限して文章を
+記述する方法である．制限言語で記述された文章は，人間が読んだりコンピュー
+タが処理を行う際，構文構造や意味解釈の曖昧性を減少させる効果があると報
+告されている．
+
+対訳コーパスからの翻訳知識自動構築の場合にも，同じ考え方が利用できる．
+すなわち，コーパス中の対訳を，すべての表現を許すのではなく，「機械翻訳
+に適した対訳」に制限することにより，誤訳の原因となる文脈／状況依存訳を
+自動構築の前段階で排除したり，そこから構築させた翻訳知識の言語変換時の
+曖昧性を減少させることができると期待される．これを本稿では制限対訳と呼
+ぶ．
+
+制限対訳の指標としては，以下のものが考えられる．前半3項目は，対訳単位の
+指標であり，最後の1項目は対訳コーパス全体に対する指標である．
+
+\begin{itemize}
+
+\item {\bf 直訳性} \\
+	原言語・目的言語間で省略・冗長語が少ない．すなわち，原文の単語
+	のほとんどが翻訳文の単語に対応する．
+
+\item {\bf 文脈自由性} \\
+	原文の単語列が翻訳文の単語列に，局所的に（文脈情報なしで）対応する．
+	この指標は，部分文が翻訳単位として再利用しやすいことを示している．
+
+\item {\bf 語順一致性} \\
+	原文の語順が翻訳文でも保たれている．
+	この指標は，翻訳時の語順調整が少ないことを示している．
+
+\item {\bf 訳語一定性} \\
+	コーパスを通じて，ある１単語が常に同じ単語に翻訳されている．た
+	とえば，形容動詞「必要だ」は，英語では形容詞`{\it necessary}'，
+	動詞`{\it need}'，動詞`{\it require}'などに翻訳することができ
+	る．しかし，可能であれば常に一つの表現，たとえば`{\it
+	necessary}'に翻訳されている方が望ましい．
+
+\end{itemize}
+
+これらの指標は，翻訳方式により必要とされるものが異なる．たとえば，単語
+直接方式の統計翻訳\cite{Brown:SMT1993}では，単語の変換と語順調整を組み
+合わせて翻訳を行うため，語順一致性は重要な指標となる．しかし，構文トラ
+ンスファ方式では，構文変換時に語順を大幅に変更することができるため，そ
+れほど重要な指標ではない．本稿では，句構造ベースの構文トランスファ方式
+について検討する．
+
+\subsection{前提とした機械翻訳システム}
+
+本稿では，句構造ベースの構文トランスファ方式翻訳システムである，HPAT
+(Hierarchical Phrase Alignment-based Translator;
+\cite{Imamura:PatternGeneration2002})を実験に使用する．これは，変換主
+導型機械翻訳システムTDMT\cite{Furuse:TDMT1999j}を基に，従来人手で構築
+していた変換規則を，対訳コーパスから自動獲得するように拡張したものであ
+る．
+
+\begin{figure*}
+\begin{center}
+\leavevmode\epsfxsize=100mm\epsfbox{fig-HPAT.eps}
+\caption{HPATにおける翻訳知識構築と翻訳処理概要}
+\label{fig-HPAT-procedure}
+\end{center}
+\end{figure*}
+
+HPATの動作を簡単に説明する(図\ref{fig-HPAT-procedure})．まずパラレルコー
+パスから階層的句アライメント\cite{Imamura:PhraseAlignment2002j}を用い
+て，句レベルの対応を階層的に抽出する．そして，その階層関係を用いて対応
+をパターン化する．これが変換規則で，基本的には同期文脈自由文法である．
+翻訳時には，変換規則の原言語パターンを用いて入力文の構文解析を行う．次
+に使用された原言語パターンを目的言語パターンにマッピングすることにより，
+目的言語に変換する．解析や変換時に発生した曖昧性は，変換規則に記述され
+ている用例(訓練コーパスの実例)と入力文の意味的距離を計算し，最も近いパ
+ターンを選択することにより解消する．
+
+\subsection{構文トランスファ方式に適した対訳}
+\label{sec-suitable-translation}
+
+構文トランスファ方式に適した対訳について考察するため，本節ではTDMTを分
+析する．
+
+TDMTは，ルール記述者がコーパスから対訳を一つづつ取得し，それと同等な翻
+訳が得られるよう，規則を追加または調整し，変換規則が作成された．言い換
+えると，TDMTのルール記述用対訳は，コーパスの対訳とまったく同一ではなく，
+訳質を維持したまま規則数が最小となるように，目的言語側の文を書き換えて
+いる．つまり，書き換えられた対訳文(以下，TDMT訓練訳と呼ぶ)は，TDMTとい
+う構文トランスファ方式翻訳システムに適した対訳となっている．
+
+そこで，TDMT(英日翻訳版) の変換規則の訓練に用いられたTDMT訓練訳6,304文
+と，同じ原文の元コーパスに含まれる対訳(コーパス訳と呼ぶ)の比較を行った
+\footnote{TDMTは，訓練済みの文に関しては，機械翻訳結果とルール記述者が
+意図した対訳は等しいため，訓練済の原文をTDMTで翻訳する方法でTDMT 訓練
+訳を取得した．}．その統計データを表\ref{tbl-corpus-comparison}に，例を
+表\ref{tbl-tdmt-ideal-example}に示す．これらからは，以下の制限対訳指標
+が構文トランスファ方式の機械翻訳に適していることを示している．なお，本
+データは，形態素解析結果と，単語アライメント結果
+(\ref{sec-translation-experiments}章参照)を元に算出した．単語アライメ
+ントが出力した単語の対応関係を，単語リンクとも呼ぶ．
+
+\begin{table}
+\begin{center}
+\caption{TDMT訓練訳とコーパス訳の比較}
+\label{tbl-corpus-comparison}
+{
+\smalltable
+\begin{tabular}{c|r@{ }lr@{ }l}
+\hline\hline
+& \multicolumn{2}{|c}{コーパス訳} 
+& \multicolumn{2}{c}{TDMT訓練訳} \\
+\hline		                              
+
+目的言語上での単語リンク数
+& 20,722語 & (34.0\%) 
+& 28,300語 & (49.5\%) \\
+
+目的言語語彙数
+& 3,601語 & 
+& 3,107語 & \\
+
+対応がとれた単語の平均訳語数 
+& 1.94語 & 
+& 1.51語 & \\
+
+単語リンク4のときの平均文脈自由数 
+& 4.21 & 
+& 4.45 & \\
+\hline\hline
+\end{tabular}
+}
+
+\vspace*{1.5em}
+\caption{コーパス訳とTDMT訓練訳の例}
+\label{tbl-tdmt-ideal-example}
+{
+\smalltable
+\begin{tabular}{c|l|l}
+\hline\hline
+番号 & 種類 & 文 \\
+\hline
+1 & 原文       & {\it Are tax and service charges included?} \\
+  & コーパス訳 & その料金は税金とサービス料は込みですか \\
+  & TDMT訓練訳 & 税とサービス料は含まれていますか \\
+\hline
+2 & 原文       & {\it Is breakfast included?} \\
+  & コーパス訳 & 朝食はついていますか \\
+  & TDMT訓練訳 & 朝食は含まれていますか \\
+\hline
+3 & 原文       & {\it What's the difference between the rate for a single and a twin?} \\
+  & コーパス訳 & 料金はシングルとツインではどのくらい違いますか \\
+  & TDMT訓練訳 & シングルとツインの料金の違いはどれくらいですか \\
+\hline\hline
+\end{tabular}
+}
+\end{center}
+\end{table}
+
+
+\paragraph{直訳性}
+
+まず，表\ref{tbl-corpus-comparison}の単語リンク数について着目すると，
+TDMT訓練訳は値がかなり増加しており，目的言語の約50\%の単語について，対
+応する単語が存在することになっている．つまり，TDMT訓練文は原文の単語が
+忠実に訳されており，直訳的であることを示している．
+
+表\ref{tbl-tdmt-ideal-example}の1番の対訳はその例である．コーパス
+訳では原文に現れない冗長語「その」が付加されているが，TDMT訓練訳では原
+文の内容語が過不足なく対応している．
+
+\paragraph{訳語一定性}
+
+次に，目的言語語彙数，および平均訳語数を見ると，TDMT訓練訳は目的言語語
+彙数がかなり減少しており，それに伴い，平均訳語数が減少している．これは，
+原文の単語訳ができる限り一定になるように，ルール記述者が翻訳文を書き換
+えながら訓練したためであり，そのため訳語のバラエティが減少したものであ
+る．言い換えると，TDMT訓練訳は訳語一定性が高い．たとえば，表
+\ref{tbl-tdmt-ideal-example}の1番と2番の`{\it include}'について着目す
+ると，コーパス訳では，1番は名詞「込み」，2番は動詞「つく」と異なる訳語
+が使用されている．しかし，TDMT訓練訳ではどちらも「含む」で一定である．
+
+\paragraph{文脈自由性}
+
+表\ref{tbl-corpus-comparison}の平均文脈自由数は原文で連続した単語が翻
+訳文上でも連続している組み合わせ数をカウントしたものである．この値が大
+きいものは文脈自由性が高く，部品化しやすい対訳であると言える．単語リン
+ク数(単語対応数)が多いほど，この数値は大きくなる傾向があるが，同じ単語
+リンク数の場合，TDMT訓練訳の方が若干大きい値を示している．
+
+表\ref{tbl-tdmt-ideal-example}の3番はその例である．TDMT訓練訳では，名
+詞句``{\it the rate for a single and a twin}''は，やはり名詞句「シング
+ルとツインの料金」と局所的にに訳されているため，規則化した際も再利用が
+可能である．しかし，コーパス訳では，動詞「違う」を修飾する2つの連用修
+飾句「料金は」「シングルとツインでは」に分割されて訳されている．そのた
+め，修飾先を含めて規則化しないと再利用はできない．
+
+
+\section{直訳性}
+\label{sec-translation-literalness}
+
+前節で示した制限対訳指標のうち，本稿では特に直訳性に着目する．直訳性の
+高い対訳のみを使用して翻訳知識を構築できれば，文脈／状況に依存する変換
+規則の生成が抑制され，誤訳を減少させることができると期待される．訳語一
+定性，および文脈自由性は，コーパスを通じて訳語や構造が一定であることを
+示しているため，言い換え表現対策として有効と考えられるが，今回は曖昧性
+の減少より，誤訳の減少を優先する．
+
+\subsection{直訳性スコア}
+\label{sec-literalness-score}
+
+「直訳」は，原文の単語が忠実に翻訳文に反映されていることを意味する．し
+たがって，対訳文があったとき，原文・翻訳文の単語対応が多く取れる文は直
+訳性が高い．対訳文の単語対応は，対訳辞書を参照する方法や，統計的単語ア
+ライメント(たとえば\cite{Melamed:WordAlignment2000})等を用いると取得す
+ることができる．
+
+しかし，言語によっては，必ずしも単語同士が対応づかない場合もある．たと
+えば，日本語と英語を考えたとき，格助詞「が」などは，英語の単語として現
+れない．ところが同じ助詞でも，副助詞「だけ」の場合は，英語では`{\it
+only}'などに訳されている場合が多く，たとえ機能語でも単語としての翻訳が
+必要な場合と不必要な場合がある．つまり，単語対応数だけでなく，本来翻訳
+すべき単語が原文・翻訳文双方にどの程度含まれているか判断しなければ，直
+訳性は決定しない．
+
+このような考えから，本稿では直訳性を以下の手順で判定する．なお，ここで
+は対訳辞書を用いる．対訳辞書は市販辞書を用いることも可能だと考えられる
+が，ここでは，対訳コーパスの単語アライメント結果から，単語リンクを集め
+て自動的に作成されるものとする．また，一つの対訳文中で原言語・目的言語
+間は1対1に単語が対応するものと仮定する．
+
+\begin{enumerate}
+\item 原言語の単語で対訳辞書を引く．辞書の見出しに存在する単語は，翻訳
+されるべき単語と見なす．その数を$T_s$とする．
+\item 目的言語の単語で対訳辞書を逆引きする．辞書の訳語に存在する単語は，
+翻訳されるべき単語と見なす．その数を$T_t$とする．
+\item 対訳辞書にエントリが存在する対訳単語を，単語リンクと見なす．その数
+を$L$とする．
+\item 以下の式で直訳性を計算する．これを対訳対応率(Translation
+Correspondence Rate; TCR)と呼ぶ．
+  \begin{equation}
+  TCR = \frac{2L}{T_s + T_t}\label{eqn-tcr}
+  \end{equation}
+\end{enumerate}
+
+対訳対応率は，「本来翻訳されるべき単語のうち，実際に翻訳された語の割合」
+を表す．双方向に見ているので，省略語と冗長語を同等に検出することができ
+る．また，辞書に記載されていない語は分母・分子共に無視されるため，辞書
+のカバレッジの影響が少ない．
+
+\begin{figure*}
+\begin{center}
+\leavevmode\epsfxsize=110mm\epsfbox{fig-example.eps}
+\caption{対訳対応率(TCR)による直訳性判定例}
+(丸囲み単語は，対訳辞書に記載されている単語，文間の直線は単語リンクを表す)
+\label{fig-tcr-example}
+\end{center}
+\end{figure*}
+
+たとえば，原文「私はこのステーキを頼んでいません」の翻訳として，翻訳文
+1``{\it I didn't order this steak}''と，翻訳文2``{\it This is
+different what I ordered}''があったとする(図\ref{fig-tcr-example})．直
+感的には，翻訳文1は原文に忠実な直訳であり，翻訳文2は意訳が含ま
+れている対訳である．図中の丸囲み単語が対訳辞書に載っている単語だったと
+すると，原文は5単語が見出しとして存在している($T_s = 5$)．また，翻訳文
+1の単語も5単語が対訳として存在している($T_t = 5$)．単語リンクは，I-私，
+not-ぬ，order-頼む，this-この，steak-ステーキの5つである($L = 5$)ので，
+式(\ref{eqn-tcr})によると，対訳対応率$TCR = 1.0$となる．
+
+一方，翻訳文2を見ると，対訳辞書の訳語として載っている単語は，this,
+different, I, orderの4つであり($T_t = 4$)，単語リンクはthis-これ，
+order- 頼む，I-私の3つしかない($L = 3$)．したがって，$TCR = \frac{2 *
+3}{5 + 4} \simeq 0.67$となり，翻訳文1の方が直訳性が高いと判断される．
+
+このように，対訳対応率は基本的に形態素解析結果と対訳辞書だけから判断さ
+れ，構文解析などの深い解析を必要としない．
+
+
+\section{直訳性を用いた翻訳知識構築}
+\label{sec-construction-methods}
+
+本章では，直訳性を利用した機械翻訳知識構築方法について述べる．本稿では，
+2つのアプローチを取る．一つは，対訳文からの知識獲得の前処理として，対
+訳コーパス自体にフィルタリング処理を行い，対訳文を絞り込む方法，もう一
+つは，翻訳知識構築時に対訳文を直訳部とそれ以外（意訳部）に分離し，構築
+条件を変える方法である．
+
+\subsection{対訳コーパスフィルタリング}
+
+ここでは，コーパスフィルタリング方法として，さらに２つの方法を考える．
+
+\paragraph{閾値によるフィルタリング}
+
+高直訳対訳のみを用いて機械翻訳知識を自動構築した場合．閾値を高く設定す
+るに従い，高直訳対訳だけが残るが，部分コーパスサイズは減少するため，そ
+こから作成した機械翻訳知識のカバレッジが低下する．
+
+\paragraph{グループ内最高値によるフィルタリング}
+
+原言語が同じ対訳でグループを作成し，各グループから最高スコアを持つもの
+を用いて機械翻訳知識を自動構築した場合．前者に比べてすべての原言語が学
+習対象となるため，翻訳知識のカバレッジが下がらないが，低直訳対訳であっ
+ても，コーパス中に１回しか出現しない場合は知識構築対象となるため，文脈／
+状況依存訳が残る可能性がある．
+
+
+\subsection{直訳句と意訳部の分割構築}
+
+\ref{sec-literalness-score}節で定義した対訳対応率TCRは，完全な文ばかり
+でなく，部分文(句)に対しても適用可能なスコアである．対訳コーパスフィル
+タリングの場合，高直訳対訳に絞るに従い，翻訳規則のカバレッジが低下する
+という欠点がある．しかし低直訳対訳でも，部分的に見ると直訳と見なせる句
+が存在する．つまり，低直訳対訳の直訳部を抽出し，翻訳知識構築に利用でき
+れば，カバレッジの低下を抑えることができる．
+
+ここで問題となるのは，低直訳対訳中には，慣用表現など直訳では訳すべきで
+ないものが存在する点である．たとえば，``{\it May I help you}''を直訳す
+ると，「あなたを助けてもよいでしょうか」になるが，「どうしましたか」と
+訳すのが普通である．このような慣用表現は，かなり長単位の単語列で表現さ
+れる．
+
+両者を共存させるため，ここでは対訳を直訳部と意訳部（非直訳部）に分割し，
+機械翻訳知識の構築方法を変える．すなわち，直訳部に関しては，できる限り
+再利用可能なように細かい単位で規則化を行い，意訳部は規則化を最小限にし
+て翻訳知識を構築する．
+
+具体的には以下の手順による．
+
+\begin{enumerate}
+\item 階層的句アライメントを行い，句レベルの対応関係を取得する．
+\item 階層構造をトップダウンに走査し，句レベルで直訳性を測る．直訳性ス
+コアが閾値以上の場合，その句を直訳句と判定する．
+\item 直訳句の場合，自分自身とその下位構造を汎化し，翻訳知識を構築する．
+\item もし，最上位構造（対訳文全体）が直訳句でない場合，直訳句までの句対
+応を無視した翻訳知識を構築する．
+\end{enumerate}
+
+\begin{figure*}
+\begin{center}
+\leavevmode\epsfxsize=140mm\epsfbox{fig-rule-example2.eps}
+\caption{日英翻訳における生成規則例: 
+(A) 直訳の場合
+(B) 意訳からの分割構築の場合}
+\label{fig-rule-example}
+\end{center}
+\end{figure*}
+
+たとえば，図\ref{fig-rule-example}のように，同じ原文に対応する2つの翻
+訳文があったとする．翻訳文(A)の場合は，文全体{\tt (A-1)S}のTCR値は1.0
+である．そのため，すべての句が汎化され，全部で6規則が生成される．直訳
+から生成された規則は他の翻訳文にも適用可能な一般的な規則である．一方，
+(B)では文全体{\tt (B-1)S}のTCR値は0.25と低い．しかし，部分的に見ると，
+名詞句「市内」と``the city''のTCR値は1.0である．そのため，文全体のうち，
+句{\tt (B-2)NP}だけが汎化対象となり，{\tt (B-1)S}のように，単語数の多
+い規則が生成される．
+
+このように，分割構築では直訳句は本来の構文トランスファ用変換規則を生成
+し，意訳部からはテンプレート的パターンを生成する．意訳から生成された
+規則は，入力文の単語列とほぼ完全一致した場合のみ適用されるため，異なっ
+た文脈では使われにくい規則となる．
+
+
+\section{翻訳実験}
+\label{sec-translation-experiments}
+
+翻訳知識自動構築における直訳性の効果を測定するため，
+\ref{sec-construction-methods}章で述べた手法で機械翻訳知識を自動構築し，
+英日機械翻訳の翻訳品質という観点で評価を行った．
+
+\subsection{実験条件}
+
+\paragraph{対訳コーパス}
+
+対訳コーパスは，BTECコーパス
+\cite{Takezawa:PBCorpus2002,Kikui:BTECandMADCorpus}のうち，149,882対訳
+を使用した．このコーパスは，旅行会話に頻出する表現を集めたものである．
+原文が同じ対訳も多く含まれ，約13\%の英語文が複数の日本語訳を持つ．
+
+\paragraph{単語対応抽出方法：対訳辞書構築方法}
+
+単語同士の対応は，コーパス中の共起頻度が10回以上の単語については，
+\shortciteA{Melamed:WordAlignment2000}と同様に，Competitive Linking
+Algorithmを用いて統計的に単語アライメントを行い，コーパス全体に対して
+この対応を集めて，対訳辞書を構築した．低頻度語については，シソーラス
+\cite{Thesaurus1984j}を参照し，同一グループに属する単語を対応付けた．
+この対応付けの結果を用い，以下の2種類の対訳辞書を構成した．
+
+\begin{itemize}
+
+\item {\bf 辞書A} \\
+統計的単語アライメントとシソーラス参照の両方の対応付けを用いた辞書．再
+現率が比較的高く，対応付けの精度を内容語のみで測定した場合，クローズド
+テストで適合率91\%，再現率73\%程度である．
+
+\item {\bf 辞書B} \\
+統計的単語アライメントのみの対応付けを用いた辞書．再現率が比較的低い．
+精度を辞書Aと同様に測定した場合，適合率93\%，再現率61\%程度である．
+
+\end{itemize}
+
+\paragraph{翻訳品質評価方法}
+
+評価方法は，以下の2種類を用いた．
+
+\begin{itemize}
+\item {\bf 自動評価} \\
+自動評価では，予めコーパスから除外したテストセット10,150文を使い，BLEU
+\cite{papineni-EtAl:2002:ACL} を用いて評価した．使用した参照訳は1原文
+あたり1つで，4-gramまで使用した．
+
+\item {\bf 主観評価} \\
+主観評価では，上記テストセット中の510文を使い，日本語ネイティブ話者1名
+が一対比較法で評価した．具体的には，全対訳を使用した機械翻訳結果をベー
+スとし，それに対して直訳性に基づく自動構築後の翻訳結果を1 文づつ比較し，
+どちらの翻訳がよい翻訳であるのか，あるいは同品質であるのか，判定する形
+で行った．主観評価における翻訳品質(主観品質)は，以下の式で表す．したがっ
+て，これはベースに対する相対評価である．
+
+\begin{equation}
+\mbox{主観品質} = \frac{\mbox{改善文数} - \mbox{改悪文数}}{\mbox{テスト文数}}
+\end{equation}
+\end{itemize}
+
+
+\subsection{閾値によるコーパスフィルタリングの効果}
+
+\begin{figure}
+\begin{center}
+\leavevmode\epsfxsize=75mm\epsfbox{fig-stat-sem.eps}
+\caption{対訳対応率の閾値を変化させたときの翻訳品質(辞書A使用時)}
+\label{fig-stat-sem}
+\vspace*{2ex}
+\leavevmode\epsfxsize=75mm\epsfbox{fig-stat-nosem.eps}
+\caption{対訳対応率の閾値を変化させたときの翻訳品質(辞書B使用時)}
+\label{fig-stat-nosem}
+\end{center}
+\end{figure}
+
+まず，対訳対応率の閾値を変化させてコーパスフィルタリングを行い，自動評
+価で翻訳品質を測定した結果を図\ref{fig-stat-sem}(辞書A使用時)，図
+\ref{fig-stat-nosem}(辞書B使用時)に示す．これは，各閾値以上を持つ対訳
+文を用いたときの翻訳品質を，対訳数(訓練コーパスサイズ)でプロットしたも
+のである．なお，同グラフ中のランダム選択とは，ランダムに訓練コーパスサ
+イズを変化させた場合を示す．
+
+辞書A，辞書B使用時とも，対訳対応率の閾値を上げるに従い，訓練コーパスサ
+イズは減少するが，翻訳品質は逆に若干向上した．どちらも$TCR \geq 0.3$の
+とき，BLEUスコアは最大となっており，辞書Aでは0.233，辞書Bでは0.234を示
+した．
+
+さらに閾値を上げて高直訳対訳に限定すると，訓練コーパスサイズも減少する
+が，辞書A使用時で約8万対訳，辞書B使用時で約7万対訳まで，ランダム選択よ
+り高いBLEUスコア値を示し，その後急激に翻訳品質は悪化した．これは慣用表
+現など，直訳性が低いにも関わらず翻訳に必要な対訳が排除されたためと考え
+られる．
+
+いずれにしても辞書A，辞書B使用時ともに同じ傾向を示しており，対訳対応率
+による直訳性の測定は，辞書のカバー率の影響が少ないことを示している．
+
+
+\subsection{構築方法の違いと翻訳品質}
+
+\begin{table*}[t]
+\begin{center}
+\caption{構築方法を変えたときの翻訳品質(辞書B使用時)}
+\label{tbl-constructions}
+{
+\smalltable
+\begin{tabular}{p{5pt}l|c|c|c|c}
+\hline\hline
+& & 全対訳使用 & \multicolumn{2}{c|}{フィルタリング}   & 分割構築 \\
+\cline{4-5}
+& & (ベース)   & 閾値($TCR \geq 0.3$) & グループ最高値 & ($TCR \geq 0.8$)\\
+\hline
+\multicolumn{2}{l|}{対訳数}
+	         & 149,882 & 134,521  & 121,623  & 121,623 \\
+\multicolumn{2}{l|}{(サイズ比)}
+	         & (100\%) & (89.8\%) & (81.1\%) & (81.1\%) \\
+\hline
+\multicolumn{2}{l|}{翻訳知識カバー率}
+		 & 65.7\%  &  64.0\%  & 65.3\%   & 61.4\%   \\
+\hline
+\multicolumn{2}{l|}{BLEUスコア}
+	         & 0.232   & 0.233    & 0.240    & {\bf 0.252}    \\
+\hline
+\multicolumn{2}{l|}{主観品質}
+		 &	   & +3.3\%   & +1.8\%   & {\bf +8.6\%}   \\
+& 改善文数 	 &	   & 30       & 30       & 119      \\
+& 同品質(同一翻訳) &	   & 467(424) & 459(413) & 316(213) \\
+& 悪化文数 	 &	   & 13       & 21       & 75       \\
+\hline\hline
+\end{tabular}
+}
+\end{center}
+\end{table*}
+
+次に，翻訳知識構築法を変えて，翻訳品質を測定した結果を，表
+\ref{tbl-constructions}に示す．なお，本表は，辞書Bを用いて測定した結果
+であり，表中の翻訳知識カバー率とは，翻訳知識中の用例が入力文と完全一致
+した規則だけで翻訳できた割合を示す．また，分割構築では，グループ最高値
+によるフィルタリング後の対訳コーパスを用い，TCRが0.8以上の句を直訳句と
+判断して構築した．
+
+閾値によるフィルタリングと，グループ内最高値によるフィルタリングを比較
+すると，主観評価では閾値によるフィルタリングの方が高品質となっているが，
+BLEUスコアはグループ内最高値の方が高い．翻訳知識カバー率も，使用した対
+訳数が減少しているにも関わらず，グループ内最高値の方が若干高く，グルー
+プ内最高値によるフィルタリングは，翻訳知識のカバレッジを保持したまま翻
+訳品質を向上できている．
+
+今回用いたコーパスは約13\%の英語文が複数の日本語訳を持つ高密度
+なコーパスであるにも関わらず，フィルタリングでは1〜3\%程度の品質改善し
+かできなかった．対訳文のフィルタリングは，誤訳の原因となる低直訳対訳の
+排除と，翻訳知識のカバレッジ保持の両立は難しく，大幅な品質改善は困難で
+ある．
+
+一方，分割構築では，BLEUスコア，主観品質共に大幅に向上した．特に主観品
+質は8.6\%の翻訳文について改善された．意訳から生成される翻訳知識の適用
+条件を厳しくしたため，翻訳知識カバー率は低下したが，このことが誤訳の抑
+制に貢献したためである．
+
+いずれの構築方法も，ベースに比べ，BLEUスコアまたは主観品質が向上してお
+り，対訳対応率を利用した翻訳知識構築は，機械翻訳品質向上に効果があると
+言える．
+
+
+\section{おわりに}
+
+本稿では，対訳コーパス中に含まれる翻訳の多様性を，制限対訳によって機械
+翻訳に適した対訳に制限することを提案した．制限対訳の指標として，直訳性
+に着目し，直訳性を測定するスコアとして，対訳対応率を定義した．
+
+対訳対応率を用いて対訳文のフィルタリングを行い，低直訳対訳を排除するこ
+とにより，翻訳品質を若干向上させることができる．
+
+対訳対応率は，対訳文の直訳性を測定できるだけでなく，部分文（句）の直訳
+性も測定することができる．言い換えると，対訳を機械翻訳に適した部分文と
+それ以外に分割することができる．このことを利用し，対訳文を直訳部分と意
+訳部分に分割し，意訳部分から獲得される翻訳規則の適用条件を厳しくするこ
+とにより，主観評価では約8.6\%の文について翻訳品質を向上させることがで
+きた．
+
+今回は直訳性のみに着目したが，制限対訳の指標としては他にも訳語一義性，
+文脈自由性が考えられる．これらの指標も組み込むことにより，言い換え表現
+が減少し，翻訳品質はさらに向上できると推測される．
+
+\acknowledgment
+
+類語新辞典分類体系の研究利用を許可してくださった，(株)角川書店に感謝い
+たします．
+
+また，本研究を進めるにあたって有意義な議論をさせていただいたATR音声言
+語コミュニケーション研究所の皆様，および奈良先端科学技術大学院大学情報
+処理学科自然言語処理講座の皆様に感謝いたします．
+
+なお，本研究は通信・放送機構の研究委託「大規模コーパスベース音声対話翻
+訳技術の研究開発」により実施したものです．
+
+
+\bibliographystyle{jnlpbbl}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Brown, Pietra, Pietra, \BBA\ Mercer}{Brown
+  et~al.}{1993}]{Brown:SMT1993}
+Brown, P.~F., Pietra, S. A.~D., Pietra, V. J.~D., \BBA\ Mercer, R.~L. \BBOP
+  1993\BBCP.
+\newblock \BBOQ The Mathematics of Machine Translation: Parameter
+  Estimation\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 19}  (2), 263--311.
+
+\bibitem[\protect\BCAY{古瀬, 山本, 山田}{古瀬\Jetal }{1999}]{Furuse:TDMT1999j}
+古瀬蔵, 山本和英, 山田節夫 \BBOP 1999\BBCP.
+\newblock \JBOQ 構成素境界解析を用いた多言語話し言葉翻訳\JBCQ\
+\newblock \Jem{自然言語処理}, {\Bbf 6}  (5), 63--91.
+
+\bibitem[\protect\BCAY{Huijsen}{Huijsen}{1998}]{Huijsen:ControlledLanguage1998}
+Huijsen, W.-O. \BBOP 1998\BBCP.
+\newblock \BBOQ Controlled Language --- An Introduction\BBCQ\
+\newblock In {\Bem Proceedings of the Second International Workshop on
+  Controlled Language Applications (CLAW-98)}, \BPGS\ 1--15.
+
+\bibitem[\protect\BCAY{今村}{今村}{2002}]{Imamura:PhraseAlignment2002j}
+今村賢治 \BBOP 2002\BBCP.
+\newblock \JBOQ 構文解析と融合した階層的句アライメント\JBCQ\
+\newblock \Jem{自然言語処理}, {\Bbf 9}  (5), 23--42.
+
+\bibitem[\protect\BCAY{Imamura}{Imamura}{2002}]{Imamura:PatternGeneration2002}
+Imamura, K. \BBOP 2002\BBCP.
+\newblock \BBOQ Application of Translation Knowledge Acquired by Hierarchical
+  Phrase Alignment for Pattern-based {MT}\BBCQ\
+\newblock In {\Bem Proceedings of the 9th Conference on Theoretical and
+  Methodological Issues in Machine Translation (TMI-2002)}, \BPGS\ 74--84.
+
+\bibitem[\protect\BCAY{Kikui, Sumita, Takezawa, \BBA\ Yamamoto}{Kikui
+  et~al.}{2003}]{Kikui:BTECandMADCorpus}
+Kikui, G., Sumita, E., Takezawa, T., \BBA\ Yamamoto, S. \BBOP 2003\BBCP.
+\newblock \BBOQ Creating Corpora for Speech-to-Speech Translation\BBCQ\
+\newblock In {\Bem Proceedings of EuroSpeech 2003}, \BPGS\ 381--384.
+
+\bibitem[\protect\BCAY{Melamed}{Melamed}{2000}]{Melamed:WordAlignment2000}
+Melamed, I.~D. \BBOP 2000\BBCP.
+\newblock \BBOQ Models of Translational Equivalence among Words\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 26}  (2), 221--249.
+
+\bibitem[\protect\BCAY{Menezes \BBA\ Richardson}{Menezes \BBA\
+  Richardson}{2001}]{Menezes:PAandTranslation2001}
+Menezes, A.\BBACOMMA\  \BBA\ Richardson, S.~D. \BBOP 2001\BBCP.
+\newblock \BBOQ A best first alignment algorithm for automatic extraction of
+  transfer mappings from bilingual corpora\BBCQ\
+\newblock In {\Bem Proceedings of the `Workshop on Example-Based Machine
+  Translation' in MT Summit VIII}, \BPGS\ 35--42.
+
+\bibitem[\protect\BCAY{Meyers, Kosaka, \BBA\ Grishman}{Meyers
+  et~al.}{2000}]{Meyers:PAandTranslation2000}
+Meyers, A., Kosaka, M., \BBA\ Grishman, R. \BBOP 2000\BBCP.
+\newblock \BBOQ Chart-Based Translation Rule Application in Machine
+  Translation\BBCQ\
+\newblock In {\Bem Proceedings of COLING-2000}, \BPGS\ 537--543.
+
+\bibitem[\protect\BCAY{Mitamura \BBA\ Nyberg}{Mitamura \BBA\
+  Nyberg}{1995}]{Mitamura:ControlledLanguage1995}
+Mitamura, T.\BBACOMMA\  \BBA\ Nyberg, E.~H. \BBOP 1995\BBCP.
+\newblock \BBOQ Controlled {English} for Knowledge-Based {MT}: Experience with
+  the {KANT} System\BBCQ\
+\newblock In {\Bem Proceedings of TMI-95}.
+
+\bibitem[\protect\BCAY{Mitamura, Nyberg, \BBA\ Carbonell}{Mitamura
+  et~al.}{1991}]{Mitamura:ControlledLanguage1991}
+Mitamura, T., Nyberg, E.~H., \BBA\ Carbonell, J.~G. \BBOP 1991\BBCP.
+\newblock \BBOQ An Efficient Interlingua Translation System for Multi-lingual
+  Document Production\BBCQ\
+\newblock In {\Bem Proceedings of Machine Translation Summit III}, \BPGS\
+  55--61\ Washington, DC.
+
+\bibitem[\protect\BCAY{大野，浜西}{大野\JBA 浜西}{1984}]{Thesaurus1984j}
+大野晋，浜西正人 \BBOP 1984\BBCP.
+\newblock \Jem{類語新辞典}.
+\newblock 角川書店.
+
+\bibitem[\protect\BCAY{Papineni, Roukos, Ward, \BBA\ Zhu}{Papineni
+  et~al.}{2002}]{papineni-EtAl:2002:ACL}
+Papineni, K., Roukos, S., Ward, T., \BBA\ Zhu, W.-J. \BBOP 2002\BBCP.
+\newblock \BBOQ {BLEU}: a Method for Automatic Evaluation of Machine
+  Translation\BBCQ\
+\newblock In {\Bem Proceedings of the 40th Annual Meeting of the Association
+  for Computational Linguistics (ACL)}, \BPGS\ 311--318.
+
+\bibitem[\protect\BCAY{Takezawa, Sumita, Sugaya, Yamamoto, \BBA\
+  Yamamoto}{Takezawa et~al.}{2002}]{Takezawa:PBCorpus2002}
+Takezawa, T., Sumita, E., Sugaya, F., Yamamoto, H., \BBA\ Yamamoto, S. \BBOP
+  2002\BBCP.
+\newblock \BBOQ Toward a Broad-coverage Bilingual Corpus for Speech Translation
+  of Travel Conversations in the Real World\BBCQ\
+\newblock In {\Bem Proceedings of the Third International Conference on
+  Language Resources and Evaluation (LREC 2002)}, \BPGS\ 147--152.
+
+\end{thebibliography}
+
+\begin{biography}
+\biotitle{略歴}
+
+\bioauthor{今村 賢治}{
+1985年千葉大学工学部電気工学科卒業．
+同年日本電信電話株式会社入社．
+2000年より，ATR音声言語通信研究所主任研究員，現在に至る．
+主として自然言語処理の研究・開発に従事．
+情報処理学会，電子情報通信学会，ACL各会員．
+}
+
+\bioauthor{隅田 英一郎}{
+1982年電気通信大学大学院計算機科学専攻修士課程修了．
+1999年京都大学工学博士．
+ATR音声言語コミュニケーション研究所主任研究員．
+自然言語処理，機械翻訳，情報検索，並列処理の研究に従事．
+情報処理学会，電子情報通信学会，ACL各会員．
+}
+
+\bioauthor{松本 裕治}{
+1977年京都大学工学部情報工学科卒業．
+1979年同大学大学院工学研究科修士課程情報工学専攻修了．
+同年電子技術総合研究所入所．
+1984〜85年英国インペリアルカレッジ客員研究員．
+1985〜87年(財)新世代コンピュータ技術開発機構に出向．
+京都大学助教授を経て，
+1993年より奈良先端科学技術大学院大学教授，現在に至る．
+工学博士．
+情報処理学会，人工知能学会，日本ソフトウェア科学会，認知科学会，
+AAAI，ACL，ACM各会員．
+}
+
+
+\bioreceived{受付}
+\biorevised{再受付}
+\bioaccepted{採録}
+
+\end{biography}
+
+\end{document}
+

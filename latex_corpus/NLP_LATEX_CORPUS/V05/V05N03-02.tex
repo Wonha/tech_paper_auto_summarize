@@ -1,0 +1,1117 @@
+
+\documentclass[a4j]{article}
+\usepackage[dvips]{graphicx}
+
+\title{Probabilistic GLR Parsing: A New Formalization\\ and Its Impact on
+  Parsing Performance}
+\author{INUI Kentaro$^\dagger$, Virach SORNLERTLAMVANICH$^\ddagger$, \\
+TANAKA Hozumi$^\ddagger$ and TOKUNAGA Takenobu$^\ddagger$\\
+$\dagger$~~Department of Artificial Intelligence\\
+  Kyushu Institute of Technology\\
+{\tt inui@ai.kyutech.ac.jp}\\
+$\ddagger$~~Graduate School of Information Science and Engineering\\
+  Tokyo Institute of Technology\\
+  {\tt \{virach,tanaka,take\}@cs.titech.ac.jp}}
+\date{}
+
+\def\A{} 
+\def\E{}
+\def\a{}
+\def\o{}
+\def\i{}
+
+\def\ceq{}
+\def\leq{}
+\def\capr{}
+\def\={}
+\def\:{}
+\def\eqdef{}
+
+\def\set#1{}
+\def\vec#1{}
+\def\tpl#1{}
+
+\def\Tset{}
+\def\T{}
+\def\st{}
+
+\def\tr#1{}
+
+\def\BC{}
+
+
+\def\La{} 
+\def\Act{} 
+\def\top{} 
+\def\goto{} 
+\def\core{} 
+\def\acc{}
+\def\final{}
+
+\def\LAIS{} 
+\def\las{} 
+
+\def\Vt{} 
+\def\Vn{} 
+\def\P{} 
+
+\def\AS{} 
+\def\As{}
+\def\Ar{}
+
+\def\SS{} 
+\def\Ss{}
+\def\Sr{}
+
+\def\I{}
+\def\iset{}
+
+\def\sec#1{}
+\def\fig#1{}
+\def\tbl#1{}
+\def\eq#1{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+  This paper presents a new formalization of probabilistic GLR (PGLR)
+  language modeling for statistical parsing. Our model inherits its
+  essential features from Briscoe and Carroll's generalized
+  probabilistic LR model~\cite{briscoe:93:a}, which takes context of
+  parse derivation into account by assigning a probability to each LR
+  parsing action according to its left and right context. Briscoe and
+  Carroll's model, however, has a drawback in that it is not formalized
+  in any probabilistically well-founded way, which may degrade its
+  parsing performance. Our formulation overcomes this drawback with a
+  few significant refinements, while maintaining all the advantages of
+  Briscoe and Carroll's modeling. In this paper, we discuss the formal
+  and qualitative aspects of our PGLR model, illustrating the
+  qualitative differences between Briscoe and Carroll's model and our
+  model, and their expected impact on parsing performance.
+\end{abstract}
+
+\noindent\textbf{Keywords}~~statistical parsing, GLR parsing, probabilistic language modeling
+
+\section{Introduction}
+\label{sec:intro}
+
+The increasing availability of text corpora has encouraged researchers
+to explore statistical approaches for various tasks in natural language
+processing. Statistical parsing is one of these approaches. In
+statistical parsing, one of the most straightforward methodologies is to
+generalize context-free grammars by associating a probability with each
+rule in producing probabilistic context-free grammars (PCFGs). However,
+as many researchers have already pointed out, PCFGs are not quite
+adequate for statistical parsing due to their inability to encapsulate
+context of parse derivation. Probabilistic GLR parsing is one existing
+statistical parsing methodology which takes context into account to a
+greater degree than PCFG-based parsing.
+
+Several attempts have been made to incorporate probability into
+generalized LR (GLR) parsing~\cite{tomita:86:a}. For example, Wright and
+Wrigley proposed an algorithm to distribute probabilities originally
+associated with CFG rules to LR parsing actions, in such a way that the
+resulting model is equivalent to the original
+PCFG~\cite{wright:91:a}. Perhaps, the most naive way of coupling a PCFG
+model with the GLR parsing framework would be to assign the probability
+associated with each CFG rule to the reduce actions for that
+rule. Wright and Wrigley expanded on this general methodology by
+distributing probabilities to shift actions as well as reduce actions,
+so that the parser can prune improbable parse derivations after shift
+actions as well as reduce actions. This can be advantageous particularly
+when one considers applying a GLR parser to, for example, continuous
+speech recognition. However, since their principal concern was in
+compiling PCFGs into the GLR parsing framework, their language model
+still failed to capture context-sensitivity of languages.
+
+Su et al. proposed a way of introducing probabilistic distribution into
+the shift-reduce parsing framework~\cite{su:91:a}. Unlike Wright and
+Wrigley's work, the goal of this research was the construction of a
+model that captures context.
+Their model distributes
+probabilities to stack transitions between two shift actions, and
+associates a probability with each parse derivation, given by the
+product of the probability of each change included in the
+derivation. Further, they also described an algorithm to handle this
+model within the GLR parsing framework, gaining parse
+efficiency. However, since their probabilistic model in itself is not
+intimately coupled with the GLR parsing algorithm, their model needs an
+additional complex algorithm for training.
+
+On the other hand, Briscoe and Carroll proposed the distribution of
+probabilities directly to each action in an LR
+table~\cite{briscoe:93:a}. Their model overcomes the drawback of
+derivational context-insensitivity of PCFGs by estimating the
+probability of each LR parsing action according to its left (i.e. LR
+parse state) and right context (i.e. next input symbol).
+The probability of each parse derivation is computed as the product of
+the probability assigned to each action included in the
+derivation. Unlike the approach of Su et al., this makes it easy to
+implement context-sensitive probabilistic parsing by slightly extending
+GLR parsers, and the probabilistic parameters can be easily trained
+simply by counting the frequency of application of each action in
+parsing the training sentences. Furthermore, their model is expected to
+be able to allow the parser to prune improbable parse derivations at an
+equivalently fine-grained level as that of Wright and Wrigley's
+statistical parser, since it assigns probabilities to both shift and
+reduce actions. However, in as far as we have tested the performance of
+Briscoe and Carroll's model (\BC model, hereafter) in our preliminary
+experiments, it seems that, in many cases, it does not significantly
+improve on the performance of the PCFG model, and furthermore, in the
+worst case, it can be even less effective than the PCFG
+model~\cite{virach:97:b}. According to our analysis, these seem to be
+the results, principally, of the method used for normalizing
+probabilities in their model, which may not be probabilistically
+well-founded. In fact, Briscoe and Carroll have not explicitly presented
+any formalization of their model.
+
+This line of reasoning led us to consider a new formalization of
+probabilistic GLR (PGLR) parsing. In this paper, we propose a newly
+formalized PGLR language model for statistical parsing, which has the
+following advantages:
+\begin{itemize}
+\item It provides probabilistically well-founded distributions.
+\item It captures context of parse derivation.
+\item It can be trained simply by counting the frequency of each LR
+  parsing action.
+\item It allows the parser to prune improbable parse derivations,
+even after shift actions.
+\end{itemize}
+The focus of this paper is on the formal and qualitative aspects of our
+PGLR model rather than the empirical quantitative evaluation of the
+model. Large-scaled experiments for the empirical evaluation is
+currently being conducted. In our preliminary experiments, we have so
+far been achieving promising results, some of which is reported
+elsewhere~\cite{virach:97:b,virach:97:c}. In what follows, we first present our new
+formalization of PGLR parsing (\sec{PGLR}). We then review \BC model
+according to our formalization, demonstrating that \BC model may not be
+probabilistically well-founded through the use of simple examples
+(\sec{BC-model}). We finally discuss how our refinement is expected to
+influence parsing performance through a further example (\sec{example}).
+
+
+
+\section{A PGLR Language Model}
+\label{sec:PGLR}
+
+Suppose we have a CFG and its corresponding LR table. Let $\Vn$ and
+$\Vt$ be the nonterminal and terminal alphabets, respectively, of the
+CFG. Further, let $\SS$ and $\AS$ be the sets of LR parse states and
+parsing actions appearing in the LR table, respectively. For each state
+$s\in\SS$, the LR table specifies a set $\La(s)\subseteq\Vt$ of possible
+next input symbols. Further, for each coupling of a state $s$ and input
+symbol $l\in\La(s)$, the table specifies a set of possible parsing
+actions: $\Act(s,l)\subseteq\AS$. Each action $a\in\AS$ is either a
+shift action or reduce action. Let $\As$ and $\Ar$ be the set of shift
+and reduce actions, respectively, such that $\AS=\As\cup\Ar\cup\{\acc\}$
+($\acc$ is a special action denoting the completion of parsing).
+
+
+As with most statistical parsing frameworks, given an input sentence, we
+rank the parse tree candidates according to the probabilities of the
+parse derivations that generate those trees. In LR parsing, each parse
+derivation can be regarded as a complete sequence of transitions between
+LR parse stacks, which we describe in detail below. Thus, in the
+following, we use the terms parse tree, parse derivation, and complete
+stack transition sequence interchangeably.
+
+Given an input word sequence $W=w_1\ldots w_n$, we estimate the
+distribution over the parse tree candidates $\T$ as follows:
+\begin{eqnarray}
+  \label{eq:P(T|W)}
+  P(\T|W)=\alpha\cdot P(\T)\cdot P(W|\T)
+\end{eqnarray}
+The first scaling factor $\alpha$ is a constant that is independent of
+$\T$, and thus does not need to be considered in ranking parse
+trees. The second factor $P(T)$ is the distribution over all the
+possible trees, i.e. complete stack transition sequences, that can be
+derived from a given grammar, such that, for $\Tset$ being the infinite
+set of all possible complete stack transition sequences:
+\begin{equation}
+  \label{eq:Tset0}
+  \sum_{\T\in\Tset}P(\T)=1
+\end{equation}
+We estimate this syntactic distribution $P(\T)$ using a PGLR model. The
+third factor $P(W|T)$ is the distribution of lexical derivations from
+$T$, where each terminal symbol of $T$ is assumed to be a part of speech
+symbol. Most statistical parsing frameworks estimate this distribution
+by assuming that the probability of the $i$-th word $w_i$ of $W$ depends
+only on its corresponding terminal symbol (i.e. part of speech)
+$l_i$. Since $l_i$ is uniquely specified by $\T$ for each $i$, we obtain
+equation \eq{P(W|T)}:
+\begin{equation}
+  \label{eq:P(W|T)}
+  P(W|\T)=\prod_{i=1}^{n}P(w_i|l_i)
+\end{equation}
+where $n$ is the length of $W$.
+One could take richer context in estimating the lexical distribution
+$P(W|\T)$. For example, we propose to incorporate the statistics of word
+collocations into this lexical derivation model
+elsewhere~\cite{inui:97:f,inui:97:b,shirai:97:a}. However, this issue is
+beyond the scope of this paper.
+
+A stack transition sequence $\T$ can be described as \eq{T-def}:
+\begin{equation}
+  \label{eq:T-def}
+  \st_0\tr{l_1,a_1}\st_1\tr{l_2,a_2}
+  \ldots\tr{l_{n-1},a_{n-1}}\st_{n-1}\tr{l_n,a_n}\st_n
+\end{equation}
+where $\st_i$ is the $i$-th stack, whose stack-top state is denoted by
+$\top(\st_i)$, and $l_i\in\La(\top(\st_{i-1}))$ and
+$a_i\in\Act(\top(\st_{i-1}),l_i)$ are, respectively, an input symbol and
+a parsing action chosen at $\st_{i-1}$. A parse derivation completes if
+$l_n=\$$ and $a_n=\acc$. We say stack transition sequence $\T$ is
+complete if $l_n=\$$, $a_n=\acc$, and $\st_n=\final$, where $\final$ is
+a dummy symbol denoting the stack when parsing is completed. Hereafter,
+we consistently refer to an LR parse state as a {\it state\/} and an LR
+parse stack as a {\it stack}. And, unless defined explicitly, $s_i$
+denotes the stack-top state of the $i$-th stack $\st_i$,
+i.e. $s_i=\top(\st_i)$.
+
+
+
+The probability of a complete stack transition sequence $\T$ can be
+decomposed as in \eq{T1}:
+\begin{eqnarray}
+  \label{eq:T0}
+  P(\T) &=& P(\st_0,l_1,a_1,\st_1,\ldots,\st_{n-1},l_n,a_n,\st_n)\\
+  \label{eq:T1}
+       &=& P(\st_0)\cdot\prod_{i=1}^n
+           P(l_i,a_i,\st_i|\st_0,l_1,a_1,\st_1,\ldots,
+                           l_{i-1},a_{i-1},\st_{i-1})
+\end{eqnarray}
+Here we assume that $\st_i$ contains all the information of its
+preceding parse derivation that has any effect on the probability of the
+next transition, namely:
+\begin{equation}
+  \label{eq:st-supset}
+  P(l_i,a_i,\st_i|\st_0,l_1,a_1,\st_1,\ldots,l_{i-1},a_{i-1},\st_{i-1})
+  = P(l_i,a_i,\st_i|\st_{i-1})
+\end{equation}
+This assumption simplifies equation \eq{T1} to:
+\begin{equation}
+  \label{eq:T2}
+  P(\T)=\prod_{i=1}^n P(l_i,a_i,\st_i|\st_{i-1})
+\end{equation}
+
+Now, we show how we estimate each transition probability
+$P(l_i,a_i,\st_i|\st_{i-1})$, which can be decomposed as in \eq{St0}:
+\begin{equation}
+  \label{eq:St0}
+  P(l_i,a_i,\st_i|\st_{i-1}) = P(l_i|\st_{i-1})\cdot
+    P(a_i|\st_{i-1},l_{i})\cdot
+    P(\st_i|\st_{i-1},a_{i},l_{i})
+\end{equation}
+To begin with, we estimate the first factor $P(l_i|\st_{i-1})$ as follows:
+\begin{description}
+\item[Case 1.] $i=1$:
+  \begin{equation}
+    \label{eq:l0}
+    P(l_1|\st_0)=P(l_1|s_0)
+  \end{equation}
+\item[Case 2.] The previous action $a_{i-1}$ is a shift action,
+  i.e. $a_{i-1}\in\As$. We assume that only the current stack-top
+  state $s_{i-1}=\top(\st_{i-1})$ has any effect on the probability
+  of the next input symbol $l_i$. This means that:
+  \begin{equation}
+    \label{eq:l1}
+    P(l_i|\st_{i-1}) = P(l_i|s_{i-1})
+  \end{equation}
+  where
+  \begin{equation}
+    \sum_{l\in La(s)}P(l|s)=1
+  \end{equation}
+\item[Case 3.] The previous action $a_{i-1}$ is a reduce action,
+  i.e. $a_{i-1}\in\Ar$. Unlike Case 2, the input symbol does not get
+  consumed for reduce actions, and thus the next input symbol $l_i$ is
+  always identical to $l_{i-1}$; namely, $l_i$ can be deterministically
+  predicted. Therefore,
+  \begin{equation}
+    \label{eq:l2}
+    P(l_i|\st_{i-1}) = 1
+  \end{equation}
+\end{description}
+Next, we estimate the second factor $P(a_i|\st_{i-1},l_{i})$ relying on
+the analogous assumption that only the current stack-top state
+$s_{i-1}$ and input symbol $l_i$ have any effect on the
+probability of the next action $a_i$:
+\begin{equation}
+  \label{eq:a1}
+  P(a_i|\st_{i-1},l_{i}) = P(a_i|s_{i-1},l_i)
+\end{equation}
+where
+\begin{equation}
+  \sum_{a\in Act(s,l)}P(a|s,l)=1
+\end{equation}
+Finally, given the current stack $\st_{i-1}$ and action $a_{i}$, the
+next stack $\st_i$ can be uniquely determined:
+\begin{equation}
+  \label{eq:st0}
+  P(\st_i|\st_{i-1},l_i,a_i) = 1
+\end{equation}
+Equation \eq{st0} can be derived from the LR parsing algorithm; namely,
+given an input symbol $l_{i+1}\in\La(\top(\st_i))$ and an action
+$a_{i+1}\in\Act(\top(\st_i),l_{i+1})$, the next (derived) stack
+$\goto(\st_i,a_{i+1})$ ($=\st_{i+1}$) can always be uniquely determined
+as follows:
+\begin{itemize}
+\item If the current action $a_{i+1}$ is a shift action for an input
+  symbol $l_{i+1}$, then the parser consumes $l_{i+1}$, pushing
+  $l_{i+1}$ onto the stack, and then pushes the next state $s_{i+1}$,
+  which is uniquely specified by the LR table, onto the stack.
+\item If the current action $a_{i+1}$ is a reduction by a rule
+$A\to\beta$, the parser derives the next stack as follows. The parser
+first pops $|\beta|$ grammatical symbols together with $|\beta|$ state
+symbols off the stack, where $|\beta|$ is the length of $\beta$. In this
+way, the stack-top state $s_j$ is exposed. The parser then pushes $A$
+and $s_{i+1}$ onto the stack, with $s_{i+1}$ being the entry specified
+in the LR goto table for $s_j$ and $A$. All these operations are
+executed deterministically.
+\end{itemize}
+
+As shown in equations \eq{l1} and \eq{l2}, the probability
+$P(l_i|\st_{i-1})$ should be estimated differently depending on whether
+the previous action $a_{i-1}$ is a shift action or a reduce
+action. Fortunately, given the current stack-top state $s_{i-1}$, it is
+always possible to determine whether the previous action $a_{i-1}$ was a
+shift or reduction. Thus, we divide the set of LR parse states $\SS$
+into two subsets: $\Ss$, which is the set containing $s_0$ and all the
+states reached immediately after applying a shift action, and $\Sr$,
+which is the set of states reached immediately after applying a reduce
+action:
+\begin{eqnarray}
+  \label{eq:Ss-def}
+  &&\Ss\eqdef\{s_0\}\cup
+             \{s|\exists a\in\As,\st:\;s=\top(\goto(\st,a))\}\\
+  \label{eq:Sr-def}
+  &&\Sr\eqdef\{s|\exists a\in\Ar,\st:\;s=\top(\goto(\st,a))\}\\
+  \label{eq:SS}
+  &&\SS=\Ss\cup\Sr\quad{\rm and}\quad\Ss\cap\Sr=\emptyset
+\end{eqnarray}
+where $s_0$ is the initial state. See Appendix A for a brief proof
+of the mutual exclusiveness between $\Ss$ and $\Sr$. Equations \eq{St0}
+through \eq{Sr-def} can be summarized as:
+\begin{equation}
+  \label{eq:St2}
+  P(l_i,a_i,\st_i|\st_{i-1}) =
+  \left\{
+    \begin{array}{@{\,}ll}
+      P(l_i,a_i|s_{i-1}) & \mbox{(for $s_{i-1}\in\Ss$)}\\
+      P(a_i|s_{i-1},l_i) & \mbox{(for $s_{i-1}\in\Sr$)}
+    \end{array}
+  \right.\\
+\end{equation}
+Since $\Ss$ and $\Sr$ are mutually exclusive, we can assign a single
+probabilistic parameter to each action in an LR table, according to
+equation \eq{St2}. To be more specific, for each state $s\in\Ss$, we
+associate a probability $p(a)$ with each action $a\in\Act(s,l)$ (for
+$l\in\La(s)$), where $p(a)=P(l,a|s)$ such that:
+\begin{equation}
+  \label{eq:sum-a1}
+  \sum_{l\in La(s)}\sum_{a\in Act(s,l)} p(a)=1\quad\mbox{(for
+    $s\in\Ss$)}
+\end{equation}
+On the other hand, for each state $s\in\Sr$, we associate a probability
+$p(a)$ with each action $a\in\Act(s,l)$ (for $l\in\La(s)$), where
+$p(a)=P(a|s,l)$ such that:
+\begin{equation}
+  \label{eq:sum-a2}
+  \sum_{a\in Act(s,l)} p(a)=1\quad\mbox{(for $s\in\Sr$)}
+\end{equation}
+Through assigning probabilities to actions in an LR table in this
+way, we can estimate the probability of a stack transition sequence
+$\T$ as given in \eq{T-def} by computing the product of the
+probabilities associated with all the actions included in $\T$:
+\begin{equation}
+  \label{eq:T3}
+  P(\T)=\prod_{i=1}^np(a_i)
+\end{equation}
+
+Before closing this section, we describe the advantages of our PGLR
+model. Our model inherits some of its advantages from \BC model. First,
+the model captures context as in equation \eq{a1}: the probabilistic
+distribution of each parsing action depends on both its left context
+(i.e. LR parse state) and right context (i.e. input symbol). We
+elaborate this through an example in \sec{example}.  Second, since the
+probability of each parse derivation can be estimated simply as the
+product of the probabilities associated with all the actions in that
+derivation, we can easily implement a probabilistic LR parser through a
+simple extension to the original LR parser. We can also easily train the
+model, as we need only count the frequency of application of each action
+in generating correct parse derivations for each entry in the training
+corpus.  Third, both \BC model and our model are expected to be able to
+allow the parser to prune improbable parse derivations at an
+equivalently fine-grained level as that for Wright and Wrigley's
+statistical parser, since these two models assign probabilities to both
+shift and reduce actions. Furthermore, since our model assigns a single
+probabilistic parameter to each action in an LR table similarly to \BC
+model, the algorithm proposed by Carroll and Briscoe~\cite{carroll:92:a}
+for efficient unpacking of packed parse forests with probability
+annotations can be equally applicable to our model. Finally, although
+not explicitly pointed out by Briscoe and Carroll, it should also be
+noted that PCFGs give global preference over structures but do not
+sufficiently reflect local bigram statistics of terminal symbols,
+whereas both \BC model and our PGLR model reflect these types of
+preference simultaneously. $P(l_i|s_{i-1})$ in equation \eq{l1} is a
+model that predicts the next terminal symbol $l_i$ for the current left
+context $s_{i-1}\in\Ss$. In this case of $s_{i-1}\in\Ss$, since
+$s_{i-1}$ uniquely specifies the previous terminal symbol $l_{i-1}$,
+$P(l_i|s_{i-1})=P(l_i|s_{i-1},l_{i-1})$, which is a slightly more
+context-sensitive version of the bigram model of terminal symbols
+$P(l_i|l_{i-1})$. This feature is expected to be significant
+particularly when one attempts to integrate syntactic parsing with
+morphological analysis in the GLR parsing framework
+(e.g. \cite{li:95:a}), since the bigram model of terminal symbols has
+been empirically proven to be effective in morphological analysis.
+
+Besides these advantages, which are all shared with \BC model, our model
+overcomes the drawback of \BC model; namely, our model is based on a
+probabilistically well-founded formalization, which is expected to
+improve the parsing performance. We discuss this issue in the remaining
+sections.
+
+\section{Comparison with Briscoe and Carroll's Model}
+\label{sec:BC-model}
+
+In this section, we briefly review \BC model, and make a qualitative
+comparison between their model and ours.
+
+In our model, we consider the probabilities of transitions between
+stacks as given in equation \eq{T2}, whereas Briscoe and Carroll
+consider the probabilities of transitions between {\it LR parse
+states\/} as below:
+\begin{eqnarray}
+  \label{eq:Briscoe-T0}
+  P(\T)&=&\prod_{i=1}^n P(l_i,a_i,s_i|s_{i-1})\\
+  \label{eq:Briscoe-T1}
+             &=&\prod_{i=1}^n P(l_i,a_i|s_{i-1})\cdot
+                              P(s_i|s_{i-1},l_i,a_i)
+\end{eqnarray}
+Briscoe and Carroll initially associate a probability $p(a)$ with each
+action $a\in\Act(s,l)$ (for $s\in\SS$, $l\in\La(s)$) in an LR table,
+where $p(a)$ corresponds to the first factor in \eq{Briscoe-T1}:
+\begin{equation}
+  \label{eq:Briscoe-a0}
+  p(a)=P(l,a|s)  
+\end{equation}
+such that:
+\begin{equation}
+  \label{eq:Briscoe-a1}
+  \forall s\in\SS.\;\sum_{l\in La(s)}\sum_{a\in Act(s,l)}p(a)=1
+\end{equation}
+In this model, the probability associated with each action is normalized
+in the same manner for any state. However, as discussed in the previous
+section, the probability assigned to an action should be normalized
+differently depending on whether the state associated with the action is
+of class $\Ss$ or $\Sr$ as in equations \eq{sum-a1} and
+\eq{sum-a2}. Without this treatment, probability $P(l_i|s_{i-1})$ in
+equation \eq{l1} could be incorrectly duplicated for a single terminal
+symbol, which would make it difficult to give probabilistically
+well-founded semantics to the overall score. As a consequence, in \BC
+formulation, the probabilities of all the complete parse derivations may
+not sum up to one, which would be inconsistent with the definition of
+$P(\T)$ (see equation \eq{Tset0}).
+
+To illustrate this, let us consider grammar $G1$ as follows.
+\begin{quote}
+{\bf Grammar G1:}
+  \begin{itemize}\itemsep=0mm
+  \item[(1)]\quad {\sf S\quad$\to$\quad X\quad u}
+  \item[(2)]\quad {\sf S\quad$\to$\quad X\quad v}
+  \item[(3)]\quad {\sf X\quad$\to$\quad x}
+  \end{itemize}
+\end{quote}
+This grammar allows only two derivations as shown in
+\fig{trees1}. Suppose that we have tree (a) with frequency $m$, and (b)
+with frequency $n$ in the training set. Training \BC model and our model
+with these trees, we obtain the models as shown in \tbl{LR-table1},
+where, for each LR parse state, each bracketed value in the top of each
+row denotes the number of occurrences of the action associated with it,
+and the numbers in the middle and bottom of each row denote the
+probabilistic parameters of \BC model and our model, respectively.
+\begin{figure}[t]
+  \begin{center}
+    \leavevmode
+    \includegraphics{fig:trees1.eps}
+    \caption{Parse trees derived from grammar $G1$ (The square-bracketed 
+      value below each tree denotes the number of occurrences of that
+      tree.)}
+    \label{fig:trees1}
+  \end{center}
+\end{figure}
+\begin{table}[t]
+  \begin{center}
+    \leavevmode
+    \caption{LR table for grammar $G1$, with trained parameters (The
+      numbers given in the middle and bottom of each row denote the
+      parameters for \BC model and our model, respectively.)}
+    \label{tbl:LR-table1}
+    \small
+    \input{tbl:LR-table1}
+  \end{center}
+\end{table}
+
+Given this setting, the probability of each tree in \fig{trees1} is
+computed as follows (see \fig{trees1}, where each circled number denotes
+the LR parse state reached after parsing has proceeded from the
+left-most corner to the location of that number):
+\begin{eqnarray}
+  \label{B/C-1}
+  &&P_{\rm B\&C}({\rm tree (a)})=
+  1\cdot\frac{m}{m+n}\cdot\frac{m}{m+n}\cdot 1=
+  \left(\frac{m}{m+n}\right)^2\\
+  &&P_{\rm B\&C}({\rm tree (b)})=
+  1\cdot\frac{n}{m+n}\cdot\frac{n}{m+n}\cdot 1=
+  \left(\frac{n}{m+n}\right)^2\\
+  \label{PGLR-1}
+  &&P_{\rm PGLR}({\rm tree (a)})=
+  1\cdot\frac{m}{m+n}\cdot 1\cdot 1=\frac{m}{m+n}\\
+  &&P_{\rm PGLR}({\rm tree (b)})=
+  1\cdot\frac{n}{m+n}\cdot 1\cdot 1=\frac{n}{m+n}
+\end{eqnarray}
+where B\&C denotes \BC model and PGLR denotes our model.  This
+computation shows that our model correctly fits the distribution of the
+training set, with the sum of the probabilities being one. In the case
+of \BC model, on the other hand, the sum of these two probabilities is
+smaller than one. The reason can be described as follows. After shifting
+the left-most input symbol {\sf x}, which leads the process to state 1,
+the model predicts the next input symbol as either {\sf u} or {\sf v},
+and chooses the reduce action in each case, reaching state 4. So far,
+both \BC model and our model behave in the same manner. In state 4,
+however, \BC model repredicts the next input symbol {\sf u} (or {\sf
+v}), despite it already having been determined in state 1. This
+duplication makes the probability of each tree smaller than what it
+should be. In our model, on the other hand, the probabilities in state
+4, which is of class $\Sr$, are normalized for each input symbol, and
+thus the prediction of the input symbol is not duplicated.
+
+Briscoe and Carroll are also required to include the second factor
+$P(s_i|s_{i-1},l_i,a_i)$ in \eq{Briscoe-T1} since this factor does not
+always compute to one. In fact, if we have only the information of the
+current stack-top state $s_{i-1}$ and apply a reduce action in that
+state, the next state $s_i$ is not always uniquely determined. For this
+reason, Briscoe and Carroll further subdivide probabilities assigned to
+reduce actions according to the stack-top states exposed immediately
+after the pop operations associated with those reduce
+actions. Contrastively, in our model, given the current stack, the next
+stack after applying any action can be uniquely determined as in
+\eq{st0}, and thus we do not need to subdivide the probability for any
+reduce action.
+
+\begin{figure}[t]
+  \begin{center}
+    \leavevmode
+    \includegraphics{fig:trees2.eps}
+    \caption{Parse trees derived from grammar $G2$}
+    \label{fig:trees2}
+  \end{center}
+\end{figure}
+
+To illustrate this, let us take another simple example in grammar $G2$
+as given below, with all the possible derivations shown in \fig{trees2}. 
+Further, the LR table is shown in \tbl{LR-table2}.
+\begin{quote}
+{\bf Grammar G2:}
+  \begin{itemize}\itemsep=0mm
+  \item[(1)]\quad {\sf S\quad$\to$\quad u\quad X}
+  \item[(2)]\quad {\sf S\quad$\to$\quad v\quad X}
+  \item[(3)]\quad {\sf X\quad$\to$\quad x}
+  \end{itemize}
+\end{quote}
+Let us compute again the probability of each tree for the two models:
+\begin{eqnarray}
+  &&P_{\rm B\&C}({\rm tree (a)})=
+  \frac{m}{m+n}\cdot 1\cdot\frac{m}{m+n}\cdot 1=
+  \left(\frac{m}{m+n}\right)^2\\
+  &&P_{\rm B\&C}({\rm tree (b)})=
+  \frac{n}{m+n}\cdot 1\cdot\frac{n}{m+n}\cdot 1=
+  \left(\frac{n}{m+n}\right)^2\\
+  &&P_{\rm PGLR}({\rm tree (a)})=
+  \frac{m}{m+n}\cdot 1\cdot 1\cdot 1=\frac{m}{m+n}\\
+  &&P_{\rm PGLR}({\rm tree (b)})=
+  \frac{n}{m+n}\cdot 1\cdot 1\cdot 1=\frac{n}{m+n}
+\end{eqnarray}
+In \BC model, the probability assigned to the reduce action in state 3
+with the next input symbol being {\sf \$} is subdivided according to
+whether the state exposed by the pop operation is state 1 or 2 (see
+\tbl{LR-table2}). This makes the probability of each tree smaller than
+what it should be.
+\begin{table}[t]
+  \begin{center}
+    \leavevmode
+    \caption{LR table for grammar $G2$, with trained parameters (Each
+      middle bracketed number denotes the state exposed by the
+      stack-pop operation associated with the corresponding reduce
+      action.)}
+    \label{tbl:LR-table2}
+    \small
+    \input{tbl:LR-table2}
+  \end{center}
+\end{table}
+
+The above examples illustrate that, in \BC model, the probabilities of
+all the possible parse trees may not necessarily sum up to one, due to
+the lack of probabilistically well-founded normalization, which would be
+inconsistent with the definition of $P(T)$ (see equation \eq{Tset0}). In
+our model, on the other hand, the probabilities of all the parse trees
+are guaranteed to always sum to one\footnote{Precisely speaking, this is
+the case if the model is based on a canonical LR (CLR) table. In the
+case of lookahead LR (LALR) tables, the probabilities of all the parse
+trees may not sum up to one even for the case of our model, since some
+stack transitions may not be accepted (for details of CLR and LALR, see,
+for example, \cite{aho:86:a,chapman:87:a}). However, this fact will
+never prevent our model from being applicable to LALR. For further
+discussion, see Appendix B and \cite{inui:97:a}.}. This flaw in \BC
+model can be considered to be related to Briscoe and Carroll's claim
+that their model tends to favor parse trees involving fewer grammar
+rules, almost regardless of the training data. In \BC model, stack
+transition sequences involving more reduce actions tend to be assigned
+much lower probabilities for the two reasons mentioned above: (a) the
+probabilities assigned to actions following reduce actions tend to be
+lower than what they should be, since \BC model repredicts the next
+input symbols immediately after reduce actions, (b) the probabilities
+assigned to reduce actions tend to be lower than what they should be,
+since they are further subdivided according to the stack-top states
+exposed by the stack-pop operations. Therefore, given the fact that
+stack transition sequences involving fewer reduce actions correspond to
+parse trees involving fewer grammar rules, it is to be expected that \BC
+model tends to strongly prefer parse trees involving fewer grammar
+rules. To solve this problem, Briscoe and Carroll proposed calculating
+the geometric mean of the probabilities of the actions involved in each
+stack transition sequence. However, this solution makes their model even
+further removed from a probabilistically well-founded model. In our
+model, on the other hand, any bias toward shorter derivations is
+expected to be much weaker, and thus we do not require the calculation
+of the geometric mean.
+
+One may wonder to what extent these differences matter for practical
+statistical parsing. Although this issue needs to be explored through
+large-scaled empirical evaluation, it must be still worthwhile to
+consider some likely cases where the difference discussed here will
+influence parsing performance. We discuss such a case through a further
+example in the next section.
+
+\section{Expected Impact on Parsing Performance}
+\label{sec:example}
+
+In this section, we first demonstrate through an example how \BC model
+and our model, which we class as GLR-based models here, captures richer
+context than the PCFG model. We then return to the issue raised at the
+end of the previous section.
+
+Suppose we have grammar $G3$ as follows:
+\begin{quote}
+{\bf Grammar G3:}
+  \begin{itemize}\itemsep=0mm
+  \item[(1)]\quad {\sf S\quad$\to$\quad u\quad S}
+  \item[(2)]\quad {\sf S\quad$\to$\quad v\quad S}
+  \item[(3)]\quad {\sf S\quad$\to$\quad x}
+  \item[(4)]\quad {\sf S\quad$\to$\quad S\quad S}
+  \end{itemize}
+\end{quote}
+Further, let us assume that we train the PCFG model, \BC model, and our
+PGLR model, respectively, using a training set as shown in \fig{trees3},
+where trees (a) and (b) are the parse trees for input sentence
+$W_1=\mbox{\sf uxx}$, and (c) and (d) are those for $W_2=\mbox{\sf
+vxx}$.
+\tbl{LR-table3} shows the LR table for grammar $G3$, with the trained
+parameters\footnote{In practical applications, when computing
+parameters, one would need to use some smoothing technique in order to
+avoid assigning zero to any parameter associated with an action that had
+never occurred in training.}.
+
+\begin{figure}[t]
+  \begin{center}
+    \leavevmode
+    \includegraphics{fig:trees3.eps}
+    \caption{Training set for grammar $G3$}
+    \label{fig:trees3}
+  \end{center}
+\end{figure}
+
+According to the training data in \fig{trees3}, where the
+square-bracketed value below each tree denotes the number of occurrences
+of that tree, right branching (i.e. tree (a)) is preferred for input
+sentence $W_1$, whereas left branching (i.e. tree (d)) is preferred for
+input sentence $W_2$.
+It is easy to see that the PCFG model does not successfully learn these
+preferences for either of the sentences, since all the parse trees
+produced for each sentence involve the same set of grammar rules.
+
+\begin{table}[tp]
+  \begin{center}
+    \leavevmode
+    \caption{LR table for grammar $G3$}
+    \label{tbl:LR-table3}
+    \small
+    \input{tbl:LR-table3}
+  \end{center}
+\end{table}
+
+Unlike the PCFG model, both the GLR-based models can learn these
+preferences in the following way. In the LR parsing process for sentence
+$W_1$, the point where the parser must choose between parse trees (a)
+and (b) is in state 5, which is reached after the reduction of the
+left-most {\sf x} into {\sf S} (see \fig{trees3}). In state 5, if the
+shift action is chosen, parse tree (a) is derived, while, if the reduce
+action is chosen, (b) is derived. Thus, the preference for (a) to (b) is
+reflected in the distribution over the shift-reduce conflict in this
+state. \tbl{LR-table3} shows that both \BC model and our model correctly
+prefer the shift action in state 5 with the next input symbol being {\sf
+x}. For input sentence $W_2$, on the other hand, the left branching tree
+(d) is preferred. This preference is also reflected in the distribution
+over the shift-reduce conflict in the state reached after the reduction
+of the left-most {\sf x} into {\sf S}, but, this time, the relevant
+state is state 6 instead of state 5. According to \tbl{LR-table3}, state
+6 with the next input symbol being {\sf x} correctly prefers the reduce
+action, which derives the left-branching tree (d). In sum, the different
+preferences for $W_1$ and $W_2$ are reflected separately in the
+distributions assigned to the different states (i.e. states 5 and 6).
+
+\begin{table}[t]
+  \begin{center}
+    \leavevmode
+    \caption{Distributions over the parse trees from Figure 3 (trees 
+      (a) and (b) are the parse trees for input sentence
+      $W_1={\sf uxx}$, and (c) and (d) are those for
+      $W_2={\sf vxx}$)}
+    \label{tbl:result3}
+    \input{tbl:result3}
+  \end{center}
+\end{table}
+As illustrated in this example, for each parsing choice point, the LR
+parse state associated with it can provide a context for specifying the
+preference for that parse choice. This feature of the GLR-based models
+enables us to take richer context into account than the PCFG
+model. Furthermore, although not explicitly demonstrated in the above
+example, it should also be noted that the GLR-based models are sensitive
+to the next input symbol as shown in \eq{a1} in \sec{PGLR}.
+
+Now, let us see how the probabilities assigned to LR parsing actions are
+reflected in the probability of each parse tree. \tbl{result3} shows the
+overall distributions provided by the PCFG model, \BC model, and our
+model, respectively, to the trees in \fig{trees3}\footnote{Although
+Briscoe and Carroll proposed to take the geometric mean of peripheral
+distributions as mentioned in \sec{BC-model}, we did not apply this
+operation when computing the probabilities in \tbl{result3}, to give the
+reader a sense of the difference between the probabilities given by \BC
+model and our model. Note that, in our example, since the number of
+state transitions involved in each parse tree is always the same for any
+given sentence, taking the geometric mean would not change the
+preference order.}.
+According to the table, our model accurately learns the distribution of
+the training data, whereas \BC model does not fit the training data very
+well. In particular, for sentence $W_1$, it goes as far as incorrectly
+preferring parse tree (b). This occurs due to the lack of well-founded
+normalization of probabilities as discussed in \sec{BC-model}. As
+mentioned above, \BC model correctly prefers the shift action in state
+5, as does our model.  However, for the rest of the parsing process, \BC
+model associates a considerably higher probability to the process from
+state 4 through 3 and 7 to 4, which derives tree (b), than the process
+from 3 through 7 and 5 to 4, which derives tree (a), since, in their
+model, the former process is inappropriately supported by the occurrence
+of tree (d). For example, in both parsing processes for (b) and (d), the
+pop operation associated with the reduction in state 3 exposes state 4,
+and \BC model thus assigns an inappropriately high probability to this
+reduction, compared to the reduction in state 3 for tree (a).
+
+Of course, as far as various approximations are made in constructing a
+probabilistic model similar to both \BC model and our model, it is
+always the case that the model may not fit the training data precisely
+due to the insufficiency of the model's complexity. Analogous to \BC
+model, our model does not always fit the training data precisely due to
+the independence assumptions such as equations \eq{st-supset}, \eq{l1},
+etc. However, it should be noted that, as illustrated by the above
+example, there is a likelihood that \BC model not fitting the training
+data is due not only to the insufficiency of complexity, but also to the
+lack of well-founded normalization.
+
+
+
+
+\section{Conclusion}
+
+In this paper, we newly presented a formalization of probabilistic LR
+parsing. Our modeling inherits some of its features from \BC
+model. Namely, it captures derivational context to a greater degree then
+the PCFG model, and naturally integrates local bigram statistics of
+terminal symbols and global preference over structures of parse
+trees. Furthermore, since the model is tightly coupled with GLR parsing,
+it can be easily implemented and trained. Inheriting these advantages,
+our formalization additionally overcomes an important drawback of \BC
+model: the lack of well-founded normalization of probabilities. We
+demonstrated through examples that this refinement is expected to
+improve parsing performance. Those examples may seem to be relatively
+artificial and forced. However, in our preliminary experiments, we are
+achieving some promising results, which support our claim
+(see~\cite{virach:97:b,virach:97:c} for preliminary results). We are now
+planning to conduct further large-scaled experiments.
+
+It should also be noted that our modeling is equally applicable to both
+CLR tables and LALR tables. Since it is a highly
+empirical issue whether it is better to use CLR-based models or
+LALR-based models, it may be interesting to make experimental
+comparisons between these two types (for a qualitative comparison,
+see~\cite{inui:97:a}).
+
+Other approaches to context-sensitive statistical parsing have also been
+proposed, such as \cite{magerman:91:b,black:93:a,kita:94:a,sekine:95:a}. 
+We need to make theoretical and empirical comparisons between these
+models and ours. The significance of introducing lexical sensitivity
+into language models should also not be underestimated. In fact, several
+attempts to use lexically sensitive models already exist:
+e.g.~\cite{schabes:92:a,collins:96:a,li:96:a,charniak:97:a}. Our future
+research will also be directed towards this area, the initial findings
+of which are reported in \cite{inui:97:f,inui:97:b,shirai:97:a}.
+
+\section*{Acknowledgment}
+
+The authors would like to thank the reviewers for their suggestive
+comments. They would also like to thank UEKI Masahiro and SHIRAI Kiyoaki
+(Tokyo Institute of Technology) for their fruitful discussion on the
+formalization of the proposed model. Finally, they would like to thank
+Timothy Baldwin (Tokyo Institute of Technology) for his help in writing
+this paper.
+
+
+\bibliographystyle{jplain}
+
+\begin{thebibliography}{99}
+
+\bibitem{aho:86:a}
+Aho, A., Ravi, S., and\ Ullman, J. (1986).
+\newblock {\em Compilers, Principle, Techniques, and Tools}.
+\newblock Addision Wesely.
+
+\bibitem{black:93:a}
+Black, E., Jelinek, F., Lafferty, J., Magerman, D.~M., Mercer, R., and\
+  Roukos, S. (1993).
+\newblock ``Towards history-based grammars: using richer models for
+  probabilistic parsing''\
+\newblock In {\em Proceedings of the 31st Annual Meeting of the Association
+  for Computational Linguistics}, pp.\ 31--37.
+
+\bibitem{briscoe:93:a}
+Briscoe, T.andCOMMA\  and\ Carroll, J. (1993).
+\newblock ``Generalized probabilistic {LR} parsing of natural language
+  (corpora) with unification-based grammars''\
+\newblock {\em Computational Linguistics}, {\em 19\/}(1).
+
+\bibitem{carroll:92:a}
+Carroll, J.andCOMMA\  and\ Briscoe, E. (1992).
+\newblock ``Probabilistic normalization and unpacking of packed parse
+  forests for unification-based grammars.''\
+\newblock In {\em Proceedings, AAAI Fall Symposium on Probabilistic Approaches
+  to Natural Language}, pp.\ 33--38.
+
+\bibitem{chapman:87:a}
+Chapman, N.~P. (1987).
+\newblock {\em {LR} Parsing --- Theory and Practice}.
+\newblock Cambridge University Press.
+
+\bibitem{charniak:97:a}
+Charniak, E. (1997).
+\newblock ``Statistical parsing with a context-free grammar and word
+  statistics''\
+\newblock In {\em Proceedings of the National Conference on Artificial
+  Intelligence}.
+
+\bibitem{collins:96:a}
+Collins, M.~J. (1996).
+\newblock ``A new statistical parser based on bigram lexical
+  dependencies''\
+\newblock In {\em Proceedings of the 34th Annual Meeting of the Association
+  for Computational Linguistics}.
+
+\bibitem{inui:97:f}
+Inui, K., Shirai, K., Tanaka, H., and\ Tokunaga, T. (1997a).
+\newblock ``Integrated probabilistic language modeling for statistical
+  parsing''\
+\newblock In {\em Summary Correction of the Poster Session of the 15th
+  International Joint Conference on Aritifical Intelligence}, p.~49.
+
+\bibitem{inui:97:b}
+Inui, K., Shirai, K., Tanaka, H., and\ Tokunaga, T. (1997b).
+\newblock ``Integrated probabilistic language modeling for statistical
+  parsing''\
+\newblock Technical Report\ TR97-0005, Dept. of Computer Science, Tokyo Institute of
+  Technology.
+\newblock Available from {\tt http://www.cs.titech.ac.jp/tr.html}.
+
+\bibitem{inui:97:a}
+Inui, K., Sornlartlamvanich, V., Tanaka, H., and\ Tokunaga, T. (1997c).
+\newblock ``A new probabilistic {LR} language model for statistical
+  parsing''\
+\newblock Technical Report\ TR97-0004, Dept. of Computer Science, Tokyo Institute of
+  Technology.
+\newblock Available from {\tt http://www.cs.titech.ac.jp/tr.html}.
+
+\bibitem{kita:94:a}
+Kita, K. (1994).
+\newblock ``Spoken sentence recognition based on {HMM-LR} with hybrid
+  language modeling''\
+\newblock {\em IEICE Trans. Inf. \& Syst.}, {\em E77-D\/}(2).
+
+\bibitem{li:96:a}
+Li, H. (1996).
+\newblock ``A probabilistic disambiguation method based on psycholinguistic
+  principles''\
+\newblock In {\em Proceedings of the Fourth Workshop on Very Large Corpora
+  (WVLC-4)}.
+\newblock cmp-lg/9606016.
+
+\bibitem{li:95:a}
+Li, H.andCOMMA\  and\ Tanaka, H. (1995).
+\newblock ``A method for integrating the connection constraints into an
+  {LR} table''\
+\newblock In {\em Proceedings of Natural Language Processing Pacific Rim
+  Symposium '95}, pp.\ 703--708.
+
+\bibitem{magerman:91:b}
+Magerman, D.~M.andCOMMA\  and\ Marcur, M. (1991).
+\newblock ``Pearl: A probabilistic chart parser''\
+\newblock In {\em Proceedings of the 5th Conference of European Chapter of the
+  Association for Computational Linguistics}, pp.\ 15--20.
+
+\bibitem{schabes:92:a}
+Schabes, Y. (1992).
+\newblock ``Stochastic lexicalized tree-adjoining grammars''\
+\newblock In {\em Proceedings of the 14th International Conference on
+  Computational Linguistics}, \lowercase{Vol.}~2, pp.\ 425--432.
+
+\bibitem{sekine:95:a}
+Sekine, S.andCOMMA\  and\ Grishman, R. (1995).
+\newblock ``A Corpus-based probabilistic prammar with only two
+  non-terminals''\
+\newblock In {\em Proceedings of the International Workshop on Parsing
+  Technologies '95}.
+
+\bibitem{shirai:97:a}
+Shirai, K., Inui, K., Tanaka, H., and\ Tokunaga, T. (1997).
+\newblock ``An empirical study on statistical disambiguation of Japanese
+  dependency structures using a lexically sensitive language model''\
+\newblock In {\em Proceedings of Natural Language Pacific-Rim Symposium},
+  pp.\ 215--220.
+
+\bibitem{virach:97:c}
+Sornlartlamvanich, V., Inui, K., Shirai, K., Tanaka, H., Tokunaga, T., and\
+  Takezawa, T. (1997a).
+\newblock ``An empirical evaluation of probabilistic {GLR} parsing''\
+\newblock In {\em Proceedings of Natural Language Pacific-Rim Symposium},
+  pp.\ 169--174.
+
+\bibitem{virach:97:b}
+Sornlartlamvanich, V., Inui, K., Shirai, K., Tanaka, H., Tokunaga, T., and\
+  Takezawa, T. (1997b).
+\newblock ``Incorporating probabilistic parsing into an {LR} parser -- {LR}
+  table engineering (4) --''\
+\newblock {\em Information Processing Sciety of Japan, SIG-NL-119}.
+\newblock Available from {\tt http://tanaka-www.cs.titech.ac.jp/}.
+
+\bibitem{su:91:a}
+Su, K.-Y., Wang, J.-N., Su, M.-H., and\ Chang, J.-S. (1991).
+\newblock ``{GLR} parsing with scoring''\
+\newblock In Tomita (1991), Chapter~7.
+
+\bibitem{tomita:86:a}
+Tomita, M. (1986).
+\newblock {\em An Efficient Parsing for Natural Languages}.
+\newblock Kluwer, Boston, Mass.
+
+\bibitem{tomita:91:c}
+Tomita, M. (ed.). (1991).
+\newblock {\em Generalised {LR} Parsing}.
+\newblock Kluwer Academic Publishers.
+
+\bibitem{wright:91:a}
+Wright, J.~H. and\ Wrigley, E.~N. (1991).
+\newblock ``{GLR} parsing with probability''\
+\newblock In Tomita (1991), Chapter~8.
+
+\end{thebibliography}
+
+\section*{Appendix}
+
+\subsection*{A~~A brief proof of the mutual exclusiveness between $\Ss$
+  and $\Sr$}
+
+It is obvious from the algorithm for generating an LR(1) goto
+graph\cite{aho:86:a} that, for each state $s$ ($\neq s_0$), if there
+exist states $s_i$ and $s_j$ whose goto transitions on symbol $X_i$ and
+$X_j$, respectively, both lead to $s$, then $X_i=X_j$. Namely, for any
+given state $s$, the symbol $X$ required to reach $s$ by way of a goto
+transition is always uniquely specified. On the other hand, if the
+current state is in $\Ss$, then it should have been reached through a
+goto transition on a certain terminal symbol $X\in\Vt$, whereas, if the
+current state is in $\Sr$, then it should have been reached through a
+goto transition on a certain nonterminal symbol $X\in\Vn$. Given these
+facts, it is obvious that $\Ss$ and $\Sr$ are mutually exclusive.
+
+\subsection*{B~~An LALR-based model}
+
+Let us consider equation \eq{P(T|W)} again. In this equation, we
+implicitly assume the range of $T$ to be all the possible parse tree
+candidates, i.e. the set of all the complete and {\em acceptable\/}
+stack transition sequences, which we refer to as $\Tset_{acc}$. Thus,
+the second factor $P(\T)$ in equation \eq{P(T|W)} should be interpreted
+as a distribution over $\Tset_{acc}$ such that:
+$$\sum_{\T\in\Tset_{acc}}P(\T)=1$$ However, what is estimated by a PGLR
+model $P_{PGLR}(T)$ is not a distribution over $\Tset_{acc}$ but that
+over $\Tset$, which is the set of all the possible complete transition
+sequences --- whether acceptable or rejected ---, such that:
+$$\sum_{\T\in\Tset}P_{PGLR}(\T)=1$$ Obviously, this difference does not
+matter in the case of a CLR-based model, since $\Tset_{acc}=\Tset$. On
+the other hand, if one considers an LALR-based model, since there may be
+rejected transition sequences in $\Tset$,
+$\Tset_{acc}\subseteq\Tset$. In spite of this, however, one can still
+rank complete and acceptable stack transition sequences using a PCFG
+model $P_{PGLR}(T)$, since $P(\T)$ can be estimated using $P_{PGLR}(T)$
+as follows:
+$$P(\T)=\left(\sum_{\T\in\Tset_{acc}}P_{PGLR}(\T)\right)^{-1}\cdot
+P_{PGLR}(\T)$$ where the first factor is a constant that is independent
+of $\T$, and thus can be neglected in ranking $\T$. To conclude, one can
+rank the parse tree candidates for any given input sentence according to
+$P_{PGLR}(\T)$ and $P(W|\T)$, whether one bases the model on CLR, LALR,
+or even LR(0) (i.e. SLR). 
+
+
+
+\section*{Biography}
+
+\begin{description}
+\item[INUI Kentaro]
+  He is an associate professor of Department of Artificial Intelligence,
+  Kyushu Institute of Technology. He received the B.S. degree in 1990
+  from Tokyo Institute of Technology, and the M.S. and the
+  Dr. Eng. degrees from Tokyo Institute of Technology in 1992 and 1995,
+  respectively. His work focuses on natural language processing.
+\item[Virach SORNLERTLAMVANICH]
+  He is a Ph.D. student of Department of Computer Science, Tokyo
+  Institute of Technology. He received the B.E. and M.E. degrees from
+  Kyoto University, in 1984 and 1986, respectively. In 1988, he joined
+  NEC Corporation, and was involved in the Multi-lingual Machine
+  Translation Project supported by MITI until 1992. In 1992, he joined
+  the National Electronics and Computer Technology (NECTEC) of Thailand
+  as a chief researcher of Linguistics and Knowledge Science Laboratory
+  (LINKS). His research interests are natural language processing and
+  information retrieval.
+\item[TANAKA Hozumi]
+  He is a professor of Department of Computer Science, Tokyo Institute
+  of Technology. He received the B.S. degree in 1964 and the M.S. degree
+  in 1966 from Tokyo Institute of Technology. In 1966 he joined in the
+  Electro Technical Laboratories, Tsukuba. He received the
+  Dr. Eng. degree in 1980. He joined in Tokyo Institute of Technology in
+  1983. He has been engaged in artificial intelligence and natural
+  language processing research.
+\item[TOKUNAGA Takenobu]
+  He is an associate professor of Graduate School of Information Science
+  and Engineering, Tokyo Institute of Technology. He received the B.S.
+  degree in 1983 from Tokyo Institute of Technology, the M.S. and the
+  Dr. Eng. degrees from Tokyo Institute of Technology in 1985 and 1991,
+  respectively. His current interests are natural language processing
+  and information retrieval.
+\end{description}
+\end{document}
+

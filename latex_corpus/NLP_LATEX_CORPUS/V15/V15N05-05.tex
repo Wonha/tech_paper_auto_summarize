@@ -1,0 +1,954 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.1}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+\usepackage{tabularx}
+\renewcommand{\labelenumi}{}
+
+\Volume{15}
+\Number{5}
+\Month{October}
+\Year{2008}
+
+\received{2008}{2}{6}
+\revised{2008}{5}{14}
+\accepted{2008}{7}{1}
+
+\setcounter{page}{99}
+
+\jtitle{自動獲得した名詞関係辞書に基づく共参照解析の高度化}
+
+\jauthor{笹野　遼平\affiref{UT}\affiref{JSPS} \and 黒橋　禎夫\affiref{KUEE}}
+\jabstract{
+本稿では，自動獲得した知識を用いた日本語共参照
+解析システムを提案する．日本語における共参照の多くを占める名詞句間の共参
+照の解析では，語彙的知識が重要となり，中でも同義表現知識が非常に有効とな
+る．そこでまず，大規模なコーパスおよび国語辞典の定義文から同義表現の自動
+獲得を行い，自動獲得した同義表現を用いた共参照解析システムを構築する．さ
+らに，より精度の高い共参照解析システムの構築のため，自動構築した名詞格フ
+レームを用いた名詞句の関係解析を行い，その結果を共参照解析の手掛りとして
+使用する．新聞記事およびウェブテキストを用いた実験の結果，同義表現，およ
+び，名詞句の関係解析結果を用いることにより，共参照解析の精度は向上し，手
+法の有効性が確認できた．
+}
+\jkeywords{共参照解析，同義表現抽出，名詞句の関係解析}
+
+\etitle{Improving Coreference Resolution Using Automatically Acquired
+Knowledge of Nominal Relations}
+\eauthor{Ryohei Sasano\affiref{UT}\affiref{JSPS} \and Sadao Kurohashi\affiref{KUEE}}
+\eabstract{
+We present a knowledge-rich approach to Japanese coreference
+resolution. In Japanese, noun phrase coreference occupies a central
+position in coreference relations. To improve coreference resolution for
+such language, wide-coverage knowledge of synonyms is required. We first
+acquire knowledge of synonyms from large raw corpus and dictionary
+definition sentences, and then resolve coreference relations based on
+the knowledge. Furthermore, to boost the performance of coreference
+resolution, we integrate bridging reference resolution system that uses
+automatically constructed nominal case frames into coreference
+resolver. We evaluated our approach on news paper article and WEB corpus
+and confirmed that the performance of coreference resolution is improved
+by using automatically acquired synonyms and bridging reference
+resolution.  }
+
+\ekeywords{Coreference, Synonym Extraction, Bridging Reference}
+
+\headauthor{笹野，黒橋}
+\headtitle{自動獲得した名詞関係辞書に基づく共参照解析の高度化}
+
+
+\affilabel{UT}{東京大学大学院情報理工学系研究科}{
+	Graduate School of Information Science and Technology, University of Tokyo}
+\affilabel{JSPS}{日本学術振興会特別研究員DC}{
+	Research Fellow of the Japan Society for the Promotion of Science} 
+\affilabel{KUEE}{京都大学情報学研究科}{
+	Graduate School of Infomatics, Kyoto University}
+
+\makeatletter
+\newcounter{example}
+\def\ex#1{}
+\def\exs#1{}             
+\makeatother
+
+\begin{document}
+\maketitle
+
+
+
+ \section{はじめに}
+ \label{hajime}
+ 共参照解析とは，ある表現が他の表現と同一の対象を指してい
+ ることを同定する解析のことであり，計算機による自然言語の意味理解を目指
+ す上で重要な技術である．本研究では，日本語文における，同一文章内の表現
+ 間の共参照である文章内共参照を解析の対象とする．文章内共参照では，ある
+ 表現（照応詞）が文章中の先行する表現（先行詞）と同一の対象を指している場合
+ にそれを認識することが目的となる．
+
+ 共参照における照応詞としては，普通名詞，固有名詞，代名詞の3つが考えられ
+ る．英語などの言語では照応詞として代名詞が頻繁に使用されるが，日本語では
+ 代名詞の多くはゼロ代名詞として省略されるため，照応詞の多くは普通名詞，固
+ 有名詞が占めている．ゼロ代名詞の検出・解析（ゼロ照応解析）も，意味理解を目
+ 指すためには欠かすことのできない解析であり，多くの研究が行われている
+ \cite{Seki2002,Kawahara2004a,Iida2006}．ゼロ照応解析は，先行する文中から
+ 先行詞を同定するという点では共参照解析と同じであるが，ゼロ代名詞の認識が
+ 必要である点，省略されているため照応詞自体に関する情報がない点で異なって
+ おり，より応用的なタスクであると言える．本研究では，高精度な照応解析シス
+ テムを実現するためには，まず基礎的な照応解析である共参照解析の精度向上が
+ 重要であると考え，共参照解析の精度向上を目指す．
+
+ 共参照解析の手法としては大きく分けて，人手で作成した規則に基づく手法と，
+ タグ付きコーパスを用いた機械学習に基づく手法がある．英語を対象とした共参
+ 照解析では，これらの2手法によりほぼ同程度の精度が得られている
+ \cite{Soon2001,Ng2002a,Zhou2004}．一方，日本語の場合は規則に基づく手法で
+ 高い精度が得られる傾向がある\cite{Iida2003,Murata1996b}\footnote{これら
+ の研究では使用しているコーパスが異なるため単純には比較できないものの，新
+ 聞記事を対象とした予備実験の結果，規則に基づく手法でより高い精度が得られ
+ た．}．日本語において規則に基づく手法で高い精度が得られるのは，普通名詞，
+ 固有名詞間の共参照関係が大部分であり，語彙的情報が非常に大きな役割を占め
+ るため，機械学習によって得られる性向が，人手で作成した規則でも十分に反映
+ できているためであると考えられる．そこで本研究では基本的に，人手で設定し
+ た規則に基づく共参照解析システムを構築する．
+
+ 照応詞が普通名詞，固有名詞となる場合，照応詞と先行詞の関係は大きく以下
+ のように分類できる．
+
+  \begin{enumerate}
+   \item 照応詞の表記が先行詞の表記に含まれているもの：Ex. 大統領官邸=官
+	 邸\label{most1}
+   \item 同義表現による言い換え：Ex. 北大西洋条約機構=NATO\label{most2}
+   \item その他（クラスとインスタンス，上位語と下位語など）：Ex. 1995年=前
+	 年\label{most3}
+  \end{enumerate}
+
+  このうち，\ref{most1}は基本的に照応詞が先行詞と一致する場合や，末尾に含
+  まれている場合で，特別な知識がなくても認識が可能である．ただし，末尾が
+  一致する場合すべてが共参照関係にあるわけではなく，精度の高い解析のため
+  には照応詞，先行詞が指すものを解析する必要がある．例えば次のような2文が
+  あった場合，いずれの文にも「結果」という語が複数回出現するが，aではそれ
+  らが同一の内容を指しているのに対し，bでは異なる内容を指している．
+
+  \exs{a. & 2006 FIFAワールドカップ優勝国予想アンケートを行った．
+  \underline{結果}はブラジルがトップだった．アンケート\underline{結果} の
+  詳細はWebで見られる．\label{kekka} \\& b. & 先月行なわれた韓国との親善
+  試合の\underline{結果}を受けアンケートを行った．アンケート\underline{結
+  果}から以下のようなことが判明した．} \\ これらの違いを正しく解析するた
+  めには，a中の「結果」はともに「アンケートの結果」を意味しているのに対し，
+  b中の「結果」は順に「試合の結果」，「アンケートの結果」を意味しているこ
+  とを認識する必要がある．そこで本研究では，係り受け解析，および，自動構
+  築した名詞格フレームに基づく橋渡し指示(bridging reference)解析により名
+  詞句の関係を解析し，その結果を共参照解析の手掛りとして用いる．
+
+  2は「北大西洋条約機構」と「NATO」のように，同義表現を用いた言い換えと
+  なっている場合である．同義表現を用いた言い換えとなっている場合，人間が
+  同一性を理解する場合も，事前の知識がないと困難な場合も多い．そこで，同
+  義表現に関する知識を事前にコーパスや国語辞典から自動的に獲得し，獲得し
+  た同義表現知識を共参照解析に使用する．
+
+  \ref{most3} については，シソーラスを用いたり，文脈的な手がかりを用いる
+  ことによって解決できる場合があると考えられるが，本研究では解析を行なわ
+  ず，今後の課題とする．
+
+
+ \section{同義表現の自動獲得}
+
+
+  \subsection{獲得に用いるリソース}
+  \label{resource}
+
+  同義表現を獲得するためのリソースとしては，コーパスや辞書が考えられる．
+
+  コーパスを用いた同義表現に関する研究としては，括弧表現を用いる手法や，
+  テキストの局所的な文脈依存性を利用する手法\cite{Yamamoto2002}，コーパス
+  から名詞と略語をその出現頻度に関するルールを用いて獲得する手法
+  \cite{Sakai2003}，係り受けおよび共起関係を利用し同義表現を抽出する手法
+  \cite{Ueno2004}，複数の著者の表記の違いを利用した手法
+  \cite{Murakami2004}などが提案されている．本研究ではこのうち比較的高い精
+  度を実現している括弧表現を用いた手法を用いる．
+
+  括弧表現から獲得できる同義表現の特徴としては，常識となっていない事柄，
+  すなわち，新語や未知語への対応力は強いものの，次の例文における「日」と
+  「日本」のように極めて常識的な言い換えは抽出できない点が挙げられる．
+
+  \ex{在\underline{日}外国人への所得課税を優遇する要件を厳しくし，主
+  に\underline{日本}で働く外国人には国内外のすべての所得に課税できるよう
+  にする．\label{nihon}}
+
+  そこで，極めて常識的な言い換え表現を獲得するため国語辞典からも同義表現
+  の抽出を行う．国語辞典から獲得できる同義表現ペアには，新語などは含まれ
+  ないものの，括弧を用いて表記されないような極めて一般的な同義表現ペアが
+  含まれていると考えられ，括弧表現と国語辞典の2つのリソースを用いて同義表
+  現を抽出することで，多くの同義表現を獲得できると考えられる．
+  
+
+  \subsection{括弧表現からの同義表現の抽出}
+
+  括弧の解析に関する先行研究としては久光らの研究\cite{Hisamitsu1997}や，
+  Okazakiらの研究\cite{Okazaki2008}がある．久光らは統計量とルールを組み合
+  わせて括弧表現を，同義表現や，読みを表している場合，補足している場合な
+  どに分類し，同義表現などの有用な情報の抽出を行っている．久光らの手法は，
+  小規模なコーパスからも大量に同義表現を抽出できるという特徴がある．実験
+  には日経新聞1992年1年分を使用しており，もっとも高い精度となるYate補正し
+  た$\chi^2$とルールを組合せた場合の言い換え抽出精度は，$\chi^2$値上位
+  500位に含まれる437個の言い換え表現の獲得に対しては約99.3\%，$\chi^2$ 値
+  上位501位〜6366位に含まれる約3400個の言い換え表現の獲得に対しては約
+  96.5\%である\footnote{久光らは，適切な文字列の削除／追加により正解となるものを
+  半正解としているが，ここでは本研究の基準と同様にそれらを不正解として計
+  算している．}．
+
+  Okazakiらは，新たに以下の2つの条件を同時に満たす文書は「A→B」の語彙的
+  言い換えであると認定することで計算される言い換え発生率を指標として導入
+  し，精度95.7\%，適合率90.0\%，再現率87.6\%を得ている．
+
+  \begin{enumerate}
+   \item 「A(B)」のパターンが出てくる前の文において，表現Bが出現しない．
+   \item 「A(B)」のパターンが出てきた後の文において，表現Aよりも表現Bの
+	 出現頻度が高い．
+  \end{enumerate}
+  実験には1998--1999年の毎日新聞・読売新聞に含まれる括弧表現のうち共起頻
+  度が8よりも大きい語彙対を使用しており，その中に含まれる言い換え可能な
+  表現は1,430事例である．再現率が87.6\%であることから約1,250個の言い換え
+  表現を獲得していることになる．
+  
+  本研究では，共参照解析において有用となる同義表現を獲得することを目的と
+  し，できるだけ出現頻度の高い同義表現を精度良く獲得することを目指す．同
+  義表現であるならば，「A(B)」のパターンに加えて，「B(A)」のパターンも出
+  現する（双方向性がある）可能性が高いと考え，双方向性に注目することにより
+  高精度に同義表現を抽出する手法を提案する．抽出する同義表現を「A(B)」の
+  パターンに加えて，「B(A)」のパターンも出現するものに限定することにより，
+  コーパスサイズに対する獲得同義表現数は少なくなるものの，高い精度で抽出
+  できると考えられる．提案する括弧表現からの同義表現の自動獲得の手順は以
+  下の通りである．
+  \begin{description}
+   \item[1.長い同義表現候補の抽出]\ \\ 括弧の中の表現Aと，その前に出現し
+	      た句読点から括弧の前までの表現Bのペアをコーパスから取り出
+	      し，AとBを同義表現の候補とする．例えば，(\ref{tyogin})のよ
+	      うな文があった場合はAとして「日本長期信用銀行」がBとして
+	      「金融システムの危機について焦点となっている長銀」を取り出
+	      す．
+
+	      \ex{現在のところ，金融システムの危機について焦点となってい
+	      る\textgt{長銀}\textgt{（日本長期信用銀行）}に関して
+	      は，…．\label{tyogin}}
+
+   \item[2.短い同義表現候補の抽出]\ \\ 
+	      Bの形態素解析を行い末尾の名詞句B'がBと異なる場合はB'を取り
+	      出し，AとB'のペアも同義表現候補とする\footnote{人名とその所
+	      属組織，地名とそこに位置する組織名などの組み合わせを除くた
+	      めAとB'のいずれかが，人名のみ，または地名のみで構成されて
+	      いる場合は候補としていない．}．
+	      例えば(\ref{tyogin}) のような文があった場合は「日本長期信
+	      用銀行」と「長銀」のペアが抽出される．
+   \item[3.同義表現の決定]\ \\ 	      
+	      A(B)とB(A)の両方が出現しているものに対し，表
+	      \ref{THREsynonym}に示すような同義表現候補のタイプごとに設定
+	      した閾値を満足する同義表現候補を同義表現として抽出する．
+  \end{description}
+
+  \begin{table}[b]
+   \caption{括弧表現を用いた同義表現抽出のために設定した閾値}
+   \label{THREsynonym}
+   \begin{center}
+\input{05table01.txt}
+   \end{center}
+  \end{table}
+
+  表\ref{THREsynonym}に示した閾値は事前に100個程度の同義表現候補とその出
+  現頻度を参考に決定した．また，実験には毎日新聞12年分と読売新聞14年分，
+  計26年分，約2,600万文を使用した．約2,600万文中に文頭に出現するものを除
+  いて括弧は約1,000万回出現し，短い同義表現候補の異なり数は約110,000個，
+  双方向性のある語彙対は5,800個であった．獲得された固有表現の種類と数，正
+  しいと判断されたものの割合（正解の割合）を表\ref{Equivalent} に示す．正解
+  の割合はタイプ1，タイプ2に関してはランダムに抽出した200個を，タイプ3，
+  タイプ4に関しては抽出されたすべての同義表現対を人手で評価し算出している
+  \footnote{抽出された同義表現対が正解であると判断する基準は，それらが同
+  一文章中に出現した場合に同じ対象を指していることが多いと考えられるかど
+  うかである．}．
+
+  \begin{table}[t]
+   \caption{括弧表現を用いた同義表現抽出の結果}
+   \label{Equivalent}
+   \begin{center}
+\input{05table02.txt}
+   \end{center}
+  \end{table}  
+
+  表\ref{Equivalent}の結果から約2,600個の同義表現を精度約99\%という高い精
+  度で同義表現を獲得できており，双方向性に注目した絞り込みが有効であった
+  ことが確認できる．また，先行研究と比較した場合，大規模なコーパスを使う
+  ことにより，抽出精度を落とさずに多くの同義表現の獲得に成功していると言
+  える．
+  
+  次に，使用した閾値の妥当性を確認するため同義表現であると判断する閾値を
+  表\ref{THREsynonym}に``[ ]''を用いて記した閾値に緩めて同義表現の抽出を
+  行った．新たに同義表現と判断された語の数と評価を表\ref{Equivalent2}に示
+  す．新たに約730個の正しい同義表現が獲得され，その精度は約95\%であった．
+  このことから，使用するコーパスから出来るだけ多くの同義表現の獲得を目的
+  とする場合，閾値を緩めた方が良いと考えられる．しかしながら，同義表現の
+  獲得数はより大規模なコーパスを使用することで増やすことができると考えら
+  れること，精度の高い同義表現データの方が汎用性が高いと考えられることか
+  ら本研究では緩い閾値は採用せず，表\ref{Equivalent}に示した同義表現を知
+  識として使用する．
+
+  \begin{table}[t]
+   \caption{緩い閾値を用いて新たに抽出された同義表現}
+   \label{Equivalent2}
+   \begin{center}
+\input{05table03.txt}
+   \end{center}
+  \end{table}  
+
+
+  \subsection{国語辞典からの同義表現の抽出}
+
+  括弧表現を用いるだけでは抽出できないと考えられる\ref{resource}節の
+  (\ref{nihon})の例における「日」と「日本」のような極めて常識的な言い換え
+  表現も含めた同義表現辞書を構築するために，国語辞典からの同義表現抽出も
+  行う．
+
+  国語辞典からの同義表現抽出については多くの研究が行なわれており
+  \cite{Tsurumaru1991,Tokunaga2001,Nichols2005}，それらの多くは国語辞典か
+  ら出来る限り多くの情報を抽出することを目的としている．本研究では，共参
+  照解析に有用な同義表現の獲得を目的としており，また，コーパス中に出現す
+  る共参照関係にある同義表現のうち括弧表現から抽出できないものの多くは常
+  識的な地名の言い換えであることから，これらの地名を含む常識的な言い換え
+  が抽出できれば十分であると考える．そこで，これらが抽出できるような簡単な規則を設
+  定し国語辞典からの同義表現抽出を行う．同義表現抽出のために用いた規則を
+  以下に示す．
+  \begin{enumerate}
+   \item 対象の語の見出し語Aを取り出す．
+   \item 対象の語の定義文を順に見ていき，「の略．」，「のこと．」で終わっ
+	 ている定義文である場合はその前の部分を，それ以外の定義文につい
+	 ては句点より前の部分を取り出しBとする．
+   \item 取り出したBが「」で囲まれているか，または，Bが国語辞典に見出し語
+	 として載っている場合のみ次の処理に進む．\label{joken3}
+   \item その定義文が対象の語の第一義である場合，または，Bが地名として国
+	 語辞典に登録されているならば，AとBを同義表現とする．
+	 \label{joken4}
+  \end{enumerate}
+
+  \begin{table}[b]
+   \caption{例解小学国語辞典の定義文の例}
+   \label{RSK}
+\input{05table04.txt}
+  \end{table}
+
+  例えば，表\ref{RSK}に示すような見出し語と定義文があった場合の処理は次の
+  ようになる．「ソビエトれんぽう」に対しては，まず，表記として「ソビエト
+  連邦」が取り出される．続いて定義文を順に取り出していき，条件
+  \ref{joken3} を満足するかどうかを調べると，最後の定義文「ソ連」のみが辞
+  書の表記として含まれているので，\ref{joken4}の処理に進む．この場合，
+  「ソ連」は辞書に地名として載っているので，「ソビエト連邦」と「ソ連」は
+  同義表現であると判断される．「ふけい」に対しては，まず，表記として「婦
+  警」が取り出され，続いて，定義文から「婦人警察官」が取り出される．「婦
+  人警察官」は辞書には登録されていないが，「」で囲まれた表現なので
+  \ref{joken4}の処理に進み，第一義であるので「婦警」と「婦人警察官」は同
+  義表現として抽出される．
+
+  実験に用いた国語辞典は「例解小学国語辞典\cite{Reikai}」と「岩波国語辞典
+  \cite{Iwanami}」である．「例解小学国語辞典」は小学生向けの辞書で基本的
+  な語が比較的平易な定義文により記載されており，約3万語が記載されている．
+  一方，「岩波国語辞典」は一般向けの辞書であり，語彙数は約6万語である．
+
+  表\ref{fromdic}に自動抽出された同義表現の例を示す．抽出された同義表現は
+  150個であった．掲載語彙数に対して少ないと言えるが，目的とした常識的な国
+  名の言い換え表現は獲得できており，誤った同義表現のペアは含まれていなかっ
+  た．括弧表現から抽出した同義表現ペアと重複しているのは「国連」と「国際
+  連合」，「北朝鮮」と「朝鮮民主主義人民共和国」など6つのみであり，「高校」
+  と「高等学校」，「米国」と「アメリカ」など括弧表現から抽出することがで
+  きない極めて常識的な同義表現の抽出に成功していると言える．
+
+  \begin{table}[t]
+   \caption{国語辞典を用いた同義語抽出}
+   \label{fromdic}
+   \begin{center}
+\input{05table05.txt}
+   \end{center}
+  \end{table}
+
+
+ \section{名詞句の関係解析}
+
+ 本研究では，名詞句間の関係を解析するため，構文解析，および，橋渡し指示
+ (bridging reference)解析を行う．
+
+ 構文解析は，KNP\cite{KNP3}を用いて行う．構文解析の結果，文節ごとの係り受
+ け関係，および，連体修飾であるなど係り受け関係にある2文節がどのような関
+ 係にあるかが分かる．例えば，以下のような文があった場合，「立てこもる」
+ が「事件」を連体修飾していることなどが分かる．
+
+ \ex{女性を人質に\textbf{立てこもる}\underline{事件}があった．
+ \label{tate1}}
+
+ 橋渡し指示とは，(\ref{nedan})中の「チケット」と「値段」の関係である．こ
+ れらは直接係り受け関係にはないが，「チケットの値段」という意味となって
+ いる．橋渡し指示解析は自動構築した名詞格フレームを用いて行う
+ \cite{Sasano2004}．橋渡し指示解析の結果，(\ref{nedan})中の「値段」は
+ 「チケット」の値段という意味であることなどが分かる．
+
+  \ex{金券ショップでは\underline{チケット}が何倍もの\underline{値段}で売
+  られていた．\label{nedan}}
+
+
+ \section{共参照解析}
+
+
+  \subsection{文字列のマッチングを用いた共参照解析}
+
+  本研究では，基本的な共参照解析システムとして，文字列のマッチングを用い
+  た共参照解析システムを用いる．本節では，文字列のマッチングを用いた共参
+  照解析システムについて説明する．
+
+   \subsubsection{照応詞，先行詞として考える単位}
+
+   共参照解析システムを構築するにあたり問題となるのが，照応詞，先行詞と
+   して扱う単位をどのようにするかである．特に，複合名詞句があった場合，
+   その構成素のうちどの部分を照応詞，先行詞として考えるかが問題となる．
+   まず，考えられるのが Iida ら\cite{Iida2003}の基準である．Iida らは共参照
+   解析を行うにあたり，照応詞を文節の主辞（最右の名詞自立語）に限定してい
+   る．
+   
+   \ex{携帯電話／PHSの利用に関するウェブ・アンケート\underline{調査}を実施し，
+   207名から回答を得ました．\underline{調査}内容は…\label{phs}}
+   
+   しかしながら，(\ref{phs})のような文があった場合，「ウェブ・アンケート
+   調査」と，「調査内容」の「調査」は同じ対象を指しており，カバレッジの
+   大きな共参照解析システムの構築を目指す場合，主辞となっていない形態素
+   が照応詞となる共参照関係も認識できることが望ましいと考えられる．そこ
+   で，本研究では，複合名詞の構成素すべてを照応詞の候補として考える．た
+   だし，固有表現については結び付きが強いと考えられることから例外として
+   扱い，固有表現の部分構成素は照応詞，先行詞として考慮しないものとする．
+
+   京都テキストコーパス\cite{Kawahara2002c}では，複合名詞句の構成素も含
+   むすべての自立語を照応詞，先行詞として扱っている．例えば，次のような
+   文があった場合，後続する「ロシア軍」に含まれる「ロシア」および「軍」
+   にはそれぞれ別々に，先行する「ロシア」，「軍」と共参照関係にあるとい
+   うタグが付与されている．
+
+   \ex{グロズヌイからの報道では，\underline{ロシア} \underline{軍}は…． 首都防衛はうまくいっており，\underline{ロシア} \underline{軍}
+   の戦車五十両を破壊したと発表．\label{russia}}
+
+   しかしながら，複合名詞のある構成素が，先行する同表記の複合名詞の構成
+   素と共参照関係にある場合，その複合名詞の他の構成素も対応していること
+   は自明であると考えられる．例えば，(\ref{russia})のような文があった場
+   合，「軍」が同一の対象を指しているならば，「ロシア」が同じ対象を指し
+   ていることは自明である．そこで本研究では，1つの文節に対してはより右側
+   に出現した照応詞1つのみを解析の対象とする．
+   
+   以上より，本研究における先行詞，照応詞として扱う基準は以下のとおりで
+   ある．
+
+   \begin{itemize}
+    \item 文章内に出現したすべての名詞句，複合名詞句の構成素を先行詞の候
+	  補とする．
+    \item 文章内に出現したすべての名詞句，複合名詞句の構成素を照応詞の候
+	  補とする．ただし，1つの文節に対しては，より右側に出現した照応
+	  詞1つのみを対象とする．
+    \item 固有表現については例外として扱い，その部分構成素は先行詞，照応
+	  詞として考えない．
+   \end{itemize}
+   
+
+   \subsubsection{基本的な方針}
+
+   一般的に，文章中に新しい概念が登場する際は，その性質や内容を表す節を
+   伴なって出現する場合が多いと考えられる．これに対して，既に文章中に出
+   現している内容・対象を指す表現の場合はすでに行われた説明を繰り返すと
+   冗長になるため，同一，または，より簡潔な表現で表される場合が多いと考
+   えられる．また，同一文章中に先行する文章中で出現した表現が同一，また
+   は，より簡潔な形で出現した場合は，それらは同一の内容・対象を指す可能
+   性が高いと考えられる．
+
+   そこで本研究では基本的に，先行する文章中に出現した表現が同一，または，
+   より簡潔な形で出現した場合に，それらが同一の内容・対象を指すと考える．
+   ただし，指示詞や「同」に修飾されている表現については，先行する表現を
+   照応していると考えた方が自然であるので，これらの語を伴なっていた場合
+   も先行する表現を照応していると考える．また，固有表現は，修飾語によっ
+   て限定されることはないと考えられるので，修飾語を伴なっていた場合も先
+   行する同表記の固有表現を照応していると考える．以下では，同一，または，
+   より簡潔な形で出現したと判断し，照応詞候補と先行詞候補が共参照関係に
+   あると判断する基準を，共参照関係認定基準と呼ぶ．
+
+
+   \subsubsection{共参照関係認定基準}
+   \label{basis}
+
+   文章中に出現した表現が，共参照関係にあると判断する基準，すわなち，照
+   応詞候補が先行詞候補と，同一，または，より簡潔な形であると判断する基
+   準として以下の2つの基準を用いる．ただし，いずれの場合も指示詞，および，
+   「同」は考慮しない．
+
+   \begin{description}
+    \item[\underline{\mbox{共参照関係認定基準1: （文節内のみ考慮）}}]\ \\ 
+	       照応詞，先行詞候補を含む文節を比較し，照応詞候補を含む文
+	       節の照応詞候補以前の部分が，先行詞候補を含む文節に含まれ
+	       ている場合，同一，または，より簡潔であるとする．
+    \item[\underline{\mbox{共参照関係認定基準2: （文節間の係り受けも考慮）}}]\ \\
+	       1の条件に加え，照応詞候補が他の文節から修飾されていない場
+	       合のみ，同一，または，より簡潔であるとする．
+   \end{description}
+
+   例として，(\ref{part})のような文を考える．共参照関係認定基準1を使用し
+   た場合は，a，b，cの場合に，後続する「出場者」は先行する「出場者」と同
+   一，または，より簡潔な表現だと判断し，共参照関係認定基準2を使用した場
+   合は，a，bの場合のみ，同一，または，より簡潔な表現だと判断する．
+
+   \exs{a.\label{part} & 会場に集まった\underline{出場者}が…．
+   \underline{出場者}たちは…．\\& b. & 会場に集まった\underline{出場
+   者}が…．同\underline{出場者}たちは…．\\& c. & 会場に集まった
+   \underline{出場者}が…．決勝に残った\underline{出場者}たちは…．
+   \\& d. & 会場に集まった\underline{出場者}が…．決勝戦\underline{出
+   場者}たちは…．}
+   
+
+   \subsubsection{文字列のマッチングを用いた共参照解析のアルゴリズム}
+   \label{alg}
+
+   以上の方針に基づく，文字列のマッチングを用いた共参照解析のアルゴリズ
+   ムを以下に示す．
+   \begin{enumerate}
+    \item 対象とする文章について，形態素解析，固有表現認識，構文解析を行
+	  う．
+    \item 文頭の文節から順に，すべての名詞句，および，複合名詞の構成素を
+	  照応詞候補とする．だだし，固有表現と解析された名詞句については，
+	  それ以上分割しない．
+    \item 各照応詞候補について，以下の基準で先行詞を探し，先行詞が見つかっ
+	  た場合は，それらの照応詞候補，先行詞は共参照関係にあると判断す
+	  る．ただし，1文節中に複数の照応詞がある場合は，より主辞の近く
+	  （右側）に出現したものを優先する．
+	  \begin{enumerate}
+	   \item 先行する文章中から同一の表現を探す．\label{3-a}
+	   \item 照応詞候補が固有表現である場合は，より簡潔な表現である
+		 かどうかを考慮せず，同一の固有表現があれば先行詞と判断する．
+	   \item それ以外の場合は，照応詞候補がその表現と同一，または，
+		 より簡潔な形である場合，その表現を先行詞とする．先行詞
+		 の条件を満たす表現が複数あった場合は，照応詞候補の近く
+		 に出現したものを優先する．
+	  \end{enumerate}
+   \end{enumerate}
+ 
+
+  \subsection{名詞句の関係解析の利用}
+
+  構文解析の結果，連体修飾関係にある2つの文節と，それらに含まれる自立語
+  を含む複合名詞句があった場合，連体修飾されている名詞句と複合名詞句は同
+  じ対象を指している可能性が高いと考えられる．例えば，(\ref{soren})中の
+  「北海道北部」に連体修飾された「占領」と「北海道北部占領」や，
+  (\ref{tate})中の「立てこもる」に連体修飾された「事件」と「立てこもり事
+  件」は同一の対象を指していると考えられる．
+
+  そこで，照応詞候補を含む文節の照応詞候補以前の部分が，先行詞候補を含む
+  文節に含まれていない場合であっても，含まれていない部分を原形に直したも
+  のが，先行詞候補を連体修飾している文節の原形に含まれている場合，これら
+  は共参照関係にあると考える．
+  
+  \ex{…，ソ連の当時の最高指導者スターリンが，日本の\textbf{北海道北部} 
+  の\underline{占領}とともに，……ソ連の\underline{北海道北部占領}計画
+  は既に知られているが…\label{soren}} 
+  \ex{…女性を人質に\textbf{立て
+  こもる}\underline{事件}があった．今回の\underline {立てこもり事件}につ
+  いて…  \label{tate}}
+
+  同様に，橋渡し指示解析の結果，先行詞候補と関係があると解析された表現の
+  原形を補うことにより，照応詞候補が先行詞候補に含まれるようになった場合，
+  これらは共参照関係にあると考える．例えば(\ref{wcup})のような文があった
+  場合，橋渡し指示解析の結果，2文目に出現する「結果」がアンケートの結果
+  であると認識され，3文目の「アンケート結果」と同一の対象を
+  指していると解析できるようになる．
+
+  \ex{2006 FIFAワールドカップ優勝国予想アンケートが行った．\underline{結
+  果}はブラジルがトップだった．\underline{アンケート結果}の詳細はWebで見
+  られる．\label{wcup}}
+
+
+  \subsection{同義表現の利用}
+
+  \ref{alg}節で説明したアルゴリズムでは，同義表現を用いた言い換えに対応で
+  きない．そこで，\ref{alg}節の3(a)
+  において，先行する文章中から同一の表現を探す際に，自動獲得した同義表現
+  も対象とする．この結果，以下のような文があった場合，「北大西洋条約機構」
+  と「NATO」の間の共参照解析を認識できるようになる．
+
+  \ex{米国は\underline{北大西洋条約機構}加盟国に対し，タリバンとの衝突が激
+  化した南部地域への増派を求めており，7日からの\underline{NATO}国防省理
+  事会で主要議題になる見通し．}
+  
+
+
+ \section{実験と考察} 
+
+ 京都テキストコーパス，および，ウェブから集めた文章に京都テキストコーパ
+ スと同様の基準\cite{TAG}で共参照タグを付与したウェブコーパスを用いて，
+ 共参照解析実験を行なった．京都テキストコーパスは，毎日新聞322 記事2098
+ 文から成り，2870個の共参照タグが付与されている．ウェブコーパスは，186記
+ 事979文から成り，717個の共参照タグが付与されている．
+   
+ 実験は，共参照関係認定基準1，および，共参照関係認定基準2それぞれに対し，
+ 文字列のマッチングのみを用いた手法，それに名詞句の関係解析，自動獲得した
+ 同義表現，および，その両方を追加した計4手法を行った．また，共参照関係認
+ 定基準の妥当性を確かめるため，より簡潔であるかどうかに関わらず，照応詞候
+ 補があった場合，先行する直近の同一の表現を先行詞と判断するという手法も用
+ いた．すなわち，「大統領官邸」という表現の前に「首相官邸」という表現があ
+ る場合，「官邸」が同一の対象を指していると判断する．ただし，より長い表現
+ 間のマッチングを優先し，「首相官邸」より前に「大統領官邸」という表現があっ
+ た場合は，「大統領官邸」を先行詞とする．結果を表\ref{main}に示す．表
+ \ref{main}中のF値は，適合率と再現率の調和平均である．
+
+  \begin{table}[b]
+  \caption{共参照解析結果}
+  \label{main}
+  \begin{center}
+\input{05table06.txt}
+  \end{center}
+ \end{table}     
+
+ 先行する直近の同一の表現を先行詞と判断する手法と文字列のマッチングのみを
+ 用いた手法を比較すると，いずれの共参照関係認定基準を用いた場合も，僅かな
+ 再現率の減少で，適合率は大幅に上昇しており，照応詞を先行詞と同一，または，
+ より簡潔な表現とするという制約が有効であることが確認できる．
+
+ 共参照関係認定基準1を用いた場合と共参照関係認定基準2を用いた場合とを比
+ 較すると，共参照関係認定基準2の方が厳しい制約であるため，再現率が低下す
+ るかわりに，適合率が上昇している．F値に関しては，京都テキストコーパスを
+ 用いた実験では共参照関係認定基準1を用いた場合の方が，ウェブコーパスを用
+ いた実験では共参照関係認定基準2を用いた場合の方が高くなっている．これは，
+ 新聞記事では比較的長い名詞句が多いため，同一の複合名詞句であれば同じも
+ のを指している場合が多く文節内のみを考慮すれば十分であるのに対し，ウェ
+ ブコーパスでは短い名詞句が多いため文節間の修飾関係も考慮する必要がある
+ ためだと考えられる．
+
+ 同義表現を用いない場合と用いる場合を比較すると，同義表現を用いることによ
+ り適合率，再現率はともに上昇しており，自動獲得した同義表現を共参照解析に
+ 用いることは有効であると言える．表\ref{syn}に同義表現の利用により新たに
+ 共参照関係にあると解析された例を示す．共参照関係認定基準1を用いた場合，
+ 同義表現を用いることにより，京都テキストコーパスとウェブコーパス合わせて
+ 新たに56個がシステムにより共参照関係にあると解析されるようになった．その
+ うち51個が正しい解析となっており，新たに誤って解析されるようになったもの
+ は表\ref{syn}に示した「衛星」と「BS」など5個のみであった．また，51個中
+ 21個が国語辞典から抽出された同義表現であり，国語辞典から抽出された同義
+ 表現は，数は少ないものの共参照解析の性能向上に貢献していることが分かる．
+
+  \begin{table}[b]
+   \caption{同義表現の利用により新たに共参照関係にあると解析された例}
+   \label{syn}
+\input{05table07.txt}
+  \end{table}
+
+  一方，名詞句の関係解析を用いた場合，再現率は上昇したものの，適合率は減
+  少しており，ウェブコーパスに対し共参照関係認定基準1を用いた実験ではF値
+  も低下している．しかし，ウェブコーパスに対し，より高い精度となる共参照
+  関係認定基準2を用いた場合は再現率は大幅に上昇しており，また，いずれの
+  コーパスに対しても，もっとも高い精度が得られたのは同義表現，名詞句の関
+  係解析の両方を用いた場合であることから，名詞句の関係解析を用いることも
+  共参照解析にある程度有効であると考えられる．共参照関係認定基準1を用い
+  た場合に，名詞句の関係解析の利用により新たに共参照関係にあると解析され
+  た例を表\ref{rel}に示す．
+
+  表\ref{rel}において，名詞句の関係解析を用いることにより新たに正しく認
+  識できるようになったものは，それぞれ2回出現する「所感」，「結果」，
+  「漁民」が「首相の所感」，「アンケートの結果」，「ベトナム系の漁民」と
+  解析されたことにより，これらの間の共参照関係を認識できるようになった．
+  一方，新たに誤って認識するようになったものは，それぞれ2回出現する「候
+  補」，「燃料」が「連絡協議会の候補」，「核の燃料」と解析されることから，
+  これらの表現が共参照関係にあると判断したものの，この場合は，それぞれ
+  「有力」，「独自の」，また，「初回分の」，「代替」という異なる修飾語で
+  限定されていることから，これらの表現は同一のものを指しているとは言えず，
+  誤った解析となっている．
+
+  \begin{table}[b]
+   \caption{名詞句の関係解析の利用により新たに共参照関係にあると解析された例}
+   \label{rel}
+\input{05table08.txt}
+  \end{table}
+  \begin{table}[b]
+   \caption{照応詞と先行詞の関係ごとの再現率}
+   \label{recall}
+   \begin{center}
+\input{05table09.txt}
+   \end{center}
+  \end{table}     
+
+  続いて，\ref{hajime}章で分類した照応詞と先行詞の関係ごとの傾向を調べる
+  ため，京都テキストコーパスから無作為に抽出した共参照タグ250個について，
+  照応詞と先行詞の関係，および，システムが正しく認識できているか否かを調
+  べた．結果を表\ref{recall}に示す．照応詞の表記が先行詞の表記に含まれて
+  いる場合は高い再現率が実現できていることが確認できる．また，同義表現に
+  よる言い換えとなっている場合は，出現数が少ないものの，ある程度高い再現
+  率が実現されていると考えられる．その他に分類されたものは本システムでは
+  原理的に解析できないため，22個すべてが解析できていない．その他に分類さ
+  れた例を(\ref{others}) に示す．このような共参照関係は全体の約9\% 程度を
+  占めており，より高い再現率をもつ共参照解析システムを構築するためには，
+  これらの認識を行う必要があると考えられる．
+
+  \exs{a. \label{others}& 小選挙区に立候補するには現金\underline{三百万
+  円}か\underline {同額} の国債証書を… \\[-10pt] & b. & …ロシア
+  軍は一日までの激戦で，首都\underline{グロズヌイ}を事実上制圧した模様だ
+  が，…．しかし，\underline{市}内を完全に制圧するまでには，…}
+
+  \begin{table}[t]
+   \caption{先行研究との比較}
+   \label{compare}
+   \begin{center}
+\input{05table10.txt}
+   \end{center}
+  \end{table}     
+
+  最後に，先行研究との比較結果を表\ref{compare}に示す．対象とする共参照
+  の定義，および，使用しているコーパスが異なるため単純には比較できないも
+  のの，提案システムは，ある程度高い精度を実現していると考えられる．
+
+
+ 
+ \section{関連研究}
+
+ 直接照応解析に関係する先行研究で用いられた手法としては大きく，人手で作
+ 成した規則に基づく解析手法と，タグ付きコーパスを用いた学習手法に分けら
+ れる．
+  
+
+  \subsection{規則ベースの手法}
+
+  Zhouら\cite{Zhou2004}は，英文に対して，coreferenceを7種類に分類し，照
+  応の種類ごとに規則を作成し直接照応の解析を行っている．各段階で必要とな
+  る制約は基本的にデータから人手で作成している．Zhouらはこの手法により，
+  MUC-6に対して73.9\%，MUC-7に対して66.5\%のF値という解析結果を得ている．
+  
+  村田ら\cite{Murata1996b}は，日本語を対象として，名詞の指示性を考慮した
+  9個のルールを用いて名詞の同一性の解析を行っている．名詞句の指示性に関
+  しては，人手で作成した86個の規則を適用することにより，すべての名詞を総
+  称名詞，定名詞，不定名詞の3種類に分類している．童話や新聞記事を用いた
+  実験を行い，結果として適合率79\%，再現率77\%を得ている．童話，新聞記事
+  それぞれの精度，および，複合名詞の構成素が関係する照応をどこまで扱って
+  いるかなどは不明である．
+
+
+  \subsection{機械学習を用いた手法}
+
+  機械学習を用いた同一指示解析手法はいくつかの手法が提案されている．これ
+  らの手法の多くは，共参照解析の問題を，照応詞候補に対して，先行詞の候補
+  となる名詞句の各々が先行詞となるか否かを判別する2値分類問題として扱って
+  いる．分類器は対象の名詞句が先行詞かどうかという2値分類問題を解く．
+
+  Soonら\cite{Soon2001}は，訓練時には，先行詞と照応詞の対を正例，先行詞
+  と照応詞の間の各名詞句と照応詞の対を負例として学習した．照応問題を解く
+  際には，照応詞から先行文脈に向かって，先行詞候補となる名詞句の各々につ
+  いて，それが先行詞かどうかを分類していく．そして，分類器がいずれかの名
+  詞句を先行詞として決定した時点で解析を終了する．分類器が，先行する名詞
+  句をすべて先行詞でないと分類した場合は，対象としている照応詞は先行詞を
+  持たないと判断する．Soonらの実験では，12個の素性を用い，決定木を用いて
+  学習を行ない，MUC-6に対して62.6\%のF値，MUC-7に対して60.4\%のF 値と，
+  規則ベースの手法と同程度の精度を得ている．
+  
+  Ngら\cite{Ng2002a}はSoonらの手法を2つの点において改良している．一つは
+  素性集合を拡張し，語彙的な素性や意味的素性など，53個の素性に増やした．
+  もう一つは先行詞同定の探索アルゴリズムの変更である．Soonらが照応詞に近
+  い名詞句から順に先行詞かどうかを決定的に決めるのに対し，Ngらはすべての
+  先行する名詞句を分類器にかけ，分類器が先行詞と決定した名詞句の中で，最
+  も先行詞らしいと判定した名詞句を先行詞とする．NgらのモデルはSoonらのモ
+  デルよりも先行詞同定の精度がよく，MUC-6に対して70.4\%，MUC-7に対して
+  63.4\%のF 値を得ている．
+
+  日本語における機械学習を用いた同一指示性解析に関する研究としては Iida ら
+  \cite{Iida2003}の研究がある．Iida らは日本語では冠詞などの情報が無く，
+  名詞句の指示性の推定がそれほど容易でないことから，まず名詞の指示性の判
+  断を行った後に先行詞の同定を行うのではなく，まずある表現に対する最尤先
+  行詞候補を決定した後先行詞候補の情報も用いて名詞の指示性の判断を行って
+  いる．Iida らは分類器としてSVMを用い，語彙的な情報を用いた素性や統語的
+  な情報を用いた素性，意味的な情報を用いた素性，名詞句間の距離情報を用い
+  た素性計30あまりの素性を用いている．京大コーパスの報道90記事に対して名
+  詞句同一指示関係のタグを付与し，10分割交叉検定を行った結果，F値として
+  70.9\% を得ている．
+    
+
+
+ \section{おわりに}
+
+ 本稿では，まず，コーパスおよび国語辞典の定義文から同義表現の自動獲得を行っ
+ た．続いて，獲得した同義表現，および，名詞句の関係解析結果を用いた日本語
+ 共参照解析システムの構築を行った．京都テキストコーパス，および，ウェブコー
+ パスを使った実験の結果，同義表現，および，名詞句の関係解析結果を用いるこ
+ とにより，共参照解析の精度は向上し，手法の有効性が確認できた．今後の課題
+ としては，文字列のマッチングや同義表現による言い換えでは解析できないよう
+ な共参照関係の認識が挙げられる．
+ 
+
+
+
+\bibliographystyle{jnlpbbl_1.3}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Guodong \BBA\ Jian}{Guodong \BBA\ Jian}{2004}]{Zhou2004}
+Guodong, Z.\BBACOMMA\ \BBA\ Jian, S. \BBOP 2004\BBCP.
+\newblock \BBOQ A High-Performance Coreference Resolution System using a
+  Constraint-based Multi-Agent Strategy\BBCQ\
+\newblock In {\Bem Proceedings of the 20th International Conference on
+  Computational Linguistics}, \mbox{\BPGS\ 522--528}.
+
+\bibitem[\protect\BCAY{Iida, Inui, \BBA\ Matsumoto}{Iida
+  et~al.}{2006}]{Iida2006}
+Iida, R., Inui, K., \BBA\ Matsumoto, Y. \BBOP 2006\BBCP.
+\newblock \BBOQ Exploiting Syntactic Patterns as Clues in Zero-Anaphora
+  Resolution\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on
+  Computational Linguistics and 44th Annual Meeting of the Association for
+  Computational Linguistics}, \mbox{\BPGS\ 625--632}.
+
+\bibitem[\protect\BCAY{Iida, Inui, Takamura, \BBA\ Matsumoto}{Iida
+  et~al.}{2003}]{Iida2003}
+Iida, R., Inui, K., Takamura, H., \BBA\ Matsumoto, Y. \BBOP 2003\BBCP.
+\newblock \BBOQ Incorporating Contextual Cues in Trainable Models for
+  Coreference Resolution\BBCQ\
+\newblock In {\Bem Proceedings of the 10th Conference of the European Chapter
+  of the Association for Computational Linguistics Workshop on The
+  Computational Treatment of Anaphora}, \mbox{\BPGS\ 23--30}.
+
+\bibitem[\protect\BCAY{Kawahara \BBA\ Kurohashi}{Kawahara \BBA\
+  Kurohashi}{2004}]{Kawahara2004a}
+Kawahara, D.\BBACOMMA\ \BBA\ Kurohashi, S. \BBOP 2004\BBCP.
+\newblock \BBOQ Zero Pronoun Resolution based on Automatically Constructed Case
+  Frames and Structural Preference of Antecedents\BBCQ\
+\newblock In {\Bem Proceedings of the 1st International Joint Conference on
+  Natural Language Processing (IJCNLP-04)}, \mbox{\BPGS\ 334--341}.
+
+\bibitem[\protect\BCAY{Ng \BBA\ Cardie}{Ng \BBA\ Cardie}{2002}]{Ng2002a}
+Ng, V.\BBACOMMA\ \BBA\ Cardie, C. \BBOP 2002\BBCP.
+\newblock \BBOQ Improving Machine Learning Approaches to Coreference
+  Resolution\BBCQ\
+\newblock In {\Bem Proceedings of the 40th Annual Meeting of the Association
+  for Computational Linguistics}, \mbox{\BPGS\ 104--111}.
+
+\bibitem[\protect\BCAY{Nichols, Bond, \BBA\ Flickinger}{Nichols
+  et~al.}{2005}]{Nichols2005}
+Nichols, E., Bond, F., \BBA\ Flickinger, D. \BBOP 2005\BBCP.
+\newblock \BBOQ Robust ontology acquisition from machine-readable
+  dictionaries\BBCQ\
+\newblock In {\Bem Proceedings of the International Joint Conference on
+  Artificial Intelligence IJCAI-2005}, \mbox{\BPGS\ 1111--1116}.
+
+\bibitem[\protect\BCAY{Okazaki \BBA\ Ishizuka}{Okazaki \BBA\
+  Ishizuka}{2008}]{Okazaki2008}
+Okazaki, N.\BBACOMMA\ \BBA\ Ishizuka, M. \BBOP 2008\BBCP.
+\newblock \BBOQ A Discriminative Approach to Japanese Abbreviation
+  Extraction\BBCQ\
+\newblock In {\Bem Proceedings of the 3rd International Joint Conference on
+  Natural Language Processing (IJCNLP-08)}, \mbox{\BPGS\ 889--894}.
+
+\bibitem[\protect\BCAY{Sasano, Kawahara, \BBA\ Kurohashi}{Sasano
+  et~al.}{2004}]{Sasano2004}
+Sasano, R., Kawahara, D., \BBA\ Kurohashi, S. \BBOP 2004\BBCP.
+\newblock \BBOQ Automatic Construction of Nominal Case Frames and its
+  Applicatoin to Indirect Anaphora Resolution\BBCQ\
+\newblock In {\Bem Proceedings of the 20th International Conference on
+  Computational Linguistics}, \mbox{\BPGS\ 1201--1207}.
+
+\bibitem[\protect\BCAY{Seki, Fujii, \BBA\ Ishikawa}{Seki
+  et~al.}{2002}]{Seki2002}
+Seki, K., Fujii, A., \BBA\ Ishikawa, T. \BBOP 2002\BBCP.
+\newblock \BBOQ A Probabilistic Method for Analyzing {J}apanese Anaphora
+  Integrating Zero Pronoun Detection and Resolution\BBCQ\
+\newblock In {\Bem Proceedings of the 19th International Conference on
+  Computational Linguistics}, \mbox{\BPGS\ 911--917}.
+
+\bibitem[\protect\BCAY{Soon, Ng, \BBA\ Lim}{Soon et~al.}{2001}]{Soon2001}
+Soon, W.~M., Ng, H.~T., \BBA\ Lim, D. C.~Y. \BBOP 2001\BBCP.
+\newblock \BBOQ A Machine Learning Approach to Coreference Resolution of Noun
+  Phrases\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 27}  (4), \mbox{\BPGS\
+  521--544}.
+
+\bibitem[\protect\BCAY{Tokunaga, Syotu, Tanaka, \BBA\ Shirai}{Tokunaga
+  et~al.}{2001}]{Tokunaga2001}
+Tokunaga, T., Syotu, Y., Tanaka, H., \BBA\ Shirai, K. \BBOP 2001\BBCP.
+\newblock \BBOQ Integration of heterogeneous language resources: A monolingual
+  dictionary and a thesaurus\BBCQ\
+\newblock In {\Bem the 6th Natural Language Processing Pacific Rim Symposium},
+  \mbox{\BPGS\ 135--142}.
+
+\bibitem[\protect\BCAY{鶴丸\JBA 竹下\JBA 伊丹\JBA 柳川\JBA 吉田}{鶴丸\Jetal
+  }{1991}]{Tsurumaru1991}
+鶴丸弘昭\JBA 竹下克典\JBA 伊丹克企\JBA 柳川俊英\JBA 吉田将 \BBOP 1991\BBCP.
+\newblock \JBOQ 国語辞典情報を用いたシソーラスの作成について\JBCQ\
+\newblock \Jem{情報処理学会自然言語処理研究会 1991-NL-083}, \mbox{\BPGS\
+  121--128}.
+
+\bibitem[\protect\BCAY{酒井\JBA 増山}{酒井\JBA 増山}{2003}]{Sakai2003}
+酒井浩之\JBA 増山繁 \BBOP 2003\BBCP.
+\newblock \JBOQ コーパスからの名詞と略語の対応関係の自動獲得\JBCQ\
+\newblock \Jem{言語処理学会第9回年次大会発表論文集}.
+
+\bibitem[\protect\BCAY{西尾\JBA 岩淵\JBA 水谷}{西尾\Jetal }{2000}]{Iwanami}
+西尾実\JBA 岩淵悦太\JBA 水谷静夫\JEDS\ \BBOP 2000\BBCP.
+\newblock \Jem{岩波国語辞典}.
+\newblock 岩波書店.
+
+\bibitem[\protect\BCAY{村田\JBA 長尾}{村田\JBA 長尾}{1996}]{Murata1996b}
+村田真樹\JBA 長尾眞 \BBOP 1996\BBCP.
+\newblock \JBOQ
+  名詞の指示性を利用した日本語文章における名詞の指示対象の推定\JBCQ\
+\newblock \Jem{自然言語処理}, {\Bbf 3}  (1), \mbox{\BPGS\ 67--81}.
+
+\bibitem[\protect\BCAY{河原\JBA 黒橋\JBA 橋田}{河原\Jetal
+  }{2002}]{Kawahara2002c}
+河原大輔\JBA 黒橋禎夫\JBA 橋田浩一 \BBOP 2002\BBCP.
+\newblock \JBOQ 「関係」タグ付きコーパスの作成\JBCQ\
+\newblock \Jem{言語処理学会第8回年次大会発表論文集}, \mbox{\BPGS\ 495--498}.
+
+\bibitem[\protect\BCAY{河原\JBA 笹野\JBA 黒橋\JBA 橋田}{河原\Jetal
+  }{2005}]{TAG}
+河原大輔\JBA 笹野遼平\JBA 黒橋禎夫\JBA 橋田浩一 \BBOP 2005\BBCP.
+\newblock \Jem{格・省略・共参照タグ付けの基準}.
+
+\bibitem[\protect\BCAY{黒橋\JBA 河原}{黒橋\JBA 河原}{2007}]{KNP3}
+黒橋禎夫\JBA 河原大輔 \BBOP 2007\BBCP.
+\newblock \JBOQ 日本語構文解析システム{KNP} version 3.0 使用説明書\JBCQ\
+\newblock 京都大学大学院情報学研究科.
+
+\bibitem[\protect\BCAY{久光\JBA 丹羽}{久光\JBA 丹羽}{1997}]{Hisamitsu1997}
+久光徹\JBA 丹羽芳樹 \BBOP 1997\BBCP.
+\newblock \JBOQ 統計量とルールを組み合わせて有用な括弧表現を抽出する手法\JBCQ\
+\newblock \Jem{情報処理学会自然言語処理研究会 1997-NL-122}, \mbox{\BPGS\
+  113--118}.
+
+\bibitem[\protect\BCAY{村上\JBA 那須川}{村上\JBA 那須川}{2004}]{Murakami2004}
+村上明子\JBA 那須川哲哉 \BBOP 2004\BBCP.
+\newblock \JBOQ 複数の著者の表記の違いを利用した同義表現抽出\JBCQ\
+\newblock \Jem{情報処理学会自然言語処理研究会 2004-NL-162}, \mbox{\BPGS\
+  117--124}.
+
+\bibitem[\protect\BCAY{上野\JBA 森\JBA 木戸\JBA 中川}{上野\Jetal
+  }{2004}]{Ueno2004}
+上野友司\JBA 森辰則\JBA 木戸冬子\JBA 中川裕志 \BBOP 2004\BBCP.
+\newblock \JBOQ 係り受けの2部グラフと共起関係を利用した同義語抽出\JBCQ\
+\newblock \Jem{言語処理学会第10回年次大会発表論文集}.
+
+\bibitem[\protect\BCAY{山本}{山本}{2002}]{Yamamoto2002}
+山本和英 \BBOP 2002\BBCP.
+\newblock \JBOQ テキストからの語彙的換言知識の獲得\JBCQ\
+\newblock \Jem{言語処理学会第8回年次大会発表論文集}.
+
+\bibitem[\protect\BCAY{田近}{田近}{1997}]{Reikai}
+田近洵一\JED\ \BBOP 1997\BBCP.
+\newblock \Jem{例解小学国語辞典}.
+\newblock 三省堂.
+
+\end{thebibliography}
+
+\begin{biography}
+ \bioauthor{笹野　遼平}{2004年東京大学工学部電子情報工学科卒業．2006年同大
+ 学院情報理工学系研究科修士課程修了．現在，同大学院博士課程在学中．省略解
+ 析，照応解析の研究に従事．}
+ \bioauthor{黒橋　禎夫}{1989年京都大学工学部電気工学第二学科卒業．1994年同
+ 大学院博士課程修了．京都大学工学部助手，京都大学大学院情報学研究科講師，
+ 東京大学大学院情報理工学系研究科助教授を経て，2006年京都大学大学院情報学
+ 研究科教授，現在に至る．自然言語処理，知識情報処理の研究に従事．}
+\end{biography}
+
+\biodate
+
+
+
+\end{document}

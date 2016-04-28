@@ -1,0 +1,987 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.2}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+    \usepackage{mymacro_re}
+
+
+
+\Volume{17}
+\Number{1}
+\Month{Janurary}
+\Year{2010}
+\received{2009}{6}{8}
+\revised{2009}{8}{7}
+\accepted{2009}{9}{8}
+
+\setcounter{page}{121}
+
+\jtitle{項の共有関係と統語パターンを用いた事態間関係獲得}
+\jauthor{阿部　修也\affiref{Author} \and 乾　健太郎\affiref{Author} \and 松本　裕治\affiref{Author}}
+\jabstract{
+  行為—効果関係，行為—手段関係のような事態間の関係を大規模コーパスか
+  ら自動的に獲得する．共起パターンを利用する手法では，事態を表現する述
+  語間で共有される項を認識することが難しいため，述語間で共有される名詞
+  （アンカー）を用いて共有項を獲得し，共起パターンを用いて獲得した所与
+  の関係を満たす述語対と共有項を組み合わせることで，共有項と共に事態間
+  関係を獲得する．このとき2種類の異なるアンカーを用いることで，精度を保っ
+  たまま再現率を向上できることを確認した．
+}
+\jkeywords{関係獲得，事態間関係}
+
+\etitle{Event Relation Acquisition with Syntactic Patterns and Shared Arguments}
+\eauthor{Shuya Abe\affiref{Author} \and Kentaro Inui\affiref{Author} \and Yuji Matsumoto\affiref{Author}} 
+\eabstract{
+  Addressing the task of acquiring semantic relations between events
+  from a large corpus, we first argue the complementarity between the
+  pattern-based relation-oriented approach and the anchor-based
+  argument-oriented approach. We then proposes a two-phased approach,
+  which first uses lexico-syntactic patterns to acquire predicate
+  pairs and then uses two types of anchors to identify shared
+  arguments. The present results of our empirical evaluation on a
+  large-scale Japanese Web corpus have shown that (a) the anchor-based
+  filtering extensively improves the precision of predicate pair
+  acquisition, (b) the two types anchors are almost equally
+  contributive and combining them improves recall without losing
+  precision, and (c) the anchor-based method achieves high precision
+  also in shared argument identification.
+}
+\ekeywords{relation extraction, event relation}
+
+\headauthor{阿部，乾，松本}
+\headtitle{項の共有関係と統語パターンを用いた事態間関係獲得}
+
+\affilabel{Author}{奈良先端科学技術大学院大学情報科学研究科}{Graduate School of Information Science, Nara Institute of Science and Technology}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+
+質問応答，情報抽出，複数文章要約などの応用では，テキスト間の含意関係や
+因果関係を理解することが有益である．例えば，動詞「洗う」と動詞句「きれ
+いになる」の間には，「何かを洗うという行為の結果としてその何かがきれい
+になる」という因果関係を考えることができる．本論文では，このような述語
+または述語句で表現される事態と事態の間にある関係を大規模にかつ機械的に
+獲得する問題について述べる．
+
+事態表現間の因果関係，時間関係，含意関係等を機械的に獲得する研究がいく
+つか存在す
+る
+~\cite[etc.]{lin:01,inui:DS03,chklovski,torisawa:NAACL,pekar:06,zanzotto:06,abe:08}
+．事態間関係の獲得を目的とする研究では，事態を表現する述語（または述語
+句）の間でどの項が共有されているのかを捉えるということが重要である．例
+えば，述語「洗う」と述語句「きれいになる」の因果関係は次にように表現で
+きる．
+\begin{quotation}
+  （$X$を）\emph{洗う} $\rightarrow_{因果関係}$ （$X$が）\emph{きれいに
+    なる}
+\end{quotation}
+この$X$は述語「洗う」のヲ格と述語句「きれいになる」のガ格が共有されてい
+ることを表している．
+
+関係$R$を満たす述語対は次のように一般化して表現することができる．
+\begin{quotation}
+  （$X項_{1}$）$\emph{述語}_1$ $\rightarrow_{R}$ （$X項_{2}$）$\emph{述
+    語}_2$
+\end{quotation}
+$\emph{述語}_i$は自然言語における述語（または述語句）であり，典型的には
+動詞または形容詞である．$X$はある述語の項ともう一つの述語の項が共有され
+ていることを表している．
+
+我々の目的は，(a) 特定の関係を満たす述語対を見付けだし（\emph{述語対獲
+  得}），(b) 述語対の間で共有されている項を特定する（\emph{共有項同
+  定}）ことである．事態間関係の獲得を目的とする研究は既にいくつかあるが，
+どの研究も関係述語対獲得または共有項同定の片方の問題のみを対象としてお
+り，両方の問題を対象とした研究はない．我々が提案する手法は，目的が異な
+る2種類の手法を段階的に適用して述語間関係を獲得する手法である．
+
+
+
+\section{関連研究}
+\label{sec:related}
+
+既存の述語間関係獲得の手法は2種類の手法に分類することができる．本論文で
+はそれぞれの手法を\emph{パターン方式}，\emph{アンカー方式}と呼称する．
+
+
+\subsection{パターン方式}
+\label{ssec:related_patt}
+
+パターン方式に共通する手法は，多数の事例と共起する様な語彙統語的な共起
+パターンを作成し，これを用いて特定の関係を満たす述語対を獲得するという
+手法である．パターン方式の中で最も基本的な手法は，\emph{VerbOcean}とい
+う知識源を構築するためにChklovskiとPantel~\cite{chklovski}が用いたもの
+である．例えば，\emph{to \bracket{\emph{Verb-X}} and then
+  \bracket{\emph{Verb-Y}}}~\footnote{共起パターン中の\bracket{~}は変数ス
+  ロットを意味しており，特定の表現に置き換えることが可能である．ま
+  た，\bracket{~}の中に記述している情報は語彙または統語的な制約であ
+  り，\bracket{Verb-X\,}は\bracket{~}を置き換える表現が動詞であるこ
+  とを表現している．}のような共起パターンを人手で作成
+し，\emph{strength} (e.g. \emph{taint--poison}) という述語間の関係を
+獲得した．述語間関係毎に共起パターンを人手で作成することで6種類の述語間
+関係を獲得した．このように人手で作成した共起パターンを用いることで少数
+の共起パターンを用意するだけで多数の述語間関係を獲得することができるが，
+獲得した述語間関係の再現率は高いが，精度が低くなる傾向がみられる．例え
+ば，Chklovskiらが約29,000の述語間関係を獲得した実験における精度は約65.5\%であった．
+これに対し，自動獲得した述語間関係から誤り事例を除くための手法も提案されている~\cite{chklovski,torisawa:NAACL,zanzotto:06,inui:DS03}．
+
+近年，Abeら~\cite{abe:08}がPantelとPennacchiotti~\cite{pantel2006}の手
+法を拡張した．Pantelらの手法は，実体間関係獲得のために提案されたもので，
+任意の関係のみとよく共起するパターンと実体対をブートストラップ的に獲得
+する．Abeらはこの手法を述語間関係獲得に適用できるように拡張し，例えば
+「\bracket{\text{\bfseries 名詞}}不足により\bracket{\text{\bfseries 動詞}}できなかっ
+た」\footnote{この共起パターンは，例えば「\emph{研究}不足により\emph{発
+    見}できなかった」という事例と共起する．}のような，多数の事例とは共起
+しないが獲得した述語対の精度が高くなる傾向を持つ共起するパターン（特殊
+な共起パターン）をブートストラップ的に学習し，述語間関係知識を獲得し
+た．
+
+
+\subsection{アンカー方式}
+\label{ssec:related_anc}
+
+アンカー方式は，述語間関係を決めるための手がかりとして述語の項を埋める
+表現を用い，主に述語間の類義関係を獲得する場合や含意関係を獲得する場合
+の前処理として利用される．述語の項を埋める表現を取り扱う方法の違いから，
+アンカー方式を2つに分けることができる．ひとつめ手法はDistributional
+Hypothesis~\cite{harris}を利用し，述語の項を埋める表現が似ている述語の
+間には同義関係が成り立つと仮定する方法であ
+り，Linら~\cite{lin:01}とSzpektorら~\cite{szpektor-EtAl:2004:EMNLP}らの
+研究がこのような手法を用いている．
+
+もうひとつの手法はPekar~\cite{pekar:06}が提案している手法である．この手
+法は，含意関係を満たす動詞対の候補を見付けるために次の2つの基準を用い
+る．
+\begin{itemize}
+\item 2つの動詞が同一の談話に出現する．
+\item 2つの動詞の項を埋める表現が指しているものが同一である（これ
+  を\emph{アンカー}と呼ぶ）．
+\end{itemize}
+例えば，次の節対``\emph{Mary bought a house.}''と``\emph{The house
+  belongs to Mary.}''が同一談話に存在する場合，動詞
+対\emph{buy} (object:\emph{X})-\emph{belong} (subject:\emph{X}) と\emph{buy} (subject:\emph{X})-\emph{belong} (to:\emph{X}) は含意関係の候補である\footnote{含意関係の
+  候補となる動詞対を2つ挙げたが，どちらも\emph{buy}と\emph{belong}の対
+  である．2つの動詞対は，それぞれ項が異なるため別の対であるとみなす．}．
+
+
+
+\subsection{パターン方式とアンカー方式の違い}
+
+パターン方式とアンカー方式の2つの手法を説明したが，この2つの手法は独立
+かつ相補的な関係にある．パターン方式は，アンカー方式と比較して関係の種
+類を詳細に識別することができ，例え
+ばChklovskiとPantel~\cite{chklovski}が用いたパターンは6種類の関係を認識
+し，Abeら~\cite{abe:08}はInui ら \cite{inui:DS03}によって定義され
+た4種類の因果関係のうち2種類の関係を認識した．しかし，パターン方式は共
+起パターンを用いて同一文内で共起した述語対を関係の候補とするが，同一文
+内ではしばしば述語の項が省略されるため，述語の間で共有されている項を同
+定することが難しい．例えば，普通は「お茶を淹れてからお茶を飲んだ」とは
+言わずに「お茶を淹れてから飲んだ」と言うように，同一文内において同じ項
+が2回以上出現する場合は2回目以降はその項が省略されることが多い．一方，
+アンカー方式では，述語の間で共有されている項を用いて述語間関係を発見す
+るため，この手法で獲得した述語対は述語間で共有されている項が同定されて
+いる．しかし，述語間の関係を決めるために用いる情報がせいぜい項の情報で
+あるため，同義関係や含意関係よりも詳細な因果関係や前提条件を直接的に識
+別することが難しい．
+
+
+
+\subsection{パターン方式とアンカー方式の組み合わせ}
+
+このような独立的かつ相補的な特徴にも関わらず，2つの手法の組み合わせにつ
+いては十分に研究が行われていない．興味深い例外とし
+てTorisawa~\cite{torisawa:NAACL}の手法がある．この手法は，一般的な接続
+表現「\emph{\bracket{Verb-X\,}て\bracket{Verb-Y\,}}」と動詞と項の間の共起情
+報を組み合わせて時間的な順序関係の制約を持つような事態間の推論規則を獲
+得する．この手法は有望であるように思えるが，時間的な制約を持つ事態間の
+推論規則に特化したヒューリスティックを用いているために，別の種類の関係
+を獲得するためにこの手法を適用できるのかという点が明かではない．
+
+
+
+\section{2段階述語間関係獲得手法}
+\label{sec:method}
+
+
+パターン方式の関係指向手法とアンカー方式の類義指向手法を組み合わせる手
+法を提案する．この手法の概要を\fig{overview}に記す．この手法は述語対獲
+得と共有項同定の2つの過程からなる．最初にパターン方式を用いて所与の関係
+を満たす述語対を獲得し，これを述語対候補とする．次に，アンカー方式を用
+いて各述語対候補のフィルタリングと共有項同定を行う．アンカーとして，イ
+ンスタンスアンカーとタイプアンカーの2種類を用いる．述語対候補のアンカー
+を発見した場合，述語対候補は確かに所与の関係にあると見なし，アンカーを
+共有している述語対の項対を共有項とする．一方で，述語対候補のアンカーが
+ない場合はその述語対候補を破棄する．\sec{result}で示すように，パターン
+方式とアンカー方式を組み合わせて述語対の関係を判断することにより精度が
+向上した．
+
+\begin{figure}[p]
+\begin{center}
+\includegraphics{17-1ia7f1.eps}
+\end{center}
+\vspace{-3pt}
+  \caption{2段階述語間関係獲得}
+  \label{fig:overview}
+\end{figure}
+
+
+\subsection{述語対獲得}
+\label{ssec:pred_pair}
+
+述語対獲得ではパターン方式の手法を用いて，所与の関係にある述語対を獲得
+する．このとき，パターン方式の手法は，関係を詳細に識別して因果関係のよ
+うな事態間関係を獲得することができれば任意の手法でもよい．例え
+ば，\ssec{related_patt}で挙げた手法はこの条件を備えている
+が，\ssec{related_anc}で挙げた手法はこの条件を備えていない．
+
+実験ではパターン方式の手法として，Abeら~\cite{abe:08}の手法を用いること
+にした．その理由は，この手法が獲得した事態対の確からしさを表すスコアを
+持つため，このスコアを用いて信頼度の高い事態対だけを利用することができ
+るという利点を備えているためである．この手法の詳細は~\cite{abe:08}に記
+されているが，概要を\sec{patt_method}にも記す．
+
+
+\subsection{共有項同定}
+\label{ssec:shared_case}
+
+共有項同定では，パターン方式を用いて獲得した所与の関係にある述語対候補
+に対して，アンカーを用いることで，フィルタリングと共有項同定を行う．イ
+ンスタンスアンカーとタイプアンカーの2種類のアンカーを用いる．この2種類
+のアンカーはそれぞれ独立的かつ相補的な特徴を持つため，この2つのアンカー
+を組み合わせることで再現率を向上できる可能性がある．
+
+
+\subsection{共有項同定：インスタンスアンカー}
+\label{ssec:instance_anc}
+
+Pekar~\cite{pekar:06}が動詞間の含意関係を獲得するためにアンカーを用いた
+方法に示唆を受けて，我々は次の3つの仮説を置いた．
+\begin{itemize}
+\item 同一談話内において2つの述語が項に同じ名詞表現を伴っているとき，こ
+  の名詞表現は同じものを指している．
+\item 同一談話内において2つの述語の項が同じものを指しているのであれば，
+  この2つの述語の項は共有されている．
+\item 同一談話内において2つの述語の項が同じものを指しているのであれば，
+  この2つの述語は何らかの関係\footnote{ここで言う関係とは含意関係や因果
+    関係のことである．また述語間の含意関係や因果関係では，述語の間の順
+    序関係が重要であるが，この仮説は順序関係について述べない．}を満た
+  す．
+\end{itemize}
+例えば\fig{overview}の (2a)はある文章中の談話である．この談話において，
+名詞「パン」は2回出現し，1つめの「パン」は「焼く」のヲ格であり，2つめの
+「パン」は「焦げる」のガ格である．仮説から，2回出現した「パン」は同じ
+「パン」を指していると仮定でき，「焼く」のヲ格と「焦げる」のガ格は項を
+共有し，さらに「焼く」と「焦げる」は何らかの関係にあると仮定できる．こ
+こで重要な役割を果す名詞（この例では「パン」）を我々はアンカーと呼び，
+このようなアンカーを\ssec{type_anc}で述べる「タイプアンカー」と対比させ
+て「インスタンスアンカー」と呼ぶ．
+
+述語対$\emph{Pred}_1$，$\emph{Pred}_2$が与えられたとき，次の条件を満た
+す3つ組\bracket{$\emph{Pred}_1$-$\emph{Arg}_1$;
+  $\emph{Pred}_2$-$\emph{Arg}_2$; \emph{Anc}}を探す．
+\begin{itemize}
+\item[(a)] Webページ中に出現した$\emph{Pred}_1$ の項の名詞句の主
+  辞$\emph{Arg}_1$をアンカー\emph{Anc}とする．
+\item[(b)] (a)と同じWebページに出現する$\emph{Pred}_2$の項の名詞句の主
+  辞$\emph{Arg}_2$が\emph{Anc}と等しい．
+\item[(c)] \emph{Anc}がストップリストに含まれていない．
+\item[(d)] 条件$\textit{PMI}(\emph{Pred}_1, \emph{Arg}_1) \geq
+  \alpha$かつ$\textit{PMI}(\emph{Pred}_2, \emph{Arg}_2) \geq \alpha$を
+  満たす（ただし実験では$\alpha=-1$とした）．
+\end{itemize}
+実験では人手でストップリストを作成した．リストには219語の代名詞，数字，
+「こと」，「もの」，「とき」のように非常に一般的な名詞を含んでいる．条
+件 (d) の$\textit{PMI}(\emph{Pred}_i,
+\emph{Arg}_i)$ は，\emph{Pred}$_i$と\emph{Arg}$_i$の間の自己相互情報量
+である．この条件は，係り受け解析器のエラーが原因で誤認したアンカーを除
+くことを目的としている．
+
+インスタンスアンカーの集合は，項の共有関係を持つ述語対の
+組\emph{Pred}$_1$-\emph{Arg}$_1$と\emph{Pred}$_2$-\emph{Arg}$_2$から次
+のように求められる．
+\[
+ \mathit{AnchorSet}(\mathit{Pred}_1\text{-}\mathit{Arg}_1, \mathit{Pred}_2\text{-}\mathit{Arg}_2) 
+  =\{\mathit{Arg}|\langle \mathit{Pred}_1\text{-}\mathit{Arg}_1; \mathit{Pred}_2\text{-}\mathit{Arg}_2; \mathit{Anc} \rangle\}.
+\]
+
+Pekarは談話の範囲をできるだけ正確に認識しようと勤めているのに対して，我々
+は同一Webページに含まれる文を同じ談話であると見なし，同一Webページ内で
+アンカーを共有している述語対は何らかの関係を持つと仮定した．このよう
+にPekarと比較してより少ない制約のみを用いているにもかかわら
+ず，\sec{result}で示すように我々の手法を用いて良い実験結果を得ることが
+できた．この理由は，我々は少ない制約を用いて談話関係を認識したが，代り
+に語彙統語的パターンを用いて獲得した述語対を用いたため，これが強い制約
+となり精度の低下を防いでいると考えられる．
+
+
+\subsection{共有項同定：タイプアンカー}
+\label{ssec:type_anc}
+
+我々は次の仮説を置いた．
+\begin{itemize}
+\item 同一文内で共起する2つの述語は何らかの関係\footnote{ここで言う関係
+    とは，\ssec{instance_anc}における何らかの関係と同じであり，含意関係
+    や因果関係のことである．また，述語の間の順序関係について述べない．}を
+  満たす．
+\item 同一文内で2つの述語が共起するという状況下において，2つの述語の項
+  が伴う名詞をそれぞれの項毎に独立に集めたとき，2つの名詞集合の両方にお
+  いて出現する名詞は，2つの述語の項の間で共有されるような名詞である．
+\end{itemize}
+
+\fig{overview}の文(3a)と(3b)について考察する．この2文は独立した文であり，
+同一文章内の2文であっても，異なる文章の2文であってもよい．この2文はとも
+に述語「焼く」と述語「焦げる」を含む．(3a) では名詞「パン」が「焼く」
+のヲ格にあり，(3b) では名詞「パン」が「焦げる」のガ格にある．ここから
+名詞「パン」は，「焼く」のヲ格に伴うことができ，かつ「焦げる」のガ格に
+伴うこともできるということがわかる．仮説から，「焼く」のヲ格と「焦げる」
+のガ格は同じ名詞（少なくとも名詞「パン」）を伴うことができるということ
+がわかる．このときの名詞「パン」は，「焼く」のヲ格と「焦げる」のガ格が
+共有項である可能性を示す名詞である．このような名詞を「タイプアンカー」
+と呼ぶ．この名称の理由は，(3a)の「パン」と (3b) の「パン」は同じもの
+を指していないが，同じタイプであるためである．
+
+タイプアンカーの集合は次のように求める．述語
+対$\emph{Pred}_1$と$\emph{Pred}_2$が与えられたとき，コーパス全体か
+ら$\emph{Pred}_1$と$\emph{Pred}_2$が共起する文を探し，次に示すように，
+どちらか片方の述語の項を埋める名詞の出現頻度を計算する．
+\begin{itemize}
+\item $\emph{Pred}_1$の項$\emph{Arg}_1$に名詞\emph{Anc}があれ
+  ば，\bracket{$\emph{Pred}_1$-$\emph{Arg}_1$; $\emph{Pred}_2$;
+    \emph{Anc}} の頻度を増やす．
+\item $\emph{Pred}_2$の項$\emph{Arg}_2$に名詞\emph{Anc}があれ
+  ば，\bracket{$\emph{Pred}_1$; $\emph{Pred}_2$-$\emph{Arg}_2$;
+    \emph{Anc}} の頻度を増やす．
+\end{itemize}
+$\emph{Pred}_1$-$\emph{Arg}_1$と$\emph{Pred}_2$-$\emph{Arg}_2$の間で共
+有された名詞集合の交差集合を計算する．すなわち，
+\[
+ \mathit{AnchSet}(\mathit{Pred}_1\text{-}\mathit{Arg}_1, \mathit{Pred}_2\text{-}\mathit{Arg}_2)
+  = S_1\cap S_2,
+\]
+となる．このとき，
+\begin{align*}
+ S_1 & =\{\mathit{Arg}|\langle\mathit{Pred}_1\text{-}\mathit{Arg}_1; 
+	\mathit{Pred}_2; \mathit{Anc}\rangle\},\\
+ S_2 & =\{\mathit{Arg}|\langle\mathit{Pred}_1; \mathit{Pred}_2\text{-}\mathit{Arg}_2; \mathit{Anc}\rangle\}.
+\end{align*}
+である．
+
+
+
+\subsection{共有項同定：アンカー集合の利用}
+
+インスタンスアンカーとタイプアンカーに共通する性質を利用して次の目的を
+達成する．
+\begin{itemize}
+\item アンカーを持つ述語対候補は何らかの関係を満たすという性質を利用し，
+  何らかの関係を満たさないような述語対候補を除く．
+\item 述語対の項対の共有項を見付けることができるというアンカーの性質を
+  利用し，述語対候補の項対の共有項を同定する．
+\end{itemize}
+このとき，ある述語対のある項対に対応するアンカーが見付かった場合，その
+項対は\emph{アンカーを持つ}と言うことにする．また，ある述語対の項対がア
+ンカーを持てば，その述語対もアンカーを持つとみなす．逆にある述語対の項
+対がアンカーを持てば，その述語対もアンカーを持つとみなす．
+
+\fig{overview}の例を用いて，アンカーによる述語対候補のフィルタリングと
+共有項同定について説明する．述語対獲得から述語対候補$\emph{焼
+  く}\rightarrow_{行為—効果関係}\emph{焦げる}$を得る．この述語対候補の
+インスタンスアンカーには「パン」「肉」「オーブン」「トースター」の4つの
+名詞が存在するため，この述語対候補はインスタンスアンカーを持つ．同様に，
+タイプアンカーも4つの名詞を持つため，この述語対候補はタイプアンカーも持
+つ．このときアンカーが存在しなければ，この述語対候補は何の関係も満たさ
+ないとみなして候補から除かれるが，この例ではインスタンスアンカーとタイ
+プアンカーを持つため，所与の関係を満たす可能性のある述語対であると見な
+される．さらに，この述語対は，アンカー「パン」と「肉」より「焼く」のヲ
+格と「焦げる」のガ格が共有項であり，アンカー「オーブン」と「トースター」
+より「焼く」のデ格と「焦げる」のデ格も共有項であるとみなす．
+
+アンカーを用いて，述語対獲得によって獲得した述語対候補それぞれに対して
+次の手続きを実行する．
+\begin{enumerate}
+\item アンカーを持たない述語対を除く．
+\item 述語対毎に項対を選ぶ．このとき頻度の高い項対を最大で$k$個を選ぶ
+  （実験では$k=3$）．
+\item 項対毎にアンカーを選ぶ．このとき頻度の高いアンカーを最大で$l$個を
+  選ぶ（実験では$l=3$）．
+\end{enumerate}
+
+
+
+\section{実験設定}
+\label{ssec:settings}
+
+述語間関係獲得手法の性能を確認するために，Kawaharaとkurohashiが獲得したWebコーパ
+ス約5億文~\cite{kawahara:NAACL06}を用いた．このコーパスに含まれる文に対
+してMecabで形態素解析を行い，CaboCha~\cite{cabocha}で係り受け解析を行
+い，述語表現の共起事例を獲得した．頻度20回未満の共起パターンを伴う述語
+表現は計算コストを削減するために削除した．
+
+実験では，Inuiら\cite{inui:DS03}の4つの因果関係のうち行為—効果関係
+（Inuiらの分類ではEffectに相当する）と行為—手段関係（Inuiらの分類で
+はMeansに相当する）を獲得し，評価した．行為—効果関係は，非意志的な出来
+事$y$の起るように直接または間接的にしばしば意志的な行為$x$を行うことで
+あり，$x$と$y$の間に必然性がなくてもよい．例えば，行為「Xが運動する」と
+出来事「Xが汗をかく」は行為—効果関係を満たす．また「飲む」の結果として
+「二日酔いになる」ことに必然性はないが，これも行為—効果関係を満たす．
+一方で行為—手段関係は行為$x$を行うためにしばしば行為$y$を行うことであ
+り，$x$と$y$の間に必然性がなくともよい．例えば，「Xが走る」は「Xが運動
+する」ためにしばしば行うことであるため行為—手段関係を満たす．
+
+実験では，12,000以上の動詞に対して意志性の有無を人手で付与した．これに
+は，8,968の意志性のある動詞，3,597の意志性のない動詞，547の意志性の有無が
+曖昧な動詞を含んでいる．意志性のある動詞は「食べる」「研究する」等であ
+り，意志性のない動詞は「温まる」「壊れる」「悲しむ」等である．この動詞
+の意志性の有無に関する情報は，共起パターンを用いて述語対を獲得する際に
+述語の素性として用いる．
+
+
+\section{実験結果}
+\label{sec:result}
+
+
+\subsection{関係獲得}
+\label{ssec:result_relation}
+
+パターン方式の手法を用いて，行為—効果関係と行為—手段関係の述語対を獲
+得した．このとき，行為—効果関係では正例25，負例4のシード述語対，行為—
+手段関係では正例174，負例131のシード述語対を用いた．また，ブートストラッ
+プを40回繰り返した後，行為—効果関係では9,511共起パターンと22,489事態対，
+行為—手段関係では14,119共起パターンと13,121述語対を獲得した．
+
+獲得した述語対を信頼度の順番に並べ，4つの範囲
+（1--500，501--1,500，1,501--3,500，3,501--7,500）からそれぞれ100述語対をラ
+ンダムに取得した（行為—効果関係の400述語対と行為—手段関係の400述語対
+の合計800述語対）．この述語対候補に対して，アンカー方式を用いてフィルタ
+リングし，共有項を付与した．このとき，インスタンスアンカーまたはタイプ
+アンカーによって共有項を付与された述語対は，行為—効果関係で254述語対，
+行為—手段関係で254述語対であった．共有項を付与できた事例の一部
+を\tab{examples}に示す．
+
+\begin{table}[b]
+\caption{獲得した述語対と共有項とアンカーの例}
+\label{tab:examples}
+\input{07table01.txt}
+\end{table}
+
+共有項を付与できた述語対と付与できなかった述語対に対して，2人の評価者に
+より述語対の関係が正しいかを判定した（行為—効果関係の400述語対と行為—
+手段関係の400述語対の合計800述語対を評価した）．このとき，与えられた述
+語対が所与の関係を満たすときに述語対が必要とする項対とアンカーの組を評
+価者が最低でも1つ以上想像できない場合は，その述語対の関係は正しくないと
+判断した．例えば，述語対「かける」と「つながる」は正しい行為—効果関係
+であるが，この関係は，「電話」というアンカーが「かける」のヲ格と「つな
+がる」のガ格が共有項であるときに満たされる．
+\begin{align*}
+  & かける（を：\mathit{X}） \rightarrow_{行為—効果関係} つながる（が：\mathit{X}）\\
+  &（X \in \{電話\}）
+\end{align*}
+評価者は，共有項を付与できた述語対については，評価者は共有項とアンカー
+を想像するために，機械的に付与された共有項とアンカーを参照してもよいと
+した\footnote{述語対候補の関係を評価する場合において，機械的に付与され
+  た共有項とアンカーは評価者の作業を補助するための情報である．仮に機械
+  的に付与したアンカーと共有項が全て誤りであったとしても，評価者が述語
+  対の関係を誤りであると評価するとは限らない．述語対の関係は，評価者が
+  述語対の関係が正しいときのアンカーと共有項を想像できたかできないかに
+  よって決定する．}．
+
+2人の評価結果は，400事例のうち，行為—効果関係では294事例，行為—手段関
+係では297事例が一致し，一致度は然程高くない．しかし，1人目の評価は一貫
+して厳しい判定基準で，2人目の評価は一貫して寛容な基準であるように見える．
+その証拠に2人目の評価結果が正しいと仮定した場合，1人目の評価の精度と相
+対再現率は行為—効果関係で0.71と0.97であり，行為—手段関係
+で0.75と0.99となり，2人の間で評価の厳しさの基準は異なっているが個々の評
+価基準は一貫しており，厳しい基準を考えると両者の評価はよく一致している
+と言える．これを受けて，評価者2人が共に正しいとした事例のみを正解とみな
+した．
+
+\begin{table}[b]
+  \caption{関係獲得の精度と相対再現率}
+  \label{tab:rel-prec}
+\input{07table02.txt}
+\end{table}
+
+評価結果を\tab{rel-prec}に示す．なお，行為—効果関係の評価結果も行為—
+手段関係の評価結果も同じ傾向を示しているため，行為—効果関係の評価結果
+に注目して説明する．また，今回の実験で用いたコーパスから獲得可能な全て
+行為—効果関係（または行為—手段関係）を満たす述語対のリスト，または，
+特にコーパスを限定しない行為—効果関係（または行為—手段関係）を満たす
+述語対のリストを用意することができれば再現率を計算できるが，このような
+リストを用意することは困難であり，かつこのようなリストは存在しないため
+再現率を計算することは難しい．そこで，本実験では我々が評価した400述語対
+を用いて相対再現率を計算し，ここから本手法が再現率に及ぼす影響を考察す
+る．
+
+アンカーを用いないパターン方式のみの評価結果を，\tab{rel-prec}の「パター
+ン方式」の「全て」に示した．先にサンプルした400述語対のうち269述語対が
+正しい関係を満たした．精度は，269述語対を400述語対で割って0.67と計算し
+た．また，このときの相対再現率は1.00である．
+
+パターン方式で獲得した述語対候補をアンカー方式でフィルタリングした場合
+の評価結果を\tab{rel-prec}の「アンカーを持つ事例」に示した．先にサンプ
+ルした400述語対のうち175述語対はインスタンスアンカーを持ち，そのう
+ち144述語対は正しい関係を満たした（「アンカーを持つ事例」の「インスタン
+ス」）．142述語対を175述語対で割って精度0.81を計算した．さらに，
+インスタンスアンカーを用いたときに正しく関係を満たす144事例を，評価し
+た400述語対のうち正しく関係を満たす269述語対で割って相対再現率0.52を計算した．
+一方で，タイプアンカーを持つ事例は169事例中143事例が正しい関係を満たし
+た（「アンカーを持つ事例」の「タイプ」）．このときの精度は0.84であり，
+相対再現率は0.53である．ここから，インスタンスアンカーを用いた場合もタ
+イプアンカーを用いた場合も同程度の精度と相対再現率であり，どちらも再現
+率を犠牲にする代わりに高い精度を得ていることがわかる．
+
+インスタンスアンカーまたはタイプアンカーのどちらかのアンカーを持つ述語
+対の評価結果を「アンカーを持つ事例」の「混成」に示した．インスタンスア
+ンカーのみまたはタイプアンカーのみの場合と比較して，同程度の精度である
+が相対再現率が向上している．この結果から，インスタンスアンカーとタイプ
+アンカーを組み合わせることで精度を犠牲にせずに再現率を改善できることが
+わかる．タイプアンカーとインスタンスアンカーは高い精度と低い相対再現率
+という似た傾向を示すが，カバーしている述語対は互いに異なるため2つのアン
+カーを組み合わせることで再現率が改善されたと考えられる．
+
+本実験で用いたパターン方式の手法は，所与の関係にある述語対をその確から
+しさを表わすスコアと共に導く．そこで，述語対候補をこのスコアでフィルタ
+リングした場合と，アンカー方式（インスタンスアンカーとタイプアンカーの
+組み合わせ）によりフィルタリングした場合で精度と相対再現率を比較する．
+アンカー方式ではフィルタリングにより結果400事例中254事例を残した．これ
+と比較するために，400事例からスコアの高い上位254事例について精度と相対
+再現率を計算した（「パターン方式」の「高スコア254件」）．スコアによるフィ
+ルタリングの結果（「パターン方式」の「高スコア254件」）とアンカー方式
+（「アンカーを持つ事例」の「混成」）によるフィルタリングの結果を比較す
+ると，精度と相対再現率の両方においてアンカー方式の方が良い結果である．
+この結果は，パターン方式の述語対獲得手法にアンカー方式のフィルタリング
+を組み込むことで述語対獲得の性能を改善できることを示唆している．
+
+さらに，共有項を付与できた254述語対（「アンカーを持つ事例」の「混成」）
+について信頼度毎の述語対の数と，共有項を付与できない146述語
+対\footnote{評価した400述語対のうち共有項を付与できた254述語対を除いた
+  残りの述語対．}について信頼度毎の述語対の数を比較した結果を
+\fig{effect_shared}，\fig{means_shared}に示す\footnote{この図において
+  は，小数点第2位で四捨五入して信頼度を用いた．}．ここから，共有項を付
+与できた述語対も付与できない述語対も信頼度の面からは類似した傾向を持つ
+ため，共有項を付与できたことと信頼度の間には強い相関がないことがわか
+る．この結果から，共有項によるアンカー方式は信頼度によるパターン方式とは
+異なる性質を持ち，この2つを組み合わせることが有効であることがわかる．
+
+
+\begin{figure}[b]
+\begin{minipage}[t]{.45\textwidth}
+\begin{center}
+\includegraphics{17-1ia7f2.eps}
+      \caption{共有項の有無と信頼度（行為—効果関係）}
+      \label{fig:effect_shared}
+\end{center}
+\end{minipage}
+\hfill
+\begin{minipage}[t]{.45\textwidth}
+\begin{center}
+ \includegraphics{17-1ia7f3.eps}
+      \caption{共有項の有無と信頼度（行為—手段関係）}
+      \label{fig:means_shared}
+\end{center}
+\end{minipage}
+\end{figure}
+
+
+\subsection{共有項同定}
+
+共有項同定の評価結果を示す．評価者2人に，インスタンスアンカーとタイプア
+ンカーを組み合わせた手法で共有項を付与することができた述語対の内，所与
+の関係を満たすと判断された事例について，付与された共有項が正しいかどう
+かを尋ねた（行為—結果関係で203述語対，行為—手段関係で196述語対）．次
+の2種類の基準で共有項の正しさを評価した．
+\begin{itemize}
+\item 共有項 (1-best): 最も頻度の高い共有項が正しい場合を正解とした．
+\item 共有項 (3-best): 頻度の高い最大3つの共有項のうち1つ以上が正しい
+  場合を正解とした．
+\end{itemize}
+評価結果を\tab{arg-prec}に示す．この評価結果も，評価者2人が両方とも正
+しいとした事例のみを正解とした．
+
+\begin{table}[b]
+  \caption{共有項同定の精度}
+    \label{tab:arg-prec}
+\input{07table03.txt}
+\end{table}
+
+続けて，共有項によって共有されているアンカーの正しさを，次の3種類の基準
+で評価した．
+\begin{itemize}
+\item 共有名詞（厳格）：最大3つのアンカーが全て正しい場合を正解とした．
+\item 共有名詞（寛容）：最大3つのアンカーのうち1つ以上が正しい場合を正
+  解とした．
+\end{itemize}
+評価結果を\tab{noun-prec}に示す．この評価結果も，評価者2人が両方とも正
+しいとした事例のみを正解とした．
+
+\tab{arg-prec}と\tab{noun-prec}から，アンカー方式の手法は高い精度で共有
+項とアンカーを同定できていることがわかる．この手法の精度は，獲得したア
+ンカーの良さに依存しているが，インスタンスアンカーもタイプアンカーも実
+際に出現した事例から獲得しているため，結果的に高い精度に結び付いたと考
+えられる．しかし，「共有項 (1-best)」かつ「共有名詞（厳格）」の精度は
+まだ改善の余地はあるとみられるが，これは将来の課題である．
+
+\begin{table}[t]
+  \caption{共有項同定と共有名詞同定の精度}
+    \label{tab:noun-prec}
+\input{07table04.txt}
+\end{table}
+
+また，典型的な誤りとその原因を次に示す．
+\begin{itemize}
+\item[(1)] 項の誤り
+\begin{itemize}
+\item[(1a)] コーパス中において不適切に格を用いていたため，誤った格を伴う知識が獲得されている．
+\item[(2b)] 係り受け解析器の誤りのため，誤った項を伴う知識が獲得されている．
+\end{itemize}
+\item[(2)] アンカーの誤り
+\begin{itemize}
+\item[(2a)] コーパス中において表記は等しいが，それが指す実体が異なる名詞をインスタンスアンカーが共有名詞とみなしてしまうことにより，誤った共有項を伴う知識が獲得されている．
+\item[(2b)] コーパス中において名詞が多義であったため，タイプアンカーにより誤った共有項を伴う知識が獲得されている．
+\end{itemize}
+\end{itemize}
+理由(1a)の問題は低頻度の事例を除くことで，理由(1b)の問題は
+\ssec{instance_anc}で述べた係り受け解析器の誤りを除くための制約を
+強くすることで解決することができる．しかし，理由(2a)，(2b)の問題は本手法で対処
+することが難しく，これを解決するためには同一表記の実体の同一性を判定す
+る照応技術を導入する必要がある．理由(2a)，(2b)の誤り例を次に示す．
+\begin{align*}
+  & X が操作する \rightarrow_{行為—効果関係} Xが動く （X= プレイヤー）\\
+  & X を雇う \rightarrow_{行為—効果関係} X に雇われる （X= 他人）\\
+  & X から到着する \rightarrow_{行為—手段関係} X から旅する （X=空港）
+\end{align*}
+
+
+
+\section{まとめと今後の研究}
+\label{sec:discussion}
+
+述語間関係獲得のためにパターン方式の関係指向のアプローチとアンカー方式
+の項指向のアプローチの相補的な性質に注目し，パターン方式による述語対獲
+得とアンカー方式による共有項同定を組み合わせた2段階手法を提案し，これを
+実験し評価した．この結果，(a) アンカー方式のフィルタリングは事態対獲得
+の精度を改善し，(b)インスタンスアンカーとタイプアンカーは同じくらいの
+性能で，これらを組み合わせることで精度を犠牲にせずに（相対）再現率を改
+善でき，(c) アンカー方式は共有項同定で高い精度を達成することがわかっ
+た．
+
+将来的には3つの方向を考えている．1つめは評価方法の改善であり，コーパス
+ベースの評価とタスクベースの評価を検討してい
+る．Szpektorら\cite{Szpektor2008}は，英語コーパスに対して事態に関する情
+報が付与されたAutomatic Content Extraction (ACE)のevent training
+set\footnote{http://projects.ldc.upenn.edu/ace/}を用いて，自動獲得した
+事態間の含意関係知識を評価した．しかし，これは英語に関する評価セットで
+あり，日本語のコーパスに対して同様の情報を付与した評価セットは存在しな
+い．そのため，Szpektorらのようにコーパスベースの評価を行うためには，日
+本語の評価セットを作成する必要がある．評価セットの作成を含めてコーパス
+ベースの評価を検討している．また他にも特定のタスクに述語間関係知識を適
+用し，その結果を評価することを検討している．
+
+2つめは，ゼロ照応解析~\cite[etc.]{iida:ACL06,komachi2007}の利用して共有
+項同定を行うことを検討している．本稿では，所与の関係を満たす述語対とそ
+の共有項を獲得するためにパターン方式とアンカー方式を組み合わせる手法を
+提案したが，もうひとつ方法として，ゼロ照応解析とパターン方式を組み合わ
+せることでも所与の関係を満たす述語対とその共有項を獲得できる可能性があ
+る．しかし，現在のゼロ照応解析の精度は然程高くないため，本稿ではパター
+ン方式とアンカー方式を組み合わせる手法を用いた．ただし，現状のゼロ照応
+解析の精度でも，アンカー方式を改善するための前処理としてゼロ照応解析用
+いることはできる可能性がある．この方法の検証を検討している．
+
+3つめは，アンカー方式の結果を文内のゼロ照応解析に利用することを検討して
+いる．これによりゼロ照応解析の精度を向上させることができる可能性があ
+る．
+
+
+
+\appendix
+\section{パターン方式の手法}
+\label{sec:patt_method}
+
+実験で用いたパターン方式の手法であるAbeら~\cite{abe:08}の手法の概要を述
+べる．本稿ではこの手法を拡張Espressoと言うことにする．
+
+拡張Espresoは，共起パターンを利用して実体対を獲得する手法であ
+るEspressoを，共起パターンを利用して事態対を獲得するように拡張したもの
+である．Espressoに対する拡張Espressoの主要な変更点は次の2つである．
+\begin{itemize}
+\item Espressoにおける実体対は名詞句の対であるが，拡張Espressoの事態対
+  は述語または述語句の対である．
+\item Espressoにおける共起パターンは名詞句の対の間にある文字列であるが，
+  拡張Espressoの共起パターンは係り受け関係の木を考えた場合の事態対の間
+  のパスに相当する．
+\end{itemize}
+
+
+\subsection{Espresso}
+
+Espressoは，共起パターンを用いた実体間関係獲得手法のひとつであり，共起パ
+ターンを用いた手法に共通する，任意の関係のみを表現する共起パターンを用
+いて任意の関係にある実体対を獲得でき，任意の関係のみで表現される実体対
+を用いることで，任意の関係のみを表現する共起パターンを獲得できるという
+仮定を持っている．さらにEspressoは，共起パターンまたは実体対が任意の関
+係を表わす程度を信頼度という指標で表わし，信頼度の高い共起パターンとよ
+く共起する実体対は信頼度が高く，信頼度の高い述語対とよく共起する共起パ
+ターンも信頼度が高いという仮定をおいた．
+
+このとき，Espressoは人手で作成した任意の関係にある信頼度の高い実体対を
+入力として，これと共起する信頼度の高い共起パターンを獲得する．次に信頼
+度の高い共起パターンを用いて，信頼度の高い実体対を獲得する．この操作を
+ブートストラップ的に繰り返すことで，信頼度の高い実体対を大量に獲得す
+る．
+
+
+\subsection{共起パターンの信頼度}
+
+獲得したい関係にある実体対\bracket{$x, y$}が与えられたと
+き，Espressoは$x$と$y$の両方が含まれた文をコーパスから探し出す．例え
+ば，\textsl{is-a}関係の実体対\bracket{\textit{Italy,country}} が与えら
+れたとき，Espressoはテキスト\textit{countries such as Italy}が含まれる
+ような文を見つけ出し，共起パターン \textit{Y such as X} を獲得す
+る．Espressoは共起パターン $p$ の良さを測るために信頼度 $r_\pi(p)$ とい
+う尺度を用いる．共起パターンの信頼度$r_\pi(p)$は，共起パターン $p$ と共
+起する実体対$i$の信頼度$r_\iota(i)$から求められる．$I$は共起
+パターン$p$と共起する実体対$i$の集合である．
+\begin{eqnarray}
+  \label{eq:rpi}
+  r_\pi(p) = 
+  \frac{1}{|I|}
+  \sum_{i \in I}
+  \frac{\mathit{pmi}(i,p)}{\mathit{max}_{pmi}}
+  \times r_\iota(i)
+\end{eqnarray}
+$\mathit{pmi}(i,p)$は\eq{pmi}で定義される$i$と$p$のpointwise mutual
+information (PMI) であり，$i$と$p$の関連度を表現する．$max_{pmi}$ は，
+共起パターンと実体対が共起した場合全てのPMIの中で最大となるPMIである．
+\begin{eqnarray}
+  \label{eq:pmi}
+  \mathit{pmi}(x, y) = \log\frac{P(x,y)}{P(x)P(y)}
+\end{eqnarray}
+
+PMIは頻度が少ないときに不当に高い関連性を示すという問題が知られている．
+この問題を軽減するために，Espressoでは\eq{pmi}の代り
+に\cite{pantel2004}で定義された\eq{pmi2}を用いる．
+\begin{eqnarray}
+  \label{eq:pmi2}
+  \mathit{pmi}(x, y) = \log\frac{P(x,y)}{P(x)P(y)} \times
+  \frac{C_{xy}}{C_{xy}+1} \times
+  \frac{min(\sum_{i=1}^{n}C_{x_i},\sum_{j=1}^{m}C_{y_j})}{min(\sum_{i=1}^{n}C_{x_i},\sum_{j=1}^{m}C_{y_j})
+  + 1}
+\end{eqnarray}
+$C_{xy}$は$x$と$y$が同時に出現した回数，$C_{x_i}$は個々の$x$の出現した回
+数，$C_{y_j}$は個々の$y$の出現した回数，$n$は$x$の異り数，$m$は$y$の異り
+数である．
+
+
+\subsection{実体対の信頼度}
+共起パターンの信頼度と同じように，実体対 $i$ の信頼度 $r_\iota(i)$ を次
+のように定義する．
+\begin{eqnarray}
+  \label{eq:rl}
+  r_\iota(i) = 
+    \frac{1}{|P|}
+    \sum_{p \in P}
+      \frac{\mathit{pmi}(i,p)}{\mathit{max}_{pmi}}
+      \times r_\pi(p)  
+\end{eqnarray}
+共起パターン $p$ の 信頼度$r_\pi(p)$ は，前述の \eq{rpi} で定義さ
+れ，$max_{pmi}$ は先の定義と同じであり，$P$は実体対$i$と共起する共起パ
+ターン$p$の集合である．共起パターンの信頼度 $r_\iota(i)$ と実体対の信頼
+度 $r_\pi(p)$ は再帰的に定義され，人手で与えたシード $i$ の信頼度
+を $r_\iota(i) = 1$ とする．なお，我々の拡張では，人手で与えた負例関係
+にある述語対の信頼度を $r_\iota(i) = -1$ とした．
+
+\acknowledgment
+「Web上の5億文の日本語テキスト」の使用許可を下さった情報通信研究機構
+の河原大輔氏と京都大学大学院の黒橋禎夫氏に感謝いたします．
+
+\bibliographystyle{jnlpbbl_1.4}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Abe, Inui, \BBA\ Matsumoto}{Abe et~al.}{2008}]{abe:08}
+Abe, S., Inui, K., \BBA\ Matsumoto, Y. \BBOP 2008\BBCP.
+\newblock \BBOQ Acquiring Event Relation Knowledge by Learning Cooccurrence
+  Patterns and Fertilizing Cooccurrence Samples with Verbal Nouns.\BBCQ\
+\newblock In {\Bem Proceedings of the 3rd International Joint Conference on
+  Natural Language Processing}, \mbox{\BPGS\ 497--504}.
+
+\bibitem[\protect\BCAY{Chklovski \BBA\ Pantel}{Chklovski \BBA\
+  Pantel}{2005}]{chklovski}
+Chklovski, T.\BBACOMMA\ \BBA\ Pantel, P. \BBOP 2005\BBCP.
+\newblock \BBOQ Global Path-based Refinement of Noisy Graphs Applied to Verb
+  Semantics.\BBCQ\
+\newblock In {\Bem Proceedings of Joint Conference on Natural Language
+  Processing}.
+
+\bibitem[\protect\BCAY{Harris}{Harris}{1968}]{harris}
+Harris, Z. \BBOP 1968\BBCP.
+\newblock \BBOQ Mathematical Structures of Language.\BBCQ\
+\newblock In {\Bem Interscience Tracts in Pure and Applied Mathematics}.
+
+\bibitem[\protect\BCAY{Iida, Inui, \BBA\ Matsumoto}{Iida
+  et~al.}{2006}]{iida:ACL06}
+Iida, R., Inui, K., \BBA\ Matsumoto, Y. \BBOP 2006\BBCP.
+\newblock \BBOQ Exploiting syntactic patterns as clues in zero-anaphora
+  resolution.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on
+  Computational Linguistics and the 44th annual meeting of the ACL},
+  \mbox{\BPGS\ 625--632}. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Inui, Inui, \BBA\ Matsumoto}{Inui
+  et~al.}{2003}]{inui:DS03}
+Inui, T., Inui, K., \BBA\ Matsumoto, Y. \BBOP 2003\BBCP.
+\newblock \BBOQ What kinds and amounts of causal knowledge can be acquired from
+  text by using connective markers as clues?\BBCQ\
+\newblock In {\Bem Proceedings of the 6th International Conference on Discovery
+  Science}, \mbox{\BPGS\ 180--193}.
+
+\bibitem[\protect\BCAY{Kawahara \BBA\ Kurohashi}{Kawahara \BBA\
+  Kurohashi}{2006}]{kawahara:NAACL06}
+Kawahara, D.\BBACOMMA\ \BBA\ Kurohashi, S. \BBOP 2006\BBCP.
+\newblock \BBOQ A Fully-Lexicalized Probabilistic Model for Japanese Syntactic
+  and Case Structure Analysis.\BBCQ\
+\newblock In {\Bem Proceedings of the Human Language Technology Conference of
+  the North American Chapter of the Association for Computational Linguistics},
+  \mbox{\BPGS\ 176--183}.
+
+\bibitem[\protect\BCAY{Komachi, Iida, Inui, \BBA\ Matsumoto}{Komachi
+  et~al.}{2007}]{komachi2007}
+Komachi, M., Iida, R., Inui, K., \BBA\ Matsumoto, Y. \BBOP 2007\BBCP.
+\newblock \BBOQ Learning Based Argument Structure Analysis of Event-nouns in
+  Japanese.\BBCQ\
+\newblock In {\Bem Proceedings of the Conference of the Pacific Association for
+  Computational Linguistics}, \mbox{\BPGS\ 120--128}.
+
+\bibitem[\protect\BCAY{Kudo \BBA\ Matsumoto}{Kudo \BBA\
+  Matsumoto}{2002}]{cabocha}
+Kudo, T.\BBACOMMA\ \BBA\ Matsumoto, Y. \BBOP 2002\BBCP.
+\newblock \BBOQ Japanese Dependency Analysis using Cascaded Chunking.\BBCQ\
+\newblock In {\Bem Proceedings of the 6th Conference on Natural Language
+  Learning 2002 (COLING 2002 Post-Conference Workshops)}, \mbox{\BPGS\ 63--69}.
+
+\bibitem[\protect\BCAY{Lin \BBA\ Pantel}{Lin \BBA\ Pantel}{2001}]{lin:01}
+Lin, D.\BBACOMMA\ \BBA\ Pantel, P. \BBOP 2001\BBCP.
+\newblock \BBOQ DIRT: discovery of inference rules from text.\BBCQ\
+\newblock In {\Bem Proceedings of the seventh ACM SIGKDD international
+  conference on Knowledge discovery and data mining}, \mbox{\BPGS\ 323--328}.
+
+\bibitem[\protect\BCAY{Pantel \BBA\ Pennacchiotti}{Pantel \BBA\
+  Pennacchiotti}{2006}]{pantel2006}
+Pantel, P.\BBACOMMA\ \BBA\ Pennacchiotti, M. \BBOP 2006\BBCP.
+\newblock \BBOQ Espresso: Leveraging Generic Patterns for Automatically
+  Harvesting Semantic Relations.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on
+  Computational Linguistics and 44th Annual Meeting of the ACL}, \mbox{\BPGS\
+  113--120}.
+
+\bibitem[\protect\BCAY{Pantel \BBA\ Ravichandran}{Pantel \BBA\
+  Ravichandran}{2004}]{pantel2004}
+Pantel, P.\BBACOMMA\ \BBA\ Ravichandran, D. \BBOP 2004\BBCP.
+\newblock \BBOQ Automatically Labeling Semantic Classes.\BBCQ\
+\newblock In {\Bem Proceedings of Human Language Technology / North American
+  chapter of the Association for Computational Linguistics}, \mbox{\BPGS\
+  321--328}.
+
+\bibitem[\protect\BCAY{Pekar}{Pekar}{2006}]{pekar:06}
+Pekar, V. \BBOP 2006\BBCP.
+\newblock \BBOQ Acquisition of Verb Entailment from Text.\BBCQ\
+\newblock In {\Bem Proceedings of the Human Language Technology Conference of
+  the NAACL, Main Conference}, \mbox{\BPGS\ 49--56}.
+
+\bibitem[\protect\BCAY{Szpektor \BBA\ Dagan}{Szpektor \BBA\
+  Dagan}{2008}]{Szpektor2008}
+Szpektor, I.\BBACOMMA\ \BBA\ Dagan, I. \BBOP 2008\BBCP.
+\newblock \BBOQ Learning Entailment Rules for Unary Templates.\BBCQ\
+\newblock In {\Bem Proceedings of the 22nd International Conference on
+  Computational Linguistics}, \mbox{\BPGS\ 849--856}.
+
+\bibitem[\protect\BCAY{Szpektor, Tanev, Dagan, \BBA\ Coppola}{Szpektor
+  et~al.}{2004}]{szpektor-EtAl:2004:EMNLP}
+Szpektor, I., Tanev, H., Dagan, I., \BBA\ Coppola, B. \BBOP 2004\BBCP.
+\newblock \BBOQ Scaling Web-based Acquisition of Entailment Relations.\BBCQ\
+\newblock In Lin, D.\BBACOMMA\ \BBA\ Wu, D.\BEDS, {\Bem Proceedings of EMNLP
+  2004}, \mbox{\BPGS\ 41--48}\ Barcelona, Spain. Association for Computational
+  Linguistics.
+
+\bibitem[\protect\BCAY{Torisawa}{Torisawa}{2006}]{torisawa:NAACL}
+Torisawa, K. \BBOP 2006\BBCP.
+\newblock \BBOQ Acquiring Inference Rules with Temporal Constraints by using
+  Japanese Coordinated Sentences and Noun-Verb Co-occurrences.\BBCQ\
+\newblock In {\Bem Proceedings of Human Language Technology Conference/North
+  American chapter of the Association for Computational Linguistics annual
+  meeting (HLT-NAACL06)}, \mbox{\BPGS\ 57--64}.
+
+\bibitem[\protect\BCAY{Zanzotto, Pennacchiotti, \BBA\ Pazienza}{Zanzotto
+  et~al.}{2006}]{zanzotto:06}
+Zanzotto, F.~M., Pennacchiotti, M., \BBA\ Pazienza, M.~T. \BBOP 2006\BBCP.
+\newblock \BBOQ Discovering Asymmetric Entailment Relations between Verbs Using
+  Selectional Preferences.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on
+  Computational Linguistics and 44th Annual Meeting of the Association for
+  Computational Linguistics}, \mbox{\BPGS\ 849--856}.
+
+\end{thebibliography}
+
+\begin{biography}
+\bioauthor{阿部　修也}{
+2008年奈良先端科学技術大学院大学後期課程単位取得満期退学．
+同年，奈良先端科学技術大学院大学研究員，
+現在に至る．
+専門は自然言語処理．
+情報処理学会員．
+}
+\bioauthor{乾　健太郎}{
+1995年東京工業大学大学院情報理工学研究科博士課程修了．博士（工学）．同研究科助手，九州工業大学情報工学部助教授を経て，2002年より奈良先端科学技術大学院大学情報科学研究科助教授．現在同研究科准教授，情報通信研究機構有期研究員を兼任．自然言語処理の研究に従事．情報処理学会，人工知能学会，ACL各会員，Computational Linguistics編集委員．
+}
+\bioauthor{松本　裕治}{
+1977年京都大学工学部情報工学科卒．
+1979年同大学大学院工学研究科修士課程情報工学専攻修了．
+博士（工学）．
+同年電子技術総合研究所入所．
+1984〜85年英国インペリアルカレッジ客員研究員．
+1985〜87年（財）新世代コンピュータ技術開発機構に出向．
+京都大学助教授を経て，1993年より奈良先端科学技術大学院大学教授，現在に至る．
+専門は自然言語処理．
+情報処理学会，
+人工知能学会，
+日本ソフトウェア科学会，
+認知科学会，
+AAAI, ACL, ACM各会員．
+}
+\end{biography}
+
+
+\biodate
+
+\clearpage
+
+
+
+
+
+
+
+
+\clearpage
+
+
+
+
+
+
+
+
+
+
+
+
+
+\end{document}

@@ -1,0 +1,1475 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.2}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+
+
+
+
+
+\Volume{16}
+\Number{5}
+\Month{October}
+\Year{2009}
+
+\received{2009}{2}{6}
+\revised{2009}{7}{16}
+\accepted{2009}{8}{19}
+
+\setcounter{page}{23}
+
+
+\jtitle{半教師有りクラスタリングを用いたWeb検索結果における\\
+	人名の曖昧性解消}
+\jauthor{杉山　一成\affiref{Author_1} \and 奥村　　学\affiref{Author_2}}
+\jabstract{
+人名は検索語として，しばしば検索エンジンに入力される．しかし，
+この入力された人名に対して，検索エンジンは，いくつかの同姓同名人物に
+ついての Web ページを含む長い検索結果のリストを返すだけである．
+この問題を解決するために，Web検索結果における人名の曖昧性解消を
+目的とした従来研究の多くは，凝集型クラスタリングを適用している．
+一方，本研究では，ある種文書に
+類似した文書をマージする半教師有りクラスタリングを用いる．我々の
+提案する半教師有りクラスタリングは，種文書を含むクラスタの重心の変動を
+抑えるという点において，新規性がある．
+}
+\jkeywords{Web情報検索，半教師有りクラスタリング，人名の曖昧性解消}
+
+\etitle{Personal Name Disambiguation in Web Search Results Using a Semi-Supervised Clustering Approach}
+\eauthor{Kazunari Sugiyama\affiref{Author_1} \and Manabu Okumura\affiref{Author_2}} 
+\eabstract{
+ Personal names are often submitted to search engines as query keywords.
+ However, in response to a personal name query, search engines return
+ a long list of search results that contains Web pages about several
+ namesakes. In order to address this problem,
+ most of the previous works that disambiguate personal names
+ in Web search results often employ agglomerative clustering approaches.
+ In contrast, we have adopted a semi-supervised clustering approach
+ to integrate similar documents into a seed document.
+ Our proposed semi-supervised clustering approach is
+ novel in that it controls the fluctuation of the centroid of a cluster.
+}
+\ekeywords{Web information retrieval, Semi-supervised clustering, Personal name disambiguation}
+
+\headauthor{杉山，奥村}
+\headtitle{半教師有りクラスタリングを用いたWeb検索結果における人名の曖昧性解消}
+
+\affilabel{Author_1}{シンガポール国立大学計算機科学科}{Department of Computer Science, National University of Singapore}
+\affilabel{Author_2}{東京工業大学精密工学研究所}{Precision and Intelligence Laboratory, Tokyo Institute of Technology}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに} \label{sec:Intro}
+
+検索エンジン
+\textit{ALLTheWeb}\footnote{http://www.alltheweb.com/} に
+おいて，英語の検索語の約1割が人名を含むという
+報告\footnote{http://tap.stanford.edu/PeopleSearch.pdf} が
+あるように，人名は検索語として検索エンジンにしばしば
+入力される．しかし，その検索結果としては，
+その人名を有する同姓同名人物についてのWeb ページを含む
+長いリストが返されるのみである．
+例えば，ユーザが検索エンジンGoogle\footnote{http://www.google.com/} 
+に``William Cohen''という人名を入力すると，その検索結果には，
+この名前を有する情報科学の教授，アメリカ合衆国の政治家，
+外科医，歴史家などのWebページが，各人物の実体ごとに
+分類されておらず，混在している．
+
+こうしたWeb検索結果における人名の曖昧性を解消する
+従来研究の多くは，凝集型クラスタリングを
+利用している\cite{Mann03}，\cite{Pedersen05}，
+\cite{Bekkerman-ICML05}，\cite{Bollegala06}．
+しかし，一般に人名の検索結果では，その上位に，少数の同姓同名だが
+異なる人物のページが集中する傾向にある．したがって，上位に順位付けされたページを
+種文書として，クラスタリングを行えば，各人物ごとに検索結果が
+集まりやすくなり，より正確にクラスタリングができると期待される．
+以下，本論文では，このような種文書となるWebページを
+「seed ページ」と呼ぶことにする．本研究では，
+このseed ページを用いた半教師有りクラスタリングを，
+Web検索結果における人名の曖昧性解消のために適用する．
+
+これまでの半教師有りクラスタリングの手法は，
+(1) 制約に基づいた手法，
+(2) 距離に基づいた手法，
+の二つに分類することができる．制約に基づいた手法は，
+ユーザが付与したラベルや制約を利用し，より正確な
+クラスタリングを可能にする．
+例えば，Wagstaff ら \cite{Wagstaff00}，\cite{Wagstaff01} の
+半教師有り$K$-means アルゴリズムでは，
+``must-link''（2つの事例が同じクラスタに属さなければならない）と，
+``cannot-link''（2つの事例が異なるクラスタに属さなければならない）
+という2種類の制約を導入して，データのクラスタリングを行なう．
+Basu ら \cite{Basu02} もまた，
+ラベルの付与されたデータから初期の種クラスタを生成し，
+これらの間に制約を導入する半教師有り$K$-means アルゴリズムを
+提案している．また，距離に基づいた手法では，
+教師付きデータとして付与されたラベルや制約を満たすための学習を必要とする．
+例えば，Kleinら \cite{Klein02} の
+研究では，類似した2点$(x_{i},x_{j})$間には``0''，類似していない
+2点間には$(\max_{i,j} D_{ij})+1$と設定した隣接行列を作成して，
+クラスタリングを行なう．また，Xingら \cite{Xing03} の研究では，
+特徴空間を変換することで，マハラノビス距離の最適化を行う．
+さらに，Bar-Hillelら \cite{Bar-Hillel03} の研究では，
+適切な特徴には大きな重みを，そうでない特徴には小さな重みを
+与えるRCA (Relevant Component Analysis) \cite{Shental02} により，
+特徴空間を変換する．
+一方，我々の提案する半教師有りクラスタリングでは，seedページを含む
+クラスタの重心の変動を抑える点において，新規性がある．
+
+本論文の構成は次のとおりである．
+\ref{sec:ProposedMethod}章では，我々の提案する新たな半教師有り
+クラスタリングの手法について説明する．
+\ref{sec:Experiments}章では，
+提案手法を評価するための実験結果を示し，その結果について考察する．
+最後に\ref{sec:Conclusion}章では，本論文のまとめと今後の
+課題について述べる．
+
+
+\section{提案手法}
+\label{sec:ProposedMethod}
+
+\ref{sec:Intro}章で述べた凝集型クラスタリングに
+基づいた人名の曖昧性解消は，クラスタリングを適切に導いていく基準が
+ないため，正確なクラスタリングを行うことは難しい．一方，
+これまでに提案されている半教師有りクラスタリングは，
+クラスタ数$K$をあらかじめ設定する必要がある
+$K$-means アルゴリズム \cite{MacQueen67} を改良することを目的としている．
+しかし，本研究においては，Web検索結果における同姓同名人物の
+数は，事前にわかっているわけではない．したがって，我々の手法においては，
+事前にクラスタ数を設定するのではなく，
+新たに生成されたクラスタと，すでに生成されているクラスタ間の
+類似度を計算し，これらの値がすべて，あらかじめ設定した閾値よりも小さくなった場合に，
+クラスタリングの処理を終え，その時点で生成されているクラスタ数を最終的な
+同姓同名人物の数とする．
+
+また，従来の半教師有りクラスタリングアルゴリズムは，
+制約を導入したり \cite{Wagstaff00}，\cite{Wagstaff01}，\cite{Basu02}，
+距離を学習したり \cite{Klein02}，\cite{Xing03}，\cite{Bar-Hillel03} 
+することにのみ着目していた．
+しかし，
+半教師有りクラスタリングにおいて，より正確なクラスタリング結果を
+得るためには，seedページ間への制約の導入とともに，seedページを
+含むクラスタの重心の変動の抑制も重要である．
+これは，
+(1) seedページを導入して半教師有りクラスタリングを行なう場合，
+通常の重心の計算法では重心の変動が大きくなる傾向にあり，
+クラスタリングの基準となるseedページを導入する効果が得られない，
+(2) 重心を完全に固定して半教師有りクラスタリングを行なう場合，
+その重心と類似度が高いWebページしかマージされなくなり，
+多数の独立したクラスタが生成されやすくなる，
+という二つの考えに基づく．
+したがって，seedページを含むクラスタの重心の変動を抑えることが
+できれば，より適切なクラスタリングが実現できると期待される．
+
+本章では，我々の提案する半教師有りクラスタリングの手法について説明する．
+
+以下，検索結果集合$W_{p}$中のWebページ$p_{i}$の
+特徴ベクトル$\boldsymbol{w}^{p_{i}}$ $(i=1,\cdots ,n)$を
+式(\ref{Eq:feature vector_org})のように表す．
+\begin{equation}
+ \boldsymbol{w}^{p_{i}}=(w_{t_{1}}^{p_{i}},w_{t_{2}}^{p_{i}},\cdots, w_{t_{m}}^{p_{i}})
+\label{Eq:feature vector_org}
+\end{equation}
+ここで，$m$は検索結果集合$W_{p}$における単語の
+異なり数であり，$t_{k}$ $(k=1,2,\cdots, m)$は，各単語を表す．
+予備実験として，(a) Term Frequency (TF)，(b) Inverse Document
+Frequency (IDF)，(c) residual IDF (RIDF)，(d) TF-IDF，
+(e) $x^{I}$-measure，(f) gain の6つの単語重み付け法を
+比較した．これらの単語重み付け法は，それぞれ，次のように定義される．
+
+\clearpage
+
+\noindent
+\textbf{(a) Term Frequency (TF)} 
+
+TFは，与えられた文書において，ある単語がどれだけ顕著に
+出現するかを示し，この値が大きければ大きいほど，その単語が文書の内容を
+よく表現していることを示す．
+$tf(t_{k}, p_{i})$をWebページ$p_{i}$における単語$t_{k}$の頻度とする．このとき，
+$\boldsymbol{w}^{p_{i}}$の各要素$w_{t_{k}}^{p_{i}}$は，式(\ref{eq: tf})に
+よって定義される．
+\begin{eqnarray}
+ w_{t_{k}}^{p_{i}}=\frac{tf(t_{k}, p_{i})}{\sum_{s=1}^{m}tf(t_{s}, p_{i})} \label{eq: tf}
+\end{eqnarray} 
+
+\noindent
+\textbf{(b) Inverse Document Frequency (IDF)} 
+
+\cite{Jones73} によって導入されたIDFは，その単語が出現する
+文書数が少なければ少ないほど，その単語が出現する文書にとっては，
+有用であることを示すスコアである．
+このとき，$\boldsymbol{w}^{p_{i}}$の各要素$w_{t_{k}}^{p_{i}}$は，式(\ref{eq: idf})によって定義される．
+\begin{eqnarray}
+ w_{t_{k}}^{p_{i}}=\log\frac{N}{df(t_{k})} \label{eq: idf}
+\end{eqnarray}
+ここで，$N$はWebページの総数，$df(t_{k})$は単語$t_{k}$が現れる
+Webページ数である．
+
+\noindent
+\textbf{(c) Residual Inverse Document Frequency (RIDF)}
+
+Church and Gale \cite{Church95VLC,Church95JNLE} は，
+ほとんどすべての単語は，ポアッソンモデルのような独立性に基づいた
+モデルに応じて，非常に大きなIDFスコアを持つことを示した．また，
+単語の有用性は，推定されるスコアからは
+大きな偏差を持つ傾向があるという考えに基づいて導入したスコアがresidual IDFである．
+このスコアは，実際のIDFとポアッソン分布によって推定されるIDFとの差として定義される．
+$cf_{k}$を文書集合中における単語$t_{k}$の総出現数，$N$をWebページの総数としたとき，
+1つのWebページあたりの単語$t_{k}$の平均出現数は，
+$\lambda_{k}=\frac{cf_{k}}{N}$と
+表される．このとき，
+$\boldsymbol{w}^{p_{i}}$の各要素$w_{t_{k}}^{p_{i}}$は，
+式(\ref{eq: ridf})によって定義される．
+\begin{align}
+ w_{t_{k}}^{p_{i}} &= IDF - \log\frac{1}{1-p(0;\lambda_{i})} \nonumber \\
+               &= \log\frac{N}{df(t_{k})}+\log(1-p(0;\lambda_{k})) \label{eq: ridf}
+\end{align}
+ここで，$p$は，パラメータ$\lambda_{k}$を伴うポアッソン分布である．
+この手法は，少数の文書のみに出現する単語は，より大きなRIDFスコアを持つ傾向がある．
+
+\noindent
+\textbf{(d) TF-IDF}
+
+TF-IDF 法 \cite{Salton83} は，文書中の単語を重み付けするために，情報
+検索の研究において広く使われている．TF-IDFは，上述した
+(a) TF と (b) IDF に基づいて，式(\ref{eq: tfidf})のように定義される．
+\begin{eqnarray}
+ w_{t_{k}}^{p_{i}} = \frac{tf(t_{k}, p_{i})}{\sum_{s=1}^{m}tf(t_{s}, p_{i})}\cdot \log\frac{N}{df(t_{k})} \label{eq: tfidf}
+\end{eqnarray}
+ここで， $tf(t_{k}, p_{i})$と$df(t_{k})$は，それぞれ，
+Webページ$p_{i}$における単語$t_{k}$の頻度と，単語$t_{k}$が
+出現するWebページ数を表す．また，$N$はWebページの総数である．
+
+\noindent
+\textbf{(e) $x^{I}$-measure}
+
+Bookstein and Swanson \cite{Bookstein74} は，単語$t_{k}$に対する
+ $x^{I}$-measure というスコアを導入した．
+$tf(t_{k}, p_{i})$をWebページ$p_{i}$における単語$t_{k}$の頻度，
+$df(t_{k})$を単語$t_{k}$が現れるWebページ数とすると，
+$\boldsymbol{w}^{p_{i}}$の各要素$w_{t_{k}}^{p_{i}}$は，
+式(\ref{eq: xI})によって定義される．
+\begin{eqnarray}
+ w_{t_{k}}^{p_{i}}=tf(t_{k}, p_{i})-df(t_{k}) \label{eq: xI}
+\end{eqnarray}
+この手法は，同程度の出現頻度である2つの単語のうち，
+少数の文書に集中して出現する単語ほど，高いスコアを示す．
+
+\noindent
+\textbf{(f) gain}
+
+一般に，IDFは単語の重要性を表すと考えられているが，
+Papineni \cite{Papineni01} は，IDFは単語の特徴を表す最適な重みに過ぎず，
+単語の重要性とは異なるものであるため，
+利得を単語の重要性と考え，gainを提案した．本手法では，
+$\boldsymbol{w}^{p_{i}}$の各要素$w_{t_{k}}^{p_{i}}$は，
+式(\ref{eq: gain})によって定義される．
+\vspace{-0.5\baselineskip}
+\begin{eqnarray}
+ w_{t_{k}}^{p_{i}}=\frac{df(t_{k})}{N}\left(\frac{df(t_{k})}{N}-1-\log\frac{df(t_{k})}{N}\right) \label{eq: gain}
+\end{eqnarray}
+ここで，$df(t_{k})$は，単語$t_{k}$が現れるWebページ数を，
+$N$はWebページの総数を示す．本手法では，ほとんど出現しない単語と，
+非常に頻出する単語は，両方とも低いスコアとなり，中頻度の単語は
+高いスコアとなる．
+
+上述した(a)〜(f)の単語重み付け手法の中で，本研究においては，``(f) gain''が
+最も効果的な単語の重み付け法であることがわかったため，これを本研究に
+おける単語の重み付け法として用いる．
+さらに，クラスタ$C$の重心ベクトル
+$\boldsymbol{G}^{C}$を式(\ref{Eq:centroid vector})のように定義する．
+\begin{eqnarray}
+ \boldsymbol{G}^{C}=(g^{C}_{t_{1}},g^{C}_{t_{2}},\cdots, g^{C}_{t_{m}})
+\label{Eq:centroid vector}
+\end{eqnarray}
+ここで，$g^{C}_{t_{k}}$は$\boldsymbol{G}^{C}$に
+おける各単語の重みであり，$t_{k}$ $(k=1,2,\cdots, m)$は各単語を表す．
+なお，以下で述べるクラスタリング手法では，2つのクラスタ$C_{i}$，
+$C_{j}$間の類似度$sim(C_{i},C_{j})$を，式(\ref{eq:sim})によって
+計算する．
+\begin{eqnarray}
+ sim(C_{i},C_{j})=
+\frac{\boldsymbol{G}^{C_{i}}\cdot\boldsymbol{G}^{C_{j}}}{|\boldsymbol{G}^{C_{i}}|\cdot |\boldsymbol{G}^{C_{j}}|}
+\label{eq:sim}
+\end{eqnarray}
+ただし，$\boldsymbol{G}^{C_{i}}$，$\boldsymbol{G}^{C_{j}}$は，それぞれ，
+クラスタ$C_{i}$，$C_{j}$の
+重心ベクトルを表す．
+
+
+\subsection{凝集型クラスタリング}
+\label{subsec:AggCls}
+
+凝集型クラスタリングにおいては，はじめに各Webページを，
+\pagebreak
+個々のクラスタとして設定する．次に，二つのクラスタ間の類似度が，
+あらかじめ設定された閾値より小さくなるまで，
+類似度が最大となる二つのクラスタをマージして
+新たなクラスタを生成する．図\ref{Fig:AggClsAlgorithm}に凝集型
+クラスタリングのアルゴリズムを示す．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{16-4ia3f1.eps}
+\end{center}
+\caption{凝集型クラスタリングアルゴリズム}\label{Fig:AggClsAlgorithm}
+\end{figure}
+
+このアルゴリズムでは，あるクラスタ$C_{i}$ (要素数$n_{i}$)
+を最も類似したクラスタ$C_{j}$ (要素数$n_{j}$) にマージした後の，
+新たなクラスタ$C^{new}$の重心ベクトル
+$\boldsymbol{G}^{new}$は，
+式(\ref{eq:new agg-centroid})のように定義される．
+\begin{eqnarray}
+ \boldsymbol{G}^{new}=\frac{\sum_{\boldsymbol{w}^{p}\in C_{i}}\boldsymbol{w}^{p}+\sum_{\boldsymbol{w}^{p}\in C_{j}}\boldsymbol{w}^{p}}{n_{i}+n_{j}} \label{eq:new agg-centroid}
+\end{eqnarray}
+
+
+\subsection{提案する半教師有りクラスタリング} \label{subsec:SSCls}
+
+一般に，seedページを含むクラスタ$C_{s_{j}}$
+と，seedページを含まないクラスタ$C_{i}$の類似度が
+大きい場合には，両者を新たなクラスタとしてマージすべきであるが，
+両者の距離が大きい場合には，通常の重心の計算法では，
+重心の変動が大きくなる傾向にある．そこで，
+はじめに，あるクラスタ$C_{i}$(重心ベクトル$\boldsymbol{G}^{C_{i}}$)を，
+seedページを含むクラスタ$C_{s_{j}}$(重心ベクトル$\boldsymbol{G}^{C_{s_{j}}}$)に
+マージする際，
+これらのクラスタの重心間の距離
+$D(\boldsymbol{G}^{C_{i}},\boldsymbol{G}^{C_{s_{j}}})$に
+基づいて，Webページ$p$の特徴ベクトル$\boldsymbol{w}^{p}\in C_{i}$を
+重み付けする．次に，この重み付けした特徴ベクトルを用いて重心の計算を
+行なうことで上述した傾向を防ぎ，重心の変動を抑える．
+
+まず，これまでに$k_{j}$個のクラスタがマージされたseedページを含むクラスタ
+$C_{s_{j}}^{(k_{j})}$ (要素数$n_{s_{j}}$) に対して，
+クラスタ$C_{i}$ (要素数$n_{i}$) が$k_{j}+1$回目に
+マージされるクラスタであるとする．
+なお，クラスタ$C_{s_{j}}^{(0)}$の要素は，初期のseedページとなる．
+
+\noindent
+\textbf{(1)} この$C_{s_{j}}^{(k_{j})}$にマージされるクラスタ$C_{i}$に
+含まれる各要素について，
+$C_{s_{j}}^{(k_{j})}$の重心$\boldsymbol{G}^{C_{s_{j}}^{(k_{j})}}$と，
+クラスタ$C_{i}$の重心$\boldsymbol{G}^{C_{i}}$間の距離尺度
+$D(\boldsymbol{G}^{C_{i}},\boldsymbol{G}^{C_{s_{j}}^{(k_{j})}})$を用いて，
+クラスタ$C_{i}$に含まれるWebページの特徴ベクトル
+$\boldsymbol{w}^{p_{l}}_{C_{i}}$ $(l=1,\cdots ,n_{i})$を
+重み付けし，その後に生成されるクラスタを$C_{i'}$ (要素数$n_{i'}$) 
+とする．このとき，$C_{i'}$の要素となる重み付けした後のWebページの
+特徴ベクトル$\boldsymbol{w}^{p_{l}}_{C_{i'}}$は，式(\ref{eq:TransferedCor})で表される．
+\begin{eqnarray}
+\boldsymbol{w}^{p_{l}}_{C_{i'}}
+=\frac{\boldsymbol{w}^{p_{l}}_{C_{i}}}{D(\boldsymbol{G}^{C_{i}},\boldsymbol{G}^{C_{s_{j}}^{(k_{j})}})+c} \label{eq:TransferedCor}
+\end{eqnarray}
+本研究では，$D(\boldsymbol{G}^{C_{i}},\boldsymbol{G}^{C_{s_{j}}^{(k_{j})}})$
+として，(i)ユークリッド距離，(ii)マハラノビス距離，
+(iii)適応的マハラノビス距離，の三つの距離尺度を比較する．
+また，$c$は$D(\boldsymbol{G}^{C_{i}},\boldsymbol{G}^{C_{s_{j}}^{(k_{j})}})$が
+0に非常に近い値となったとき，
+$\boldsymbol{w}^{p}$の各要素が極端に大きな値となることを防ぐ
+ために導入した定数である．
+この$c$の値の影響については，3.3.1節で
+述べる．
+
+\noindent
+\textbf{(2)} 次に，seedページを含むクラスタ$C_{s_{j}}^{(k_{j})}$
+(要素数$n_{s_{j}}$)に$C_{i'}$(要素数$n_{i'}$)の
+要素を追加し，クラスタ$C_{s_{j}}^{(k_{j}+1)}$
+(要素数$n_{s_{j}}+n_{i'}$)を作成する．
+\[
+C_{s_{j}}^{(k_{j}+1)}=
+\{
+\boldsymbol{w}^{p_{1}}_{C_{s_{j}}^{(k_{j})}},\cdots
+,\boldsymbol{w}^{p_{{n}_{s_{j}}}}_{C_{s_{j}}^{(k_{j})}},
+\boldsymbol{w}^{p_{1}}_{C_{i'}},\cdots ,\boldsymbol{w}^{p_{n_{{i'}}}}_{C_{i'}} \}
+\]
+
+
+\noindent
+\textbf{(3)} このとき，$k_{j}+1$回目のクラスタをマージしたクラスタ$C_{s_{j}}^{(k_{j}+1)}$の
+重心$\boldsymbol{G}^{C_{s_{j}}^{(k_{j}+1)}}$は，式(\ref{eq:NewG})のように
+計算される．ここで，式(\ref{eq:TransferedCor})において，マージされる
+クラスタの特徴ベクトル$\boldsymbol{w}^{p_{l}}_{C_{i}}$に重み付けを
+しているため，重み付き平均の計算と
+なるように，$n_{i'}$にも同様の重みを乗じている．
+\begin{eqnarray}
+\boldsymbol{G}^{C_{s_{j}}^{(k_{j}+1)}}=\frac{\sum_{\boldsymbol{w}^{p}\in C_{s_{j}}^{(k_{j}+1)}}\boldsymbol{w}^{p}}{n_{{s_{j}}}+n_{i'}\times\frac{1}{D(\boldsymbol{G}^{C_{i}},\boldsymbol{G}^{C_{s_{j}}^{(k_{j})}})+c}}
+\label{eq:NewG}
+\end{eqnarray}
+
+このように本研究では，seedページを含むクラスタを重視してクラスタリングの
+基準を明確にし，正確なクラスタリングを行うことを目的とする．
+もし，2つのクラスタが種用例を含まないのであれば，
+新たなクラスタの重心ベクトル$\boldsymbol{G}^{new}$は，
+式(\ref{eq:new centroid(agg)})のように計算される．
+\begin{eqnarray}
+ \boldsymbol{G}^{new}=\frac{\sum_{\boldsymbol{w}^{p}\in C_{i}}\boldsymbol{w}^{p}+\sum_{\boldsymbol{w}^{p}\in C_{j}}\boldsymbol{w}^{p}}{n_{i}+n_{j}}
+ \label{eq:new centroid(agg)}
+\end{eqnarray}
+
+本研究では，seedページを含むクラスタに，それと最も類似したクラスタを
+マージする際，seedページを含むクラスタの
+重心の変動を抑える半教師有りクラスタリングを適用して，
+Web検索結果における人名の曖昧性を解消する．
+従来の半教師有りクラスタリングの手法のうち，
+制約を導入する手法では，クラスタの基準となる重心についての
+検討は見逃されており，また，距離を学習する手法では，
+特徴空間が大域的に変換される．
+一方，我々の手法は，seedページを含むクラスタの
+重心の変動を抑え，その重心を局所的に調整できる効果が期待される．
+なお，seedページを導入することで，検索結果を改善することは，
+適合性フィードバック\cite{Rocchio71}に類似した手法であると考えられる．
+しかし，適合性フィードバックでは，検索結果中の文書に
+対して，ユーザが判断した適合文書・非適合文書に
+基づいた検索語の修正を目的としているのに対し，本手法は，
+あらかじめ設定したseedページに基づいて，検索結果の改善，特に本研究に
+おいては，検索結果のクラスタリング精度の改善を目的としている点が異なる．
+
+また，検索結果をクラスタリングする
+検索エンジンとして，``Clusty''\footnote{http://clusty.com}
+が挙げられる．しかし，そのクラスタリングされた検索結果には，
+適合しないWebページが含まれることも
+多く，クラスタリングを行う上で，何らかの基準が必要である．
+すなわち，本研究のように，
+seedページをクラスタリングの基準として導入し，かつ，そのseedページを
+含むクラスタの重心を抑えることで，その基準を保つような手法が必要であると
+考えられる．
+
+図\ref{Fig:SSClsAlgorithm}に，我々の提案する半教師有りクラスタリング
+アルゴリズムの詳細を示す．なお，提案する半教師有りクラスタリングでは，
+対象とするすべてのWebページが，いずれかのseedページを含むクラスタに
+マージされるのではなく，seedページを含まないクラスタにもマージされる
+ことに，注意されたい（図\ref{Fig:SSClsAlgorithm}下から7行目，
+``else if''以降参照）．
+
+\begin{figure}[p]
+\begin{center}
+\includegraphics{16-4ia3f2.eps}
+\end{center}
+\caption{提案する半教師有りクラスタリングアルゴリズム} \label{Fig:SSClsAlgorithm}
+\end{figure}
+
+ここで，本研究において比較する式(\ref{eq:TransferedCor})直後に
+述べた(i)，(ii)，(iii)の3つの距離尺度は，それぞれ，以下のように
+定義される．
+
+
+\noindent
+\textbf{(i) ユークリッド距離}
+
+式(\ref{eq:TransferedCor})において，ユークリッド距離を導入した場合，
+seedページを含むクラスタの重心ベクトル$\boldsymbol{G}^{C_{s}}$と，
+あるクラスタ$C$の重心ベクトル$\boldsymbol{G}^{C}$間の距離
+$D(\boldsymbol{G}^{C_{s}},\boldsymbol{G}^{C})$は，
+式(\ref{Eq:centroid vector})に基づいて，
+式(\ref{Eq:Euclidean disrance})のように定義される．
+\begin{eqnarray}
+ D(\boldsymbol{G}^{C_{s}},\boldsymbol{G}^{C})=\sqrt{\sum_{k=1}^{m}(g^{C_{s}}_{t_{k}}-g^{C}_{t_{k}})^{2}}
+\label{Eq:Euclidean disrance}
+\end{eqnarray}
+
+\noindent
+\textbf{(ii) マハラノビス距離}
+
+マハラノビス距離は，データ集合の相関を考慮した尺度である
+という点において，ユークリッド距離とは異なる．
+したがって，ユークリッド距離を用いるよりも
+マハラノビス距離を用いた方が，クラスタの重心の変動を，
+より効果的に抑えられることが期待される．
+
+式(\ref{eq:TransferedCor})において，マハラノビス距離を導入した場合，
+seedページを含むクラスタ$C_{s}$の重心ベクトル$\boldsymbol{G}^{C_{s}}$と，
+あるクラスタ$C$の重心ベクトル$\boldsymbol{G}^{C}$間の距離
+$D(\boldsymbol{G}^{C_{s}},\boldsymbol{G}^{C})$は，
+式(\ref{Eq:Mahalanobis distance})のように定義される．
+\begin{eqnarray}
+D(\boldsymbol{G_{C_{(s)}}},\boldsymbol{G_{C}})
+=\sqrt{(\boldsymbol{G}^{C_{s}}-\boldsymbol{G}^{C})^{T}\boldsymbol{\Sigma}^{-1}(\boldsymbol{G}^{C_{s}}-\boldsymbol{G}^{C})} \label{Eq:Mahalanobis distance}
+\end{eqnarray}
+ここで，$\boldsymbol{\Sigma}$は，seedページを含むクラスタ$C_{s}$
+の要素によって定義される共分散行列である．
+
+すなわち，クラスタ$C_{s}$内の要素を，
+\[
+ C_{s}=\{\boldsymbol{w}^{p_{1}}_{C_{s}},\boldsymbol{w}^{p_{2}}_{C_{s}},\cdots ,\boldsymbol{w}^{p_{m}}_{C_{s}}\}
+\]
+と表せば，重心ベクトル$\boldsymbol{G}^{C_{s}}$，
+\[
+ \boldsymbol{G}^{C_{s}}=\frac{1}{m}\sum_{i=1}^{m}\boldsymbol{w}^{p_{i}}_{C_{s}}
+\]
+を用いて，共分散$\Sigma_{ij}$を式(\ref{eq:CovMHD})のように
+定義することができる．
+\begin{eqnarray}
+ \Sigma_{ij}=\frac{1}{m}\sum_{i=1}^{m}(\boldsymbol{w}^{p_{i}}_{C_{s}}-\boldsymbol{G}^{C_{s}})
+(\boldsymbol{w}^{p_{j}}_{C_{s}}-\boldsymbol{G}^{C_{s}})^{T} \label{eq:CovMHD}
+\end{eqnarray}
+以上から，共分散行列$\boldsymbol{\Sigma}$は，
+\[
+ \boldsymbol{\Sigma}=\left[
+ \begin{array}{@{\,}cccc@{\,}}
+  \Sigma_{11} & \Sigma_{12} & \cdots & \Sigma_{1m} \\
+  \Sigma_{21} & \Sigma_{22} & \cdots & \Sigma_{2m} \\
+  \vdots      & \vdots      & \ddots & \vdots \\
+  \Sigma_{m1} & \Sigma_{m2} & \cdots & \Sigma_{mm}
+ \end{array}
+\right]
+\]
+と表すことができる．
+
+\noindent
+\textbf{(iii)適応的マハラノビス距離}
+
+(ii)のマハラノビス距離は，クラスタ内の要素数が
+少ないときに，共分散が大きくなる傾向がある．
+そこで，seedページを含むあるクラスタ$C_{s_{j}}$について，
+このクラスタに含まれるWebページの特徴ベクトル間の
+非類似度を局所最小化することを考える．
+この局所最小化で得られる分散共分散行列を
+用いて計算した
+$C_{s_{j}}$の重心ベクトル$\boldsymbol{G}^{C_{s_{j}}}$と，
+このクラスタにマージされるクラスタ$C_{l}$の
+重心ベクトル$\boldsymbol{G}^{C_{l}}$間の距離が，
+適応的マハラノビス距離 \cite{Diday77} である．
+この分散共分散行列は，次のように導出される．
+
+\noindent
+\textbf{(1)}まず，クラスタ$C_{s_{j}}$において，このクラスタ
+に含まれるWebページの特徴ベクトル
+$\boldsymbol{w}^{p_{i}}$と，それ以外の
+特徴ベクトル$\boldsymbol{v}$ $(\boldsymbol{w}^{p_{i}}\neq \boldsymbol{v})$との
+非類似度$d_{s_{j}}(\boldsymbol{w}^{p_{i}},\boldsymbol{v})$を，
+式(\ref{eq:intra-cls})により定義する．
+\begin{eqnarray}
+d_{s_{j}}(\boldsymbol{w}^{p_{i}},\boldsymbol{v})=
+(\boldsymbol{w}^{p_{i}}-\boldsymbol{v})^{T}\boldsymbol{M}_{s_{j}}^{-1}(\boldsymbol{w}^{p_{i}}-\boldsymbol{v}) \label{eq:intra-cls}
+\end{eqnarray}
+ただし，$\boldsymbol{M}_{s_{j}}$は$C_{s_{j}}$の分散共分散行列を表す．
+すなわち，クラスタ$C_{s_{j}}$内の要素を，
+\[
+ C_{s_{j}}=\{\boldsymbol{w}^{p_{1}}_{C_{s_{j}}},\boldsymbol{w}^{p_{2}}_{C_{s_{j}}},\cdots ,\boldsymbol{w}^{p_{m}}_{C_{s_{j}}}\}
+\]
+\pagebreak
+と表せば，重心ベクトル$\boldsymbol{G}^{C_{s_{j}}}$，
+\[
+ \boldsymbol{G}^{C_{s_{j}}}=\frac{1}{m}\sum_{i=1}^{m}\boldsymbol{w}^{p_{i}}_{C_{s_{j}}}
+\]
+を用いて，共分散$M_{ij}$を式(\ref{eq:CovAMHD})のように定義することができる．
+\begin{eqnarray}
+ M_{ij}=\frac{1}{m}\sum_{i=1}^{m}(\boldsymbol{w}^{p_{i}}_{C_{s_{j}}}-\boldsymbol{G}^{C_{s_{j}}})
+(\boldsymbol{w}^{p_{j}}_{C_{s_{j}}}-\boldsymbol{G}^{C_{s_{j}}})^{T} \label{eq:CovAMHD}
+\end{eqnarray}
+以上から，共分散行列$\boldsymbol{M_{s_{j}}}$は，
+\[
+ \boldsymbol{M_{s_{j}}}=\left[
+ \begin{array}{@{\,}cccc@{\,}}
+  M_{11} & M_{12} & \cdots & M_{1m} \\
+  M_{21} & M_{22} & \cdots & M_{2m} \\
+  \vdots      & \vdots      & \ddots & \vdots \\
+  M_{m1} & M_{m2} & \cdots & M_{mm}
+ \end{array}
+\right]
+\]
+と表すことができる．
+
+\noindent
+\textbf{(2)} 次に，目的関数
+\begin{align*}
+ \Delta_{s_{j}}(\boldsymbol{v},\boldsymbol{M}_{s_{j}})
+	&= \sum_{\boldsymbol{w}^{p_{i}}\in C_{s_{j}}}d_{s_{j}}
+	(\boldsymbol{w}^{p_{i}},\boldsymbol{v})\\
+  & = \sum_{\boldsymbol{w}^{p_{i}}\in C_{s_{j}}}
+	(\boldsymbol{w}^{p_{i}}-\boldsymbol{v})^{T}\boldsymbol{M}_{s_{j}}^{-1}
+	(\boldsymbol{w}^{p_{i}}-\boldsymbol{v})
+\end{align*}
+を定義し，これを局所最小化するような$C_{{s}_{j}}$の代表点の特徴ベクトル
+$\boldsymbol{L}_{s_{j}}$と分散共分散行列$\boldsymbol{S}_{{s}_{j}}$を求める．
+
+\noindent
+(i) まず，クラスタ$C_{s_{j}}$の要素により定義される共分散
+行列$\boldsymbol{M}_{s_{j}}$を固定し，
+$\Delta_{s_{j}}$を最小化する$\boldsymbol{L}_{s_{j}}$を求める．
+\begin{eqnarray}
+\boldsymbol{L}_{s_{j}}=
+\arg\min_{\boldsymbol{v}}\sum_{\boldsymbol{w}^{p_{i}}\in C_{s_{j}}}
+(\boldsymbol{w}^{p_{i}}-\boldsymbol{v})^{T}\boldsymbol{M}_{s_{j}}^{-1}(\boldsymbol{w}^{p_{i}}-\boldsymbol{v}) \label{eq:Lj}
+\end{eqnarray}
+式(\ref{eq:Lj})において，クラスタ$C_{s_{j}}$の重心$G$に最も近い点
+$G'$の特徴ベクトルを$\boldsymbol{v}_{G'}$と表せば，
+$\boldsymbol{L}_{s_{j}}=\boldsymbol{v}_{G'}$と求めることができる．
+
+\noindent
+(ii) 次に，
+(i)で求めた代表点の特徴ベクトル
+$\boldsymbol{L}_{s_{j}}=\boldsymbol{v}_{G'}$
+を固定する．ここで，
+$det(\boldsymbol{M}_{s_{j}})=1$のもとで，
+$\Delta_{s_{j}}$を局所最小化する$\boldsymbol{S}_{s_{j}}$を求める．
+\begin{eqnarray}
+\boldsymbol{S}_{s_{j}}=\arg\min_{\boldsymbol{M}_{s_{j}}}\sum_{\boldsymbol{w}^{p_{i}}\in C_{s_{j}}}
+(\boldsymbol{w}^{p_{i}}-\boldsymbol{v}_{G'})^{T}
+\boldsymbol{M}_{s_{j}}^{-1}(\boldsymbol{w}^{p_{i}}-\boldsymbol{v}_{G'}) \label{eq:dj}
+\end{eqnarray}
+この$\boldsymbol{S}_{s_{j}}$は，クラスタ$C_{s_{j}}$の
+共分散行列$\boldsymbol{M}_{s_{j}}$を用いて，
+式(\ref{eq:AdpCov})によって与えられることが，文献 \cite{Diday77} に
+より示されている．
+\pagebreak
+\begin{eqnarray}
+\boldsymbol{S}_{s_{j}}=(det(\boldsymbol{M}_{s_{j}}))^{1/m}\boldsymbol{M}_{s_{j}}^{-1}
+\label{eq:AdpCov}
+\end{eqnarray}
+ただし，$det(\boldsymbol{M}_{s_{j}}) \neq 0$であり，$m$は検索結果
+集合における単語の異なり数を表す．
+
+以上から，seedページを含むあるクラスタ$C_{s_{j}}$において，
+Webページ間の非類似度を局所最小化することを考慮した
+分散共分散行列$\boldsymbol{S}_{s_{j}}$を求めることができる．
+この$\boldsymbol{S}_{s_{j}}$を用いて，$C_{s_{j}}$の
+重心ベクトル$\boldsymbol{G}^{C_{s_{j}}}$と，このクラスタに
+マージされるべきクラスタ$C_{l}$の重心ベクトル$\boldsymbol{G}^{C_{l}}$
+間の適応的マハラノビス距離は，
+式(\ref{Eq:Adapt. Mahalanobis distance})のように定義される．
+\begin{eqnarray}
+D(\boldsymbol{G}^{C_{s_{j}}},\boldsymbol{G}^{C_{l}})=
+\sqrt{(\boldsymbol{G}^{C_{s_{j}}}-\boldsymbol{G}^{C_{l}})^{T}\boldsymbol{S}_{s_{j}}^{-1}(\boldsymbol{G}^{C_{s_{j}}}-\boldsymbol{G}^{C_{l}})} \label{Eq:Adapt. Mahalanobis distance}
+\end{eqnarray}
+なお，式(\ref{Eq:Adapt. Mahalanobis distance})は，
+上述した\textbf{(1)}〜\textbf{(2)}による
+クラスタ$C_{s_{j}}$におけるWebページ間の非類似度を
+考慮して得られた式(\ref{eq:AdpCov})の
+分散共分散行列$\boldsymbol{S}_{s_{j}}$を
+適用している点で，式(\ref{Eq:Mahalanobis distance})とは異なる．
+
+
+\section{実験}
+\label{sec:Experiments}
+
+\subsection{実験データ}
+\label{subsec:ExperimentalData}
+
+本研究では，``Web People Search Task'' \cite{Artiles07} において
+作成された 「WePS コーパス」を，実験に用いた．
+この WePS コーパスは，訓練集合とテスト集合から構成され，それぞれ49，30，
+合計で79の人名が含まれる．これらは，人名を検索語として，
+Yahoo!\footnote{http://www.yahoo.com/} の検索APIを
+通じて得られた上位100件の検索結果から取得されたものである．
+すなわち，このコーパスは約7,900のWebページから構成される．
+具体的な統計量を表\ref{tab:WePS-stat}に示す．
+
+まず前処理として，このコーパスにおけるすべての
+Webページに対して，
+不要語リスト\footnote{ftp://ftp.cs.cornell.edu/pub/smart/english.stop} に
+基づいて，不要語を取り除き，
+Porter Stemmer \cite{Porter80}\footnote{http://www.tartarus.org/\~{}martin/PorterStemmer/} を用いて語幹処理を行なった．
+次に，WePS コーパスの訓練集合を用いて類似したクラスタをマージする
+ための最適なパラメータを決定し，これをWePS コーパスのテスト集合に
+適用した．
+
+
+\begin{table}[t]
+ \caption{WePSコーパスにおける統計量} 
+\label{tab:WePS-stat}
+\input{06table01.txt}
+\end{table}
+
+
+
+\subsection{評価尺度}
+\label{subsec:EvaluationMeasure}
+
+本研究では，``purity''，``inverse purity''と，これらの調和平均である
+$F$値 \cite{Hotho05} に基づいて，クラスタリングの精度を評価する．これらは，
+``Web People Search Task'' において
+採用されている標準的な評価尺度である．
+以下，生成されたクラスタに割り当てられるべき，人手で定めた正解を「カテゴリ」と
+呼ぶことにする．``purity''は，各クラスタにおいて最もよく現れるカテゴリの
+頻度に注目し，ノイズの少ないクラスタを高く評価する．$C$を評価対象となるクラスタの
+集合，$L$を人手で作成したカテゴリの集合，$n$をクラスタリング対象の
+文書数とすると，purityは，式(\ref{eq:Purity})に基づいて，
+最大となる適合率の重み付き平均をとることで計算される．
+\begin{eqnarray}
+Purity=\sum_{i}\frac{|C_{i}|}{n}\max Precision(C_{i}, L_{j}) \label{eq:Purity}  
+\end{eqnarray}
+ここで，あるカテゴリ$L_{j}$に対するクラスタ$C_{i}$の
+適合率$Precision(C_{i},L_{j})$は，式(\ref{eq:Precision})によって
+定義される．
+\begin{eqnarray}
+Precision(C_{i},L_{j})=\frac{|C_{i}\bigcap L_{j}|}{|C_{i}|} \label{eq:Precision}
+\end{eqnarray}
+
+``inverse purity''は，各カテゴリに対して最大の再現率となるクラスタに
+着目する．ある一つのクラスタにおいて，各カテゴリで
+定められた要素を多く含むクラスタを高く評価する．
+inverse purityは，式(\ref{eq:InvPur})によって定義される．
+\begin{eqnarray}
+Inverse Purity=\sum_{j}\frac{|L_{j}|}{n}\max Recall(C_{i}, L_{j}) \label{eq:InvPur} 
+\end{eqnarray}
+ここで，あるカテゴリ$L_{j}$に対するクラスタ$C_{i}$の
+再現率$Recall(C_{i},L_{j})$は，式(\ref{eq:Recall})によって
+定義される．
+\begin{eqnarray}
+Recall(C_{i},L_{j})=\frac{|C_{i}\bigcap L_{j}|}{|L_{j}|} \label{eq:Recall}
+\end{eqnarray}
+
+また，purity と inverse purityの調和平均$F$は，式(\ref{eq:F})に
+よって定義される．
+\begin{eqnarray}
+F=\frac{1}{\alpha\frac{1}{Purity}+(1-\alpha)\frac{1}{InversePurity}} \label{eq:F}
+\end{eqnarray}
+なお，本研究では，$\alpha=0.5$，$0.2$として，評価を行なった．
+以下，$\alpha=0.5$，$0.2$のときの$F$値を，それぞれ，
+$F_{0.5}$，$F_{0.2}$と示すことにする．
+
+
+\subsection{実験結果}
+\label{subsec:ExpResults}
+
+我々の提案する半教師有りクラスタリングの手法では，次の
+2種類の seed ページを用いた実験を行なった．
+\begin{itemize}
+ \item[(a)] Wikipedia \cite{Remy02} における各人物の記事，
+ \item[(b)] Web検索結果において上位に順位付けされたWebページ．
+\end{itemize} 
+
+
+    \subsubsection{パラメータ$c$の設定}
+
+我々の提案する手法では，
+seedページを含むクラスタ$C_{s_{j}}$と，それに最も類似した
+クラスタ$C_{i}$をマージした後の新しいクラスタの
+重心ベクトルは，\ref{sec:ProposedMethod}章で述べたように，
+式(\ref{eq:TransferedCor})に基づいて
+クラスタ$C_{i}$に含まれるWebページの特徴ベクトル
+$\boldsymbol{w}^{p_{l}}_{C_{i}}$ $(l=1,\cdots ,n_{i})$を
+重み付けし，この重み付けした特徴ベクトルを用いて，式(\ref{eq:NewG})に
+よって計算される．
+
+式(\ref{eq:TransferedCor})における
+$c$は，$D(\boldsymbol{G}^{C_{i}}, \boldsymbol{G}^{C_{s_{j}}})$が
+0に非常に近い値となったとき，
+$\boldsymbol{w}^{p}$の各要素が極端に大きな値となることを防ぐ
+ために導入した定数であるが，この値によっては，
+クラスタリングの精度にも影響が及ぶものと考えられる．
+そこで，WePSコーパスの訓練集合を用いて，上述した2種類の
+seedページ(a)，(b)ともに7個までのseedページを
+用いた場合について，$0.1\le c\le 50$として
+得られるクラスタリング精度について検証した．
+ここで，seedページの数を7個までと定めたのは，
+少数のseedページでの効果を確認するためである．
+この結果，表\ref{Table:CbyEuclidDistance}
+〜\ref{Table:CbyAdpMahalanobisDistance}に示す$c$の値のときに，
+$F_{0.5}$，$F_{0.2}$ともに，最良なクラスタリング精度が得られた．
+
+\begin{table}[b]
+ \caption{ユークリッド距離を用いたときの最良なクラスタリング精度を与える$c$の値}
+ \label{Table:CbyEuclidDistance}
+\input{06table02.txt}
+\end{table}
+
+
+なお，以下の3.3.3節では，
+距離尺度，seedページの種類とその数，
+に応じて，表\ref{Table:CbyEuclidDistance}
+〜\ref{Table:CbyAdpMahalanobisDistance}に示した$c$の値を，
+WePSコーパスのテスト集合に適用して得られた
+実験結果を示している．
+
+
+\begin{table}[t]
+ \caption{マハラノビス距離を用いたときの最良なクラスタリング精度を与える$c$の値}
+ \label{Table:CbyMahalanobisDistance}
+\input{06table03.txt}
+\end{table}
+\begin{table}[t]
+ \caption{適応的マハラノビス距離を用いたときの最良なクラスタリング精度を与える$c$の値}
+ \label{Table:CbyAdpMahalanobisDistance}
+\input{06table04.txt}
+\end{table}
+
+
+\subsubsection{文書全体を用いた実験結果}
+
+\noindent
+\textbf{(1) 凝集型クラスタリングを用いた実験結果}
+
+凝集型クラスタリングによって得られた精度を表\ref{Table:AggCls}に
+示す．
+
+
+\begin{table}[t]
+ \caption{凝集型クラスタリングを用いて得られたクラスタリング精度}
+ \label{Table:AggCls}
+\input{06table05.txt}
+\end{table}
+
+\noindent
+\textbf{(2) 半教師有りクラスタリングを用いた実験結果}
+
+seedページを導入することによる効果を確かめるため，
+はじめに一つの seedページを用いて実験を行なった．
+この際，\ref{subsec:ExpResults}節はじめに述べた2種類の
+seedページに関して，(a)は検索結果の上位にある
+Wikipediaの記事を，(b)は第1位に順位付けされたWebページを
+用いた．しかしながら，
+\ref{subsec:ExperimentalData}節で述べたWePSコーパスの
+テスト集合におけるすべての人名が，必ずしも Wikipedia に対応する
+記事を有するわけではない．
+したがって，ある人名が Wikipedia に
+記事を有するのであれば，これをseed ページとして用いた．そうでなければ，
+Web検索結果において第1位に順位付けされたWebページを用いた．この方針に
+基づき，WePSコーパスのテスト集合における30の人名のうち，16の人名に
+対してはWikipediaの記事を，
+14の人名に対しては第1位に順位付けされたWebページをseedページとして
+用いた．なお，人名の曖昧性解消にWikipediaを利用した最近の研究
+として，Bunescu \cite{Bunescu06} らは，Wikipediaの構造を用いる
+ことによって固有名を同定するとともに，その固有名の曖昧性を解消している．
+表\ref{Table:OneSeedSSCls}に，
+一つの seed ページでの半教師有りクラスタリングを用いて得られた
+クラスタリング精度を示す．
+
+\begin{table}[b]
+ \hangcaption{1つのseedページを使い，提案する半教師有りクラスタリングを用いて得られたクラスタリング精度} 
+\label{Table:OneSeedSSCls}
+\input{06table06.txt}
+\end{table}
+
+さらに，一つの seed ページを用いた実験において，最も良い
+$F$値($F_{0.5}=0.68$，$F_{0.2}=0.66$)が得られた
+適応的マハラノビス距離に関して，seed ページの数を変えることによって，
+さらなる実験を行なった．3.3.1節でも述べたように，
+少数のseedページでの効果を確認するために，導入するseedページの数は
+7個までとした．
+また，図\ref{Fig:SSClsAlgorithm}に示したように，これらのseedページの
+間には，``cannot-link''の制約を導入している．
+これは，上位に順位付けされる検索エンジンの出力結果を信頼し，
+それぞれのWebページが異なる人物について記述していると
+想定していることに基づく．
+図\ref{fig:multiple seeds (Wiki)}，\ref{fig:multiple seeds (Web)}は，
+それぞれ, 複数のWikipedia記事，
+上位7位までに順位付けされたWebページを用いて得られた
+クラスタリング精度($F$値)を示す．
+
+また，この実験では，
+\ref{sec:ProposedMethod}章で述べたように，
+seedページを含むクラスタの重心と，それにマージされるクラスタの重心間の
+距離を考慮する．この提案手法の有効性を確認するために，
+\ref{sec:Intro}章で述べた
+距離を学習する半教師有りクラスタリング手法であるKleinら \cite{Klein02}，
+Xingら\cite{Xing03}，Bar-Hillelら\cite{Bar-Hillel03} の手法を用いて
+得られた結果との比較を示す．また，seedページを含むクラスタの
+重心の変動を抑えることによる効果を確認するために，
+重心を固定する手法との比較も示す．
+
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{16-4ia3f3.eps}
+\end{center}
+\caption{複数のseedページを用いて得られたクラスタリング精度 (7つまでの Wikipedia記事)}
+\label{fig:multiple seeds (Wiki)}
+\end{figure}
+\begin{figure}[t]
+\begin{center}
+\includegraphics{16-4ia3f4.eps}
+\end{center}
+\hangcaption{複数のseedページを用いて得られたクラスタリング精度 (上位7位までに順位付けされたWebページ)}
+\label{fig:multiple seeds (Web)}
+\end{figure}
+
+
+
+    \subsubsection{文書を部分的に用いた実験結果}
+\label{subsec:ExpResults(Fragments)}
+
+3.3.2節で述べた実験では，
+検索結果のWebページと seedページの全文を用いた．しかし，
+人物について記述されたWebページにおいて，その人物を特徴付ける単語は，
+人名の周囲にしばしば現れること，また，検索結果のスニペットにおいても，
+同様の傾向が観察される．
+
+そこで，seedページを用いて最も良い結果が
+得られている場合，すなわち，図\ref{fig:multiple seeds (Wiki)}において，
+5つのWikipedia記事を用いた場合($F_{0.5}=0.76, F_{0.2}=0.74$)
+に，さらに精度が改善されるかを確認するために，
+\begin{itemize}
+ \item[(i)] seedページと検索結果のWebページにおいて，人名前後の単語，および文の数を変化させる， 
+ \item[(ii)] 検索結果のスニペットを用いる， 
+\end{itemize}
+実験を行なった．
+
+(i)については，まず，WePSコーパスの訓練集合を用いて，
+最も良い$F$値を与えるseedページと検索結果のWebページの
+それぞれにおいて用いる人名前後の単語数，または
+文数を求める．この結果を図\ref{fig:multiple seeds (Partial)}に示す．
+次に，これらのパラメータをテスト集合に適用し，評価する．
+(ii)についても同様に，WePSコーパスの訓練集合を用いて，
+最も良い$F$値を与えるseedページでの人名前後の単語数，または文数を求める．
+この結果を図\ref{fig:RsltSnippet}に
+示す．次に，これらのパラメータをテスト集合に適用し，評価する．
+最終的に(i)，(ii)の実験によって得られたクラスタリング精度を，
+表\ref{Table:ResultsByOthers}に示す．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{16-4ia3f5.eps}
+\end{center}
+\hangcaption{図\ref{fig:multiple seeds (Wiki)}における5つの seed ページ
+(Wikipedia記事)の場合に, seedページと検索結果のWebページで用いる
+人名前後の単語数と文数を変化させて得られるクラスタリング精度(``w'' と
+ ``s'' は, それぞれ「単語」と「文」を表す)}
+\label{fig:multiple seeds (Partial)}
+\end{figure}
+\begin{figure}[t]
+\begin{center}
+\includegraphics{16-4ia3f6.eps}
+\end{center}
+\hangcaption{図\ref{fig:multiple seeds (Wiki)}における5つの seed ページ
+ (Wikipedia記事)の場合に，検索結果のスニペットを用い，seedページ中の人名前後
+ の単語数と文数を変化させて得られるクラスタリング精度 
+(``w'' と ``s'' は, それぞれ「単語」と「文」を表す)}
+\label{fig:RsltSnippet}
+\end{figure}
+
+
+
+    \subsubsection{他手法との比較}
+\label{subsec:ComparisonWithOthers}
+
+``Web People Search Task''における上位3チームのクラスタリング
+精度($F値$)を，表\ref{Table:ResultsByOthers}に示す．
+なお，これらのチームで採用している手法の詳細については，
+表\ref{Table:ResultsByOthers}に示した文献を参照されたい．
+基本的には，凝集型クラスタリングの手法が採用されている．
+また，提案手法によって得られた結果も，比較のために示す．
+
+\begin{table}[t]
+ \caption{Web People Search Task における上位3チームと提案手法とのクラスタリング精度の比較}
+ \label{Table:ResultsByOthers}
+\input{06table07.txt}
+\end{table}
+
+
+\subsection{処理時間に関する検討} 
+\label{subsec:ProcessingTime}
+
+3.3.2節で述べたように，
+式(\ref{eq:TransferedCor})において，適応的マハラノビス距離を
+用いて，seedページを含むクラスタにマージされるクラスタに含まれる
+Webページの特徴ベクトルを重み付けし，この変換された特徴ベクトルを
+用いて重心の計算を行なった場合に，
+最良なクラスタリング精度が得られることがわかった．
+この場合について，7つまでのWikipedia記事，
+上位7位までに順位付けされたWebページを
+seedページとして用い，最も処理時間を要すると考えられる
+3.3.2節の文書全体を
+用いた場合についての処理時間を測定した．なお，提案手法は，
+PC (CPU: Intel Pentium M・2.0~GHz，Memory: 2~GByte，
+OS: Windows XP) 上にPerlを用いて実装されている．
+図\ref{fig:time}に，その結果を示す．
+
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{16-4ia3f7.eps}
+\end{center}
+\caption{seedページ数を変化させたときのクラスタリングに要する処理時間}
+\label{fig:time}
+\end{figure}
+
+
+\subsection{考察}
+\label{subsec:Discussion}
+
+式(\ref{eq:TransferedCor})における$c$の値について，特徴ベクトルを重み付けする際には，
+表\ref{Table:CbyEuclidDistance}〜
+\ref{Table:CbyAdpMahalanobisDistance}から
+$c=0.95$前後の値を用いたときに，
+最良なクラスタリング精度が得られることがわかった．
+なお，$5\le c\le 50$の大きな値のときには，
+それほど高いクラスタリング精度が得られないことも観察された．
+これは，式(\ref{eq:TransferedCor})において，
+距離尺度よりも$c$が支配的になることにより，クラスタにマージすべき
+Webページの特徴ベクトルの各要素の値が小さくなりすぎることによる
+影響であると考えられる．
+
+凝集型クラスタリングの手法においては，
+表\ref{Table:AggCls}から，purity (0.67) は，inverse purity (0.48) よりも
+高いことがわかる．このように，purity が高いことは，
+凝集型クラスタリングが，一つの要素しか含まないクラスタを生成する
+傾向にあることを示す．また，$F$値が$F_{0.5}$=0.52，$F_{0.2}$=0.49
+であり，それほど高い精度が得られていないことは，凝集型クラスタリングでは，
+クラスタリングを適切に行なうことが難しいことを改めて確認できたといえる．
+
+\ref{sec:ProposedMethod}章で述べた
+半教師有りクラスタリングの手法において，
+表\ref{Table:OneSeedSSCls}からpurity の値(0.47〜0.57)は，
+表\ref{Table:AggCls}の凝集型クラスタリングを用いて
+得られた purity の値(0.67)を上回ることができなかったが，
+inverse purityの値(0.75〜0.88)は，すべての手法が
+凝集型クラスタリングの値(0.48)を上回っていることがわかる．
+また，良好なinverse purityの値によって，
+$F$値においても，良い結果が得られている．
+これは，seedページを導入したこと，ならびに，そのseedページを含むクラスタの
+重心の変動を抑えられたことによる効果であると考えられる．
+さらに，表\ref{Table:OneSeedSSCls}からは，seed ページとしてWikipediaの記事を
+用い，適応的マハラノビス距離を適用した場合において，最も良い
+$F$値($F_{0.5}=0.68$，$F_{0.2}=0.66$)が得られたことがわかる．
+
+複数のseed ページを用いた半教師有りクラスタリング手法に
+おいては，図\ref{fig:multiple seeds (Wiki)}，
+\ref{fig:multiple seeds (Web)}から，次の内容が観察される．
+まず，いずれのseedページを用いても，また，いずれの手法においても，
+導入する種文書数の増加とともに，クラスタリング精度($F$値)が改善されて
+いる．seedページの数について，7個まで導入したが，いずれのseedページ
+とも5個の時点でのクラスタリング精度が最も良いことが観察される．
+さらに，重心を固定する方法は，他の手法に比べて非常に
+精度が劣る結果となった．これは，重心を完全に固定してしまうと，
+その重心と類似度が高いWebページしかマージされなくなるため，
+本来クラスタにマージされるべきWebページが独立したクラスタと
+なってしまうことが原因であると考えられる．この実験においては，
+高いpurityの値が得られていたことからも，上述した原因が
+裏付けられるといえる．
+
+一方，距離を学習するクラスタリング手法では，
+Bar-Hillelら \cite{Bar-Hillel03}，Xingら \cite{Xing03}，
+Kleinら \cite{Klein02} の手法の順に良いクラスタリング
+精度が得られている．
+\ref{sec:Intro}章で述べたように，
+Kleinらの手法では，類似した2点($x_{i},x_{j}$)間を0，
+類似していない2点間を($\max_{i,j} D_{ij}$)+1と設定した単純な隣接行列を
+作成した上で，クラスタリングを行なうのに対し，
+Xingら，Bar-Hillelらの方法では，特徴空間を適切に変換する
+手法が用いられている．後者の二つの手法では，この変換手法が有効に作用している
+ものと考えられる．しかし，これらの距離を学習する手法と比較しても，
+重心の変動を抑えたクラスタリングを行なう我々の提案手法が，最も良いクラスタ
+リング精度を示した．これは，
+あるクラスタをseedページを含むクラスタにマージするたびに，
+そのseedページを含むクラスタの重心を局所的に調整できることに
+よる効果であると考えられる．
+
+さらに，seedページについては，Wikipediaにおける各人物の記事を
+用いたほうが，Web検索結果の上位に順位付けされたWebページを
+用いるよりも良い精度が得られた．これは，
+クラスタリングのためのseedページとして，Wikipediaの記述内容を
+用いることが有効であることを示す事例であると考えられる．
+
+また，文書を部分的に用いた場合には，以下に述べるような傾向が
+観察される．まず，WePSコーパスの訓練集合において，
+3.3.3節(i)で述べたように，
+seedページ，および検索結果のWebページ中の人名前後の単語数または
+文数を変化させた場合，
+図\ref{fig:multiple seeds (Partial)}から，
+検索結果のWebページに関して，単語よりも文を用いることで，
+より良いクラスタリング精度が得られることが観察される．
+これは，人名前後の数語のみでは，人物の実体を
+識別することは難しいが，人名前後の数文を用いることで，
+その人物を特徴付ける情報を獲得でき，人物の実体を識別しやすく
+なったことによる効果であると考えられる．また，
+図\ref{fig:multiple seeds (Partial)}からは，
+seedページ，検索結果のWebページについて，
+それぞれ，人名前後の2文，3文を用いた場合に最も良い
+$F$値($F_{0.5}=0.79$，$F_{0.2}=0.80$)が得られることが
+わかった．これらの文数をWePSコーパスのテスト集合に適用した場合，
+[purity:0.80，inverse purity:0.83, $F_{0.5}=0.81$，$F_{0.2}=0.82$]の
+結果が得られた．特に$F$値は，$\alpha=0.5$のとき，
+表\ref{Table:ResultsByOthers}に示した
+``Web People Search Task'' \cite{Artiles07} の
+第1位のチーム (CU\_COMSEM) の結果を0.03上回り，提案手法が
+有効であることが確認される．なお，3.3.2節(2)で述べたように，
+Wikipediaに記事のある16人名のうち，Wikipediaから取得した
+人名数は10 (表\ref{tab:WePS-stat}参照，以下(A)とする)，
+ACL'06参加者リスト，アメリカ合衆国・国勢調査の人名のうち，
+Wikipediaにも記事のある人名数は6（表\ref{tab:WePS-stat}参照，
+以下(B)とする）である．
+これらの人名について，Wikipediaをseedページとして
+クラスタリングした場合に，その精度に差があるか否かを検証した．
+その結果を表\ref{Table:WikiDetail}に
+示す．(A)の方が(B)よりも，0.02〜0.04上回る結果が得られているが，
+それほど大きな差ではない．このことから，seedページとして
+Wikipediaの記述内容を用いることは，(B)のよう
+に他分野から取得した人物のWebページに対しても有効であり，
+Wikipediaの記述内容の汎用性が特徴付けられる結果であると考えられる．
+また，クラスタ数については，seedページを導入したことで，このseedページを中心に，
+Webページのグループが形成され，実際の正解クラスタ数よりも
+少ない数のクラスタが生成される傾向が観察された．これは，表
+\ref{Table:ResultsByOthers}において，inverse purityの値が高いことからも裏付けられる．
+
+
+\begin{table}[b]
+ \hangcaption{Wikipediaをseedページとした場合，(A) Wikipediaから取得した10人名と，(B) Wikipediaに記事はあるが，ACL'06参加者リスト，アメリカ合衆国・国勢調査から取得した6人名のクラスタリング精度の比較}
+ \label{Table:WikiDetail}
+\input{06table08.txt}
+\end{table}
+\begin{table}[b]
+ \hangcaption{``Web People Search Task''の上位3チームが使用した素性を，提案する半教師有りクラスタリングに適用して得られたクラスタリング精度}
+ \label{Table:ClsRsltsbyWePSFeat}
+\input{06table09.txt}
+\end{table}
+
+なお，``Web People Search Task''の上位3チームは，
+凝集型クラスタリングの手法を採用しているが，これらの手法は素性を
+工夫することで，比較的高い精度を得ている．一方，我々の提案する
+半教師有りクラスタリングでは，
+seedページを含むクラスタの重心の変動を抑えることで，
+表\ref{Table:AggCls}に示した凝集型クラスタリングよりも
+精度が改善されている．我々が導入した素性は，
+\ref{sec:ProposedMethod}章で述べたように，
+gainによって単語を重み付けする簡単なものであるが，
+``Web People Search Task''の上位3チームが使用した素性を
+我々の手法に適用すれば，さらなる精度の向上が期待される．
+そこで，これらの3チームの素性を，我々の手法で用いた結果を
+表\ref{Table:ClsRsltsbyWePSFeat}に示す．
+なお，表\ref{Table:ResultsByOthers}に示した我々の提案手法で
+得られた最良の結果と比較するため，
+seedページとしてWikipediaにおける各人物の記事を5つ導入した
+場合についての比較を行った．
+まず，CU\_COMSEMについて，表\ref{Table:ResultsByOthers}に示した
+凝集型クラスタリングの$F$値($F_{0.5}=0.78$，$F_{0.2}=0.83$)と
+比較して，半教師有りクラスタリングの$F$値も
+高め($F_{0.5}=0.81$，$F_{0.2}=0.84$)となっている．
+しかし，$F_{0.5}$で0.03，$F_{0.2}$で0.01程度の改善に
+過ぎない．これは，文中の単語，URLのトークン，名詞句など，
+すでに多くの素性を導入しているため，半教師有りクラスタリングを適用しても，
+それほど効果は得られないことによると考えられる．
+IRST-BPについては，表\ref{Table:ResultsByOthers}に示した
+凝集型クラスタリングの$F$値($F_{0.5}=0.75$，$F_{0.2}=0.77$)と
+比較しても，半教師有りクラスタリングの精度は
+($F_{0.5}=0.76$，$F_{0.2}=0.81$)であり，改善の程度は
+$F_{0.5}$で0.01，$F_{0.2}$で0.04であった．
+このチームが使用している固有名詞，時制表現，人名のある
+段落で最も良く出現する単語といった素性は，あまり有効な素性ではないと
+考えられる．
+PSNUSについては，NE素性をTF-IDFで重み付けしたのみの単純な
+素性であるが，表\ref{Table:ResultsByOthers}に示した凝集型クラスタリングの
+$F$値($F_{0.5}=0.75$，$F_{0.2}=0.78$)と比較して，
+半教師有りクラスタリングで得られた$F$値は
+$F_{0.5}=0.78$，$F_{0.2}=0.82$であり，$F_{0.5}$で0.03，$F_{0.2}$で0.04
+の改善が観察される．一方，我々の手法では素性としてgainを用い，
+表\ref{Table:ResultsByOthers}に示したとおり，
+$F_{0.5}=0.81$，$F_{0.2}=0.82$の$F$値を得ている．
+これは，CU\_COMSEMで使用されている多数の
+素性で得られた$F$値とほぼ同じ値が得られていることから，gainによって単純に
+Webページ中の単語を重み付けした素性だけでも，
+我々の提案する半教師有りクラスタリングを適用することで，
+高い精度が得られることが確認された．また，表\ref{Table:AggCls}に
+示した凝集型クラスタリングによる
+$F$値($F_{0.5}=0.52$，$F_{0.2}=0.49$)と比較しても，
+$F_{0.5}$で0.29，$F_{0.2}$で0.33の改善が観察されたことから，
+我々の提案する半教師有りクラスタリングの有効性が確認される．
+
+
+次に，WePSコーパスの訓練集合において，
+3.3.3節(ii)で述べたように，
+検索結果のスニペットを用い，seedページ中の人名前後の単語数または
+文数を変化させた場合，図\ref{fig:RsltSnippet}から，
+seedページ中の人名前後の単語ではなく，同様に文を用いたときに，
+より良いクラスタリング精度が得られることが観察される．
+この場合も同様に，人名前後の数語の情報よりも，
+人名前後の数文を用いることで，その人物を特徴付ける情報が
+獲得でき，人物の実体が識別しやすくなった効果によるものと
+考えられる．また，図\ref{fig:RsltSnippet}からは，
+seedページについて，人名前後の3文を用いた場合に
+最も良い$F$値($F_{0.5}=0.64$，$F_{0.2}=0.67$)が
+得られることがわかった．この文数をWePSコーパスの
+テスト集合に適用した場合，[purity:0.70，inverse purity:0.62，
+$F_{0.5}=0.66$，$F_{0.2}=0.68$]の
+結果が得られた．この結果は，Web People Search Taskの上位3チームの結果，
+および本研究における他の実験結果と比較して，かなり劣っている．
+これは，スニペットのような数語程度の情報だけでは，
+seedページで人名前後の3文という情報を用いたとしても，
+該当する人物について述べた適切なWebページが，
+そのseedページには集まらず，結果として，クラスタリング精度が
+悪くなったことによるためであると考えられる．
+
+以上から，提案手法ではWikipediaの記事をseedページとして
+利用し，人名前後の2文を，また，検索結果のWebページについては
+人名前後の3文を用いた場合に，良好な検索結果が得られることが
+わかった．
+
+さらに，処理時間に関して，最良なクラスタリング精度が得られた
+適応的マハラノビス距離の式(\ref{Eq:Adapt. Mahalanobis distance})に
+おける分散共分散行列の計算には，単語数の2乗の計算量が必要となるが，
+1人名について100件のWebページのクラスタリングを行なうのに，
+最も多い5つのseedページを用い，seedページと検索結果のWebページの
+双方ともに文書全体を用いた場合でも，0.8秒余りで
+処理できることが図\ref{fig:time}から観察され，妥当な応答性を
+実現できていると考えられる．
+
+
+\section{むすび}
+\label{sec:Conclusion}
+
+本論文では，Web検索結果における人名の曖昧性を解消するため，
+seedページを含むクラスタの重心の変動を抑える
+半教師有りクラスタリングの手法を提案した．
+実験の結果，最良な場合において，
+[purity:0.80，inverse purity:0.83，$F_{0.5}$:0.81，
+$F_{0.2}$:0.82]の評価値が得られた．
+今回は，上位に順位付けされる検索エンジンの出力結果が
+異なることを想定して実験を行った．すなわち，同一人物の
+seedページ間にも``cannot-link''の制約が導入されている
+可能性がある．しかし，クラスタが生成される過程で，seedページ以外の人物の
+ページがクラスタ内の要素として支配的になり，最終的には比較的正確なクラスタが
+生成されることが観察された．同一人物のseedページ間でも，その人物を正確に
+表現しているページ，そうでないページがあることによるためであると
+考えられる．したがって，その人物についてより正確に
+記述されたWebページをseedページとして選択することが，今後の課題の
+一つとして挙げられる．
+また，Web検索結果における人名の曖昧性解消の精度を高めるには，
+その人物を特徴付ける単語の重みが大きくなるように，
+Webページの特徴ベクトルを作成して，クラスタリングを行なう
+ことが重要である．
+そのために，特に，seedページの内容に適合する人物のページが集まるように，
+より的確なseedページの特徴ベクトルを作成するための
+手法を開発してクラスタリングを行なうことも，
+今後の課題として挙げられる．
+
+
+
+
+
+
+\bibliographystyle{jnlpbbl_1.4}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Artiles, Gonzalo, \BBA\ Sekine}{Artiles
+  et~al.}{2007}]{Artiles07}
+Artiles, J., Gonzalo, J., \BBA\ Sekine, S. \BBOP 2007\BBCP.
+\newblock \BBOQ The SemEval-2007 WePS Evaluation: Establishing a Benchmark for
+  the Web People Search Task.\BBCQ\
+\newblock In {\Bem Proc. of the Semeval 2007, Association for Computational
+  Linguistics (ACL)}, \mbox{\BPGS\ 64--69}.
+
+\bibitem[\protect\BCAY{Bar-Hillel, Hertz, \BBA\ Shental}{Bar-Hillel
+  et~al.}{2003}]{Bar-Hillel03}
+Bar-Hillel, A., Hertz, T., \BBA\ Shental, N. \BBOP 2003\BBCP.
+\newblock \BBOQ Learning Distance Functions Using Equivalence Relations.\BBCQ\
+\newblock In {\Bem Proc. of the 20th International Conference on Machine
+  Learning (ICML 2003)}, \mbox{\BPGS\ 577--584}.
+
+\bibitem[\protect\BCAY{Basu, Banerjee, \BBA\ Mooney}{Basu
+  et~al.}{2002}]{Basu02}
+Basu, S., Banerjee, A., \BBA\ Mooney, R. \BBOP 2002\BBCP.
+\newblock \BBOQ Semi-supervised Clustering by Seeding.\BBCQ\
+\newblock In {\Bem Proc. of the 19th International Conference on Machine
+  Learning (ICML 2002)}, \mbox{\BPGS\ 27--34}.
+
+\bibitem[\protect\BCAY{Bekkerman, El-Yaniv, \BBA\ McCallum}{Bekkerman
+  et~al.}{2005}]{Bekkerman-ICML05}
+Bekkerman, R., El-Yaniv, R., \BBA\ McCallum, A. \BBOP 2005\BBCP.
+\newblock \BBOQ Multi-way Distributional Clustering via Pairwise
+  Interactions.\BBCQ\
+\newblock In {\Bem Proc. of the 22nd International Conference on Machine
+  Learning (ICML2005)}, \mbox{\BPGS\ 41--48}.
+
+\bibitem[\protect\BCAY{Bollegala, Matsuo, \BBA\ Ishizuka}{Bollegala
+  et~al.}{2006}]{Bollegala06}
+Bollegala, D., Matsuo, Y., \BBA\ Ishizuka, M. \BBOP 2006\BBCP.
+\newblock \BBOQ Extracting Key Phrases to Disambiguate Personal Names on the
+  Web.\BBCQ\
+\newblock In {\Bem Proc. of the 7th International Conference on Computational
+  Linguistics and Intelligent Text Processing (CICLing 2006)}, \mbox{\BPGS\
+  223--234}.
+
+\bibitem[\protect\BCAY{Bookstein \BBA\ Swanson}{Bookstein \BBA\
+  Swanson}{1974}]{Bookstein74}
+Bookstein, A.\BBACOMMA\ \BBA\ Swanson, D.~R. \BBOP 1974\BBCP.
+\newblock \BBOQ Probabilistic Models for Automatic Indexing.\BBCQ\
+\newblock {\Bem Journal of the American Society for Information Science}, {\Bbf
+  25}  (5), \mbox{\BPGS\ 312--318}.
+
+\bibitem[\protect\BCAY{Bunescu \BBA\ Pasca}{Bunescu \BBA\
+  Pasca}{2006}]{Bunescu06}
+Bunescu, R.\BBACOMMA\ \BBA\ Pasca, M. \BBOP 2006\BBCP.
+\newblock \BBOQ Using Encyclopedic Knowledge for Named Entity
+  Disambiguation.\BBCQ\
+\newblock In {\Bem Proc. of the 11th Conference of the European Chapter of the
+  Association for Computational Linguistics (EACL 2006)}, \mbox{\BPGS\ 9--16}.
+
+\bibitem[\protect\BCAY{Chen \BBA\ Martin}{Chen \BBA\ Martin}{2007}]{Chen07}
+Chen, Y.\BBACOMMA\ \BBA\ Martin, J. \BBOP 2007\BBCP.
+\newblock \BBOQ CU-COMSEM: Exploring Rich Features for Unsupervised Web
+  Personal Name Disambiguation.\BBCQ\
+\newblock In {\Bem Proc. of the Semeval 2007, Association for Computational
+  Linguistics (ACL)}, \mbox{\BPGS\ 125--128}.
+
+\bibitem[\protect\BCAY{Church \BBA\ Gale}{Church \BBA\
+  Gale}{1995a}]{Church95VLC}
+Church, K.~W.\BBACOMMA\ \BBA\ Gale, W.~A. \BBOP 1995a\BBCP.
+\newblock \BBOQ Inverse Document Frequency (IDF): A Measure of Deviation from
+  Poisson.\BBCQ\
+\newblock In {\Bem Proc. of the 3rd Workshop on Very Large Corpora},
+  \mbox{\BPGS\ 121--130}.
+
+\bibitem[\protect\BCAY{Church \BBA\ Gale}{Church \BBA\
+  Gale}{1995b}]{Church95JNLE}
+Church, K.~W.\BBACOMMA\ \BBA\ Gale, W.~A. \BBOP 1995b\BBCP.
+\newblock \BBOQ Poisson Mixtures.\BBCQ\
+\newblock {\Bem Journal of Natural Language Engineering}, {\Bbf 1}  (2),
+  \mbox{\BPGS\ 163--190}.
+
+\bibitem[\protect\BCAY{Diday \BBA\ Govaert}{Diday \BBA\
+  Govaert}{1977}]{Diday77}
+Diday, E.\BBACOMMA\ \BBA\ Govaert, G. \BBOP 1977\BBCP.
+\newblock \BBOQ Classification Automatique Avec Distances Adaptatives.\BBCQ\
+\newblock {\Bem R.A.I.R.O. Informatique Computer Science}, {\Bbf 11}  (4),
+  \mbox{\BPGS\ 329--349}.
+
+\bibitem[\protect\BCAY{Elmacioglu, Tan, Yan, Kan, \BBA\ Lee}{Elmacioglu
+  et~al.}{2007}]{Elmacioglu07}
+Elmacioglu, E., Tan, Y.~F., Yan, S., Kan, M.-Y., \BBA\ Lee, D. \BBOP 2007\BBCP.
+\newblock \BBOQ PSNUS: Web People Name Disambiguation by Simple Clustering with
+  Rich Features.\BBCQ\
+\newblock In {\Bem Proc. of the Semeval 2007, Association for Computational
+  Linguistics (ACL)}, \mbox{\BPGS\ 268--271}.
+
+\bibitem[\protect\BCAY{Hotho, N{\"{u}}rnberger, \BBA\ Paa\ss}{Hotho
+  et~al.}{2005}]{Hotho05}
+Hotho, A., N{\"{u}}rnberger, A., \BBA\ Paa\ss, G. \BBOP 2005\BBCP.
+\newblock \BBOQ A Brief Survey of Text Mining.\BBCQ\
+\newblock {\Bem GLDV-Journal for Computational Linguistics and Language
+  Technology}, {\Bbf 20}  (1), \mbox{\BPGS\ 19--62}.
+
+\bibitem[\protect\BCAY{Jones}{Jones}{1973}]{Jones73}
+Jones, K.~S. \BBOP 1973\BBCP.
+\newblock \BBOQ Index Term Weighting.\BBCQ\
+\newblock {\Bem Information Strage and Retrieval}, {\Bbf 9}  (11), \mbox{\BPGS\
+  619--633}.
+
+\bibitem[\protect\BCAY{Klein, Kamvar, \BBA\ Manning}{Klein
+  et~al.}{2002}]{Klein02}
+Klein, D., Kamvar, S.~D., \BBA\ Manning, C.~D. \BBOP 2002\BBCP.
+\newblock \BBOQ From Instance-level Constraints to Space-level Constraints:
+  Making the Most of Prior Knowledge in Data Clustering.\BBCQ\
+\newblock In {\Bem Proc. of the 19th International Conference on Machine
+  Learning (ICML 2002)}, \mbox{\BPGS\ 307--314}.
+
+\bibitem[\protect\BCAY{MacQueen}{MacQueen}{1967}]{MacQueen67}
+MacQueen, J. \BBOP 1967\BBCP.
+\newblock \BBOQ Some Methods for Classification and Analysis of Multivariate
+  Observations.\BBCQ\
+\newblock In {\Bem Proc. of the 5th Berkeley Symposium on Mathmatical
+  Statistics and Probability}, \mbox{\BPGS\ 281--297}.
+
+\bibitem[\protect\BCAY{Mann \BBA\ Yarowsky}{Mann \BBA\ Yarowsky}{2003}]{Mann03}
+Mann, G.~S.\BBACOMMA\ \BBA\ Yarowsky, D. \BBOP 2003\BBCP.
+\newblock \BBOQ Unsupervised Personal Name Disambiguation.\BBCQ\
+\newblock In {\Bem Proc. of the 7th Conference on Natural Language Learning
+  (CoNLL-2003)}, \mbox{\BPGS\ 33--40}.
+
+\bibitem[\protect\BCAY{Papineni}{Papineni}{2001}]{Papineni01}
+Papineni, K. \BBOP 2001\BBCP.
+\newblock \BBOQ Why Inverse Document Frequency?\BBCQ\
+\newblock In {\Bem Proc. of the 2nd Meeting of the North American Chapter of
+  the Association for Computational Linguistics (NAACL 2001)}, \mbox{\BPGS\
+  25--32}.
+
+\bibitem[\protect\BCAY{Pedersen, Purandare, \BBA\ Kulkarni}{Pedersen
+  et~al.}{2005}]{Pedersen05}
+Pedersen, T., Purandare, A., \BBA\ Kulkarni, A. \BBOP 2005\BBCP.
+\newblock \BBOQ Name Discrimination by Clustering Similar Contexts.\BBCQ\
+\newblock In {\Bem Proc. of the 6th International Conference on Computational
+  Linguistics and Intelligent Text Processing (CICLing~2005)}, \mbox{\BPGS\
+  226--237}.
+
+\bibitem[\protect\BCAY{Popescu \BBA\ Magnini}{Popescu \BBA\
+  Magnini}{2007}]{Popescu07}
+Popescu, O.\BBACOMMA\ \BBA\ Magnini, B. \BBOP 2007\BBCP.
+\newblock \BBOQ IRST-BP: Web People Search Using Name Entities.\BBCQ\
+\newblock In {\Bem Proc. of the Semeval 2007, Association for Computational
+  Linguistics (ACL)}, \mbox{\BPGS\ 195--198}.
+
+\bibitem[\protect\BCAY{Porter}{Porter}{1980}]{Porter80}
+Porter, M.~F. \BBOP 1980\BBCP.
+\newblock \BBOQ An Algorithm for Suffix Stripping.\BBCQ\
+\newblock {\Bem Program}, {\Bbf 14}  (3), \mbox{\BPGS\ 130--137}.
+
+\bibitem[\protect\BCAY{Remy}{Remy}{2002}]{Remy02}
+Remy, M. \BBOP 2002\BBCP.
+\newblock \BBOQ Wikipedia: The Free Encyclopedia.\BBCQ\
+\newblock {\Bem Online Information Review}, {\Bbf 26}  (6), \mbox{\BPG\ 434}.
+
+\bibitem[\protect\BCAY{Rocchio}{Rocchio}{1971}]{Rocchio71}
+Rocchio, J. \BBOP 1971\BBCP.
+\newblock \BBOQ Relevance Feedback in Information Retrieval.\BBCQ\
+\newblock In Salton, G.\BED, {\Bem The Smart Retrieval System: Experiments in
+  Automatic Document Processing}, \mbox{\BPGS\ 313--323}. Prentice-Hall,
+  Englewood Cliffs, NJ.
+
+\bibitem[\protect\BCAY{Salton \BBA\ McGill}{Salton \BBA\
+  McGill}{1983}]{Salton83}
+Salton, G.\BBACOMMA\ \BBA\ McGill, M.~J. \BBOP 1983\BBCP.
+\newblock {\Bem Introduction to Modern Information Retrieval}.
+\newblock McGraw-Hill.
+
+\bibitem[\protect\BCAY{Shental, Hertz, Weinshall, \BBA\ Pavel}{Shental
+  et~al.}{2002}]{Shental02}
+Shental, N., Hertz, T., Weinshall, D., \BBA\ Pavel, M. \BBOP 2002\BBCP.
+\newblock \BBOQ Adjustment Learning and Relevant Component Analysis.\BBCQ\
+\newblock In {\Bem Proc. of the 7th European Conference on Computer Vision
+  (ECCV 2002)}, \mbox{\BPGS\ 776--792}.
+
+\bibitem[\protect\BCAY{Wagstaff \BBA\ Cardie}{Wagstaff \BBA\
+  Cardie}{2000}]{Wagstaff00}
+Wagstaff, K.\BBACOMMA\ \BBA\ Cardie, C. \BBOP 2000\BBCP.
+\newblock \BBOQ Clustering with Instance-level Constraints.\BBCQ\
+\newblock In {\Bem Proc. of the 17th International Conference on Machine
+  Learning (ICML 2000)}, \mbox{\BPGS\ 1103--1110}.
+
+\bibitem[\protect\BCAY{Wagstaff, Rogers, \BBA\ Schroedl}{Wagstaff
+  et~al.}{2001}]{Wagstaff01}
+Wagstaff, K., Rogers, S., \BBA\ Schroedl, S. \BBOP 2001\BBCP.
+\newblock \BBOQ Constrained K-means Clustering with Background Knowledge.\BBCQ\
+\newblock In {\Bem Proc. of the 18th International Conference on Machine
+  Learning (ICML 2001)}, \mbox{\BPGS\ 577--584}.
+
+\bibitem[\protect\BCAY{Xing, Ng, Jordan, \BBA\ Russell}{Xing
+  et~al.}{2003}]{Xing03}
+Xing, E.~P., Ng, A.~Y., Jordan, M.~I., \BBA\ Russell, S.~J. \BBOP 2003\BBCP.
+\newblock \BBOQ Distance Metric Learning with Application to Clustering with
+  Side-Information.\BBCQ\
+\newblock {\Bem Advances in Neural Information Processing Systems}, {\Bbf 15},
+  \mbox{\BPGS\ 521--528}.
+
+\end{thebibliography}
+
+\begin{biography}
+\bioauthor{杉山　一成}{
+1998年横浜国立大学工学部電子情報工学科卒業．
+2000年同大学院工学研究科電子情報工学
+専攻博士前期課程修了．KDDI（株）勤務を経て，
+2004年奈良先端科学技術大学院大学情報科学研究科博士
+後期課程修了，博士（工学）．（株）日立製作所勤務を経て，
+2006年東京工業大学精密工学研究所研究員，
+2009年シンガポール国立大学計算機科学科研究員，
+現在に至る．情報検索，自然言語処理に関する研究に従事．
+電子情報通信学会，情報処理学会，人工知能学会，IEEE，ACM，AAAI 各会員．
+}
+\bioauthor{奥村　　学}{
+1984年東京工業大学工学部情報工学科卒業．1989年同大学院博士
+課程修了．工学博士．同年，東京工業大学工学部情報工学科助手．
+1992年北陸先端科学技術大学院大学情報科学研究科助教授，
+2000年東京工業大学精密工学研究所助教授，2009年同教授，
+現在に至る．自然言語処理，知的情報提示技術，語学学習支援，テキスト評価分析，
+テキストマイニングに関する研究に従事．
+電子情報通信学会，情報処理学会，人工知能学会，言語処理学会，認知科学会，計量国語学会，
+ AAAI，ACL 各会員．
+}
+
+\end{biography}
+
+
+\biodate
+
+
+\end{document}

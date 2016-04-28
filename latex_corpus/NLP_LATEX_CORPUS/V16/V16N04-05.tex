@@ -1,0 +1,461 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.2}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+
+\Volume{16}
+\Number{4}
+\Month{October}
+\Year{2009}
+
+\received{2008}{8}{31}
+\revised{2008}{11}{7}
+\rerevised{2009}{1}{8}
+\accepted{2009}{7}{17}
+
+\setcounter{page}{91}
+
+\jtitle{課題志向別シラバス自動分類システムの設計と実装}
+\jauthor{太田　　晋\affiref{Author_1} \and 美馬　秀樹\affiref{Author_1}}
+\jabstract{
+近年の科学技術の進展にともない，工学知は幾何級数的に増大したが，その一方で，工学教育の現場においては，学生が自分の興味に合わせて講義・演習を選ぶことが非常に困難な状況になっている．また，教員も同様に，講義全体の効率化のために，講義内容の重複や講義の抜けを知る必要があり，総じて，各講義間の関連性を明確にし，カリキュラムの全体像を明らかにすることが求められている．しかし，講義間の関連から全体の構造を明らかにするためには，通常，人手によりあらかじめ講義内容（シラバス）を分析・分類する必要があり，これは大きな人的コストと時間を必要とする．したがって，この作業を可能な限り自動化し，効率的な手法を開発することが非常に重要な課題となる．本稿では，こうした問題に対して，我々のグループで取り組んでいる課題志向別シラバス分類システムについて，評価実験を交えて解説する．また，東京大学工学部の850以上のシラバスを使った評価実験によって，本システムが実用的な課題志向別シラバス分類の自動化に有効であることを示す．
+}
+\jkeywords{自動用語認識，機械学習，テキスト分類，知の構造化}
+
+\etitle{Design and Implementation of an Issue-oriented \\
+	Automatic Syllabus Categorization System}
+\eauthor{Susumu Ota\affiref{Author_1} \and Hideki Mima\affiref{Author_1}} 
+\eabstract{
+  The purpose of this study is to develop an issue-oriented automatic syllabus categorization system, in which natural language processing and machine learning based automatic categorization are combined.
+  Recent explosion of scientific knowledge due to the rapid advancement of academia and society makes it difficult for learners and educators to recognize overall picture of syllabus. In addition, the growing number of interdisciplinary researches makes it harder for learners to find their proper subjects from the syllabi. In an attempt to present clear directions to their subjects, issue-oriented syllabus structure is expected to be more efficient in learning and education. However, it normally requires categorizing all the syllabi manually in advance, and it is generally a time consuming task. Thus, this emphasizes the importance of developing efficient methods for (semi-) automatic syllabus structuring in order to accelerate syllabus retrieval. In this paper, we introduce design and implementation of an issue-oriented automatic syllabus categorization system. And preliminary experiments using more than 850 engineering syllabi of University of Tokyo show that our proposed syllabus categorization system obtains sufficient accuracy.
+}
+\ekeywords{automatic term recognition, machine learning, text categorization}
+
+\headauthor{太田，美馬}
+\headtitle{課題志向別シラバス自動分類システムの設計と実装}
+
+\affilabel{Author_1}{東京大学大学院工学系研究科}{School of Engineering, The University of Tokyo}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+
+近年の科学技術の進展にともない，工学知は幾何級数的に増大したが，その一方で，工学教育の現場においては，学生が自分の興味に合わせて講義・演習を選ぶことが非常に困難な状況になっている．例えば，東京大学工学部では約900の講義が開講されており，学科の枠を越えた講義の履修が可能であるが，講義の選択に対する十分な知識が得られる状況とは言い難い．学生にとっては，a) 自分の興味がどの講義によって教授されるか（講義の検索），b) その講義を受けるために習得すべき講義は何か（講義間関連の同定），等を得ることが望ましい．また，教員も同様に，講義全体の効率化のために，講義内容の重複や講義の抜けを知る必要があり，総じて講義の全体像を俯瞰し，各講義間の関連性を知ることが非常に重要となる．
+
+こうした問題に対し，我々は先より，異なる分野における知識を効率的に抽出し，かつ得られた知識間の関連性から浮かび上がる新たな知の活用を支援する「知の構造化」に関する研究開発を進めてきた\cite{Inproc_Mima_2006a,Article_Mima_2006b,Inproc_Yoshida_2007}．「知の構造化」の主たる目的は，知識を分析し可視化技術により知の内容を明瞭にすることで，i) 知識全体の構造を明らかにし，ii) 知識の関連から隠れた知識や，新たな知識を発見する，iii) 知識の集中と抜けを発見する，さらには，これらによる知識の活用と再利用性を促すことにある．
+
+以上のような知の構造化の工学教育分野における実践として，以下の目標を達成するために，工学知およびカリキュラムの構造化と可視化に取り組んでいる．
+
+\noindent
+\textgt{・セルフオリエンテーション可能なシステムの構築}
+
+カリキュラムの全体像を構造化し，可視化することによって，学生が学ぶことの相対的位置付けを理解し，進むべき道を自ら指向できるようにする．
+
+\noindent
+\textgt{・テーラーメイド教育の実現}
+
+様々な異なるキャリアの学生に対して，多様なコース中から，個々の目的に応じた最適なカリキュラムを効果的に提示する．
+
+これらの目標を達成するために，1) キーワード検索によるアプローチ，および，2) 課題志向によるアプローチ，という二つのアプローチでこの問題に対する取り組みを進め，既に学生へのサービス提供を行っている．
+
+通常，キーワード検索によるアプローチは，有用性が高く強力な検索能力を提供可能であるが，専門的知識の乏しい初学者にとっては，適切な検索キーワードを見つけだすことが難しいという問題がある．その一方，Yahoo!等のインターネット検索サイトでのディレクトリ検索に相当する課題志向によるアプローチでは，あらかじめ「環境」，「エネルギー」等の，（学科の枠に捕らわれない）課題に即して講義を（階層的に）分類し，それらの取捨選択により最終的な講義の選別が可能となるため，個別の科目に関する知識をそれほど必要とせずに，各学生の興味のある課題にあわせて講義を検索することができるという利点がある．双方共に一長一短があるが，教養課程から専門課程に渡る学生の多様なニーズに応えるためにも，キーワード入力と課題志向の両面から，講義を構造化・可視化することが，学生へのサービス提供という点からも重要である．
+
+キーワード入力からのアプローチとして，東京大学工学部では，MIMA Searchシラバス構造化システムとして既に学生に向けサービスを提供している．本システムの特徴は，講義内容（以下，シラバス）のテキストを自然言語処理技術により自動的に構造化し，可視化技術を利用することで学生との柔軟なインタフェースを提供することにある．学部学生，大学院生を対象とした過去3年に渡るアンケート調査の結果や，年々のアクセス数の伸び等を始めとし，検索の効率化等に対する良好な評価を得ている．なお，MIMA Searchに関する詳細は\cite{Inproc_Mima_2006a,Web_MIMA_Search}にあるため，本稿では割愛する．一方，課題志向によるアプローチに関しても，従来，人手により課題別にシラバスを分類し，構造化，可視化を行うことで，同様のサービスを提供しており，先と同様，学生からの良好な評価を得ている．
+
+しかしながら，課題志向によるアプローチでは，従来の学科や進学コース単位での，言わば，分野内でのシラバス分類と異なり，多くの場合に分野の枠を越えたシラバスの分類が要求される．特に，近年急速に発展しつつある「バイオテクノロジー」，「ナノテクノロジー」，「環境」，「エネルギー」等の分野では，学際的，複合的，融合的な方法で研究開発が行なわれており，これらの分類に関しては，より広範囲の知識を必要とする．さらには，「地球温暖化」，「環境資源の枯渇」，「持続可能な社会」等，学科のみならず，学部の枠組みを超えた講義や知識のつながりをとらえることが必要な課題も存在する．
+
+その一方で，近年の工学知の増大と細分化により，講義を受け持つ各教員が俯瞰的な視点から自身の講義を位置付けることが困難な状況にあるといえる．例えば，東京大学工学部の2008年度シラバスにおいて，「事前履修」，「並行履修」，「事後履修」という関連講義を記述する項目があるが，入力された関連講義のうち約34\%の記述に誤りがあり，関連講義をたどることできない状態にある．これらの多くは，カリキュラムの再編によって既に開講されていない講義名を参照していたり，曖昧な記述のままとなっていることが原因と見られるが，各教員が講義の全体像を把握し，シラバス間の関連を記述することが必ずしも容易ではないことを示していると思われる．
+
+以上のように，学際的な研究が増加し課題志向別にシラバスを俯瞰する必要性が高まっている一方で，各教員は学問分野の増大・細分化により俯瞰的な視点からシラバスを記述することが困難な状況にある．したがって，客観的・俯瞰的に課題志向別にシラバスを構造化するためには，工学知を俯瞰し，分類することができる専門の人員が必要となる．そこで，東京大学大学院工学系研究科では，現在数名の専門の教員が人手によりシラバスを精査し分類作業を行っている\cite{Web_Kadaisikou} ．しかし，年度毎に更新されるシラバスに対して，人手による分類を毎年続けていくことは，大きなコストと時間を要する．よって，この作業を可能な限り自動化し，効率的な手法を開発することが非常に重要な課題となる．
+
+そこで，本研究では，課題志向によるシラバス構造化のアプローチに関し，シラバス分類を（半）自動化するシステムを提案する．本システムの特徴は，従来，全ての工程を人手による手作業で行っていたシラバス分類に対し，その一部を言語処理による特徴抽出，及び機械学習による自動分類を利用することで，全体の作業工程を短縮することにある．以下，本稿では，これら課題志向によるシラバス構造化アプローチとして，我々のグループで取り組んでいる課題志向別シラバス分類，構造化システムについて，システム構成，実装，及びテストデータを利用した実験評価を交えて解説する．
+
+
+\section{関連研究}
+
+近年，大学における活動状況を内外へ周知する目的でWebを利用した情報公開が進んでおり，Information Communication Technology (ICT) を活用した教育の一環として，シラバスの電子化と公開が多くの大学で取り組まれている．さらに，シラバスの公開から一歩すすんで，MIT をはじめとする主要大学にて， Open Course Ware (OCW) という，講義とその関連資料をインターネット上に公開する取り組みもはじまっている\citeC{Web_OCW,Web_JOCW}．また，一部の大学では，シラバスを可視化するシステムに関する研究・開発が行われている\cite{Article_Miyoshi_2006}．これらのシステムでは，講義間の関連性を可視化することによって，学生が自ら履修計画を立てたり，多様なコース中から最適なキャリアパスを自ら指向することを目指しているが，現段階では，比較的単純な可視化という段階にとどまっており，より深くシラバスを分析し構造化することが求められている．
+
+シラバスの分類支援に関する研究\cite{Article_Miyazaki_2005}では，ユーザ支援のためには，分類の根拠となった素性（用語）を含めた形でユーザへ情報提示することが重要であると指摘されており，通常の文書分類において一般的に利用されているサポートベクターマシン(SVM)や確率モデルがユーザ支援には向かないことが議論されている．現時点では，分類の判定根拠を明確にする目的においては，SVMに比べて決定木\cite{Inproc_Lewis_1994}等の手法のほうが有望であると考えられるが，近年の研究では，SVMにおいても判定根拠の説明を行おうとする試みが行われている\cite{Inproc_Itabashi_2008}．尚，本システムでは，分類精度の観点からSVMを分類器として選択したが，分類の根拠を明示する目的において，可視化時に素性（用語）を提示する等の工夫を行っており，修正作業者からは，修正に有益な情報であるとの評価を得ている．しかしながら，より大規模の対象に対する分類・修正の場合は，\cite{Inproc_Itabashi_2008}と同様の手法の導入も検討する必要があろう．一方，システム上は，分類器を変更できるようモジュラリティを確保して設計を行っており，今後の研究の進展および技術発展等を検討しつつ，他の分類手法へ変更に柔軟に対応できるように実装を行っている．
+
+また，本研究のようにあらかじめ課題を設定して分類しようとするトップダウン型ではなく，ボトムアップ型の分類手法として，文書クラスタリングによりシラバスを分類する研究も行われている\cite{Article_Nozawa_2005}．文書クラスタリングは，分析の切り口が定まっていない状況での分類や，新たなカテゴリの発見には有用であり，東京大学工学部においても，MIMA Searchシラバス分類システム\cite{Inproc_Mima_2006a,Web_MIMA_Search}を開発し，学生に向けたサービスを提供している．また，学生を主体としたボトムアップ型アプローチとして，フォークソノミーを用いた講義選択知識の抽出の試みも行われている\cite{Inproc_Nishijima_2008}．ただし，学生の観点からの分類が，学生への教育にとって必ずしも適当とは限らないこと（例えば，単位取得の容易さによる分類等）や，実際にサービスを行う際には，学生へのインセンティブ付与の問題や，不適切な内容の削除に必要なコスト等，検討すべき課題は多い．
+
+一方，高等教育機関における，教育内容・方法等の改善のための組織的な取り組み（ファカルティディベロップメント，FD）の制度化が近年急速に進展しており，教員の教育力向上のために ICT を活用した FDの実施が求められている\cite{Techrep_NIME_2008}．この点からも，シラバスを構造化し全体を俯瞰することによって，講義内容の重複や抜けを発見し FD の実施に資することが期待されている．ただ，ICT活用教育の導入の際のデメリットとして，「システムやコンテンツを作成，維持するための人員が不足していること」が最も高いと報告されているように\cite{Techrep_NIME_2008}，シラバスを構造化するためには，通常，人手によりあらかじめシラバスを分析・分類・整理する必要があり，これは大きな人的コストと時間を必要とする．したがって，この作業を可能な限り自動化し，効率的な手法を開発することが非常に重要な課題となる．
+
+
+\section{システム構成}
+
+図\ref{fig:system_overview}に本システムの構成を示す．本システムでは，あらかじめ分類されたシラバスの情報をもとに，未分類のシラバスを（半）自動的に各カテゴリに分類することを目的とする．以下に各コンポーネントの概要を述べる．
+
+\noindent
+\textgt{・特徴抽出（自動用語認識）}
+
+入力されたシラバスに対して，形態素解析および自動用語認識を行い，シラバス中から特徴を抽出する．なお，本システムでは，シラバス中の「科目名」，「講義の目的」，「理解すべき事項」，「前提事項」，「応用先」，「事前履修」，「並行履修」，「事後履修」を対象として名詞および用語の抽出を行うこととした．
+
+関連研究で取り上げた文献\cite{Article_Miyazaki_2005}で報告されているように，ユーザ支援を目的とした分類システムでは，分類の根拠となった用語を含めた形でユーザへ情報提示することが重要である．本システムでも同様の理由により，分類の根拠をユーザに明確にする目的で，シラバス中に含まれる用語を次項で述べるC/NC-value用語認識を利用して抽出を行い，可視化の際に利用することで，可能な限りユーザに提示する．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{16-5ia4f1.eps}
+\end{center}
+\caption{課題志向別シラバス分類システムの構成}
+\label{fig:system_overview}
+\end{figure}
+
+\noindent
+\textgt{・C/NC-value用語抽出}
+
+本システムでは，機械学習・分類のための素性の一部としてC/NC-value用語認識技術\cite{Article_Mima_2000}を基にした用語の自動認識を利用している．C/NC-value手法は，テキストを入力とし，言語的な知識と統計的な解析の両者を複合的に利用することで，複数の語からなる用語を自動抽出する手法である．
+
+まず，C-value手法では，形態素のパターンと用語の対象ドメインにおける出現頻度，さらには，用語のネスティングに関する性質に注目し，スコア付けを行うことで用語の高精度な自動認識を行う．ここで，ネスティングとは，「乱数系列」と「疑似乱数系列」の関係のような，ある用語がさらに長いまとまりの用語に含まれている状態（包含関係）を示す．具体的な手順としては，まず，対象テキストを形態素解析し，以下のようなパターンによってフィルタリングを行う．
+
+\clearpage
+
+\begin{quote}
+\begin{verbatim}
+[Filter 1] Noun{2,}
+例：疑似 乱数 系列，仮想 関数
+[Filter 2] (Prefix | Adv) (Noun | Adj | Suffix)+ Noun+
+例：全 二重 接続，非 同期 通信
+[Filter 3] Prefix Noun+ Suffix
+例：未 定義 型，再 初期 化
+\end{verbatim}
+\end{quote}
+
+上記のフィルターによって対象テキスト中から文字列を切り出し，これを用語の候補とする．次に，用語の候補それぞれの対象テキスト中における出現頻度を計算し，さらにこの出現頻度から，単語のネスティングに関する性質を利用して，以下の式によりC-valueを算出する．
+\[
+C-value(a) = \begin{cases}
+               \log_{2} |a| \cdot f(a) & \text{$a$がネストしていない場合} \\
+               \log_{2} |a| \Bigl( f(a) - \frac{1}{P(T_a)} \sum_{b \in T_a} f(b) \Bigr) & \text{$a$がネストしている場合}
+             \end{cases}
+\]
+
+ここで，
+\begin{quote}
+$a$は用語の候補
+
+$|a|$は用語の候補$a$の長さ（形態素の個数）
+
+$f(.)$は対象テキスト中の出現頻度
+
+$T_a$は$a$を含む抽出された用語の候補の集合
+
+$P(T_a)$は上記集合の要素数
+\end{quote}
+
+である．
+
+また，NC-value手法では，候補となる用語の実際の文章上でのコンテキスト（前後の文脈）中にある語彙との共起の情報を用いて，用語としての確からしさ(termhood)の指標を求め，求まった指標を基に候補となる用語の再順序づけを行う．
+
+本手法は日英両言語のテキストに対して用語抽出の実験評価が行われており，両言語共に高い精度の認識が行える言語非依存性や，異なる分野に対しても同手法で比較的高精度な用語抽出が可能なドメイン非依存性を持つことを特徴とする．この性質は，本稿で提案する，分野を越えて関連する講義を抽出するという目的には有効だと思われる．実際に，AI分野の論文を用いた評価実験の結果，90\%以上の用語認識精度が得られており，他の手法と比較して高いドメイン非依存性があると報告されている\cite{Article_Mima_2000}．
+
+なお，抽出した用語の例として，2006年度の東京大学工学部シラバスから抽出した用語のうちスコア上位5件は，「基礎知識」，「線形代数」，「統計力学」，「固体物理」，「ベクトル解析」であった．
+
+\noindent
+\textgt{・サポートベクターマシン(SVM)}
+
+SVMは，あらかじめ学習させたパターンに基づき，未知の入力パターンの分類を行う強力なパターンマッチング手法であり，機械学習理論の構造的リスク最小化原理に基づいている\cite{Book_Vapnik_1995,Article_Cortes_1995}．本システムでは高精度のテキスト分類を実現するためにSVMを分類器として採用した．なお，SVMによるテキスト分類についての研究は既に報告されており，決定木等の他の手法に比べてSVMが非常に高い分類能力を持つことが示されている\cite{Inproc_Dumais_1998,Inproc_Joachims_1998}．本システムでは，あらかじめいくつかのカテゴリに分類されたシラバス群をSVM分類器に学習させておき，未分類のシラバスを自動的に各カテゴリに分類するためにSVMを利用している．なお，本コンポーネントでは，カテゴリ数と同数のSVM分類器を用意し，1つのシラバスを複数のカテゴリに分類することが可能である．本システムでは，SVMソフトウェアのTinySVM 0.09 \citeC{Web_TinySVM}を利用した．
+
+また，SVMを利用したテキスト分類において，素性をどのように選択するかが重要であると報告されている\cite{Inproc_Taira_1999}．文献\cite{Inproc_Moschitti_2004}では，n-gram，形態素，および複合名詞を含む種々の素性を用いたテキスト分類について議論されており，英語の新聞記事に対するSVMを用いた分類実験では，形態素に複合名詞を加えたものを素性として用いた際に，10個の分類カテゴリのうち8個のカテゴリにおいては若干の分類精度向上が見られることが示されている．総合的に見た場合には，bag of words 以外（フレーズ，語義情報等）の素性を利用しても精度向上は微々たるものであり，計算量とのトレードオフも含め，必ずしも質の向上に寄与するとは言えない面もあるとの報告もあるが，カテゴリの専門性の高さ（専門用語の特徴量としての尤もらしさ）に対する素性の最適化や素性の組み合わせ方式等，未だ議論の余地はある．例えば，情報検索分野において，従来，素性の単位をn-gramか形態素にするかの議論が成されていたが，今日の検索システムにおいては，両者の融合による検索精度の向上が既に実現されている．
+
+以上の観点より，システムの設計にあたり，事前に学習データのクロスバリデーションによる実験，及び日本語の新聞記事を使った予備実験を行い，名詞と用語を素性に採用した際の分類精度への影響を調査した．まず，SVMによるテキスト分類の素性として，1) 名詞のみ，2)用語のみ，3) 名詞および用語，の3つを準備し，tf・idf \cite{Article_Salton_1991}によりスコア付けを行い，それぞれの場合について新聞記事を対象とした分類実験を行った．その結果，実験全体のF値（適合率と再現率の調和平均）は，1) 名詞のみ F=0.6390，2)用語のみ F=0.5462，3) 名詞および用語 F=0.6560 となり，3)の名詞および用語を素性とした場合に最も精度よく分類出来ることを確認した．特に，新聞記事での軍事や国際関係等の専門性の高いと考えられるカテゴリにおいて，より多くの精度向上が見られた．一般に，シラバスの記述内容は専門用語を多く含んでいるため，名詞および用語を素性とすることでより高精度の分類を行うことが期待できる．以上の理由から本システムではSVM分類の素性として，名詞および用語を素性として採用した．
+
+\noindent
+\textgt{・機械学習}
+
+「特徴抽出」部によって抽出された素性（名詞および専門用語）を基に，tf・idf  によりスコア付けを行い，訓練データとなるシラバスを正規化された多次元ベクトルに変換する．さらに，訓練データをもとにSVM分類器を学習させ，分類知識を生成する．
+
+\noindent
+\textgt{・自動分類}
+
+「特徴抽出」部によって抽出された素性（名詞および専門用語）を基に，テストデータとなるシラバスを多次元ベクトルに変換し，SVM分類器により未分類のシラバスを分類する．
+
+\noindent
+\textgt{・シラバス分類可視化エンジン}
+
+「自動分類」部によって分類されたシラバスから，HTMLドキュメントを自動生成しブラウザに表示する（図\ref{fig:kadai_kankyou}参照）．なお，実装についてはアプリケーションエンジンの一つであるApache Tomcat 4.1.32 をベースに，Java 言語によりHTMLを生成するServletを作成した．また，シラバスデータを保存するためのデータベースエンジンとしてPostgreSQL 7.1.3を利用し，JDBCを介したデータベースコネクションによりモジュラリティの高い構成を採用している．
+
+\noindent
+\textgt{・インタラクティブ修正インタフェース}
+
+「自動分類」部によって生成されたシラバス分類結果を見ながら，インタラクティブに分類間違いを修正する．まず，図\ref{fig:syllabus_list}に示した分類結果一覧画面を見ながら分類間違いを探し，「修正」ボタンを押すことによって個別シラバスの修正画面に移行し，図\ref{fig:syllabus_detail}に示した個別シラバス修正画面にてシラバス内の各項目を修正する．実装については「シラバス分類可視化エンジン」部と同様にApache Tomcat 4.1.32上にJava言語によりServletを作成した．なお，可視化システム，および上記インタラクティブ修正インタフェース等，本システムのすべてのユーザインタフェースをWebベースとすることで，一般のWebブラウザを介した操作のみで，シラバス閲覧等のすべての作業を行うことが可能となっている．
+
+\begin{figure}[b]
+\begin{minipage}[b]{0.45\textwidth}
+\begin{center}
+\includegraphics{16-5ia4f2.eps}
+\end{center}
+\caption{環境分野における課題志向別科目構造}
+\label{fig:kadai_kankyou}
+\end{minipage}
+\hfill
+\begin{minipage}[b]{0.45\textwidth}
+\begin{center}
+\includegraphics{16-5ia4f3.eps}
+\end{center}
+\caption{課題志向別シラバス分類結果一覧画面}
+\label{fig:syllabus_list}
+\end{minipage}
+\end{figure}
+
+図\ref{fig:kadai_kankyou}は，環境分野に関連する科目について，課題志向型構造（ある課題に着目した場合の関係構造）を相対的な関係で描き出したものである．「環境大事典」（工業調査会）のセクションあるいはテーマで全体の枠組みを作り，その中に工学部で履修できる環境関連科目を当てはめた．図\ref{fig:kadai_kankyou}中において，亀甲状のタイルによりある課題の全体構造を示し，六角形の各領域がそれぞれの下位の課題に対応している．下位の課題の部分をクリックすることにより，その下位の構造全体の可視化画面に遷移する．色の濃淡は科目数に対応しており，科目ごとの相対的な関係が見えると同時に，工学部の講義の中では技術的なことはよく扱われている反面，法的枠組みのような社会科学的視点や，人文科学的枠組みである心理的問題などが，工学部の講義の中だけでは必ずしも履修できないことが見えてくる．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{16-5ia4f4.eps}
+\end{center}
+\caption{個別シラバス修正画面}
+\label{fig:syllabus_detail}
+\end{figure}
+
+以上のように，分類結果を可視化することで，学生にとっては，学問分野を俯瞰しながら自分の興味のある講義を探し，さらにその講義に関連する講義を知り，履修しようとする講義の相対的位置付けや，キャリアパスに応じた履修計画の支援に役立てることがきる．また，教員にとっては，可視化によって，講義の全体像を俯瞰し各講義間の関連性を知ることによって，講義内容の重複や講義の抜けを知ることができ，カリキュラムの改善に役立てることができる．
+
+
+
+\section{評価実験}
+
+SVMによる自動分類システムの有用性を評価するために精度評価実験を行った．実験データとして，東京大学工学部の2003年度（総科目数862）および2006年度（総科目数855）のシラバスを対象とした．このシラバスには，あらかじめ数名の専門の教員が人手により分類を行い，表\ref{table:category_data}に示すように，約450科目に情報工学分野および環境分野のカテゴリが付与されている．本実験では，2003年度の人手による分類結果を訓練データとして分類器を学習させ，2006年度のシラバスをテストデータとして分類を行い，人手による分類と分類器による結果を比較することにより，その適合率と再現率を求めた．訓練データとテストデータそれぞれの詳細を表\ref{table:category_data}に示す．また，機械学習システムとして，SVMソフトウェアのTinySVM 0.09 \citeC{Web_TinySVM}をデフォルトの状態で利用した．
+
+\begin{table}[t]
+\caption{分類実験の対象としたシラバスのカテゴリとデータ数}
+\label{table:category_data}
+\begin{center}
+\includegraphics{16-5ia4t1.eps}
+\end{center}
+\end{table}
+
+実験結果を図\ref{fig:svm_result}に示す．適合率(precision)は，分類器により求められたカテゴリのうち，正しく分類できたカテゴリの割合である．再現率(recall)は，正しく分類されるべきシラバスのうち，どれだけ分類器が正しく分類できたかの割合である．なお，F値（適合率と再現率の調和平均）の平均値はF=0.5685であった．さらに，予備実験にて，SVMによるテキスト分類の素性として，1) 名詞のみ，2)用語のみ，3) 名詞および用語，を素性とした場合の分類精度を比較したが，本実験においても同様に分類実験を行い，その結果F値の平均値は1) 名詞のみ F=0.5352， 2)用語のみ F=0.5038， 3) 名詞および用語 F=0.5685 となり，3)の名詞および用語を素性とした場合に最も精度よく分類出来ることを本実験においても確認した．また，全科目に対する分類誤り率は0.84\%である．つまり，システムで分類した結果のうち，一つのカテゴリにつき平均7.2件程度の分類誤りがあり，これらを人手により修正することが必要となる．図\ref{fig:svm_result}より，再現率についてはカテゴリによってばらつきがあるものの，概ね全てのカテゴリにおいて90\%以上の適合率を得た．また，訓練データ数が極端に少ないカテゴリでは，適合率・再現率ともに低く，自動で分類することは難しいことがわかる．ただし，訓練データ数が極端に少ないカテゴリに関しては，他のカテゴリと同数程度まで訓練データを毎年蓄積することで改善可能であると考えられる．また，カリキュラムの再編で科目数が大幅に増減しているカテゴリでは，他のカテゴリに比べて再現率が低下していることから，これらのカテゴリにおいては自動分類後に人手により修正する必要があることがわかる．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{16-5ia4f5.eps}
+\end{center}
+\caption{分類実験の適合率(precision)—再現率(recall)結果}
+\label{fig:svm_result}
+\end{figure}
+
+以上の実験結果から，本手法が実用的な課題志向別シラバス分類の自動化に有効であることを確認した．
+
+
+\section{考察}
+
+まず，本システムの導入による作業量の変化について考察する．図\ref{fig:work_flow}に本システム導入前後の分類作業フローの比較を示す．A1の作業では，それぞれの課題に関連するキーワード選定を行うが，このキーワードの選定は課題への十分な理解が必要であり，多少の主観が入ることは否めない．また，人手によりキーワード選定を行った場合，必ずしもその課題を特徴付けるキーワードが全て網羅できるとは限らない．それに対して，B1の自動分類システムでは，自動特徴抽出およびtf・idfによってスコア付けを行うことによって，客観的基準により課題の特徴を抽出することが期待できる．加えて，課題志向のような分野が多岐に渡る場合，例え人手によるものであっても，作業者の専門分野との関連の度合いにより，精度にばらつきが生じる．よって，A4に与えられるカテゴリ候補は，適合率，再現率共に十分とは言えず，やはり事後の精査による修正が必要となる．実際に，今回の実験では，A1〜A3の作業によって得られたカテゴリの候補と，B1によって自動で得られたカテゴリの候補の精度は同程度であった．従来，A1〜A3までの作業は3〜4週間程度必要としていたが，本システムの導入によって，A1〜A3までの作業をB1の作業に置き換えることが可能となり，数日間の作業に短縮することができた．A4〜A5の作業については，通常2〜3週間程度の作業を必要とし，現段階ではB2〜B3の作業も同程度の作業を必要とする．しかし，今後，分類システムの精度を向上させることによってさらなる短縮が期待できる．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{16-5ia4f6.eps}
+\end{center}
+\caption{システム導入以前（左）
+以後（右）の分類作業フローの比較}
+\label{fig:work_flow}
+\end{figure}
+
+次に，本システムを運用する上で想定される問題点として，課題の構造（カテゴリ）をどのように整備・修正するかということがあげられる．現在は，例えば情報の分野では，岩波書店刊「情報科学事典」をもとに課題のカテゴリを作成しているが，今後，科学技術の発展に伴い，課題の構造（カテゴリ）が年々変化することが考えられる．現在のシステムでは，新たな課題を追加する際は，人手により全シラバスを吟味し，個別の講義（シラバス）を一つ一つ新たなカテゴリに追加する必要がある．この作業の負担を減らすためには，前述のMIMA Searchを組み合わせて，個別のシラバスをキーワード検索し，その結果をドラッグアンドドロップ等の簡便な方法でシームレスにカテゴリに追加出来るようシステムを拡張する必要がある．また，MIMA Searchのクラスタリング機能を利用して新たなカテゴリを発見し，本システムのカテゴリへ反映することも考えられる．一方，近年のコーパスベース言語処理研究の発展により，コーパスを利用したシソーラスやオントロジーの自動構築研究\cite{Inproc_Mima_2002,Inproc_Shinzato_2004}も進展しつつある．実用に至るには未だ課題は多いが，今後の研究の進展によりこのような課題の構造を自動で構築することも可能となると期待される．
+
+また，評価実験の章で述べたように，カリキュラムの再編により，年度毎にカテゴリに属する講義（シラバス）に大幅な増減があった場合は，分類精度が低下し人手の作業が必要となる．この場合は，分類結果を可視化する際に色を分けて表示するなど，作業者に対して注意を促すような仕組みを追加し，作業者自身の負担を軽減することが必要である．
+
+
+\section{結論}
+
+本稿では，課題志向別シラバス分類システムの開発，というアプローチによって，i) カリキュラムの全体像の俯瞰，ii) 各講義間の関連性の可視化，および， iii) 講義の集中と抜けを可視化するシステムを示した．また，本システムによって，大量のシラバスデータの自動分類，および，分類間違いのインタラクティブ修正を可能にし，大幅に人的コストと時間を短縮することが期待できる．
+
+ドッグイヤーと呼ばれるように，近年の高度情報化による社会の発展のスピードは著しく，グローバル経済の発達等により社会の変化も激しいのが現状である．社会の変化に迅速に対応した教育を行うことは大学の使命であるが，カリキュラム再編のみならず，学科の再編等，教育にも常に変化が求められる現状において，教育環境構築の負担は今後も常に増大するものと思われる．その意味でも，本システムのような学生へのサービス向上とその効率的運用を目的としたシステムに対する期待は今後も非常に大きくなると思われる．なお，本システムは，現在は2003年度から2008年度のデータを元に実験運用を行なっているが，2009年度より実運用を開始し，実際に学生に向けてサービスを提供する予定である．本サービス開始と共に，学生へのアンケート調査等を通じ，ユーザビリティの改善を進める予定である．
+
+
+
+
+
+\bibliographystyle{jnlpbbl_1.4}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{CIEE}{CIEE}{a}]{Web_MIMA_Search}
+CIEE東京大学大学院工学系研究科工学教育推進機構.
+\newblock MIMA Search シラバス検索システム.\
+\newblock \Turl{http://ciee.t.u-tokyo.ac.jp/snavi/index.html}.
+
+\bibitem[\protect\BCAY{CIEE}{CIEE}{b}]{Web_Kadaisikou}
+CIEE東京大学大学院工学系研究科工学教育推進機構.
+\newblock 課題志向別の科目分類.\
+\newblock \Turl{http://ciee.t.u-tokyo.ac.jp/ciee/kozoka/kadai.html}.
+
+\bibitem[\protect\BCAY{Cortes \BBA\ Vapnik}{Cortes \BBA\
+  Vapnik}{1995}]{Article_Cortes_1995}
+Cortes, C.\BBACOMMA\ \BBA\ Vapnik, V. \BBOP 1995\BBCP.
+\newblock \BBOQ Support-Vector Networks.\BBCQ\
+\newblock {\Bem Machine Learning}, {\Bbf 20}, \mbox{\BPGS\ 273--297}.
+
+\bibitem[\protect\BCAY{Dumais, Platt, Heckerman, \BBA\ Sahami}{Dumais
+  et~al.}{1998}]{Inproc_Dumais_1998}
+Dumais, S., Platt, J., Heckerman, D., \BBA\ Sahami, M. \BBOP 1998\BBCP.
+\newblock \BBOQ Inductive Learning Algorithms and Representations for Text
+  Categorization.\BBCQ\
+\newblock In {\Bem Proc. 7th International Conference on Information and
+  Knowledge Management}, \mbox{\BPGS\ 273--297}.
+
+\bibitem[\protect\BCAY{板橋\JBA 松井\JBA 大和田}{板橋 \Jetal
+  }{2008}]{Inproc_Itabashi_2008}
+板橋広和\JBA 松井藤五朗\JBA 大和田勇人 \BBOP 2008\BBCP.
+\newblock テキスト分類における重みつき類似度を用いたSVM 判別モデルの説明.\
+\newblock \Jem{2008年度人工知能学会全国大会（第22回）3B2-04}.
+
+\bibitem[\protect\BCAY{Joachims}{Joachims}{1998}]{Inproc_Joachims_1998}
+Joachims, T. \BBOP 1998\BBCP.
+\newblock \BBOQ Text Categorization with Support Vector Machines: Learning with
+  Many Relevant Features.\BBCQ\
+\newblock In {\Bem Proc. European Conference on Machine Learning}, \mbox{\BPGS\
+  137--142}.
+
+\bibitem[\protect\BCAY{JOCW}{JOCW}{}]{Web_JOCW}
+JOCW日本オープンコースウェア・コンソーシアム.
+\newblock \BBOQ Japan Opencourseware Consortium (JOCW) Official Site.\BBCQ\
+\newblock \Turl{http://www.jocw.jp/}.
+
+\bibitem[\protect\BCAY{Kudoh}{Kudoh}{}]{Web_TinySVM}
+Kudoh, T.
+\newblock \BBOQ TinySVM.\BBCQ\
+\newblock \Turl{http://www.chasen.org/{\textasciitilde}taku/software/TinySVM/}.
+
+\bibitem[\protect\BCAY{Lewis \BBA\ Ringuette}{Lewis \BBA\
+  Ringuette}{1994}]{Inproc_Lewis_1994}
+Lewis, D.~D.\BBACOMMA\ \BBA\ Ringuette, M. \BBOP 1994\BBCP.
+\newblock \BBOQ A Comparison of Two Learning Algorithms for Text
+  Categorization.\BBCQ\
+\newblock In {\Bem Proc. 3rd Annual Symposium on Document Analysis and
+  Information Retrieval}, \mbox{\BPGS\ 81--93}.
+
+\bibitem[\protect\BCAY{Mima}{Mima}{2006}]{Inproc_Mima_2006a}
+Mima, H. \BBOP 2006\BBCP.
+\newblock \BBOQ Structuring and Visualizing the Curricula with MIMA
+  Search.\BBCQ\
+\newblock In {\Bem Proc. 7th APRU Distance Learning and the Internet Conference
+  2006}.
+
+\bibitem[\protect\BCAY{Mima \BBA\ Ananiadou}{Mima \BBA\
+  Ananiadou}{2000}]{Article_Mima_2000}
+Mima, H.\BBACOMMA\ \BBA\ Ananiadou, S. \BBOP 2000\BBCP.
+\newblock \BBOQ An application and evaluation of the C/NC-value approach for
+  the automatic term recognition of multi-word units in Japanese.\BBCQ\
+\newblock {\Bem International Journal on Terminology}, {\Bbf 6}  (2),
+  \mbox{\BPGS\ 175--194}.
+
+\bibitem[\protect\BCAY{Mima, Ananiadou, \BBA\ Matsushima}{Mima
+  et~al.}{2006}]{Article_Mima_2006b}
+Mima, H., Ananiadou, S., \BBA\ Matsushima, K. \BBOP 2006\BBCP.
+\newblock \BBOQ Terminology-based Knowledge Mining for New Knowledge
+  Discovery.\BBCQ\
+\newblock {\Bem ACM Transactions on Asian Language Information Processing
+  (TALIP)}, {\Bbf 5}  (1), \mbox{\BPGS\ 74--88}.
+
+\bibitem[\protect\BCAY{Mima, Ananiadou, Nenadic, \BBA\ Tsujii}{Mima
+  et~al.}{2002}]{Inproc_Mima_2002}
+Mima, H., Ananiadou, S., Nenadic, G., \BBA\ Tsujii, J. \BBOP 2002\BBCP.
+\newblock \BBOQ A Methodology for Terminology-based Knowledge Acquisition and
+  Integration.\BBCQ\
+\newblock In {\Bem Proc. 19th International Conference on Computational
+  Linguistics (COLING2002)}, \mbox{\BPGS\ 667--673}.
+
+\bibitem[\protect\BCAY{宮崎\JBA 井田\JBA 芳鐘\JBA 野澤\JBA 喜多}{宮崎 \Jetal
+  }{2005}]{Article_Miyazaki_2005}
+宮崎和光\JBA 井田正明\JBA 芳鐘冬樹\JBA 野澤孝之\JBA 喜多一 \BBOP 2005\BBCP.
+\newblock
+  分類候補数の能動的調整を可能にした学位授与事業のための科目分類支援システムの
+提案と評価.\
+\newblock \Jem{知能と情報（日本知能情報ファジィ学会誌）\inhibitglue}, {\Bbf 17}
+   (5), \mbox{\BPGS\ 558--568}.
+
+\bibitem[\protect\BCAY{三好\JBA 大家\JBA 上田\JBA 廣友\JBA 矢野\JBA 川上}{三好
+  \Jetal }{2006}]{Article_Miyoshi_2006}
+三好康夫\JBA 大家隆弘\JBA 上田哲史\JBA 廣友雅徳\JBA 矢野米雄\JBA 川上博 \BBOP
+  2006\BBCP.
+\newblock EDBを利用した学習経路探索を支援するeシラバスシステムの構築.\
+\newblock \Jem{大学教育研究ジャーナル（徳島大学）\inhibitglue}, {\Bbf 3},
+  \mbox{\BPGS\ 1--9}.
+
+\bibitem[\protect\BCAY{Moschitti \BBA\ Basili}{Moschitti \BBA\
+  Basili}{2004}]{Inproc_Moschitti_2004}
+Moschitti, A.\BBACOMMA\ \BBA\ Basili, R. \BBOP 2004\BBCP.
+\newblock \BBOQ Complex Linguistic Features for Text Classification: a
+  comprehensive study.\BBCQ\
+\newblock In {\Bem Proc. 26th European Conference on Information Retrieval
+  Research (ECIR 2004)}.
+
+\bibitem[\protect\BCAY{NIME}{NIME}{2008}]{Techrep_NIME_2008}
+NIME独立行政法人~メディア教育開発センター \BBOP 2008\BBCP.
+\newblock eラーニング等のICTを活用した教育に関する調査報告書（2007年度）.\
+\newblock \JTR, 独立行政法人 メディア教育開発センター.
+
+\bibitem[\protect\BCAY{西島\JBA 荒井\JBA 檜垣\JBA 土屋}{西島 \Jetal
+  }{2008}]{Inproc_Nishijima_2008}
+西島寛\JBA 荒井幸代\JBA 檜垣泰彦\JBA 土屋俊 \BBOP 2008\BBCP.
+\newblock フォークソノミーを用いた講義選択知識の抽出.\
+\newblock \Jem{電子情報通信学会技術研究報告 OIS2008-14}, {\Bbf 108}  (53),
+  \mbox{\BPGS\ 79--84}.
+
+\bibitem[\protect\BCAY{野澤\JBA 井田\JBA 芳鐘\JBA 宮崎\JBA 喜多}{野澤 \Jetal
+  }{2005}]{Article_Nozawa_2005}
+野澤孝之\JBA 井田正明\JBA 芳鐘冬樹\JBA 宮崎和光\JBA 喜多一 \BBOP 2005\BBCP.
+\newblock シラバスの文書クラスタリングに基づくカリキュラム分析システムの構築.\
+\newblock \Jem{情報処理学会論文誌}, {\Bbf 46}  (1), \mbox{\BPGS\ 289--300}.
+
+\bibitem[\protect\BCAY{{Open~Course~Ware}}{{Open~Course~Ware}}{}]{Web_OCW}
+{Open~Course~Ware}.
+\newblock \BBOQ MIT OpenCourseWare.\BBCQ\
+\newblock \Turl{http://ocw.mit.edu/}.
+
+\bibitem[\protect\BCAY{Salton}{Salton}{1991}]{Article_Salton_1991}
+Salton, G. \BBOP 1991\BBCP.
+\newblock \BBOQ Developments in automatic text retrieval.\BBCQ\
+\newblock {\Bem Science}, {\Bbf 253}, \mbox{\BPGS\ 974--980}.
+
+\bibitem[\protect\BCAY{Shinzato \BBA\ Torisawa}{Shinzato \BBA\
+  Torisawa}{2004}]{Inproc_Shinzato_2004}
+Shinzato, K.\BBACOMMA\ \BBA\ Torisawa, K. \BBOP 2004\BBCP.
+\newblock \BBOQ Acquiring Hyponymy Relations from Web Documents.\BBCQ\
+\newblock In {\Bem Proc. HLT-NAACL}.
+
+\bibitem[\protect\BCAY{Taira \BBA\ Haruno}{Taira \BBA\
+  Haruno}{1999}]{Inproc_Taira_1999}
+Taira, H.\BBACOMMA\ \BBA\ Haruno, M. \BBOP 1999\BBCP.
+\newblock \BBOQ Feature Selection in SVM Text Categorization.\BBCQ\
+\newblock In {\Bem Proc. Fifth International Conference on Artificial
+  Intelligence (AAAI-99)}, \mbox{\BPGS\ 480--486}.
+
+\bibitem[\protect\BCAY{Vapnik}{Vapnik}{1995}]{Book_Vapnik_1995}
+Vapnik, V. \BBOP 1995\BBCP.
+\newblock {\Bem The Nature of Statistical Learning Theory}.
+\newblock New York: Springer-Verlag.
+
+\bibitem[\protect\BCAY{Yoshida}{Yoshida}{2007}]{Inproc_Yoshida_2007}
+Yoshida, M. \BBOP 2007\BBCP.
+\newblock \BBOQ Structuring and Visualising the Engineering Knowledge---Basic
+  Principles, methods and the application to the UT's Engineering
+  Curriculum.\BBCQ\
+\newblock In {\Bem Proc. 8th APRU Distance Learning and the Internet Conference
+  2007}.
+
+\end{thebibliography}
+
+
+\begin{biography}
+\bioauthor{太田　　晋}{
+2001年東京大学大学院工学系研究科金属工学専攻修士課程修了．同年コグニティブリサーチラボ（株）入社．2005年科学技術振興機構社会技術研究開発センター研究員，2007年より東京大学大学院工学系研究科工学教育推進機構特任研究員．自然言語処理の研究に従事．言語処理学会会員．
+}
+\bioauthor{美馬　秀樹}{
+1996年徳島大学工学研究科システム工学専攻博士課程修了．工学博士．（株）ジャストシステム研究員，ATR音声翻訳通信研究所研究員，英国マンチェスターメトロポリタン大学講師(Lecturer)，東京大学大学院理学系研究科研究員，同大学工学系研究科助手を経て，2005年より東京大学大学院工学系研究科工学教育推進機構／知の構造化センター特任准教授．自然言語処理の研究に従事．言語処理学会，可視化情報学会 各会員．
+}
+\end{biography}
+
+
+\biodate
+
+
+
+\end{document}

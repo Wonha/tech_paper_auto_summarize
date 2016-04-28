@@ -1,0 +1,1144 @@
+    \documentclass[english]{jnlp_1.4}
+
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\makeatletter
+\def\@{}
+\makeatother
+
+\def\pair#1#2{}
+\def\subpair#1#2{}
+    \newcommand{\svec}[1]{}
+    \newcommand{\subsvec}[1]{}
+    \newcommand{\argmax}{}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\renewcommand{\algorithmicrequire}{}
+\renewcommand{\algorithmicensure}{}
+    \newcommand{\newcite}{}
+\def\ja{}
+\def\smallja{}
+
+\Volume{21}
+\Number{6}
+\Month{December}
+\Year{2014}
+
+\received{2013}{12}{27}
+\revised{2014}{4}{11}
+\rerevised{2014}{7}{10}
+\accepted{2014}{9}{16}
+
+\setcounter{page}{1107}
+
+\etitle{Noise-aware Character Alignment for Extracting Transliteration Fragments}
+\eauthor{Katsuhito Sudoh\affiref{ntt}\affiref{kyotou1} \and Shinsuke Mori\affiref{kyotou2} \and Masaaki Nagata\affiref{ntt}}
+\eabstract{
+This paper proposes a novel noise-aware character alignment method
+for automatically extracting transliteration fragments in phrase pairs that are extracted from parallel corpora.
+The proposed method extends a many-to-many Bayesian character alignment method
+by distinguishing transliteration (signal) parts from non-transliteration (noise) parts.
+The model can be trained efficiently by a state-based blocked Gibbs sampling algorithm with signal and noise states.
+The proposed method bootstraps statistical machine transliteration
+using the extracted transliteration fragments to train transliteration models.
+In experiments using Japanese-English patent data,
+the proposed method was able to extract transliteration fragments with much less noise than an IBM-model-based baseline,
+and achieved better transliteration performance
+than sample-wise extraction in transliteration bootstrapping.}
+\ekeywords{Statistical Machine Transliteration, Bayesian Many-to-many Alignment, \mbox{Machine} Translation}
+
+\headauthor{Sudoh, Mori, Nagata}
+\headtitle{Noise-aware Character Alignment}
+\affilabel{ntt}{}{Communication Science Laboratories, NTT Corporation}
+\affilabel{kyotou1}{}{Graduate School of Informatics, Kyoto University}
+\affilabel{kyotou2}{}{Academic Center for Computing and Media Studies, Kyoto University}
+
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+Transliteration is used for providing translations for source language words
+that have no appropriate counterparts in a target language
+such as certain technical terms and named entities.
+Statistical machine transliteration \cite{knight:1998:cl} is a technology
+designed to solve this problem in a statistical manner.
+Bilingual dictionaries can be used to train its model,
+but many of their entries are actually {\em translations} rather than {\em transliterations}.
+Such non-transliteration pairs hurt the transliteration model and should be eliminated in advance.
+
+\newcite{sajjad:2012:acl} proposed a method for identifying such non-transliteration pairs
+and applied it successfully to {\em noisy} word pairs obtained from automatic word alignment using bilingual corpora
+enabling a statistical machine transliteration to be bootstrapped from bilingual corpora.
+This approach is beneficial because it does not require carefully developed bilingual transliteration dictionaries,
+and it can learn domain-specific transliteration patterns from bilingual corpora in the target domain.
+However, their transliteration mining approach is sample-wise;
+that is, it decides whether or not a bilingual phrase pair is transliterated.
+There can be cases where a part of the phrase is the transliteration of the other.
+For example, suppose a Japanese transliterated compound word キーステム (key stem)
+is aligned only to an English word ``stem.''
+This word pair consists a transliteration fragment $\pair{\text{ステム (stem)}}{\text{stem}}$
+and a non-transliteration part キー (key) on the Japanese side as partial noise.
+The sample-wise method cannot extract the transliteration fragment,
+but it can only accept or reject the whole word pair.
+Such a sample-wise decision is difficult due to the trade-off between the transliteration fragment and partial noise
+and often accepts partially noisy pairs incorrectly.
+This introduces noise into the training data for statistical machine transliteration.
+
+This paper proposes a novel method for extracting such transliteration fragments.
+The method uses a noise-aware character alignment model
+that distinguishes non-transliteration (noise) parts from transliteration (signal) parts,
+such as $\pair{\text{キー}}{\mathit{noise}}$ and $\pair{\text{ステム}}{\text{stem}}$ for the example above.
+The model is an extension of a Bayesian many-to-many character alignment model \cite{finch:2010:iwslt}
+by introducing {\em noise symbols} that can be aligned to such partial noise in the many-to-many alignment.
+The model can be trained using an extended sampling algorithm with a constraint based on an assumption of noise positions.
+In our experiments on Japanese-to-English transliteration bootstrapping using patent data,
+the proposed method showed much better partial noise identification performance
+than an IBM-model-based baseline using NULL alignments
+and achieved better transliteration accuracy than the sample-wise transliteration mining method \cite{sajjad:2012:acl}.
+The main contribution of this paper is two-fold:
+\begin{itemize}
+\item First, we formulate a technique for achieving alignment over string pairs with partial noise and present a solution with a noise-aware alignment model.
+\item Next, we prove its effectiveness by undertaking experiments using actual Japanese-to-English patent translation data.
+\end{itemize}
+
+The remainder of this paper is organized as follows:
+Section 2 briefly reviews the related studies.
+Section 3 explains the many-to-many alignment method proposed by \newcite{finch:2010:iwslt} on which the proposed method is based.
+Section 4 presents the proposed method in detail: our assumption regarding partial noise, the extended Bayesian alignment model,
+and the extended sampling algorithm.
+Section 5 discusses advantages of the proposed method using experimental results and
+Section 6 concludes this paper with some future prospects.
+
+
+\section{Related Work}
+
+Machine transliteration is often treated as a sub-problem
+of machine translation and cross-lingual information retrieval
+for handling unknown names and terms.
+There have been many previous studies on machine transliteration between various languages,
+as described in a previous survey \cite{karimi:2011:acmcs}.
+
+This work relates to a technology in the field of machine transliteration called
+{\em transliteration mining} or {\em transliteration extraction}
+that aims to find transliteration pairs from parallel, comparable, or even independent bilingual resources.
+A typical task in transliteration mining involves finding transliteration pairs at the word level
+from Wikipedia Inter-Language Link data as in a shared task in the 2010 Named Entity Workshop \cite{kumaran:2010:news}.
+The problem in such a task is classifying transliteration pair hypotheses into transliteration and non-transliteration.
+\newcite{fukunishi:2013:talip} applied the many-to-many alignment model proposed by \newcite{finch:2010:iwslt} to this classification task,
+using forced-aligned substring pairs as features for support vector machine-based classification.
+Our work aims to find {\em segmental} transliteration pairs excluding partial noise,
+not sample-wise pairs as in previous studies.
+To the best of our knowledge, this is the first work on this kind of problem.
+
+Technically our work is based on transliteration bootstrapping \cite{sajjad:2012:acl}
+and many-to-many character alignment \cite{finch:2010:iwslt} and extends them to our problem.
+\mbox{However,} the proposed approach is not limited to the current implementation;
+transliteration candidates can be explored from comparable or independent bilingual resources
+by other transliteration mining technologies \cite{al-onaizan:2002:acl,lam:2004:sigir};
+other transliteration alignment methods (such as the EM-based approach \cite{kubo:2011:apsipa})
+can be extended to partial noise.
+
+
+\section{Bayesian Many-to-many Alignment}
+
+We briefly review the Bayesian many-to-many character alignment technique proposed by \newcite{finch:2010:iwslt}.
+
+
+\subsection{Model}
+
+Their model is a bilingual extension of the unigram Dirichlet Process (DP)
+for unsupervised word segmentation \cite{goldwater:2006:colacl,xu:2008:coling}
+based on a generative process of bilingual string pairs.
+We assume that a bilingual string pair $\pair{\svec{s}}{\svec{t}} = \pair{s_1 \ldots s_{|\svec{s}|}}{t_1 \ldots t_{|\svec{t}|}}$ is generated
+by a left-to-right generation of bilingual substring pairs.
+Each substring pair can be seen as a {\em many-to-many aligned} pair of characters on the bilingual string pair.
+The probability of the bilingual string pair
+is the sum of the probabilities of all its possible many-to-many character alignments.
+\begin{equation}
+p(\pair{\svec{s}}{\svec{t}})
+ = \sum_{\svec{a} \in A(\pair{\svec{s}}{\svec{t}})} p(\pair{\svec{s}}{\svec{t}}, \svec{a})
+   \label{eqn:prob_base}
+\end{equation}
+where {$\svec{a}$} is a sequence of many-to-many character alignments on {$\pair{\svec{s}}{\svec{t}}$}
+and {$A(\pair{\svec{s}}{\svec{t})}$} is a set of all possible alignments.
+Each alignment represents a bilingual correspondence in the form of a pair of character indices.
+Here, the probability {$p(\pair{\svec{s}}{\svec{t}}, \svec{a})$} can be decomposed into
+the product of the probabilities of corresponding substring pairs defined by the alignments {$\svec{a}$} under the unigram-based formulation:
+\begin{equation}
+p(\pair{\svec{s}}{\svec{t}}, \svec{a})
+ = \prod_{k=1}^{K(\svec{a})} p(\subpair{\svec{\sigma}_k}{\svec{\tau}_k})
+   \label{eqn:prob}
+\end{equation}
+where {$K(\svec{a})$} represents the number of many-to-many character alignment blocks (substring pairs) for {$\svec{a}$},
+{$\svec{\sigma}_k$} and {$\svec{\tau}_k$} are the substrings covered by the alignment {$a_k$} ($k$-th alignment in {$\svec{a}$})
+on {$\svec{s}$} and {$\svec{t}$}, respectively.
+Figure \ref{fig:notation} shows an example of many-to-many alignments with notations above.
+This bilingual string pair is composed of three substring pairs aligned by alignments {$a_1$}, {$a_2$}, and {$a_3$}:
+{$\subpair{\text{フォー}}{\text{fo}}, \subpair{\text{カ}}{\text{cu}}, and \subpair{\text{ス}}{\text{s}}$}.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-6ia1f1.eps}
+\end{center}
+\caption{Example of many-to-many alignment without noise}
+\label{fig:notation}
+\end{figure}
+
+These substring pairs are considered to be generated from the DP in this model.
+The DP for {$\subpair{\svec{\sigma}_{k}}{\svec{\tau}_{k}}$}
+in a bilingual string pair can be denoted as follows:
+\begin{align}
+& G|{\alpha, G_0}  \sim \mathrm{DP}(\alpha, G_0) \nonumber \\
+& \subpair{\svec{\sigma}_{k}}{\svec{\tau}_{k}} | G \sim G, 
+	\label{eqn:dp}
+\end{align}
+where $G$ is a probability distribution over substring pairs according to a DP prior
+with base measure $G_0$ and hyperparameter $\alpha$.
+\pagebreak
+$G_0$ is modeled as a joint word model relying only on the lengths of $\svec{\sigma}_{k}$ and $\svec{\tau}_{k}$ (denoted as {$|\svec{\sigma}_{k}|$} and {$|\svec{\tau}_{k}|$}) as follows:
+\begin{equation}
+G_0 ( \subpair{\svec{\sigma}_{k}}{\svec{\tau}_{k}} ) = \frac{\lambda_s^{|\svec{\sigma}_k|}}{|\svec{\sigma}_k| !} e^{-\lambda_s} v_s^{-|\svec{\sigma}_k|} \times \frac{\lambda_t^{|\svec{\tau}_k|}}{|\svec{\tau}_k| !} e^{-\lambda_t} v_t^{-|\svec{\tau}_k|}. 
+	\label{eqn:basemeasure}
+\end{equation}
+This is a simple joint probability of two word models.
+In each word model,
+each alphabet appears based on a uniform distribution over the vocabulary (of size $v_s$ or $v_t$),
+and each substring length follows a Poisson distribution
+(with average length $\lambda_s$ or $\lambda_t$) {\cite{brown:1992:cl}}.
+The model handles an infinite number of substring pairs according to the Chinese Restaurant Process (CRP).
+The probability of a substring pair $\subpair{\svec{\sigma}_{k}}{\svec{\tau}_{k}}$ drawn from the DP
+is based on the counts of all other substring pairs as follows:
+\begin{equation}
+p ( \subpair{\svec{\sigma}_{k}}{\svec{\tau}_{k}} \mid \left\{ \subpair{\svec{\sigma}_{i}}{\svec{\tau}_{i}} \right\}_{-k} )
+ = \frac{N ( \subpair{\svec{\sigma}_{k}}{\svec{\tau}_{k}} ) + \alpha G_0 ( \subpair{\svec{\sigma}_{k}}{\svec{\tau}_{k}})}{\sum_{i} N ( \subpair{\svec{\sigma}_{i}}{\svec{\tau}_{i}}) + \alpha}. 
+	\label{eqn:dpprob}
+\end{equation}
+Here $\{ \subpair{\svec{\sigma}_{i}}{\svec{\tau}_{i}} \}_{-k}$ means
+a set of substring pairs observed so far (not including {$\subpair{\svec{\sigma}_{k}}{\svec{\tau}_{k}}$}),
+and $N( \subpair{\svec{\sigma}_{k}}{\svec{\tau}_{k}} )$ is
+the number of appearance of $\subpair{\svec{\sigma}_k}{\svec{\tau}_k}$ in the substring pair set.
+This model is suitable for representing a very sparse distribution over arbitrary substring pairs
+thanks to reasonable CRP-based smoothing for unseen pairs based on the word model.
+Note that we maintain two different kinds of probability:
+the DP-based probability of a substring pair {$p (\subpair{\svec{\sigma}_{k}}{\svec{\tau}_{k}} \mid \{\subpair{\svec{\sigma}_{i}}{\svec{\tau}_{i}} \}_{-k})$}
+in Equation ({\ref{eqn:dpprob}}),
+and the marginal probability of a string pair {$p(\pair{\svec{s}}{\svec{t}})$}
+in Equation ({\ref{eqn:prob}}) considering all possible many-to-many alignments.
+
+
+\subsection{Sampling-based Inference}
+
+The goal of this method is to find the best many-to-many alignments for bilingual string pairs as shown in Figure \ref{fig:notation},
+in given training data {$D = \{ \pair{\svec{s}}{\svec{t}}_m \mid 1 \leq m \leq M \}$}:
+\begin{equation}
+ \hat{\svec{a}_1} ,\ldots, \hat{\svec{a}_M} = \argmax_{\svec{a}_1 ,\ldots , \svec{a}_M} \prod_{m=1}^M p ( \pair{\svec{s}}{\svec{t}}_m, \svec{a}_m \mid D) = \argmax_{\svec{a}_1 ,\ldots, \svec{a}_M} \prod_{m=1}^M \prod_{k=1}^{K(\svec{a}_m)}p ( \subpair{\svec{\sigma}_{k}}{\svec{\tau}_{k}}_{m} \mid D). 
+\label{eqn:alignmentD}
+\end{equation}
+where {$\svec{a}_m$} represents the many-to-many alignments on $m$-th data in $D$.
+To approximate the true posterior distribution for {$p \left(\pair{\svec{s}}{\svec{t}}_m, \svec{a}_m \mid D \right)$},
+{\newcite{finch:2010:iwslt}} used an efficient forward-backward inference with a blocked Gibbs sampling algorithm
+called forward filtering backward sampling (FFBS) \cite{scott:2002:jasa,mochihashi:2009:acl}.
+It enables efficient block-wise sampling over true posterior distributions
+by employing an efficient dynamic programming-based calculation
+similar to the well-known forward-backward algorithm.
+The blocked Gibbs sampler samples many-to-many alignments {$\svec{a}_m$}
+corresponding to substring pairs
+{$\subpair{\svec{\sigma}_{1}}{\svec{\tau}_{1}}_m, \ldots, \subpair{\svec{\sigma}_{K(\svec{a}_m)}}{\svec{\tau}_{K(\svec{a}_m)}}_m$} at the same time,
+using the posterior distributions conditioned by the substring sample space of many-to-many alignments on the rest of the training data
+{$S_{-m} = \{ \pair{\svec{\sigma}_{k}}{\svec{\tau}_{k}}_{m'} \mid 1 \leq m' \leq M,\ m' \neq m,\ 1 \leq k \leq K(\svec{a}_{m'}) \}$}.
+We denote the DP-based probability of a substring pair in Equations ({\ref{eqn:dpprob}}) and ({\ref{eqn:alignmentD}}) conditioned by {$S_{-m}$} as
+\begin{equation}
+p_{-m} ( \subpair{\svec{\sigma}_{k}}{\svec{\tau}_{k}}) \equiv p( \subpair{\svec{\sigma}_{k}}{\svec{\tau}_{k}}_{m} \mid S_{-m}).
+\end{equation}
+
+
+Algorithm {\ref{alg:sampling}} shows the algorithm for the blocked Gibbs sampling.
+The algorithm starts the training from random many-to-many alignments over the training data,
+and samples and updates the many-to-many alignments of each bilingual string pair by the FFBS iteratively.
+Final many-to-many alignment results are obtained as a set of sampled substring pair sequences
+that maximize the probability in Equation ({\ref{eqn:alignmentD}}) after convergence.
+Here we explain the FFBS for a bilingual string pair {$\pair{\svec{s}}{\svec{t}}_m$},
+shown in the innermost loop in Algorithm {\ref{alg:sampling}} (lines 4 to 7).
+Henceforth, we omit the index {$m$} for readability except for {$p_{-m}$}.
+
+\begin{algorithm}[tb]
+\caption{The blocked Gibbs sampling for Bayesian unsupervised alignment}
+\label{alg:sampling}
+\begin{algorithmic}[1]
+\REQUIRE Bilingual string pairs $D = \left\{ \pair{\svec{s}}{\svec{t}}_m \mid 1 \leq m \leq M\right\}$
+\ENSURE  Many-to-many alignments $\left\{ \svec{a}_m \mid 1 \leq m \leq M \right\}$
+\STATE Initialize $\svec{a}_m$ randomly for all $m$
+\REPEAT
+\FOR{$m$ in $1, \ldots , M\ {\rm (in\ random\ order)} $}
+\STATE Remove substring pairs for current many-to-many alignments $\pair{\svec{\sigma}_{1}}{\svec{\tau}_{1}}_m, \ldots \pair{\svec{\sigma}_{K(\svec{a}_m)}}{\svec{\tau}_{K(\svec{a}_m)}}_m$ from the substring sample space
+\STATE Initialize forward probability matrix $A = \left[ \alpha \left( i, j \right) \right] \ (0 \leq i \leq |\svec{s}|, \ 0 \leq j \leq |\svec{t}|)$ with $A_{0,0} \leftarrow 1$
+\STATE Compute and store the forward probabilities in $A$ recursively by the dynamic programming (forward filtering)
+\STATE Sample and update many-to-many alignments (backward sampling)
+\STATE Update the substring sample space by the substrings corresponding to the sampled many-to-many alignments
+\ENDFOR
+\UNTIL{the number of iterations reaches its limit}
+\end{algorithmic}
+\end{algorithm}
+
+
+\subsubsection{Forward filtering}
+
+Forward probabilities are calculated in the forward filtering step (line 6).
+The forward probability {$\alpha (I,J)$} is the probability of a bilingual substring pair 
+with the length of $I$ and $J$ ({$\pair{s_1\ldots s_I}{t_1 \ldots t_J}$}),
+defined in a recursive manner considering all possible substring pairs {$\subpair{\svec{\sigma}_{k}}{\svec{\tau}_{k}}$} ending with the indices {$(I,J)$}:
+\begin{equation}
+\alpha (I, J) = \sum_{\svec{\sigma}_{k} \in C(I,\svec{s}),\ \svec{\tau}_{k} \in C(J,\svec{t})} p_{-m} (\subpair{\svec{\sigma}_{k}}{\svec{\tau}_{k}}) \times \alpha (I-|\svec{\sigma}_{k}|, J-|\svec{\tau}_{k}|),
+\label{eqn:forward}
+\end{equation}
+where {$\alpha (0,0) = 1$} (line 5) and {$C(I,\svec{s})$} is a set of all possible substrings
+from a string {$\svec{s}$} that end with {$s_{I}$}.\footnote{
+This work considers arbitrary-length substrings up to {$s_{I}$}, {$\{ s_{1}\ldots s_{I}, s_{2}\ldots s_{I},\ldots, s_{I-1}s_{I}, s_{I}\}$}, following {\newcite{finch:2010:iwslt}}.}\@ 
+Note that the DP-based probability in Equation ({\ref{eqn:dpprob}}) is conditioned by {$S_{-m}$} here (line 4).
+This process calculates the forward probability at the end of the bilingual string pair {$\alpha (|\svec{s}|, |\svec{t}|)$}
+that is also equivalent to the probability of the whole string pair {$p (\pair{\svec{s}}{\svec{t}})$}.
+The forward probabilities with all the other indices are calculated by its recursive definition.
+Since the forward probability at a certain position is calculated only once by a dynamic programming using a matrix $A$,
+these forward probabilities can be obtained efficiently.
+Figure {\ref{fig:ffbs_org}}~(a) shows an example of the forward filtering,
+in which each arrow represents the corresponding substring pair.
+At first the calculation of the forward probability of the whole bilingual string pair {$\pair{\text{カバー}}{\mathit{cover}}$} is called.
+Forward probabilities are calculated at preceding positions recursively as Equation ({\ref{eqn:forward}}).
+The probabilities along with the paths are accumulated when they gather into the same positions,
+and finally {$p(\pair{\text{カバー}}{\mathit{cover}})$} is obtained considering all its possible many-to-many alignments.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{21-6ia1f2.eps}
+\end{center}
+\hangcaption{Forward filtering backward sampling in Finch and Sumita (2010) (A few example paths are shown)}
+\label{fig:ffbs_org}
+\end{figure}
+
+
+\subsubsection{Backward sampling}
+
+Next, in the backward sampling step,
+the many-to-many alignments on the bilingual string pair is determined from its end
+by the sampling based on the posterior distribution of bilingual substring pairs (line 7).
+The posterior probability of the bilingual substring pair at the end of the whole string pair {$\subpair{\svec{\sigma}_{K}}{\svec{\tau}_{K}}$},
+can be calculated using its DP-based probability and its forward probability as follows:
+\begin{equation}
+p (\subpair{\svec{\sigma}_{K}}{\svec{\tau}_{K}} \mid \pair{\svec{s}}{\svec{t}}) = 
+ \frac{p_{-m} (\subpair{\svec{\sigma}_{K}}{\svec{\tau}_{K}}) \times \alpha (|\svec{s}| - |\svec{\sigma}_{K}|, |\svec{t}| - |\svec{\tau}_{K}|)}{p (\pair{\svec{s}}{\svec{t}})}.
+\end{equation}
+Here, the backward probability is constant (1.0) because of the unigram-based formulation of this model.
+The numerator of the right side of the equation is the sum of the probabilities of all possible many-to-many alignments that include
+{$\subpair{\svec{\sigma}_{K}}{\svec{\tau}_{K}}$} at the end,
+and its denominator is the probability of the whole string pair, which can be considered as a constant
+in comparison to different {$\subpair{\svec{\sigma}_{K}}{\svec{\tau}_{K}}$} at the end.
+Thus, a substring pair {$\subpair{\svec{\sigma}_{K}}{\svec{\tau}_{K}}$} can be sampled
+based on the true posterior distribution as follows:
+\begin{equation}
+p (\subpair{\svec{\sigma}_{K}}{\svec{\tau}_{K}} \mid \pair{\svec{s}}{\svec{t}}) \propto p_{-m} (\subpair{\svec{\sigma}_{K}}{\svec{\tau}_{K}}) \times \alpha (|\svec{s}| - |\svec{\sigma}_{K}|, |\svec{t}| - |\svec{\tau}_{K}|).
+\label{eqn:posterior}
+\end{equation}
+Once the substring pair at the end is determined,
+its preceding substring pair {$\subpair{\svec{\sigma}_{K-1}}{\svec{\tau}_{K-1}}$} can be sampled in the same manner,
+regarding its backward probability as a constant.
+The sampling can be repeated by the beginning of the bilingual string pair,
+and finally its many-to-many alignments
+{$\pair{\svec{\sigma}_{1}}{\svec{\tau}_{1}}, \ldots \pair{\svec{\sigma}_{K}}{\svec{\tau}_{K}}$} are obtained.
+Figure {\ref{fig:ffbs_org}}~(b) shows an example of the backward sampling.
+Substring pairs are sampled among all possible substring pairs ending with the current position (starting from the end of the bilingual string pair)
+based on their posterior probabilities in Equation ({\ref{eqn:posterior}}).
+The sampling is repeated to the beginning as shown in the figure
+(bold solid arrows indicate sampled substring pairs and dotted arrows are those not sampled),
+and a many-to-many alignments {$\subpair{\text{カ}}{\text{co}}, \subpair{\text{バ}}{\text{v}}, \subpair{\text{ー}}{\text{er}}$} is obtained.
+
+
+\section{Proposed Method}
+
+We propose an extended many-to-many alignment model that can handle partial noise.
+We extend the model described in the previous section by introducing a noise symbol
+and state-based probability calculation.
+
+
+\subsection{Partial Noise in Transliteration Data}
+
+Figure \ref{fig:partial-noise} shows transliteration examples with ``no noise,'' ``sample-wise noise,'' and ``partial noise.''
+The solid lines in the figure show correct many-to-many alignment links.
+Examples (a) and (b) are distinguished effectively by \newcite{sajjad:2012:acl}.
+We aim to realize alignment as in examples (c) and (d) by distinguishing its non-transliteration (noise) part,
+which cannot be achieved with the existing methods.
+Here, we additionally use {\it NULL} symbols in Figure {\ref{fig:partial-noise}}(e)
+that are expected to be aligned to white spaces and silent letters (such as ``b'' in ``doubt'') in signal parts.
+Characters aligned to the NULL symbols are required to learn phrasal transliteration (at the character level),
+while characters aligned to the noise symbols can be eliminated.
+We define noise and NULL as follows in this work:\footnote{
+There are often common but non-equivalent transliteration examples such as ``McDonald's''
+and its transliteration to Japanese, マクドナルド (MA KU DO NA RU DO).
+We regard ``'s'' as partial noise in this work and the correct (back-)transliteration of マクドナルド as ``McDonald.''}
+\begin{description}
+\item[Noise] Substrings whose pronunciations do not appear in the transliterated strings, and
+\item[NULL]  Substrings that do not need to be transliterated, typically white spaces and silent letters.
+\end{description}
+In this work, we distinguish it from the data; the choice of noise or NULL is learned from the bilingual string pairs.\footnote{
+Most of the silent letters were included in many-to-many alignments and not aligned to NULL individually,
+in our experiments described later.}
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{21-6ia1f3.eps}
+\end{center}
+\hangcaption{Three types of noise in transliteration examples. Solid lines are correct many-to-many alignment links.}
+\label{fig:partial-noise}
+\vspace{-0.5\Cvs}
+\end{figure}
+
+
+\subsection{Noise-aware Alignment with a Noise Assumption}
+
+We introduce a {\em noise symbol} to handle partial noise in the many-to-many alignment model.
+\newcite{htun:2012:ijca} extended many-to-many alignment to sample-wise transliteration mining;
+however, its noise model can only handle sample-wise noise and cannot distinguish partial noise.
+We model the partial noise in the CRP-based joint substring model.
+
+Partial noise in transliteration data typically appears in compound words as mentioned earlier
+because their counterparts consisting of two or more words
+\pagebreak
+may not be fully covered in automatically extracted word and phrase pairs as shown in Figure \ref{fig:partial-noise}(c).
+Another type of partial noise is derived from morphological differences caused by inflection,
+which usually appear at the sub-word level as prefixes and suffixes
+as shown in Figure \ref{fig:partial-noise}(d) and {\ref{fig:partial-noise}}(e).
+According to this intuition,
+we assume that partial noise appears at the beginning and/or end of transliteration data
+(we assume that noise appears at the beginning for sample-wise noise).
+This assumption derives a constraint between signal and noise parts
+that helps to avoid a welter of transliteration and non-transliteration parts.
+It also has a shortcoming in that it cannot handle noise in the middle (e.g., Figure \ref{fig:partial-noise}(e)),
+but handling an arbitrary number of noise parts increases computational complexity and sparseness.\footnote{
+Explicit modeling of the fixed number of noise parts ($n$) requires $2n+1$ different states in this paper's approach.
+We can actually model partial noise by only signal and noise states
+but it may cause unexpected alignments with a welter of transliteration and non-transliteration parts.}\@ 
+This paper is based on this simple assumption and we consider a more complex mid-noise problem as future study.
+
+Figure \ref{fig:alignment} shows a partial noise example at both the beginning and end.
+This example is actually a correct translation but it includes noise in the sense of transliteration;
+the article ``the'' is wrongly included in the phrase pair (no articles are used in Japanese)
+and a plural noun ``masks'' is transliterated into ``{マスク}''(mask).
+The noise symbols are treated as zero-length substrings in the model,
+which can be aligned to substrings in the same way as other characters.
+The non-transliteration parts are aligned with noise symbols in the proposed model.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{21-6ia1f4.eps}
+\end{center}
+\hangcaption{Example of many-to-many alignment with partial noise at the beginning and end. ``{\it noise}'' stands for the noise symbol, ``{\it NULL}'' stands for the zero-length substring, and ``sp'' indicates a white space.}
+\label{fig:alignment}
+\end{figure}
+
+
+\subsection{State-based FFBS Extension}
+
+We extend Finch's algorithm to our noise-aware model
+using a state-based calculation over the three states:
+the non-transliteration part at the beginning ({\sf noiseB}),
+the transliteration part ({\sf signal}),
+and the non-transliteration part at the end ({\sf noiseE}).
+Substrings are aligned in either {\sf noiseB}, {\sf signal}, or {\sf noiseE} state.
+In the noise states {\sf noiseB} and {\sf noiseE}, substrings are always aligned to the noise symbols.
+In the example of Figure {\ref{fig:alignment}},
+{$\subpair{\mathit{noise}}{\text{the}}$} and {$\subpair{\mathit{noise}}{\mathsf{sp}}$} are aligned in {\sf noiseB},
+{$\subpair{\text{エッチ}}{\text{etchi}}$}, {$\subpair{\text{ング}}{\text{ng}}$}, {$\subpair{\text{NULL}}{\mathsf{sp}}$}, {$\subpair{\text{マ}}{\text{ma}}$},
+{$\subpair{\text{ス}}{\text{s}}$}, and {$\subpair{\text{ク}}{\text{k}}$} are aligned in {\sf signal},
+{$\subpair{\mathit{noise}}{\text{s}}$} is aligned in {\sf noiseE}.
+Here we assume that source-side noise is aligned first and target-side noise is aligned later in the noise states
+to avoid repetitive counts of the same noise sequence,
+because many-to-many alignments {$\subpair{\text{a b}}{\mathit{noise}} \subpair{\mathit{noise}}{\text{x y}}$}
+and {$\subpair{\mathit{noise}}{\mathrm{x y}} \subpair{\mathrm{a b}}{\mathit{noise}}$} are equivalent.
+
+The training framework of the proposed method is basically the same as proposed by \newcite{finch:2010:iwslt} that is described in Section 3
+and Algorithm {\ref{alg:sampling}}, except for considering the partial noise and the three different states
+as shown in Figure {\ref{fig:sffbs}}.
+There are state transitions from {\sf noiseB} to {\sf signal} and {\sf signal} to {\sf noiseE}.
+Note that this work does not regard the state transitions as probabilistic events.
+We introduce the noise states to constrain the appearance of the partial noise
+at the beginning and the end of bilingual string pairs as an extension to their method.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{21-6ia1f5.eps}
+\end{center}
+\caption{State-based FFBS for proposed model (A few example paths are shown)}
+\label{fig:sffbs}
+\end{figure}
+
+
+\subsubsection{Forward filtering}
+
+Our state-based FFBS algorithm maintains
+three different forward probability matrices {$A^\mathsf{noiseB}$}, {$A^\mathsf{signal}$}, and {$A^\mathsf{noiseE}$},
+and corresponding forward probabilities {$\alpha^\mathsf{oiseB}$}, {$\alpha^\mathsf{signal}$}, and {$\alpha^\mathsf{noiseE}$}.
+{$\alpha^\mathsf{X} (I,J)$} represents the marginal probability of a bilingual string pair
+{$\pair{s_1\ldots s_I}{t_1\ldots t_J}$} whose final substring pair is aligned in state {\sf X}.
+We initialize the forward probabilities at the beginning  in these states as
+{$\alpha^\mathsf{noiseB}(0,0) = 1$}, {$\alpha^\mathsf{signal}(0,0) = 0$}, and {$\alpha^\mathsf{noiseE}(0,0) = 0$},
+because our beginning state is {\sf noiseB}.
+The forward probabilities can be calculated efficiently by a dynamic programming using the matrices,
+in the same way as the FFBS in Section 3.
+We explain the calculation of the forward probabilities in each state in the following.
+
+The forward probabilities in state {\sf noiseB} ({$\alpha^\mathsf{noiseB}$}) can be considered separately with two parts
+corresponding to source- and target-side noise.
+Here recall that the source-side partial noise is aligned first.
+\begin{itemize}
+\item For source-side noise as the downward arrows in {\sf noiseB} state in Figure {\ref{fig:sffbs}}(a), the forward probability is the sum of the probabilities with different length of {$\svec{\sigma}_{k}$} as follows:
+\begin{equation}
+\alpha^\mathsf{noiseB} (I, 0) =
+ \sum_{\svec{\sigma}_{k} \in C(I,\svec{s})} p_{-m} (\subpair{\svec{\sigma}_{k}}{\mathit{noise}}) \times \alpha^\mathsf{noiseB} (I - |\svec{\sigma}_{k}|, 0). 
+\label{eqn:forward_noiseB1}
+\end{equation}
+\item For target-side noise as the rightward arrows in {\sf noiseB} state in Figure {\ref{fig:sffbs}}(a), the forward probability is the sum of the probabilities with different length of {$\svec{\tau}_{k}$} as follows:
+\begin{equation}
+ \alpha^\mathsf{noiseB} (I, J) =
+  \sum_{\svec{\tau}_{k} \in C(J,\svec{t})} p_{-m} (\subpair{\mathit{noise}}{\svec{\tau}_{k}}) \times \alpha^\mathsf{noiseB} (I, J - |\svec{\tau}_{k}|). 
+\label{eqn:forward_noiseB2}
+\end{equation}
+\end{itemize}
+
+The forward probabilities in state {\sf signal} ({$\alpha^\mathsf{signal}$}) are almost the same as those of the original FFBS in Equation ({\ref{eqn:forward}}) but have two differences:
+\begin{itemize}
+\item we have to consider state transition from {\sf noiseB} (as illustrated by arrows from {\sf noiseB} to {\sf signal} in Figure {\ref{fig:sffbs}}(a)), and
+\item we allow NULL in the many-to-many alignment, so either {$\svec{\sigma}_{k}$} or {$\svec{\tau}_{k}$} can be a zero-length substring.
+\end{itemize}
+Thus, the calculation of {$\alpha^\mathsf{signal}$} is extended by two different previous states {\sf noiseB} and {\sf signal},
+and by the NULL-aligned substrings as follows:
+\begin{equation}
+\begin{aligned}[b]
+ & \alpha^\mathsf{signal} (I, J) \\
+ & \quad = \sum_{\svec{\sigma}_{k} \in C_{N}(I,\svec{s}),\ \svec{\tau}_{k} \in C_{N}(J,\svec{t}),\ |\svec{\sigma}_{k}|+|\svec{\tau}_{k}|>0} 
+	p_{-m} (\subpair{\svec{\sigma}_{k}}{\svec{\tau}_{k}}) 
+	\times \alpha^\mathsf{noiseB} (|\svec{s}| - |\svec{\sigma}_{k}|, |\svec{t}| - |\svec{\tau}_{k}|) \\ 
+  & \qquad  +  \sum_{\svec{\sigma}_{k} \in C_{N}(I,\svec{s}),\ \svec{\tau}_{k} \in C_{N}(J,\svec{t}),\ |\svec{\sigma}_{k}|+|\svec{\tau}_{k}|>0} 
+	p_{-m} (\subpair{\svec{\sigma}_{k}}{\svec{\tau}_{k}}) 
+	\times \alpha^\mathsf{signal} (|\svec{s}| - |\svec{\sigma}_{k}|, |\svec{t}| - |\svec{\tau}_{k}|). 
+\end{aligned}
+\label{eqn:forward_signal}
+\end{equation}
+where {$C_{N}(I,\svec{s})$} is a set of substrings the same as {$C(I,\svec{s})$} but includes a zero-length substring for NULL.
+
+Finally, the forward probabilities in state {\sf noiseE} ({$\alpha_\mathsf{noiseE}$}) have to consider
+the source-side noise and the target side noise, and further need to handle state transitions from {\sf signal}.
+\begin{itemize}
+\item If the source-side does not reach its end ({$I < |\mbox{\boldmath $s$}|$}), 
+\pagebreak
+the final substring must be the source-side noise so we can only consider the source-side noise as follows:
+\begin{equation}
+\begin{aligned}[b]
+ \alpha^\mathsf{noiseE} (I, J) 
+  & = \sum_{\svec{\sigma}_{k} \in C(I,\svec{s})} p_{-m} (\subpair{\svec{\sigma}_{k}}{\mathit{noise}}) 
+	\times \alpha^\mathsf{signal} (I - |\svec{\sigma}_{k}|, J) \\
+  & \quad + \sum_{\svec{\sigma}_{k} \in C(I,\svec{s})} p_{-m} (\subpair{\svec{\sigma}_{k}}{\mathit{noise}}) 
+	\times \alpha^\mathsf{noiseE} (I - |\svec{\sigma}_{k}|, J).  
+\end{aligned}
+\label{eqn:forward_noiseE1}
+\end{equation}
+\item Otherwise, we have to sum up the probabilities from the source-side noise towards the end of the source-side string (as illustrated by a downward arrow) in state {\sf noiseE},
+and the target-side noise along with the end of the source-side string (as illustrated by rightward arrows) in state {\sf noiseE}:
+\end{itemize}
+\begin{equation}
+\begin{aligned}[b]
+ \alpha^\mathsf{noiseE} ( I=| \boldsymbol{s}|, j) 
+  & = \sum_{\svec{\sigma}_{k} \in C(I,\svec{s})} p_{-m} (\subpair{\svec{\sigma}_{k}}{\mathit{noise}}) 
+	\times \alpha^\mathsf{signal} (| \boldsymbol{s}| - |\svec{\sigma}_{k}|, J) \\
+  & \quad  + \sum_{\svec{\sigma}_{k} \in C(I,\svec{s})} p_{-m} (\subpair{\svec{\sigma}_{k}}{\mathit{noise}}) 
+	\times \alpha^\mathsf{noiseE} (| \boldsymbol{s}| - |\svec{\sigma}_{k}|, J)  \\
+  & \quad  + \sum_{\svec{\tau}_{k} \in C(J,\svec{t})} p_{-m} (\subpair{\mathit{noise}}{\svec{\tau}_{k}}) 
+	\times \alpha^\mathsf{signal} (| \boldsymbol{s}|, J - |\svec{\tau}_{k}|) \\
+  & \quad + \sum_{\svec{\tau}_{k} \in C(J,\svec{t})} p_{-m} (\subpair{\mathit{noise}}{\svec{\tau}_{k}}) 
+	\times \alpha^\mathsf{noiseE} (| \boldsymbol{s}|, J - |\svec{\tau}_{k}|). 
+\end{aligned}
+\label{eqn:forward_noiseE2}
+\end{equation}
+
+
+\subsubsection{Backward sampling}
+
+The backward-sampling is also extended to handle the three states.
+We first sample the ending state based on the forward probabilities at the end of the bilingual string pair:
+{$\alpha^\mathsf{noiseB} (|\boldsymbol{s}|, |\boldsymbol{t}|)$},
+{$\alpha^\mathsf{signal} (|\boldsymbol{s}|, |\boldsymbol{t}|)$},
+and {$\alpha^\mathsf{noiseE} (|\boldsymbol{s}|, |\boldsymbol{t}|)$}.
+Then we set index {$(I,J)$} as {$(|\boldsymbol{s}|, |\boldsymbol{t}|)$}
+and repeat the sampling of the bilingual substring pair
+{$\subpair{\svec{\sigma}_{k}}{\svec{\tau}_{k}}$}
+towards the beginning represented by the indices {$(0, 0)$},
+based on the posterior distributions of the substring pairs ending with the position represented by the indices {$(I,J)$}.
+The indices are updated according to the sampled substrings.
+Here, we have to maintain the current state in the sampling.
+We sample a substring pair and its previous state at the same time to distinguish paths from different states,
+and update the current state to the sampled state.
+
+Figure {\ref{fig:sffbs}}(b) shows an example of the backward sampling.
+This is basically similar to the original ones shown in Figure {\ref{fig:ffbs_org}}(b);
+the difference is that the proposed method handles three forward probability tables for the three states.
+At first, {\sf signal} state is sampled as the ending state.
+Subsequently, substring pairs {$\subpair{\text{ー}}{\mathit{ey}}$} and {$\subpair{\text{キ}}{k}$} are sampled from {\sf signal} state.
+When we sample {$\subpair{\text{キ}}{k}$}, there are two possibilities of its previous state, {\sf noiseB} and {\sf signal},
+as shown in the figure.
+Here we sample {$\subpair{\text{キ}}{k}$} from {\sf noiseB}, so the current state has changed to {\sf noiseB}.
+Finally, {$\subpair{noise}{\mathsf{sp}}$} and {$\subpair{noise}{a}$} are sampled from {\sf noiseB} state.
+We explain the calculation of the posterior probabilities of substring pairs to be sampled in the following.
+
+If the current state is {\sf noiseB}, 
+the previous state is also {\sf noiseB}; therefore we do not have to consider state transitions.
+We distinguish the cases of source- and target-side noise as in the forward probability calculation.
+\begin{itemize}
+\item If {$J$} is equal to zero, we sample preceding source-side noise {$\svec{\sigma}_{k}$} among {$C(I,\svec{s})$} using
+\begin{equation}
+ p (\subpair{\svec{\sigma}_{k}}{\mathit{noise}}^\mathsf{noiseB} \mid \pair{\boldsymbol{s}}{\boldsymbol{t}}) \propto
+	 p_{-m} (\subpair{\svec{\sigma}_{k}}{\mathit{noise}}) \times \alpha^\mathsf{noiseB} (I - |\svec{\sigma}_{k}|, 0).
+\label{eqn:posterior_noiseB1}
+\end{equation}
+\item Otherwise, we sample target-side noise {$\svec{\tau}_{k}$} among {$C(J,\svec{t})$} using
+\begin{equation}
+ p (\subpair{\mathit{noise}}{\svec{\tau}_{k}}^\mathsf{noiseB} \mid \pair{\boldsymbol{s}}{\boldsymbol{t}}) \propto 
+	 p_{-m} (\subpair{\mathit{noise}}{\svec{\tau}_{k}}) \times \alpha^\mathsf{noiseB} ( I, J - |\svec{\tau}_{k}|).
+\label{eqn:posterior_noiseB2}
+\end{equation}
+\end{itemize}
+Here, the notation {$p (\subpair{\svec{\sigma}_{k}}{\svec{\tau}_{k}}^\mathsf{X} \mid \pair{\boldsymbol{s}}{\boldsymbol{t}})$} means the posterior probability of the substring pair {$\subpair{\svec{\sigma}_{k}}{\svec{\tau}_{k}}$} whose previous state is {\sf X}.
+
+If the current state is {\sf signal}, the previous state is either {\sf noiseB} or {\sf signal}.
+We distinguish the substring pairs considering their previous states, and sample a substring pair {$\subpair{\svec{\sigma}_{k}}{\svec{\tau}_{k}}$}
+among {$C_{N} (I,\svec{s})$} and {$C_{N} (J,\svec{t})$} based on the following posterior probabilities:
+\begin{align}
+ p (\subpair{\svec{\sigma}_{k}}{\svec{\tau}_{k}}^\mathsf{noiseB} \mid \pair{\boldsymbol{s}}{\boldsymbol{t}}) 
+	& \propto p_{-m} (\subpair{\svec{\sigma}_{k}}{\svec{\tau}_{k}}) 
+	\times \alpha^\mathsf{noiseB} (I - |\svec{\sigma}_{k}|, J - |\svec{\tau}_{k}|),\ \text{and}
+	\label{eqn:posterior_signal1}\\
+ p (\subpair{\svec{\sigma}_{k}}{\svec{\tau}_{k}}^\mathsf{signal} \mid \pair{\boldsymbol{s}}{\boldsymbol{t}}) 
+	& \propto p_{-m} (\subpair{\svec{\sigma}_{k}}{\svec{\tau}_{k}}) 
+	\times \alpha^\mathsf{signal} (I - |\svec{\sigma}_{k}|, J - |\svec{\tau}_{k}|).
+	\label{eqn:posterior_signal2}
+\end{align}
+If a substring pair is sampled from the distribution of Equation ({\ref{eqn:posterior_signal1}}), the current state is changed to {\sf noiseB}.
+
+Finally, if the current state is {\sf noiseE}, its preceding state is either {\sf signal} or {\sf noiseE}.
+We have to distinguish the cases of source- and target-side noise, and two different previous states.
+
+\begin{itemize}
+\item If the current source-side index {$I$} is smaller than the length of the source-side string {$|\boldsymbol{s}|$}, there must be no preceding target-side noise. We sample source-side noise considering its previous state between {\sf signal} or {\sf noiseE} based on the following distributions:
+\begin{align}
+ p (\subpair{\svec{\sigma}_{k}}{\mathit{noise}}^\mathsf{signal} \mid \pair{\boldsymbol{s}}{\boldsymbol{t}}) 
+	& \propto p_{-m} (\subpair{\svec{\sigma}_{k}}{\mathit{noise}}) \times \alpha^\mathsf{signal} (I - |\svec{\sigma}_{k}|, J),\ \text{and}
+	\label{eqn:posterior_noiseE1}\\
+ p (\subpair{\svec{\sigma}_{k}}{\mathit{noise}}^\mathsf{noiseE} \mid \pair{\boldsymbol{s}}{\boldsymbol{t}}) 
+	& \propto p_{-m} (\subpair{\svec{\sigma}_{k}}{\mathit{noise}}) \times \alpha^\mathsf{noiseE} (I - |\svec{\sigma}_{k}|, J).
+	\label{eqn:posterior_noiseE2}
+\end{align}
+
+\item Otherwise, we can sample the source- or target-side noise using the following probabilities together with the source-side noise probabilities of Equations ({\ref{eqn:posterior_noiseE1}}) and ({\ref{eqn:posterior_noiseE2}}), considering its previous state {\sf signal} and {\sf noiseE}:
+\pagebreak
+\begin{align}
+ p (\subpair{\mathit{noise}}{\svec{\tau}_{k}}^\mathsf{signal} \mid \pair{\boldsymbol{s}}{\boldsymbol{t}}) 
+	& \propto p_{-m} (\subpair{\mathit{noise}}{\svec{\tau}_{k}}) \times \alpha^\mathsf{signal} (I, J - |\svec{\tau}_{k}|),\ \text{and}
+	\label{eqn:posterior_noiseE3}\\
+ p (\subpair{\mathit{noise}}{\svec{\tau}_{k}}^\mathsf{noiseE} \mid \pair{\boldsymbol{s}}{\boldsymbol{t}}) 
+	& \propto p_{-m} (\subpair{\mathit{noise}}{\svec{\tau}_{k}}) \times \alpha^\mathsf{noiseE} (I, J - |\svec{\tau}_{k}|).
+	\label{eqn:posterior_noiseE4}
+\end{align}
+\end{itemize}
+If a substring pair is sampled from the distribution of Equation ({\ref{eqn:posterior_noiseE1}}) or ({\ref{eqn:posterior_noiseE3}}), the current state is changed to {\sf signal}.
+
+The computational cost with this algorithm is increased almost three-fold compared with that of \newcite{finch:2010:iwslt},
+because it handles three different states.
+
+
+\section{Experiments}
+
+We conducted Japanese-to-English transliteration experiments in which we compared the proposed method
+with the conventional sample-wise method in bootstrapping statistical machine transliteration
+employing a Japanese-to-English patent translation dataset.
+In the experiments, we focused on {\it katakana} words in Japanese
+that are usually used for the transliteration of foreign words,
+and we back-transliterate these {\it katakana} words into the original English words.
+Note that the problem of back-transliteration generally has unique answers
+because most transliterated {\it katakana} words have unique corresponding foreign words except for some homonyms,
+while transliteration is basically ambiguous due to non-unique sound-to-character mappings.
+
+The workflow of the experiments is illustrated in Figure {\ref{fig:experiment}},
+and the following sections give its detailed explanation.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{21-6ia1f6.eps}
+\end{center}
+\caption{Workflow of the experiments}
+\label{fig:experiment}
+\vspace{-0.5\Cvs}
+\end{figure}
+
+
+\subsection{Data Setup}
+
+For the transliteration bootstrapping,
+we extracted bilingual phrase pairs with a maximum length of seven words
+from 3.2~M parallel sentences in NTCIR-10 PatentMT dataset {\cite{goto:2013:ntcir}}.\footnote{
+http://research.nii.ac.jp/ntcir/data/data-en.html}\@ 
+We used a standard training procedure for phrase-based statistical machine translation \cite{koehn:2003:naacl}
+with GIZA++\footnote{https://code.google.com/p/giza-pp/} and Moses.\footnote{http://www.statmt.org/moses/}\@ 
+Japanese and English sentences were tokenized using MeCab\footnote{http://code.google.com/p/mecab/}
+and {\tt tokenizer.perl} (included in Moses), respectively.
+We obtained 591,840 phrase table entries where the Japanese side was written in {\it katakana} (Japanese phonograms)
+only.\footnote{
+This {\it katakana}-based filtering is a language dependent heuristic for choosing potential transliteration candidates,
+because transliterations in Japanese are usually written in {\it katakana}.}\@ 
+Here, some bilingual phrases include words without appropriate counterparts (called NULL-aligned words).
+The bilingual phrases were extracted from bilingual corpora with automatic word alignment;
+but in the Japanese-English case, English articles and prepositions are sometimes not aligned with any Japanese words
+because they lack Japanese counterparts.
+These unaligned words are needed for actual translation and
+typical phrase-based machine translation uses {\em extended} phrases
+in which such unaligned words are included.\footnote{For more details,
+please refer to the book of a work on statistical machine translation \cite{koehn:smtbook}.}\@ 
+These extended phrases may help us to extract complete phrasal correspondences of compound words
+but also incorporate more noise.
+Thus, in the experiments, we compared two conditions to take this problem into account:
+\begin{itemize}
+\item Recall-oriented condition ({\sc All}): all the bilingual phrases (591,840) are used to extract more transliteration substring pairs; and
+\item Precision-oriented condition ({\sc FullyAligned}): only fully aligned phrases without unaligned words (177,610) to exclude more word-level noise.
+\end{itemize}
+
+We iteratively ran the method proposed by \newcite{sajjad:2012:acl} on these bilingual phrases
+and eliminated sample-wise non-transliteration pairs until the number of pairs converged.
+Finally we obtained 104,563 {\it katakana}-English pairs from {\sc All} after 10 iterations,
+and 49,252 pairs from {\sc FullyAligned} after 8 iterations.
+These were our {\em baseline transliteration training set} that we mined with the sample-wise method.
+We used the method of \newcite{sajjad:2012:acl} as a preprocessing technique for filtering sample-wise noise.
+The proposed method is also capable of this,
+but it takes much more training time for all phrase table entries.
+We focused on the partial noise problem in the experiments
+that was not addressed by \newcite{sajjad:2012:acl}.
+
+Next we applied the proposed method to the baseline transliteration training set with 30 sampling iterations
+(empirically chosen for the convergence of the likelihood)
+and obtained character alignment results with partial noise identification.
+Here, the hyperparameters, $\alpha$, $\lambda_{s}$, and $\lambda_{t}$, were optimized
+using a held-out set of 2,000 {\it katakana}-English pairs
+that were randomly chosen from a general-domain bilingual dictionary.\footnote{
+The parameters of the spelling model $\lambda_{s}$, and $\lambda_{t}$ can be learned from many-to-many alignment samples
+(because they are equals to expectations of substring lengths according to a Poisson distribution),
+but we used constant values same as \newcite{finch:2010:iwslt}.}\@ 
+The hyperparameter optimization was based on transliteration F-score values on the held-out set
+with the following $\alpha$ values $0.01$, $0.02$, $0.03$, $0.05$, $0.1$, $0.2$, $0.3$, $0.4$, $0.5$,
+and the following $\lambda$s values $1$, $2$, $3$, $4$, $5$.
+Finally we used {$\alpha = 0.1$} and {$\lambda = 3$} for \textsc{All} condition,
+and {$\alpha = 0.02$} and {$\lambda = 2$} for \textsc{FullyAligned} condition.
+
+
+\subsection{Evaluation of Partial Noise Identification}
+
+First we evaluated the extent to which the proposed method identified partial noise
+using 4,000 {\it katakana}-English pairs randomly chosen from the baseline transliteration training set of {\sc All}.
+The partial noise of the 4,000 pairs was manually annotated.
+251 of 34,547 (0.73\%) {\it katakana} characters
+and 3,462 of 52,872 (6.5\%) English characters were annotated as noise,
+including three sample-wise noise pairs that were not identified by the method of \newcite{sajjad:2012:acl}.
+In the evaluation in the {\sc FullyAligned} condition,
+we used 1,524 pairs that were also included in the baseline transliteration training set of {\sc FullyAligned},
+of the 4,000 annotated pairs.
+In the evaluation, we compared the proposed method ({\sc Proposed})
+with a baseline ({\sc GIZA++/GDFA})
+where unaligned characters using bilingual phrase extraction heuristics
+called {\em grow-diag-final-and}
+over bidirectional GIZA++ alignment\footnote{Word alignments based on IBM models \cite{brown:1993:cl}
+and HMM alignment model \cite{vogel:1996:coling} used in GIZA++ are many-to-one,
+so recent phrase-based statistical machine translation combines
+these many-to-one alignments with one-to-many alignments in the reverse direction
+to obtain many-to-many alignments for bilingual phrases.
+{\em grow-diag-final-and} is a commonly-used heuristic alignment combination method.
+For more details, please refer to \newcite{koehn:smtbook}.}
+were regarded as noise.
+
+Table~{\ref{tbl:alignment}} shows precision, recall, and F1-measure values for noise identification
+both in Japanese and English
+for different phrase extraction conditions.
+{\sc GIZA++/GDFA} was clearly worse than {\sc Proposed}.
+This suggests that NULL alignments in IBM models are not appropriate for identifying partial noise.
+With respect to the difference between {\sc All} and {\sc FullyAligned},
+the performance of {\sc Proposed} for {\sc FullyAligned} was much worse than that for {\sc All}.
+One possible reason for this is the noise on the English side in the {\sc All} phrases,
+which appeared as articles and prepositions and that can be easily eliminated as word-level noise.
+
+\begin{table}[b]
+\hangcaption{Precision (\%), recall (\%), and F1-measure (\%) of noise identification
+by the proposed method ({\sc Proposed}) and IBM-model-based baseline ({\sc GIZA++/GDFA})
+using 4,000 ({\sc All}) and 1,524 ({\sc FullyAligned}) noise annotated phrase pairs}
+\label{tbl:alignment}
+\input{01table01.txt}
+\end{table}
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-6ia1f7.eps}
+\end{center}
+\hangcaption{Examples of noise-aware many-to-many alignment in the training data.
+$\phi$ indicates a zero-length substring.
+Bold gray lines show incorrect alignments, and dashed lines mean their corrections. }
+\label{fig:examples-alignment}
+\end{figure}
+
+Figure \ref{fig:examples-alignment} shows examples of the alignment results in the training data.
+As expected, partial noise both in Japanese and English was identified correctly in (a), (b), and (c).
+There were some alignment errors in the signal part in (b),
+in which characters in boundary positions were aligned incorrectly with adjacent substrings.
+These alignment errors did not directly degrade the partial noise identification
+but they may have a negative effect on the overall alignment performance in the sampling-based optimization.
+(d) is a negative example in which partial noise was incorrectly aligned.
+(c) and (d) have similar partial noise in their English word endings,
+but it could not be identified in (d).
+
+
+\subsection{Evaluation of Transliteration Accuracy}
+
+Next we evaluated the transliteration accuracy using the mined transliteration pairs.
+We implemented statistical machine transliteration as
+character-based statistical machine translation with Moses
+using a character-based 7-gram language model trained on 300~M English patent sentences.
+The test set was the top 1,000 unknown (in the Japanese-to-English translation model) {\it katakana} words
+appearing in 400~M Japanese patent sentences.
+They covered 15.5\% of all unknown {\it katakana} words and 8.8\% of all unknown words (excluding numbers);
+that is, more than half of the unknown words were {\it katakana} words.
+The problem itself was Japanese-to-English back-transliteration as described above.
+
+\begin{table}[b]
+\hangcaption{Statistics of the transliteration training sets, after eliminating sample-wise and partial noise.
+The sample-wise noise was eliminated by the method of Sajjad et al. (2012) (baseline transliteration training set),
+and partial noise was further eliminated by GIZA++ and grow-diag-final-and heuristics ({\sc GIZA++/GDFA})
+and the proposed method ({\sc Proposed}).}
+\label{tbl:statistics}
+\input{01table02.txt}
+\end{table}
+
+We compared three different training data:
+Sajjad's method ({\sc Sajjad}; namely the baseline transliteration training set), {\sc GIZA++/GDFA} and {\sc Proposed}.
+Table~\ref{tbl:statistics} shows the data statistics obtained after eliminating noise with them.
+Recall that {\sc GIZA++/GDFA} and {\sc Proposed} were applied to {\sc Sajjad} results as described above
+and the number of phrase pairs and characters by {\sc GIZA++/GDFA} and {\sc Proposed} were lower than those of {\sc Sajjad}.
+The training procedure of statistical machine transliteration was a standard Moses approach:
+GIZA++-based alignment, grow-diag-final-and alignment symmetrization
+and phrase extraction with a maximum phrase length of seven characters.
+Note that the Bayesian many-to-many alignment was ignored in bilingual phrase extraction
+and we re-aligned phrases with GIZA++ and grow-diag-final-and heuristic,
+because we aimed to investigate the effect of partial noise elimination on statistical machine transliteration
+in the same training condition.
+We also tested the use of the many-to-many alignment as bilingual phrases as did {\cite{finch:2010:iwslt}},
+called {\sc Proposed-Joint},
+following their agglomeration heuristic to include longer substring pairs by:
+\begin{enumerate}
+\item generating many-to-many word alignment, in which all possible word alignments link in many-to-many correspondences
+      (e.g., 0-0 0-1 0-2 1-0 1-1 1-2 for {$\subpair{\text{コン}}{\mathrm{com}}$}),
+\item running phrase extraction and scoring the same as with standard Moses training.
+\end{enumerate}
+This procedure extracts longer phrases that satisfy the many-to-many alignment constraints
+than the simple use of extracted joint substring pairs as phrases.
+
+We used ACC (sample-wise accuracy) as our main evaluation metric,
+the sample-wise accuracy in the back-transliteration of {\it katakana} words compared with original English words.
+We also used two additional metrics for character-wise evaluation:
+F-score and BLEU$_{\rm c}$.
+F-score is a character-wise F-measure-like score \cite{li:2010:news}.
+BLEU$_{\rm c}$ is BLEU \cite{papineni:2002:acl} at the character level with $n$=4.
+Table~{\ref{tbl:largeresult}} shows the transliteration evaluation results.
+
+\begin{table}[b]
+\hangcaption{Japanese-to-English transliteration results for the top 1,000 unknown {\it katakana} words.
+ACC and F-score stand for those used in NEWS workshop, BLEU$_\mathrm{c}$ is character-wise BLEU.
+Values shown in {\bf bold} represent the best values for the same phrase extraction condition.}
+\label{tbl:largeresult}
+\input{01table03.txt}
+\end{table}
+
+{\sc Proposed} achieved ACC of 63\% (16\% relative error reduction compared with {\sc Sajjad}) using {\sc All} phrases
+and 65\% (8\% relative error reduction compared with {\sc Sajjad}) using {\sc FullyAligned} phrases.
+It also showed better character-wise performance in F-score and BLEU$_c$.
+These improvements clearly exhibited the advantage of the proposed method over sample-wise mining.
+Recall that {\sc Sajjad} and {\sc Proposed} had a small difference in their training data size
+as shown in \mbox{Table~\ref{tbl:statistics}}.
+In contrast, {\sc GIZA++/GDFA} was based on a similar-sized training set
+but produced much worse ACC results than {\sc Sajjad}.
+{\sc Proposed} further eliminated partial noise from the sample-wise mined results
+and achieved the best back-transliteration performance.
+These results suggest that the partial noise can hurt transliteration models
+and the proposed approach actually worked in transliteration bootstrapping.
+
+{\sc Proposed-Joint} performed similarly to {\sc Proposed},
+although many-to-many substring alignment was expected to improve transliteration
+as reported by \newcite{finch:2010:iwslt}.
+The difference may be due to the difference in coverage of the phrase tables;
+{\sc Proposed-Joint} retained relatively long substrings caused by the many-to-many alignment constraints
+in contrast to the less-constrained grow-diag-final-and alignments in {\sc Proposed}.
+Since the training data in our bootstrapping experiments contained many similar phrases
+unlike the dictionary-based data in \newcite{finch:2010:iwslt},
+the {\sc Proposed-Joint} phrase table may have limited coverage
+owing to its long and sparse substring pairs with large probabilities even if the many-to-many alignment was good.
+This sparseness problem is beyond the scope of this paper and worth further study.
+
+\begin{table}[b]
+\caption{Transliteration examples by {\sc Sajjad} and {\sc Proposed} in {\sc FullyAligned} condition}
+\label{tbl:examples}
+\input{01table04.txt}
+\end{table}
+
+Some transliteration examples are shown in Table~{\ref{tbl:examples}}.
+The first two examples show a typical advantage of {\sc Proposed}.
+{\sc Sajjad} generated noise (ester``s'' and ``an'' armonk) due to partial noise in the training data.
+In the next example, both methods generated wrong transliterations.
+The transliteration results for the word ``protoplast'' include unnecessary suffixes ``-ing''
+that should be aligned to the noise symbol by the proposed method.
+This is mainly due to the low recall in noise identification, as shown in Table~{\ref{tbl:alignment}}.
+In the last three examples, the transliteration results are not appropriate as English words,
+although they may have similar pronunciations to their reference words.
+Longer bilingual phrases and n-gram language models are expected to choose more consistent hypotheses,
+but they sometimes fail to keep word-level consistency
+and then generate inappropriate character sequences especially for rare words.
+This consistency problem in statistical machine transliteration warrants
+further study,
+not only in segmental alignment but also in context-rich modeling and decoding.
+
+
+\section{Conclusion}
+
+This paper proposed a noise-aware many-to-many alignment model that can distinguish partial noise in transliteration pairs
+for bootstrapping a statistical machine transliteration model from automatically extracted phrase pairs.
+The model and training algorithm are straightforward extensions of those described by \newcite{finch:2010:iwslt}.
+The proposed method was proved effective in partial noise identification and transliteration bootstrapping
+in experiments with Japanese-to-English patent documents.
+
+Future work will investigate the use of the proposed method in other domains and language pairs.
+Partial noise appears in other language pairs, and typically between agglutinative and non-agglutinative languages.
+It is also worth extending the approach to word alignment in statistical machine translation.
+
+
+\acknowledgment
+A part of this study was presented at {\it the 2013 Conference on Empirical Methods in Natural Language Processing} \cite{sudoh:2013:emnlp}.
+The authors would like to thank the anonymous reviewers for their valuable suggestions and comments.
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Al-Onaizan \BBA\ Knight}{Al-Onaizan \BBA\
+  Knight}{2002}]{al-onaizan:2002:acl}
+Al-Onaizan, Y.\BBACOMMA\ \BBA\ Knight, K. \BBOP 2002\BBCP.
+\newblock \BBOQ Translating Named Entities Using Monolingual and Bilingual
+  Resources.\BBCQ\
+\newblock In {\Bem Proceedings of 40th Annual Meeting of the Association for
+  Computational Linguistics}, \mbox{\BPGS\ 400--408}.
+
+\bibitem[\protect\BCAY{Brown, Della~Pietra, Della~Pietra, Lai, \BBA\
+  Mercer}{Brown et~al.}{1992}]{brown:1992:cl}
+Brown, P.~F., Della~Pietra, S.~A., Della~Pietra, V.~J., Lai, J.~C., \BBA\
+  Mercer, R.~L. \BBOP 1992\BBCP.
+\newblock \BBOQ {An Estimate of an Upper Bound for the Entropy of
+  English}.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 18}  (1), \mbox{\BPGS\
+  31--40}.
+
+\bibitem[\protect\BCAY{Brown, Della~Pietra, Della~Pietra, \BBA\ Mercer}{Brown
+  et~al.}{1993}]{brown:1993:cl}
+Brown, P.~F., Della~Pietra, S.~A., Della~Pietra, V.~J., \BBA\ Mercer, R.~L.
+  \BBOP 1993\BBCP.
+\newblock \BBOQ {The Mathematics of Statistical Machine Translation: Parameter
+  Estimation}.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 19}  (2), \mbox{\BPGS\
+  263--311}.
+
+\bibitem[\protect\BCAY{Finch \BBA\ Sumita}{Finch \BBA\
+  Sumita}{2010}]{finch:2010:iwslt}
+Finch, A.\BBACOMMA\ \BBA\ Sumita, E. \BBOP 2010\BBCP.
+\newblock \BBOQ {A Bayesian Model of Bilingual Segmentation for
+  Transliteration}.\BBCQ\
+\newblock In {\Bem Proceedings of the 7th International Workshop on Spoken
+  Language Translation (IWSLT)}, \mbox{\BPGS\ 259--266}.
+
+\bibitem[\protect\BCAY{Fukunishi, Finch, Yamamoto, \BBA\ Sumita}{Fukunishi
+  et~al.}{2013}]{fukunishi:2013:talip}
+Fukunishi, T., Finch, A., Yamamoto, S., \BBA\ Sumita, E. \BBOP 2013\BBCP.
+\newblock \BBOQ {A Bayesian Alignment Approach to Transliteration
+  Mining}.\BBCQ\
+\newblock {\Bem ACM Transactions on Asian Language Information Processing},
+  {\Bbf 12}  (3, Article No. 9).
+
+\bibitem[\protect\BCAY{Goldwater, Griffiths, \BBA\ Johnson}{Goldwater
+  et~al.}{2006}]{goldwater:2006:colacl}
+Goldwater, S., Griffiths, T.~L., \BBA\ Johnson, M. \BBOP 2006\BBCP.
+\newblock \BBOQ Contextual Dependencies in Unsupervised Word
+  Segmentation.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on
+  Computational Linguistics and 44th Annual Meeting of the Association for
+  Computational Linguistics}, \mbox{\BPGS\ 673--680}.
+
+\bibitem[\protect\BCAY{Goto, Chow, Lu, Sumita, \BBA\ Tsou}{Goto
+  et~al.}{2013}]{goto:2013:ntcir}
+Goto, I., Chow, K.~P., Lu, B., Sumita, E., \BBA\ Tsou, B.~K. \BBOP 2013\BBCP.
+\newblock \BBOQ {Overview of the Patent Machine Translation Task at the
+  NTCIR-10 Workshop}.\BBCQ\
+\newblock In {\Bem The 10th NTCIR Conference}, pp.~260--286.
+
+\bibitem[\protect\BCAY{Htun, Finch, Sumita, \BBA\ Mikami}{Htun
+  et~al.}{2012}]{htun:2012:ijca}
+Htun, O., Finch, A., Sumita, E., \BBA\ Mikami, Y. \BBOP 2012\BBCP.
+\newblock \BBOQ {Improving Transliteration Mining by Integrating Expert
+  Knowledge with Statistical Approaches}.\BBCQ\
+\newblock {\Bem International Journal of Computer Applications}, {\Bbf 58}
+  (17), \mbox{\BPGS\ 12--22}.
+
+\bibitem[\protect\BCAY{Karimi, Scholer, \BBA\ Turpin}{Karimi
+  et~al.}{2011}]{karimi:2011:acmcs}
+Karimi, S., Scholer, F., \BBA\ Turpin, A. \BBOP 2011\BBCP.
+\newblock \BBOQ Machine Transliteration Survey.\BBCQ\
+\newblock {\Bem ACM Computing Surveys}, {\Bbf 43}  (3).
+
+\bibitem[\protect\BCAY{Knight \BBA\ Graehl}{Knight \BBA\
+  Graehl}{1998}]{knight:1998:cl}
+Knight, K.\BBACOMMA\ \BBA\ Graehl, J. \BBOP 1998\BBCP.
+\newblock \BBOQ Machine Transliteration.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 24}  (4), \mbox{\BPGS\
+  599--612}.
+
+\bibitem[\protect\BCAY{Koehn}{Koehn}{2010}]{koehn:smtbook}
+Koehn, P. \BBOP 2010\BBCP.
+\newblock {\Bem Statistical Machine Translation}.
+\newblock Cambridge University Press.
+
+\bibitem[\protect\BCAY{Koehn, Och, \BBA\ Marcu}{Koehn
+  et~al.}{2003}]{koehn:2003:naacl}
+Koehn, P., Och, F.~J., \BBA\ Marcu, D. \BBOP 2003\BBCP.
+\newblock \BBOQ Statistical Phrase-Based Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 2003 Human Language Technology Conference
+  of the North American Chapter of the Association for Computational
+  Linguistics}, \mbox{\BPGS\ 48--54}.
+
+\bibitem[\protect\BCAY{Kubo, Kawanami, Saruwatari, \BBA\ Shikano}{Kubo
+  et~al.}{2011}]{kubo:2011:apsipa}
+Kubo, K., Kawanami, H., Saruwatari, H., \BBA\ Shikano, K. \BBOP 2011\BBCP.
+\newblock \BBOQ Unconstrained Many-to-Many Alignment for Automatic
+  Pronunciation Annotation.\BBCQ\
+\newblock In {\Bem Proceedings of the Asia-Pacific Signal and Information
+  Processing Association Annual Summit and Conference (APSIPA 2011)}.
+
+\bibitem[\protect\BCAY{Kumaran, Khapra, \BBA\ Li}{Kumaran
+  et~al.}{2010}]{kumaran:2010:news}
+Kumaran, A., Khapra, M.~M., \BBA\ Li, H. \BBOP 2010\BBCP.
+\newblock \BBOQ Report of NEWS 2010 Transliteration Mining Shared Task.\BBCQ\
+\newblock In {\Bem Proceedings of the 2010 Named Entities Workshop},
+  \mbox{\BPGS\ 21--28}.
+
+\bibitem[\protect\BCAY{Lam, Huang, \BBA\ Cheung}{Lam
+  et~al.}{2004}]{lam:2004:sigir}
+Lam, W., Huang, R., \BBA\ Cheung, P.-S. \BBOP 2004\BBCP.
+\newblock \BBOQ Learning Phonetic Similarity for Matching Named Entity
+  Translations and Mining New Translations.\BBCQ\
+\newblock In {\Bem Proceedings of the 27th Annual International ACM SIGIR
+  Conference on Research and Development in Information Retrieval},
+  \mbox{\BPGS\ 286--296}.
+
+\bibitem[\protect\BCAY{Li, Kumaran, Zhang, \BBA\ Pervouchine}{Li
+  et~al.}{2010}]{li:2010:news}
+Li, H., Kumaran, A., Zhang, M., \BBA\ Pervouchine, V. \BBOP 2010\BBCP.
+\newblock \BBOQ Report of NEWS 2010 Transliteration Generation Shared
+  Task.\BBCQ\
+\newblock In {\Bem Proceedings of the 2010 Named Entities Workshop},
+  \mbox{\BPGS\ 1--11}.
+
+\bibitem[\protect\BCAY{Mochihashi, Yamada, \BBA\ Ueda}{Mochihashi
+  et~al.}{2009}]{mochihashi:2009:acl}
+Mochihashi, D., Yamada, T., \BBA\ Ueda, N. \BBOP 2009\BBCP.
+\newblock \BBOQ {Bayesian Unsupervised Word Segmentation with Nested Pitman-Yor
+  Language Modeling}.\BBCQ\
+\newblock In {\Bem Proceedings of the Joint Conference of the 47th Annual
+  Meeting of the ACL and the 4th International Joint Conference on Natural
+  Language Processing of the AFNLP}, \mbox{\BPGS\ 100--108}.
+
+\bibitem[\protect\BCAY{Papineni, Roukos, Ward, \BBA\ Zhu}{Papineni
+  et~al.}{2002}]{papineni:2002:acl}
+Papineni, K., Roukos, S., Ward, T., \BBA\ Zhu, W.-J. \BBOP 2002\BBCP.
+\newblock \BBOQ {Bleu: a Method for Automatic Evaluation of Machine
+  Translation}.\BBCQ\
+\newblock In {\Bem Proceedings of 40th Annual Meeting of the Association for
+  Computational Linguistics}, \mbox{\BPGS\ 311--318}.
+
+\bibitem[\protect\BCAY{Sajjad, Fraser, \BBA\ Schmid}{Sajjad
+  et~al.}{2012}]{sajjad:2012:acl}
+Sajjad, H., Fraser, A., \BBA\ Schmid, H. \BBOP 2012\BBCP.
+\newblock \BBOQ A Statistical Model for Unsupervised and Semi-supervised
+  Transliteration Mining.\BBCQ\
+\newblock In {\Bem Proceedings of the 50th Annual Meeting of the Association
+  for Computational Linguistics (Volume 1: Long Papers)}, \mbox{\BPGS\
+  469--477}.
+
+\bibitem[\protect\BCAY{Scott}{Scott}{2002}]{scott:2002:jasa}
+Scott, S.~L. \BBOP 2002\BBCP.
+\newblock \BBOQ {Bayesian Methods for Hidden Markov Models: Recursive Computing
+  in the 21st Century}.\BBCQ\
+\newblock {\Bem Journal of the American Statistical Association}, {\Bbf 97}
+  (457), \mbox{\BPGS\ 337--351}.
+
+\bibitem[\protect\BCAY{Sudoh, Mori, \BBA\ Nagata}{Sudoh
+  et~al.}{2013}]{sudoh:2013:emnlp}
+Sudoh, K., Mori, S., \BBA\ Nagata, M. \BBOP 2013\BBCP.
+\newblock \BBOQ {Noise-Aware Character Alignment for Bootstrapping Statistical
+  Machine Transliteration from Bilingual Corpora}.\BBCQ\
+\newblock In {\Bem Proceedings of the 2013 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 204--209}, Seattle, Washington,
+  USA. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Vogel, Ney, \BBA\ Tillmann}{Vogel
+  et~al.}{1996}]{vogel:1996:coling}
+Vogel, S., Ney, H., \BBA\ Tillmann, C. \BBOP 1996\BBCP.
+\newblock \BBOQ {HMM-Based Word Alignment in Statistical Translation}.\BBCQ\
+\newblock In {\Bem Proceedings of the 16th International Conference on
+  Computational Linguistics}, \textbf{2}, \mbox{\BPGS\ 836--841}.
+
+\bibitem[\protect\BCAY{Xu, Gao, Toutanova, \BBA\ Ney}{Xu
+  et~al.}{2008}]{xu:2008:coling}
+Xu, J., Gao, J., Toutanova, K., \BBA\ Ney, H. \BBOP 2008\BBCP.
+\newblock \BBOQ {Bayesian Semi-Supervised Chinese Word Segmentation for
+  Statistical Machine Translation}.\BBCQ\
+\newblock In {\Bem Proceedings of the 22nd International Conference on
+  Computational Linguistics (Coling 2008)}, \mbox{\BPGS\ 1017--1024}.
+
+\end{thebibliography}
+
+
+\begin{biography}
+
+\bioauthor[:]{Katsuhito Sudoh}{
+He received B.E. degree and master's degree in informatics from Kyoto University, Kyoto, in 2000 and 2002, respectively.
+He joined NTT in 2002. He is currently a research scientist at NTT Communication Science Laboratories.
+He was also a doctoral course student in Graduate School of Informatics, Kyoto University from 2011 to 2014.
+His research interest include natural language processing especially machine translation.
+}
+
+\bioauthor[:]{Shinsuke Mori}{
+He received B.S., M.S., and Ph.D. degrees in electrical engineering from Kyoto University, Kyoto, Japan in 1993, 1995, and 1998, respectively.
+After joining Tokyo Research Laboratory of IBM in 1998, he studied the language model and its application to speech recognition and language processing.
+He is currently an associate professor of Academic Center for Computing and Media Studies, Kyoto University.
+}
+
+\bioauthor[:]{Masaaki Nagata}{
+He received B.E., M.E., and Ph.D. degrees in information science from Kyoto University, Kyoto, Japan in 1985, 1987, and 1999, respectively.
+He joined NTT in 1987. He was with ATR Interpreting Telephony Research Laboratories from 1989 to 1993.
+He is the leader of the Linguistic Intelligence Research Group at the NTT Communication Science Laboratories.
+His research interest include natural language processing, especially morphological analysis, named entity recognition, parsing, and machine translation.
+}
+\end{biography}
+
+\biodate
+
+
+
+\end{document}

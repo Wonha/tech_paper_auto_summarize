@@ -1,0 +1,908 @@
+
+
+
+
+\documentstyle[epsf,jnlpbbl]{jnlp_j}
+\setlength{\topmargin}{0mm}
+
+\setcounter{page}{0}
+\setcounter{巻数}{6}
+\setcounter{号数}{3}
+\setcounter{年}{1999}
+\setcounter{月}{4}
+\受付{1998}{6}{25}
+\再受付{1998}{8}{24}
+\採録{1999}{1}{25}
+
+
+\setcounter{secnumdepth}{2}
+
+\title{複数の表層的手がかりを統合したテキストセグメンテーション}
+\author{望月  源\affiref{JAIST} \and 本田  岳夫\affiref{TITECH} \and
+	奥村  学\affiref{JAIST}}
+
+
+\headauthor{望月 源・本田 岳夫・奥村 学}
+\headtitle{複数の表層的手がかりを統合したテキストセグメンテーション}
+
+\affilabel{JAIST}{北陸先端科学技術大学院大学 情報科学研究科}
+{School of Information Science, Japan Advanced Institute of
+Science and Technology}
+\affilabel{TITECH}{株式会社 富士通愛知エンジニアリング}
+{Fujitsu Aichi Engineering Limited}
+
+\jabstract{
+一般に、テキストは複数の文から形成されており、文間には何らかの意味的なつ
+ながりがある．テキスト中の意味的にまとまったある範囲が，談話セグメントや意
+味段落と呼ばれる一貫性のある談話の単位を構成する．また，談話セグメント間の
+関係によってテキスト全体の談話構造が形成される．こうしたことから，セグメン
+ト境界の検出は，テキスト構造解析の第一歩であると考えられる．テキスト中には，
+セグメント境界の検出に利用できる多くの表層的手がかりが存在する．本稿では，
+複数の表層的手がかりを組み合わせて日本語テキストのセグメント境界を検出する
+手法について述べる．セグメント境界の検出は，複数の手がかりのスコアを基に各
+文間のセグメント境界への成り易さあるいは成り難さを表す文間スコアを計算する
+ことで行われる．文間のスコアは，各手がかりのスコアに重要度に応じた重みをか
+け，この重み付きスコアを足し合わせることにより計算する．本稿では，各手がか
+りへの重み付けを人手によらず，訓練データを用いた統計的手法により自動的に行
+う手法について述べる．また複数の手がかりの中で，実際にセグメント境界の検出
+に有効な手がかりだけを選択することで訓練データへの過適合を避ける手法につい
+ても述べる．
+}
+
+\jkeywords{セグメンテーション，テキスト構造，語彙的連鎖，表層的情報}
+
+\etitle{Text Segmentation with Multiple Surface Linguistic Cues}
+\eauthor{Hajime Mochizuki \affiref{JAIST} \and Takeo 
+Honda\affiref{TITECH}
+	\and Manabu Okumura\affiref{JAIST}} 
+
+\eabstract{ 
+In general, a text consists of multiple sentences, and there are some
+semantic relations among them. A certain range of sentences in a text,
+is  widely assumed to form a coherent unit which is usually called a
+discourse segment. While sentences in a segment have semantic relations
+with each other, segments in a discourse have some relations with each
+other. The global discource structure of a text can be constructed by
+relating the segments with each other. Therefore, identifying the segment
+boundaries is a first step to recognize the structure of a text. There are
+many surface linguistic cues which help for identifing text segmentations
+in a text. In this paper, we describe a method for identifying segment
+boundaries of a Japanese text with the aid of multiple surface linguistic
+cues, though our experiments might be small-scale. We calculate a weighted
+sum of the scores for all cues that reflects their contribution to
+identifying the correct segment boundaries. We also present a method of
+training the weights for multiple linguistic cues automatically without 
+the overfitting problem.
+}
+
+
+\ekeywords{Segmentation, Discourse structure, Lexical chain, Surface information}
+
+\begin{document}
+\maketitle
+
+
+\newpage
+\section{はじめに}\label{intro}
+テキストは単なる文の集まりではなく，テキスト中の各文は互いに何らかの意味的
+関係を持つ．特に意味的関係の強い文が集まって談話セグメントと呼ばれる単位を
+形成する．文が互いに意味的関係を持つように，これらの談話セグメント間にも意
+味的な関係が存在する．テキストの全体的な談話構造はこの談話セグメント間の関
+係によって形成される．そのため，テキストのセグメント境界を検出するテキスト
+セグメンテーションの研究は，談話構造解析の第一ステップであると考えられる
+\cite{Grosz:86}．
+また，最近では，テキストセグメンテーションの研究は情報検索の分野においても
+応用されている．長いテキスト中には複数のサブトピックが存在しているため，テ
+キスト全体を扱うよりも，テキストをセグメントに分けた方が検索対象として良い
+と考えられるためである\cite{Callan:94,Salton:93,Hearst:93}．
+
+セグメント境界の検出では，テキスト中の表層的な情報が利用されることが多い．
+表層的な情報は比較的容易に抽出可能であり，特別な領域知識を必要としないので
+一般的な利用が可能だからである．
+
+多様な表層的情報の中で，意味的に類似した単語間の表層的関係である語彙的
+結束性\cite{Halliday:76}が，これまで多くのテキストセグメンテーションの研究
+に使用されている
+\cite{Morris:91,Kozima:93,hearst:94b,okumura:94a,reynar:94}．
+OkumuraとHonda\cite{okumura:94a}は語彙的結束性の情報だけでは充分ではなく，
+他の表層的情報を取り入れることによって，テキストセグメンテーションの精度が
+向上することを報告している．
+
+本稿では，複数の表層的手がかりとして，接続詞，照応表現，省略，文のタイプ，
+語彙的結束性などを使用して日本語テキストのセグメント境界を検出する手法につ
+いて述べる．
+
+セグメント境界の検出では，手がかりから得られるスコアを基に，各文間の境界へ
+のなりやすさ(あるいはなり難さ)を表す文間のスコアを与えることが多い．
+この手がかりを複数設定し，組み合わせて使用する手法は数多く存在する
+\cite{McRoy:92}が，各手がかりの出現がセグメント境界の検出に影響する度合が
+異なるため，各手がかりのスコアをそのまま使用せず，各手がかりの重要度に応じ
+た重みをかけ，重み付きスコアの総和を文間のスコアとする手法が比較的良く用
+いられる．重み付きスコアの総和を文間のスコアとして使用する手法においては，
+各手がかりに最適な重み付けを行うことが，検出精度向上にとって重要になる．
+
+複数の表層的手がかりを用いてセグメント境界の検出を行う過去の研究
+\cite{Kurohashi:94,Sumita:92,Cohen:87,Fukumoto1}では，各手がかりの重みは直
+観あるいは，人手による試行錯誤によって決定される傾向がある．しかし人手によ
+る重みの決定はコストが高く，決定された重みを使用することで，必ずしも最適あ
+るいは最適に近い精度が得られるという保証がない．そのため人手による重み付け
+を避け，少なくとも最適に近い値を得るために，自動的に重みを決定する方
+が望ましいと考えられる．そこで本研究では，正しいセグメント境界位置の情報が
+付いた訓練テキストを用意し，統計的手法である重回帰分析を使用することで各表
+層的手がかりの重要度の重みを自動的に学習する．
+
+しかし，重みの自動学習手法では訓練データの数が少ない場合に学習精度が
+良くならないという問題がある\cite{Akiba:98}．また，訓練データに対してパラ
+メータ(手がかり)の数が多い場合には，学習された値が過適合を起す傾向があると
+いう問題が知られている．学習された重みが訓練データに対し過適合すると，訓練
+データ以外のテキストに適用した場合には良い精度が得られない．また，考えられ
+る全ての表層的手がかりが，常にセグメンテーションにとっ
+て良い手がかりになるとは限らない．そこで，過適合の問題を解消するために，重
+みの学習と共に使用する手がかりの最適化も行う必要がある．
+
+有効な手がかりだけを選択することができれば，良い重みの学習ができ，セ
+グメンテーションの精度が向上すると考えられる．本研究で重みの学習に使用する
+重回帰分析には，有効なパラメータを選択する手法が既にいくつか開発されている．
+そこで，本研究ではパラメータ選択手法の一つとして広く利用されているステップ
+ワイズ法を使用する．重回帰分析とパラメータ選択手法であるステップワイズ法を
+使用することにより，有効な手がかりのみを選択し，最適な重みを獲得できると考
+えられる．
+
+我々の主張を要約すると以下のようになる．
+
+\begin{itemize}
+\item テキストセグメンテーションにおいて，複数の表層的手がかりの組み合わせ
+は有効である．
+\item 重回帰分析とステップワイズ法の使用によってテキストセグメンテーション
+にとって有効な手がかりの選択と重みの自動的な獲得が可能となる．
+\end{itemize}
+
+上記の主張の有効性を調べるため，いくつかの実験を行う．小規模な実験ではある
+が，実験結果から我々のアプローチの有効性を示す．
+
+以下，2節では本研究でテキストセグメンテーションに使用する表層的手がかりに
+ついて説明する．3節では複数の手がかりの重みを自動的に決定する手法について
+述べる．4節では自動的に有効な手がかりを選択する手法について述べる．5節では，
+本研究のアプローチによる実験について記述する．
+
+\section{テキストセグメンテーションに使用する表層的手がかり}
+\label{sec:cues}
+
+テキスト中には，セグメント境界あるいは非境界の検出に使用できると考えられる
+多くの表層的な手がかりが存在する．しかし，良い結果を得るために，どの手がか
+りを使用するべきなのかは明らかでない．そのため我々はまず，使用可能な全て
+の表層的な手がかりを数え挙げる．次に，有効な手がかりを選択し，その手がかり
+を組み合わせることによってテキストセグメンテーションを行う．
+
+まず，本研究で用いるテキストセグメンテーション手法について説明する．ここで，
+文$n$と文$n+1$の間を$p(n,n+1)$と表わすことにする．$n$は$1$から「テキストの
+$文数-1$」の範囲を取る．各文間$p(n,n+1)$は，セグメント境界の候補となる．
+この文間ごとに，式(\ref{equ:sumscr})で表わすように，各手がかり$i$の重み付
+きスコア$w_{i}\times scr_{i}(n,n+1)$の合計スコアである$scr(n,n+1)$を計算す
+る．
+なお，各手がかりのスコア$scr_{i}(n,n+1)$には，初期値として0を与える．
+
+\begin{equation}\label{equ:sumscr}
+	scr(n,n+1) = \sum_{i=1}^{I}w_{i} \times scr_{i}(n, n+1)
+\end{equation}
+
+高いスコア$scr(n,n+1)$を持つ文間$p(n,n+1)$が，セグメント境界の候補とし
+て優先され，スコア順にセグメント境界として選択される．
+
+
+本研究では，以下の表層的手がかりを使用する．
+
+\begin{itemize}
+\item 主語を表わす助詞の出現 ($i=1..4$)．\\
+	文間$p(n,n+1)$の前の文($n$)もしくは後の文($n+1$)に，副助詞「は」も
+	しくは格助詞「が」が出現した場合，それぞれ$scr_{i}(n,n+1)$に1を加
+	える．
+	ただしテキスト中には「は」や「が」の出現する文が多数存在し，すべて
+	を抽出してもあまり意味がないと考えられる．そこで後述する語彙的連鎖
+	を構成する自立語に付属する場合だけを考慮する．
+
+\item 接続詞の出現 ($i=5..10$)．\\
+	以下に示す6つの接続詞のどれかが文$n+1$の文頭に出現した場合，
+	$scr_{i}(n,n+1)$に1を加える．
+	\begin{itemize}
+	\item 「添加」型 (例，しかも，そして)
+	\item 「強調」型 (例，むしろ，とにかく)
+	\item 「説明」型 (例，例えば，つまり)
+	\item 「順接」型 (例，ゆえに，だから)
+	\item 「逆接」型 (例，しかし，だが)
+	\item 「転換」型 (例，ところで，それでは)
+	\end{itemize}
+
+	接続詞の分類は所\cite{tokoro}，国語文法\cite{kougobunpou}を参照
+	し，機能によって著者が行った．
+
+\item 照応表現の出現 ($i=11..13$)．\\
+	以下に示す3つの前方照応詞のどれかが，文$n+1$の文頭に出現した場合，
+	$scr_{i}(n,n+1)$に1を加える．
+
+	\begin{itemize}
+	\item 「あ」型 (例，あの，あんな)
+	\item 「こ」型 (例，この，こんな)
+	\item 「そ」型 (例，その，そんな)
+	\end{itemize}
+
+\item 主語の省略 ($i=14$)．\\
+	文$n+1$に主語が出現しない場合，$scr_{i}(n,n+1)$に1を加える．
+
+\item 同一タイプの文の連続 ($i=15..18$)．\\
+	文$n$と$n+1$がどちらも同じタイプと判断される場合，$scr_{i}(n,n+1)$
+	に1を加える．
+
+	文のタイプは永野\cite{nagano}，福本\cite{Fukumoto1}を参照し，文末
+	表現を手がかり
+	にして9つに分類した．このうち特に客観的な事実や事象を提示する
+	「叙述文」および，判断や主張を強く提示する「判断文」と「断定文」の
+	連続を特に区別し，それ以外の文タイプの連続を「その他」として以下の
+	4種類に分ける．
+
+	\begin{itemize}
+	\item 叙述文 (例，〜ている，〜ません)
+	\item 判断文 (例，〜に違いない，〜と判断する)
+	\item 断定文 (例，〜のである，〜なのだ)
+	\item その他
+	\end{itemize}
+
+\item 語彙的連鎖の出現 ($i=19..22$)．\\
+	語彙的連鎖とは，語彙的結束性を持つ語の連続のことをいう
+	\cite{Morris:91}．
+	語彙的連鎖はテキスト中に存在する意味的なまとまりを示すと考えること
+	ができる\cite{Morris:91,Barzilay:97}．そこで，語彙的連鎖の情報と，
+	連鎖の範囲内で単語が出現しない部分であるギャップの情報を使用する．
+	語彙的連鎖のギャップは，その区間では一時的に別の話題に移っているこ
+	とを示していると考えられる．文$n$で連鎖が終わっているか，ギャップ
+	が始まる場合と，文$n+1$で連鎖が始まっているか，ギャップが終わって
+	いる場合に，それぞれ$scr_{i}(n,n+1)$に1を加える．
+	
+	なお，ギャップ長を1文とし，連鎖の範囲内で1文以上単語が出現し
+	ない場合にすべてギャップとする．
+	
+
+	また，
+	語彙的結束性を持つ語をシソーラス上の同一クラスに属
+	する語として計算する．シソーラスには，角川類語新辞典
+	\cite{kadokawa}	を使用する．
+
+\item 語彙的連鎖内の単語につく修飾語の変化 ($i=23$)．\\
+	文$n+1$で語彙的連鎖を構成する単語に付く修飾語が変化している場合，
+	$scr_{i}(n,n+1)$に1を加える．同一の語彙的連鎖を構成する語につく修
+	飾語が変化すると，これまで述べられていた話題の別の側面について述べ
+	ていると考えることができ，新しい話題に変化していると考えられる．
+\end{itemize}
+
+上に挙げた手がかりのスコアは，各文間のセグメント境界への成り易さもしくは成
+り難さを示す文間のスコアを計算するために使用される．
+例えば，副助詞「は」の出現は，セグメント境界への成り易さを表わし，照応表現
+の出現や同じタイプの文の連続は，境界への成り難さを表わすと考えられる．
+各手がかりの出現がセグメント境界の検出に影響する度合が異なるため，各手がか
+りのスコアには重要度に応じた重みをかける必要がある．次節では，各手がかりへ
+の重み付け手法を示す．
+
+\newpage
+\section{複数の手がかりへの自動的な重み付け}\label{sec:weight}
+
+各手がかりに重みを付ける手法としては，少なくとも次の2つが考えられる．1つは
+人手による重み付けであり，もう1つは自動的な計算である．人手による重み付け
+の場合，各手がかりの重みは専門家による直観もしくは試行錯誤によって決定され
+ることが多い．しかし，この作業は非常に手間がかかる上に，新しい領域のテキス
+トをシステムが処理する場合，重みの調整を柔軟に行うことができない．また，人
+手によって決定された重みは客観性に欠け，最適あるいはほぼ最適な性能を引き出
+すという保証がない\cite{Alshawi:94,Rayner:94}．一方，自動的な計算の場合，
+人手による労力を省くことができ，新しい領域への適用も容易に行える．また，決
+定された値が客観性を持ち少なくとも最適に近い値を得られると考えられる．
+このようなことから，重み付けを自動化することにはメリットがあると考えられる．
+
+本研究では，自動的な重み付けのために，正解セグメント境界の情報が付加された
+テキストを用意し，訓練テキストとして使用する．各手がかりの自動的な重みの推
+定には，統計的手法である重回帰分析\cite{Sen:90:a,Jobson:91}を使用する．
+
+重回帰分析は，ある変数(目的変数と呼ばれ，「結果」と考えられる)をもっとも
+良く推定あるいは予測するために役立つと考えられる複数の変数(説明変数と呼ば
+れ，「原因」と考えられる)の間に成り立つ関係式を求め，この関係式に基づいて
+説明変数の値から目的変数の値を予測したり，各説明変数の重要度を評価する分析
+手法である．関係式は，後述するように目的変数と説明変数の組を集めた観測デー
+タを基に計算される．
+
+本研究では，この目的変数が各文間の境界へのなりやすさを表すスコアに対応し，
+説明変数が各手がかりのスコアに対応する．また各説明変数の重要度の評価が各手
+がかりの重み付けに対応する．
+重回帰分析による重みの推定は以下のように行なわれる．
+
+訓練テキストの各文間$p(n,n+1)$に，次のような観測データがあるとする．
+
+\begin{table}[htbp]
+\begin{center}
+\caption{観測データ}\label{equ:kansoku}
+\begin{tabular}{|c|c|c|c|c|}\hline
+目的変数 & \multicolumn{4}{|c|}{説明変数($i=1..I$)}\\\hline
+$S(1,2)$ & $scr_{11}$ & $scr_{21}$ &$\cdots$ & $scr_{I1}$\\
+$S(2,3)$ & $scr_{12}$ & $scr_{22}$ & $\cdots$ & $scr_{I2}$\\
+$\vdots$ & $\vdots$   & $\vdots$   & $\ddots$ & $\vdots$  \\
+$S(N,N+1)$& $scr_{1N}$ & $scr_{2N}$& $\cdots$ & $scr_{IN}$\\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+ここで，$N$は文間の総数，$scr_{ij}$の説明変数が$I$個の手がかり
+から得られるスコアであり，$S(n,n+1)$の目的変数がセグメント境界へのなりやす
+さを表す文間のスコアである．
+
+この観測データから次の予測式$(\ref{equ:expect})$を計算する．
+
+\begin{eqnarray}\label{equ:expect}
+\hat{S}(1,2)=a+w_{1}scr_{11}+w_{2}scr_{21}+
+\cdots+w_{I}scr_{I1}\nonumber\\
+\hat{S}(2,3)=a+w_{1}scr_{12}+w_{2}scr_{22}+
+\cdots+w_{I}scr_{I2}\nonumber\\
+\vdots\hspace{1.0cm}\vdots\hspace{1.2cm}\vdots\hspace{1.2cm}
+\vdots\hspace{1.2cm}\ddots\hspace{1.0cm}\vdots\hspace{0.4cm}\nonumber\\
+\hat{S}(N,N+1)=a+w_{1}scr_{1N}+w_{2}scr_{2N}+
+\cdots+w_{I}scr_{IN}\nonumber\\
+\end{eqnarray}
+
+ここで$a$は定数項であり，$w_{1},\cdots,w_{I}$は回帰係数と呼ばれる．
+
+次に，予測式$( \ref{equ:expect} )$の$\hat{S}(1,2),\cdots,\hat{S}(N,N+1)$と
+観測データ(表$\ref{equ:kansoku}$)の$S(1,2),\cdots,S(N,N+1)$との誤差を最小2
+乗法により最小にする．すなわち，
+
+\begin{equation}\label{equ:least_squares}
+Q\equiv
+\sum_{n=1}^N \{S(n,n+1) -
+(a+w_{1}scr_{1n}+ \cdots +w_{I}scr_{IN})\}^2
+\end{equation}
+
+\noindent を計算し、式$( \ref{equ:least_squares} )$が最小となる
+$a$および$w_{1},\cdots,{w_I}$を定め、それを推定された回帰係数とする．
+この回帰係数が各手がかりに対して決定された重みに対応することから，
+本研究でパラメータとして設定する手がかりの重み付けに重回帰分析を利用するこ
+とができる．
+
+重回帰分析を使用して各手がかりに対する最適な重みを決定するためには，セグメ
+ント境界の$S(n,n+1)$には高い値を与え，逆に境界にならない文間の$S(n,n+1)$に
+は低い値を与える必要がある．仮に各$S(n,n+1)$
+に実際のテキストの現象を反映した良い値を与えることができれば，より最適な性
+能を引き出すことができると考えられる．しかし，本研究で訓練データとして使用
+するテキストには正解境界位置の情報しか付加されていない．そこで正解境界の
+$S(n,n+1)$には$10$を与え，非境界の$S(n,n+1)$には$-1$を与えて重回帰分析を適
+用する．これらの値は，$S(n,n+1)$への値の与え方を4通りの組み合わせで行った
+予備実験の結果から選択した．
+
+関連研究として，\cite{Watanabe:96}が挙げられる．Watanabeはテキスト
+中の重要な文を選択することによる新聞記事の要約生成を行っている．重要文の選
+択のために，文の表層的特徴の重み付けを行い，重みの決定に重回帰分析を使用し
+ている．Watanabeの研究では，訓練テキストの各文の$S$に人間の被験者たちが重
+要であると判断した度合を与えている．本研究では$S$に対して同様の
+方法で値を与えることはしていない．訓練テキストの各文間について，セグメント
+への成り易さ，成り難さを人間の被験者が判断することは，非常に困難でコストが
+高過ぎるためである．
+
+\section{有効な手がかりの自動選択}\label{sec:select}
+セグメンテーションにとって，\ref{sec:cues}節で挙げた表層的手がかりが実際
+にどの程度有効かは明らかでない．有効でない手がかりを含めて重回帰分
+析で重みを計算すると悪影響の原因となる．そのうえ，訓練データの量に比べて，
+表層的手がかりが多過ぎる場合には，過適合の問題が発生する．
+一方，\ref{sec:cues}節で設定した手がかり全体の中から有効な手がかりだけを選
+択できれば，良い重みが決定できセグメンテーションの精度も向上すると考えられ
+る．しかし，有効な手がかりを選択するには手がかりの有効度を計算する客観的な
+基準が必要になる．この客観的な基準の設定は難しい問題であるが，幸いに
+も，本研究で重みの計算に使用する重回帰分析では，多くのパラメータ選択手法が
+既に開発されている．
+そこで本研究では，パラメータ選択手法の一つで，もっとも一般的なステップワイ
+ズ法\cite{Jobson:91}と呼ばれるパラメータ選択手法を用いる．
+
+ステップワイズ法は，後述するアルゴリズムにより，重回帰モデルに加えることで
+良い推定ができると判断されたパラメータを加え，逆に別のパラメータが加えられ
+たことにより，良い推定に役立たなくなったと判断されたパラメータを除去すると
+いう処理を繰り返し，最終的に有効なパラメータの組を選択する．
+パラメータの追加および削除の際に一般的に使用される判断基準は，各パラメータ
+の重み$w_{i}$について個別に計算した$F$値に基づくものである．この個別の$F$
+統計値は以下の式で与えられる．
+
+\begin{equation}\label{equ:fvalue}
+\displaystyle{F_0 = ( \frac{w_i}{SE(w_i)} )^2}
+\end{equation}
+
+ここで$SE(w_i)$は標準誤差と呼ばれ$w_i$の標準偏差を表す．
+
+この統計量の分布は自由度$(p,n-p-1)$のF分布に従う($p$はパラメータの数，$n$
+はデータの数を示す)．よって$\displaystyle{F_0>= F_{(p,n-p-1)}(\alpha)}$な
+らば，有意水準$\alpha$でパラメータ$i$は有効であると判断される．
+ただし，この基準値$\displaystyle{F_{(p,n-p-1)}(\alpha)}$の計算が複雑である
+ため，一般的にはパラメータを追加する時の基準値を$F_{in}$とし，パラメータを
+除去する時の基準値を$F_{out}$として，それぞれに定数\footnote{$F_{in},
+F_{out}$の値は，$1.0$から$4.0$までの範囲から選んで与えるのが一般的で
+あり，重要なパラメータを削除しないことに重点を置くなら小さい値，無駄なパラ
+メータを取り込まないことに重点を置くなら大きな値を指定する．本研究では
+$F_{in},F_{out}$ともに$1.2$を与えている．}
+を与えてパラメータ選択を行う．
+
+ステップワイズ法のアルゴリズムは次のようになる．
+
+\begin{tabbing}
+ステップ1. \\
+\quad \= 重回帰モデルに何もパラメータが含まれていない状態から開始\\
+ステップ2. \\
+\quad \= {\bf if} (すべてのパラメータが含まれている)\\
+\>\quad \= 取り込むパラメータはない．ステップ3へ \\
+\>{\bf else} \\
+\>\quad \= 残りのパラメータを1つづつ順番に採用し，F値を計算．\\
+\>\> F値最大のパラメータを選ぶ．\\
+\>\>{\bf if} ($F値>F_{in}$) \\
+\> \> \quad \= そのパラメータを取り込む．ステップ3へ\\
+\> \> {\bf else}\\
+\> \> \> 取り込むべきパラメータはない．ステップ3へ\\
+ステップ3. \\
+\quad \= モデルに含まれているパラメータについてF値を計算．\\
+\> F値最小となるパ
+ラメータを選ぶ\\
+\>{\bf if} ($F値>F_{out}$)\\
+\> \quad \={\bf if} (取り込むべきパラメータがない)\\
+\> \> \quad \= 終了\\
+\> \> {\bf else}\\
+\> \> \> ステップ4へ\\
+\>{\bf else}\\
+\> \> そのパラメータをモデルから取り除きステップ3へ\\
+ステップ4. \\
+\quad \= {\bf if} (すべてのパラメータが取り込まれている)\\
+\>\>終了\\
+\>{\bf else}\\
+\>\>ステップ2へ\\
+\end{tabbing}
+ステップワイズ法以外に良く利用される手法として，変数増加法と変数減少法があ
+るが，変数増加法では，一度採用されたパラメータは除去されることがなく，変数
+減少法では，一度除去されたパラメータは採用されることがないという問題がある．
+ステップワイズ法は両手法の問題点を改良した手法であるため，他の手法よりも良
+いパラメータ選択ができると考えられる．
+
+\section{実験}\label{sec:experiments}
+これまでに述べた本研究の主張は以下のように要約できる．
+
+\begin{itemize}
+\item テキストセグメンテーションにおいて，複数の表層的手がかりの組み合わせ
+は有効である．
+\item 重回帰分析とステップワイズ法の使用によってテキストセグメンテーション
+にとって有効な手がかりの選択と重みの自動的な獲得が可能となる．
+\end{itemize}
+本節では，本研究のアプローチの有効性を確かめるための実験を行う．
+
+実験には，日本語の国語の問題集から意味の切れ目を問う問題に使用された14テキ
+ストを使用する．問題は例えば，『次の文章を意味的に3つの部分に分ける
+としたらどこで切れるか．境界になる個所を答えなさい』というようなものである．
+システムの性能はシステムの出力と問題集の解答を比較することで計算する．
+
+実験に使用する14テキストの平均境界候補数は20(12から47)であり，平均正解
+境界数は$3.4$(2から6)である．なお，以下の理由から，実験の正解として形式段
+落を使用していない．
+
+\begin{itemize}
+\item 実験に使用する問題集のテキストのほとんどは，形式段落を示す字下げの情
+報をあらかじめ消してあり利用できないため．
+\item 日本語のテキストの場合，形式段落の境界が必ずしも意味的な境界と一致す
+るとは限らず，修辞的理由から形式段落に分けられる場合がしばしばあるため
+\cite{tokoro}．
+\end{itemize}
+
+実験では，システムは各文間のスコア$scr(n,n+1)$を値の高い順に出力する．
+システムの出力の上位$10\%,20\%,30\%$および$40\%$における精度を評価する．
+
+評価尺度には，再現率($Recall$)と適合率($Precision$)を使用する．$Recall$は
+全正解境界の内，システムによって正しく検出された境界の割合を示す．
+$Precision$はシステムが境界と検出した候補の内，実際に正解境界であるもの
+の割合を示す．$Recall$と$Precision$は次式で表わされる．
+
+\begin{equation}
+Recall = \frac{システムにより検出された正解境界数}{全ての正解境界数}
+\end{equation}
+
+\begin{equation}
+Precision = \frac{システムにより検出された正解境界数}{システムが検出した全
+境界数}
+\end{equation}
+
+実験は以下の6通りについて行う．
+
+\begin{enumerate}
+\item 語彙的連鎖の手がかり以外の手がかりによる実験．\\
+	手がかり1から18および23を使用．
+
+\item 語彙的連鎖の手がかりのみを使用した実験．\\
+	手がかり19から22を使用．
+
+\item \ref{sec:cues}節で挙げた全ての手がかりを使用した実験．\\
+	重みの決定は人手によって行う．
+
+\item \ref{sec:cues}節で挙げた全ての手がかりを使用した実験．\\
+	重みの決定は重回帰分析によって自動的に行う．
+	重回帰分析では，14テキストを2テキストづつ7グループに分け，6グルー
+	プを訓練テキストとして使用し，残りの1グループを評価テキストとして
+	使用する．評価用のテキストを変えることにより，7回のクロスバリデー
+	ション\cite{Weiss:91}を行い平均値で評価する．
+
+\item ステップワイズ法により選択された手がかりのみを使用した実験．\\
+	\ref{sec:select}節で述べたように，訓練テキスト内で有効な手がかりの
+	選択にステップワイズ法を使用する．手がかりの選択以外の手続きは全て
+	4番目の実験と同じである．
+
+\item 5人の被験者による実験．\\
+	5人の被験者に対し，システムと同様の14テキストについて，セグメント
+	境界位置を問う問題を解かせる．解答数は問題集の正解数を下限とし，そ
+	れ以上であれば，被験者が自由に選んで良いとする．
+	この実験により，テキストセグメンテーション実験の精度の上限の算出
+	を試みる．この実験の結果によってセグメンテーションタスクの難易度が
+	示されると考えられる\cite{Passonneau:93,Gale:92}．
+\end{enumerate}
+
+全ての実験結果を図\ref{fig:handm}と\ref{fig:regressm}および表
+\ref{tab:human}に示す．2つの図は14テキストに対するシステムの平均精度を示す．
+表\ref{tab:human}は5人の被験者によるセグメンテーション実験の結果を示す．
+表\ref{tab:human}がこのタスクにおける精度の上限を表すと考えられる．また，
+下限についても計算している(図\ref{fig:regressm}の``lowerbound'')．下限はシ
+ステムがランダムにセグメント境界候補を選択した場合を考えることで計算するこ
+とができる．この場合，precisionは各境界候補が正解になる平均確率と同じであ
+り，recallは出力の割合と同じである．
+
+図\ref{fig:handm}では語彙的連鎖以外の手がかりによる実験(``ex.1'')，語彙的
+連鎖のみの手がかりによる実験(``ex.2'')および，設定した全ての手がかりによる
+実験(``ex.3'')の精度を比較している．結果から複数の手がかりを組み合わせて使
+用した``ex.3''が良い精度を引き出すことがわかる．また，語彙的連鎖が有効な手
+がかりである可能性が示されているといえる．図\ref{fig:regressm}は複数
+の手がかりを使用し，人手によって重みを与えた実験(``ex.3'')と訓練テキストに
+より自動的に計算された重みを使用した実験(``ex.4.test'')との比較をしている．
+結果から自動的に学習された重みが概ね良い精度を出すことが示されている．人手
+による手間を省き，客観的な値が得られることから，自動的な重み付けは人手によ
+る重み付けよりも良い手法であるといえる．
+
+\begin{figure}[htbp]
+\begin{center}
+\epsfile{file=handmport2.ps,scale=0.5}
+\caption{\vspace*{-3mm}Hand tuning}
+\label{fig:handm}
+\end{center}
+\end{figure}
+
+\begin{figure}[htbp]
+\begin{center}
+\epsfile{file=regressmport2.ps,scale=0.5}
+\caption{\vspace{-3mm}Automatic tuning}
+\label{fig:regressm}
+\end{center}
+\end{figure}
+
+\begin{table}[ht]
+\begin{center}
+\caption{The result of the human subjects}
+\begin{tabular}{|c|c|}\hline
+recall & precision \\\hline\hline
+63.1\% & 57.2\%\\\hline
+\end{tabular}
+\label{tab:human}
+\end{center}
+\end{table}
+
+図\ref{fig:regressm}では，全ての手がかりを使用して自動的に重みを決定した場
+合(``ex.4.test'')と選択された手がかりのみを使用して自動的に重みを決定した
+場合(``ex.5.test'')の比較も行っている．結果から有効な手がかりを選
+択することで良い精度を引き出していることがわかる．
+この結果は本研究で使用したパラメータ選択手法によって訓練テキストへの重みの
+過適合の問題が解消されていることも示している．実験4と実験5では訓練テキスト
+による結果と評価テキストによる結果の差が異なる．パラメータ選択を行う
+``ex.5.training''と``ex.5.test''の差は，パラメータ選択を行わない
+``ex.4.training''と``ex.4.test''の差よりも小さい．
+
+今回の実験(実験5)では，平均7.4の手がかりが選択され，選ばれた手がかりは訓練
+セットごとに異なっていた．その中で常に選択された手がかりは，逆接の接続詞
+(\ref{sec:cues}節の手がかり9)と語彙的連鎖の手がかり(手がかり19と20)であっ
+た．
+
+また重回帰分析のような統計的手法では，パラメータの選択で個々のパラメータ
+(手がかり)が有効かどうかを検定した場合と同様に，得られた重回帰式全体が実際
+に予測に役立っているかどうかを検定する必要がある．本研究で計算された各重回
+帰式について，$F$分布に基づく検定を行ったところ，有意水準$\alpha$が$0.05$
+から$0.1$の範囲で重みの推定に役立っているという結果を得た．
+
+さらに，同様の実験として，問題集の正解を使用せず，被験者による実験(実験6)
+で被験者の過半数(3人)以上がセグメント境界であると判断した位置を正解とした
+実験も行った．この場合正解境界数は平均で3.5(2から6)であった．実験の結果，
+システムはこちらの実験においても問題集の正解と同様な精度を得た．
+
+関連研究としてLitman and Passonneau\cite{Litman:95}の研究が挙げられる．彼
+らも複数の手がかりを使用したテキストセグメンテーション手法を提案している．
+LitmanとPassonneauのモデルでは機械学習ツールを使用してspoken narrativeコー
+パスから訓練を行っている．彼らの研究との厳密な比較は困難であるが，本研究の
+タスクにおける精度の上限が彼らのタスクの場合に比べて低いことから，本研究の
+タスクの方がより難しいと考えられる．そのため我々のシステムの精度が彼らのも
+のに比べて低いとは必ずしもいえない．
+
+\section{おわりに}
+本稿では，複数の表層的手がかりを使用して，テキストのセグメント境界を検出す
+る手法について述べた．複数の表層的な手がかりを組み合わせて使用し，各手がか
+りへの重みを自動的に決定することがテキストセグメンテーションにとって有効で
+あると考えられる．さらに，重回帰分析とステップワイズ法を使用することで過適
+合を防ぎつつ，各手がかりへの自動的な重み付けをする手法を示した．本研究の実
+験は小規模ではあるが，主張の有効性を示す結果を得ることができた．今後大規模
+なデータセットを使用して実験を行う必要がある．
+複数の表層的手がかりを使用するテキストセグメンテーションのアプローチ
+としては，本研究で使用した手がかりのスコアの重み付き総和を用いる手法以外に，
+C4.5\cite{Quinlan:93}のような，境界/非境界をクラスとし，各手がか
+りから決定木を学習して分類を行う決定木学習の手法が考えられる
+\cite{Litman:95,Honda:96}．今後両方のアプローチの比較をしていく必要がある．
+
+今後の課題として，訓練テキストをクラスタリングし，手がかりの重み計算をテキ
+ストのグループごとに行う手法の実験を計画をしている．テキスト間にはさまざま
+な違いが存在する．例えば，著者の違い，文体の違い，ジャンルの違いなどである．
+訓練テキストをクラスタリングし，特徴の類似したテキストのクラスタごとに手が
+かりの重みを計算することで，訓練テキスト全体を使用する場合よりも良い重み付
+けが可能になると考えられる．結果としてセグメンテーションの精度向上も期待で
+きる．音声認識の分野では，言語モデルの精度向上のために，訓練データのクラス
+タリングが行われ，自動学習手法における有望な手法と考えられている
+\cite{Carter:94,Iyer:94}．
+
+\acknowledgment
+本研究での「角川類語新辞典」の使用を許可して下さった(株)角川書店に感謝致し
+ます．統計解析に関して御助言を頂きました群馬大学社会情報学部の青木教授およ
+び北陸先端科学技術大学院大学情報科学研究科の松澤教授に感謝致します．
+
+
+\bibliographystyle{jnlpbbl}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Alshawi \BBA\ Carter}{Alshawi \BBA\
+  Carter}{1994}]{Alshawi:94}
+Alshawi, H.\BBACOMMA\  \BBA\ Carter, D. \BBOP 1994\BBCP.
+\newblock \BBOQ {Training and scaling preference functions for
+  disambiguation}\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 20}  (4), 635--648.
+
+\bibitem[\protect\BCAY{Barzilay \BBA\ Elhadad}{Barzilay \BBA\
+  Elhadad}{1997}]{Barzilay:97}
+Barzilay, R.\BBACOMMA\  \BBA\ Elhadad, M. \BBOP 1997\BBCP.
+\newblock \BBOQ {Using lexical chains for text summaryzation}\BBCQ\
+\newblock In {\Bem Proc. of the ACL Workshop on Intelligent Scalable Text
+  Summarization}, \BPGS\ 10--17.
+
+\bibitem[\protect\BCAY{Callan}{Callan}{1994}]{Callan:94}
+Callan, J.~P. \BBOP 1994\BBCP.
+\newblock \BBOQ {Passage-Level Evidence in Document Retrieval}\BBCQ\
+\newblock In {\Bem Proc. of 17th Annual International ACM Special Interest
+  Group on Information Retrieval Conference on Research and Development in
+  Information Retrieval}, \BPGS\ 302--310.
+
+\bibitem[\protect\BCAY{Carter}{Carter}{1994}]{Carter:94}
+Carter, D. \BBOP 1994\BBCP.
+\newblock \BBOQ {Improving Language Models by Clustering Training
+  Sentences}\BBCQ\
+\newblock In {\Bem Proc. of the 4th Conference on Applied Natural Language
+  Processing}, \BPGS\ 59--64.
+
+\bibitem[\protect\BCAY{Cohen}{Cohen}{1987}]{Cohen:87}
+Cohen, R. \BBOP 1987\BBCP.
+\newblock \BBOQ {Analyzing the structure of argumentative discourse}\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 13}, 11--24.
+
+\bibitem[\protect\BCAY{Gale\JBA Church \BBA\ Yarowsky}{Gale
+  et~al.}{1992}]{Gale:92}
+Gale, W.\JBA Church, K.\JBA  \BBA\ Yarowsky, D. \BBOP 1992\BBCP.
+\newblock \BBOQ {Estimating Upper and Lower Bounds on the Performance of
+  Word-Sense Disambiguation Programs}\BBCQ\
+\newblock In {\Bem Proc. of the 30th Annual Meeting of the Association for
+  Computational Linguistics}, \BPGS\ 249--256.
+
+\bibitem[\protect\BCAY{Grosz \BBA\ Sidner}{Grosz \BBA\ Sidner}{1986}]{Grosz:86}
+Grosz, B.\BBACOMMA\  \BBA\ Sidner, C. \BBOP 1986\BBCP.
+\newblock \BBOQ Attention, intention, and the structure of discourse\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 12}  (3), 175--204.
+
+\bibitem[\protect\BCAY{Halliday \BBA\ Hasan}{Halliday \BBA\
+  Hasan}{1976}]{Halliday:76}
+Halliday, H.\BBACOMMA\  \BBA\ Hasan, R. \BBOP 1976\BBCP.
+\newblock {\Bem Cohesion in English}.
+\newblock Longman.
+
+\bibitem[\protect\BCAY{Hearst}{Hearst}{1994}]{hearst:94b}
+Hearst, M. \BBOP 1994\BBCP.
+\newblock \BBOQ {Multi-Paragraph Segmentation of Expository Texts}\BBCQ\
+\newblock In {\Bem Proc. of the 32nd Annual Meeting of the Association for
+  Computational Linguistics}, \BPGS\ 9--16.
+
+\bibitem[\protect\BCAY{Hearst \BBA\ Plaunt}{Hearst \BBA\
+  Plaunt}{1993}]{Hearst:93}
+Hearst, M.\BBACOMMA\  \BBA\ Plaunt, C. \BBOP 1993\BBCP.
+\newblock \BBOQ {Subtopic Structuring for Full-Length Document Access}\BBCQ\
+\newblock In {\Bem Proc. of 16th Annual International ACM Special Interest
+  Group on Information Retrieval Conference on Research and Development in
+  Information Retrieval}, \BPGS\ 59--68.
+
+\bibitem[\protect\BCAY{Iyer\JBA Ostendorf \BBA\ Rohlicek}{Iyer
+  et~al.}{1994}]{Iyer:94}
+Iyer, R.\JBA Ostendorf, M.\JBA  \BBA\ Rohlicek, J. \BBOP 1994\BBCP.
+\newblock \BBOQ {Language modeling with sentence-level mixtures}\BBCQ\
+\newblock In {\Bem Proc. of the Human Language Technology Workshop 1994},
+  \BPGS\ 82--87.
+
+\bibitem[\protect\BCAY{Jobson}{Jobson}{1991}]{Jobson:91}
+Jobson, J. \BBOP 1991\BBCP.
+\newblock {\Bem {Applied Multivariate Data Analysis Volume I: Regression and
+  Experimental Design}}.
+\newblock Springer-Verlag.
+
+\bibitem[\protect\BCAY{Kozima}{Kozima}{1993}]{Kozima:93}
+Kozima, H. \BBOP 1993\BBCP.
+\newblock \BBOQ {Text segmentation based on similarity between words'}\BBCQ\
+\newblock In {\Bem Proc. of the 31st Annual Meeting of the Association for
+  Computational Linguistics}, \BPGS\ 286--288.
+
+\bibitem[\protect\BCAY{Kurohashi \BBA\ Nagao}{Kurohashi \BBA\
+  Nagao}{1994}]{Kurohashi:94}
+Kurohashi, S.\BBACOMMA\  \BBA\ Nagao, M. \BBOP 1994\BBCP.
+\newblock \BBOQ {Automatic Detection of Discourse Structure by Checking Surfce
+  Information in Sentence}\BBCQ\
+\newblock In {\Bem Proc. of the 15th International Conference on Computational
+  Linguistics}, \BPGS\ 1123--1127.
+
+\bibitem[\protect\BCAY{Litman \BBA\ Passonneau}{Litman \BBA\
+  Passonneau}{1995}]{Litman:95}
+Litman, D.\BBACOMMA\  \BBA\ Passonneau, R. \BBOP 1995\BBCP.
+\newblock \BBOQ {Combining Multiple Knowledge Sources for Discourse}\BBCQ\
+\newblock In {\Bem Proc. of the 33rd Annual Meeting of the Association for
+  Computational Linguistics}, \BPGS\ 108--115.
+
+\bibitem[\protect\BCAY{McRoy}{McRoy}{1992}]{McRoy:92}
+McRoy, S. \BBOP 1992\BBCP.
+\newblock \BBOQ Using multiple knowledge sources for word sense
+  discrimination\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 18}  (1), 1--30.
+
+\bibitem[\protect\BCAY{Morris \BBA\ Hirst}{Morris \BBA\
+  Hirst}{1991}]{Morris:91}
+Morris, J.\BBACOMMA\  \BBA\ Hirst, G. \BBOP 1991\BBCP.
+\newblock \BBOQ {Lexical Cohesion Computed by Thesaural Relations as an
+  Indicator of the Structure of Text}\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 17}  (1), 21--48.
+
+\bibitem[\protect\BCAY{Okumura \BBA\ Honda}{Okumura \BBA\
+  Honda}{1994}]{okumura:94a}
+Okumura, M.\BBACOMMA\  \BBA\ Honda, T. \BBOP 1994\BBCP.
+\newblock \BBOQ Word Sense Disambiguation and Text Segmentation Based on
+  lexical Cohesion\BBCQ\
+\newblock In {\Bem Proc. of the 15th International Conference on Computational
+  Linguistics}, \BPGS\ 755--761.
+
+\bibitem[\protect\BCAY{Passonneau \BBA\ Litman}{Passonneau \BBA\
+  Litman}{1993}]{Passonneau:93}
+Passonneau, R.\BBACOMMA\  \BBA\ Litman, D. \BBOP 1993\BBCP.
+\newblock \BBOQ {Intention-based Segmentation: Human Reliability and
+  Correlation with Linguistic Cues}\BBCQ\
+\newblock In {\Bem 31st Annual Meeting of the Association for Computational
+  Linguistics}, \BPGS\ 148--155.
+
+\bibitem[\protect\BCAY{Quinlan}{Quinlan}{1993}]{Quinlan:93}
+Quinlan, J. \BBOP 1993\BBCP.
+\newblock {\Bem {C4.5: Programs for Machine Learning}}.
+\newblock Morgan Kaufmann.
+
+\bibitem[\protect\BCAY{Rayner\JBA Carter\JBA Digalakis \BBA\ Price}{Rayner
+  et~al.}{1994}]{Rayner:94}
+Rayner, M.\JBA Carter, D.\JBA Digalakis, V.\JBA  \BBA\ Price, P. \BBOP
+  1994\BBCP.
+\newblock \BBOQ {Combining knowledge sources to reorder n-best speech
+  hypothesis lists}\BBCQ\
+\newblock In {\Bem Proc. of the Human Language technology Workshop 1994},
+  \BPGS\ 271--221.
+
+\bibitem[\protect\BCAY{Reynar}{Reynar}{1994}]{reynar:94}
+Reynar, J. \BBOP 1994\BBCP.
+\newblock \BBOQ {An automatic method of finding topic boundaries}\BBCQ\
+\newblock In {\Bem Proc. of the 32nd Annual Meeting of the Association for
+  Computational Linguistics}, \BPGS\ 331--333.
+
+\bibitem[\protect\BCAY{Salton\JBA Allan \BBA\ Buckley}{Salton
+  et~al.}{1993}]{Salton:93}
+Salton, G.\JBA Allan, J.\JBA  \BBA\ Buckley, C. \BBOP 1993\BBCP.
+\newblock \BBOQ {Approaches to passage retrieval in full text information
+  systems.}\BBCQ\
+\newblock In {\Bem Proc. of 16th Annual International ACM Special Interest
+  Group on Information Retrieval Conference on Research and Development in
+  Information Retrieval}, \BPGS\ 49--56.
+
+\bibitem[\protect\BCAY{Sen \BBA\ Srivastava}{Sen \BBA\
+  Srivastava}{1990}]{Sen:90:a}
+Sen, A.\BBACOMMA\  \BBA\ Srivastava, M. \BBOP 1990\BBCP.
+\newblock {\Bem {Regression analysis: theory, methods, and applications}}.
+\newblock Springer-Verlag.
+
+\bibitem[\protect\BCAY{Sumita\JBA Ono\JBA Chino \BBA\ Amano}{Sumita
+  et~al.}{1992}]{Sumita:92}
+Sumita, K.\JBA Ono, K.\JBA Chino, T.\JBA  \BBA\ Amano, S. \BBOP 1992\BBCP.
+\newblock \BBOQ {A discourse structure analyzer for Japanese text}\BBCQ\
+\newblock In {\Bem Proc. of the International Conference on Fifth Generation
+  Computer Systems 1992}, \BPGS\ 1133--1140.
+
+\bibitem[\protect\BCAY{Watanabe}{Watanabe}{1996}]{Watanabe:96}
+Watanabe, H. \BBOP 1996\BBCP.
+\newblock \BBOQ {A Method for Abstracting Newspaper Articles by Using Surface
+  Clues}\BBCQ\
+\newblock In {\Bem Proc. of the 16th International Conference on Computational
+  Linguistics}, \BPGS\ 974--979.
+
+\bibitem[\protect\BCAY{Weiss \BBA\ Kulikowski}{Weiss \BBA\
+  Kulikowski}{1991}]{Weiss:91}
+Weiss, S.\BBACOMMA\  \BBA\ Kulikowski, C. \BBOP 1991\BBCP.
+\newblock {\Bem {Computer systems that learn: classification and prediction
+  methods from statistics, neural nets, machine learning, and expert systems}}.
+\newblock Morgan Kaufmann.
+
+\bibitem[\protect\BCAY{所}{所}{1987}]{tokoro}
+所一哉 \BBOP 1987\BBCP.
+\newblock \Jem{現代文レトリック読解法}.
+\newblock 匠出版.
+
+\bibitem[\protect\BCAY{本田\JBA 望月\JBA Bao\JBA 奥村}{本田\Jetal
+  }{1996}]{Honda:96}
+本田岳夫\JBA 望月源\JBA BaoH.T.\JBA  奥村学 \BBOP 1996\BBCP.
+\newblock \JBOQ
+  {決定木獲得アルゴリズムを用いたテキストセグメンテーション}\JBCQ\
+\newblock \Jem{言語処理学会 第2回 年次大会 発表論文集}, \BPGS\ 329--332.
+
+\bibitem[\protect\BCAY{永野}{永野}{1986}]{nagano}
+永野賢 \BBOP 1986\BBCP.
+\newblock \Jem{{文章論総説}}.
+\newblock 朝倉書店.
+
+\bibitem[\protect\BCAY{福本}{福本}{1990}]{Fukumoto1}
+福本淳一 \BBOP 1990\BBCP.
+\newblock \JBOQ {筆者の主張に基づく日本語文章の構造化}\JBCQ\
+\newblock \Jem{情報処理学会研究会資料NL78-15}, \BPGS\ 113--120.
+
+\bibitem[\protect\BCAY{秋葉\JBA フセイン\JBA 金田}{秋葉\Jetal
+  }{1998}]{Akiba:98}
+秋葉泰弘\JBA フセインアルモアリム\JBA  金田重郎 \BBOP 1998\BBCP.
+\newblock \JBOQ {例からの学習技術の応用に向けて 1,2}\JBCQ\
+\newblock \Jem{情報処理学会}, {\Bbf 39}  (2),(3), 145--151(2),245--251(3).
+
+\bibitem[\protect\BCAY{成田}{成田}{1980}]{kougobunpou}
+成田杢之助 \BBOP 1980\BBCP.
+\newblock \Jem{{口語文法表覧}}.
+\newblock 共文社.
+
+\end{thebibliography}
+
+\begin{biography}
+\biotitle{略歴}
+\bioauthor{望月 源}{
+1970年生．
+1993年金沢大学経済学部経済学科卒業．
+1999年北陸先端科学技術大学院大学情報科学研究科博士後期課程修了．
+同年4月より，北陸先端科学技術大学院大学情報科学研究科助手．
+博士(情報科学)．自然言語処理，知的情報検索システムの研究に従事．
+情報処理学会会員
+}
+\bioauthor{本田 岳夫}{
+1968年生．
+1992年，東京工業大学工学部情報工学科卒業．
+1994年，北陸先端科学技術大学院大学情報科学研究科博士前期課程修了．
+1998年，同博士後期課程満期退学．
+同年，東京工業大学情報理工学研究科教務補佐員を経て，
+株式会社富士通愛知エンジニアリング勤務，現在に至る．
+}
+\bioauthor{奥村 学}{
+1962年生．1984年東京工業大学工学部情報工学科卒業．1989年同大学院博士課
+程修了．同年，東京工業大学工学部情報工学科助手．1992年北陸先端科学技術
+大学院大学情報科学研究科助教授，現在に至る．工学博士．自然言語処理，知
+的情報検索システム，語学学習支援システム，語彙知識獲得に関する研究に従
+事．情報処理学会，人工知能学会, 
+AAAI，ACL, 認知科学会，計量国語学会各会員．
+}
+
+\bioreceived{受付}
+\biorevised{再受付}
+\bioaccepted{採録}
+
+\end{biography}
+
+\end{document}
+

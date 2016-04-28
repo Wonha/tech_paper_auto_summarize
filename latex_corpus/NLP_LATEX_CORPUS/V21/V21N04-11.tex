@@ -1,0 +1,1171 @@
+    \documentclass[english]{jnlp_1.4_rep}
+
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\usepackage{amsmath}
+
+\usepackage{bm}
+\usepackage{subfigure}
+
+\Volume{21}
+\Number{4}
+\Month{September}
+\Year{2014}
+
+\received{2011}{12}{2}
+\revised{2012}{3}{6}
+\accepted{2012}{5}{14}
+
+\setcounter{page}{921}
+
+\etitle{Relevance Feedback using Surface and Latent Information in Texts\footnotetext{\llap{*~}This article has been partially revised for better understanding of overseas readers.}}
+\eauthor{Jun Harashima\affiref{Author} \and Sadao Kurohashi\affiref{Author}} 
+\eabstract{
+Most relevance feedback methods re-rank search results using only the
+information of surface words in texts. We present a method that uses not
+only the information of surface words but also that of latent words that
+are inferred from texts. We infer latent word distribution in each
+document in the search results using latent Dirichlet allocation
+(LDA). When feedback is given, we also infer the latent word
+distribution in the feedback using LDA. We calculate the similarities
+between the user feedback and each document in the search results using
+both the surface and latent word distributions and re-rank the search
+results on the basis of the similarities. Evaluation results show that
+when user feedback consisting of two documents ($3,589$ words) is given,
+the proposed method improves the initial search results by $27.6\%$ in
+precision at $10$ (P@10). Additionally, it proves that the proposed
+method can perform well even when only a small amount of user feedback
+is available. For example, an improvement of $5.3\%$ in P@10 was
+achieved when user feedback constituted only $57$ words.
+}
+\ekeywords{Information Retrieval, Relevance Feedback, Latent Dirichlet Allocation}
+
+\headauthor{Harashima and Kurohashi}
+\headtitle{Relevance Feedback using Surface and Latent Information in Texts}
+
+\affilabel{Author}{}{Graduate School of Informatics, Kyoto University}
+
+\Reprint[T]{Vol.~19, No.~3, pp.~121--142}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+\label{sec:intr}
+
+The main purpose of information retrieval (IR) is to rank documents so
+that users can obtain information efficiently. However, appropriate
+ranking of documents is difficult to achieve through one-off retrievals
+because user queries are typically short and
+ambiguous \cite{Jansen2000}. For example, the query ``Mac price'' can be
+interpreted as the price of a ``Mac'' (PC), a food item at
+``McDonalds,'' or some other ``Mac.'' If we do not know what ``Mac''
+refers to, we cannot rank the documents in a way that satisfies user
+information needs.
+
+Relevance feedback (RF) is a technique that solves this problem by
+incorporating user feedback into the IR process. The basic procedure for
+RF is as follows.
+\begin{enumerate}
+ \item The RF-based system presents the initial search results for a
+       given query.
+ \item The user selects some relevant documents from the search results.
+ \item The system modifies the search results using this feedback.
+\end{enumerate}
+For example, if the system obtains documents about the price of a
+``Mac'' (PC) as user feedback, it assumes that the user is interested in
+this topic and modifies the initial search results.
+
+There are a variety of RF methods based on different retrieval
+models. Rocchio's algorithm \cite{Rocchio1971} and the Ide dec-hi
+method \cite{Ide1971} are well-known RF methods for the vector space
+model \cite{Salton1975}. In the probabilistic
+model \cite{SparckJones2000}, feedback can be used to modify the weight
+of terms to change or expand the original query. For language modeling
+approaches \cite{Ponte1998}, Zhai and Lafferty \citeyear{Zhai2001}
+proposed a fundamental RF method.
+
+The basic idea behind these methods is the same, i.e., documents that
+are similar to the feedback are re-ranked higher. It should be noted
+that most methods calculate similarities using information from words
+that only appear in the feedback and search results. In other words,
+these methods do not use information from words that do not appear in
+the given texts.
+
+However, information from highly probable relevant words can be useful
+for re-ranking search results even if the words do not appear in the
+given texts. Consider the query, ``Mac price,'' and suppose that the
+feedback contains documents about the price of a ``Mac'' (PC). Although
+the feedback may not contain words such as ``CPU'' and ``HDD,'' these
+words are closely related to the feedback and are, therefore, highly
+probable. The same is true of other relevant documents in the search
+results. Even if a relevant document does not contain words specific to
+the feedback and if it does include closely related to words, these
+words are highly probable. This information can be useful for
+calculating similarities between the feedback and other documents.
+
+In this paper, we propose an RF method that uses the surface information
+in texts and latent information contained in the texts. For each
+document in the search results, we infer the distribution of words that
+are highly probable given the latent topics in the document using latent
+Dirichlet allocation (LDA) \cite{Blei2003}. We calculate the
+similarities between the feedback and each document in the search
+results using both surface and latent word distributions. Then, we
+re-rank the search results on the basis of the similarities.
+
+The remainder of this paper is organized as follows. In
+Sections~\ref{sec:lm_approaches} and \ref{sec:lda}, we explain the
+language modeling approaches for IR and LDA, which form the basis of the
+proposed method. In Section~\ref{sec:mthd}, we present the proposed
+method. Section~\ref{sec:experiments} reports experiments performed to
+evaluate the proposed method, and conclusions are presented in
+Section~\ref{sec:cncl}.
+
+
+\section{Language Modeling Approaches to IR}
+\label{sec:lm_approaches}
+
+In this section, we describe the language modeling approaches for IR
+that form the basis of our method.
+
+
+\subsection{Overview}
+
+Language modeling approaches can be classified into three types: query
+likelihood model \cite{Ponte1998}, document likelihood
+model \cite{Lavrenko2001}, and Kullback-Leibler (KL) divergence
+retrieval model \cite{Lafferty2001}.
+
+In the query likelihood model, a document language model
+$P_{\bm{d}_{h}}(\cdot)$ is constructed for each document $\bm{d}_{h} \;
+(h = 1, \dots, H)$ in the collection. When a query $\bm{q}$ is submitted
+by a user, the query likelihood $P_{\bm{d}_{h}}(\bm{q})$ is computed
+using the document model for each $\bm{d}_{h}$. Then, the documents in
+the collection are ranked according to their likelihood.
+
+In the document likelihood model, a query language model
+$P_{\bm{q}}(\cdot)$ is constructed for a given query. The query language
+model is then used to compute the document likelihood
+$P_{\bm{q}}(\bm{d}_{h})$ for each document in the collection. The
+documents are then ranked by their likelihood.
+
+In the KL-divergence retrieval model, both a query model
+$P_{\bm{q}}(\cdot)$ and a document model $P_{\bm{d}_{h}}(\cdot)$ are
+constructed. The documents in the collection are ranked according to the
+KL-divergence $KL(P_{\bm{q}}(\cdot)||P_{\bm{d}_{h}}(\cdot))$ between
+these models.
+
+
+\subsection{Language Model Construction}
+
+There are several ways to construct a query model and a document
+model. One method is maximum likelihood estimation (MLE). The MLE of a
+word $w$ with respect to a text $\bm{t}$ (a query or document) is
+computed using
+\begin{equation}
+ P^{MLE}_{\bm{t}}(w) = \frac{tf(w,\bm{t})}{|\bm{t}|},
+\end{equation}
+where $tf(w,\bm{t})$ represents the frequency of $w$ in $\bm{t}$, and
+$|\bm{t}|$ represents the number of words in $\bm{t}$.
+
+Dirichlet prior smoothing (DIR) \cite{Zhai2004} is a well-known
+construction method. The DIR of $w$ with respect to $\bm{t}$ is computed
+as follows.
+\begin{equation}
+ P^{DIR}_{\bm{t}}(w)
+ =
+ \frac
+ {tf(w,\bm{t}) + \mu P^{MLE}_{\bm{D}_{all}}(w)}
+ {|\bm{t}| + \mu},
+\label{equ:dir}
+\end{equation}
+where $\bm{D}_{all}$ represents a collection, and $\mu$ represents the
+smoothing parameter that controls the degree of confidence for the
+frequency of $w$ in $\bm{D}_{all}$ (rather than in the frequency in
+$\bm{t}$).
+
+
+\subsection{Fundamental RF Method}
+
+Zhai and Lafferty proposed a fundamental RF method for language
+modeling~\cite{Zhai2001}. When user feedback $\bm{F} = (\bm{f}_{1},
+\dots, \bm{f}_{G})$ is available, they construct a language model
+$P_{\bm{F}}(\cdot)$ for the feedback. Then, a new query model is
+constructed by interpolating the feedback model with the original query
+model that was used to obtain the initial search results. Finally, they
+modify the search results using the new query model.
+
+Their experiments demonstrate that their proposed method is
+effective. However, they only use the information of words that appear
+in a text for the RF. In our proposed method, we also use information
+about words that do not appear in a text but are highly probable given
+the latent topics in the text.
+
+
+
+\section{LDA}
+\label{sec:lda}
+
+In this section, we explain LDA, which the proposed method uses to
+determine words that are highly probable given the latent topics of a
+text.
+
+
+\subsection{Overview}
+
+LDA \cite{Blei2003} is a popular topic model that is based on the idea
+that documents are generated from a mixture of topics, where a topic is
+a distribution of words. LDA posits that a topic proportion $\bm{\theta}
+= (\theta_{1}, \dots, \theta_{K})$ for a document can take any value in
+the $(K - 1)$ simplex. Therefore, a topic proportion is a point of the
+simplex as drawn from a Dirichlet distribution.
+
+According to the generative process, the probability of document
+$\bm{d}$ in LDA is calculated as follows:
+\begin{equation}
+ P(\bm{d}|\bm{\alpha},\bm{\beta}_{1}, \dots, \bm{\beta}_{K})
+ = \int
+ P(\bm{\theta}|\bm{\alpha})
+ \Biggl(
+ \prod_{j=1}^{J}
+ \biggl(
+ \sum_{k=1}^{K}
+ P(w_{j}|z_{k},\bm{\beta}_{k}) \,
+ P(z_{k}|\bm{\theta})
+ \biggr)
+ ^{tf(w_{j},\bm{d})}
+ \Biggr)
+ d\bm{\theta},
+ \label{equ:lda}
+\end{equation}
+where $P(\bm{\theta}|\bm{\alpha})$ represents the probability of
+$\bm{\theta}$ drawn from a Dirichlet distribution, and the parameter
+$\bm{\alpha}$ is a $K$-vector with components $\alpha_{k} > 0$ ($k = 1,
+\dots, K$). $z_{k}$ represents the $k$-th topic, and $\bm{\beta}_{k}$
+represents a word distribution for the
+topic. $P(w_{j}|z_{k},\bm{\beta}_{k})$ represents the probability of
+$w_{j}$ in $z_{k}$, and $P(z_{k}|\bm{\theta})$ represents the
+probability of $z_{k}$ drawn from a multinomial distribution. $J$
+represents the number of words in a vocabulary.
+
+
+\subsection{Parameter Estimation}
+\label{ssec:parameter_estimation}
+
+There are two ways to estimate the parameters: Gibbs sampling and a
+variational method \cite{Griffiths2004,Blei2003}. Gibbs sampling is more
+popular because it determines better parameter values and is simpler to
+implement. However, Gibbs sampling for parameter estimation takes much
+longer to execute than variational methods. Therefore, we use a
+variational method because search systems should return results as
+quickly as possible.
+
+First, variational parameters $\bm{\gamma}_{i} = (\gamma_{i1}, \dots,
+\gamma_{iK})$ and $\bm{\phi}_{i} = (\bm{\phi}_{i1}, \dots,
+\bm{\phi}_{iJ})$ are introduced for each document $\bm{d}_{i} \; (i = 1,
+\dots, I)$ in the training data. Note that $\bm{\phi}_{ij} =
+(\phi_{ij1}, \dots, \phi_{ijK})$. Then, optimum parameter values are
+found by repeatedly computing the following pair of updated equations:
+\begin{align}
+ \phi_{ijk} & \propto
+ \beta_{kj} \exp\biggl( \Psi(\gamma_{ik}) -
+ \Psi\Bigl(\sum\limits_{k'=1}^{K} \gamma_{ik'}\Bigr)\biggr)
+ \label{equ:phi}
+ \\
+ \gamma_{ik} & =  \alpha_{k} + \sum\limits_{j=1}^{J} \phi_{ijk} \, tf(w_{j},\bm{d}_{i}),
+ \label{equ:gamma}
+\end{align}
+where $\Psi$ is the first derivative of the log $\Gamma$ function.
+
+Next, $\alpha_{k}$ and $\bm{\beta}_{k}$ are updated using
+$\bm{\gamma}_{i}$ and $\bm{\phi}_{i}$. A Newton-Raphson method has been
+used to estimate each $\alpha_{k}$~\cite{Blei2003}. However, the
+fixed-point iteration method~\cite{Minka2000} is a better estimation
+technique; therefore, we have used updated equations based on this
+method. The updated equations for $\alpha_{k}$ and $\bm{\beta}_{k}$,
+respectively, are as follows:
+\begin{align}
+ \beta_{kj} & \propto \sum\limits_{i=1}^{I} \phi_{ijk} \, tf(w_{j},\bm{d}_{i})
+ \label{equ:beta}
+ \\
+ \alpha_{k} & =  \frac
+ { \sum_{i=1}^{I} \{ \Psi(\alpha_{k} + n_{ik})  - \Psi(\alpha_{k}) \} }
+ { \sum_{i=1}^{I} \{ \Psi(\alpha_{0} + |\bm{d}_{i}|) - \Psi(\alpha_{0}) \} } \,
+ \alpha_{k}^{old},
+ \label{equ:alpha}
+\end{align}
+where $n_{ik} = \sum_{j=1}^{J} \phi_{ijk} \, tf(w_{j},\bm{d}_{i})$,
+$\alpha_{0} = \sum_{k'=1}^{K} \alpha_{k'}$, and $\alpha_{k}^{old}$
+represents $\alpha_{k}$ before the update.
+
+Finally, updates of $\bm{\gamma}_{i}$ and $\bm{\phi}_{i}$ for each
+$\bm{d}_{i}$ and those of $\alpha_{k}$ and $\bm{\beta}_{k}$ are iterated
+until convergence. When $\alpha_{k}$ and $\bm{\beta}_{k}$ have been
+estimated, we obtain the probability of document $\bm{d}_{i}$ using
+Eq.~(\ref{equ:lda}). In addition, we can obtain
+$P^{LDA}_{\bm{d}_{i}}(w_{j})$ using the estimated $\bm{\gamma}_{i}$ and
+the following equation:
+\begin{equation}
+ P^{LDA}_{\bm{d}_{i}}(w_{j})
+ \simeq
+ \sum_{k = 1}^{K}
+ \frac{\beta_{kj} \gamma_{ik}}{\sum_{k' = 1}^{K} \gamma_{ik'}},
+ \label{equ:pwd}
+\end{equation}
+where $\gamma_{ik}/\sum_{k'=1}^{K} \gamma_{ik'}$ is a distribution over
+the latent topics of $\bm{d}_{i}$. We interpolate each $\bm{\beta}_{kj}$
+according to the distribution and obtain the probabilities of $w_{j}$
+that are highly probable given $\bm{d}_{i}$.
+
+
+\subsection{Inference of Unseen Documents}
+\label{ssec:inference}
+
+LDA is considered a Bayesian extension of probabilistic latent semantic
+analysis~\cite{Hofmann1999}. A major advantage of LDA is that it can
+infer the probabilities of unseen documents that are not included in the
+training data. When we compute the probabilities of an unseen document
+$\bm{d}_{I+1}$, the variational parameters $\bm{\gamma}_{I+1}$ and
+$\bm{\phi}_{I+1}$ are estimated using Eqs.~(\ref{equ:phi}) and
+(\ref{equ:gamma}), respectively. The estimated values obtained using the
+training document set are used for $\alpha_{k}$ and
+$\bm{\beta}_{k}$. When $\bm{\gamma}_{I+1}$ has been estimated, we can
+obtain the probability $P_{\bm{d}_{I+1}}^{LDA}(w_{j})$ using
+Eq.~$(\ref{equ:pwd})$. In the proposed method, this advantage of LDA
+allows us to calculate the probabilities of words that are highly
+probable given the feedback.
+
+
+\subsection{LDA in IR}
+
+LDA has been successfully used in various fields such as natural
+language processing \cite{Blei2003}, image
+processing \cite{Fei-Fei2005}, and speech
+recognition \cite{Heidel2007}. In the IR field, Wei and
+Croft \citeyear{Wei2006} incorporated LDA into a query likelihood model,
+and Yi and Allan \citeyear{Yi2009} have incorporated LDA into a document
+likelihood model. Zhou and Wade \citeyear{Zhou2009} incorporated LDA
+into a KL-divergence retrieval model. These methods construct a language
+model for each document using LDA and the obtained search results for a
+given query according to their scores (e.g., query likelihood). In this
+study, we focus on user feedback. We construct a language model for the
+feedback using LDA, which we use to modify the search results.
+
+
+\section{Proposed Method}
+\label{sec:mthd}
+
+\subsection{Overview}
+
+We propose an RF method that uses surface and latent information in
+texts. An overview of the proposed method is illustrated in
+Figure~\ref{fig:proposed_method}. We refer to the model containing
+surface and latent information in text $\bm{t}$ as a hybrid language
+model $P^{HYB}_{\bm{t}}(\cdot)$. First, a query $\bm{q}$ is submitted by
+a user and initial search results $\bm{D}_{\bm{q}} = (\bm{d}_{1}, \dots,
+\bm{d}_{I})$ are obtained (\textbf{Step~1}). Next for each document
+$\bm{d}_{i} \; (i = 1, \dots, I)$ in $\bm{D}_{\bm{q}}$, a hybrid
+language model $P_{\bm{d}_{i}}^{HYB}(\cdot)$ that contains the
+document's surface and latent information is constructed
+(\textbf{Step~2}). Then, when the user provides feedback $\bm{F} =
+(\bm{f}_{1}, \dots, \bm{f}_{G})$, a hybrid language model
+$P_{\bm{F}}^{HYB}(\cdot)$ for $\bm{F}$ is constructed
+(\textbf{Step~3}). Finally, a new query model using the feedback model
+is constructed, and $\bm{D}_{\bm{q}}$ is re-ranked using the new query
+model. Documents that have a hybrid language model resembling the user
+feedback are given a higher rank (\textbf{Step~4}). The details of each
+step are described in the following sections.
+
+\begin{figure}[t]
+ \begin{center}
+  \includegraphics{21-4ia5f1.eps}
+ \end{center}
+  \caption{Overview of the proposed method}
+\label{fig:proposed_method}
+\end{figure}
+
+It is possible to use latent semantic analysis (LSA) to take advantage
+of latent information in texts. We could use LSA on documents in a
+collection and map the documents to a lower dimensional semantic
+space. By doing this, the information of words that are highly probable
+given the documents can be used. However, this method requires
+significant time to execute because LSA must be applied to the entire
+collection and there may be tens of millions of documents. If documents
+are added or removed, LSA must be performed again on the entire
+collection. Another disadvantage of LSA is that it does not naturally
+infer the probabilities of unseen texts. In the proposed method, each
+time search results are obtained, LDA must be performed
+(Section~\ref{ssec:hdm_construction}). However, this does not take a
+long time because the number of documents in the search results is much
+smaller than that in the entire collection. In addition, LDA can infer
+the probabilities of unseen documents.
+
+
+\subsection{Acquisition of Initial Search Results}
+\label{ssec:initial_results_acquisition}
+
+In the proposed method, we use a KL-divergence retrieval
+model~\cite{Lafferty2001} to obtain the initial search results for a
+given query. For each document $\bm{d}_{h} \; (h = 1, \dots, H)$ in the
+collection $\bm{D}_{all}$, a DIR-based document model
+$P^{DIR}_{\bm{d}_{h}}(\cdot)$ is constructed in advance. For a given
+query $\bm{q}$, we construct the MLE-based query model
+$P^{MLE}_{\bm{q}}(\cdot)$. Then, for each document containing $\bm{q}$
+in $\bm{D}_{all}$, we compute the KL-divergence between the DIR-based
+document model and the MLE-based query model. That is, we define the
+score of a document $\bm{d}_{h}$ for a query $\bm{q}$ as
+\begin{equation}
+ initial\_score(\bm{d}_{h},\bm{q})
+ =
+ - KL(P^{MLE}_{\bm{q}}(\cdot)||P^{DIR}_{\bm{d}_{h}}(\cdot)).
+ \label{equ:initial_score}
+\end{equation}
+The initial search results $\bm{D}_{q}$ are obtained by ranking the
+documents according to their scores.
+
+We use MLE to construct the query model~\cite<e.g.,>{Zhai2001}. When a
+query model is constructed using MLE, the ranking based on the
+KL-divergence retrieval model is equivalent to that based on the query
+likelihood model~\cite{Ponte1998}.
+
+
+\subsection{Hybrid Document Model Construction}
+\label{ssec:hdm_construction}
+
+We construct a hybrid language model $P^{HYB}_{\bm{d}_{i}}(\cdot)$ for
+each document $\bm{d}_{i} \, (i = 1, \dots, I)$ in $\bm{D}_{\bm{q}}$. In
+this model, we consider both the surface and latent information in the
+documents.
+
+First, an LDA-based document model $P^{LDA}_{\bm{d}_{i}}(\cdot)$ is
+constructed for each $\bm{d}_{i}$. We perform LDA on $\bm{D}_{\bm{q}}$
+to infer the topic distribution in each $\bm{d}_{i}$, and estimate the
+parameters $\alpha_{k}$, $\bm{\beta}_{k} \; (k = 1, \dots, K)$ and
+$\bm{\gamma}_{i}$ for each $\bm{d}_{i}$. Then, we construct
+$P^{LDA}_{\bm{d}_{i}}(\cdot)$ using the estimated parameters and
+Eq.~(\ref{equ:pwd}). As described in
+Section~\ref{ssec:parameter_estimation}, $P_{\bm{d}_{i}}^{LDA}(\cdot)$
+is constructed on the basis of highly probable words given the latent
+topics in $\bm{d}_{i}$.
+
+Next, for each $\bm{d}_{i}$, we construct $P^{HYB}_{\bm{d}_{i}}(\cdot)$
+by interpolating the constructed $P_{\bm{d}_{i}}^{LDA}(\cdot)$ with
+$P_{\bm{d}_{i}}^{DIR}(\cdot)$ as follows.
+\begin{equation}
+ P^{HYB}_{\bm{d_{i}}}(w)
+ = (1 - a) P^{DIR}_{\bm{d_{i}}}(w) + a P^{LDA}_{\bm{d_{i}}}(w),
+ \label{equ:hdm}
+\end{equation}
+where $0 \le a \le 1$. $P^{DIR}_{\bm{d}_{i}}(\cdot)$ is constructed
+using the words that appear in $\bm{d}_{i}$. By interpolating the two
+models, our method constructs a document model that contains the surface
+and latent information in $\bm{d}_{i}$.
+
+
+\subsection{Hybrid Feedback Model Construction}
+
+We construct a hybrid language model $P^{HYB}_{\bm{F}}(\cdot)$ for user
+feedback. First, we perform LDA on $\bm{F}$ to infer the topic
+distribution in $\bm{F}$ and estimate the variational parameters for
+$\bm{F}$, as described in Section~\ref{ssec:inference}. Then, we
+construct the LDA-based feedback model $P^{LDA}_{\bm{F}}(\cdot)$ using
+the estimated parameters and Eq.~(\ref{equ:pwd}). Similar to
+$P^{LDA}_{\bm{d}_{i}}(\cdot)$, $P^{LDA}_{\bm{F}}(\cdot)$ is constructed
+on the basis of the highly probable words from the latent topics in
+$\bm{F}$. Finally, $P^{HYB}_{\bm{F}}(\cdot)$ is constructed in the same
+manner as $P^{HYB}_{\bm{d}_{i}}(\cdot)$.
+\begin{equation}
+ P^{HYB}_{\bm{F}}(w)
+ = (1 - a) P^{DIR}_{\bm{F}}(w) + a P^{LDA}_{\bm{F}}(w),
+ \label{equ:hfm}
+\end{equation}
+where $P^{DIR}_{\bm{F}}(\cdot)$ is constructed using
+Eq.~(\ref{equ:dir}). By interpolating the two models, our method
+constructs a feedback model that contains the surface and latent
+information in $\bm{F}$.
+
+
+\subsection{Re-ranking Search Results}
+
+We construct a new query model that is used to re-rank the initial
+search results $\bm{D}_{\bm{q}}$. The new query model
+$P^{NEW}_{\bm{q}}(\cdot)$ is constructed by interpolating the original
+query model $P^{MLE}_{\bm{q}}(\cdot)$ with the hybrid feedback model
+$P^{HYB}_{\bm{F}}(\cdot)$ as follows:
+\begin{equation}
+ P^{NEW}_{\bm{q}}(w)
+ = (1 - b) P^{MLE}_{\bm{q}}(w) + b P^{HYB}_{\bm{F}}(w),
+ \label{equ:nqm}
+\end{equation}
+where $0 \le b \le 1$.
+
+Then, for each $\bm{d}_{i}$ in $\bm{D}_{\bm{q}}$, we compute the
+KL-divergence between $P^{HYB}_{\bm{d}_{i}}(\cdot)$ and
+$P^{NEW}_{\bm{q}}(\cdot)$. That is, the score of document $\bm{d}_{i}$
+for query $\bm{q}$ (given feedback $\bm{F}$) is defined as
+\begin{equation}
+ re\mathchar`-ranking\_score(\bm{d}_{i},\bm{q},\bm{F})
+ =
+ - KL(P^{NEW}_{\bm{q}}(\cdot)||P^{HYB}_{\bm{d}_{i}}(\cdot)).
+\end{equation}
+
+Finally, we obtain the revised search results by re-ranking the
+documents in $\bm{D}_{\bm{q}}$ according to their scores.
+
+
+\section{Experiments}
+\label{sec:experiments}
+
+In this section, we present the results of experiments performed to
+evaluate the proposed method.
+
+
+\subsection{Test Set}
+\label{ssec:test_set}
+
+In the experiments, we used the test set from the Web Retrieval Task
+from the Third NTCIR Workshop \cite{Eguchi2002}. The test set consists
+\linebreak
+of 11,038,720 Japanese web pages and $47$ information needs. For each
+information need, 
+\linebreak
+approximately 2,000 documents are rated as highly
+relevant, fairly relevant, partially relevant or irrelevant. We can
+evaluate the ranking of search results using these annotated documents.
+
+\begin{figure}[b]
+ \begin{center}
+  \includegraphics{21-4ia5f2.eps}
+ \end{center}
+  \caption{Example information need from the Third NTCIR Workshop.}
+  \label{fig:ntcir_subject}
+\end{figure}
+
+Figure~\ref{fig:ntcir_subject} gives an example of an information need
+for the Web Retrieval Task. The meaning of each element is given below.
+\begin{description}
+ \item[NUM] Identification number of the information need.
+ \item[TITLE] Query submitted to a search engine. Up to three words are
+	    provided, listed according to importance.
+ \item[DESC] A description of the user's information need in a single
+	    sentence.
+ \item[RDOC] Up to three identification numbers referring to examples of
+	    documents that are relevant to this information need, listed
+	    according to importance.
+\end{description}
+
+In our experiments, we used the first two terms in the
+$\langle$TITLE$\rangle$ tag as the query. We collected each document
+containing a query
+(Section~\ref{ssec:initial_results_acquisition}). When we used all the
+terms in the $\langle$TITLE$\rangle$, there were too few documents in
+the search results. For example, for identification numbers 0027, 0047,
+and 0058, we could only obtain $17$, $5$, and $14$ documents,
+respectively. For identification number 0061, we could not find any
+documents. This caused unreliable evaluation results. In other words, if
+an RF method improved the ranking of the initial search results, the
+improvement was not reflected by evaluation measures such as precision
+at $10$ (P@10), and we could not determine how well the method
+performed. Thus, to obtain a sufficient number of documents, we used
+only the first two terms in the $\langle$TITLE$\rangle$ tag. It should
+be noted that greater than $100$ documents was defined as sufficient.
+
+We used the documents in the $\langle$RDOC$\rangle$ tag as the user
+feedback. These are relevant documents selected by assessors and can be
+treated as user feedback. They were not necessarily included in the
+initial search results. In such cases, one may think that these
+documents should not be used as user feedback. However, when we
+evaluated the RF method, we removed these documents from the search
+results regardless of whether they were included in the initial results
+(Section~\ref{ssec:evaluation_method}). In other words, whether these
+documents were included in the search results was not important because
+we removed them from the initial search results and the re-ranked
+results.
+
+We did not use seven of the information needs (identification numbers:
+0011, 0018, 0032, 0040, 0044, 0047, and 0061) because we were unable to
+retrieve a sufficient number of documents (i.e., $100$ documents) for
+them even when using the first two terms as the query. We divided the
+remaining $40$ information needs into development and test data. The
+development data consisted of $8$ information needs (identification
+numbers 0008--0017), which were used to tune our method. The test data
+consisted of $32$ information needs (identification numbers 0018--0063),
+which were used to evaluate our method.
+
+
+\subsection{Search Engine}
+
+In these experiments, we implemented a search engine that obtained the
+initial search results for a given query and re-ranked them using the
+proposed method. The details of the implementation are as follows.
+
+We used the $11,038,720$ web pages in our test set as the collection
+(i.e., $\bm{D}_{all}$). Each document was converted into the format
+    presented by \citeA{Shinzato2008}. In this format,
+each sentence in a document was segmented into words. Each word was
+given a representative form using JUMAN \cite{Kurohashi1994}, a Japanese
+morphological analyzer. Then, we constructed the DIR-based document
+model for each document. We set the smoothing parameter $\mu = 1,000$,
+which is consistent with previous
+studies \cite{Zhai2001,Wei2006,Yi2009}.
+
+When given a query, we converted its terms into a representative form
+using JUMAN, constructed its MLE-based language model, and obtained the
+initial search results by ranking documents in the collection.
+
+The LDA configuration is given below. We set the initial values of
+$\alpha_{k} \, (k = 1, \dots, K)$ to $1$, and the initial value of each
+$\beta_{kj} \, (k = 1, \dots, K, \, j = 1, \dots, J)$ to random
+values. The number of iterations for the variational parameters and that
+for $\alpha_{k}$ and $\bm{\beta}_{k}$ were set to $10$. We limited the
+size of the vocabulary in LDA, denoted as $J$, to $100$. We selected
+$100$ words on the basis of their importance in the search results. Note
+that the importance of a word $w$ to the search results
+$\bm{D}_{\bm{q}}$ is defined as $df(w, \bm{D}_{\bm{q}}) * \log(|H| /
+df(w, \bm{D}_{all}))$, where $df(w, \bm{D})$ represents the document
+frequency of $w$ in documents $\bm{D}$.
+
+
+\subsection{Evaluation Method}
+\label{ssec:evaluation_method}
+
+We removed the feedback documents from both the initial and re-ranked
+results. We can evaluate the performance of an RF method by comparing
+the initial search results with the re-ranked results. A common
+evaluation problem is how to handle documents that users have marked as
+relevant \cite{Hull1993}. If the initial and re-ranked results are
+compared in a straightforward manner, the latter have an advantage
+because documents that are known to be relevant tend to be re-ranked
+higher. However, if we remove them from the re-ranked results, they are
+disadvantaged. This is especially true if there are few relevant
+documents. Therefore, we removed the documents used as user feedback
+from both results. This allowed us to make a fair comparison between the
+initial and re-ranked results.
+
+We evaluated the method using P@10, mean average precision (MAP), and
+normalized 
+\linebreak
+discounted cumulative gain for the $10$ top (re-)ranked
+documents (NDCG@10) \cite{Jarvelin2002}. When calculating P@10 and MAP,
+documents that were rated as highly relevant, fairly relevant, and
+partially relevant were regarded as relevant, while documents rated as
+irrelevant and unrated documents were regarded as irrelevant. When
+calculating NDCG, we assessed the relevance score of documents rated
+highly relevant, fairly relevant, and partially relevant as $3$, $2$,
+and $1$, respectively.
+
+
+\subsection{Performance of the Proposed Method}
+\label{ssec:experiment1}
+
+We examined the effectiveness of the proposed method in re-ranking the
+initial search results using explicit feedback. As described in
+Section~\ref{ssec:test_set}, we used the test data and the first two
+terms in the $\langle$TITLE$\rangle$ as the query for each information
+need. We defined the initial search results as the $100$ documents with
+the highest initial scores and then re-ranked them using the proposed
+method. We used the first two documents in the $\langle$RDOC$\rangle$
+tag for each information need as the explicit feedback. The average
+number of words in a document was $3,589$. We set $(a, b, K) = (0.2,
+0.9, 50)$ because this setting obtained the best results in the
+preliminary experiment described in Section~\ref{ssec:experiment0}.
+
+The results are listed in Table~\ref{sbtbl:eRF}. INIT represents the
+ranking of the initial search results, and OURS represents the re-ranked
+results using the proposed method. For comparison, we also show the
+performance of some baseline methods, ZHAI represents the method by Zhai
+and Lafferty \citeyear{Zhai2001} and OURS ($a = 0.0$) represents the
+proposed method without latent information. ZHAI is essentially the same
+as OURS ($a = 0.0$). Both methods construct the feedback model by
+modifying the surface word distribution of the feedback using that of
+the collection. The difference lies in the way the word distribution is
+modified. The former uses an expectation-maximization algorithm for the
+modification, while the latter uses DIR estimation. In OURS ($a = 0.0$),
+we set $b = 0.5$. This value was determined in the preliminary
+experiment.
+
+\begin{table}[b]
+\vspace{0.5\Cvs}
+  \caption{Comparative performance of the proposed method}
+\label{tbl:experiment1}
+\input{05table01.txt}
+\end{table}
+
+DIC also represents a baseline method. The proposed method uses
+information about words that are highly probable given a
+text. Dictionaries of synonyms and related words can also be used for
+this purpose. DIC is an extension of OURS ($a = 0.0$); DIC uses synonyms
+of the surface words from the feedback and search results. For this
+method, we constructed a synonym dictionary from Japanese dictionaries
+    using the method proposed by \citeA{Shibata2008}. For
+the Japanese dictionaries, we used Reikai Shougaku Kokugo
+Jiten \cite{Tajika2001} and Iwanami Kokugo Jiten \cite{Nishio2002}. The
+constructed dictionary contained 4,597 entries (e.g., $\text{``computer''} =
+\text{``electronic brain''}$).
+
+The results shown in Table~\ref{sbtbl:eRF} indicate that OURS
+outperformed INIT for all metrics. For example, the proposed method
+improved the initial search results by $27.6\%$ in P@10. These results
+suggest that the proposed method effectively re-ranked the initial
+search results. In addition, the proposed method outperformed ZHAI and
+OURS ($a = 0.0$), which do not use latent information from texts. This
+suggests that latent information is useful when re-ranking search
+results.
+
+We investigated further and confirmed that the proposed method made good
+use of the words that did not appear in the feedback but were considered
+highly probable. Consider the information need shown in
+Figure~\ref{fig:ntcir_subject}. The user feedback did not contain the
+words ``religion,'' ``holiday,'' or ``bible,'' which are related to the
+information need. As such, ZHAI and OURS ($a = 0.0$) could not use these
+words. In contrast, these highly likely words had a certain degree of
+probability in the hybrid language model even though the words did not
+appear in the feedback. For example, the method could allocate the
+probabilities $0.0046$, $0.0037$, and $0.0024$ to the words
+``religion,'' ``holiday,'' and ``bible,'' respectively. The
+probabilities allocated to the words ``Christmas'' and ``easter,'' which
+appeared once in the feedback, were $0.0093$ and $0.0060$,
+respectively. Using these probabilities, the proposed method raised the
+score of documents that contained these words.
+
+Although DIC outperformed ZHAI and OURS ($a = 0.0$), it did not
+outperform OURS. This may be due to the coverage of the synonym
+dictionary. DIC may perform better if wide-coverage synonym dictionaries
+are used. However, constructing such dictionaries is difficult. The
+proposed method also needs to know that a word is related to other
+words; however, unlike DIC, it does not need any dictionaries. Using
+LDA, the proposed method dynamically acquires the required knowledge
+from the search results. Consider the query ``Mac price'' described in
+Section~\ref{sec:intr}. Suppose that the search results contain words
+such as ``CPU,'' ``HDD,'' ``hamburger,'' and ``potato.'' Our method
+performs LDA on the search results and dynamically acquires the
+knowledge that ``CPU'' is related to ``HDD,'' and ``hamburger'' is
+related to ``potato.'' In addition, even if ``HDD'' does not appear in a
+document, the proposed method can assign a certain degree of probability
+to the word from other related words, such as ``CPU.'' Thus, the
+proposed method does not require any dictionaries.
+
+The proposed method can also be applied to pseudo RF. In pseudo RF, the
+top $n$ documents in the initial search results are assumed to be
+relevant, and the search results are re-ranked on the basis of this
+assumption. We implemented pseudo RF using the proposed method for $n =
+10$ and compared the initial results with the re-ranked results. Note
+that there are no relevant documents in pseudo RF. Thus, we evaluated
+the performance of each method using the raw (re-)ranked results.
+
+The evaluation results are shown in Table~\ref{sbtbl:pRF}. The results
+for INIT in this table differ from those in Table~\ref{sbtbl:eRF}
+because the documents used as feedback were not removed from the search
+results. The proposed method improved the initial search results in P@10
+and NDCG@10. For example, the proposed method improved the initial
+search results by $8.2\%$ in P@10. These results demonstrate that the
+proposed method is a promising candidate for pseudo RF as well as
+explicit RF.
+
+
+\subsection{Effect of the Amount of Feedback}
+\label{ssec:experiment2}
+
+In the second experiment, we simulated a situation where only a small
+amount of user feedback can be obtained. We investigated how the amount
+of feedback affected the performance of the proposed method. In
+practice, large quantities of user feedback are rarely available. Thus,
+an RF method should perform well only when a small amount of user
+feedback is available. We incrementally reduced the amount of explicit
+feedback and observed the change in P@10.
+
+For this experiment, we used seven different quantities of explicit
+feedback: $G = 2^{1}$, $2^{0}$, $2^{-1}$, $2^{-2}$, $2^{-3}$, $2^{-4}$,
+and $2^{-5}$ relevant documents. Note that, for example, $G = 2^{1}$
+means that we used two relevant documents as user feedback. $G = 2^{-1}$
+represents the use of half a document, i.e., half the words from the
+feedback were randomly sampled and only these words were used for
+RF. This allowed us to consider the case where part of a document (e.g.,
+title or snippet) is given as user feedback.
+
+Figure~\ref{fig:g} shows the effect of the amount of feedback on the
+performance of the proposed method. For comparison, we also present the
+results of the proposed method without the latent information (OURS ($a
+= 0.0$)). INIT represents the precision of the ranking of the initial
+search results. From Figure~\ref{fig:g}, it is evident that the proposed
+method performed consistently well. For example, when one relevant
+document was given as user feedback, the proposed method improved the
+initial search results by $24.5\%$ in P@10. In addition, the proposed
+method achieved a $5.3\%$ improvement with only $2^{-5}$ documents. When
+$G = 2^{-5}$, there were on average $57$ words in the feedback, i.e.,
+$|\bm{F}|$ was $57$. On the other hand, when $G$ was small, the
+improvements achieved by OURS ($a = 0.0$) were negligible. As $G$
+becomes smaller, the amount of available surface information becomes
+smaller and the method can not improve the initial search results. On
+the other hand, OURS uses both surface and latent information. Even when
+only a small amount of feedback is available, OURS improved the initial
+search results because the method uses more information.
+
+\begin{figure}[t]
+ \begin{center}
+  \includegraphics{21-4ia5f3.eps}
+ \end{center}
+  \caption{Effect of the amount of feedback}
+\label{fig:g}
+\end{figure}
+
+
+\subsection{Sensitivity to Parameters}
+\label{ssec:experiment0}
+
+The proposed method uses the following three parameters: $a$, $b$, and
+$K$. Parameter $a$ controls the reliability of an LDA-based language
+model in a hybrid language model. Parameter $b$ controls the reliability
+of a feedback model in a new query model, and parameter $K$ represents
+the number of topics. In our experiments, we set $(a, b, K) = (0.2, 0.9,
+50)$ for OURS and $b = 0.5$ for OURS ($a = 0.0$). These values were
+determined in a preliminary experiment.
+
+In the preliminary experiment, we re-ranked the initial search results
+using different parameter values and measured the changes in performance
+using the proposed method. We used the development data, applied our
+method with $a$ and $b$ ranging from $0.0$ to $1.0$ in steps of $0.1$
+and $K$ ranging from $10$ to $100$ in steps of $10$, and obtained the
+average of P@10 for all information needs. We used the first two terms
+in the $\langle$TITLE$\rangle$ as the query and the first two documents
+in the $\langle$RDOC$\rangle$ as the user feedback.
+
+The results of the preliminary experiment are shown in
+Table~\ref{tbl:experiment0} and
+Figure~\ref{fig:K}. Table~\ref{tbl:experiment0} summarizes the results
+with respect to $(a,b)$. The value of each cell in the table is the
+average of P@10 obtained for each $K$. For example, the value of cell
+$(a,b) = (0.1,0.2)$ denotes that the average of P@10 obtained for
+$(a,b,K) = (0.1,0.2,10), (0.1,0.2,20), \dots,$ $(0.1,0.2,100)$ is
+$0.286$. The highest value in each column is shown in bold, and the
+highest value in each row is underlined.
+
+As can be seen from the table, the proposed method achieved the best
+performance with $(a,b) = (0.1,0.9)$ or $(0.2,0.9)$. The results with $a
+= 0.0$ (not using latent information) demonstrate that the method
+performed well with $b = 0.3$--$0.5$. On the other hand, the results with
+$a \geq 0.1$ (using latent information) demonstrate that the proposed
+method performed well with $b = 0.8$--$1.0$. The value of $b$ (and the
+performance with this $b$) with $a \geq 0.1$ is greater than that with
+$a = 0.0$. This result suggests that latent information increases the
+reliability of the feedback model.
+
+\begin{table}[t]
+\caption{Sensitivity to $(a,b)$}
+\label{tbl:experiment0}
+\input{05table02.txt}
+\end{table}
+
+\begin{figure}[t]
+ \begin{center}
+  \includegraphics{21-4ia5f4.eps}
+ \end{center}
+  \caption{Sensitivity to $K$}
+\label{fig:K}
+\end{figure}
+
+Figure~\ref{fig:K} illustrates the effect of $K$ on the performance of
+the proposed method. For clarity, 
+\linebreak
+we only show the results with $(a,b) =
+(0.1,0.9), (0.2,0.9)$, and $(0.3,0.9)$, which produced good results~(Table~\ref{tbl:experiment0}). 
+According to the result presented in
+Figure~\ref{fig:K}, the proposed method performed well with $K = 50$--$70$. 
+These results indicate that the proposed method achieves the best
+performance with $(a,b) = (0.1,0.9)$ or $(0.2,0.9)$, and $K = 50$--$70$.
+
+
+\subsection{Execution Time}
+\label{ssec:execution_time}
+
+In the proposed method, we perform LDA on the search results to
+construct an LDA-based document model for each document. We also perform
+LDA on the feedback to construct an LDA-based feedback model. Here, we
+report the execution times of these procedures.
+
+In our experiments, the proposed method took 13.1--16.0~secs to perform
+LDA on the search results ($100$ documents). Note that we implemented
+LDA using Perl and C. We believe that this is an acceptable execution
+time because users typically browse documents in search results to
+select relevant documents. This process generally takes at least
+1~min. In other words, we can perform LDA on the search results while
+the users are browsing the documents. Thus, LDA can be completed before
+the users re-rank the initial search results.
+
+However, the number of retrieved documents is sometimes greater than
+$100$. If a large number of documents is retrieved, LDA requires a
+significant amount of time to execute. One way to avoid this problem is
+to use only the top ranked documents as the search results. The time
+required for LDA is not a matter of concern if we use the top $100$
+documents. Another alternative is to parallelize the estimation of the
+variational parameters in LDA, a process that takes the majority of the
+execution time. Variational parameters for each document are independent
+of those for other documents. Thus, we can parallelize the estimation of
+the parameters and reduce the time required for the procedure. For
+    example, \citeA{Nallapati2007} achieved a $14.5$
+times speedup using $50$ cluster nodes. Therefore, it is expected that
+we can reduce the execution time based on these studies.
+
+It took less than 1~sec to perform LDA on the feedback. For example, the
+execution time was only 0.1--0.2~secs when using two documents as
+feedback. Thus, the time required to perform LDA on the feedback is
+negligible.
+
+
+\section{Conclusion}
+\label{sec:cncl}
+
+We have proposed an RF method using surface and latent information from
+texts and investigated its effectiveness. Using LDA, our method infers
+the distributions over words that are highly probable given the user
+feedback and each document in the search results. Then, a hybrid word
+distribution is constructed by interpolating the latent word
+distribution with the surface word distribution for the feedback and
+each document. Finally, documents whose hybrid word distributions
+resemble the feedback are regarded as relevant to the user's information
+need, and are re-ranked higher. Through our experiments, we confirmed
+that the proposed method performs well for both explicit and pseudo
+RF. The proposed method also performs well when only a small amount of
+feedback is available.
+
+In future, we intend to use negative feedback in the proposed method. In
+this study, only use positive feedback (relevant documents for a query)
+was used for re-ranking search results; however, we believe that
+negative feedback (irrelevant documents) can also be useful.
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Blei, Ng, \BBA\ Jordan}{Blei et~al.}{2003}]{Blei2003}
+Blei, D.~M., Ng, A.~Y., \BBA\ Jordan, M.~I. \BBOP 2003\BBCP.
+\newblock \BBOQ Latent Dirichlet Allocation.\BBCQ\
+\newblock {\Bem Jounal of Machine Learning Research}, {\Bbf 3}, \mbox{\BPGS\
+  993--1022}.
+
+\bibitem[\protect\BCAY{Eguchi, Oyama, Ishida, Kuriyama, \BBA\ Kando}{Eguchi
+  et~al.}{2002}]{Eguchi2002}
+Eguchi, K., Oyama, K., Ishida, E., Kuriyama, K., \BBA\ Kando, N. \BBOP
+  2002\BBCP.
+\newblock \BBOQ The Web Retrieval Task and its Evaluation in the Third NTCIR
+  Workshop.\BBCQ\
+\newblock In {\Bem Proceedings of the 25th Annual International ACM SIGIR
+  Conference on Research and Development in Information Retrieval (SIGIR
+  2002)}, \mbox{\BPGS\ 375--376}.
+
+\bibitem[\protect\BCAY{Fei-Fei \BBA\ Perona}{Fei-Fei \BBA\
+  Perona}{2005}]{Fei-Fei2005}
+Fei-Fei, L.\BBACOMMA\ \BBA\ Perona, P. \BBOP 2005\BBCP.
+\newblock \BBOQ A Bayesian Hierarchical Model for Learning Natural Scene
+  Categories.\BBCQ\
+\newblock In {\Bem Proceedings of the 2005 IEEE Computer Society Conference on
+  Computer Vision and Pattern Recognition (CVPR 2005)}, \mbox{\BPGS\ 524--531}.
+
+\bibitem[\protect\BCAY{Griffiths \BBA\ Steyvers}{Griffiths \BBA\
+  Steyvers}{2004}]{Griffiths2004}
+Griffiths, T.~L.\BBACOMMA\ \BBA\ Steyvers, M. \BBOP 2004\BBCP.
+\newblock \BBOQ Finding scientific topics.\BBCQ\
+\newblock In {\Bem Proceedings of the National Academy of Sciences of the
+  United States of America (NAS)}, \mbox{\BPGS\ 5228--5235}.
+
+\bibitem[\protect\BCAY{Heidel, Chang, \BBA\ Lee}{Heidel
+  et~al.}{2007}]{Heidel2007}
+Heidel, A., Chang, H., \BBA\ Lee, L. \BBOP 2007\BBCP.
+\newblock \BBOQ Language Model Adaptation using Latent Dirichlet Allocation and
+  an Efficient Topic Inference Algorithm.\BBCQ\
+\newblock In {\Bem Proceedings of the 8th Annual Conference of the
+  International Speech Communication Association (INTERSPEECH 2007)},
+  \mbox{\BPGS\ 2361--2364}.
+
+\bibitem[\protect\BCAY{Hofmann}{Hofmann}{1999}]{Hofmann1999}
+Hofmann, T. \BBOP 1999\BBCP.
+\newblock \BBOQ Probabilistic Latent Semantic Analysis.\BBCQ\
+\newblock In {\Bem Proceedings of the 15th Conference on Uncertainty in
+  Artificial Intelligence (UAI 1999)}, \mbox{\BPGS\ 289--296}.
+
+\bibitem[\protect\BCAY{Hull}{Hull}{1993}]{Hull1993}
+Hull, D. \BBOP 1993\BBCP.
+\newblock \BBOQ Using Statistical Testing in the Evaluation of Retrieval
+  Experiments.\BBCQ\
+\newblock In {\Bem Proceedings of the 16th Annual International ACM SIGIR
+  Conference on Research and Development in Information Retrieval (SIGIR
+  1993)}, \mbox{\BPGS\ 329--338}.
+
+\bibitem[\protect\BCAY{Ide}{Ide}{1971}]{Ide1971}
+Ide, E. \BBOP 1971\BBCP.
+\newblock \BBOQ New Experiments in Relevance Feedback.\BBCQ\
+\newblock In {\Bem The SMART Retrieval System: Experiments in Automatic
+  Document Processing}, \mbox{\BPGS\ 337--354}. Prentice-Hall Inc.
+
+\bibitem[\protect\BCAY{Jansen, Spink, \BBA\ Saracevic}{Jansen
+  et~al.}{2000}]{Jansen2000}
+Jansen, B.~J., Spink, A., \BBA\ Saracevic, T. \BBOP 2000\BBCP.
+\newblock \BBOQ Real Life, Real Users, and Real Needs: A Study and Analysis of
+  User Queries on the Web.\BBCQ\
+\newblock {\Bem Information Processing and Management}, {\Bbf 36}  (2),
+  \mbox{\BPGS\ 207--227}.
+
+\bibitem[\protect\BCAY{J{\"{a}}rvelin \BBA\
+  Kek{\"{a}}l{\"{a}}inen}{J{\"{a}}rvelin \BBA\
+  Kek{\"{a}}l{\"{a}}inen}{2002}]{Jarvelin2002}
+J{\"{a}}rvelin, K.\BBACOMMA\ \BBA\ Kek{\"{a}}l{\"{a}}inen, J. \BBOP 2002\BBCP.
+\newblock \BBOQ Cumulated Gain-Based Evaluation of IR Techniques.\BBCQ\
+\newblock {\Bem ACM Transactions on Information Systems}, {\Bbf 20}  (4),
+  \mbox{\BPGS\ 422--446}.
+
+\bibitem[\protect\BCAY{Kurohashi, Nakamura, Matsumoto, \BBA\ Nagao}{Kurohashi
+  et~al.}{1994}]{Kurohashi1994}
+Kurohashi, S., Nakamura, T., Matsumoto, Y., \BBA\ Nagao, M. \BBOP 1994\BBCP.
+\newblock \BBOQ Improvements of Japanese Morphological Analyzer {JUMAN}.\BBCQ\
+\newblock In {\Bem Proceedings of the International Workshop on Sharable
+  Natural Language Resources (SNLR)}, \mbox{\BPGS\ 22--28}.
+
+\bibitem[\protect\BCAY{Lafferty \BBA\ Zhai}{Lafferty \BBA\
+  Zhai}{2001}]{Lafferty2001}
+Lafferty, J.\BBACOMMA\ \BBA\ Zhai, C. \BBOP 2001\BBCP.
+\newblock \BBOQ Document Language Models, Query Models, and Risk Minimization
+  for Information Retrieval.\BBCQ\
+\newblock In {\Bem Proceedings of the 24th Annual International ACM SIGIR
+  Conference on Research and Development in Information Retrieval (SIGIR
+  2001)}, \mbox{\BPGS\ 111--119}.
+
+\bibitem[\protect\BCAY{Lavrenko \BBA\ Croft}{Lavrenko \BBA\
+  Croft}{2001}]{Lavrenko2001}
+Lavrenko, V.\BBACOMMA\ \BBA\ Croft, W.~B. \BBOP 2001\BBCP.
+\newblock \BBOQ Relevance-Based Language Models.\BBCQ\
+\newblock In {\Bem Proceedings of the 24th Annual International ACM SIGIR
+  Conference on Research and Development in Information Retrieval (SIGIR
+  2001)}, \mbox{\BPGS\ 120--127}.
+
+\bibitem[\protect\BCAY{Minka}{Minka}{2000}]{Minka2000}
+Minka, T.~P. \BBOP 2000\BBCP.
+\newblock \BBOQ Estimating a Dirichlet distribution.\BBCQ\
+\newblock \BTR, Microsoft.
+
+\bibitem[\protect\BCAY{Nallapati, Cohen, \BBA\ Lafferty}{Nallapati
+  et~al.}{2007}]{Nallapati2007}
+Nallapati, R., Cohen, W., \BBA\ Lafferty, J. \BBOP 2007\BBCP.
+\newblock \BBOQ Parallelized Variational EM for Latent Dirichlet Allocation: An
+  Experimental Evaluation of Speed and Scalability.\BBCQ\
+\newblock In {\Bem Proceedings of the 7th IEEE International Conference on Data
+  Maining Workshops (ICDMW 2007)}, \mbox{\BPGS\ 349--354}.
+
+\bibitem[\protect\BCAY{Nishio, Iwabuchi, \BBA\ Mizutani}{Nishio
+  et~al.}{2002}]{Nishio2002}
+Nishio, M., Iwabuchi, E., \BBA\ Mizutani, S. \BBOP 2002\BBCP.
+\newblock {\Bem Iwanami Kokugo Jiten}.
+\newblock Iwanami Shoten.
+
+\bibitem[\protect\BCAY{Ponte \BBA\ Croft}{Ponte \BBA\ Croft}{1998}]{Ponte1998}
+Ponte, J.~M.\BBACOMMA\ \BBA\ Croft, W.~B. \BBOP 1998\BBCP.
+\newblock \BBOQ A Language Modeling Approach to Information Retrieval.\BBCQ\
+\newblock In {\Bem Proceedings of the 21nd Annual International ACM SIGIR
+  Conference on Research and Development in Information Retrieval (SIGIR
+  1998)}, \mbox{\BPGS\ 275--281}.
+
+\bibitem[\protect\BCAY{Rocchio}{Rocchio}{1971}]{Rocchio1971}
+Rocchio, J.~J. \BBOP {1971}\BBCP.
+\newblock \BBOQ Relevance Feedback in Information Retrieval.\BBCQ\
+\newblock In {\Bem The SMART Retrieval System: Experiments in Automatic
+  Document Processing}, \mbox{\BPGS\ 313--323}. Prentice-Hall Inc.
+
+\bibitem[\protect\BCAY{Salton, Wong, \BBA\ Yang}{Salton
+  et~al.}{1975}]{Salton1975}
+Salton, G., Wong, A., \BBA\ Yang, C.-S. \BBOP 1975\BBCP.
+\newblock \BBOQ A Vector Space Model for Automatic Indexing.\BBCQ\
+\newblock {\Bem Communications of the ACM}, {\Bbf 18}  (11), \mbox{\BPGS\
+  613--620}.
+
+\bibitem[\protect\BCAY{Shibata, Odani, Harashima, Oonishi, \BBA\
+  Kurohashi}{Shibata et~al.}{2008}]{Shibata2008}
+Shibata, T., Odani, M., Harashima, J., Oonishi, T., \BBA\ Kurohashi, S. \BBOP
+  2008\BBCP.
+\newblock \BBOQ {SYNGRAPH}: A Flexible Matching Method Based on Synonymous
+  Expression Extraction from an Ordinary Dictionary and a Web Corpus.\BBCQ\
+\newblock In {\Bem Proceedings of the 3rd International Joint Conference on
+  Natural Language Processing (IJCNLP 2008)}, \mbox{\BPGS\ 787--792}.
+
+\bibitem[\protect\BCAY{Shinzato, Kawahara, Hashimoto, \BBA\ Kurohashi}{Shinzato
+  et~al.}{2008}]{Shinzato2008}
+Shinzato, K., Kawahara, D., Hashimoto, C., \BBA\ Kurohashi, S. \BBOP 2008\BBCP.
+\newblock \BBOQ A Large-Scale Web Data Collection as a Natural Language
+  Processing Infrastructure.\BBCQ\
+\newblock In {\Bem Proceedings of the 6th International Conference on Language
+  Resources and Evaluation (LREC 2008)}, \mbox{\BPGS\ 2236--2241}.
+
+\bibitem[\protect\BCAY{Sp{\"a}rck~Jones, Walker, \BBA\
+  Robertson}{Sp{\"a}rck~Jones et~al.}{2000}]{SparckJones2000}
+Sp{\"a}rck~Jones, K., Walker, S., \BBA\ Robertson, S.~E. \BBOP 2000\BBCP.
+\newblock \BBOQ A Probabilistic Model of Information Retrieval: Development and
+  Comparative Experiments.\BBCQ\
+\newblock {\Bem Information Processing and Management}, {\Bbf 36}  (6),
+  \mbox{\BPGS\ 779--808,~809--840}.
+
+\bibitem[\protect\BCAY{Tajika}{Tajika}{2001}]{Tajika2001}
+Tajika, J. \BBOP 2001\BBCP.
+\newblock {\Bem Sanseido Reikai Shougaku Kokugo Jiten}.
+\newblock Sanseido.
+
+\bibitem[\protect\BCAY{Wei \BBA\ Croft}{Wei \BBA\ Croft}{2006}]{Wei2006}
+Wei, X.\BBACOMMA\ \BBA\ Croft, W. \BBOP 2006\BBCP.
+\newblock \BBOQ LDA-Based Document Models for Ad-hoc Retrieval.\BBCQ\
+\newblock In {\Bem Proceedings of the 29th Annual International ACM SIGIR
+  Conference on Research and Development in Information Retrieval (SIGIR
+  2006)}, \mbox{\BPGS\ 178--185}.
+
+\bibitem[\protect\BCAY{Yi \BBA\ Allan}{Yi \BBA\ Allan}{2009}]{Yi2009}
+Yi, X.\BBACOMMA\ \BBA\ Allan, J. \BBOP 2009\BBCP.
+\newblock \BBOQ A Comparative Study of Utilizing Topic Models for Information
+  Retrieval.\BBCQ\
+\newblock In {\Bem Proceedings of the 31st European Conference on Information
+  Retrieval (ECIR 2009)}, \mbox{\BPGS\ 29--41}.
+
+\bibitem[\protect\BCAY{Zhai \BBA\ Lafferty}{Zhai \BBA\
+  Lafferty}{2001}]{Zhai2001}
+Zhai, C.\BBACOMMA\ \BBA\ Lafferty, J. \BBOP 2001\BBCP.
+\newblock \BBOQ Model-based Feedback in the Language Modeling Approach to
+  Information Retrieval.\BBCQ\
+\newblock In {\Bem Proceedings of the 20th ACM Conference on Information and
+  Knowledge Management (CIKM 2001)}, \mbox{\BPGS\ 403--410}.
+
+\bibitem[\protect\BCAY{Zhai \BBA\ Lafferty}{Zhai \BBA\
+  Lafferty}{2004}]{Zhai2004}
+Zhai, C.\BBACOMMA\ \BBA\ Lafferty, J. \BBOP 2004\BBCP.
+\newblock \BBOQ A Study of Smoothing Methods for Language Models Applied to
+  Information Retrieval.\BBCQ\
+\newblock {\Bem ACM Transactions on Information Systems}, {\Bbf 22}  (2),
+  \mbox{\BPGS\ 179--214}.
+
+\bibitem[\protect\BCAY{Zhou \BBA\ Wade}{Zhou \BBA\ Wade}{2009}]{Zhou2009}
+Zhou, D.\BBACOMMA\ \BBA\ Wade, V. \BBOP 2009\BBCP.
+\newblock \BBOQ Latent Document Re-Ranking.\BBCQ\
+\newblock In {\Bem Proceedings of the 2009 Conference on Empirical Methods in
+  Natural Language Processing (EMNLP 2009)}, \mbox{\BPGS\ 1571--1580}.
+
+\end{thebibliography}
+
+
+\begin{biography}
+
+\bioauthor[:]{Jun Harashima}{received his B.Eng. in $2007$, and M.Sc. and
+ Ph.D. in Informatics in $2009$ and $2013$, from Kyoto University. He is
+ currently employed as an engineer at COOKPAD Inc. His research
+ interests include natural language processing and information
+ retrieval.}
+
+\bioauthor[:]{Sadao Kurohashi}{received his Ph.D. in Electrical
+ Engineering from Kyoto University in $1994$. He is currently a
+ professor of the Graduate School of Informatics at Kyoto
+ University. His research interests include natural language processing,
+ knowledge acquisition/representation, and information retrieval.}
+\end{biography}
+
+
+
+\biodate
+
+
+\end{document}

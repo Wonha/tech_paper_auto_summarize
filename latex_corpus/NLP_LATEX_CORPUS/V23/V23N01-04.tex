@@ -1,0 +1,1177 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{array}
+
+\usepackage{algorithm,algorithmic}
+\usepackage{url}
+\usepackage{multirow}
+\newcommand{\argmax}{}
+\newcommand{\argmin}{}
+
+\newcommand{\textcolor}[2]{}
+
+
+
+
+\Volume{23}
+\Number{1}
+\Month{January}
+\Year{2016}
+
+\received{2015}{5}{21}
+\revised{2015}{8}{6}
+\accepted{2015}{8}{29}
+
+\setcounter{page}{87}
+
+\jtitle{機械翻訳システムの誤り分析のための誤り箇所選択手法}
+\jauthor{赤部　晃一\affiref{Author_1} \and Graham Neubig\affiref{Author_1} \and Sakriani Sakti\affiref{Author_1} \and 戸田　智基\affiref{Author_1} \and 中村　　哲\affiref{Author_1}}
+\jabstract{
+複雑化する機械翻訳システムを比較し，問題点を把握・改善するため，誤り分析が利用される．
+その手法として，様々なものが提案されているが，多くは単純にシステムの翻訳結果と正解訳の差異に着目して誤りを分類するものであり，人手による分析への活用を目的とするものではなかった．
+本研究では，人手による誤り分析を効率化する手法として，機械学習の枠組みを導入した誤り箇所選択手法を提案する．
+学習によって評価の低い訳出と高い訳出を分類するモデルを作成し，評価低下の手がかりを自動的に獲得することで，人手による誤り分析の効率化を図る．
+実験の結果，提案法を活用することで，人手による誤り分析の効率が向上した．
+}
+\jkeywords{統計的機械翻訳，誤り分析，誤り検出，評価尺度，コーパス}
+
+\etitle{Error Selection Methods for \\ Machine Translation Error Analysis}
+\eauthor{Koichi Akabe\affiref{Author_1} \and Graham Neubig\affiref{Author_1} \and Sakriani Sakti\affiref{Author_1} \and \\
+	Tomoki Toda\affiref{Author_1} \and Satoshi Nakamura\affiref{Author_1}}
+\eabstract{
+Error analysis is used to improve accuracy of machine translation (MT) systems.
+Various methods of analyzing MT errors have been proposed; however, most of these methods are based on differences between translations and references that are
+translated independently by human translators, and few methods have been proposed for manual error analysis.
+This work proposes a method that uses a machine learning framework to identify errors in MT output, and improves efficiency of manual error analysis.
+Our method builds models that classify low and high quality translations, then identifies features of low quality translations to improve efficiency of the manual analysis.
+Experiments showed that by using our methods, we could improve the efficiency of MT error analysis.
+}
+\ekeywords{Statistical Machine Translation, Error Analysis, Error Detection, Evaluation Metric, Corpus}
+
+\headauthor{赤部，Neubig，Sakti，戸田，中村}
+\headtitle{機械翻訳システムの誤り分析のための誤り箇所選択手法}
+
+\affilabel{Author_1}{奈良先端科学技術大学院大学}{Nara Institute of Science and Technology}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+
+最新の機械翻訳システムは，年々精度が向上している反面，システムの内部は複雑化しており，翻訳システムの傾向は必ずしも事前に把握できるわけではない．
+このため，システムによってある文章が翻訳された結果に目を通すことで，
+そのシステムに含まれる問題点を間接的に把握し，システム同士を比較することが広く行われている．
+このように，単一システムによって発生する誤りの分析や，各システムを比較することは，各システムの利点や欠点を客観的に把握し，システム改善の手段を検討することに役立つ．
+ところが，翻訳システムの出力結果を分析しようとした際，機械翻訳の専門家である分析者は，システムが出力した膨大な結果に目を通す必要があり，その作業は労力がかかるものである．
+
+
+この問題を解決するために，機械翻訳の誤り分析を効率化する手法が提案されている\cite{popovic2011towards,kirchhoff2007semi,fishel2011automatic,elkholy11morphologicallyrich}．
+この手法の具体的な手続きとして，機械翻訳結果を人手により翻訳された参照訳と比較し，機械翻訳結果のどの箇所がどのように誤っているかを自動的にラベル付けする．
+さらに，発見した誤りを既存の誤り体系\cite{flanagan1994error,vilar2006error}に従って「挿入・削除・置換・活用・並べ替え」のように分類することで，機械翻訳システムの誤り傾向を自動的に捉えることができる．
+
+\textcolor{black}{しかし，このような自動分析で誤りのおおよその傾向をつかめたとしても，機械翻訳システムを改善する上で，詳細な翻訳誤り現象を把握するためには，人手による誤り分析が欠かせない．}
+\textcolor{black}{ところが，先行研究と同じように，参照文と機械翻訳結果を比較して差分に基づいて誤りを集計する手法で詳細な誤り分析を行おうとした際に，問題が発生する．
+具体的には，機械翻訳結果と参照訳の文字列の不一致箇所を単純な方法でラベル付けすると，人間の評価と一致しなくなる場合がある．
+つまり，機械翻訳結果が参照訳と同様の意味でありながら表層的な文字列が異なる換言の場合，先行研究では不一致箇所を誤り箇所として捉えてしまう．
+このような誤った判断は，誤り分析を効率化する上で支障となる．}
+
+\textcolor{black}{本研究では，前述の問題点を克服し，機械翻訳システムの誤りと判断されたものの内，より誤りの可能性が高い箇所を優先的に捉える手法を提案する．}
+図\ref{fig:scoring-ex}に本研究の概略を示す．
+まず，対訳コーパスに対して翻訳結果を生成し，翻訳結果と参照訳を利用して誤り分析を優先的に行うべき箇所を選択する．
+次に，重点的に選択された箇所を中心に人手により分析を行う．
+誤りの可能性が高い箇所を特定するために，機械翻訳結果に含まれる$n$-gramを，誤りの可能性の高い順にスコア付けする手法を提案する（\ref{sec:scoring}節）．
+また，誤りかどうかの判断を単純な一致不一致より頑健にするために，与えられた機械翻訳結果と正解訳のリストから，機械翻訳文中の各$n$-gramに対して誤りらしさと関係のあるスコア関数を設計する．
+設計されたスコア関数を用いることで，誤り$n$-gramを誤りらしさに基づいて並べ替えることができ，より誤りらしい箇所を重点的に分析することが可能となる．
+単純にスコアに基づいて選択を行った場合，正解訳と一致するような明らかに正しいと考えられる箇所を選択してしまう恐れがある．
+この問題に対処するため，正解訳を利用して誤りとして提示された箇所をフィルタリングする手法を提案し，選択精度の向上を図る（\ref{sec:filtering}節）．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{23-1ia4f1.eps}
+\end{center}
+\caption{本研究の流れ図}
+\label{fig:scoring-ex}
+\vspace{-0.5\Cvs}
+\end{figure}
+
+実験では，まず\ref{sec:manual-analysis-result}節〜\ref{sec:auto-analysis-result}節で提案法の誤り箇所選択精度の測定を行い，単一システムの分析，及びシステム間比較における有効性の検証を行う．
+実験の後半では，提案法の課題を分析し（\ref{sec:selection-error-analysis}節），提案法を機械翻訳システムの改善に使用した場合の効果について検討を行う（\ref{sec:act-error-analysis}節）．
+
+
+\section{機械翻訳の自動評価と問題点}
+\label{sec:analysis}
+
+本節では，従来から広く行われている機械翻訳の自動評価について説明し，その問題点を明らかにする．
+
+
+\subsection{評価の手順}
+
+機械翻訳システムに「原文 $\boldsymbol{f}$」を与えることで，「機械翻訳結果 $\boldsymbol{e}$」が得られたとする．
+評価方法として「自動評価尺度」を用いる場合，事前に人手により翻訳された「参照訳 $\boldsymbol{r}$」を与える．
+自動評価尺度は，機械翻訳結果 $\boldsymbol{e}$ と参照訳 $\boldsymbol{r}$ の差異に基づき機械翻訳結果の良し悪しをスコアとして計算するものである\cite{papineni02bleu,doddington02nistmetric,banerjee05meteor}．
+また，「品質推定」と呼ばれる技術は，参照訳を利用せずに評価を行う．
+具体的には，誤りのパターンを学習したモデルによって機械翻訳文の精度を推定することや\cite{specia09qualityestimation}，翻訳結果の精度を部分的に評価することが行われている\cite{bach11goodness}．
+
+自動評価尺度を利用する場合は参照訳を用意する必要があるが，翻訳精度の計算を翻訳システムに依らず一貫して行える利点がある．
+一方，品質推定は参照訳を必要としない分，翻訳精度を正しく推定することが比較的困難である．
+本研究は，参照訳が与えられた状況で機械翻訳の誤り分析を行う場合を対象とする．
+
+
+\subsection{代表的な自動評価尺度}
+
+機械翻訳の自動評価尺度は，様々なものが提案されており，尺度ごとに異なった特徴がある．
+BLEU \cite{papineni02bleu}は機械翻訳の文章単位の自動評価尺度として最も一般的に使われるものであり，参照訳$\boldsymbol{r}$と機械翻訳結果$\boldsymbol{e}$の間の$n$-gramの一致率に基づきスコアを計算する．
+機械翻訳結果と参照訳が完全に一致すれば1となり，異なりが多くなるに連れて0に近くなる．
+BLEUを文単位の評価に対応させたものにBLEU+1 \cite{lin04orange}がある．
+BLEUやBLEU+1は，$\boldsymbol{e}$と$\boldsymbol{r}$の表層的な文字列の違いにしか着目しないため，$\boldsymbol{e}$が$\boldsymbol{r}$の換言である場合にスコアが不当に低くなる場合がある\footnote{BLEUやBLEU+1を用いる場合，複数の異なった言い回しの参照訳を与えることで，複数の言い回しに対応した評価が行える．}．
+
+BLEUとは異なり，評価尺度自体が換言に対応したものに，METEOR \cite{banerjee05meteor}がある．
+METEORを利用する場合，単語やフレーズの換言を格納したデータベースを事前に用意しておく．
+これにより，参照訳と機械翻訳結果の$n$-gramが一致しない場合であっても，データベース中に含まれる換言を利用することで一致する場合，スコアの低下を小さくすることが可能となる．
+
+
+\subsection{自動評価の課題}
+
+\begin{table}[b]
+\caption{機械翻訳の誤訳の例}
+\label{tab:wrong-trans}
+\input{04table01.txt}
+\vspace{4pt}\small
+文脈から ``right'' は「正しい」と訳すべきだが「右」と訳されている．また ``choose'' に相当する語句が機械翻訳結果では削除されている．
+\end{table}
+
+表\ref{tab:wrong-trans}に，英日翻訳における原文，機械翻訳結果，参照訳の例を示す．機械翻訳システムとして，句構造に基づく機械翻訳システムを利用した．
+自動評価尺度の一例として，BLEU+1スコアを示す．
+また，図\ref{fig:wrong-trans-t2s}はシステムが翻訳結果を出力した際の導出過程の一部である．
+自動評価尺度を用いることで，翻訳システムの性能を数値で客観的に比較することが可能であるが，この例から自動評価尺度に頼り切ることの危険性も分かる．
+前節で述べたように，自動評価尺度は人間の評価と必ずしも一致しない評価を行う場合がある．
+表\ref{tab:wrong-trans}の例では，``For this reason'' が機械翻訳で「このため」と正しく翻訳されているが，参照訳では「それゆえ」と翻訳されているため，
+文字列の表層的な違いにしか着目しないBLEU+1では誤訳と判断されて，スコアが不当に低くなる．
+METEORを用いた場合，換言によるスコアの低下は発生しにくくなるが，逆に誤った換言が使用され，スコアが不当に高くなることも考えられる．
+
+自動評価尺度は，機械翻訳結果の正確さを判断する上で有用であるが，その結果からシステムの特徴を把握することは困難である．
+しかし，このように翻訳結果に目を通すことで，自動評価尺度の数値だけからは分からない情報を把握することが可能となる．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{23-1ia4f2.eps}
+\end{center}
+\caption{機械翻訳システムの導出過程の例}
+\small
+この文脈で形容詞 (JJ) ``right'' を「右」と訳すのは誤りである．また動詞 (VB) ``choose'' を削除する規則をここで使用することも誤りである．
+\label{fig:wrong-trans-t2s}
+\end{figure}
+
+
+\section{スコアに基づく誤り候補$\boldsymbol{n}$-gramの順位付け}
+\label{sec:scoring}
+
+\textcolor{black}{機械翻訳の誤り箇所を自動的に提示する際に，単純に誤り箇所を列挙するのではなく，
+より誤りの可能性が高い箇所から順に示すことができれば，後の人手による誤り分析の効率が上がると考えられる．}
+本節では，機械翻訳結果に含まれる$n$-gramに対して，分析の優先度に対応するスコアを与える手法を提案する．
+分析者はこのスコアを参考にし，最初に分析する箇所を決定する．
+図\ref{fig:scoring-ex-part}に$n$-gramのスコアに基づく誤り分析の例を示す．
+この例では，提案法によって \textbf{い．」} が最も優先的に分析すべき$n$-gramと判断されているため，最初に機械翻訳結果全体からこの$n$-gramが含まれる箇所を見つけ，誤り分析をする．
+分析が終了したら，次に優先度の高い \textbf{れるが} を，最後に \textbf{られる。} を分析する．
+
+ある$n$-gramを提示した際に，もし分析者が機械翻訳の誤りでない箇所を分析対象としてしまうと，余計な分析作業を行うこととなり，分析効率が低下する原因となる．
+このため，効率的な誤り分析が行われるためには，最初に提示される$n$-gramほどシステムの特徴的な誤りを捉えていることが望ましい．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{23-1ia4f3.eps}
+\end{center}
+\caption{$n$-gramのスコアに基づく誤り分析}
+\label{fig:scoring-ex-part}
+\end{figure}
+
+
+\subsection{正解訳を用いた$\boldsymbol{n}$-gramのスコア計算法}
+
+本節では，このようなスコア付けを行う手法を5つ説明する．
+そのうち，2つ（ランダム選択と誤り頻度に基づく選択）はベースラインであり，3つ（自己相互情報量に基づく選択，平滑化された条件付き確率に基づく選択，識別言語モデルの重みに基づく選択）は提案法である．
+
+まず，すべての手法に共通する以下の関数を定義する．
+\begin{description}
+	\item[$\boldsymbol{\phi}(\boldsymbol{e})$:] 文$\boldsymbol{e}$に対する素性ベクトル．各要素は文$\boldsymbol{e}$に含まれる$n$-gramの出現頻度．
+	\item[$\boldsymbol{e}_{MT}(n)$:] コーパス中の$n$番目の文に対応する機械翻訳結果．
+	\item[$\boldsymbol{e}_{C}(n)$:] コーパス中の$n$番目の文に対応する正解訳（\ref{sec:score-correct-trans}節で定義）．
+\end{description}
+
+これらの関数を利用し，次節以降で述べるスコア関数に従って，コーパス全体から$n$-gramのスコアを計算する．
+
+
+\subsubsection{ランダム選択}
+
+ランダム選択は，$n$-gramの順位付けを一切行わずに誤り分析を進めることに等しい．
+\ref{sec:filtering}章で誤り候補のフィルタリングの説明を行うが，フィルタリングを一切行わない場合はチャンスレートとなる．
+また，ランダム選択と参照訳を用いた厳密一致フィルタリングを組み合わせた場合は，先行研究\cite{popovic2011towards}で提案されている参照訳との差分に基づく分析となる．
+
+
+\subsubsection{誤り頻度に基づく選択}
+
+誤り頻度に基づく手法は，機械翻訳結果に多く含まれ，正解訳に含まれない回数が多い$n$-gramは重点的に分析すべきという考え方に基づく．
+$n$-gramのスコア計算では，ある$n$-gram $x$が機械翻訳結果$\boldsymbol{e}_{MT}(n)$に含まれていて，かつ正解訳$\boldsymbol{e}_{C}(n)$に含まれていない回数を計算し，スコアとする．
+\begin{equation}
+S(x) = -\sum_n \left [ \phi_x(\boldsymbol{e}_{MT}(n)) - \phi_x(\boldsymbol{e}_{C}(n)) \right ]_+ 
+\label{eqn:freq}
+\end{equation}
+ここで $[ ~ ]_+$ はヒンジ関数である．
+このスコアが低い$n$-gramから順に選択することで，誤って出現した回数が多い$n$-gramを優先的に分析することとなる．
+
+しかし，頻繁に発生する誤りが必ずしも分かりやすく有用な誤りとは限らない．
+表\ref{tab:commonerrors}は，ある英日機械翻訳システムが出力した翻訳結果に含まれ，参照訳には含まれなかった$n$-gramを，回数が多いものから順に一覧にしたものである．この表で，右側の数字はテストコーパス内で誤って出現した回数を示している．
+この表を見ると，単純に頻繁に検出される誤りは目的言語に頻繁に出現するものに支配されており，この結果だけからは翻訳システムの特徴を把握しにくいことが分かる．
+
+\begin{table}[t]
+\caption{機械翻訳で頻繁に起こる誤り}
+\label{tab:commonerrors}
+\input{04table02.txt}
+\end{table}
+
+
+\subsubsection{自己相互情報量に基づく選択}
+
+誤り頻度に基づいて$n$-gramの選択を行った場合，表\ref{tab:commonerrors}に示したように誤りとして検出されるものの多くは単純に目的言語の特徴を捉えたものとなってしまう．
+本研究ではこの問題に対処するため，出現頻度より正しく，ある$n$-gramが誤った文の特徴であるかどうかを判断する手法を提案する．
+
+最初のスコア付け基準として，自己相互情報量 (PMI: Pointwise Mutual Information) に基づく手法を提案する．
+PMIは，2つの事象の関係性を計る尺度であり，本研究では与えられた$n$-gramと機械翻訳結果との関係性をスコアとして定式化する．
+機械翻訳結果と関係が強い$n$-gramは，正解訳との関係は逆に弱くなる．
+PMIは以下の式によって計算される\cite{churchhanks90pmi}．
+\begin{align*}
+PMI(x, \boldsymbol{e}_{MT}) &= \log \frac{p(\boldsymbol{e}_{MT}, x)}{p(\boldsymbol{e}_{MT}) \cdot p(x)} \\
+                            &= \log \frac{p(\boldsymbol{e}_{MT} | x)}{p(\boldsymbol{e}_{MT})}
+\end{align*}
+ここで，各原文につき機械翻訳結果と正解訳が1つずつ与えられるため，$p(\boldsymbol{e}_{MT}) = 1/2$である．
+条件付き確率$p(\boldsymbol{e}_{MT} | x)$は以下の式で計算される．
+\[
+p(\boldsymbol{e}_{MT} | x) = \frac{\sum_n \phi_x(\boldsymbol{e}_{MT}(n))}{ \sum_n \{ \phi_x(\boldsymbol{e}_{MT}(n)) + \phi_x(\boldsymbol{e}_{C}(n)) \} }
+\]
+最終的に，自己相互情報量の期待値に比例する以下の値をスコアとし，スコアが低いものから順に$n$-gramを選択する．
+\begin{align}
+S(x) &= \phi_x(\boldsymbol{e}_{MT}(n)) \cdot (-PMI(x, \boldsymbol{e}_{MT})) \\
+     & \propto  p(x, \boldsymbol{e}_{MT}) \cdot (-PMI(x, \boldsymbol{e}_{MT})) \nonumber
+\end{align}
+
+
+\subsubsection{平滑化された条件付き確率に基づく選択}
+
+「誤り頻度に基づく選択」では，目的言語に頻繁に出現する$n$-gramが分析対象の上位を占めてしまう問題があった．
+そこで，2つ目のスコア付け基準は，誤り頻度を全体の出現回数で正規化し，条件付き確率として定式化することを考える．
+平滑化された条件付き確率に基づく選択では，ある$n$-gramがシステム出力に含まれながら参照文に含まれない確率をスコアとし，
+このスコアが高いものを優先的に分析する．
+まず，以下の関数を定義する．
+\begin{align*}
+F_{MT}(x) & = \sum_n \left [ \phi_x(\boldsymbol{e}_{MT}(n)) - \phi_x(\boldsymbol{e}_{C}(n)) \right ]_+ \\
+F_{C}(x) & = \sum_n \left [ \phi_x(\boldsymbol{e}_{C}(n)) - \phi_x(\boldsymbol{e}_{MT}(n)) \right ]_+ 
+\end{align*}
+ここで，$F_{MT}(x)$は誤り頻度に基づく選択で利用した式(\ref{eqn:freq})に等しい．
+また，$F_{C}(x)$は$n$-gramが正解訳により多く出現した回数を表す．
+ある$n$-gramを選択した際，その$n$-gramが正解訳に多く含まれる条件付き確率は以下の通りである．
+\begin{equation}
+p(\boldsymbol{e}_{MT}|x) = \frac{F_{MT}(x)}{F_{MT}(x) + F_{C}(x)}
+\end{equation}
+しかし，確率を最尤推定で計算すると，正解訳として出現せず，機械翻訳結果に1回しか出現しないような稀な$n$-gramの確率が1となり，頻繁に選択されてしまう．
+上述の問題点を解決するために，確率の平滑化を行う．
+文献\cite{mackay95hdlm}では平滑化の手法としてディリクレ分布を事前分布として確率を推定しており，本手法もこれに習う．
+平滑化を用いた際の$n$-gram $x$ についての評価関数は式(\ref{eqn:dirichlet})の通りであり，$S(x)$が低いものを代表的な$n$-gramとする．
+\begin{equation}
+S(x) = -\frac{F_{MT}(x) + \alpha P_{MT}}{F_{MT}(x) + F_{C}(x) + \alpha} \label{eqn:dirichlet}
+\end{equation}
+ただし，
+\[
+P_{MT} = \frac{\sum_x F_{MT}(x)}{\sum_x F_{MT}(x) + \sum_x F_{C}(x)}
+\]
+このとき平滑化係数$\alpha$を決定する必要がある．
+$n$-gramを利用して参照文もしくはシステム出力文を選択する際，選択される文の種類がディリクレ過程に従うと仮定すると，
+コーパス全体に対する尤度は式(\ref{eqn:dirichlet2})で表される．
+\begin{equation}
+P = \prod_x \frac{\{ \prod_{k=0}^{F_{MT}(x)-1} (k + \alpha P_{MT}) \} \{ \prod_{k=0}^{F_{C}(x)-1} (k + \alpha P_{C}) \}}{\prod_{k=0}^{F_{MT}(x)+F_{C}(x)} (k + \alpha)} \label{eqn:dirichlet2}
+\end{equation}
+式(\ref{eqn:dirichlet2})の$P$が最大化されるような$\alpha$をパラメーターとする．
+\pagebreak
+$P$は全区間で微分可能であり，唯一の極があるとき，その点で最大値となる．
+よって$\alpha$は$P$の微分からニュートン法により計算できる．
+
+
+\subsubsection{識別言語モデルの重みに基づく選択}
+
+最後に，識別言語モデルの重みに基づくスコア付け基準を提案する．
+識別言語モデルは，自然な出力言語文の特徴を捉えるように学習される通常の言語モデルとは異なり，ある特定のシステムについて，起こりやすい出力誤りを修正するように学習される．
+さらに学習時に正則化を行えば，モデルのサイズが小さくなり，少ない修正で出力を改善するような効率的な修正パターンが学習される．
+誤り分析の観点から見ると，モデルによって学習された効率的な修正パターンに目を通せば，システムの特徴的な誤りを発見できると考えられる．
+
+\begin{algorithm}[b]
+\caption{構造化パーセプトロンによる識別言語モデルの学習}
+\label{alg:s-perceptron}
+\begin{algorithmic}
+\FOR{$t = 1$ \TO $T$}
+\FOR{$n = 1$ \TO $N$}
+\STATE $E^* \leftarrow \argmax_{E \in \boldsymbol{\hat E}(n)} EV(E)$
+\STATE $\hat{E} \leftarrow \argmax_{E \in \boldsymbol{\hat E}(n)} \boldsymbol{w} \cdot \boldsymbol{\phi}(E)$
+\STATE $\boldsymbol{w} \leftarrow \boldsymbol{w} + \boldsymbol{\phi}(E^*) - \boldsymbol{\phi}(\hat{E})$
+\ENDFOR
+\ENDFOR
+\end{algorithmic}
+\end{algorithm}
+
+\vspace{1\Cvs}
+\noindent \textbf{○ 構造化パーセプトロンによる識別言語モデル}
+
+識別言語モデルの学習は構造学習の一種である．
+先行研究では，構造学習の最も単純な手法である構造化パーセプトロン\cite{collins02structuredperceptron}を，識別言語モデルの学習において有用な手法であると示している\cite{roark07discriminative}．
+構造化パーセプトロンでは，\textcolor{black}{候補集合の中で誤りの修正先として学習される目標$E^*$を定める．本研究では目標として，機械翻訳結果の$n$-bestの中で評価尺度が最も高かった文（オラクル訳，\ref{sec:score-correct-trans}節参照）を選択する．
+学習では，}モデルによって最も大きなスコアが与えられる現在の仮説$\hat{E}$と$E^*$の素性列を比較する．
+1回の更新において，$\hat{E}$と$E^*$の差分を用いて重み$\boldsymbol{w}$を更新する．
+重みが更新されると，重みと素性列から計算されるスコアが変化し，仮説$\hat{E}$が更新される．
+$\hat{E}$と$E^*$が等しいときは差分が$\boldsymbol{0}$のため更新を行わない．
+重みの更新はコーパス全体に対して一文ごとに逐次的に行い，反復回数や重みの収束といった終了条件が満たされるまで反復する．
+学習のアルゴリズムをAlgorithm~\ref{alg:s-perceptron}に示す．
+ここで，$\boldsymbol{\hat E}(n)$は$n$番目の文に対応する機械翻訳結果の$n$-bestリスト，$T$は反復回数である．
+また，$EV(E)$は機械翻訳結果$E$の翻訳精度を評価するための自動評価尺度である．
+
+\vspace{1\Cvs}
+\noindent \textbf{○ L1正則化による素性選択}
+
+\label{sec:l1}
+機械翻訳システムの誤り傾向をより明確にするため，重みの学習時にL1正則化を行う．
+L1正則化は，重みベクトルに対してL1ノルム$\|\boldsymbol{w}\|_1 = \sum_i |w_i|$に比例するペナルティを与える．
+L1正則化を用いる時に，重み$\boldsymbol{w}$の中で多くの素性に対応するものが0となるため，識別能力に大きな影響を与えない素性をモデルから削除することが可能となる．
+
+L1正則化された識別モデルを学習する簡単かつ効率的な方法として，前向き後ろ向き分割 (forward-backward splitting; FOBOS) アルゴリズムがある\cite{duchi09fobos}．
+一般的なパーセプトロンでは正則化を重みの更新時に行うが，FOBOSでは重みの更新と正則化の処理を分割し，重みの利用時に前回からの正則化分をまとめて計算し，効率化を図る．
+
+\vspace{1\Cvs}
+\noindent \textbf{○ 識別言語モデルの素性}
+
+識別言語モデルの素性として様々な情報を利用できるが，本研究では$n$-gramに基づく選択を行うため，以下の3種類の素性を利用する．
+\begin{description}
+\item[翻訳仮説を生成したシステムのスコア：] システム出力を修正するように学習するため，学習の初期においてシステムスコアによる順位付けが必要である．
+\item[翻訳仮説に含まれる$\boldsymbol{n}$-gramの頻度：] $n$-gramに対して重み付けをすることで，システムが出力する誤った$n$-gramを捉える．
+\item[翻訳仮説の単語数：] 翻訳システムが利用する評価尺度が単語数によって大きく影響される場合，単語数を調整するのに用いられる．
+\end{description}
+
+$n$-gramの選択時には，識別言語モデルによって学習された重みが低いものを優先的に選択する．
+
+
+\subsection{スコア計算に用いる正解訳$\boldsymbol{e_{C}(n)}$の選択}
+\label{sec:score-correct-trans}
+
+機械翻訳の評価では，正解訳として事前に人手で翻訳された参照訳を利用することが多い．
+しかし参照訳は機械翻訳とは独立に翻訳されるため，使用する語彙が機械翻訳結果とは異なる場合が多いと考えられる．
+本研究では参照訳の代わりに，機械翻訳システムが出力した翻訳候補の中で，自動評価尺度により最も高いスコアが与えられた文（オラクル訳）を正解訳として利用し，参照訳を用いた場合との比較を行う．
+
+表\ref{tab:oracle-ex}にオラクル訳の例を示す．この例では，日本語の「宗派」が機械翻訳結果で``sect''と正しく翻訳されているが，
+参照訳では``school''となっているため，差分を取ると誤り$n$-gramとして選択されやすくなってしまう．
+オラクル訳は機械翻訳システムの探索空間の中で，参照訳の表現に最も近い文であるため，訳出に近い表現を維持しながら正しい翻訳に近づく．
+この場合，誤りでない``sect''がオラクル訳でも使用されているため，差分をとった際に誤り$n$-gramとして扱われにくくなる．
+このように，オラクル訳は翻訳仮説と同じシステムから出力されるため，オラクル訳は参照訳に比べて翻訳仮説との表層的な異なりが少なくなり，\textcolor{black}{換言を誤り$n$-gramとして誤選択する}可能性が低くなると考えられる．
+一方，オラクル訳は機械翻訳システムから出力されている以上，誤訳を含む場合もあることに注意されたい．
+
+\begin{table}[t]
+\caption{オラクル訳の例}
+\label{tab:oracle-ex}
+\input{04table03.txt}
+\end{table}
+
+
+\section{誤り候補$\boldsymbol{n}$-gramのフィルタリング}
+\label{sec:filtering}
+
+$n$-gramに基づく誤り箇所選択では，$n$-gramのスコアはコーパス全体から計算される．
+このため，コーパス全体を見た際に分析すべきと判断された$n$-gramであっても，ある特定の文では誤りとは考えにくい場合がある．
+本節では，選択された箇所に対してフィルタリングを適用することにより誤選択を回避し，機械翻訳の誤り箇所選択率の向上を行う．
+
+
+\subsection{厳密一致フィルタリング}
+
+このフィルタリングは，機械翻訳結果中のある$n$-gramが誤り箇所として選択された際に，その$n$-gramが\textcolor{black}{正解訳の一部に厳密一致するかどうかを確認し，
+一致する場合は}選択を行わないようにする．
+フィルタリングの具体例を表\ref{tab:exact-filter}に示す．
+$n$-gram「、 右」が誤り箇所の候補とされた際，1つ目の例では機械翻訳結果の一致箇所が選択されるが，2つ目の例では正解訳に同一の$n$-gramがあるため，誤り箇所の候補から除外される．
+これは，正解訳に含まれている文字列は翻訳誤りではないだろうという直感に基づく．
+
+
+\subsection{換言によるフィルタリング}
+
+機械翻訳結果と正解訳の文字列が，表層的に異なりながら意味が等しい場合，厳密一致フィルタリングを用いただけでは選択された箇所が正解訳に含まれず，誤選択を回避することができない．
+この問題を解決するため，本研究では正解訳の換言を用いたフィルタリングを行う．
+
+換言によるフィルタリングの例を図\ref{fig:para-ref}に示す．
+正解訳として ``I don't like IT!'' が与えられている中，
+機械翻訳結果が ``I like information technology!'' となり，``like information'' が誤りの候補として挙げられたとする．
+換言によるフィルタリングでは，まず正解訳に含まれる全ての部分単語列を用意した換言データベースの中から検索し，ある閾値以上の確率で置換可能な換言を抽出する．
+次に，抽出された換言を利用して参照訳のパラフレーズラティス\cite{onishi10paraphrase}を構築する．
+最後にラティス上を探索し，誤りの候補として挙げられた$n$-gram ``like information'' が見つかった場合は，この$n$-gramを誤りの候補から除外する．
+
+\begin{table}[t]
+\setlength{\fboxsep}{0.1em}
+\caption{厳密一致フィルタリングの例}
+\label{tab:exact-filter}
+\input{04table04.txt}
+\end{table}
+\begin{figure}[t]
+\begin{center}
+\includegraphics{23-1ia4f4.eps}
+\end{center}
+\caption{パラフレーズラティスによる誤り箇所候補のフィルタリング}
+\label{fig:para-ref}
+\end{figure}
+
+
+\subsection{フィルタリングに用いる正解訳の選択}
+
+\ref{sec:score-correct-trans}節で，スコア計算に用いる正解訳として参照訳またはオラクル訳を利用するが，
+フィルタリングの際にも正解訳として\textcolor{black}{参照訳のみ用いた場合と，参照訳に加えてオラクル訳を用いた場合で比較を行う}．
+オラクル訳の選択では，機械翻訳の自動評価尺度を用いるが，本研究では以下の2つの評価尺度で選択を行った場合の比較を行う．
+
+\begin{description}
+	\item[BLEU+1:] 機械翻訳の自動評価に一般的に用いられる尺度であるBLEUを，文単位の評価に対応させたもの．換言を考慮しない．
+	\item[METEOR:] BLEU+1は，参照訳と機械翻訳結果の表層的な文字列の違いにしか着目しないため，換言に対して不当な罰則を行ってしまう．METEORは事前に与えられた換言テーブルを用いるため，換言に対する罰則がBLEU+1に比べて小さくなる．
+	METEORを用いた場合，BLEU+1を用いた場合に比べ，オラクル訳と参照訳の違いは表層的に多くなると考えられるが，逆に機械翻訳結果との表層的な違いが少なくなり，換言の誤選択が発生しにくくなると考えられる．
+\end{description}
+
+
+\section{実験}
+\label{sec:experiments}
+
+本節では，各実験を通して，提案法を利用することで機械翻訳の誤り分析をより効率的に行えることを示す．
+まず，各スコア基準に従って単一の機械翻訳システム（\ref{sec:pr-curve}節）及び複数の機械翻訳システム（\ref{sec:system-comparison}節）の誤り箇所選択を行い，人手評価を行う．これにより，提案法の選択精度とシステム間比較における有効性を検証する．
+次に，誤りとして選択された箇所のフィルタリングを複数の手法によって行い，フィルタリングの効果を自動評価によって測定する（\ref{sec:auto-analysis-result}節）．
+さらに，提案法が翻訳誤りでない箇所を誤選択する場合についても分析を行い，提案法が抱える課題を明らかにし，その改善策について検討する（\ref{sec:selection-error-analysis}節）．
+また，提案法によって発見された翻訳誤りを修正した際の効果について検討する（\ref{sec:act-error-analysis}節）．
+
+
+\subsection{選択された誤り箇所の調査}
+\label{sec:manual-analysis-result}
+
+本節では，各手法によって順位付けされた誤り$n$-gramを人手で分析する．
+人手評価の方法は赤部, Neubig, Sakti, 戸田, 中村 (2014a) \nocite{akabe14signl216}に従い2段階で行う．
+まず，各誤り箇所選択手法によって選択された箇所に対し，分析者はその箇所が機械翻訳の誤り箇所を捉えているかどうかをアノテーションする．
+これにより，優先的に選択された上位$k$個の$n$-gramについて，誤り箇所の適合率を測定することが可能となる．
+次に，誤り箇所を捉えている場合は，以下に示す誤りの種類をアノテーションする．
+
+\begin{description}
+\item[文脈依存置換誤り：] 別の文脈では正しい翻訳だが，この文脈では不適切な翻訳．
+\item[文脈非依存置換誤り：] いかなる文脈であっても，不適切な翻訳．
+\item[挿入誤り：] 不必要な語句の挿入．
+\item[削除誤り：] 必要な語句の不適切な削除．
+\item[並べ換え誤り：] 選択された箇所が語順の誤りを捉えている．
+\item[活用誤り：] 活用形が誤っている．
+\end{description}
+
+これにより，選択された誤り箇所の誤り傾向を把握する．
+これらの結果を元に，翻訳システムの比較を行う．
+
+
+\subsubsection{実験設定}
+
+すべての実験で京都フリー翻訳タスク (KFTT) \cite{neubig11kftt}の日英翻訳を利用した．
+コーパスの大きさを表\ref{tab:kftt}に示す．
+単一の機械翻訳システムを用いた実験では，Travatarツールキット\cite{neubig13travatar}に基づくforest-to-string (\textsc{f2s}) システムを利用した．
+システム間比較では，\textsc{f2s}システムに加え，Mosesツールキット\cite{koehn07moses}に基づくフレーズベース翻訳 (\textsc{pbmt}) システム及び階層的フレーズベース (\textsc{hiero}) システムを利用した．
+
+翻訳システムを構築する上で，\textsc{f2s}システムでは単語間アラインメントにNile\footnote{http://code.google.com/p/nile/}を利用し，
+構文木の生成にはEgret\footnote{http://code.google.com/p/egret-parser/}を利用した．
+\textsc{pbmt}システムと\textsc{hiero}システムでは，単語間アラインメントにGIZA++ \cite{och03alignment}を利用した．
+チューニングにはMERT \cite{och03mert}を利用し，評価尺度をBLEU \cite{papineni02bleu}とした．
+
+\begin{table}[b]
+\caption{KFTTのデータサイズ}
+\label{tab:kftt} 
+\input{04table05.txt}
+\end{table}
+\begin{table}[b]
+\caption{実験に用いた誤り箇所選択手法}
+\label{tab:method-list}
+\input{04table06.txt}
+\end{table}
+
+$n$-gramの選択には\ref{sec:scoring}章で説明したスコア計算法を利用した．
+実験を行ったスコア計算法とスコアの学習に利用したデータの組み合わせを表\ref{tab:method-list}に示す．
+$n$-bestによる識別言語モデルの学習は，反復回数を100回とした．
+学習時にFOBOS \cite{duchi09fobos}によるL1正則化を行った．正則化係数は$10^{-7}$--$10^{-2}$の中から選び，
+KFTTのテストセットに対して高い精度を示す値を利用した．
+学習には1-gramから3-gramまでの$n$-gramを\textcolor{black}{長さによる区別を行わずに}利用した．
+
+オラクル文の選択にはBLEU+1を利用し，選択される$n$-gramの誤り傾向を分析した．
+各手法で，参照訳を用いた厳密一致フィルタリングを行った．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{23-1ia4f5.eps}
+\end{center}
+\caption{分析対象となった$n$-gramの誤り箇所選択率}
+\small\centerline{横軸は選択した$n$-gramの種類数，縦軸は誤り箇所適合率．}
+\label{fig:precision}
+\end{figure}
+
+
+\subsubsection{選択する$\boldsymbol{n}$-gramの個数と適合率の関係}
+\label{sec:pr-curve}
+
+まず，識別言語モデルの重みに基づく選択，機械翻訳結果と参照訳から計算された誤り頻度に基づく選択，ランダム選択の比較を行った．
+図\ref{fig:precision}に，上位の$n$-gramを順に選んだ際の誤り箇所適合率を示す．
+この結果から，識別言語モデルの重みに基づき選択された$n$-gramが，ランダム選択，誤り頻度に基づく選択の2手法に比べ，機械翻訳の誤り箇所を高い精度で捉えていることが分かる．
+
+
+\subsubsection{選択された$\boldsymbol{n}$-gramの統計}
+
+次に，各手法で上位30個に選ばれた誤り$n$-gramを選択した際の誤り箇所適合率を調査した．
+結果を表\ref{tab:method-comparison}に示す．
+
+\begin{table}[b]
+\caption{各手法により選択された$n$-gramの内訳}
+\label{tab:method-comparison}
+\input{04table07.txt}
+\vspace{4pt}\small
+誤り箇所選択率がランダムよりも高い3つの手法を太字で示した．また，3つの手法の中で各種類の誤りについて多く検出されたものを太字とした．
+\end{table}
+
+表から，誤り箇所選択率が高い手法は，平滑化された条件付き確率に基づく手法と，識別言語モデルの重みに基づく手法であることが分かる．
+その他の手法はランダム選択を下回っており，誤り箇所選択率が高いとは言えない．
+上位3つの手法を比較すると，参照文を利用した条件付き確率に基づく手法では，置換誤りや挿入誤りを多く捉えているが，
+削除誤りをほとんど捉えていないことが分かる．
+一方，識別言語モデルの重みに基づく手法では，他の手法に比べて2倍以上の削除誤りを捉えていることが分かる．
+
+識別言語モデルの重みに基づく手法以外で削除誤りの検出率が悪い原因として，削除誤りを検出する際には削除された単語列ではなく，
+その前後の文脈を見る必要があることが挙げられる．
+削除誤りが発生する前後の文脈は原文によって大きく変わるため，$n$-gramの発生頻度が小さく候補から外れやすくなる．
+しかし識別言語モデルの重みに基づく手法の場合，同じ文脈における削除誤りが$n$-best中の複数の候補に発生するため，
+削除誤りが修正されるまで$n$-gramの重みを大きくしようとする．
+結果として，識別言語モデルの重みに基づく手法では，削除誤りも多く捉えることができる．
+
+\textcolor{black}{
+各手法とも，ランダム選択に対して捉えられた誤りの分布は大きく異なる．
+この点から，別々の手法によって捉えられた誤りの分布を比較することはできないことが分かる．
+また，あるシステムの分析結果に対して，どの誤りが多い，あるいは少ないという絶対的な評価はできず，
+システム同士の相対的な評価にしか利用できないことに注意されたい．
+}
+
+識別言語モデルの重みによって選択された箇所の例を表\ref{tab:trainederrors}に示す．
+この結果を見ると，誤り頻度に基づいて選択した場合（表\ref{tab:commonerrors}）に比べ，選択された$n$-gramが目的言語の言語現象に支配されていないことが分かる．
+
+\begin{table}[b]
+\setlength{\fboxsep}{2pt}
+\caption{識別言語モデルによって選択された上位の$n$-gram}
+\label{tab:trainederrors}
+\input{04table08.txt}
+\par\vspace{4pt}\small
+枠で囲まれた部分は選択された箇所および選択箇所に対応する箇所を示す．
+\end{table}
+
+
+\subsubsection{システム間比較}
+\label{sec:system-comparison}
+
+\textcolor{black}{分析対象とするシステムによって，含まれる誤りの分布が異なる．
+本節では，提案法によって検出される誤りが，本来の誤り分布を適切に捉えることを確認する．
+具体的には，\textsc{pbmt}，\textsc{hiero}，\textsc{f2s}の3つの翻訳システムで日英・英日の両方向に対して翻訳を行い，
+単一システムの評価を行った際と同様に，識別言語モデルの重みに基づく誤り箇所選択法を利用して抽出された上位30個の誤り$n$-gramに対し，分析を行った．}
+その結果を表\ref{tab:diff-dir}に示す．
+
+\begin{table}[b]
+\caption{3種類のシステムで両方向の翻訳を行った際の比較}
+\label{tab:diff-dir}
+\input{04table09.txt}
+\end{table}
+
+この結果から，\textsc{pbmt}と\textsc{hiero}の両システムでは，並べ換え誤りが上位の誤りとして検出されている一方，\textsc{f2s}システムの特に英日翻訳では下位の誤りとして検出された．
+一般的に，統語情報を使った翻訳システムは並べ換え誤りに強いことが知られており，本結果はこれを裏付けることとなった．
+次に，日英翻訳では挿入誤りが多く検出され，逆に英日翻訳では日本語で多様な活用誤りが多く検出されていることが分かる．
+
+このように僅か30個の誤り$n$-gramに目を通すだけで，各翻訳システムが苦手とする分野に目を通すことがある程度できたことが分かる．
+
+
+\subsection{選択された箇所に対するフィルタリングの効果}
+\label{sec:auto-analysis-result}
+
+本節では，翻訳誤りとして選択された箇所に対し，各フィルタリング法を適用した際の効果について，誤り箇所アノテーションコーパスを用いた自動評価により検証する．
+    自動評価には，先行研究で提案されている機械翻訳結果を後編集した際の編集パターンを利用した手法 (赤部, Neubig, Sakti, 戸田, 中村 2014b) を利用する．\nocite{akabe14signl219}
+評価の際は，事前に選択精度評価用の機械翻訳結果を後編集したコーパスを作成する．
+後編集のパターンから，機械翻訳結果の各部分に対して，挿入誤り，削除誤り，置換誤り，並べ換え誤りのラベルを付与することが可能である．
+これを誤り箇所の正解ラベルとし，評価用の機械翻訳結果に対して各誤り箇所選択法を適用した際に，誤り箇所の正解ラベルをどの程度予測できるかを適合率と再現率により評価する．
+
+
+\subsubsection{実験設定}
+
+人手評価の際と同様に，機械翻訳システムとして京都フリー翻訳タスク (KFTT) \cite{neubig11kftt}の日英データで構築された\textsc{f2s}システムを利用した．
+誤り候補のフィルタリングでは，正解訳として参照訳のみ利用した場合と，参照訳とオラクル訳の2つを利用した場合で比較を行った．
+オラクル訳の選択には，評価尺度としてBLEU+1または，METEOR version 1.5 \cite{denkowski:lavie:meteor-wmt:2014}を利用し，それぞれ500-bestの中で評価尺度が最大となるものを選択し，比較を行った．
+パラフレーズラティスの構築のため，英語換言データベース (PPDB) \cite{ganitkevitch2013ppdb}のXLサイズ（43.2~Mルール）を利用した．
+また日本語のラティス構築のため，日本語換言データベース \cite{mizukami14cocosda}のXLサイズ（11.7~Mルール）を利用した．
+
+誤り箇所選択率の評価のため，KFTTの開発セットを日英翻訳した結果503文（12,333単語），英日翻訳した結果200文（4,846単語）に対して後編集を行い，誤り箇所アノテーションコーパスを作成した．
+
+
+\subsubsection{参照訳による厳密一致フィルタリングの効果}
+
+予備実験として，コーパス全体をランダムに選択した場合と，参照訳によるフィルタリングを行った場合で，誤り箇所の選択精度がどのようになるか確認を行った．
+表\ref{tab:filt}はすべての箇所をランダムに分析した場合の結果である．
+「フィルタリングなし」はチャンスレート，「フィルタリングあり」は分析の際にフィルタリングを行った結果である\footnote{フィルタリングなしの再現率は1.0とならない．これはコーパスの中に機械翻訳結果を見ただけでは発見不能な削除誤りが含まれる場合があるためである．}．
+この表から，参照訳によるフィルタリングを行うだけでも，再現率の低下を抑えつつ適合率が大きく改善したことが分かる．
+
+\begin{table}[b]
+\caption{参照訳によるフィルタリングの効果}
+\label{tab:filt}
+\input{04table10.txt}
+\end{table}
+
+
+\subsubsection{換言を考慮した正解訳の効果}
+
+各正解訳（参照訳，\textcolor{black}{参照訳+}オラクル訳）を用いたフィルタリング法を，換言あり・なしの場合について適用した実験を行った．
+表\ref{tab:precision-recall}は各設定における誤り箇所適合率と再現率の結果である．
+この表から，フィルタリングに用いる正解訳として，\textcolor{black}{参照訳のみ}を用いた場合に比べてBLEU+1によるオラクル訳を\textcolor{black}{加えた}方が適合率が高く，
+また\textcolor{black}{評価尺度として}METEORを用いた場合は，BLEU+1\textcolor{black}{を用いた場合}に比べ更に\textcolor{black}{適合率が}高くなったことが分かる．
+このことから，METEORにより選択されたオラクル訳は，機械翻訳の1-best出力で利用される語彙に似ており，換言表現が含まれにくくなっていることが分かる．
+
+\begin{table}[b]
+\caption{各フィルタリング法における適合率と再現率}
+\label{tab:precision-recall}
+\input{04table11.txt}
+\end{table}
+
+次に正解訳の換言を用いた場合の結果を見ても，選択箇所の誤り箇所適合率が高くなっていることが分かる．
+これらから，正解訳の換言を用いたフィルタリングを行うことによって，機械翻訳の誤り箇所がより適切に捉えられるようになったことが分かる．
+
+一方，再現率について注意しなければならない点がある．特にオラクル訳を正解訳として利用した場合に，誤り箇所選択の再現率が大きく低下している．
+これは，オラクル訳は機械翻訳システムが出力した文であり，1-bestと同様の誤りが発生する場合があるためである．
+しかし，今回提案した各手法は，コーパスの中の少なくとも20\%の誤り箇所を捉えており，提案法を利用する際には大きな問題とはならないと考えられる．
+誤り分析を効率的に行う際には，適合率の高い手法から先に利用し，選択された箇所を全て分析してしまった場合は順次再現率の高い選択法に切り替えることが可能である．
+
+\begin{table}[b]
+\caption{換言によりフィルタリングされた$n$-gramの例}
+\label{tab:para-example}
+\setlength{\fboxsep}{0.1em}
+\input{04table12.txt}
+\end{table}
+
+表\ref{tab:para-example}にフィルタリングされた箇所の例を示す．
+1つ目の日英翻訳の例では，``foundation of''が誤り箇所の候補として選択されている．しかし参照訳に含まれる``a foundation for''は換言データベースによると``a foundation of''に置き換えることが可能である．
+その結果，``foundation of''は誤りの候補から正しく除外された．
+2つ目の英日翻訳の例では，換言データベースにより句点「、」が削除されたことで，不適切な選択箇所が正しく除外された．
+
+この際注意すべきこととして，生成されたパラフレーズラティスが言語的に正しいものとは限らないという点が挙げられる．
+このため，誤った翻訳が発生している箇所が候補から除外される可能性もあることに注意されたい．
+
+
+\subsubsection{換言テーブルのドメインの影響}
+
+次に，日英翻訳において異なる換言データベースを使用した際の選択精度の調査を行った．
+前節の実験で利用した英語PPDBには，分析対象であるKFTTのデータが含まれていない．
+このため，KFTTのデータが含まれている日本語PPDBの構築データを利用して英語のPPDBを新たに作成した．
+前者を「ドメイン外」，新しく作成した後者を「ドメイン内」とし，評価結果を表\ref{tab:precision-recall-ppdb}に示す．
+
+\begin{table}[b]
+\caption{異なるドメインのPPDBを利用した場合の結果}
+\label{tab:precision-recall-ppdb}
+\input{04table13.txt}
+\end{table}
+
+この表から，分析対象のドメインのデータが含まれた換言データベースを利用することで，誤り箇所選択の適合率が向上したことが分かる．
+換言データベースは機械翻訳のパラレルデータがあれば容易に作成可能なため\cite{bannard05paraphrase}，誤り分析で利用する際には独自に作成することが望ましいと言える．
+
+
+\subsubsection{選択された誤り箇所の分布}
+
+誤り箇所選択法によって見つかった誤りの傾向が，本来の誤り傾向と異なる場合，機械翻訳システムの傾向を正しく把握できないことにつながる．
+このため，誤り分析コーパスに含まれる誤りの分布と，各誤り箇所選択法によって見つかった誤りの分布の比較を行った．
+
+各手法によって見つかった誤りの統計を図\ref{fig:details}に示し，表\ref{tab:kl}にKLダイバージェンス\cite{kullback1951} $D_{\mathsf{KL}}(P_{\mathsf{corpus}} \| P_{\mathsf{select}})$を示す．
+ここで，$P_{\textsf{corpus}}$はコーパスに含まれる誤りの分布，$P_{\textsf{select}}$は各手法によって見つかった誤りの分布である．
+この結果から，参照訳を用いたフィルタリング法によって検出される誤りが，翻訳システムの誤り傾向を最も正確に捉えていると言えるが，
+他の手法でもKLダイバージェンスの値が0.001程度に収まっている．
+この結果から，いずれの手法においても選択された誤りの種類に大きな偏りが生じず，
+機械翻訳システムの誤り傾向を適切に捉えていることが分かった．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{23-1ia4f6.eps}
+\end{center}
+\caption{各手法で選択された誤り箇所の分布}
+\small\centerline{``All''は誤り分析コーパスに含まれる誤りの分布を示す．}
+\label{fig:details}
+\end{figure}
+\begin{table}[t]
+\caption{コーパスに含まれる誤り分布と見つかった誤り分布の間のKLダイバージェンス}
+\label{tab:kl}
+\input{04table14.txt}
+\end{table}
+
+
+\subsection{誤選択箇所の分析}
+\label{sec:selection-error-analysis}
+
+\ref{sec:manual-analysis-result}節及び\ref{sec:auto-analysis-result}節の実験から，各誤り箇所選択法が誤って正しい翻訳箇所を選択する場合，
+またはフィルタリングによって誤り箇所が選択できなくなってしまう場合が存在することが明らかとなった．
+また，誤り箇所選択の自動評価の際，後編集結果に基づいて誤り箇所がアノテーションされたコーパスを用いるが，そもそもこのコーパスに誤りが含まれている場合は，精度評価が正しく行えないと考えられる．
+本節では，\ref{sec:auto-analysis-result}節と同様に，日英翻訳の誤り箇所アノテーションコーパスを用いて誤り箇所選択を行い，
+自動評価によって誤選択と判断された箇所について原因の調査を行った．
+
+
+\subsubsection{誤選択された正しい翻訳箇所に対する分析}
+
+誤り箇所選択法は，優先的に分析すべきと判断された箇所を選択するが，選択された箇所が本当は誤りでない場合がある．
+このような誤選択の分析を行うため，各手法により誤り箇所選択を行い，さらに選択箇所の自動評価を行った際に，誤選択と判断された部分について以下のアノテーションを人手で行う．
+
+\begin{description}
+\item[厳密一致：] $n$-gramは正解訳にも存在し，換言を利用しないフィルタリングによって除外可能．
+\item[換言：] $n$-gramは正解訳の局所的な換言であり，適切な換言ルールを利用できれば，除外可能．
+\item[統語的換言：] $n$-gramは正解訳の換言だが，局所的な換言が困難と考えられる．文全体に影響する複雑な換言を利用できれば，除外可能．
+\item[正解訳の誤り：] 正解訳が誤っているため，フィルタリングによって除外されない．
+\item[無くても良い：] $n$-gramは正解訳に一致せず，フィルタリングできない．しかし，その$n$-gramが正解訳に含まれていなくても正解訳は誤りでない．
+\item[後編集誤り：] 正解ラベルの誤り（後編集誤り）により誤選択と判断されたが，実際は適切な選択．
+\item[その他：] 上記以外の誤り．$n$-gramが長すぎるためフィルタリングできない等．
+\end{description}
+
+\vspace{1\Cvs}
+\noindent \textbf{○ 実験設定}
+
+京都フリー翻訳タスク (KFTT) の日英データで構築された\textsc{f2s}システムに対し，「識別言語モデルの重みに基づく誤り箇所選択」を行い，再現率が5\%となる上位の$n$-gramについて分析を行った．
+選択の際，各手法によりフィルタリングを行った．
+オラクル訳を選択する際の評価尺度としてBLEU+1を利用した．
+
+\vspace{1\Cvs}
+\noindent \textbf{○ 実験結果}
+
+まず，選択箇所のフィルタリングを一切しない場合に検出された誤選択箇所の内訳を表\ref{tab:ngram-stat}に示す．
+誤選択と判断された箇所の内，誤り箇所アノテーションコーパスの誤りであり，誤選択ではなかったものが僅か3\%であり，後編集による自動評価が十分効果的であると言える．
+
+\begin{table}[b]
+\vspace{-0.8\Cvs}
+\caption{誤選択された$n$-gramの内訳}
+\label{tab:ngram-stat}
+\input{04table15.txt}
+\end{table}
+
+次に，各フィルタリング法を適用した場合に検出された\textcolor{black}{誤選択箇所の個数を表\ref{tab:ngram-stat-ratio}に示す．}
+この結果から，識別言語モデルの重みに基づく誤り箇所選択を行った際に，参照訳を用いたフィルタリングを行うことによって4割以上の誤選択を回避できることが分かった．
+また，誤選択された箇所が正解訳の換言に含まれる場合，参照訳の換言を用いたフィルタリング\textcolor{black}{によって3割以上，さらにオラクル訳やオラクル訳の換言を用いたフィルタリングを合わせることで}8割以上の誤選択を回避できることが分かった．
+
+\begin{table}[b]
+\caption{各フィルタリング適用後の誤選択箇所の個数}
+\label{tab:ngram-stat-ratio}
+\input{04table16.txt}
+\end{table}
+
+オラクル訳を正解訳としてフィルタリングを行った場合の「正解訳の誤り」がフィルタリングをしなかった場合に比べて多く現れている．
+これは，オラクル訳に含まれる誤りが参照訳に対して多いためである．
+また，「厳密一致」に分類される誤選択箇所であっても，フィルタリングで除外されない誤りがある．これは短い$n$-gramで一致していても，長い$n$-gramでは一致しない場合にフィルタリングを通過し，誤選択されてしまうためである．
+
+\begin{table}[b]
+\caption{各種類の誤選択例}
+\label{tab:example}
+\setlength{\fboxsep}{0.1em}
+\input{04table17.txt}
+\end{table}
+
+表\ref{tab:example}に誤り箇所の誤選択例を示す．
+「\textcolor{black}{統語的換言}」に分類された例を見ると，機械翻訳結果の``1392 , started''が誤り箇所として選択されている．
+これは参照訳の統語的な換言であり，実験で使用したPPDBでは対応できないため，参照訳のみを正解訳とした場合は誤り箇所として扱われてしまう．
+しかし，オラクル訳は機械翻訳結果と同じ文の構造をしており，``began''を``started''に置き換えるだけで選択箇所に一致する．
+このため，オラクル訳の換言を使ったフィルタリングによって分析対象から除外可能となる．
+
+
+\subsubsection{選択されなかった誤り箇所に対する分析}
+
+誤り箇所選択によって選択された箇所に対してフィルタリング法を適用することで，正解訳に一致する$n$-gramや正解訳の換言に含まれる$n$-gramを誤り箇所から除外することができる．
+しかしそれらの手法によって，逆に正しく選択されるべき機械翻訳の誤り箇所を誤り箇所の候補から除外する場合があり，再現率の低下として現れている．
+このような問題の分析を行うため，誤り箇所アノテーションコーパスで誤りとされている箇所で，フィルタリングにより選択できなくなる部分について，以下の基準に従って分類を行う．
+
+\begin{description}
+\item[誤った部分に一致：] 正解訳の異なる位置に対応する$n$-gramに一致した．
+\item[誤った換言：] 換言テーブルの不適切なルールが使用された．
+\item[文脈的に誤った換言：] この文脈では使うべきでない換言ルールが使用された．
+\item[文脈的後編集：] 文脈に依存する誤り箇所．後編集の表現方法を変えれば，誤り箇所ではなくなる．
+\item[正解訳の誤り：] 正解訳が誤っているため，誤り箇所がフィルタリングによって除外された．
+\item[後編集誤り：] 正解ラベルの誤り（後編集誤り，または不要な後編集）により誤り箇所とされているが，実際は適切な翻訳．
+\item[日本人の名前：] 日本人の名前（姓名の順序が正解訳・機械翻訳結果と後編集の間で異なる）．コーパス特有の問題であり後編集誤りに分類できるが，多く含まれているため特別に分類を行う．
+\end{description}
+
+\vspace{1\Cvs}
+\noindent \textbf{○ 実験設定}
+
+\ref{sec:auto-analysis-result}節で利用した日英機械翻訳の誤り箇所アノテーションコーパスについて，「参照訳を用いた厳密一致フィルタリング」及び「参照訳のパラフレーズを用いたフィルタリング」を適用し，選択されなくなってしまう誤り箇所の調査を行った．
+
+\vspace{1\Cvs}
+\noindent \textbf{○ 実験結果}
+
+各フィルタリング法を適用することによって選択されなくなった誤り箇所の統計を表\ref{tab:fn-stat}に示す．
+この結果から，参照訳のみによるフィルタリングを行った場合，選択されなくなる箇所の約3割は誤り箇所アノテーションコーパスの誤りによるもの，
+約6割は姓名の順序の違いに起因する誤りであり，実用上問題となる誤り箇所がほとんど除外されていないことが分かった．
+次に，参照訳の換言によるフィルタリングを適用した場合の結果を見ると，間違った換言が使用されたことによる誤選択が20\%以上あることが分かった．
+
+また，誤り箇所アノテーションコーパスの誤りにより誤り箇所として誤判断された箇所が約3割検出されており，
+各選択法の再現率を評価する際，無視できないほどの影響が出ることが分かった．
+
+\begin{table}[b]
+\caption{フィルタリングで除外された誤り箇所の内訳}
+\label{tab:fn-stat}
+\input{04table18.txt}
+\end{table}
+
+
+\subsection{誤り箇所選択の誤り分析における効果}
+\label{sec:act-error-analysis}
+
+本節では，実際の誤り分析を想定し，各誤り箇所選択法を用いて一定時間分析を行った際の効果を検証する．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{23-1ia4f7.eps}
+\end{center}
+\caption{分析時間と誤り発見数の関係の調査}
+\label{fig:time-found-flow}
+\end{figure}
+
+図\ref{fig:time-found-flow}は本節の実験の手順を示す．
+まず，\ref{sec:scoring}章で述べた各手法によって$n$-gramにスコアを与え，優先的に分析すべき$n$-gramを順に抽出する．
+次に，機械翻訳の訳出の中で各$n$-gramが含まれている文を列挙し，$n$-gramに一致する箇所を選択する．
+\textcolor{black}{その際，\ref{sec:filtering}章で述べたフィルタリング処理を行う．
+分析シートは，$n$-gramが正解訳に含まれないものを先に表示し，正解訳に含まれるものを後に表示するようにした．
+このようにすることで，分析者はフィルタリングの対象とならなかった結果を優先的に分析しつつ，分析者の時間が許せば，誤ってフィルタリングされた機械翻訳文も分析対象とすることができる．}
+分析者は各$n$-gramが選択した箇所について誤り分析を行い，翻訳時に誤って使用された翻訳ルールを記録する．その際，誤り箇所が\ref{sec:manual-analysis-result}節で述べた「文脈依存誤り」か「文脈非依存誤り」かを記録しておくことで，翻訳ルールそのものが誤っているのか，あるいはモデル化が誤っているのかが把握可能となる．
+1個の$n$-gramにより複数の文が選択された場合は，実際の誤り分析と同様に，分析者の判断ですべての文を見ずに分析を中断しても良いこととする．
+最後に，各$n$-gram毎に誤り分析に要した時間を記録する．
+
+
+\subsubsection{実験設定}
+
+機械翻訳システムとして京都フリー翻訳タスク (KFTT) で構築された\textsc{f2s}英日翻訳システムを利用した．
+$n$-gramのスコアリングに「ランダム」，「誤り頻度」，「識別言語モデルの重み」に基づく3つの手法を利用し，自動評価でF値が最大となった「参照訳の換言によるフィルタリング」を利用した．
+KFTTの開発セットに対して誤り箇所選択を行い，誤って使用された翻訳ルールを記録した．
+
+
+\subsubsection{実験結果}
+
+各手法を利用して誤り分析を行った際に，経過した分析時間と誤って使用された翻訳ルールが発見された個数の関係を
+    図\ref{fig:time-found}(a) に示す．また図\ref{fig:time-found}(b) は
+発見された誤りの中でも文脈非依存誤りの原因となるルールが見つかった個数を示す．
+グラフの傾きが大きいほど，誤りルールを効率的に発見できることを意味する．
+これらの結果から，各手法とも分析時間と誤りルール発見数の間に大きな違いは見られなかった．
+一方で，文脈非依存誤りの原因に限って見れば，識別言語モデルの重みに基づく誤り箇所選択では，他の手法に比べて早い段階から誤りが見つかることが分かった．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{23-1ia4f8.eps}
+\end{center}
+\caption{分析時間と記録された誤りルール数の関係}
+\label{fig:time-found}
+\end{figure}
+
+文脈非依存誤りは，その誤りを修正しようとした際に文脈を考慮する必要がないため，文脈依存誤りに比べて誤りを容易に修正できる．
+このため，識別言語モデルの重みに基づく手法を利用することで，修正が容易な誤りを早期に発見することができ，システムの改善を比較的効率良く行うことができると言える．
+
+次に，文脈非依存誤りの原因として記録された翻訳ルールを機械翻訳システムから削除することによって，システムをどの程度改善できるかを見積もった．
+KFTTのテストセット1,160文を機械翻訳した際，21,080個の翻訳ルールが使用された．
+この内，各手法で文脈非依存誤りの原因として記録されたルールが使用された回数を表\ref{tab:stat-indepcover}に示す．
+
+この結果から，文脈非依存の誤りの原因となるルールを具体的に記録しても，そのルールが機械翻訳システムで使用されることは稀であることが分かる．
+翻訳システムの誤りを修正する際には，見つかった誤りルールを1つずつ修正するのではなく，見つかった誤りルールを一般化し，テストセットにおけるカバー率を向上させる必要がある．
+
+\begin{table}[t]
+\caption{文脈非依存誤りの原因として記録されたルールがKFTTのテストセット翻訳時に使用された回数}
+\label{tab:stat-indepcover}
+\input{04table19.txt}
+\end{table}
+
+
+\section{おわりに}
+\label{sec:conclusion}
+
+本論文では，機械翻訳システムの比較・改善のための誤り分析を効率的に行うことを目的として，機械学習の枠組みを利用した機械翻訳の誤り箇所選択法，及び選択箇所のフィルタリング法を提案した．
+その結果，人手評価において従来法に比べて高い精度で適切な誤り箇所を捉えることに成功した．
+また，優先的に選択された少量の誤り箇所を分析するだけで，各システムの誤り傾向を捉えることができ，システム間比較の効率化に貢献した．
+
+
+次に，機械翻訳の誤り箇所選択法が誤選択した箇所の分析を行ったところ，オラクル訳や換言を利用したフィルタリングは適合率の向上に効果的であるが，誤った換言が使用されることによる再現率の低下が明らかとなった．
+
+最後に，今回の提案法を実際の誤り分析に利用した場合の効果を検証した．
+その結果，翻訳システムを容易に修正可能な文脈非依存誤りについては，提案法により比較的早い段階から捉えることが可能であることが分かった．
+一方ですべての種類の誤りについて見ると，各手法とも誤りの発見数に大きな違いが見られなかった．
+\textcolor{black}{この理由として，各手法によって選択された誤り箇所の特徴が挙げられる．
+誤り頻度に基づき選択された誤り箇所は，識別言語モデルの重みに基づいて選択された箇所に比べ，目的言語に頻繁に出現する$n$-gramを多く含む．
+このため，識別言語モデルの重みに基づく手法を利用した際，誤り分析者が比較的効率良く選択箇所に目を通すことができたと考えられる．
+今回の実験では，目を通した文の数については記録を行っていないため，今後の調査項目として検討する必要がある．
+}
+
+また，発見したルールを単独で見ても，システム全体から見ればそのような翻訳ルールが使用されることはごく稀であることが分かった．
+一方で，具体的な誤りルールを一般化することで，同様の翻訳ルールをまとめて修正することは可能と考えられる．
+
+今後の課題として，見つかった具体的な誤りをどのように一般化するかを検討する必要がある．
+具体的には，見つかった翻訳ルールを品詞列などのより抽象的な情報に自動的に変換することや，誤ったルールを元に，人手によって複数の修正ルールを列挙する手法が考えられる．
+
+
+\acknowledgment
+
+本研究の一部は，JSPS 科研費25730136と（独）情報通信研究機構の委託研究「知識・言語グリッドに基づくアジア医療交流支援システムの研究開発」
+の助成を受け実施したものである．
+
+
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{赤部\JBA {Graham Neubig}\JBA {Sakriani Sakti}\JBA
+  戸田\JBA 中村}{赤部 \Jetal }{2014a}]{akabe14signl216}
+赤部晃一\JBA {Graham Neubig}\JBA {Sakriani Sakti}\JBA 戸田智基\JBA 中村哲 \BBOP
+  2014a\BBCP.
+\newblock 機械翻訳システムの詳細な誤り分析のための誤り順位付け手法.\
+\newblock \Jem{情報処理学会 第 216 回自然言語処理研究会 (SIG-NL)}, 東京.
+
+\bibitem[\protect\BCAY{赤部\JBA {Graham Neubig}\JBA {Sakriani Sakti}\JBA
+  戸田\JBA 中村}{赤部 \Jetal }{2014b}]{akabe14signl219}
+赤部晃一\JBA {Graham Neubig}\JBA {Sakriani Sakti}\JBA 戸田智基\JBA 中村哲 \BBOP
+  2014b\BBCP.
+\newblock パラフレーズを考慮した機械翻訳の誤り箇所選択.\
+\newblock \Jem{情報処理学会 第219回自然言語処理研究会(SIG-NL)}, 神奈川.
+
+\bibitem[\protect\BCAY{Bach, Huang, \BBA\ Al-Onaizan}{Bach
+  et~al.}{2011}]{bach11goodness}
+Bach, N., Huang, F., \BBA\ Al-Onaizan, Y. \BBOP 2011\BBCP.
+\newblock \BBOQ Goodness: A Method for Measuring Machine Translation
+  Confidence.\BBCQ\
+\newblock In {\Bem Proceeding of ACL}, \mbox{\BPGS\ 211--219}.
+
+\bibitem[\protect\BCAY{Banerjee \BBA\ Lavie}{Banerjee \BBA\
+  Lavie}{2005}]{banerjee05meteor}
+Banerjee, S.\BBACOMMA\ \BBA\ Lavie, A. \BBOP 2005\BBCP.
+\newblock \BBOQ METEOR: An Automatic Metric for MT Evaluation with Improved
+  Correlation with Human Judgments.\BBCQ\
+\newblock In {\Bem Proceeding of ACL Workshop on Intrinsic and Extrinsic
+  Evaluation Measures for Machine Translation and/or Summarization}.
+
+\bibitem[\protect\BCAY{Bannard \BBA\ Callison-Burch}{Bannard \BBA\
+  Callison-Burch}{2005}]{bannard05paraphrase}
+Bannard, C.\BBACOMMA\ \BBA\ Callison-Burch, C. \BBOP 2005\BBCP.
+\newblock \BBOQ Paraphrasing with Bilingual Parallel Corpora.\BBCQ\
+\newblock In {\Bem Proceeding of ACL}, \mbox{\BPGS\ 597--604}.
+
+\bibitem[\protect\BCAY{Church \BBA\ Hank}{Church \BBA\
+  Hank}{1990}]{churchhanks90pmi}
+Church, K.~W.\BBACOMMA\ \BBA\ Hank, P. \BBOP 1990\BBCP.
+\newblock \BBOQ Word Association Norms, Mutual Information, and
+  Lexicography.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 16}  (1), \mbox{\BPGS\
+  22--29}.
+
+\bibitem[\protect\BCAY{Collins}{Collins}{2002}]{collins02structuredperceptron}
+Collins, M. \BBOP 2002\BBCP.
+\newblock \BBOQ Discriminative Training Methods for Hidden Markov Models:
+  Theory and Experiments with Perceptron Algorithms.\BBCQ\
+\newblock In {\Bem Proceeding of EMNLP}, \mbox{\BPGS\ 1--8}.
+
+\bibitem[\protect\BCAY{Denkowski \BBA\ Lavie}{Denkowski \BBA\
+  Lavie}{2014}]{denkowski:lavie:meteor-wmt:2014}
+Denkowski, M.\BBACOMMA\ \BBA\ Lavie, A. \BBOP 2014\BBCP.
+\newblock \BBOQ Meteor Universal: Language Specific Translation Evaluation for
+  Any Target Language.\BBCQ\
+\newblock In {\Bem Proceedings of the EACL 2014 Workshop on Statistical Machine
+  Translation}.
+
+\bibitem[\protect\BCAY{Doddington}{Doddington}{2002}]{doddington02nistmetric}
+Doddington, G. \BBOP 2002\BBCP.
+\newblock \BBOQ Automatic Evaluation of Machine Translation Quality using
+  N-gram Co-occurrence Statistics.\BBCQ\
+\newblock In {\Bem Proceeding of HLT}, \mbox{\BPGS\ 128--132}, San Diego, CA.
+
+\bibitem[\protect\BCAY{Duchi \BBA\ Singer}{Duchi \BBA\
+  Singer}{2009}]{duchi09fobos}
+Duchi, J.\BBACOMMA\ \BBA\ Singer, Y. \BBOP 2009\BBCP.
+\newblock \BBOQ Efficient Online and Batch Learning using Forward Backward
+  Splitting.\BBCQ\
+\newblock {\Bem Journal of Machine Learning Research}, {\Bbf 10}, \mbox{\BPGS\
+  2899--2934}.
+
+\bibitem[\protect\BCAY{El~Kholy \BBA\ Habash}{El~Kholy \BBA\
+  Habash}{2011}]{elkholy11morphologicallyrich}
+El~Kholy, A.\BBACOMMA\ \BBA\ Habash, N. \BBOP 2011\BBCP.
+\newblock \BBOQ Automatic Error Analysis for Morphologically Rich
+  Languages.\BBCQ\
+\newblock In {\Bem Proceeding of MT Summit}, \mbox{\BPGS\ 225--232}.
+
+\bibitem[\protect\BCAY{Fishel, Bojar, Zeman, \BBA\ Berka}{Fishel
+  et~al.}{2011}]{fishel2011automatic}
+Fishel, M., Bojar, O., Zeman, D., \BBA\ Berka, J. \BBOP 2011\BBCP.
+\newblock \BBOQ Automatic Translation Error Analysis.\BBCQ\
+\newblock In {\Bem Text, Speech and Dialogue}, \mbox{\BPGS\ 72--79}. Springer.
+
+\bibitem[\protect\BCAY{Flanagan}{Flanagan}{1994}]{flanagan1994error}
+Flanagan, M. \BBOP 1994\BBCP.
+\newblock \BBOQ Error classification for MT evaluation.\BBCQ\
+\newblock In {\Bem Proceeding of AMTA}, \mbox{\BPGS\ 65--72}.
+
+\bibitem[\protect\BCAY{Ganitkevitch, Van~Durme, \BBA\
+  Callison-Burch}{Ganitkevitch et~al.}{2013}]{ganitkevitch2013ppdb}
+Ganitkevitch, J., Van~Durme, B., \BBA\ Callison-Burch, C. \BBOP 2013\BBCP.
+\newblock \BBOQ PPDB: The Paraphrase Database.\BBCQ\
+\newblock In {\Bem Proceeding of NAACL}, \mbox{\BPGS\ 758--764}.
+
+\bibitem[\protect\BCAY{Kirchhoff, Rambow, Habash, \BBA\ Diab}{Kirchhoff
+  et~al.}{2007}]{kirchhoff2007semi}
+Kirchhoff, K., Rambow, O., Habash, N., \BBA\ Diab, M. \BBOP 2007\BBCP.
+\newblock \BBOQ Semi-automatic Error Analysis for Large-scale Statistical
+  Machine Translation Systems.\BBCQ\
+\newblock In {\Bem Proceeding of MT Summit}.
+
+\bibitem[\protect\BCAY{Koehn, Hoang, Birch, Callison-Burch, Federico, Bertoldi,
+  Cowan, Shen, Moran, Zens, Dyer, Bojar, Constantin, \BBA\ Herbst}{Koehn
+  et~al.}{2007}]{koehn07moses}
+Koehn, P., Hoang, H., Birch, A., Callison-Burch, C., Federico, M., Bertoldi,
+  N., Cowan, B., Shen, W., Moran, C., Zens, R., Dyer, C., Bojar, O.,
+  Constantin, A., \BBA\ Herbst, E. \BBOP 2007\BBCP.
+\newblock \BBOQ Moses: Open Source Toolkit for Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceeding of ACL}, \mbox{\BPGS\ 177--180}.
+
+\bibitem[\protect\BCAY{Kullback \BBA\ Leibler}{Kullback \BBA\
+  Leibler}{1951}]{kullback1951}
+Kullback, S.\BBACOMMA\ \BBA\ Leibler, R. \BBOP 1951\BBCP.
+\newblock \BBOQ On Information and Sufficiency.\BBCQ\
+\newblock {\Bem The Annals of Mathematical Statistics}, {\Bbf 22}, \mbox{\BPGS\
+  79--86}.
+
+\bibitem[\protect\BCAY{Lin \BBA\ Och}{Lin \BBA\ Och}{2004}]{lin04orange}
+Lin, C.-Y.\BBACOMMA\ \BBA\ Och, F.~J. \BBOP 2004\BBCP.
+\newblock \BBOQ Orange: A Method for Evaluating Automatic Evaluation Metrics
+  for Machine Translation.\BBCQ\
+\newblock In {\Bem Proceeding of COLING}, \mbox{\BPGS\ 501--507}.
+
+\bibitem[\protect\BCAY{Mackay \BBA\ Petoy}{Mackay \BBA\
+  Petoy}{1995}]{mackay95hdlm}
+Mackay, D.~J.\BBACOMMA\ \BBA\ Petoy, L. C.~B. \BBOP 1995\BBCP.
+\newblock \BBOQ A Hierarchical Dirichlet Language Model.\BBCQ\
+\newblock {\Bem Natural Language Engineering}, {\Bbf 1}  (3), \mbox{\BPGS\
+  289--308}.
+
+\bibitem[\protect\BCAY{Mizukami, Neubig, Sakti, Toda, \BBA\ Nakamura}{Mizukami
+  et~al.}{2014}]{mizukami14cocosda}
+Mizukami, M., Neubig, G., Sakti, S., Toda, T., \BBA\ Nakamura, S. \BBOP
+  2014\BBCP.
+\newblock \BBOQ Building a Free, General-Domain Paraphrase Database for
+  Japanese.\BBCQ\
+\newblock In {\Bem Proceeding of COCOSDA}.
+
+\bibitem[\protect\BCAY{Neubig}{Neubig}{2011}]{neubig11kftt}
+Neubig, G. \BBOP 2011\BBCP.
+\newblock \BBOQ The Kyoto Free Translation Task.\BBCQ\
+\newblock \url{http://www.phontron.com/kftt}.
+
+\bibitem[\protect\BCAY{Neubig}{Neubig}{2013}]{neubig13travatar}
+Neubig, G. \BBOP 2013\BBCP.
+\newblock \BBOQ Travatar: A Forest-to-String Machine Translation Engine based
+  on Tree Transducers.\BBCQ\
+\newblock In {\Bem Proceeding of ACL Demo Track}, \mbox{\BPGS\ 91--96}.
+
+\bibitem[\protect\BCAY{Och}{Och}{2003}]{och03mert}
+Och, F.~J. \BBOP 2003\BBCP.
+\newblock \BBOQ Minimum Error Rate Training in Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceeding of ACL}, \mbox{\BPGS\ 160--167}.
+
+\bibitem[\protect\BCAY{Och \BBA\ Ney}{Och \BBA\ Ney}{2003}]{och03alignment}
+Och, F.~J.\BBACOMMA\ \BBA\ Ney, H. \BBOP 2003\BBCP.
+\newblock \BBOQ A Systematic Comparison of Various Statistical Alignment
+  Models.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 29}  (1), \mbox{\BPGS\
+  19--51}.
+
+\bibitem[\protect\BCAY{Onishi, Utiyama, \BBA\ Sumita}{Onishi
+  et~al.}{2010}]{onishi10paraphrase}
+Onishi, T., Utiyama, M., \BBA\ Sumita, E. \BBOP 2010\BBCP.
+\newblock \BBOQ Paraphrase Lattice for Statistical Machine Translation.\BBCQ\
+\newblock In {\Bem Proceeding of ACL}, \mbox{\BPGS\ 1--5}.
+
+\bibitem[\protect\BCAY{Papineni, Roukos, Ward, \BBA\ Zhu}{Papineni
+  et~al.}{2002}]{papineni02bleu}
+Papineni, K., Roukos, S., Ward, T., \BBA\ Zhu, W.-J. \BBOP 2002\BBCP.
+\newblock \BBOQ BLEU: A Method for Automatic Evaluation of Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceeding of ACL}, \mbox{\BPGS\ 311--318}.
+
+\bibitem[\protect\BCAY{Popovi{\'c} \BBA\ Ney}{Popovi{\'c} \BBA\
+  Ney}{2011}]{popovic2011towards}
+Popovi{\'c}, M.\BBACOMMA\ \BBA\ Ney, H. \BBOP 2011\BBCP.
+\newblock \BBOQ Towards Automatic Error Analysis of Machine Translation
+  Output.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 37}  (4), \mbox{\BPGS\
+  657--688}.
+
+\bibitem[\protect\BCAY{Roark, Saraclar, \BBA\ Collins}{Roark
+  et~al.}{2007}]{roark07discriminative}
+Roark, B., Saraclar, M., \BBA\ Collins, M. \BBOP 2007\BBCP.
+\newblock \BBOQ Discriminative N-gram Language Modeling.\BBCQ\
+\newblock {\Bem Computer Speech \& Language}, {\Bbf 21}  (2), \mbox{\BPGS\
+  373--392}.
+
+\bibitem[\protect\BCAY{Specia, Turchi, Cancedda, Dymetman, \BBA\
+  Cristianini}{Specia et~al.}{2009}]{specia09qualityestimation}
+Specia, L., Turchi, M., Cancedda, N., Dymetman, M., \BBA\ Cristianini, N. \BBOP
+  2009\BBCP.
+\newblock \BBOQ Estimating the Sentence-level Quality of Machine Translation
+  Systems.\BBCQ\
+\newblock In {\Bem Proceeding of EAMT}, \mbox{\BPGS\ 28--37}.
+
+\bibitem[\protect\BCAY{Vilar, Xu, d'Haro, \BBA\ Ney}{Vilar
+  et~al.}{2006}]{vilar2006error}
+Vilar, D., Xu, J., d'Haro, L.~F., \BBA\ Ney, H. \BBOP 2006\BBCP.
+\newblock \BBOQ Error Analysis of Statistical Machine Translation Output.\BBCQ\
+\newblock In {\Bem Proceeding of LREC}, \mbox{\BPGS\ 697--702}.
+
+\end{thebibliography}
+
+
+
+\begin{biography}
+\bioauthor{赤部　晃一}{
+2015年奈良先端科学技術大学院大学情報科学研究科博士前期課程修了．
+同大学院博士後期課程に在学中．
+機械翻訳，自然言語処理に関する研究に従事．
+}
+\bioauthor[:]{Graham Neubig}{
+2005年米国イリノイ大学アーバナ・シャンペーン校工学部コンピュータ・サイエンス専攻卒業．
+2010年京都大学大学院情報学研究科修士課程修了．
+2012年同大学院博士後期課程修了．
+同年奈良先端科学技術大学院大学助教．
+機械翻訳，自然言語処理に関する研究に従事．
+}
+\bioauthor[:]{Sakriani Sakti}{
+1999年インドネシア・バンドン工科大学情報卒業．
+2002年ドイツ・ウルム大学修士，2008年博士課程修了．
+2003〜2011年ATR音声言語コミュニケーション研究所研究員，情報通信研究機構主任研究員．
+現在，奈良先端科学技術大学院大学情報科学研究科助教．
+2015〜2016年フランスINRIA滞在研究員．統計的パターン認識，音声認識，音声翻訳，認知コミュニケーション，グラフィカルモデルの研究に従事．
+JNS，SFN，ASJ，ISCA，IEICE，IEEE各会員．
+}
+\bioauthor{戸田　智基}{
+1999年名古屋大学工学部電気電子・情報工学科卒業．
+2003年奈良先端科学技術大学院大学情報科学研究科博士後期課程修了．
+同年日本学術振興会特別研究員-PD．2005年奈良先端科学技術大学院大学情報科学研究科助手．
+2007年同助教．2011年同准教授．2015年より名古屋大学情報基盤センター教授．工学博士．音声情報処理の研究に従事．IEEE，電子情報通信学会，情報処理学会，日本音響学会各会員．
+}
+\bioauthor{中村　　哲}{
+1981年京都工芸繊維大学工芸学部電子工学科卒業．京都大学工学博士．シャープ株式会社．奈良先端科学技術大学院大学助教．2000年ATR音声言語コミュニケーション研究所室長，所長．
+2006年独立行政法人情報通信研究機構研究センター長，けいはんな研究所長などを経て，現在，奈良先端科学技術大学院大学教授．
+ATRフェロー．カールスルーエ大学客員教授．音声翻訳，音声対話，自然言語処理の研究に従事．
+情報処理学会喜安記念業績賞．総務大臣表彰，文部科学大臣表彰，Antonio Zampoli賞受賞．
+IEEE SLTC委員，ISCA理事，IEEEフェロー．
+}
+
+\end{biography}
+
+
+\biodate
+
+
+
+
+\end{document}
