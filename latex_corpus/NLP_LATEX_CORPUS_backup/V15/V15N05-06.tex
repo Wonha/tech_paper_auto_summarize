@@ -1,0 +1,1639 @@
+    \documentclass[english]{jnlp_1.4}
+
+\usepackage{jnlpbbl_1.1}
+\usepackage[dvips]{graphicx}
+\usepackage{hangcaption_jnlp}
+\usepackage{array}
+
+\Volume{15}
+\Number{5}
+\Month{October}
+\Year{2008}
+
+\received{2008}{3}{17}
+\revised{2008}{6}{25}
+\accepted{2008}{7}{23}
+
+\setcounter{page}{119}
+
+\etitle{A Comparative Study on Effective Context Selection \\ for Distributional Similarity}
+\eauthor{Masato Hagiwara\affiref{Authors} \and Yasuhiro Ogawa\affiref{Authors} \and Katsuhiko Toyama\affiref{Authors}} 
+\eabstract{
+  Distributional similarity is a widely adopted concept to capture the
+  semantic relatedness of words based on their context in various NLP
+  tasks. While accurate similarity calculation requires a huge number
+  of context types and co-occurrences, the contribution to the
+  similarity calcualtion depends on individual context types, and some
+  of them even act as noise. To select well-performing context and
+  alleviate the high computational cost, we propose and investigate
+  the effectiveness of three context selection schemes:
+  category-based, type-based, and co-occurrence based selection. {\em
+  Category-based selection} is a conventional, simplest selection
+  method which limits the context types based on the syntactic
+  category. Finer-grained, {\em type-based selection} assigns
+  importance scores to each context type, which we make possible by
+  proposing a novel formalization of distibutional similarity as a
+  classification problem, and applying feature selection
+  techniques. The finest-grained, {\em co-occurrence based selection}
+  assigns importance scores to each co-occurrence of words and context
+  types. We evaluate the effectiveness and the trade-off between
+  co-occurrence data size and synonym acquisition performance. Our
+  experiments show that, on the whole, the finest-grained,
+  co-occurrence based selection achieves better performane, although
+  some of the simple category-based selection show comparable
+  performance/cost trade-off. }
+\ekeywords{Feature Selection, Contextual Information, Distributional Similarity, Synonym Acquistion}
+
+\headauthor{Hagiwara et al.}
+\headtitle{A Comparative Study on Effective Context Selection for Distributional Similarity}
+
+
+\affilabel{Authors}{}{Graduate School of Information Science, Nagoya University.}
+
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+
+Lexical knowledge is one of the most fundamental but important
+resources for natural language processing. Among various kinds of
+lexical relations, synonym relation is frequently used as the basis in
+a broad range of NLP tasks including query expansion and indexing
+techniques for information retrieval \cite{Crouch:92,Jing:94}, and
+automatic thesaurus construction
+\cite{Kojima:95,Grefenstette:94}. However, the extraction,
+construction, and maintenance of lexical knowledge by hand are
+difficult and costly tasks, thus various methods
+\cite{Hindle:90,Lin:98:automatic} have been proposed for similarity
+calculation and synonym acquisition.
+
+Most of the acquisition methods can be regarded as the combination of
+these two steps: (1) context extraction, and (2) similarity
+calculation. In the first step, the methods extract useful contextual
+information of words to characterize the target words from large
+corpora. In the second step, word similarity is calculated using the
+extracted contexts in the previous step. The key assumption on
+acquiring word similarity is the so-called {\it distributional
+  hypothesis} \cite{Harris:85}, which states that semantically similar
+words share similar contexts. Inversely, the more similar the contexts
+of words are, the more likely the words are semantically related, and
+similarity can be obtained by comparing the contexts the target words
+have. The similarity obtained in this way is called {\em
+  distributional similarity}.
+
+A wide range of contextual information, such as word-based context,
+where surrounding words are used as context
+\cite{Lowe:00,Curran:02:scaling}, dependency-based context, where the
+words having syntactical relations with the target words are used as
+context \cite{Hindle:90,Ruge:97,Lin:98:automatic}, and dependency
+path, where paths in a dependency tree are used as context
+\cite{Lin:01,Pado:07}, has been utilized for distributional similarity
+calculation, achieving considerable success. However, a major problem
+which arises when adopting distributional similarity is that it easily
+yields a huge amount of context types and co-occurrences. This can
+lead to high dimensionality of semantic spaces, often up to the order
+of tens or hundreds of thousands, which makes the calculation
+computationally impractical. This problem poses a real challenge
+especially for machine learning techniques. A few researchers have
+begun to apply supervised learning methods such as naive bayes and
+logistic regression to lexical relation acquisition \cite{Snow:04}, but
+an excessively high dimensionality makes the computation almost
+impossible in many cases. However, not all of the contexts are
+necessarily useful, and some of them are even harmful and act as
+noise, worsening the calculation performance. Therefore, it is
+desirable to identify the contributing contexts and to remove the
+poorly-performing ones, before the similarity calculation is taken
+on. This allows to ease the expensive cost and to eliminate noise to
+improve performance.
+
+
+However, whereas a few studies which tackled context or co-occurrence
+selection problem in a limited way can be found, there are no
+qualitative measures proposed or comprehensive study conducted for
+this problem. Therefore, general methods based on quantitative
+measures which can be used for reduction and selection of any kind of
+context categories, types, and co-occurrences are strongly
+required. In response to this problem, in this paper we propose three
+different schemes of context selection for distributional similarity,
+namely, category-based, type-based, and co-occurrence based selection,
+and show their effectiveness in selecting well-performing contexts, in
+terms of trade-off between performance and computational cost
+reduction.
+
+
+
+The overview of three selection schemes is described in
+Fig.~{\ref{fig_overview}}. The overall context selection process is as
+follows: firstly, the corpus is analyzed and all the co-occurrences of
+words and context types are extracted. Secondly, the extracted context
+types and/or co-occurrences are selected based on one of the following
+three selection schemes: category-based, type-based, and co-occurrence
+based selection. Finally, distributional similarity is calculated
+using only the remaining co-occurrences and synonyms are acquired.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{15-5ia6f1.eps}
+\end{center}
+\caption{Overview of selection schemes described in this paper}
+\label{fig_overview}
+\end{figure}
+
+{\em Category-based selection}, the simplest and conventional
+selection scheme, limits the variety of context based on syntactic
+category. While there are various kinds of contextual information
+proposed so far, we especially paid attention to two classes:
+word-based context ({\tt wbc}) and dependency-based context ({\tt
+dbc}). For {\tt wbc}, i.e., the context based on surrounding words, we
+set categories according to relative positions of context
+words. For {\tt dbc}, the adopted categories are based on grammatical
+relations (GRs) \cite{Briscoe:02:gr} of dependency relations.
+
+The major drawbacks of category-based selection are the fact that
+categories must be fixed beforehand, and contributions of individual
+context types remain unknown. It is desirable that we can determine
+the importance of contexts on a type-by-type basis. Here, shifting our
+attention from synonym acquisition to other areas, a great deal of
+studies on feature selection has been conducted in the literature,
+especially for text categorization \cite{Yang:97} and gene expression
+classification \cite{Ding:03}. Whereas these methods have been
+successful in reducing feature size while keeping classification
+performance, the model of distributional similarity is radically
+different from that of classification, and whether the same methods
+are applicable to and effective for automatic context type selection
+for the word similarity problems is yet to be investigated. In this
+paper we solve this problem by introducing a new formalization of the
+distributional similarity, where it is regarded as a classification
+problem based on word pairs, not individual words. This enables the
+importance calculation of context types, leading to the finer-grained,
+{\em type-based selection}.
+
+The third and last selection scheme is {\em co-occurrence based
+selection}, the generalization of Curran's method based on canonical
+attributes \cite{Curran:02:improvements}, which assigns an importance
+score to each co-occurrence of words and contexts. Although it is
+difficult to know the contribution of each context type compared to
+type-based selection, this enables the finest-grained selection of
+contexts.
+
+We introduce importance measures which can be used for type- and
+co-occurrence based selections, and investigate how well they work for
+removing unwanted contexts. Automatic synonym acquisition experiments
+are conducted to evaluate the performance of the selection schemes
+mentioned above, reducing the unimportant contexts or
+co-occurrences. We use two evaluation measures: average precision (AP)
+of acquired synonyms and the correlation coefficient (CC) between the
+calculated similarity and the similarity obtained from WordNet
+\cite{Fellbaum:98}. The three schemes are evaluated and compared in
+terms of performance gain/loss and computational cost reduction.
+
+
+This paper is organized as follows: in Section 2 we review previous
+studies concerning the contextual information selection for
+distributional similarity, and clarify the position of this paper. In
+Section 3, two kinds of contextual information (word-based context
+{\tt wbc} and dependency-based context {\tt dbc}) to which we paid
+attention in this paper are introduced. Sections 4 and 5 are the
+approach and evaluation method for synonym acquisition, the task we
+use to compare the effectiveness of context selection schemes. The
+acquisition is based on the vector space model, and the evaluation
+uses average precision (AP) and correlation coefficient (CC), both of
+which are calculated using reference sets created from a few existing
+thesauri such as WordNet \cite{Fellbaum:98}. In Sections 6 through 8,
+which are the key part of this paper, three selection schemes are
+introduced. Each section accompanies experiment descriptions and
+results. Finally, Section 9 compares all these three schemes in terms
+of performance/cost trade-off, and Section 10 concludes this paper.
+
+
+\section{Previous studies}
+
+As for the selection of contexts, a surprisingly small number of
+studies have paid attention to the extraction and selection of
+contexts, whereas a certain number of variations of context has been
+proposed and many studies were conducted as mentioned previously in
+Section 1. Earlier studies dealt with the selection problem, if any,
+only in a limited way. For example, Ruge \cite{Ruge:97} proposed the
+use of dependency structure for automatic thesaurus construction and
+showed the result to be encouraging, but neither the further
+investigation of dependency selection nor the comparison with other
+kind of contextual information is provided. Lin
+\cite{Lin:98:automatic} also used a wider range of grammatical
+relationship including modifications and showed the possibility that
+other kind of dependency relations in addition to subject and object
+was contributing, although it is still not clear what kind of
+relations affect the performance, or to what extent.
+
+There are some studies which are first to pay attention to the
+comparison of various context categories for synonym acquisition
+\cite{Curran:02:scaling,Hagiwara:06}. The former compared several
+context extractors such as window extractor and shallow- and
+deep-parsing extractor, while the latter compared various kinds of
+syntactical relations as finer-grained context categories.  However,
+they have conducted only a posteriori comparisons based on performance
+evaluation, and we are afraid that these findings are somewhat limited
+to their own experimental settings which may not be applicable to
+completely new settings, e.g., one with a new set of contexts
+extracted from different sources.
+
+As finer-grained context selection method, the concept of ``frequency
+cutoff'' used in a certain numbers of studies so far
+\cite{Curran:02:scaling,Pado:07}, is worth mentioning. This simply
+removes any word types (optionally, context types as well) whose
+frequencies are less than a fixed threshold. This is one of the
+simplest way to greatly reduce the computational cost while keeping
+the performance loss at minimum \cite{Curran:02:scaling}, although it
+has been used with its effectiveness unquestioned, especially compared
+with other selection methods. Type-based selection scheme proposed in
+this paper is a generalization of this selection by frequency cutoff,
+and their effectiveness in terms of performance and computational cost
+is compared.
+
+Curran and Moens \cite{Curran:02:improvements} focused on each
+co-occurrence of words and contexts, and suggested assigning an index
+vector of {\em canonical attributes}, i.e., a small number of
+representative elements extracted from the original vector, to each
+word. When the comparison is performed, canonical attributes of two
+target words are firstly consulted, and the original vectors are
+referred to only if the attributes have a match between them. This can
+be regarded as a context selection method because important
+word-context co-occurrences are ``selected'' as an approximation of
+the original vector. However, it is not clear whether the condition
+for canonical attributes they adopted, i.e., that the attributes must
+be the most weighted subject, direct object, or indirect object, is
+optimal in terms of performance. Co-occurrence based selection
+presented in this study is a generalization of this method, and the
+performance is evaluated in a more comprehensive way.
+
+\section{Contextual information}
+
+In this section, how context types and co-occurrences are extracted
+from corpora before the selection is described in detail. We used two
+kinds of contextual information, namely, word-based context ({\tt
+wbc}) and dependency-based context ({\tt dbc}). We adopted these two
+kinds of contextual information because they are the most widely
+adopted ones for distributional similarity calculation.
+
+\subsection{Word-based context}
+
+The first and simplest context, {\em word-based context} ({\tt wbc})
+uses the words surrounding a target word as contexts. To capture this,
+we consider a window centered at the target word, and the tokens
+located within this window are extracted. The contexts for {\tt wbc}
+in this paper are represented as concatenations of relative positions
+and tokens. Take the following sentence for example:
+\begin{quotation}
+{\em The investigators were still looking for witnesses and the motive of the attack.}
+\end{quotation}
+The word ``investigators'' has words such as ``the,''
+``were (be)'', and ``still'' in its neighbor, so word-based context of
+``investigator'' will be {\tt L1:the}, {\tt R1:be}, {\tt R2:still},
+and so on.  The considered window is symmetric, and we adopted the
+maximum window radius of 3 in this study. We chose this setting
+because it is computationally expensive to consider windows with the
+radius larger than 3, and few researches which support their
+effectiveness can be found.
+
+
+\subsection{Dependency-based context}
+
+More sophisticated context, {\em dependency-based context} ({\tt dep})
+uses the words which have syntactical relationship with a target
+word. Since the extraction of accurate and comprehensive dependency
+structure is in itself a difficult task, the sophisticated parser RASP
+Toolkit ver. 2 (RASP2) \cite{Briscoe:06} is utilized to extract this
+kind of word relations.
+
+RASP2 analyzes the sentence as shown in Fig.~\ref{fig_dbc_example} and
+outputs the extracted dependency structure as $n$-ary relations as
+follows, which are called {\em grammatical relations} (GRs)
+\cite{Briscoe:02:gr}: 
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{15-5ia6f2.eps}
+\end{center}
+\caption{Example Sentence for Dependency-based Context Extraction}
+\label{fig_dbc_example}
+\end{figure}
+
+\begin{verbatim}
+  (ncsubj look investigator _)
+  (ncmod _ look still)
+  (aux look be)
+  (iobj look for)
+  (dobj for and)
+  (conj and witness)
+  (conj and motive)
+  (det motive the)
+  (iobj motive of)
+  (dobj of attack)
+  (det attack the)
+  (det investigator the)
+\end{verbatim}
+
+The first slots represent the GR labels that the words of the
+remaining slots have. Annotations regarding suffix, part of speech
+tags, offsets for individual words are omitted for simplicity. While
+outputs of RASP2 are $n$-ary relations in general, what we need here
+is co-occurrences of words and contexts, so we extract the set of
+co-occurrences of stemmed words and contexts by taking out the target
+word from the relation and replacing the slot by an asterisk ``*'':
+
+\begin{verbatim}
+  (words)       -  (contexts)
+  investigator  -  (ncsubj look * _)
+  investigator  -  (det * the)
+  witness       -  (conj and *)
+  motive        -  (conj and *)
+  motive        -  (det * the)
+  motive        -  (iobj * of)
+  attack        -  (dobj of *)
+  attack        -  (det * the)
+  ...
+\end{verbatim}
+
+Summing all these up produces the raw co-occurrence count $N(w, c)$ of
+word $w$ and context $c$.
+
+\section{Approach to synonym acquisition}
+
+This section describes the synonym acquisition method, the task we
+used for the evaluation of distributional similarity.  In the
+following, the numbers of unique words and contexts are denoted as $n$
+and $m$, respectively, and let $N(w, c)$ be the number of
+co-occurrences of the word $w$ and the context $c$.
+
+Firstly, we construct a vector ${\bf w}_i$ for each word $w_i$ as:
+\[
+{\bf w}_i = {}^t[\mbox{wgt}(w_i, c_1)\ \mbox{wgt}(w_i, c_2)\  \ldots\ \mbox{wgt}(w_i, c_m)],
+\]
+where $\mbox{wgt}(w, c)$ is the weight function assigned to every
+co-occurrence $(w, c)$. We adopted pointwise mutual information
+(PMI) as the weight function:
+\[
+  \mbox{wgt}(w, c) = \log \frac{p(w,c)}{p(w)p(c)},
+\]
+where the probabilities are calculated empirically, e.g. $p(w, c) =
+N(w, c) / \sum_{w', c'} N(w', c')$. 
+
+Using this vector ${\bf w}_i$ we can construct the {\em co-occurrence
+matrix} of words and contexts:
+\[
+   X = [{\bf w}_1\ {\bf w}_2\ \ldots \  {\bf w}_n]
+\]
+
+This corresponds to the {\em term-document matrix} which is frequently
+used in many of information retrieval tasks. The columns of this
+matrix are word vectors ${\bf w}_i$ and the rows correspond to
+individual context types.
+
+The similarity between words $w_1$ and $w_2$, i.e., $sim(w_1, w_2)$,
+is then obtained by Jaccard coefficient as follows:
+\[
+ sim(w_1, w_2) = \frac{\sum_{c \in C(w_1)\cap C(w_2)} \min(\mbox{wgt}(w_1, c), \mbox{wgt}(w_2, c))}{\sum_{c \in C(w_1)\cup C(w_2)}\max(\mbox{wgt}(w_1, c), \mbox{wgt}(w_2, c))},
+\]
+where $C(w)$ is the set of context types co-occurring with the word
+$w$, i.e., $C(w) = \{c|N(w,c) > 0\}$. We conducted this weighting and
+similarity calculation {\em after} any context selection and
+pre-processing operations.
+
+
+The weighting function PMI and the similarity measure Jaccard
+coefficient were chosen considering the result of the preliminary
+experiment, where we compared the performance (average precision and
+correlation coefficient) of several weight functions such as tf,
+tf.idf, and PMI, and similarity measures such as cosine and Jaccard
+coefficient, while fixing other experimental parameters. PMI and
+Jaccard coefficient were also among the best performing measures
+described in {\cite{Curran:02:improvements}}.
+
+
+\section{Evaluation of synonym acquisition}
+
+This section describes the two evaluation methods we employed to
+evaluate the automatically acquired synonyms --- average precision
+(AP) and correlation coefficient (CC).
+
+
+We introduced those two measures to evaluate the effectiveness of
+context selection for distributional similarity from different
+viewpoints. AP evaluates the precision of acquired synonyms, i.e., how
+accurately synonyms are extracted, while CC evaluates how accurately
+the similarity is assigned to each word pair. For example, because the
+AP value will be high as long as the synonyms are accurately
+extracted, it cannot directly evaluate how similarity is assigned to
+non-synonym pairs. In short, AP evaluates the quality of {\em
+synonyms}, and is more important in some tasks such as synonym
+acquisition, while in other tasks, such as similarity-based word-count
+smoothing, CC is a more direct evaluation because it evaluates the
+quality of {\em similarity}. By using them both, the effect of context
+selection methods described in this paper in various tasks can become
+clearer.
+
+\subsection{Average precision}
+
+The first evaluation measure, {\em average precision} (AP), is a
+common evaluation scheme mainly adopted for information retrieval,
+which evaluates how accurately the method under evaluation is able to
+extract synonyms.
+
+To calculate AP, we firstly prepare a set of {\em query words}, for
+which synonyms are obtained to evaluate the precision. We adopted the
+Longman Defining Vocabulary (LDV)
+\footnote{http://www.cs.utexas.edu/users/kbarker/working\_notes/ldoce-vocab.html},
+originally consisted of 2,194 entries, as the candidate set of query
+words. Secondly, for each entry in LDV, three existing thesauri are
+consulted: Roget's Thesaurus \cite{Roget:95}, Collins COBUILD
+Thesaurus \cite{Collins:02}, and WordNet \cite{Fellbaum:98}. The union
+of synonyms obtained when a LDV word is looked up as a noun is used as
+the {\em reference set}, except for words marked as ``idiom'', 
+``informal'', ``slang'', and phrases comprised of two or more
+words. Notice that most of the LDV entries have more than two senses
+in WordNet, in which case the union of synonyms found in all synsets
+of the entry was used as the reference set, since the synonym
+acquisition model described in this paper is not capable of treating
+multiple senses of a single word. The LDV words for which no noun
+synonyms are found in any of the reference thesauri are omitted.
+
+
+In general, the problem of such polysemies should not be treated
+lightly in synonym acquisition tasks. However, in context selection
+methods we address in this paper, we believe that the effectiveness of
+context types can still be universally determined, whether or not the
+synonym model is polysemy-aware, and the effect of polysemies is
+limited in the experiments described in this paper.
+
+Finally, from the remaining 771 LDV words, 100 query words are
+randomly chosen, which are listed in Appendix. For each of them, the
+eleven precision values at 0\%, 10\%, ..., and 100\% recall levels are
+averaged to calculate the final AP value.
+
+\subsection{Correlation coefficient}
+
+The second evaluation measure is {\em correlation coefficient} (CC)
+between the target similarity and the {\em reference similarity},
+i.e., the gold standard of similarity for word pairs. The CC value is
+calculated so that it becomes larger when the obtained similarities
+are more precise approximation of the reference similarities.
+
+
+As the reference similarity, we used Lin's similarity measure
+\cite{Lin:98:information}:
+\[
+  sim_c(x_1, x_2) = \frac{2\log P(C_0)}{\log P(C_1) + \log P(C_2)},
+\]
+where $C_1$ and $C_2$ are classes corresponding to words $w_1$ and
+$w_2$, respectively. These classes have $x_1 \in C_1$ and $x_2 \in
+C_2$ as individual senses, and the most specific class that subsumes
+both $C_1$ and $C_2$ is denoted as $C_0$. The word similarity between
+the word $w_1$ and $w_2$ is calculated by taking the maximum class
+similarity value of all the combinations of senses as:
+\[
+  sim_w(w_1, w_2) = \max_{x_1 \in C_1, x_2 \in C_2} sim_c(x_1, x_2).
+\]
+
+We have to note that a variety of similarity/distance measures are
+proposed to obtain word relatedness based on WordNet structure
+\cite{Budanitsky:06}. However, we conducted a preliminary experiment
+and verified that the different values of CC calculated using various
+calculation techniques including the one mentioned above and
+\cite{Jiang:97,Hirst:98}, all of which can be calculated utilizing
+Wordnet::Similarity package \cite{Pedersen:04}, are highly correlated
+and the choice does not essentially affect the overall evaluation.
+
+The value of CC is calculated as the correlation coefficient of
+reference similarities $\vec r = (r_1, r_2, \ldots, r_n)$ and target
+similarities $\vec s = (s_1, s_2, \ldots, s_n)$ over the word pairs in
+sample set $P_s$, which the set of 10,000 randomly created pairs from
+LDV.
+
+\section{Category-based selection}
+
+In this section, the simplest, category-based selection, where
+contexts are selected based on their category, is conducted and
+evaluated. We first set up the categories for {\tt wbc} and {\tt dbc},
+and evaluate the synonym acquisition performance when individual
+categories are used as context.
+
+\subsection{Method}
+
+The context category is a subset of all the context types extracted
+from the corpus. The distributional similarity calculation is
+conducted based on each extracted category and its performance is
+compared. This operation corresponds to selecting a set of rows in the
+word-context co-occurrence matrix $X$ in Section 4 at a time, as
+illustrated in Fig.~\ref{fig_overview}.
+
+The categories we set depend on the contextual information in use,
+which we will describe in the following. Notice that we can apply more
+sophisticated category selection methods, e.g., a finer-grained one
+incorporating richer kinds of syntactical information, but we leave it
+to the other two selection schemes and in this section we conduct a
+somewhat naive selection as a generalization of previous ones such as
+\cite{Hindle:90}.
+
+
+\subsubsection{Word-based context}
+
+For {\tt wbc}, the context categories were set according to the
+relative positions of context types. This means, in other words,
+context categories were the sets of context types covered by the
+windows with various ranges. We considered the following 15 window
+settings: [1, 0], [0, 1]; [2, 0], [1, 1], [0, 2]; [3, 0], [2, 1], [1,
+2], [0, 3]; [3, 1], [2, 2], [1, 3]; [3, 2], [2, 3], and [3, 3], where
+the notation [$l$, $r$] represents the set of {\tt wbc} extracted
+using the window covering $l$ words on the left and $r$ words on the
+right. Notice that all these 15 categories are the subsets of [3, 3],
+the case of using all the word-based contexts captured by the maximum
+window size on both sides.
+
+\subsubsection{Dependency-based context}
+
+For {\tt dbc}, the context categories were set according to the
+grammatical relation (GR) of the context and the target word. We paid
+attention to the 10 most frequent GRs, i.e., {\tt ncmod}, {\tt dobj},
+{\tt ncsubj}, {\tt obj}, {\tt xmod} {\tt cmod}, {\tt ta}, {\tt ccomp},
+{\tt obj2}, and {\tt det}.
+
+\subsection{Experiment}
+
+\subsubsection{Corpus and analysis}
+
+We extracted {\tt wbc} and {\tt dbc} from the corpus: the
+``story''-type documents of New York Times articles (1997) in English
+Gigaword\footnote{http://www.ldc.upenn.edu/Catalog/CatalogEntry.jsp?catalogId=LDC2003T05},
+consisting of approx. 202 thousand documents and 131 million
+words. For each of these categories mentioned in Section 6.1, synonym
+acquisition was conducted using only one category at a time, and the
+performance was evaluated and compared. Since our purpose here is the
+automatic extraction of synonymous nouns, only the contexts of nouns
+are extracted. To distinguish nouns, using POS tags annotated by
+RASP2, any words with POS tags APP, ND, NN, NP, PN, PP were labelled as
+nouns.
+
+\subsubsection{Frequency cut-off}
+
+We also set {\em cut-off frequencies} $\theta_w$ and $\theta_c$, i.e.,
+thresholds on occurrence frequency to filter out words or contexts
+with low frequency, respectively, and to reduce computational
+cost. More specifically, any words {\it w} such that $\sum_c N(w, c) <
+\theta_w$ and any context types {\it c} such that $\sum_w N(w, c) <
+\theta_c$ were removed from the co-occurrence data.
+
+The first one, the word cut-off frequency $\theta_w$, is relatively
+easier to fix, because it only affects the number of unique words
+contained in the semantic space. Assuming the Zipf's law, the number
+of the remaining word types is inversely proportional to $\theta_w$,
+which we confirmed through a preliminary experiment. When fixing
+$\theta_w$, we considered the trade-off between the remaining word
+types and the computational cost, and adopted $\theta_w = 20$ because
+it can keep more than half of the originally extracted word types for
+all of the context categories, while greatly reducing the cost.  Also,
+the cut-off frequency $\theta_w$ does effect AP, but not CC, because
+it works as a filter to eliminate low-frequency words from the
+ranking, most of which are irrelevant to the query word.  The
+experiment showed the performance of synonym acquisition increased
+with $\theta_w$ almost monotonically. However, since the increase
+range is not significant (20\% at most) and this performance increase
+equally happens to all the context categories, the influence can be
+ignored.
+
+The second one, the context cut-off frequency $\theta_c$, is less easy
+to handle, because it affects both the semantic space size and the
+performance (AP and CC). Although the number of the remaining context
+types can be easily estimated using Zipf's law, similarly to
+$\theta_w$, we have no other ways to know the performance change but
+to empirically investigate it. Although we do not go into the detailed
+results here, a preliminary experiment indicated that the performance
+decreased almost linearly v.s. $\theta_c$, making it difficult to fix
+a clear threshold. We set $\theta_c = 20$ as well, where the
+performance loss can be kept within 10\% range while the context types
+are cut-down by more than 70\% in number.
+
+
+\subsubsection{Computational cost estimation}
+
+
+When calculating the distributional similarity between two words
+{$w_i$} and {$w_j$}, two corresponding vectors {${\bf w}_i$} and
+{${\bf w}_j$} are constructed as described in Section 4 and all the
+elements of those vectors and the overlap between them needs to be
+assessed. This process takes a time proportional to the number of
+elements in those vectors, assuming that the vectors are sparsely
+represented, i.e., only non-zero elements are stored in the data
+structure. Thus, the computational cost of acquiring synonyms for a
+given query word is proportional to the number of the non-zero
+elements in the word-context co-occurrence matrix, because the
+similarity needs to be calculated for all the words {$w_i, \ldots,
+w_N$}. This roughly corresponds to the cost estimation of calculating
+the evaluation measures AP and CC, and most of other similarity-based
+tasks.
+
+
+In the experiment, we therefore counted the number of the remaining
+co-occurrence types (not tokens), i.e., the remaining number of the
+matrix's non-zero elements after the selection is done, to evaluate
+the computational cost reduced by the selection. It is to note that
+the numbers of words and/or contexts are also the important factors
+that affect the computational cost. However, there may exist frequent
+words and context types (thus long vectors) and infrequent ones (thus
+short vectors). This makes it difficult to estimate the exact amount
+of calculation involved, using only the numbers of remaining words or
+context types. On the other hand, the number of the co-occurrences
+used in the distributional similarity calculation is almost
+proportional to the computational cost as explained above, which we
+will use as the rough cost estimates in the following experiments.
+
+\subsection{Results}
+
+\subsubsection{Word-based context}
+
+Table \ref{table_wbc_category} shows the comparison of each {\tt wbc}
+category, i.e., each window setting, and its AP and CC values. In the
+table, the categories are grouped by the total width of the window,
+and the rows are arranged by the order of {\em shift amount} from the
+center, from the left-most ones to the right-most ones.
+
+The first thing to note is that limiting the window length actually
+{\em increased} the performance in some cases. For example, even the
+[1, 0] window, where only the single word on the left is used as
+context, showed better performance compared to the full [3, 3] window.
+This is because most of the important words which act as strong clues
+for the semantic relatedness, such as adjectives and verbs of objects,
+are most likely to appear on the left side. The five highest AP and CC
+values of the 15 windows, which are emphasized in bold faces, suggest
+that the windows smaller than [3, 3] worked effectively enough. In
+most of these cases, both of the number of context types and
+co-occurrences, thus computational cost, are cut down by more than
+half, as shown in the second and third columns of the table. This
+result also suggests that windows shifted to the left, such as [1, 0]
+and [2, 0], show better performances in general. We suspect that this
+bias is related to the fact that the words having syntactical
+relations to the target words distribute mainly on the left in
+English, but we do not go further into this topic here and will
+discuss it in another article.
+
+
+\begin{table}[t]
+\caption{Result of category-based selection for {\tt wbc}}
+\label{table_wbc_category}
+\begin{center}
+\input{06table01.txt}
+\end{center}
+\end{table}
+
+It is to be noted that the performance of the categories differs
+between the evaluation measures, AP and CC. We suppose that this is
+because of the difference in characteristics of these two measures
+explained in Section 5. We'll come to this point later in Section 7.4.
+
+
+\subsubsection{Dependency-based context}
+
+Table \ref{table_dbc_category} shows the comparison of each {\tt dbc}
+category based on GR and its AP and CC values. The categories are in
+the descending order of the number of co-occurrences belonging to the
+category. 
+
+Here we observe the strong correlation between the number of context
+types/co-occurrences and the performance: the three highest values are
+all occupied by the three most frequent categories. Although this
+result re-confirmed our previous result \cite{Hagiwara:06}, which
+states that modification categories are strong evidence for
+distributional similarity, it is simply because the modification
+category is the most frequent grammatical relation, and the numbers of
+context types and co-occurrences contained in the category is an
+important factor. On the other hand, considering the data size and the
+performance, it is evident that {\tt dobj} is on the whole a
+good-quality category because it performs comparable or even better
+compared to {\tt ncmod} and {\tt ncsubj}, with smaller numbers of
+co-occurrences (less than one thirds of {\tt ncmod}, and three
+quarters of {\tt ncsubj}). This also applies to {\tt obj}, which
+demonstrates good performance with a very small number of data.  This
+result gives a solid evidence which supports the use of widely adopted
+subject/object categories in the past, in terms of the trade-off
+between performance and computational cost (we call this {\em
+performance/cost trade-off} in the following).
+
+\begin{table}[t]
+\caption{Result of category-based selection for {\tt dbc}}
+\label{table_dbc_category}
+\begin{center}
+\input{06table02.txt}
+\end{center}
+\end{table}
+
+
+These results of {\tt wbc} and {\tt dbc} suggest that even the
+simplest selection methods based on contextual categories work well
+for cost reduction, as well as performance improvements. We will
+discuss this performance/cost trade-off later in further detail, along
+with the results of other selection schemes.
+
+\section{Type-based selection}
+
+We have just shown that even the simplest category-based selection
+worked well for boosting the performance as well as reducing the
+cost. However, it has some drawbacks such as the fact that the context
+categories must be given and fixed and it does not allow much finer
+selection, e.g., selecting effective context types one by one.
+
+In this section, we propose the second selection scheme: type-based
+selection, where individual context types are scored, and selected or
+removed. This selection scheme corresponds to removing individual rows
+of the word-context co-occurrence matrix $X$ one by one, as
+illustrated in Fig.~\ref{fig_overview}, thus enabling finer-grained
+selection compared to the category-based one mentioned above.
+
+More specifically, type-based selection consists of these two steps:
+firstly, to each of context types, the {\em importance score} of the
+context is assigned using one of the measures described in the
+following. Secondly, the scored types are sorted by the importance
+score and ones with low values of importance scores are
+eliminated. The calculation of distributional similarity is performed
+using only the remaining rows. To calculate the importance scores for
+context types, we integrate the knowledge and result of feature
+selection methods proposed for text categorization or information
+retrieval, and adopt the five importance measures, namely, DF, TS, MI,
+IG, and CHI2, described in Section 7.2. Note that the measures except
+DF were first designed in order to select/remove features for {\em
+classification problems}, not for distributional
+similarity. Therefore, how to apply the rest of the measures to this
+distributional similarity problem is a big issue, which we deal with
+in the following section.
+
+\subsection{Formalization of distributional similarity}
+
+To apply the pair-based importance measures, we formalize
+distributional similarity as a ``pair classification'' problem as
+described below.
+
+First of all, we deal with word pairs, instead of individual words, as
+the instances of classification, and define features $f_1, \ldots , f_m$
+corresponding to context types $c_1, \ldots , c_m$. The feature value is
+defined $f_j = 1$ if the two words of the pair have the context $c_j$
+in common, and $f_j = 0$ otherwise. Then, we define the target class
+$s$, so that $s = 1$ when the pair is semantically related, and $s =
+0$ if not. These defined, distributional similarity is formalized as a
+binary, pair classification problem which assigns the word pairs to
+the classes $s \in \{0, 1\}$ based on the features $f_1, \ldots ,
+f_m$. Finally, to calculate the specific values of the following
+context importance scores, we prepare two test sets of related word
+pairs for class $s = 1$ and unrelated ones for class $s = 0$. This
+enables us to apply existing feature selection methods designed for
+classification problems to the automatic context selection.
+
+The two test sets, related and unrelated one, are prepared using the
+{\em reference sets} described in Section 5. More specifically, we
+created 5,000 related word pairs by extracting from synonym pairs in
+the reference set, and 5,000 unrelated ones by firstly creating random
+pairs of the LDV words, whose detail is described later, and then
+manually making sure that no related pairs are included in these
+random pairs.
+
+\subsection{Method}
+
+In the following, the importance score measures, namely, DF, TS, MI,
+IG, and CHI2, are introduced. Remember that $n$ and $m$ represent the
+number of word and context types, respectively, and $N(w, c)$ denotes
+the frequency count of co-occurrence of word $w$ and context $c$.
+
+\subsubsection{Document frequency (DF)}
+
+Document frequency (DF), commonly used for weighting in information
+retrieval, is the number of documents a term co-occurs with. However,
+in the distributional similarity settings, DF corresponds to {\em word
+frequency}, i.e., the number of unique words the context type
+co-occurs with:
+\[
+  df(c) = |\{w | N(w, c) > 0\}|.
+\]
+The motivation of adopting DF as a context selection criterion is the
+assumption that the contexts shared by many words should be
+informative. It is to note, however, this concept that higher DF
+values corresponds to higher importance is totally contrary to the
+underlying assumption of idf (inverse document frequency) that the
+context types with too high DF, i.e., so-called {\em stopwords}, are
+not useful. On the other hand, the context types with too low DF
+values are undoubtedly unimportant, because it is very rare that such
+types are shared by pairs of words and act as useful features for
+pairs. We suppose that this DF measure can roughly capture this
+tendency.
+
+\subsubsection{Term strength (TS)}
+
+Term strength (TS), proposed by Wilbur and Sirotkin \cite{Wilbur:92}
+and applied to text categorization by Yang and Wilbur \cite{Yang:96},
+measures how likely a term is to appear in ``similar documents,'' and
+it is shown to achieve a successful outcome in reducing the amount of
+vocabulary for text retrieval. For the distributional similarity
+setting, TS is defined as:
+\[
+  ts(c) = P(c \in C(w_2) | c \in C(w_1)),
+\]
+where $(w_1, w_2)$ is a related word pair and $C(w)$ is the set of
+context types co-occurring with the word $w$, i.e., $C(w) = \{c|N(w,c)
+> 0\}$. Note that the value of $ts(c)$ is symmetric because we consider
+the similarity relation to be symmetric, i.e., when $(w_1, w_2)$ is a
+synonymous word pair, $(w_2, w_1)$ is also synonymous. The value of
+$ts(c)$ is calculated, letting $P_H$ be a set of related word pairs, as
+\[
+  ts(c) = \frac{|\{(w_1, w_2) \in P_H | c \in C(w_1) \cap
+  C(w_2)\}|}{|\{(w_1, w_2) \in P_H | c \in C(w_1)\}|}.
+\]
+
+What makes TS different from DF is that it requires a reference set
+$P_H$ consisting of related word pairs. We used the reference set for
+class $s = 1$ as $P_H$ described in Section 7.1.
+
+\subsubsection{Mutual information (MI)}
+
+Mutual information (MI), commonly used for word association and
+co-occurrence weighting in statistical NLP, is the measure of the
+degree of dependence between two events. The {\em pointwise} MI value
+of feature $f$ and class $s$ is calculated as:
+\[
+I(f, s) = \log \frac{P(f, s)}{P(f)P(s)}.
+\]
+To obtain the final context importance, we combine the MI value over
+both of the classes as $I_{\rm max}(c_j) = \max_{s \in \{0, 1\}}
+I(f_j, s)$. Note that, here we employed the maximum value of pointwise
+MI values since it is claimed to be the best in \cite{Yang:97},
+although there can be other combinations such as weighted average.
+
+\subsubsection{Information gain (IG)}
+
+Information gain (IG), often employed in the machine learning field as
+a criterion for feature importance, is the amount of gained
+information of an event by knowing the outcome of the other event, and
+is calculated as the weighted sum of the pointwise MI values over all
+the event combinations:
+\[
+G(c_j) = \sum_{f_j \in \{0, 1\}} \sum_{s \in \{0,1\}} P(f_j, s) \log \frac{P(f_j, s)}{P(f_j)P(s)}.
+\]
+
+
+\subsubsection{$\chi^2$ statistic (CHI2)}
+
+$\chi^2$ statistic (CHI2) estimates the lack of independence between
+classes and features, which is equal to the summed difference of
+observed and expected frequency over the contingency table cells. More
+specifically, letting $F_{nm} (n, m \in \{0, 1\})$ be the number of
+word pairs with $f_j = n$ and $s = m$, and the number of all pairs be
+$N$, $\chi^2$ statistic is defined as:
+\begin{equation}
+  \chi^2(c_j) = \frac{N(F_{11}F_{00} - F_{01}F_{10})^2}{(F_{11}+F_{01})(F_{10}+F_{00})(F_{11}+F_{10})(F_{01}+F_{00})}.
+\end{equation}
+
+\subsection{Experiment}
+
+In this experiment, the context types are sorted by the importance
+scores mentioned above and ones with the lowest scores were removed in
+order.  
+We started the selection with all the 172,251 types for {\tt
+wbc} and 83,029 types for {\tt dbc}, i.e., 100\% of the originally
+\pagebreak
+extracted context types, reducing the percentage of remaining types
+until only 0.2\% (344 for {\tt wbc} and 166 for {\tt dbc}) were left.
+The evaluation measures, AP and CC, were calculated at each step.
+
+The conditions such as the corpus, parser (RASP2), contextual
+information ({\tt dbc}, {\tt wbc}), and frequency cut-off, are exactly the
+same as the previous experiment (Section 6.2).
+
+\subsection{Result}
+
+The performance change when the context types of {\tt wbc} were
+selected/removed is plotted in Fig.~\ref{fig_typeres_wbc}.  The
+overall observation is that the performance not only kept the original
+level but also slightly improved even during the ``aggressive''
+reduction when more than 80\% of the original types were eliminated
+and around 30,000 context types were left. It was not until 90\%
+(approx. 17,000 remaining) elimination that the AP values began to
+fall. The usefulness of context selection was even more significant
+for CC, where the value increased more than 20\% during the 90\%
+reduction. The reason why this performance increase was observed is
+that, the context types to which lower importance scores were assigned
+were actually ``noise'' which may have hindered the accurate
+distributional similarity calculation and they might have been removed
+by the context selection technique proposed here.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{15-5ia6f3.eps}
+\end{center}
+\caption{Performance change v.s. context types on type-based context selection for {\tt wbc}}
+\label{fig_typeres_wbc}
+\end{figure}
+
+We observed a slight difference regarding which of the five measures
+were effective. More specifically, TS, IG and CHI2 worked well for AP,
+while DF and TS did for CC. On the whole, TS was performing the best,
+with IG and CHI2 coming next, whereas the performance of MI quickly
+worsened. Although the task was different, this experiment showed a
+very consistent result compared with the one of Yang and Pedersen's
+\cite{Yang:97}. This means that feature selection methods are also
+effective for context selection in distributional similarity, and our
+formalization of the problem described in Section 7.1 turned out to be
+appropriate for the purpose.
+
+
+In order to clarify the trade-off between the synonym acquisition
+performance and computational cost, we re-plotted the result of the
+current experiment by taking the number of co-occurrences, i.e., the
+number of non-zero elements in the word-context co-occurrence matrix,
+which remained after the selection operation, as x-axis. The result is
+displayed in Fig.~\ref{fig_typeres2_wbc}, and it reveals an
+interesting surprise.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{15-5ia6f4.eps}
+\end{center}
+\caption{Performance change v.s. co-occurrences on type-based context selection for {\tt wbc}}
+\label{fig_typeres2_wbc}
+\end{figure}
+
+The first thing to note is that the decline curve of AP
+v.s. co-occurrences is more pronounced, compared to Fig.~\ref{fig_typeres_wbc}, 
+making it almost linear. This difference in
+shape arises from the fact that most {\em co-occurrences} remain
+intact during the plateau shape (from 172,251 types to approx. 80,000
+types) of Fig.~\ref{fig_typeres_wbc}, where context {\em types} are
+aggressively eliminated but the performance keeps almost unchanged. To
+exemplify this, four of the corresponding points in Figs.
+\ref{fig_typeres_wbc} and \ref{fig_typeres2_wbc} are marked by letters
+``a'', ``b'', ``c'', and ``d.''  This is because the measures
+introduced above, except for MI, explicitly or implicitly favor
+frequent context types, thus type-based context selection using these
+four measures removes infrequent types first, keeping as many
+co-occurrence as possible. The CC curve also shows a quite different
+shape, where the peak located at the far right of
+Fig.~\ref{fig_typeres_wbc} is now shifted toward the center, meaning
+that the best CC is achieved when about a half of the co-occurrences
+are eliminated.
+
+
+On the other hand, MI, which we had been considered to be the
+worst-performing importance measure in terms of performance/type
+trade-off, shows quite different characteristics and now it tops the
+other four measures and demonstrates the best performance/cost
+trade-off of five, when only 10\% of the original co-occurrences are
+selected. This makes MI the best candidate for the applications which
+poses an extremely high demand for computational cost, such as machine
+learning techniques and clustering. Other four measures showed little
+difference among them between Figs.  \ref{fig_typeres_wbc} and
+\ref{fig_typeres2_wbc}, with their order slightly different.
+
+The above observation indicates that, the best measures in terms of
+performance/types trade-off, such as TS and CHI2, do not always show
+the best performance/cost trade-off, which can be achieved by MI.  The
+choice is up to the tasks and requirements in practice---the former
+measures would be appropriate for the tasks which press high demands
+for low dimensionality of feature spaces, whereas the latter measure
+can be a good candidate for the tasks dealing with sparse matrices and
+vectors.
+
+
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{15-5ia6f5.eps}
+\end{center}
+\caption{Performance change v.s. context types on type-based context selection for {\tt dbc}}
+\label{fig_typeres_dbc}
+\end{figure}
+\begin{figure}[b]
+\begin{center}
+\includegraphics{15-5ia6f6.eps}
+\end{center}
+\caption{Performance change v.s. co-occurrences on type-based context selection for {\tt dbc}}
+\label{fig_typeres2_dbc}
+\end{figure}
+
+Here we notice that the results are slightly different for AP and CC,
+and would like to discuss the cause below. In category-based
+selection, AP values declined greatly for [0, 1] and [0, 2] of {\tt
+wbc}, and {\tt obj} of {\tt dbc}, while the change of CC values was
+relatively small, as shown in Tables {\ref{table_wbc_category}} and
+{\ref{table_dbc_category}}. Furthermore, the peaks of CC values shown
+in Figs. {\ref{fig_typeres_wbc}} and {\ref{fig_typeres_dbc}} were
+shifted towards fewer context types when compared to AP values. What
+these suggest is, in order to accurately calculate AP, i.e., to
+accurately acquire synonyms, we need more context types because the
+overlap of vectors has to be precisely obtained, whereas in order to
+accurately calculate CC, i.e., to accurately assign similarity, we do
+not need as many context types because the non-overlapping elements of
+vectors are also important.  This is intuitively correct---most of
+elements in vectors do not overlap because there are so many types and
+a lot of context types should remain in order to obtain sufficient
+overlaps.
+
+
+
+
+Almost the same trend was observed for both {\tt wbc} and {\tt dbc},
+with the result shown in Figs. \ref{fig_typeres_dbc} and
+\ref{fig_typeres2_dbc}.  From the results described in this section,
+we can conclude this type-based context selection is general enough to
+be applied for any distributional similarity settings.
+
+\section{Co-occurrence based selection}
+
+We have previously shown that type-based selection could provide a
+general-purpose framework for feature space reduction. However, even
+within a single context type, the importance of individual {\em
+co-occurrence} may vary according to the word with which the context
+co-occurs. Thus finer-grained selection than type-based one is
+appropriate in some cases. Now let us consider a situation where a
+single context type $c$ co-occurs with a very frequent word $w_1$ and
+an infrequent word $w_2$. In this case, the co-occurrence $(w_1, c)$
+can be ignored without worsening the performance because $w_1$ may
+have co-occurrences with other context types which are discriminative
+enough to precisely characterize the word $w_1$. The same will not be
+true for $w_2$---the co-occurrence $(w_2, c)$ is one of the scarce
+features $w_2$ has, and as such, it should not be lightly weighted,
+let alone ignored.
+
+This leads us to the third and finest-grained context selection
+scheme, {\em co-occurrence based selection}, where individual
+co-occurrences $(w,c)$ are weighted, sorted, and removed.  This
+selection operation corresponds to removing (i.e., replacing with
+zeros) individual elements of the word-context co-occurrence matrix
+$X$ one by one, as illustrated in Fig.~\ref{fig_overview}, thus
+enabling the finest-grained selection of the three schemes proposed in
+this paper.
+
+\subsection{Method}
+
+Co-occurrence based selection works quite similarly to type-based
+selection---the importance score is assigned to every co-occurrence
+$(w,c)$, instead of context type $c$, and the co-occurrences are
+sorted by the scores and ones with low importance are eliminated. The
+calculation of distributional similarity is performed using only the
+remaining elements.  To calculate the importance score, here we pay
+attention to these four weight functions listed below: {\tt tfidf},
+{\tt pmi}, {\tt chi2}, and {\tt ttest}.
+
+
+\subsubsection{tf.idf (term frequency, inverse document frequency) weighting (tfidf)}
+
+As one of the traditional yet commonly adopted weighting measures,
+{\tt tfidf} is widely used for information retrieval systems.  The raw
+co-occurrence frequency, tf, is weighted by idf:
+\[
+  \mbox{wgt}(w, c) = N(w, c) \cdot \mbox{idf}(c), \quad \mbox{idf}(c) = \log \frac{n}{\mbox{df}(c)},
+\]
+where $\mbox{df}(c)$ is the number of word types with which the
+context type $c$ co-occurs, i.e., $\mbox{df}(c) = |\{ w | N(w, c) >
+0\}|$. In the experiments, the idf values are normalized so that the
+maximum equals to 1.
+
+\subsubsection{Pointwise mutual information (pmi)}
+
+The amount of information that the appearances of $w$ and $c$ have in
+common is defined as their pointwise mutual information ({\tt pmi}):
+\[
+  \mbox{wgt}(w, c) = \log \frac{p(w,c)}{p(w)p(c)},
+\]
+where the probabilities are calculated empirically, e.g. $p(w, c) =
+N(w, c) / \sum_{w', c'} N(w', c')$. Note that this {\tt pmi} is also
+used to weight co-occurrences throughout this paper.
+
+\subsubsection{$\chi2$ statistic (chi2)}
+
+$\chi^2$ statistic ({\tt chi2}), which was also used for type-based
+selection, is used to measure the lack of dependence between $w$ and
+$c$, and is defined as:
+\begin{equation}
+  \mbox{wgt}(w, c) = \frac{K(N_{11}N_{00} - N_{01}N_{10})^2}{(N_{11}+N_{01})(N_{10}+N_{00})(N_{11}+N_{10})(N_{01}+N_{00})},
+\end{equation}
+where $N_{11}$, $N_{10}$, $N_{01}$, and $N_{00}$ are the frequency
+counts of $w$ co-occurring with $c$, $w$ without $c$, $c$ without $w$,
+and neither, respectively. $K$ is the total number of co-occurrences,
+i.e, $K = N_{11}+N_{10}+N_{01}+N_{00}$.
+
+\subsubsection{t-statistic (ttest)}
+
+t-statistic, usually used to test whether the appearances of a word $w$ and
+a context type $c$ are statistically independent, is used as a weight function:
+\[
+  \mbox{wgt}(w,c) = \frac{p(w, c) - p(w)p(c)}{\sqrt{p(w)p(c)}}.
+\]
+\pagebreak
+Whereas t-statistic is usually employed to discover collocations from
+corpora, Curran and Moens \cite{Curran:02:improvements} proposed using
+it as a weight function and showed that it achieved higher performance
+compared to the others.
+
+
+\subsection{Experiment}
+
+In this experiment, co-occurrences are sorted by the importance scores
+mentioned above and ones with the lowest scores were removed in
+order. We started the selection with all 20,315,658 co-occurrence
+types for {\tt wbc} and 6,710,937 co-occurrence types for {\tt dbc},
+i.e., 100\% of the originally extracted co-occurrences, reducing the
+percentage of remaining ones until 2.5\% (507,891 for {\tt wbc} and
+167,773 for {\tt dbc}) were left.  The evaluation measures, AP and CC,
+were calculated at each step.
+
+The conditions such as the corpus, parser (RASP2), contextual
+information ({\tt dbc}, {\tt wbc}), and frequency cut-off, are exactly
+the same as the previous experiment (Section 6.2).
+
+\subsection{Result}
+
+The performance change on co-occurrence based selection applied for
+{\tt wbc} is displayed in Fig.~\ref{fig_cocrres_wbc}. We observed not
+only the significant tolerance of AP to a small number of selected
+co-occurrence, but also much greater increase of AP, when compared to
+type-based selection shown in Fig.~\ref{fig_typeres2_wbc}. At the
+peak, which was seen around 5,000,000 co-occurrences, i.e., less than
+quarter of the original data size, the increase of AP was approx. 25\%
+percent of that of before the selection.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{15-5ia6f7.eps}
+\end{center}
+\caption{Performance change on co-occurrence based context selection for {\tt wbc}}
+\label{fig_cocrres_wbc}
+\end{figure}
+
+
+On the other hand, CC declined almost linearly as the co-occurrences
+were selected for most of the importance measures, and the decline was
+steeper than type-based selection. This result is somewhat contrary to
+the previous result of type-based selection, where CC showed the
+tolerance to fewer number of co-occurrences. As far as we currently
+speculate, it is because CC calculation requires a lot of
+co-occurrences, most of which are contained in the non-overlapping
+elements of vectors, and they were removed in the early stage of
+co-occurrence based selection. In contrast, AP calculation requires
+many overlapping context types as we mentioned in Section 7.4, but
+this overlap is relatively small in terms of the number of
+co-occurrences. A large part of this remains even after co-occurrence
+selection, which boosts the AP values.
+
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{15-5ia6f8.eps}
+\end{center}
+\caption{Performance change on co-occurrence based context selection for {\tt dbc}}
+\label{fig_cocrres_dbc}
+\end{figure}
+
+As for the importance measures, {\tt chi2} and {\tt ttest} performed
+best of all, while {\tt tfidf} requires special attention. Although it
+did not work well for ``moderate'' selection where around half of the
+co-occurrences were removed, it outperformed for the ``aggressive''
+selection where less than quarter of the co-occurrences remained, and
+this trend is especially outstanding for CC. Different importance
+measures exhibit different characteristics, and the choice depends on
+how aggressive reduction the task demands. The result for {\tt dbc}
+also reveals the same tendency as shown in Fig.~\ref{fig_cocrres_dbc},
+and we suppose that the effectiveness of co-occurrence based
+selection, as well as the characteristics of individual importance
+measures, is general enough and applicable to other kinds of settings.
+
+\section{Comparison of three selection schemes}
+
+Finally, we compare all the three selection schemes proposed in this
+paper in terms of performance and computational cost.  The results of
+category-based selection ({\tt CATEGORY}), two representative measures
+from type-based selection ({\tt TYPE (IG)} and {\tt TYPE (MI)}), and
+from co-occurrence based selection ({\tt COOCR (tfidf)} and {\tt COOCR
+(ttest)}) are plotted in a single plane (Fig.~\ref{fig_cocrres2_wbc}).
+The result of {\tt CATEGORY} is represented by the labelled discrete
+points corresponding to individual categories. The graph takes the
+number of co-occurrences left after the selection as x-axis and the
+performance as y-axis, thus we can compare the performance/cost
+trade-off of the three schemes.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{15-5ia6f9.eps}
+\end{center}
+\caption{Comparison of performance-cost trade-off of three schemes for {\tt wbc}}
+\label{fig_cocrres2_wbc}
+\end{figure}
+
+
+The graph reveals that, on the whole, {\tt COOCR (ttest)} works well
+for AP and {\tt TYPE (IG)} does for CC. This result looks somewhat
+contradictory, but the difference in the characteristics of the
+evaluation measures explains this---recall that type-based selection
+helps keep a high CC level, while co-occurrence based selection keeps
+a high AP level, which we discussed in Sections 7.4 and 8.3. Thus
+selection methods should be carefully chosen depending on the nature
+of actual tasks to which one is applying these methods, considering
+the characteristics of AP and CC as described in Section 5.
+
+Considering both evaluation measures, {\tt TYPE (IG)} will be the
+choice for ``moderate'' selection which removes the co-occurrences up
+to approx. 50\%, and {\tt TYPE (MI)} for ``aggressive'' selection,
+where less than 20\% are left. A little surprising fact is that we
+cannot miss the effectiveness of the simplest, category-based context
+selection. Actually, the windows [1,0], [1,1], [2,0], and [2,1],
+corresponding to four points found at upper right of the graph, are
+almost the best of all three schemes, in terms of performance/cost
+trade-off.
+
+However, other {\tt wbc} categories, e.g., [3,1], [3,0], and [1,2],
+still cannot beat {\tt COOCR(tfidf)} or {\tt TYPE(IG)}, and this
+suggests that the effectiveness of {\tt CATEGORY} is only observed for
+rather limited conditions such as [1, 0]. After all, it only worked
+well for types of context ({\tt wbc} and {\tt dbc}) where categories
+can be clearly defined, and under no conditions for computational cost
+or dimensionality. It is also difficult for type-based selection to
+predict the computational cost and the performances we would obtain
+after the selection.
+
+This implies that type-based and co-occurrence based selection methods
+still have these advantages. First, they are general enough to be
+applied to context where categories cannot be clearly
+defined. Category-based selection may have difficulties when applied
+to newly proposed types of context such as dependency path
+{\cite{Lin:01}}, but the other two methods can be easily adopted for
+them. Secondly, they are flexible enough to meet the imposed
+conditions in terms of computational cost and dimensionality. In some
+tasks such as machine learning, computational resources are demanding
+and some conditions might be already given beforehand in terms of
+computational cost and dimensionality. Type-based and co-occurrence
+based selection can meet them by adjusting the ``aggressiveness'' of
+selection flexibly. Thirdly, it is easy to predict the computational
+cost and the performance achieved after type-based or co-occurrence
+based selection is applied, but not for category-based selection.
+
+To sum up, in some limited cases category-based selection works well,
+while in most cases one can benefit from the generality and
+flexibility of the other two selection methods.
+
+
+A similar comparison is conducted for {\tt dbc}, and the result is
+shown in Fig.~\ref{fig_cocrres2_dbc}. The characteristics of the three
+schemes are almost the same, and again, the relative effectiveness of
+{\tt CATEGORY} is clear, though not as outstanding as {\tt wbc}.  The
+best category is {\tt dobj}, and this evidence again supports the use
+of the combination of subject and object relations as context, as done
+in many previous works.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{15-5ia6f10.eps}
+\end{center}
+\caption{Comparison of performance-cost trade-off of three schemes for {\tt dbc}}
+\label{fig_cocrres2_dbc}
+\end{figure}
+
+Lastly but not least importantly, the three schemes are not mutually
+exclusive but freely combined and used. For example, we can firstly
+apply category-based selection using {\tt obj}, then type-based
+selection using {\tt DF}, and finally the remaining co-occurrences can
+be further thinned out using co-occurrence based selection with {\tt
+pmi}. Although we do not investigate the impact of this combination,
+one can choose any schemes as well as measures, depending on the
+demand for the semantic space dimensionality and computational cost.
+
+\section{Conclusion}
+
+
+In this paper, we proposed three schemes of context selection for
+distributional similarity: category-, type- and co-occurrence based
+selection. Category-based selection is the simplest selection where
+context types are selected/removed based on the syntactical categories
+the types belong to. Finer-grained, type-based selection enables the
+selection of context types one by one, by individually assigning them
+importance scores. For this purpose, we reformalized the
+distributional similarity problem as a classification problem,
+enabling the application of existing measures for feature selection to
+the current task. The finest, co-occurrence based selection selects or
+removes individual co-occurrences of word and context, assigning them
+importance scores.
+
+In the experiments, we investigated how well the three selection
+schemes, as well as individual importance measures, work for removing
+unwanted contexts for word-based context {\tt wbc} and
+dependency-based context {\tt dbc}. Automatic synonym acquisition was
+used as a task to evaluate the performance, and average precision (AP)
+and correlation coefficient (CC) were employed as evaluation measures.
+
+In the first experiment, we compared the performance and context
+reduction amount (the numbers of remaining context types and
+co-occurrence) for category-based selection. It showed that limiting
+the categories actually increased the performance, and appropriate
+choice of categories, such as [1,0]-window for {\tt wbc} and {\tt
+dobj} for {\tt dbc}, were indeed effective for both performance and
+computational cost.
+
+The second experiment, where the performance change on type-based
+context selection was evaluated, showed that the performance not only
+kept the original level but also slightly improved even during the
+``aggressive'' reduction when more than 80\% of the original types
+were eliminated. This implies the effectiveness of our formalization of
+distributional similarity problem for this task.  As for the importance
+measures, TS, IG and CHI2 were showing one of the best
+performance/type trade-off, while MI was the best in terms of
+performance/cost trade-off.
+
+The third experiment revealed that co-occurrence based selection
+demonstrated even better performance/cost trade-off in some cases,
+especially when {\tt chi2} or {\tt ttest} were used.
+
+Finally, we compared above three selection schemes and clarified the
+characteristics of the schemes and the measures. It also showed the
+effectiveness of the simplest category-based selection, and this
+result supports the use of subject and object relations as context, as
+done in many previous works. At the same time, type-based
+and co-occurrence based selection methods also work for both {\tt wbc}
+and {\tt dbc}, showing that these method can be generally and flexibly
+used for any kinds of context and dimensionality/computational cost
+constraints.
+
+
+
+In this paper, we presented only a considerably simple classification
+model of distributional similarity to assign importance scores for
+distributional similarity. However, much more sophisticated and
+advanced models can be considered, whose effectiveness for type-based
+context selection should be investigated in the future.
+
+Finally, the selection schemes we presented all assume the mutual
+independence of context types and co-occurrences, although this
+assumption is often unrealistic. Some feature selection methods
+incorporating mutual correlation among features are proposed for
+machine learning \cite{Ding:03}, and the same technique may be
+applicable for context selection as well. Also, dimensionality
+reduction techniques such as LSA (Latent Semantic Analysis)
+\cite{Deerwester:90} and PLSA (Probabilistic LSA) \cite{Hofmann:01}
+have been proposed, and they can be used to reduce the dimensionality
+of feature space as well. Although they do not always reduce the
+computational cost, we should compare these dimensionality reduction
+techniques and context selection methods proposed here, or their
+combination.
+
+
+\section*{Appendix: List of the 100 Chosen LDV Words}
+
+\begin{verbatim}
+action, advantage, anxiety, article, background, bank, blood, board, bunch
+burial, business, call, care, case, cloud, cold, combination, comparison
+competition, crowd, curse, curve, dance, delay, department, education, effect
+faint, family, feeling, field, fold, footstep, green, ground, group, guide
+guilt, habit, health, heaven, idea, imagination, instruction, interruption
+job, joint, kiss, knowledge, laughter, lawyer, length, letter, manner, member
+minister, mistake, model, moment, noise, nothing, official, opinion, party
+payment, pet, piece, police, port, possession, pound, preparation, punishment
+remark, reply, report, representative, result, rod, room, row, rule, shade
+shore, side, sight, soul, spring, story, structure, sympathy, tail, tear
+terror, thought, threat, victory, view, wing, worship
+\end{verbatim}
+
+
+\bibliographystyle{jnlpbbl_1.3}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Briscoe, Carroll, Graham, \BBA\ Copestake}{Briscoe
+  et~al.}{2002}]{Briscoe:02:gr}
+Briscoe, T., Carroll, J., Graham, J., \BBA\ Copestake, A. \BBOP 2002\BBCP.
+\newblock \BBOQ Relational evaluation schemes\BBCQ\
+\newblock In {\Bem Proc. of the Beyond PARSEVAL Workshop at the Third
+  International Conference on Language Resources and Evaluation}, \mbox{\BPGS\
+  4--8}.
+
+\bibitem[\protect\BCAY{Briscoe, Carroll, \BBA\ Watson}{Briscoe
+  et~al.}{2006}]{Briscoe:06}
+Briscoe, T., Carroll, J., \BBA\ Watson, R. \BBOP 2006\BBCP.
+\newblock \BBOQ The Second Release of the RASP System\BBCQ\
+\newblock In {\Bem Proc. of the COLING/ACL 2006 Interactive Presentation
+  Sessions}, \mbox{\BPGS\ 77--80}.
+
+\bibitem[\protect\BCAY{Budanitsky \BBA\ Hirst}{Budanitsky \BBA\
+  Hirst}{2006}]{Budanitsky:06}
+Budanitsky, A.\BBACOMMA\ \BBA\ Hirst, G. \BBOP 2006\BBCP.
+\newblock \BBOQ Evaluating WordNet-based Measures of Lexical Semantic
+  Relatedness\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 32}, \mbox{\BPGS\ 13--47}.
+
+\bibitem[\protect\BCAY{Collins}{Collins}{2002}]{Collins:02}
+Collins \BBOP 2002\BBCP.
+\newblock {\Bem Collins Cobuild Major New Edition CD-ROM}.
+\newblock HarperCollins Publishers.
+
+\bibitem[\protect\BCAY{Crouch \BBA\ Yang}{Crouch \BBA\ Yang}{1992}]{Crouch:92}
+Crouch, C.~J.\BBACOMMA\ \BBA\ Yang, B. \BBOP 1992\BBCP.
+\newblock \BBOQ Experiments in Automatic Statistical Thesaurus
+  Construction\BBCQ\
+\newblock In {\Bem Proc. of the 15th annual international ACM SIGIR conference
+  on Research and development in information retrieval}, \mbox{\BPGS\ 77--88}.
+
+\bibitem[\protect\BCAY{Curran \BBA\ Moens}{Curran \BBA\
+  Moens}{2002a}]{Curran:02:improvements}
+Curran, J.~R.\BBACOMMA\ \BBA\ Moens, M. \BBOP 2002a\BBCP.
+\newblock \BBOQ Improvements in automatic thesaurus extraction. In Workshop on
+  Unsupervised Lexical Acquisition\BBCQ\
+\newblock In {\Bem Proc. of ACL SIGLEX}, \mbox{\BPGS\ 231--238}.
+
+\bibitem[\protect\BCAY{Curran \BBA\ Moens}{Curran \BBA\
+  Moens}{2002b}]{Curran:02:scaling}
+Curran, J.~R.\BBACOMMA\ \BBA\ Moens, M. \BBOP 2002b\BBCP.
+\newblock \BBOQ Scaling Context Space\BBCQ\
+\newblock In {\Bem Proc. of ACL 2002}, \mbox{\BPGS\ 231--238}.
+
+\bibitem[\protect\BCAY{Deerwester, Dumais, Furnas, Landauer, \BBA\
+  Harshman}{Deerwester et~al.}{1990}]{Deerwester:90}
+Deerwester, S., Dumais, S.~T., Furnas, G.~W., Landauer, T.~K., \BBA\ Harshman,
+  R. \BBOP 1990\BBCP.
+\newblock \BBOQ Indexing by Latent Semantic Analysis\BBCQ\
+\newblock {\Bem Journal of the American Society for Information Science}, {\Bbf
+  41}  (6), \mbox{\BPGS\ 391--407}.
+
+\bibitem[\protect\BCAY{Ding \BBA\ Peng}{Ding \BBA\ Peng}{2003}]{Ding:03}
+Ding, C.\BBACOMMA\ \BBA\ Peng, H. \BBOP 2003\BBCP.
+\newblock \BBOQ Minimum Redundancy Feature Selection from Microarray Gene
+  Expression Data\BBCQ\
+\newblock In {\Bem Proc. of the IEEE Computer Society Conference on
+  Bioinformatics}, \mbox{\BPGS\ 523--528}.
+
+\bibitem[\protect\BCAY{\protect{Editors} of~the American
+  Heritage~Dictionary}{\protect{Editors} of~the American
+  Heritage~Dictionary}{1995}]{Roget:95}
+\protect{Editors} of~the American Heritage~Dictionary \BBOP 1995\BBCP.
+\newblock {\Bem Roget's II: The New Thesaurus, 3rd ed.}
+\newblock Houghton Mifflin.
+
+\bibitem[\protect\BCAY{Fellbaum}{Fellbaum}{1998}]{Fellbaum:98}
+Fellbaum, C. \BBOP 1998\BBCP.
+\newblock {\Bem WordNet: an electronic lexical database}.
+\newblock MIT Press.
+
+\bibitem[\protect\BCAY{Grefenstette}{Grefenstette}{1994}]{Grefenstette:94}
+Grefenstette, G. \BBOP 1994\BBCP.
+\newblock {\Bem Explorations in Automatic Thesuarus Discovery}.
+\newblock Kluwer Academic Publisher.
+
+\bibitem[\protect\BCAY{Hagiwara, Ogawa, \BBA\ Toyama}{Hagiwara
+  et~al.}{2006}]{Hagiwara:06}
+Hagiwara, M., Ogawa, Y., \BBA\ Toyama, K. \BBOP 2006\BBCP.
+\newblock \BBOQ Selection of Effective Contextual Information for Automatic
+  Synonym Acquisition\BBCQ\
+\newblock In {\Bem Proc. of COLING/ACL 2006}, \mbox{\BPGS\ 353--360}.
+
+\bibitem[\protect\BCAY{Harris \BBA\ Katz}{Harris \BBA\ Katz}{1985}]{Harris:85}
+Harris, Z.\BBACOMMA\ \BBA\ Katz, J.~J. \BBOP 1985\BBCP.
+\newblock {\Bem The Philosophy of Linguistics}, \mbox{\BPGS\ 26--47}.
+\newblock Oxford University Press.
+
+\bibitem[\protect\BCAY{Hindle}{Hindle}{1990}]{Hindle:90}
+Hindle, D. \BBOP 1990\BBCP.
+\newblock \BBOQ Noun classification from predicate-argument structures\BBCQ\
+\newblock In {\Bem Proc. of ACL 1990}, \mbox{\BPGS\ 268--275}.
+
+\bibitem[\protect\BCAY{Hirst \BBA\ St-Onge}{Hirst \BBA\
+  St-Onge}{1998}]{Hirst:98}
+Hirst, G.\BBACOMMA\ \BBA\ St-Onge, D. \BBOP 1998\BBCP.
+\newblock \BBOQ Lexical chains as representations of context for the detection
+  and correction of malapropisms\BBCQ\
+\newblock In {\Bem Christiane Fellbaum ed. WordNet: An electronic lexical
+  database}, \mbox{\BPGS\ 305--332}. MIT Press.
+
+\bibitem[\protect\BCAY{Hofmann}{Hofmann}{2001}]{Hofmann:01}
+Hofmann, T. \BBOP 2001\BBCP.
+\newblock \BBOQ Unsupervised Learning by Probabilistic Latent Semantic
+  Analysis\BBCQ\
+\newblock {\Bem Machine Learning}, {\Bbf 42}, \mbox{\BPGS\ 177--196}.
+
+\bibitem[\protect\BCAY{Jiang \BBA\ Conrath}{Jiang \BBA\
+  Conrath}{1997}]{Jiang:97}
+Jiang, J.~J.\BBACOMMA\ \BBA\ Conrath, D.~W. \BBOP 1997\BBCP.
+\newblock \BBOQ Semantic similarity based on corpus statistics and lexical
+  taxonomy\BBCQ\
+\newblock In {\Bem Proc. of International Conference on Research in
+  Computational Linguistics}, \mbox{\BPGS\ 19--33}.
+
+\bibitem[\protect\BCAY{Jing \BBA\ Croft}{Jing \BBA\ Croft}{1994}]{Jing:94}
+Jing, Y.\BBACOMMA\ \BBA\ Croft, B. \BBOP 1994\BBCP.
+\newblock \BBOQ An Association Thesaurus for Information Retrieval\BBCQ\
+\newblock In {\Bem Proc. of RIAO(Recherche d'Informations Assist\'{e}e par
+  Ordinateur) 1994}, \mbox{\BPGS\ 146--160}.
+
+\bibitem[\protect\BCAY{Kojima \BBA\ Ito}{Kojima \BBA\ Ito}{1995}]{Kojima:95}
+Kojima, H.\BBACOMMA\ \BBA\ Ito, A. \BBOP 1995\BBCP.
+\newblock \BBOQ Adaptive Scaling of a Semantic Space\BBCQ\
+\newblock In {\Bem IPSJ SIGNotes Natural Language, NL108-13}, \mbox{\BPGS\
+  81--88}.
+
+\bibitem[\protect\BCAY{Lin}{Lin}{1998a}]{Lin:98:automatic}
+Lin, D. \BBOP 1998a\BBCP.
+\newblock \BBOQ Automatic retrieval and clustering of similar words\BBCQ\
+\newblock In {\Bem Proc. of COLING/ACL 1998}, \mbox{\BPGS\ 768--774}.
+
+\bibitem[\protect\BCAY{Lin}{Lin}{1998b}]{Lin:98:information}
+Lin, D. \BBOP 1998b\BBCP.
+\newblock \BBOQ Information-theoretic definition of similarity\BBCQ\
+\newblock In {\Bem Proc. of ICML-98}, \mbox{\BPGS\ 294--304}.
+
+\bibitem[\protect\BCAY{Lin \BBA\ Pantel}{Lin \BBA\ Pantel}{2001}]{Lin:01}
+Lin, D.\BBACOMMA\ \BBA\ Pantel, P. \BBOP 2001\BBCP.
+\newblock \BBOQ Discovery of inference rules for question answering\BBCQ\
+\newblock {\Bem Natural Language Engineering}, {\Bbf 7}  (4), \mbox{\BPGS\
+  343--360}.
+
+\bibitem[\protect\BCAY{Lowe \BBA\ McDonald}{Lowe \BBA\
+  McDonald}{2000}]{Lowe:00}
+Lowe, W.\BBACOMMA\ \BBA\ McDonald, S. \BBOP 2000\BBCP.
+\newblock \BBOQ The direct route: Mediated priming in semantic space\BBCQ\
+\newblock In {\Bem Proc. of the 22nd Annual Conference of the Cognitive Science
+  Society}, \mbox{\BPGS\ 675--680}.
+
+\bibitem[\protect\BCAY{Pado \BBA\ Lapata}{Pado \BBA\ Lapata}{2007}]{Pado:07}
+Pado, S.\BBACOMMA\ \BBA\ Lapata, M. \BBOP 2007\BBCP.
+\newblock \BBOQ Dependency-Based Construction of Semantic Space Models\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 33}  (2), \mbox{\BPGS\
+  161--199}.
+
+\bibitem[\protect\BCAY{Pedersen, Patwardhan, \BBA\ Michelizzi}{Pedersen
+  et~al.}{2004}]{Pedersen:04}
+Pedersen, T., Patwardhan, S., \BBA\ Michelizzi, J. \BBOP 2004\BBCP.
+\newblock \BBOQ WordNet::Similarity---Measuring the Relatedness of
+  Concepts\BBCQ\
+\newblock In {\Bem Proc. of NAACL-04}, \mbox{\BPGS\ 38--41}.
+
+\bibitem[\protect\BCAY{Ruge}{Ruge}{1997}]{Ruge:97}
+Ruge, G. \BBOP 1997\BBCP.
+\newblock \BBOQ Automatic detection of thesaurus relations for information
+  retrieval applications\BBCQ\
+\newblock {\Bem Foundations of Computer Science: Potential--Theory--Cognition,
+  Lecture Notes in Computer Science}, {\Bbf 1337}, \mbox{\BPGS\ 499--506}.
+
+\bibitem[\protect\BCAY{Snow, Jurafsly, \BBA\ Ng}{Snow et~al.}{2004}]{Snow:04}
+Snow, R., Jurafsly, D., \BBA\ Ng, A.~Y. \BBOP 2004\BBCP.
+\newblock \BBOQ Learning syntactic patterns for automatic hypernym
+  discovery\BBCQ\
+\newblock In {\Bem Advances in Neural Information Processing Systems (NIPS)
+  17}.
+
+\bibitem[\protect\BCAY{Wilbur \BBA\ Sirotkin}{Wilbur \BBA\
+  Sirotkin}{1992}]{Wilbur:92}
+Wilbur, J.\BBACOMMA\ \BBA\ Sirotkin, K. \BBOP 1992\BBCP.
+\newblock \BBOQ The automatic identification of stop words\BBCQ\
+\newblock {\Bem Journal of Information Science}, {\Bbf 18}  (1), \mbox{\BPGS\
+  45--55}.
+
+\bibitem[\protect\BCAY{Yang \BBA\ Pedersen}{Yang \BBA\
+  Pedersen}{1997}]{Yang:97}
+Yang, Y.\BBACOMMA\ \BBA\ Pedersen, J.~O. \BBOP 1997\BBCP.
+\newblock \BBOQ A Comperative Study on Feature Selection in Text
+  Categorization\BBCQ\
+\newblock In {\Bem Proc. of ICML 1997}, \mbox{\BPGS\ 412--420}.
+
+\bibitem[\protect\BCAY{Yang \BBA\ Wilbur}{Yang \BBA\ Wilbur}{1996}]{Yang:96}
+Yang, Y.\BBACOMMA\ \BBA\ Wilbur, J. \BBOP 1996\BBCP.
+\newblock \BBOQ Using corpus statistics to remove redundant words in text
+  categorization\BBCQ\
+\newblock {\Bem Journal of the American Society for Information Science}, {\Bbf
+  47}  (5), \mbox{\BPGS\ 357--369}.
+
+\end{thebibliography}
+
+\clearpage
+
+\begin{biography}
+
+\bioauthor[:]{Masato Hagiwara}{
+Masto Hagiwara received his Master's Degree of Information Science
+from Nagoya University in 2006, after skipping his fourth year of
+undergraduate.  He is currently a Ph.D candidate, and his research
+interests include statistical natural language processing, especially
+lexical knowledge acquisition and automatic thesaurus construction.  }
+
+\bioauthor[:]{Yasuhiro Ogawa}{
+Yasuhiro Ogawa received his Bachelor's Degree, Master's Degree, and
+Ph. D. Degree of Engineering in 1995, 1997, and 2000, respectively.
+He is currently an assistant professor in the Graduate School of Information
+Science at Nagoya University. His research interests include Japanese
+morphological analysis, Japanese-Uighur machine translation, 
+legal informatics, and e-legislation.
+}
+
+\bioauthor[:]{Katsuhiko Toyama}{
+ Katsuhiko Toyama received his Bachelor's Degree, Master's Degree, and
+ Ph. D. Degree of Engineering in 1984, 1986, and 1989, respectively.
+ He is currently an associate professor in the Graduate School of
+ Information Science at Nagoya University. His research interests
+ include natural language processing, especially legal informatics and
+ e-legislation, as well as logical knowledge representation.
+ 
+}
+\end{biography}
+
+\biodate
+
+
+\end{document}

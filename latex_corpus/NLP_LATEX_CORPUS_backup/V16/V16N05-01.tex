@@ -1,0 +1,753 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.2}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+
+\input{macro_rev.txt}
+\def\hs{}
+\def\ecaption#1{}
+\def\lineB#1#2{}
+\def\lineC#1#2#3{}
+
+
+
+
+\Volume{16}
+\Number{5}
+\Month{October}
+\Year{2009}
+
+\received{2008}{12}{29}
+\revised{2009}{6}{22}
+\rerevised{2009}{6}{30}
+\accepted{2009}{7}{5}
+
+\setcounter{page}{7}
+
+\jtitle{擬似確率的単語分割コーパスによる言語モデルの改良}
+\jauthor{森　　信介\affiref{ACCMS} \and 小田　裕樹}
+\jabstract{
+  言語モデルの分野適応において，適応対象の分野の単語境界情報のない生コーパスの有効な
+  利用方法として，確率的単語分割コーパスとしての利用が提案されている．この枠組では，
+  生コーパス中の各文字間に単語境界が存在する確率を付与し，それを用いて単語$n$-gram確
+  率などが計算される．本論文では，この単語境界確率を最大エントロピー法に基づくモデルに
+  よって推定することを提案する．さらに，確率的単語分割コーパスを従来の決定的に単語に
+  分割されたコーパスで模擬する方法を提案し，言語モデルの能力を下げることなく計算コス
+  トが大幅に削減できることを示す．
+}
+\jkeywords{言語モデル，確率的単語分割，音声認識，仮名漢字変換}
+
+\etitle{Language Model Improvement by a Pseudo-Stochastically Segmented Corpus}
+\eauthor{Shinsuke Mori\affiref{ACCMS} \and Hiroki Oda} 
+\eabstract{
+  Language model (LM) building needs a corpus whose sentences are segmented into
+  words.  For languages in which the words are not delimited by whitespace, an
+  automatic word segmenter built from a general domain corpus is used. Automatically
+  segmented sentences, however, contain many segmentation errors especially around
+  words and expressions belonging to the target domain. To cope with segmentation
+  errors, the concept of stochastic segmentation has been proposed. In this
+  framework, a corpus is annotated with word boundary probabilities that a word
+  boundary exists between two characters. In this paper, first we propose a method
+  to estimate word boundary probabilities based on an maximum entropy model. Next we
+  propose a method for simulating a stochastically segmented corpus by a segmented
+  corpus and show that the computational cost is drastically reduced without a
+  performance degradation.
+}
+\ekeywords{Language Modeling, Stochastic Segmentation, Speech Recognition, Kana-kanji Convertor}
+
+\headauthor{森，小田}
+\headtitle{擬似確率的単語分割コーパスによる言語モデルの改良}
+
+\affilabel{ACCMS}{
+	京都大学学術情報メディアセンター（本研究の一部は日本アイ・ビー・エム在籍中になされた）}{
+	Academic Center for Computing and Media Studies, Kyoto University (Some parts of this research were done when the first author was at IBM Japan, Ltd.)}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+
+一般的な分野において精度の高い単語分割済みコーパスが利用可能になってきた現在，言語モ
+デルの課題は，言語モデルを利用する分野への適応，すなわち，適応対象分野に特有の単語や
+表現の統計的振る舞いを的確に捉えることに移ってきている．この際の標準的な方法では，適
+応対象のコーパスを自動的に単語分割し，単語$n$-gram頻度などが計数される．この際に用い
+られる自動単語分割器は，一般分野の単語分割済みコーパスから構築されており，分割誤りの
+混入が避けられない．特に，適切に単語分割される必要がある適応対象分野に特有の単語や表
+現やその近辺において誤る傾向があり，単語$n$-gram頻度などの信頼性を著しく損なう結果と
+なる．
+
+上述の単語分割誤りの問題に対処するため，確率的単語分割コーパスという概念が提案されて
+いる\cite{確率的単語分割コーパスからの単語N-gram確率の計算}．この枠組では，適応対象
+の生コーパスは，各文字の間に単語境界が存在する確率が付与された確率的単語分割コーパス
+とみなされ，単語$n$-gram確率が計算される．従来の決定的に自動単語分割された結果を用い
+るより予測力の高い言語モデルが構築できることが確認されている．また，仮名漢字変換
+\cite{無限語彙の仮名漢字変換}や音声認識
+\cite{Unsupervised.Adaptation.Of.A.Stochastic.Language.Model.Using.A.Japanese.Raw.Corpus}
+においても，従来手法に対する優位性が示されている．
+
+確率的単語分割コーパスの初期の論文では，単語境界確率は，自動分割により単語境界と推定
+された箇所で単語分割の精度$\alpha$ （例えば0.95）とし，そうでない箇所で$1-\alpha$ とす
+る単純な方法により与えられている\footnote{前後の文字種（漢字，平仮名，片仮名，記号，ア
+ラビア数字，西洋文字）によって場合分けし，単語境界確率を学習コーパスから最尤推定してお
+く方法\cite{生コーパスからの単語N-gram確率の推定}も提案されているが，構築されるモデル
+の予測力は単語分割の精度を用いる場合よりも有意に低い．後述する実験条件では，文字種を
+用いる方法によって構築されたモデルと単語分割の精度を用いる方法によって構築されたモデ
+ルによるエントロピーはそれぞれ4.723 [bit]と3.986 [bit]であった．}．実際には，単語境界が
+存在すると推定される確率は，文脈に応じて幅広い値を取ると考えられる．例えば，学習コー
+パスからはどちらとも判断できない箇所では1/2に近い値となるべきであるが，既存手法では1
+に近い$\alpha$か，0に近い$1-\alpha$とする他ない．
+
+この問題に加えて，既存の決定的に単語分割する手法よりも計算コスト（計算時間，記憶領域）
+が高いことが挙げられる．その要因は2つある．1つ目は，期待頻度の計算に要する演算の種類
+と回数である．通常の手法では，学習コーパスは単語に分割されており，これを先頭から単語
+毎に順に読み込んで単語辞書を検索して番号に変換し，対応する単語$n$-gram頻度をインクリ
+メントする．単語辞書の検索は，辞書をオートマトンにしておくことで，コーパスの読み込み
+と比較して僅かなオーバーヘッドで行える\cite{DFAによる形態素解析の高速辞書検索}．これ
+に対して，確率的単語分割コーパスにおいては，全ての連続する$n$個の部分文字列（$L$文字）
+に対して，$L+1$回の浮動小数点数の積を実行して期待頻度を計算し，さらに1回の加算を実行
+する必要がある（\subref{subsection:EF}参照）．2つ目の要因は，学習コーパスのほとんど全
+ての部分文字列が単語候補になるため，語彙サイズが非常に大きくなることである．この結果，
+単語$n$-gramの頻度や確率の記憶領域が膨大となり，個人向けの計算機では動作しなくなるな
+どの重大な制限が発生する．例えば，本論文で実験に用いた44,915文の学習コーパスに出現す
+る句読点を含まない16文字以下の部分文字列は9,379,799種類あった．このうち，期待頻度が
+0 より大きい部分文字列と既存の語彙を加えて重複を除いた結果を語彙とすると，そのサイズ
+は9,383,985語となり，この語彙に対する単語2-gram頻度のハッシュによる記憶容量は10.0~GB
+となった．このような時間的あるいは空間的な計算コストにより，確率的単語分割コーパスか
+らの言語モデル構築は実用性が高いとは言えない．このことに加えて，単語クラスタリング
+\cite{Class-Based.n-gram.Models.of.Natural.Language}や文脈に応じた参照履歴の伸長
+\cite{The.Power.of.Amnesia:.Learning.Probabilistic.Automata.with.Variable.Memory.Length}
+などのすでに提案されている様々な言語モデルの改良を試みることが困難になっている．
+
+本論文では，まず，確率的単語分割コーパスにおける新しい単語境界確率の推定方法を提案す
+る．さらに，確率的単語分割コーパスを通常の決定的に単語に分割されたコーパスにより模擬
+する方法を提案する．最後に，実験の結果，言語モデルの能力を下げることなく，確率的単語
+分割コーパスの利用において必要となる計算コストが大幅に削減可能であることを示す．これ
+により，高い性能の言語モデルを基礎として，既存の言語モデルの改良法を試みることが容易
+になる．
+
+
+
+\section{確率的単語分割コーパスからの言語モデルの推定}
+\label{section:raw}
+
+確率的言語モデルを新たな分野に適応する一般的な方法は，適応分野のコーパスを用意し，そ
+れを自動的に単語分割し，単語の頻度統計を計算することである．この方法では，単語分割誤
+りにより適応分野のコーパスにのみ出現する単語が適切に扱えないという問題が起こる．この
+解決方法として，適応分野のコーパスを確率的単語分割コーパスとして用いることが提案され
+ている\cite{確率的単語分割コーパスからの単語N-gram確率の計算}．この節では，確率的単語
+分割コーパスからの確率的言語モデルの推定方法について概説する．
+
+
+
+\subsection{確率的単語分割コーパス}
+
+\label{subsection:EM}
+
+確率的単語分割コーパスは，生コーパス$C_{r}$（以下，文字列$\Bdma{x}_1^{n_{r}}$として参
+照）とその連続する各2文字$x_{i},x_{i+1}$の間に単語境界が存在する確率$P_{i}$の組として
+定義される．最初の文字の前と最後の文字の後には単語境界が存在するとみなせるので，$i =
+0,\; i = n_{r}$の時は便宜的に$P_{i} = 1$とされる．確率変数$X_{i}$を
+\[
+X_{i} = \left\{
+  \begin{array}{rl}
+    1 & \mbox{$x_{i},x_{i+1}$の間に単語境界が存在する場合} \\
+    0 & \mbox{$x_{i},x_{i+1}$が同じ単語に属する場合}
+  \end{array} \right.
+\]
+とし($P(X_{i}=1) = P_{i},\;P(X_{i}=0) = 1-P_{i}$)，各$X_0,X_1,$ $\dots,X_{n_r}$は独立
+であることが仮定される．
+
+文献\cite{確率的単語分割コーパスからの単語N-gram確率の計算}の実験で用いられている単語
+境界確率の推定方法は次の通りである．まず，単語に分割されたコーパスに対して自動単語分
+割システムの境界推定精度$\alpha$を計算しておく．次に，適応分野のコーパスを自動単語分
+割し，その出力において単語境界であると判定された点では$P_{i} = \alpha$ とし，単語境界
+でないと判定された点では$P_{i} = 1-\alpha$とする．後述する実験の従来手法としてこの方
+法を採用した．
+
+
+
+
+\subsection{単語$n$-gram頻度}
+
+\label{subsection:EF}
+
+確率的単語分割コーパスに対して単語$n$-gram頻度が以下のように定義される．
+\begin{description}
+\item[単語0-gram頻度] 確率的単語分割コーパスの期待単語数として以下のように定義される．
+  \begin{equation}
+    \label{equation:0-gram}
+    f(\cdot) = 1 + \sum_{i=1}^{n_{r}-1} P_{i}
+  \end{equation}
+\item[単語1-gram頻度] 確率的単語分割コーパスに出現する文字列$\Bdma{x}_{i+1}^{k}$が$l
+  = k-i$文字からなる単語$w = \Bdma{x'}_{1}^{l}$である必要十分条件は以下の4つである．
+  \begin{enumerate}
+  \item 文字列$\Bdma{x}_{i+1}^{k}$が単語$w$に等しい．
+  \item 文字$x_{i+1}$の直前に単語境界がある．
+  \item 単語境界が文字列中にない．
+  \item 文字$x_{k}$の直後に単語境界がある．
+  \end{enumerate}
+  したがって，確率的単語分割コーパスの単語1-gram頻度$f_{r}$は，単語$w$の表記の全ての
+  出現$O_{1} = \{(i,k)\,|$ $\Bdma{x}_{i+1}^{k} = w\}$に対する期待頻度の和として以下の
+  ように定義される．
+  \begin{equation}
+    \label{eqnarray:1-gram}
+    f_{r}(w)
+    = \sum_{(i,k) \in O_{1}}P_{i}\left[\prod_{j=i+1}^{k-1}(1-P_{j})\right]P_{k}
+  \end{equation}
+\item[単語$n$-gram頻度($\Bdma{n\geq2}$)] $L$文字からなる単語列$\Bdma{w}_{1}^{n} =
+  \Bdma{x'}_{1}^{L}$の確率的単語分割コーパス$\Bdma{x}_{1}^{n_{r}}$における頻度，すな
+  わち単語$n$-gram頻度について考える．このような単語列に相当する文字列が確率的単語分
+  割コーパスの$(i+1)$文字目から始まり$k = i+L$文字目で終る文字列と等しく
+  ($\Bdma{x}_{i+1}^{k} = \Bdma{x'}_{1}^{L}$)，単語列に含まれる各単語$w_{m}$に相当する
+  文字列が確率的単語分割コーパスの$b_{m}$文字目から始まり$e_{m}$ 文字目で終る文字列と
+  等しい($\Bdma{x} _{b_{m}}^{e_{m}} = w_{m},\; 1 \leq \forall m \leq n$;
+  $e_{m}+1=b_{m+1},\; 1 \leq \forall m \leq n-1$; $b_{1} = i+1$; $e_{n} = k$)状況を考
+  える（\figref{figure:SSC}参照）．確率的単語分割コーパスに出現する文字列
+  $\Bdma{x}_{i+1}^{k}$が単語列$\Bdma{w}_{1}^{n}=\Bdma{x'}_{1}^{L}$ である必要十分条件
+  は以下の4つである．
+  \begin{enumerate}
+  \item 文字列$\Bdma{x}_{i+1}^{k}$が単語列$\Bdma{w}_{1}^{n}$に等しい．
+  \item 文字$x_{i+1}$の直前に単語境界がある．
+  \item 単語境界が各単語に対応する文字列中にない．
+  \item 単語境界が各単語に対応する文字列の後にある．
+  \end{enumerate}
+
+\begin{figure}[t]
+  \begin{center}
+\includegraphics{16-4ia6f1.eps}
+  \end{center}
+  \caption{確率的単語分割コーパスにおける単語$n$-gram頻度}
+  \label{figure:SSC}
+\end{figure}
+
+
+  確率的単語分割コーパスにおける単語$n$-gram頻度は以下のように定義される．
+  \begin{equation}
+    \label{eqnarray:n-gram}
+    f_{r}(\Bdma{w}_{1}^{n})
+    = 
+    \sum_{(i,e_{1}^{n}) \in O_{n}} P_{i} \left[
+    \prod_{m=1}^{n} \left\{
+    \prod_{j=b_{m}}^{e_{m}-1} (1-P_{j}) \right\}
+    P_{e_{m}} \right]
+  \end{equation}
+  ここで
+  \begin{align*}
+    e_{1}^{n}
+    & =  (e_{1},e_{2},\cdots,e_{n}) \\
+    O_{n}     
+    & =  \{(i,e_{1}^{n}) | \Bdma{x}_{b_{m}}^{e_{m}} = w_{m}, 1 \leq m \leq n \}
+  \end{align*}
+  である．
+\end{description}
+
+
+
+
+\subsection{単語$n$-gram確率}
+
+確率的単語分割コーパスにおける単語$n$-gram確率は，単語$n$-gram頻度の相対値として計算
+される．
+
+\begin{description}
+\item[単語1-gram確率] 以下のように単語1-gram頻度を単語0-gram頻度で除することで計算さ
+  れる．
+  \begin{equation}
+    \label{equation:1-gram}
+    P_r(w) = \frac{f_r(w)}{f_r(\cdot)}
+  \end{equation}
+\item[単語$n$-gram確率($\Bdma{n\geq2}$)] 以下のように単語$n$-gram頻度を単語
+  $(n-1)$-gram頻度で除することで計算される．
+  \begin{equation}
+    \label{equation:n-gram}
+    P_r(w_{n}|\Bdma{w}_{1}^{n-1})
+    = \frac{f_r(\Bdma{w}_{1}^{n})}{f_r(\Bdma{w}_{1}^{n-1})}
+  \end{equation}
+\end{description}
+
+
+
+\subsection{単語$n$-gram頻度の計算コスト}
+
+ある単語列$\Bdma{w}_{1}^{n} = \Bdma{x'}_{1}^{L}$ ($n\geq1$)のある1箇所の出現位置に対
+する期待頻度の計算に必要な演算は，\equref{eqnarray:1-gram}や\equref{eqnarray:n-gram}
+から明かなように，$L-n$回の浮動小数点に対する減算と$L+1$回の浮動小数点に対する乗算で
+ある．動的に単語$n$-gram確率を計算する方法では，この演算が文字列$\Bdma{x'}_{1}^{L}$の
+出現回数だけ繰り返される．通常の決定的単語分割コーパスの場合には，単語列の出現回数が
+そのまま頻度となるので，上述の浮動小数点に対する演算が全て付加的な計算コストであり，
+言語モデルの応用の実行速度を大きく損ねる．あらかじめ単語$n$-gram確率を計算しておく場
+合は，ある文（文字数$h$）に出現する全ての$n$個の連続する部分文字列に対して行う必要があ
+る．上述の減算や乗算が重複して行われるのを避けるために，まず文の両端を除く全ての位置
+に対して$1-P_{i}$を計算（$h-1$回の減算）し，さらにこれら$h-1$個の$1-P_{i}$のうちの任意
+個の連続する位置に対する積$\prod_{j=b}^{e}(1-P_{j})$ ($b<e$)を計算（$\sum_{i=1}^{h-2}
+=(h-1)(h-2)/2$回の乗算）しておく．ある単語$n$-gramの出現位置は，文に$n+1$個の単語境界
+を置くことで決るので，$h$文字の文には重複を含め${}_{h-1}C_{n+1}$個の単語$n$-gramが含
+まれる．このそれぞれの期待頻度は，左端の$P_{i}$に$n$個の$\prod_{j=e_{k-1}+1}^{e_{k}}
+(1-P_{j})$と$n$個の$P_{e_{k}}$の積（$2n$回の乗算）として得られる．この場合に必要な計算
+コストも，決定的単語分割コーパスの場合の単語数と同じ回数のインクリメントに比べて非常
+に大きい\footnote{後述の実験での条件では，自動分割結果（決定的単語分割）からの頻度計算
+におけるインクリメントは1,377,062回で，確率的単語分割に対する$n=2$の乗算回数の理論値
+は20,181,679,570となる．浮動小数点数に対する乗算とインクリメントでは，計算のコストが
+異なるが，回数を単純に比較しても実に14,656倍となる．実際の計算時間には，さらに，入力
+文の読み込みや文字列（単語表記）から語彙番号への変換が含まれるので，この比率にはならな
+い．}．
+
+このように，確率的単語分割コーパスに対する単語$n$-gram頻度の計算のコストは，従来の決
+定的単語分割コーパスに対する計算コストに比べて非常に大きくなる．文の長さの分布を無視
+すれば，計算回数はコーパスの文数に対しては比例する．文毎に独立なので複数の計算機によ
+る分散計算も可能であるが，ある程度の大きさのコーパスからモデルを作成する場合にはこの
+計算コストは問題になる．また，単語クラスタリング
+\cite{Class-Based.n-gram.Models.of.Natural.Language}や文脈に応じた参照履歴の伸長
+\cite{The.Power.of.Amnesia:.Learning.Probabilistic.Automata.with.Variable.Memory.Length}
+などの様々な言語モデルの改良においては，最適化の過程において言語モデルを何度も構築す
+る．確率的単語分割コーパスにおける単語$n$-gram頻度の計算のコストによって，これらの改
+良を試みることが困難になっている．
+
+
+
+\section{最大エントロピー法による単語境界確率の推定}
+
+この節では，最大エントロピー法による単語分割器を単語境界確率の推定に用いる方法につい
+て述べる．
+
+
+
+\subsection{単語境界確率の推定}
+
+\label{subsection:ME}
+
+日本語の単語分割の問題は，入力文の各文字間に単語境界が発生するか否かを予測する問題と
+みなせる\cite{教師なし隠れマルコフモデルを利用した最大エントロピータグ付けモデル,Training.Conditional.Random.Fields.Using.Incomplete.Annotations}．つまり，文
+$\Bdma{x} = \Conc{x}{m}$に対して，$x_{i}x_{i+1}$の間が単語境界であるか否かを表すタグ
+$t_{i}$を付与する問題とみなす．付与するタグは，単語境界であることを表すタグ{\bf E}と，
+非単語境界であることを表すタグ{\bf N}の2つのタグからなる．各文字間のタグがこのいずれ
+かであるかは，単語境界が明示されたコーパスから学習された点推定の最大エントロピーモデ
+ル(ME model; maximum entropy model)により推定する\footnote{文献
+\cite{Training.Conditional.Random.Fields.Using.Incomplete.Annotations}のように
+CRF (Conditional Random Fields) により推定することもできるが，計算コストと記憶領域が大
+きくなる．これらの差は，スパースな部分的アノテーションコーパスからの学習において顕著
+となる．つまり，CRFのように系列としてモデル化する方法では，アノテーションのない部分も
+考慮する必要があるのに対して，点推定の最大エントロピーモデルでは，アノテーションのあ
+る部分のみを考慮すればよい．このような考察から，本論文では計算コストの少ない最大エン
+トロピーモデルを用いる．}．その結果，より高い確率を与えられたタグをその文字間のタグと
+し，単語境界を決定する．すなわち，以下の式が示すように，最大エントロピーモデルにより，
+単語境界と推定される確率が非単語境界と推定される確率より高い文字間を単語境界とする．
+\[
+  t_{i} = \left\{
+    \begin{array}{ll}
+      \mbox{\bf E}
+      & \mbox{if} \; P_{ME}(t_{i}={\bf E}|\Bdma{x}) > P_{ME}(t_{i}={\bf N}|\Bdma{x})\\
+      \mbox{\bf N}
+      & \mbox{otherwise}
+    \end{array}\right.
+\]
+これにより，入力文を単語に分割することができる．
+
+本論文では，以下のように，タグ$t_{i}$の出現確率を確率的単語分割コーパスにおける単語境
+界確率$P_{i}$として用いることを提案する．
+\begin{displaymath}
+  P_{i} = P_{ME}(t_{i}={\bf E}|\Bdma{x})
+\end{displaymath}
+これにより，注目する文字の周辺のさまざまな素性を参照し，単語境界確率を適切に推定する
+ことが可能になる．
+
+
+
+\subsection{参照する素性}
+
+後述する実験においては，$x_{i}x_{i+1}$の間に注目する際の最大エントロピーモデルの素性
+としては，$x_{i-1}^{i+2}$の範囲の文字$n$-gramおよび字種$n$-gram($n=1,2,3$)をすべて用
+いた\footnote{字種は，漢字，ひらがな，カタカナ，アルファベット，数字，記号の6つとし
+た．}．ただし，以下の点を考慮している．
+\begin{itemize}
+
+\item 素性として利用する$n$-gramは，先頭文字の字種がその前の文字の字種と同じか否か，
+  および，末尾文字の字種がその次の文字の字種と同じか否かの情報を付加して参照する
+  \footnote{パラメータ数の急激な増加を抑えつつ素性の情報量を増加させる．これにより，
+  参照範囲を前後1文字拡張して$x_{i-2}^{i+3}$の範囲の$n$-gram($n=3,4,5$)を参照する．}．
+
+\item 素性には注目する文字間の位置情報を付加する．
+
+\end{itemize}
+たとえば，文字列「文字列を単語に分割する」の「語」「に」の文字間の素性は，
+\{
+$-$単$+|$, $+$語$|-$, $-|$に$-$, $|-$分$+$, 
+$-$単語$|-$, $+$語$|$に$-$, $-|$に分$+$, 
+$-$単語$|$に$-$, $+$語$|$に分$+$, 
+$-$K$+|$, $+$K$|-$, $-|$H$-$, $|-$K$+$, 
+$-$KK$|-$, $+$K$|$H$-$, $-|$HK$+$, 
+$-$KK$|$H$-$, $+$K$|$HK$+$, 
+\}となる．「$|$」は注目する文字間を表す補助記号であり，「$+$」と「$-$」は前後の文字が
+同じ字種である($+$)か否($-$)かを表す補助記号である．「H」と「K」は字種の平仮名と漢字
+を表している．
+
+なお，実験においては，パラメータ数を減らすために，学習データで2回以上出現する素性のみ
+を用いた．また，最大エントロピーモデルのパラメータ推定には，GISアルゴリズム
+\cite{Generalized.Iterative.Scaling.For.Log-Linear.Models}を使用した．
+
+
+
+\section{疑似確率的単語分割コーパス}
+
+確率的単語分割コーパスに対する単語$n$-gram頻度は，高いコストの計算を要する．また，確
+率的単語分割コーパスは，頻度計算の対象となる単語や単語断片（候補）を多数含む．ある単語
+$n$-gramの頻度の計算に際しては，その単語の文字列としてのすべての出現に対して，頻度の
+インクリメントではなく，複数回の浮動小数点演算を実行しなければならない．この計算コス
+トにより，より長い履歴を参照する単語$n$-gramモデルや単語クラスタリングなどの言語モデ
+ルの改良が困難になっている．
+
+上述の困難を回避する方法として，単語分割済みコーパスで確率的単語分割コーパスを近似す
+る方法を提案する．具体的には，確率的単語分割コーパスに対して以下の処理を最初の文字か
+ら最後の文字まで($1 \leq i \leq n_{r}$)行なう．
+\begin{enumerate}
+
+\item 文字$x_{i}$を出力する．
+
+\item 0以上1未満の乱数$r_{i}$を発生させ$P_{i}$と比較する．$r_{i} < P_{i}$の場合には単
+  語境界記号を出力し，そうでない場合には何も出力しない．
+
+\end{enumerate}
+これにより，確率的単語分割コーパスに近い単語分割済みコーパスを得ることができる．これ
+を疑似確率的単語分割コーパスと呼ぶ．
+
+上記の方法では，文字列としての出現頻度が低い単語$n$-gramの頻度が確率的単語分割コーパ
+スと疑似確率的単語分割コーパスにおいて大きく異なる可能性がある．そもそも，出現頻度が
+低い単語$n$-gramの場合，単語分割が正しいとしても，その統計的振る舞いを適切に捉えるの
+は困難であるが，近似によって誤差が増大することは好ましくない．従って，この影響を軽減
+するために，上記の手続きを$N$回行ない，その結果得られる$N$倍の単語分割済みコーパスを
+単語$n$-gram頻度の計数の対象とすることとする．このときの$N$を本論文では倍率と呼ぶこと
+とする．
+
+疑似確率的単語分割コーパスは，一種のモンテカルロ法となっている．モンテカルロ法による
+$d$次元の単位立方体上$[0,d]^{d}$上の定積分$I = \int_{[0,1]^{d}}f(x)dx$の数値計算法で
+は，単位立方体$[0,d]^{d}$上の一様乱数$\Stri{x}{N}$を発生させて$I_{N} = \sum_{i=1}^{N}
+f(x_{i})$とする．このとき，誤差$|I_{N}-I|$は次元$d$によらずに$1/\sqrt{N}$に比例する程
+度の速さで減少することが知られている．疑似確率的単語分割コーパスにおける単語$n$-gram
+頻度の計算はこの特殊な場合であり，$n$の値や文字数によらずに$1/\sqrt{FN}$に比例する程
+度の速さで減少する．ここで$F$は単語$n$-gramの文字列としての頻度である．
+
+
+
+\section{評価}
+
+単語境界確率の推定方法の評価として，言語モデルの適応の実験を行なった．まず，適応対象
+文野の大きな生コーパスに既存手法と提案手法のそれぞれで単語境界確率を付与した．次に，
+その結果得られる確率的単語分割コーパスから単語2-gramモデルを推定し，これを一般分野の
+単語分割済みコーパスから推定された単語2-gramモデルと補間した．最後に，適応分野のテス
+トコーパスに対して，予測力と仮名漢字変換\cite{無限語彙の仮名漢字変換}の精度の評価を行
+なった．後者は，理想的な音響モデルを用いた場合の音声認識と考えることも可能である．こ
+の節では，実験の結果を提示し，評価を行なう．
+
+
+
+\subsection{実験の条件}
+
+実験に用いたコーパスは，「現代日本語書き言葉均衡コーパス」モニター公開データ（2008年
+度版）中の人手による単語分割の修正がなされている文（一般コーパス）と医療文書からなる適
+応対象のコーパスである．一般コーパスの各文は正しく単語に分割され，各単語に入力記号列
+（読み）が付与されている．これを10個に分割し，この内の9個を学習コーパスとし，残りの1個
+をテストコーパスとした（\tabref{table:corpus}参照）．自動単語分割器や単語境界確率の推定
+のための最大エントロピーモデルはこの学習コーパスから構築される．一方，適応対象のコー
+パスは大量にあるが，単語境界情報を持たない．この内の7,000文に入力記号列（読み）を付与し
+テストコーパスとし，残りを確率的単語分割コーパスとして言語モデルの学習に用いた
+（\tabref{table:raw-corpus}参照）．テストコーパスの内の1,000文には，単語境界情報も付与
+し，言語モデルの予測力の評価に用いた．
+
+
+
+\subsection{評価基準}
+
+確率的言語モデルの予測力の評価に用いた基準は，テストコーパスにおける単語あたりのパー
+プレキシティである．まず，テストコーパス$C_{t}$に対して未知語の予測も含む文字単位のエ
+ントロピー$H$を以下の式で計算する\cite{日本語の情報量の上限の推定}．
+\begin{displaymath}
+  H = -\frac{1}{|C_{t}|}\log_{2} \prod_{\Bdma{w} \in C_{t}}M_{w,n}(\Bdma{w})
+\end{displaymath}
+ここで，$M_{w,n}(\Bdma{w})$は単語$n$-gramモデルによる単語列$\Bdma{w}$の生成確率を，
+$|C_{t}|$はテストコーパス$C_{t}$の文字数を表す．次に，単語単位のパープレキシティを以
+下の式で計算する．
+\begin{displaymath}
+  PP = 2^{H\times\overline{|\Bdma{w}|}}
+\end{displaymath}
+ここで$\overline{|\Bdma{w}|}$は平均単語長（文字数）である．これらの計算に際しては，単語
+境界情報が付与された1,000文を用いた\footnote{本論文での言語モデルの予測力の評価は，文
+字列の予測のみならず，人手で付与された単語境界の予測も含まれている．これは，言語モデ
+ルの応用を考慮してのことである．純粋に予測力が高いモデルが必要な場合は，既存の単語単
+位を用いず，文字単位でモデル化する方がよいと考えられる
+\cite{予測単位の変更によるn-gramモデルの改善,ベイズ階層言語モデルによる教師なし形態素解析}．}．
+
+
+\begin{table}[t]
+\begin{minipage}[t]{0.47\textwidth}
+\caption{一般コーパス（単語分割済み）}
+\label{table:corpus}
+\input{03table01.txt}
+\end{minipage}
+\hfill
+  \begin{minipage}[t]{0.47\textwidth}
+  \caption{適応対象コーパス（単語境界情報なし）}
+\input{03table02.txt}
+  \label{table:raw-corpus}
+  \end{minipage}
+\end{table}
+
+仮名漢字変換の評価基準は，文字誤り率である．文字誤り率は$\mbox{CER} = 1-N_{LCS}/
+N_{COR}$と定義される．ここで，$N_{COR}$は正解に含まれる文字数であり，$N_{LCS}$は各文
+を一括変換することで得られる最尤解と正解との最長共通部分列(LCS; Longest Common
+Subsequence) \cite{文字列中のパターン照合のためのアルゴリズム}の文字数である．
+
+
+
+\subsection{単語境界確率の推定方法の評価}
+
+単語境界確率の推定方法の差異を調べるために，以下の2つの確率的単語分割コーパスを作成し
+それらから推定された単語2-gramモデルの能力を調べた．
+\begin{itemize}
+\item[\bf BL:] \ 従来手法 \\ 各単語境界確率は，単語2-gramモデルに基づく自動単語分割器
+  の判断に応じて$\alpha$又は$1-\alpha$とする．ここで，$\alpha = 67372/68039$は一般分
+  野のテストコーパスにおける単語境界推定精度である（\subref{subsection:EM}参照）．
+
+\item[\bf ME:] \ 提案手法 \\ 各単語境界確率は，最大エントロピーモデルを用いて文脈に応
+じて推定される（\subref{subsection:ME}参照）．
+\end{itemize}
+
+適応対象分野のテストコーパスにおける予測力と文字誤り率を\tabref{table:result1}に示す．
+この結果から，本論文で提案する最大エントロピー法による単語境界確率の推定方法により約
+11\%のパープレキシティの削減が実現されている．この結果から，最大エントロピー法により
+推定された単語境界確率を持つ確率的単語分割コーパスを用いることで適応対象分野における
+単語2-gram確率がより正確に推定されていることがわかる．応用の仮名漢字変換においても，
+文字正解率の比較から，提案手法により，従来手法の文字誤りの約3.1\%が削減さた．検定の結
+果，有意水準5\%で有意差があるとの結果であった．この点からも言語モデルが改善されている
+ことが確認される．従来手法の文字正解率は97.51\%と高いので，提案手法により実現された誤
+りの削減は十分有意義であろう．
+
+
+
+\begin{table}[t]
+  \caption{単語境界確率の推定方法と言語モデルの能力の関係}
+\input{03table03.txt}
+  \label{table:result1}
+\end{table}
+\begin{table}[t]
+  \caption{1/1のサイズの疑似確率的単語分割コーパスから推定された言語モデルの能力}
+\input{03table04.txt}
+  \label{table:result2}
+\end{table}
+
+
+
+\subsection{疑似確率的単語分割コーパスの評価}
+
+本論文のもう一つの論点は，単語分割済みコーパスによる確率的単語分割コーパスの近似であ
+る．この評価として，3種類の大きさ(1/1, 1/2, 1/4)の適応分野の疑似確率的単語分割コーパ
+スから推定した言語モデルのテストコーパスに対するパープレキシティと文字正解率を複数の
+倍率($N = 1,2,4,\cdots, 256$)に対して計算した．\tabref{table:result2}〜
+\tabref{table:result4}はその結果である．まず，自動分割の結果を決定的単語分割コーパス
+として用いる場合についてである．これと，確率的単語分割コーパスとして用いる場合との比
+較では，文献\cite{確率的単語分割コーパスからの単語N-gram確率の計算}の報告と同じように
+確率的単語分割により予測力が向上し，文献\cite{無限語彙の仮名漢字変換}の報告と同じよう
+に仮名漢字変換の文字正解率も向上している．さらに，本論文で提案する倍率が1の疑似確率的
+単語分割は，決定的単語分割に対して，予測力と文字正解率の双方において優れていることが
+分る．倍率が1の疑似確率的単語分割と決定的単語分割の唯一の違いは，自動単語分割の際に単
+語境界確率を0.5と比較するか，0から1の乱数と比較するかであり，モデル構築の計算コストは
+ほとんど同じである．にもかかわらず，予測力と文字正解率の双方が向上している点は注目に
+値するであろう．
+
+次に，確率的単語分割と疑似確率的単語分割の比較について述べる．倍率が1の場合は，予測力
+や文字正解率は，確率的単語分割コーパスから推定された言語モデルに対して少し低く，倍率
+を上げることによりこれらは確率的単語分割コーパスによる結果に近づいていくことがわかる．
+これは，疑似確率的単語分割がモンテカルロ法による数値演算の一種になっていることを考え
+れば当然の結果である．このことから，ある程度の倍率の疑似確率的単語分割コーパスは，確
+率的単語分割コーパスのよい近似となっているといえる．適応分野のコーパスの大きさに係わ
+らず，倍率が256の場合の疑似確率的単語分割による結果は，確率的単語分割の結果とほぼ同じ
+といえる．
+
+\begin{table}[t]
+  \caption{1/2のサイズの疑似確率的単語分割コーパスから推定された言語モデルの能力}
+\input{03table05.txt}
+  \label{table:result3}
+\end{table}
+\begin{table}[t]
+  \caption{1/4のサイズの疑似確率的単語分割コーパスから推定された言語モデルの能力}
+\input{03table06.txt}
+  \label{table:result4}
+\end{table}
+
+
+
+最後に，確率的単語分割と疑似確率的単語分割の計算コストの比較について述べる．確率的単
+語分割の語彙サイズは，適応対象の学習コーパスにおける期待頻度が0より大きい16文字以下の
+部分文字列と一般コーパスの語彙の合計9,383,985語であった．この語彙に対する単語2-gram頻
+度をハッシュ(Berkeley DB 4.6.21)を用いてファイルに出力すると10.0~GBとなった．これをRAM
+ディスク上で計算するのに61147.45秒（約17時間）を要した\footnote{この計算に用いた計算機
+の中央演算装置はIntel Core 2 Duo 3.91~GHzであり，主記憶は4~GBである．}．同じ計算機で，
+16倍の疑似確率的単語分割コーパスから単語2-gram頻度をRAM ディスク上で計算すると，語彙サイ
+ズが46,777語であり，単語2-gram頻度のファイルサイズは9.98~MBであり，計算時間は1009.95秒
+（約17分）と約61分の1となった．疑似確率的単語分割コーパスを用いた場合には，倍率が256の
+場合でも20.2~MBと，ファイルサイズが大きくないので，現在の多くの計算機で主記憶上で計算
+が可能である（主記憶上での計算時間は303.29秒）．これに対して，確率的単語分割コーパスか
+らの推定では，一部の計算機においてのみ主記憶上での計算が可能である．さらに，実験で用
+いた適応対象の分野のコーパスは44,915文と決して大きくはなく，適応分野によっては1桁か2
+桁ほど大きい学習コーパスが利用できることも十分考えられる．この場合には，確率的単語分
+割では2次記憶（RAMディスクかハードディスク）上での計算が避けられず，モデル作成にかかる
+計算時間の違いは非常に大きくなる．したがって，本論文で提案する疑似確率的単語分割は，
+この点から有用であると考えられる．
+
+疑似確率的単語分割において，どの程度の倍率がよいかは要求する精度と利用可能な計算機資
+源との兼ね合いである．例えば倍率が16の場合は，単語に分割された718,640文から言語モデル
+を推定することになる．モデル構築に要する計算時間は，決定的単語分割の場合の16倍程度で
+あり，現在の計算機はこの大きさのコーパスを処理する能力が十分ある．したがって，疑似確
+率的単語分割により，単語3-gramモデルや可変長記憶マルコフモデル，あるいは言語モデルの
+ための単語クラスタリングなどさらなる言語モデルの改善を容易に試みることが可能となる．
+
+
+
+\section{おわりに}
+
+本論文では，確率的単語分割コーパスにおける新しい単語境界確率の推定方法を提案した．実
+験の結果，提案手法により約11\%のパープレキシティの減少と約3.1\%の文字誤りの削減が確認
+された．さらに，確率的単語分割コーパスを通常の決定的単語分割コーパスにより模擬する方
+法を提案した．実験の結果，言語モデルの能力を下げることなく，確率的単語分割コーパスの
+利用において必要となる計算コストが削減可能であることを示した．
+
+
+
+\acknowledgment
+
+査読者から有意義なコメントを頂きました．心より感謝致します．
+
+
+
+
+\bibliographystyle{jnlpbbl_1.4}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Aho}{Aho}{1990}]{文字列中のパターン照合のためのアルゴリ
+ズム}
+Aho, A.~V. \BBOP 1990\BBCP.
+\newblock \JBOQ 文字列中のパターン照合のためのアルゴリズム\JBCQ\
+\newblock \Jem{コンピュータ基礎理論ハンドブック}, I: 形式的モデルと意味論\JVOL,
+  \BPGS\ 263--304. Elseveir Science Publishers.
+
+\bibitem[\protect\BCAY{Brown, Pietra, deSouza, Lai, \BBA\ Mercer}{Brown
+  et~al.}{1992}]{Class-Based.n-gram.Models.of.Natural.Language}
+Brown, P.~F., Pietra, V. J.~D., deSouza, P.~V., Lai, J.~C., \BBA\ Mercer, R.~L.
+  \BBOP 1992\BBCP.
+\newblock \BBOQ Class-Based $n$-gram Models of Natural Language\BBCQ\
+\newblock {\Bem Computational Linguistics}, \textbf{18}  (4), pp.~467--479.
+
+\bibitem[\protect\BCAY{Darroch \BBA\ Ratcliff}{Darroch \BBA\
+  Ratcliff}{1972}]{Generalized.Iterative.Scaling.For.Log-Linear.Models}
+Darroch, J.\BBACOMMA\  \BBA\ Ratcliff, D. \BBOP 1972\BBCP.
+\newblock \BBOQ Generalized Iterative Scaling For Log-Linear Models\BBCQ\
+\newblock {\Bem The annuals of Mathematical Statistics}, \textbf{43}  (5),
+  pp.~1479--1480.
+
+\bibitem[\protect\BCAY{風間, 宮尾, 辻井}{風間\Jetal
+  }{2004}]{教師なし隠れマルコフモデルを利用した最大エントロピータグ付けモデル}
+風間淳一, 宮尾祐介, 辻井潤一 \BBOP 2004\BBCP.
+\newblock \JBOQ
+  教師なし隠れマルコフモデルを利用した最大エントロピータグ付けモデル\JBCQ\
+\newblock \Jem{自然言語処理}, \textbf{11}  (4), pp.~3--24.
+
+\bibitem[\protect\BCAY{Kurata, Mori, \BBA\ Nishimura}{Kurata
+  et~al.}{2006}]{Unsupervised.Adaptation.Of.A.Stochastic.Language.Model.Using.
+A.Japanese.Raw.Corpus}
+Kurata, G., Mori, S., \BBA\ Nishimura, M. \BBOP 2006\BBCP.
+\newblock \BBOQ Unsupervised Adaptation of a Stochastic Language Model Using a
+  Japanese Raw Corpus\BBCQ\
+\newblock In {\Bem Proceedings of the International Conference on Acoustics,
+  Speech, and Signal Processing}.
+
+\bibitem[\protect\BCAY{森}{森}{1997}]{DFAによる形態素解析の高速辞書検索}
+森信介 \BBOP 1997\BBCP.
+\newblock \JBOQ DFAによる形態素解析の高速辞書検索\JBCQ\
+\newblock \Jem{EDR電子化辞書利用シンポジウム}.
+
+\bibitem[\protect\BCAY{森}{森}{2007}]{無限語彙の仮名漢字変換}
+森信介 \BBOP 2007\BBCP.
+\newblock \JBOQ 無限語彙の仮名漢字変換\JBCQ\
+\newblock \Jem{情報処理学会論文誌}, \textbf{48}, pp.~3532--3540.
+
+\bibitem[\protect\BCAY{森\JBA 山地}{森\JBA 山地}{1997}]{日本語の情報量の上限の推定}
+森信介, 山地治 \BBOP 1997\BBCP.
+\newblock \JBOQ 日本語の情報量の上限の推定\JBCQ\
+\newblock \Jem{情報処理学会論文誌}, \textbf{38}  (11), pp.~2191--2199.
+
+\bibitem[\protect\BCAY{森, 山地, 長尾}{森 \Jetal
+  }{1997}]{予測単位の変更によるn-gramモデルの改善}
+森信介, 山地治, 長尾真 \BBOP 1997\BBCP.
+\newblock \JBOQ 予測単位の変更による$n$-gramモデルの改善\JBCQ\
+\newblock \Jem{情報処理学会研究報告}, SLP19\JVOL, \BPGS\ 87--94.
+
+\bibitem[\protect\BCAY{森\JBA 宅間}{森\JBA
+  宅間}{2004}]{生コーパスからの単語N-gram確率の推定}
+森信介, 宅間大介 \BBOP 2004\BBCP.
+\newblock \JBOQ 生コーパスからの単語N-gram確率の推定\JBCQ\
+\newblock \Jem{情報処理学会研究報告}, NL162\JVOL.
+
+\bibitem[\protect\BCAY{森, 宅間, 倉田}{森 \Jetal
+  }{2007}]{確率的単語分割コーパスからの単語N-gram確率の計算}
+森信介, 宅間大介, 倉田岳人 \BBOP 2007\BBCP.
+\newblock \JBOQ 確率的単語分割コーパスからの単語N-gram確率の計算\JBCQ\
+\newblock \Jem{情報処理学会論文誌}, \textbf{48}, pp.~892--899.
+
+\bibitem[\protect\BCAY{持橋, 山田, 上田}{持橋 \Jetal
+  }{2009}]{ベイズ階層言語モデルによる教師なし形態素解析}
+持橋大地, 山田武士, 上田修功 \BBOP 2009\BBCP.
+\newblock \JBOQ ベイズ階層言語モデルによる教師なし形態素解析\JBCQ\
+\newblock \Jem{情報処理学会研究報告}, NL190\JVOL.
+
+\bibitem[\protect\BCAY{Ron, Singer, \BBA\ Tishby}{Ron
+  et~al.}{1996}]{The.Power.of.Amnesia:.Learning.Probabilistic.Automata.with.Va
+riable.Memory.Length}
+Ron, D., Singer, Y., \BBA\ Tishby, N. \BBOP 1996\BBCP.
+\newblock \BBOQ The Power of Amnesia: Learning Probabilistic Automata with
+  Variable Memory Length\BBCQ\
+\newblock {\Bem Machine Learning}, \textbf{25}, pp.~117--149.
+
+\bibitem[\protect\BCAY{Tsuboi, Kashima, Mori, Oda, \BBA\ Matsumoto}{Tsuboi
+  et~al.}{2008}]{Training.Conditional.Random.Fields.Using.Incomplete.Annotatio
+ns}
+Tsuboi, Y., Kashima, H., Mori, S., Oda, H., \BBA\ Matsumoto, Y. \BBOP
+  2008\BBCP.
+\newblock \BBOQ Training Conditional Random Fields Using Incomplete
+  Annotations\BBCQ\
+\newblock In {\Bem Proceedings of the 22th International Conference on
+  Computational Linguistics}.
+
+\end{thebibliography}
+
+\begin{biography}
+  \bioauthor{森　　信介}{
+    1998年京都大学大学院工学研究科電子通信工学専攻博士後期課程修了．工学博士．
+    同年日本アイ・ビー・エム（株）入社．
+    2007年5月より京都大学学術情報メディアセンター准教授．
+    1997年情報処理学会山下記念研究賞受賞．
+    情報処理学会会員．
+    }
+  \bioauthor{小田　裕樹}{
+    1999年徳島大学大学院工学研究科博士前期課程知能情報工学専攻修了．
+    工学博士．同年NTTソフトウェア（株）入社．
+    言語処理・情報検索システム等の開発，コンサルティング業務に従事．
+    確率・統計的自然言語処理およびその応用に興味を持つ．
+情報処理学会会員．
+  }
+
+\end{biography}
+
+
+\biodate
+
+
+\end{document}
+
+

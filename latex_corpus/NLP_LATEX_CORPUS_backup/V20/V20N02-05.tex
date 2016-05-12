@@ -1,0 +1,647 @@
+    \documentclass[english]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvips]{graphicx}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+\usepackage{multirow} 
+\usepackage{cgloss4e} 
+\usepackage{gb4e} 
+\noautomath 
+\usepackage{tipa} 
+
+\Volume{20}
+\Number{2}
+\Month{June}
+\Year{2013}
+
+\received{2012}{10}{24}
+\revised{2013}{2}{15}
+\accepted{2013}{3}{28}
+
+\setcounter{page}{183}
+
+\etitle{Use of Sound Symbolism in Sentiment Classification}
+\eauthor{Takuma Igarashi\affiref{Author_1} \and Ryohei Sasano\affiref{Author_1} \and Hiroya Takamura\affiref{Author_1} \and Manabu Okumura\affiref{Author_1}} 
+\eabstract{
+In linguistics, sound symbolism is an idea that the vocal sounds of certain words carry meaning in themselves.
+This paper focuses on the sound symbolism of onomatopoeic words and demonstrates the close relationship between sound symbolism and sentiment polarity.
+Because onomatopoeic words imitate the sounds they represent, they can help us better understand the sentiment of a sentence when utilizing sound symbolism.
+Therefore, we modeled sound symbolism with N-gram-based features and applied the model to a series of sentiment classification tasks.
+The experimental results show that this method with sound symbolism significantly outperformed the baseline method without sound symbolism,
+which effectively demonstrates that a close relationship exists between sound symbolism and sentiment polarity.
+}
+\ekeywords{Sound Symbolism, Sentiment Classification, Onomatopoeia}
+
+\headauthor{Igarashi et al.}
+\headtitle{Use of Sound Symbolism in Sentiment Classification}
+
+\affilabel{Author_1}{}{Tokyo Institute of Technology}
+
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{20-2ia5f1.eps}
+\end{center}
+\hangcaption{Test subjects were asked the following question: ``In the Martian language, one of these two figures is a `bouba' and the other is a `kiki'. Try to guess which is which.'' The findings show that 95\% of the test subjects selected the left figure as ``kiki'' and the right figure as ``bouba.''}
+\label{f:boubakiki}
+\end{figure}
+
+According to K{\"o}hler \cite{kohler1929}, a close relationship exists between vocal sounds and visual impressions of shape.
+After experimentation, Ramachandran and Hubberd \cite{ramachandran2001} named this phenomenon the {\bf Bouba/Kiki effect} (Figure \ref{f:boubakiki}).
+A similar phenomenon is referred to as {\bf sound symbolism} \cite{david2008}, which is the idea that the vocal sounds of certain words carry impressions of the thing indicated by the words.
+Because an analysis of these impressions is beneficial to several natural language processing (NLP) applications,
+this paper examines sentiment classification to show the overall benefits of sound symbolism.
+
+Sentiment classification is the task of classifying words, sentences, and documents according to sentiment polarity.
+For example, the polarity is ``positive'' when the text suggests good sentiment, ``negative'' when the text suggests bad sentiment, and ``neutral'' when the text suggests neither good nor bad sentiment.
+The most common approach to sentiment classification is to apply adjectives (such as ``delicious'') in context \cite{hu2004,kamps2004}.
+In these studies, the researchers prepared a lexicon that contained adjectives and their polarities in advance, and then utilized the lexicon to estimate the polarity of the target text.
+Consider the following sentences:
+\begin{exe}
+	\ex This biscuit is delicious.
+	\label{ex:delicious}
+	\ex I lost the key for my house.
+	\label{ex:lost}
+\end{exe}
+Because ``delicious'' usually includes positive polarity in common lexicons, Sentence (\ref{ex:delicious}) is classified as ``positive.''
+This adjective-based approach, however, cannot estimate the polarity of sentences that do not include adjectives, such as Sentence (\ref{ex:lost}).
+To resolve this problem, some researchers have expanded the adjective polarity lexicon to other parts of speech by using co-occurrence information in corpus \cite{turney2003,takamura2005}.
+This can be considered as a type of bootstrap approach in which the polarities of various words are estimated from several seeds, the polarities of which are known from the lexicon.
+
+However, such approach cannot adequately deal with words that are not included in training data for learning models.
+In particular, Japanese onomatopoeia is used at a relatively high frequency.
+We searched for onomatopoeic words in a variety of restaurant reviews by using part-of-speech (POS) taggers (JUMAN)\footnote{http://nlp.ist.i.kyoto-u.ac.jp/index.php?JUMAN} in advance 
+and found that approximately 6.6\% of sentences in the restaurant reviews contained onomatopoeic words,
+some of which were not included in common dictionaries.
+This finding shows that there are a number of unknown onomatopoeic words in Japanese texts.
+Because some sentences owe their sentiment polarity to onomatopoeic words,
+the effort to estimate the polarity of onomatopoeic words is extremely important.
+
+Consider the following example sentences:
+\begin{exe}
+	\ex {\itshape Te-ga \textbf{bettori} suru.}\\
+	{\footnotesize hands\hspace{3mm} sticky\hspace{4mm} are}\\My hands are sticky.
+	\label{ex:bettori}
+	\ex {\itshape Te-ga \textbf{becho-becho} suru.}\\
+	{\footnotesize hands\hspace{7mm} humid\hspace{8mm} are}\\My hands are humid.
+	\label{ex:gucchori}
+\end{exe}
+{\it Bettori} and {\it becho-becho} are onomatopoeic words in Japanese and
+both sentences above have negative polarity.
+{\it Bettori} is commonly used and included in a typical lexicon, whereas {\it becho-becho} is not normally used because
+lexicon-based approaches cannot adequately deal with such unknown onomatopoeic words.
+
+On the other hand, onomatopoeia reflects sound symbolism to a significant extent \cite{hamano1998}.
+We can understand the nuance of onomatopoeic words from the impression of sound symbolism even if we do not understand the meaning of the words themselves.
+Because modeling sound symbolism can help estimate the polarity of unknown onomatopoeic words,
+we present a modeling method in order to demonstrate its effectiveness in sentiment classification. 
+The reason for selecting this task is that onomatopoeic words often reflect sound symbolism and are used for representation of sentiment.
+
+
+\section{Background}
+
+Onomatopoeic words either imitate the sounds they represent or suggest a relevant situation or emotion.
+There are literally thousands of onomatopoeic words in the Japanese language.
+Consider the following examples:
+\begin{exe}
+	\ex {\itshape Kare-ha \textbf{niko-niko} waratta}.\\
+	\hspace{5mm}He \hspace{15mm}smiled.
+	\label{ex:niconico}
+	\ex {\itshape Kare-ha \textbf{niya-niya} waratta}.\\
+	\hspace{5mm}He \hspace{13mm}simpered.
+	\label{ex:niyaniya}
+\end{exe}
+{\it Niko-niko} is an onomatopoeic word that indicates a bland smile, and {\it niya-niya} is an onomatopoeic word that represent a simper.
+{\it Waratta} is a generic verb that indicates a smile, laugh, chuckle, simper, or guffaw.
+In Japanese, such situational or emotional information is represented by onomatopoeic words that are separate from verbs;
+whereas in English, verbs tend to include such information.
+
+Onomatopoeic words have phonological and morphological systematicity.
+For example, {\it niko-niko}, {\it nikotto}, and {\it nikkori} suggest similar situations.
+{\it Niko} is the {\bf base} form of these words and
+morphemes are created from base forms through a type of conjugation.
+According to Waida \cite{waida1984}, the patterns of conjugation are known as {\bf onomatopoeia markers}.
+Kadooka \cite{kadooka2002} listed these markers in the manner shown in Table \ref{t:omarkers}.
+
+\begin{table}[t]
+\caption{Onomatopoeia Markers in Japanese. Reduplication pattern is the most frequent among them.}
+\label{t:omarkers}
+\input{05table01.txt}
+\end{table}
+
+The meaning of onomatopoeic words can often be guessed from sound symbolism.
+\begin{exe}
+	\ex {\itshape Kare-ha \textbf{gehi-gehi} waratta}.\\
+	\hspace{5mm}He \hspace{5mm}vulgarly \hspace{2mm}laughed.
+	\label{ex:gehigehi}
+\end{exe}
+As observed in Sentence (\ref{ex:gehigehi}), people can guess that the onomatopoeic word {\it gehi-gehi} includes negative nuances even if the word is unknown.
+Hamano \cite{hamano1998} studied the sound symbolism of Japanese onomatopoeic words and found that
+voiced consonants often created a negative impression.
+In addition, she qualitatively manually analyzed nuances of phonemes in Japanese.
+For example, /p/ and /b/ have nuances of explosion, breaking, and decisiveness, and /r/ has nuances of rolling and fluid movement.
+On the other hand, our method focuses on sentiment polarity (positive, negative, and neutral) and obtains features of sound symbolism automatically.
+\cite{sokolova2009} studied the classification of emotion words in the Russian and Romanian languages, and
+they also utilized word sounds for the classification of words.
+However, they used alphabetical letters to approximately represent the sound,
+whereas we apply the International Phonetic Alphabet (IPA)\footnote{http://www.langsci.ucl.ac.uk/ipa/},
+which is a more accurate approach to representing sounds (Section \ref{s:sound}).
+In addition, their target was the classification of words without context, whereas we focus on how words behave in terms of sentiment polarity.
+
+Recently, research on onomatopoeia has become popular in the  computer science field, including the area of NLP.
+For example, \cite{komiya2011} proposed a method for clustering Japanese onomatopoeic words by using single-link hierarchical clustering based on context.
+\cite{ichioka2008} proposed a method for clustering Japanese onomatopoeic words on the basis of the co-occurrence of onomatopoeic words on the Web and the vocal sound similarity of the words.
+However, the vocal sounds they considered were insufficient to represent pronunciation.
+The purpose of these aforementioned studies was to help people understand the meaning of onomatopoeic words, especially for non-native speakers.
+In contrast, the goal of this paper is to demonstrate the effectiveness of sound symbolism in sentiment classification.
+
+In regard to sentiment classification tasks, recent studies have used various features and advanced models.
+For example, \cite{Kudo2004} used text structures, whereas \cite{Tackstrom2011} utilized star ratings and hidden conditional random fields (CRFs).
+However, we simply use vocal sound features and bag-of-words features because our primary goal is
+to demonstrate the effectiveness of sound symbolism for interpreting the nuances of onomatopoeic words.
+
+
+\section{Proposed Method}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{20-2ia5f2.eps}
+\end{center}
+\caption{Overview of our system.}
+\label{f:flow}
+\end{figure}
+
+Our method estimates the polarity label of a sentence that includes onomatopoeic words.
+As shown in Figure \ref{f:flow}, the system receives a sentence that includes onomatopoeic words,
+classifies it into one of the three classes (positive, negative, and neutral) by using contextual and sound symbolism features, and outputs the polarity label.
+The proposed system is based on the support vector machine (SVM) introduced by \cite{svm}.
+The bag-of-words features and the context polarity feature are baseline features that are not related to sound symbolism (these are described in more detail in Section \ref{s:context}).
+The vocal sound features and onomatopoeia dictionary feature are sound symbolism features, which are described in Sections \ref{s:sound} and \ref{s:ssm}.
+The sound symbolism model, which is based on an onomatopoeia dictionary using vocal sound features,
+takes an onomatopoeic word as input and outputs a binary value of 1 if the inputted word is estimated to be positive and 0 otherwise.
+The main SVM classifier then uses this value as an onomatopoeia dictionary feature.
+
+
+\subsection{Baseline Features}
+\label{s:context}
+
+Because context information is often used for sentiment classification, this study first models context information with the bag-of-words model
+and then selects content words in the input sentence and lemmatizes them.
+Finally, the number of occurrences of each word for feature values are accounted for and normalized.
+
+In addition, we use a sentiment lexicon created by \cite{takamura2005}, which
+they assessed the polarity probability of words in WordNet \cite{wordnet} with a {\bf spin model}, assuming that adjacent words in context tend to have the same polarity.
+This lexicon includes words and their polarity values and the range of value is [$-1$, 1]. 
+Polarity values of less than 0 indicate negative polarity and values of more than 0 indicate positive polarity.
+Furthermore, the absolute values denote the confidence value.
+For example, the value of the word ``beautiful'' is +0.371463 and that of ``noisy'' is $-0.218053$.
+This shows that ``beautiful'' is positive and its confidence value is 0.371463,
+and ``noisy'' is negative and its confidence value is 0.218053.
+We selected 2,000 words for each polarity in order of decreasing confidence value\footnote{Strictly speaking, we use Japanese sentiment lexicon (not English) that is published by Takamura. http://www.lr.pi.titech.ac.jp/~takamura/pubs/pn\_ja.dic.} (4,000 words in total)
+and used them as a clue to interpret contextual polarity.
+Contextual polarity is a binary feature that is based on the sum of the words' values in context,
+in which the feature value is 1 if the sum is more than 0, and 0 otherwise.
+For example, in the sentence ``the smell is nice,'' the polarity value of ``smell'' is $-0.0174731$ and ``nice'' is +1.
+Therefore, the sum is 0.9825269 and the context polarity feature is 1.
+The baseline features consist of the context polarity feature and bag-of-words features.
+
+
+\subsection{Vocal Sound Features}
+\label{s:sound}
+
+This study considers three overall forms in the representation of Japanese vocal sounds:
+\begin{enumerate}
+  \item {\bf Kana characters}\\
+        ``Kana'' is a type of Japanese character.
+        Each kana consists of a consonant onset and vowel nucleus. For example, ``は (ha)'' or ``い (i).''
+  \item {\bf Phoneme symbols}\\
+        A phoneme is a basic unit of a language's phonology that describes vocal sounds recognized by native speakers in a language.
+        The phoneme /k/ in the words {\bf k}it or s{\bf k}ill is recognized to be the same sound even though
+        they are different sounds, as seen in \textipa{[k\super{h}]} (aspirated) for {\bf k}it and \textipa{[k]} (unaspirated) for s{\bf k}ill.
+  \item {\bf Phonetic symbols}\\
+        Phonetics is an objective and a strict representation of all vocal sounds.
+        Unlike phonemes, vocal sounds such as \textipa{[k\super{h}]} and \textipa{[k]} are distinguished in phonetic symbols.
+        This study utilizes the International Phonetic Alphabet (IPA) for this representation.
+\end{enumerate}
+Table \ref{t:gojuon} shows the examples of Japanese kana with phonemes and phonetic representations.
+In general, phoneme symbols are written with slant brackets (//), whereas phonetic symbols are written with square brackets (\textipa{[\hspace{0.5mm}]}).
+Kana characters are conventionally classified by consonant and vowel sounds \cite{roy1967}.
+Phoneme symbols are assigned to each kana character on the basis of this interpretation, and thus,
+different sounds tend to be regarded as the same phoneme symbol, as seen in the difference between ``は(/ha/, \textipa{[ha]})'' and ``ひ(/hi/, \textipa{[\c{c}i]}).''
+In general, phonetic symbols are defined in detail and they do not depend on languages.
+
+\begin{table}[b]
+\caption{Kana, phonemes and phonetic transcriptions in Japanese.}
+\label{t:gojuon}
+\input{05table02.txt}
+\end{table}
+
+These representations are used to create sound symbolic features and
+we convert onomatopoeic words to each of the three forms and create N-gram features from them.
+For example, an onomatopoeic word ``しとしと ({\it shito-shito}, drizzlingly)'' is converted to \textipa{[SitoSito]} with phonetic symbols.
+The N-gram features are derived from phonetic representation:
+\textipa{[S]}, \textipa{[i]}, \textipa{[t]}, \textipa{[o]}, \textipa{[Si]}, \textipa{[it]}, \textipa{[to]}, and \textipa{[oS]} (unigram and bigram),
+whereas the feature values are calculated from the feature frequency in the target word and then normalized with total occurrences for each unigram and bigram.
+These features denote what sounds exist and what connections of the sounds exist in a word, but they do not consider relationships among them.
+For example, \textipa{[m]} and \textipa{[p]} are simply regarded as different sounds, although both are bilabial consonants.
+Therefore, this study utilizes consonant categories in the IPA to consider such relationships.
+As shown in Table \ref{t:ipacat}, items 1--6 are categories on {\bf manner of articulation}, 7--10 are categories on {\bf place of articulation},
+11--12 are superior categories of {\bf place of articulation}, and 13 indicates whether a sound is voiced or voiceless.
+We use these categories as binary features for the first and second consonants of an onomatopoeic word on the basis of \cite{hamano1998}, which states that
+the {\bf base} of an onomatopoeic word generally includes the first and second consonants, and that consonants in the base play a key role in sound symbolism.
+In this case, the first consonant in an onomatopoeic word is considered more important than the second consonant.
+
+\begin{table}[t]
+\caption{Consonant categories in the IPA. This study considered only sounds that appear in Japanese.}
+\label{t:ipacat}
+\input{05table03.txt}
+\end{table}
+
+
+\subsection{Which Representation is the Best?}
+\label{s:ssm}
+
+Our hypothesis is that sound symbolic impressions of onomatopoeic words are composed of the vocal sounds of words.
+In addition, we believe that a more detailed representation is better for modeling sound symbolism.
+In other words, phoneme symbols are better than kana, and phonetic symbols are better than phoneme symbols.
+Therefore, we conducted experiments to test this hypothesis.
+
+When the classifier takes an onomatopoeic word, it classifies the word as either positive or negative.
+For this experiment, we began by first training an SVM classifier\footnote{We used ${\rm SVM}^{{\it light}}$ http://svmlight.joachims.org/.}.
+Then, we used a Japanese onomatopoeic dictionary \cite{hida2002}
+that consisted of 1,064 onomatopoeic words along with the impressions of each categorized into five values:
+``positive,'' ``a little positive,'' ``neither positive nor negative,'' ``a little negative,'' and ``negative.''
+Out of the total number of onomatopoeic words, we selected 845 that did not contain contradictory impressions (such as ``positive'' and ``a little negative'' in the same word), and then
+classified 225 onomatopoeic words that were ``positive'' or ``a little positive'' into the positive class.
+Finally, we selected 620 onomatopoeic words that were ``negative'' or ``a little negative'' and classified them into the negative class.
+We evaluated the performance for accuracy by performing 10-fold cross-validation.
+
+\begin{table}[b]
+\caption{Models for estimating the polarity of onomatopoeic words.}
+\label{t:ex1features}
+\input{05table04.txt}
+\end{table}
+
+As shown in Table \ref{t:ex1features}, {\it Baseline} is the model that classifies test instances into the most frequent class in training data, i.e., it always classifies test data as ``negative.''
+{\it Kana}, {\it Phoneme}, and {\it IPA} use only the N-gram features with each vocal sound representation, as detailed in Section \ref{s:sound}.
+{\it IPACat} is a model with consonant category features in addition to {\it IPA}, and {\it IPACat2} is the model with consonant bigram features in addition to {\it IPACat}.
+The consonant bigram features are created from sequences of only those consonants in the IPA that are obtained to eliminate vowels from the phonetic representation of onomatopoeic words.
+For example, the onomatopoeic word ``しとしと ({\it shito-shito})'' is converted into a phonetic representation \textipa{[SitoSito]} and then further converted to \textipa{[StSt]} by eliminating the vowels.
+In this case, the consonant bigram features are \textipa{[St]} and \textipa{[tS]}.
+We considered the consonant bigram features in the experiment because we believe that consonant connections can affect the overall impression of sound symbolism.
+
+The experimental result is shown in Figure \ref{f:ex1result}.
+The horizontal axis indicates the classification accuracy\footnote{We empirically choose the best C parameter for SVM from \{0.01, 0.1, 1, 10, 100, 1000\} for each model.}.
+Overall, {\it Phoneme} achieved a higher accuracy compared with {\it Kana}, and {\it IPA} achieved a higher accuracy than {\it Phoneme}.
+{\it IPA}, {\it IPACat}, and {\it IPACat2} use phonetic symbols.
+In addition, {\it IPACat} was better than {\it IPA} with simple N-grams, and {\it IPACat2} proved to be the best overall.
+{\it IPACat} significantly outperformed {\it Kana} using McNemar's test (P $<$ 0.01), and
+{\it IPACat2} also significantly outperformed {\it Phoneme} in the same test (P $<$ 0.05).
+These findings suggest that the hypothesis in Section \ref{s:sound} is valid and
+IPA phonetic representation is the best representation for modeling sound symbolism among the kana, phoneme, and phonetic representations.
+Thus, we used the {\it IPACat2} model as the sound symbolism model in the proposed system (Figure \ref{f:flow}).
+
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{20-2ia5f3.eps}
+\end{center}
+\hangcaption{Experimental results of estimating the polarity of onomatopoeic words. Phonetic representation based on the IPA is the best form of representation among the kana, phoneme, and phonetic representations.}
+\label{f:ex1result}
+\end{figure}
+
+\section{Experiments}
+\label{s:ex2}
+
+The proposed system estimates the polarity of a sentence that includes onomatopoeic words.
+In this study, we present experiments to demonstrate that sound symbolism features are useful in sentiment classification.
+When the system takes as input a sentence that includes an onomatopoeic word, it classifies the sentence into one of the three classes (positive, negative, or neutral) and outputs the class label of the sentence.
+
+
+\subsection{Experimental Setup}
+\label{s:setup2}
+
+In the experiment, we applied documents collected from tabelog.com\footnote{http://tabelog.com/}, which is a restaurant review web site in Japan.
+The variety of reviews includes more onomatopoeic words compared with other domains because onomatopoeic words are subjective and convenient for describing the tastes of food and drink.
+We extracted sentences that included onomatopoeic words with a Japanese POS tagger (JUMAN 7.0)
+that could automatically recognize onomatopoeic words even if they were not contained in the JUMAN dictionary by using morphologic patterns.
+Then, we manually selected 1,000 sentences for 50 onomatopoeic words\footnote{We listed them in appendix.} (20 sentences per onomatopoeic word).
+Because our goal was to focus on the sound symbolism of onomatopoeia, we excluded the sentences that included negation words that would affect the overall sentence polarity.
+
+\begin{table}[t]
+\caption{Labels annotated for each instance in a dataset.}
+\label{t:labels}
+\input{05table05.txt}
+\end{table}
+
+The gold standard labels were tagged by two annotators, and any discrepancies were discussed by the annotators in order to decide on a label.
+The labels, which are shown in Table \ref{t:labels}, are grouped into positive (Labels 1 and 2), negative (Labels 3 and 4), neutral (Label 5), and other (Label 6).
+We removed the date of Label 6 from the dataset because they could not be identified by human annotators, and therefore, they were considered as ``noise.''
+To investigate whether sound symbolism is more useful in a limited dataset (Labels 1, 3, and 5),
+positive and negative classes were divided into two on the basis of polarity dependence of an onomatopoeic word.
+We designated the complete dataset as Dataset1 and the limited dataset as Dataset2.
+Dataset1 consisted of 823 instances\footnote{The number is the sum of 276, 76, 170, 29 and 272.} and Dataset2 consisted of 718 instances\footnote{The number is the sum of 276, 170 and 272.}, and
+49 unique onomatopoeic words were included in each dataset\footnote{All of the 20 sentences for a certain onomatopoeic word were labeled as Label 6, and thus, the number of unique onomatopoeic words was reduced to 49.}.
+
+Table \ref{t:anotate} lists the label distribution, and shows that the concordance rate was not high:
+the kappa coefficient was $\kappa = 0.57$ in Dataset1 when Labels 1 and 2 were designated as one set, and Labels 3 and 4 were regarded as another.
+However, the annotators did not tag opposite labels (e.g., Label 1 versus Label 3).
+For example, the sentence {\itshape Okyaku-san ga \textbf{choko-choko} kiteta} was labeled as Label 2 because the annotator thought {\it Okyaku-san ga kiteta} itself was positive.
+On the other hand, the same sentence was labeled as Label 1 because the annotator believed that {\it Okyaku-san ga kiteta} was neutral.
+Such differences of sensitivity caused certain discrepancies in annotation.
+
+\begin{table}[t]
+\caption{Distribution of annotation results.}
+\label{t:anotate}
+\input{05table06.txt}
+\end{table}
+
+In this experiment, we evaluated the performance of classifying sentences that included unknown onomatopoeic words, i.e.,
+onomatopoeic words that appeared in the test and not the training set.
+We divided the dataset into 10 parts and used one part for testing, another for development, and the remainder for training.
+In addtion, we used a linear SVM with a one-versus-rest method and evaluated the performance for accuracy by performing 10-fold
+cross-validation\footnote{The C parameter of SVM was automatically chosen as the best value in \{0.1, 1, 10, 100\} after testing with the development set.}.
+
+We tested the following five settings:
+\vspace{1\Cvs}
+
+\begin{tabular}{ll}
+$M_B$ & BOW, {\it Context Polarity} (Baseline) \\
+$M_\mathit{BP}$ & BOW, {\it Context Polarity}, {\it Phonetic} \\
+$M_\mathit{BPD}$ & BOW, {\it Context Polarity}, {\it Phonetic}, {\it Onomatopoeia Dictionary} \\
+$M_\mathit{BD}$ & BOW, {\it Context Polarity}, {\it Onomatopoeia Dictionary} \\
+$M_{D}$ & {\it Onomatopoeia Dictionary} \\
+\end{tabular}
+\vspace{1\Cvs}
+
+The baseline method $M_B$ utilizes a bag-of-words model (BOW) and context polarity (as described in Section \ref{s:context}).
+This model does not consider sound symbolism, unlike the other models.
+The {\it Phonetic} features are the same as {\it IPACat2} in Section \ref{s:ssm},
+which are the N-gram features of phonetic symbols (uni-gram, bi-gram, and tri-gram), consonant categories in the IPA, and consonant bi-gram.
+The {\it Onomatopoeia Dictionary} feature is a binary feature that is the output of the sound symbolism model (see Figure \ref{f:flow}).
+This model is the same as {\it IPACat2}, and it was trained on a dataset that contained 820 onomatopoeic words\footnote{No onomatopoeic words in this dataset appeared in the tabelog.com data.}.
+Its feature value was designated as 1 if the output was 0 or more and 0 otherwise.
+
+
+\subsection{Results and Discussion}
+
+According to the experimental results shown in Figure \ref{f:result},
+Dataset1 (baseline) had 47.27\% accuracy, whereas $M_\mathit{BD}$, at 62.94\%, had the strongest performance.
+There was a significant difference between $M_\mathit{BD}$ and the baseline using McNemar's test ($\mathrm{P} < 0.01$).
+The other methods ($M_\mathit{BP}$, $M_\mathit{BPD}$, and $M_{D}$) outperformed the baseline by a significant margin as well ($\mathrm{P} < 0.01$).
+The {\it Onomatopoeia Dictionary} feature was effective because the sound symbolism model acquired sound symbolic impressions from numerous onomatopoeic words.
+$M_{D}$ achieved an accuracy of 59.78\%, even though it used only the {\it Onomatopoeia Dictionary} feature.
+The accuracy of $M_\mathit{BPD}$ using all of the features was lower compared with that of $M_\mathit{BD}$ because of the overfitting of {\it Phonetic} features,
+which were acquired from approximately 40 onomatopoeic words in the training data.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{20-2ia5f4.eps}
+\end{center}
+\hangcaption{Result of experiment to estimate the polarity of sentences that include onomatopoeic words. Proposed methods significantly outperform the baseline method $M_B$.}
+\label{f:result}
+\end{figure}
+
+In Dataset2, the accuracy of the baseline was just 44.85\%, which was lower than Dataset1.
+This decline is understandable because Dataset2 contained only limited data in which the polarity of a sentence was dependent on an onomatopoeic word.
+$M_\mathit{BD}$ again achieved the best performance, with an accuracy of 62.40\% and
+$M_{D}$ also had a high accuracy because Dataset2 contained only limited data where the polarity of a sentence was dependent on an onomatopoeic word.
+Models that used {\it Phonetic} features had poor results because of overfitting, but they showed improvement if they were fed additional training data.
+
+
+\section{Conclusion and Future Work}
+
+This study modeled sound symbolism with vocal sound representations of onomatopoeic words and
+showed that the polarity of unknown onomatopoeic words can be estimated by using the N-gram features of phonetic representation and consonant category features of phonetic symbols.
+The experimental results clearly showed that the methods using sound symbolism significantly outperformed the baseline model,
+which indicates that sound symbolism can be useful in sentiment classification tasks, and a close relationship exists between sound symbolism and sentiment polarity.
+However, the accuracy of the proposed methods was not sufficiently high.
+When an individual infers the polarity of onomatopoeic words, there can be many different interpretations depending on the person.
+Needless to say, further improvement on the accuracy of thise method is a challenging task.
+However, even though weighting the features and feature selection is one approach of increasing accuracy,
+we did not include these in the present method because our primary goal was to demonstrate the effectiveness of sound symbolism without overcomplicating the process.
+
+In future, we have three overall goals regarding research on this topic.
+The first is to model sound symbolism in more detail.
+To date, we have primarily considered the phonological features of onomatopoeia; however, morphological features can be related to sentiment.
+Considering that {\bf onomatopoeia markers} is a key factor in this task,
+it will be interesting to see which markers indicate which impressions.
+
+The second is to create higher quality training data by collecting more opinions in order to correctly model the sound symbolism of onomatopoeic words, as in the semantic differential method \cite{osgood1957}.
+In the present study, the data was only tagged by two annotators.
+
+The third is to expand the domain adaptation because we applied our method to only the food and drink domain.
+Because only context information and not auditory impressions are related to this domain, we believe that sound symbolism features can be expanded and applied to sentiment classification in various domains.
+
+
+\acknowledgment
+
+A portion of this paper has been presented at the 12th Pacific Rim International Conference on Artificial Intelligence (PRICAI 2012) \cite{Igarashi2012}.
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Cortes \BBA\ Vapnik}{Cortes \BBA\ Vapnik}{1995}]{svm}
+Cortes, C.\BBACOMMA\ \BBA\ Vapnik, V. \BBOP 1995\BBCP.
+\newblock \BBOQ Support-vector networks.\BBCQ\
+\newblock {\Bem Machine Learning}, {\Bbf 20}  (3), \mbox{\BPGS\ 273--297}.
+
+\bibitem[\protect\BCAY{David}{David}{2008}]{david2008}
+David, C. \BBOP 2008\BBCP.
+\newblock {\Bem A {D}ictionary of {L}inguistics and {P}honetics}.
+\newblock Wiley-Blackwell.
+
+\bibitem[\protect\BCAY{Fellbaum}{Fellbaum}{1998}]{wordnet}
+Fellbaum, C. \BBOP 1998\BBCP.
+\newblock {\Bem WordNet: {A}n {E}lectronic {L}exical {D}atabase}.
+\newblock MIT Press.
+
+\bibitem[\protect\BCAY{Hamano}{Hamano}{1998}]{hamano1998}
+Hamano, S. \BBOP 1998\BBCP.
+\newblock {\Bem The Sound-Symbolic System of Japanese}.
+\newblock CSLI Publications.
+
+\bibitem[\protect\BCAY{Hida \BBA\ Asada}{Hida \BBA\ Asada}{2002}]{hida2002}
+Hida, Y.\BBACOMMA\ \BBA\ Asada, H. \BBOP 2002\BBCP.
+\newblock {\Bem {\it Gendai Giongo Gitaigo Yoho Jiten} (In Japanese, ISBN:
+  9784490106107)}.
+\newblock Tokyo-do.
+
+\bibitem[\protect\BCAY{Hu \BBA\ Liu}{Hu \BBA\ Liu}{2004}]{hu2004}
+Hu, M.\BBACOMMA\ \BBA\ Liu, B. \BBOP 2004\BBCP.
+\newblock \BBOQ Mining and {S}ummarizing {C}ustomer {R}eviews.\BBCQ\
+\newblock In {\Bem Proceedings of the 2004 ACM SIGKDD international conference
+  on Knowledge discovery and data mining (KDD2004)}, \mbox{\BPGS\ 168--177}.
+
+\bibitem[\protect\BCAY{Ichioka \BBA\ Fukumoto}{Ichioka \BBA\
+  Fukumoto}{2008}]{ichioka2008}
+Ichioka, K.\BBACOMMA\ \BBA\ Fukumoto, F. \BBOP 2008\BBCP.
+\newblock \BBOQ Graph-Based Clustering for Semantic Classification of
+  Onomatopoetic Words.\BBCQ\
+\newblock In {\Bem Proceedings of the 3rd Textgraphs workshop on Graph-based
+  Algorithms for Natural Language Processing in the 22th International
+  Conference on Computational Linguistics (Coling2008)}, \mbox{\BPGS\ 33--40}.
+
+\bibitem[\protect\BCAY{Igarashi, Sasano, Takamura, \BBA\ Okumura}{Igarashi
+  et~al.}{2012}]{Igarashi2012}
+Igarashi, T., Sasano, R., Takamura, H., \BBA\ Okumura, M. \BBOP 2012\BBCP.
+\newblock \BBOQ The Use of Sound Symbolism in Sentiment Classification.\BBCQ\
+\newblock In {\Bem Proceedings of the 12th Pacific Rim International Conference
+  on Artificial Intelligence (PRICAI2012)}, \mbox{\BPGS\ 746--752}.
+
+\bibitem[\protect\BCAY{Kadooka}{Kadooka}{2002}]{kadooka2002}
+Kadooka, K. \BBOP 2002\BBCP.
+\newblock \BBOQ Onomatopoeia Markers in Japanese.\BBCQ\
+\newblock {\Bem LACUS FORUM}, {\Bbf 28}, \mbox{\BPGS\ 267--275}.
+
+\bibitem[\protect\BCAY{Kamps, Marx, Mokken, \BBA\ de~Rijke}{Kamps
+  et~al.}{2004}]{kamps2004}
+Kamps, J., Marx, M., Mokken, R.~J., \BBA\ de~Rijke, M. \BBOP 2004\BBCP.
+\newblock \BBOQ Using {W}ordNet to {M}easure {S}emantic {O}rientations of
+  {A}djectives.\BBCQ\
+\newblock In {\Bem Proceedings of the 4th International Conference on Language
+  Resources and Evaluation (LREC2004)}, \mbox{\BPGS\ 1115--1118}.
+
+\bibitem[\protect\BCAY{K{\"o}hler}{K{\"o}hler}{1929}]{kohler1929}
+K{\"o}hler, W. \BBOP 1929\BBCP.
+\newblock {\Bem Gestalt Psychology}.
+\newblock New York: Liveright.
+
+\bibitem[\protect\BCAY{Komiya \BBA\ Kotani}{Komiya \BBA\
+  Kotani}{2011}]{komiya2011}
+Komiya, K.\BBACOMMA\ \BBA\ Kotani, Y. \BBOP 2011\BBCP.
+\newblock \BBOQ Classification of {J}apanese onomatopoeias using hierarchical
+  clustering depending on contexts.\BBCQ\
+\newblock In {\Bem Proceedings of the 8th English International Joint
+  Conference on Computer Science and Software Engineering (JCSSE2011)},
+  \mbox{\BPGS\ 108--113}.
+
+\bibitem[\protect\BCAY{Kudo \BBA\ Matsumoto}{Kudo \BBA\
+  Matsumoto}{2004}]{Kudo2004}
+Kudo, T.\BBACOMMA\ \BBA\ Matsumoto, Y. \BBOP 2004\BBCP.
+\newblock \BBOQ A Boosting Algorithm for Classification of Semi-Structured
+  Text.\BBCQ\
+\newblock In {\Bem Proceedings of the 2004 Conference on Empirical Methods in
+  Natural Language Processing (EMNLP2004)}, \mbox{\BPGS\ 301--308}.
+
+\bibitem[\protect\BCAY{Miller}{Miller}{1967}]{roy1967}
+Miller, R.~A. \BBOP 1967\BBCP.
+\newblock {\Bem The Japanese language}.
+\newblock Chicago: University of Chicago Press.
+
+\bibitem[\protect\BCAY{Osgood, Suci, \BBA\ Tennenbaum}{Osgood
+  et~al.}{1957}]{osgood1957}
+Osgood, C.~E., Suci, G.~J., \BBA\ Tennenbaum, P. \BBOP 1957\BBCP.
+\newblock {\Bem The {M}easurement of {M}eaning}.
+\newblock University of Illinois Press.
+
+\bibitem[\protect\BCAY{Ramachandran \BBA\ Hubbard}{Ramachandran \BBA\
+  Hubbard}{2001}]{ramachandran2001}
+Ramachandran, V.~S.\BBACOMMA\ \BBA\ Hubbard, E.~M. \BBOP 2001\BBCP.
+\newblock \BBOQ Synaesthesia: A window into perception, thought and
+  language.\BBCQ\
+\newblock {\Bem Journal of Consciousness Studies}, {\Bbf 8}  (12), \mbox{\BPGS\
+  3--34}.
+
+\bibitem[\protect\BCAY{Sokolova \BBA\ Bobicev}{Sokolova \BBA\
+  Bobicev}{2009}]{sokolova2009}
+Sokolova, M.\BBACOMMA\ \BBA\ Bobicev, V. \BBOP 2009\BBCP.
+\newblock \BBOQ Classification of Emotion Words in Russian and Romanian
+  Languages.\BBCQ\
+\newblock In {\Bem Proceedings of Recent Advances in Natural Language
+  Processing (RANLP2009)}, \mbox{\BPGS\ 416--420}.
+
+\bibitem[\protect\BCAY{T\"{a}ckstr\"{o}m \BBA\ McDonald}{T\"{a}ckstr\"{o}m
+  \BBA\ McDonald}{2011}]{Tackstrom2011}
+T\"{a}ckstr\"{o}m, O.\BBACOMMA\ \BBA\ McDonald, R. \BBOP 2011\BBCP.
+\newblock \BBOQ Discovering fine-grained sentiment with latent variable
+  structured prediction models.\BBCQ\
+\newblock In {\Bem Proceedings of the 33rd European conference on Advances in
+  information retrieval (ECIR2011)}, \mbox{\BPGS\ 368--374}.
+
+\bibitem[\protect\BCAY{Takamura, Inui, \BBA\ Okumura}{Takamura
+  et~al.}{2005}]{takamura2005}
+Takamura, H., Inui, T., \BBA\ Okumura, M. \BBOP 2005\BBCP.
+\newblock \BBOQ Extracting semantic orientations of words using spin
+  model.\BBCQ\
+\newblock In {\Bem Proceedings of the 43rd Annual Meeting on Association for
+  Computational Linguistics (ACL2005)}, \mbox{\BPGS\ 133--140}.
+
+\bibitem[\protect\BCAY{Turney \BBA\ Littman}{Turney \BBA\
+  Littman}{2003}]{turney2003}
+Turney, P.~D.\BBACOMMA\ \BBA\ Littman, M.~L. \BBOP 2003\BBCP.
+\newblock \BBOQ Measuring {P}raise and {C}riticism: {I}nference of {S}emantic
+  {O}rientation from {A}ssociation.\BBCQ\
+\newblock {\Bem ACM Transactions on Information Systems (TOIS)}, {\Bbf 21}
+  (4), \mbox{\BPGS\ 315--346}.
+
+\bibitem[\protect\BCAY{Waida}{Waida}{1984}]{waida1984}
+Waida, T. \BBOP 1984\BBCP.
+\newblock \BBOQ English and {J}apanese {O}nomatopoeic {S}tructures.\BBCQ\
+\newblock {\Bem Bulletin of Osaka Women's University, Studies in English},
+  {\Bbf 36}, \mbox{\BPGS\ 55--79}.
+
+\end{thebibliography}
+
+
+\clearpage
+\appendix
+
+Table \ref{t:onomlist} shows the onomatopoeic words used in Section \ref{s:setup2}.
+Apostrophes at the end of the words represent double consonants called {\it sokuon}.
+
+\begin{table}[h]
+\caption{Onomatopoeic words in the dataset.}
+\label{t:onomlist}
+\input{05table07.txt}
+\end{table}
+
+
+\begin{biography}
+
+\bioauthor[:]{Takuma Igarashi}{
+received his B.E. in 2008 from Aoyama Gakuin University, Japan, and his M.E. in 2012 from Tokyo Institute of Technology, Japan.
+He is currently employed as an engineer at Dwango Co., Ltd.
+}
+
+\bioauthor[:]{Ryohei Sasano}{
+received his B.E., M.S., and Ph.D. in Information Science and Technology from the University of Tokyo in 2004, 2006, and 2009, respectively.
+He was a researcher at the Graduate School of Informatics at Kyoto University, and he is currently an assistant professor in the Precision and Intelligence Laboratory at the Tokyo Institute of Technology.
+His research interests include natural language processing, especially predicate-argument structure analysis and anaphora resolution.
+}
+
+\bioauthor[:]{Hiroya Takamura}{
+was born in 1974. He received his B.E. and M.E. from the University of Tokyo in 1997 and 2000, respectively.
+In 1999, he was a research student at the Technische Universitaet von Wien in Austria.
+He received his Dr.Eng. from the Nara Institute of Science and Technology in 2003.
+He was an assistant professor at the Tokyo Institute of Technology from 2003 to 2010.
+He is currently an associate professor at Tokyo Institute of Technology. His current research interests include computational linguistics.
+He is a member of the Information Processing Society of Japan and the Association for Computational Linguistics.
+}
+
+\bioauthor[:]{Manabu Okumura}{
+was born in 1962. He received his B.E., M.E. and Dr.Eng. from the Tokyo Institute of Technology in 1984, 1986, and 1989, respectively.
+He was an assistant professor in the Department of Computer Science at the Tokyo Institute of Technology from 1989 to 1992,
+and an associate professor in the School of Information Science at the Japan Advanced Institute of Science and Technology from 1992 to 2000.
+He was also a visiting associate professor in the Department of Computer Science at the University of Toronto from 1997 to 1998.
+He is currently a professor in the Precision and Intelligence Laboratory at the Tokyo Institute of Technology.
+His current research interests include natural language processing, especially automatic text summarization,
+computer-assisted language learning, sentiment analysis, and text data mining.
+He is a member of the Information Processing Society of Japan, the Japanese Society for Artificial Intelligence,
+the American Association for Artificial Intelligence, the Association for Computational Linguistics, and the Japanese Cognitive Science Society.
+}
+\end{biography}
+
+\biodate
+
+
+\end{document}

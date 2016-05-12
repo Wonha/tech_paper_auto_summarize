@@ -1,0 +1,582 @@
+\documentstyle[epsf,jnlpbbl_old]{jnlp_j_b5}
+\newcommand{\futo}[1]{}
+\newcommand{\scr}[1]{}
+\setcounter{page}{29}
+\setcounter{巻数}{6}
+\setcounter{号数}{2}
+\setcounter{年}{1999}
+\setcounter{月}{1}
+\受付{1998}{4}{3}
+\採録{1998}{7}{27}
+
+\title{単語知識を必要としない高精度な言語モデル}
+\author{森 大毅\affiref{ecei}
+	\and 阿曽 弘具\affiref{ecei}
+	\and 牧野 正三\affiref{cc}
+}
+
+\headauthor{森　大毅・阿曽 弘具・牧野 正三}
+\headtitle{単語知識を必要としない高精度な言語モデル}
+
+\affilabel{ecei}{東北大学大学院工学研究科}
+	{Graduate School of Engineering, Tohoku University}
+\affilabel{cc}{東北大学大型計算機センター}
+	{Computer Center, Tohoku University}
+
+\jabstract{
+本論文では，知識に依存しない，\mbox{高い曖昧性削減能力を持つ新しい言語モデル
+を提案}する．このモデルはsuperwordと呼ぶ文字列の集合の上の$n$-gramとし
+て定義され，従来の単語や文字列の$n$-gramモデルを包含するものになってい
+る．superwordは訓練テキスト中の文字列の再現性のみに基づいて定義される
+概念であり，Forward-Backwardアルゴリズムによって学習される．実験の結果，
+superwordに基づくモデルと文字のtrigramモデルを複数融合させたモデルの優
+位性が示され，形態素解析に基づく方法および高頻度文字列に基づく方法を上
+回る性能が得られた．
+}
+
+\jkeywords{言語モデル，superword，$n$-gram，音声認識，文字認識}
+
+\etitle{Precise Language Models \\ Requiring No Lexical Knowledge}
+\eauthor{Hiroki Mori\affiref{ecei} \and Hirotomo Aso\affiref{ecei}
+\and Shozo Makino\affiref{cc}}
+
+\eabstract{
+This paper proposes a novel, knowledge-free language model with great
+ability in reducing ambiguity. This model is defined as $n$-gram of
+string which is referred to ``superword,'' and belongs to a superclass
+of traditional word or string $n$-gram models' class. The concept of
+superword is based on only one principle---repetitionality in training
+text. The probabilistic distribution of the model is learned through
+the forward-backward algorithm. Experimental results showed that the
+performance of superword model combined with character trigram model
+was superior to the traditional word model based on morphological
+analysis, and traditional string-based model.
+}
+
+\ekeywords{Language model, Superword, $n$-gram, Speech recognition,
+Character recognition}
+
+\begin{document}
+\maketitle
+
+\section{はじめに}
+音声認識・文字認識の精度向上のため，より高い性能を持つ言語モデルを求め
+ることは重要である．近年は，モデル構築やメンテナンスの容易さの点から，
+コーパスに基づく統計的言語モデルの研究が盛んである．大語彙ないしタスク
+非依存のシステムのための統計的言語モデルとして今日もっとも有望視されて
+いるものに，$n$-gramが挙げられる．$n$-gramは大量のテキストコーパスから
+の単純な数え上げによって得られる統計量であり，強力かつ頑健性に優れてい
+る．
+
+英語などのヨーロッパ系言語においては，$n$-gram の単位として単語を用い
+ることが多い．大語彙のシステムでは単語はカテゴリ数が非常に大きくなるた
+め，単語の代わりに品詞を用いる\cite{nagata94}，または単語クラスタリング
+によって得られる単語クラスを用いることが多い．これらの言語においては単
+語は分かち書きされるため機械的に取り出すことができ，数え上げも容易に行
+える．
+
+これに対し，日本語や中国語には分かち書きの習慣がない．朝鮮語は文節ごと
+に分かち書きをするが，その分かち方は一定しないうえ，$n$-gramの単位とし
+ては大き過ぎて汎化性に難がある．よって，これらの言語を$n$-gramによって
+モデル化する際には，テキストコーパスに何らか\break
+の前処理が必要である．
+これには次の可能性が考えられる．
+\begin{itemize}
+\item 人手によって分割されたタグ付きコーパスを使う
+\item 自動形態素解析システムによって単語に分割する
+\item 経験的な統計基準によって文字列に分割する
+\end{itemize}
+このうちタグ付きコーパスを使う方法には，コーパス自体の入手が質的・量的
+な困難を伴うという欠点がある．形態素解析に基づく方法は有効であるが，モ
+デルを学習するためにはまず形態素解析システムを用意せねばならないうえ，
+特定タスクに対して高い性能を得るためには予め辞書をチューニングする必要
+があると考えられ，メンテナンスのコストがかかる．また，形態素解析システ
+ムの文法規則によっては機能語が短めに分割される傾向があり，$n$-gramの性
+能を必ずしも最大にするものではない．
+
+これらの手法に対して，伊藤ら\cite{aito96}は統計的な基準によって文
+\mbox{字列の集合を選}定し，その文字列に分割されたテキストを使って$n$-gramを学
+\mbox{習する方法を提案している．文字}列を選定する基準としては，単純な頻度，お
+よび語彙の自動獲得のために提案されている正規\break
+化頻度\cite{nakawatase95}の高い
+ものから選ぶ方式が\mbox{有効であったとされる．この方法は，形態素解}析を必要と
+しない点で優れている．しかし，抽出すべき文字列の最適な個数を見出す方法
+については述べられていない．また，用いられている基準と言語モデルの能力
+との理論的関係は浅く，最良の分割方法である保証はない．さらに，この手法
+ではテキストが明示的に分割される．このため，接辞を伴った語や複合語など
+の長い文字列が抽出された場合，その文字列を構成するもっと短い語は出現し
+なかったのと同様な扱いを受けることになる．有限のテキストから汎化性の高
+い言語モデルを構築したい場合に，このような明示的な分割が最良の結果を与
+えるとは限らない．
+
+本論文では，高い曖昧性削減能力を持つ新しい言語モデルを提案する．このモ
+デルは，superwordと呼ぶ文字列の集合の上の$n$-gramモデルとして定義され
+る．superword は訓練テキスト中の文字列の再現性のみに基づいて定義される
+概念であり，与えられた訓練テキストに対して一意に定まる．具体的な確率分
+布は，訓練テキストからForward-Backwardアルゴリズムによって求める．訓練
+テキストを明示的に分割せぬまま学習を行うため，長い文字列中の部分文字列
+を「再利用」することが可能となり，少量の訓練テキストでも効率の良いモデ
+ル化が期待できる．本論文ではまた，いくつかのモデルの融合による汎化性の
+向上についても検討する．
+
+実時間性が要求される大語彙連続音声認識システムにおいては，緩い言語モデ
+ルを用いて\mbox{可能性をしぼり込んだ後，詳細な言語モデルによって最終出力を導}
+く２パス処理が一般的である．本論文で提案するような字面の適格性を与える
+言語モデルは，ディクテーションシステムの第２パス，すなわち後処理用の言
+語モデルとして有用であるものと考えられる．また，文字$n$-gramを用いた認
+識手法\cite{yamada94}を本手法に応用することも可能である．
+\section{superwordモデルの定式化}
+単語\cite{mori96a}や文字列の$n$-gram\cite{aito96}では与え
+られた系列を単語ないし文字列に分割するやり方が一意に決まらないため，こ
+れらのモデルは直前の\(n-1\)個の単語や文字列を状態とする，隠れマルコフ
+モデルの一種と考えられる．単語や文字列の集合は，語彙知識として人手で与
+えられるか，あるいは経験的な規則に基づいて訓練テキストから抽出されるも
+のである．ここで定義するsuperwordとはこれら単語や文字列を一般化したも
+のであるが，それらと対照的なのは，訓練テキスト中の任意の文字列を含み得
+る点である．ただし，言語モデルとして意味を持つために必要最小限のヒュー
+リスティクスは導入せねばならない．そこで，次の条件を満たす文字列を
+superwordと定義する．
+\begin{itemize}
+\item 訓練テキスト中に最低2回出現する
+\end{itemize}
+または
+\begin{itemize}
+\item 長さ1の文字列である
+\end{itemize}
+訓練テキストにおける再現性の仮定は，ある文字列が何らかの言語的な
+まとまりを成すか否かに対する基準となるものであり，そのような基準として
+考え得る制約の中でもっとも緩い条件\break
+として与えてある．すなわち，ある文字
+列が訓練テキスト中で1回しか出現しない，または1回\break
+も出現しないならば，そ
+の文字列が何らかのまとまりを成すだろうという証拠は，他に人間が知識とし
+て与えない限り得られない．
+
+また，再現性とは独立に，長さ1の文字列は全てsuperwordと定義してい
+る．これにより，全ての文は少なくとも1通りのsuperwordの系列として表現で
+きることが保証される．superword $n$-gram確率
+\(P(w_i|w_{i-(n-1)}\cdots w_{i-1})\)は，直前に
+\(n-1\)個のsuperwordの列 \(w_{i-(n-1)}\cdots w_{i-1}\)が\break
+生起したと仮定
+した時のsuperword \(w_i\)の条件付き生起確率である．
+
+与えられた文\(\futo{C}=C_1C_2\cdots C_k\)がsuperwordの列\(w_1w_2\cdots
+w_l\)に分割できるとき，\(w_1w_2\cdots w_l\in\futo{C}\)と書く．
+superword $n$-gramモデルは，$\futo{C}$の全ての可能な分割に関して計算\break
+し
+たsuperword $n$-gram確率の積の総和をもって$\futo{C}$の発生確率を
+推定するものである．すなわち，その確率を次式で与える．
+\begin{equation}
+P(\futo{C})=\!\!\!\!\!\!\!\sum_{w_1\cdots w_l\in\futo{C}}
+\prod_{i=1}^lP(w_i|w_{i-(n-1)}\cdots w_{i-1})
+\label{forward}
+\end{equation}
+ここで\(n=1\)の時，すなわちsuperword unigramモデルは，文全体の生起確率
+がそれぞれ独立なsuperwordの生起確率の積で表されるとするものであり，
+multigram\cite{deligne95}と呼ばれる可変長単語列に基づく言語モ
+デルと同一のものである．
+
+superword $n$-gramモデルのクラスは，単語や文字列の$n$-gramモデルのクラ
+スを包含する．この性質は，パラメータさえ適切に与えることができれば，
+superwordに基づくモデルの性能が単語や文字列の$n$-gramモデルの性能と同
+等かそれ以上になることを保証する．
+\vspace{-2mm}
+\section{superwordモデルの学習法}
+\vspace{-1mm}
+\subsection{superword集合の獲得}
+\vspace{-1mm}
+モデルの獲得にあたっては，パラメータの学習に先立ち，訓練テキストから
+superwordの集合を求める必要がある．長さ1のsuperwordについては自明であ
+るから，再現性のある文字列を集める作業が核心である．これには，訓練テキ
+ストの全ての位置から始まる半無限文字列をソートして任意長$n$-gram統計を
+求め\cite{nagao94}，2回以上出現する文字列を記録\break
+する方法が考えられる．
+しかし，再現性のある文字列だけに興味がある場合には，短い文字列から長い
+文字列へと逐次的に求める簡便な方法で十分である\cite{mori96b}．
+
+実験で用いたテキストコーパスでは，長さ$L$のsuperwordの種類は大きな$L$
+では単調に減少\break
+することが観察されている．
+\subsection{確率分布のForward-Backward学習}
+superwordモデルでは，ある状態から別の状態に移る時に，ある確率で一つの
+superwordを出力する．状態は，直前\(n-1\)個のsuperwordによって定まるも
+のとする．ただし，\(n=1\)の場合はただ1つの状態のみ存在するものとする．
+superwordモデルの出力はsuperword列としてで\break
+はなく文字の系列として観測さ
+れる．そこで，通常の隠れマルコフモデルと同様に扱うことを\break
+可能にするため
+副状態を導入して，1回の状態遷移で1文字を出力する等価なモデルを考える．\break
+副状態は，状態を分割したもので，そこに移る時最後に出力したsuperwordの
+各文字に対応す\break
+る．superword \(w_i\)の表記を\(C_1\cdots C_j\cdots C_L\)
+とし，\(w_i\)の長さ$j$のプレフィックスを\(w_{i,j}\)とする．\break
+そして，
+superword モデルにおける\(w_i\)の出力を，等価なモデルでは次のように表
+す．すなわち，\break
+確率\(P(w_i|w_{i-(n-1)}\cdots w_{i-1})\)で副状態
+\(w_{i-(n-2)}\cdots w_{i-1}w_{i,1}\)に移る時に\(C_1\)を出力し，以後確
+率\break
+1で副状態\(w_{i-(n-2)}\cdots w_{i-1}w_{i,j}\)\mbox{に移る時に\(C_j\)を出力
+し，最終的に状態\break
+\(w_{i-(n-2)}\cdots w_{i-1}w_i\)に}\break
+至ると考える．
+例として，図\ref{fig4-1}の状態遷移図では「東北大学」というsuperwordを
+出力して状態\break
+（東北大学）に至る様子を示している．等価なモデルでは，本来
+の確率で副状態（東）に移る時に文字「東」を出力，確率1で（東北）に移る
+時に「北」を出力，確率1で（東北大）に移る時\break
+に「大」を出力，最終的に確
+率1で（東北大学）に移る時に「学」を出力する．分割前の状態が異なる副状
+態は同一視しないので，例えば（東北大学）の副状態（東）と（東京）の副状
+態（東）は異なることに注意すべきである．
+
+\begin{figure}
+\begin{center}
+\epsfile{file=33.eps}
+\caption{「東北大学」というsuperwordの各文字に対応した副状態の系列}
+\label{fig4-1}
+\end{center}
+\end{figure}
+
+\(n=1\)，すなわちsuperword unigram確率の学習のための初期確率としては，
+全てのsuperwordが等確率で発生するとして，superwordの数の逆数を与
+える．
+\(n>1\)については，対応するsuperwordの\((n-1)\)-gram確率で初期化する．
+
+確率の再推定のために，図\ref{fig4-2}のように訓練テキストから全ての
+superwordを洗い出す．
+\begin{figure}[t]
+\vspace{-7mm}
+\begin{center}
+\epsfile{file=34.eps}
+\caption{「東北大学」というテキストの解析．矩形はsuperwordを，実線は可
+能なパスを表す．\\``\$''は文の終端}
+\label{fig4-2}
+\end{center}
+\end{figure}
+次に，連接可能な$n$個のsuperwordの組に関して，次式によって確率を更新す
+る．
+\begin{eqnarray}
+\lefteqn{\tilde{P}(w_i|w_{i-(n-1)}\cdots w_{i-1})=} \nonumber \\
+& &\frac{\displaystyle\sum_t\alpha_{t-1}(w_{i-(n-1)}\cdots w_{i-1})
+P(w_i|w_{i-(n-1)}\cdots w_{i-1})\beta_t(w_{i-(n-2)}\cdots w_i)}
+{\displaystyle\sum_t\alpha_t(w_{i-(n-2)}\cdots w_i)\beta_t(w_{i-(n-2)}\cdots w_i)}
+\end{eqnarray}
+ただし，$\alpha$, $\beta$はそれぞれForward確率，Backward確率
+で，以下のように再帰的に定義する．
+\begin{equation}
+\alpha_1(w)=P(w|\#), \qquad \mbox{\#は文頭を表す状態}
+\end{equation}
+時刻$t$(\(t>1\))でsuperword \(w_i\)の第1字目を出力するとき
+\begin{equation}
+\alpha_t(w_{i-(n-2)}\cdots w_i)=\sum_{w_{i-(n-1)}}
+\alpha_{t-1}(w_{i-(n-1)}\cdots w_{i-1})P(w_i|w_{i-(n-1)}\cdots
+w_{i-1})
+\end{equation}
+時刻$t$(\(t>1\))でsuperword \(w_i=C_1\cdots C_j\cdots C_L\)の第$j$字
+目(\(j>1\))を出力するとき
+\begin{equation}
+\alpha_t(w_{i-(n-2)}\cdots w_{i-1}w_{i,j})
+=\alpha_{t-1}(w_{i-(n-2)}\cdots w_{i-1}w_{i,j-1})
+\end{equation}
+ただし
+\begin{equation}
+\alpha_t(w_{i-(n-2)}\cdots w_{i-1}w_i)
+=\alpha_t(w_{i-(n-2)}\cdots w_{i-1}w_{i,L})
+\end{equation}
+同様に
+\begin{equation}
+\beta_T(\$)=1, \qquad \mbox{$T$は文末記号 ``\$'' を出力する時刻}
+\end{equation}
+時刻$t$(\(t<T\))でsuperword \(w_i\)の第1字目を出力するとき
+\begin{equation}
+\beta_{t-1}(w_{i-(n-1)}\cdots w_{i-1})
+=\sum_{w_i}\beta_t(w_{i-(n-2)}\cdots w_i)
+P(w_i|w_{i-(n-1)}\cdots w_{i-1})
+\end{equation}
+時刻$t$(\(t<T\))でsuperword \(w_i=C_1\cdots C_j\cdots C_L\)の第$j$字
+目(\(j>1\))を出力するとき
+\begin{equation}
+\beta_{t-1}(w_{i-(n-2)}\cdots w_{i-1}w_{i,j-1})
+=\beta_t(w_{i-(n-2)}\cdots w_{i-1}w_{i,j})
+\end{equation}
+ただし
+\begin{equation}
+\beta_t(w_{i-(n-2)}\cdots w_{i-1}w_i)
+=\beta_t(w_{i-(n-2)}\cdots w_{i-1}w_{i,L})
+\end{equation}
+\section{長さ制限の導入}
+再現性のある文字列の長さを十分大きく取れば，前節までに述べたモ
+デルは与えられた訓練テキストに対して一意に求まる．以下では，これを
+一般superword $n$-gramモデルと呼ぶ．
+しか\break
+し，一般モデルのパラメータ数は大きい．特に，\(n>2\)ではsuperwordの
+組み合わせが爆発し，現実的ではない．さらに，あまりに長いsuperwordは訓
+練テキストに特化してしまう恐れがあり，汎化能力の低下を招く．
+
+これに対処するため，一般モデルに加えて長さ制限付きのsuperwordモデル
+を導入する．これは，逐次的な再現性文字列の獲得を早い段階で打ち切っ
+て小さなsuperwordの集合をつくり，その集合に基づいて
+Forward-Backward学習を行うことで得ることができる．以下では，長さ$l$に
+制限されたsuperword $n$-gram確率を\(P_{|w|\leq
+l}(w_i|w_{i-(n-1)}\cdots w_{i-1})\)と表記する．
+
+長さが$l$に制限されたsuperword $n$-gramモデルは，図\ref{ergodic}に示す
+ような，状態数が高々字種の\break
+$l$乗に制限されたエルゴーディックHMMと
+なる．ただし，図は\(l=2\)とした例である．
+\begin{figure}
+\begin{center}
+\epsfile{file=35.eps}
+\vspace*{-3mm}
+\caption{「東北大学」の部分文字列をsuperwordの集合とする時の長さ制限モ
+デル}
+\label{ergodic}
+\end{center}
+\end{figure}
+\section{複合モデル}
+$n$-gram に代表される確率モデルにおいては，モデルのパラメータを精度良
+く推定するに足るサンプルが得られないことが多く，パラメータ空間のさまざ
+まなスムージング法が提案されている\cite{federico95}．その一つに，いく
+つかのモデルの確率の重み付き線形和で表現する方法がある\cite{jelinek80}．
+これは本来，詳細なモデルの値が信用できない場合に，パラメータの少ない安
+定したモデルの値を代用するものであ\break
+るが，性質の異なる複数のモデルを組み
+合わせてより良いモデルを得るという積極的な利用も可能である．本節では，
+この線形補間に基づくいくつかの複合モデルを考える．
+
+superword bigram(\(n=2\))モデル
+に対しては，superword unigram確率によって補間された確率は次式で与
+えられる．
+\begin{equation}
+\hat{P}(w_i|w_{i-1})=\lambda_{\mbox{\scriptsize g}}
+P(w_i|w_{i-1})+(1-\lambda_{\mbox{\scriptsize g}})P(w_i)
+\end{equation}
+重み係数\(\lambda_{\mbox{\scriptsize g}}\)は，訓練テキストとは別のサン
+プル(held-outデータ)またはクロスバリデーション\break
+によって得られ
+る仮想的な未知データの確率を最大にするように再推定する．
+
+前述したように，一般superword bigramはパラメータ量が多くなり過ぎ
+るので，実際にはsuperwordの長さを最大$l$に制限したモデルと組み合
+わせる．これは次式で与えられる．
+\begin{equation}
+\hat{P}_{|w|\leq l}(w_i|w_{i-1})=
+\lambda_{\mbox{\scriptsize b}}P_{|w|\leq l}(w_i|w_{i-1})
++(1-\lambda_{\mbox{\scriptsize b}})P_{|w|\leq l}(w_i)
+\label{limited}
+\end{equation}
+
+式(\ref{limited})のような制限されたモデルでは，長い語の表現に難がある
+ことも考えられる．そこで，長さ制限付きsuperword bigramモデルと
+一般superword unigramモデルの複合モデルを導\break
+入する．
+複合superword bigram確率は次式で定義される．
+\begin{equation}
+P_{\mbox{\scriptsize comp}}(w_i|w_{i-1})=
+\lambda_{\mbox{\scriptsize c}}\hat{P}_{|w|\leq l}(w_i|w_{i-1})
++(1-\lambda_{\mbox{\scriptsize c}})P(w_i)
+\label{composite}
+\end{equation}
+
+さらに，複合superword bigramモデルを，文字のtrigramモデルによってスムー
+ジングする\break
+ことを考える．文字のtrigramモデルはそれ自身で強力な曖昧性削
+減能力を持っているが\cite{mori96}，単語$n$-gramモデルと
+融合させることにより，認識対象中の未知の文字列の存在による単語解析精度
+の低下の影響を低減させ，頑健なモデルとすることができる\cite{mori96a}
+．文字によって補間された複合superword bigram確率は次式で定義され
+る．
+\begin{equation}
+\hat{P}_{\mbox{\scriptsize comp}}(w_i|w_{i-1})=
+\lambda_{\mbox{\scriptsize w}}P_{\mbox{\scriptsize comp}}(w_i|w_{i-1})
++(1-\lambda_{\mbox{\scriptsize w}})\hat{P}_{\mbox{\scriptsize c}}(w_i|w_{i-1})
+\label{charint}
+\end{equation}
+ただし，\(\hat{P}_{\mbox{\scriptsize c}}(w_i|w_{i-1})\)はsuperword
+\(w_i\)が生起する確率を，補間された文字trigram確率の積によって求めたも
+のである．すなわち，\(w_i\)の表記を\(C_1\cdots C_{L(w_i)}\)，
+\(w_{i-1}\)の最後の2文字を\(C_{-1}C_0\)と書くとき
+\begin{equation}
+\hat{P}_{\scr{c}}(w_i|w_{i-1})=
+\left(\prod_{j=1}^{L(w_i)}\hat{P}_\scr{c}(C_j|C_{j-2}C_{j-1})\right)
+\cdot d(L(w_i))
+\label{charmodel}
+\end{equation}
+ただし\(\hat{P}_\scr{c}(C_j|C_{j-2}C_{j-1})\)はbigram, unigram等により
+補間された文字trigram確率である．また，\(d(L(w_i))\)は文字モデル
+が生成する単語の長さに関する分布関数である．
+\section{評価実験}
+提案した言語モデルの能力を，文字を単位としたパープレキシティ
+によって評価する．パープレキシティは，式(\ref{forward})において評価用
+テキストを$\futo{C}$として次式で求められる．
+\begin{equation}
+\mbox{{\it PP}}\simeq\hat{P}(\futo{C})^{-1/k}
+\end{equation}
+ただし，$k$は評価用テキストの全字数である．長さ1のsuperwordに対しては，
+確率が設定した\break
+底値を下回る場合には底上げした．対象タスクは朝日新聞「社
+説」とした．実験に用いたテキストの量を表\ref{tab4-1}に示す．表中，held-out 
+とは式(\ref{limited}), 式(\ref{composite}), 式(\ref{charint})の重み係
+数を求めるために用いたテキストである．各々のテキストは，共通部分を持た
+ない．
+\begin{table}
+\vspace{-3mm}
+\begin{center}
+\caption{訓練テキスト・評価テキストの量}
+\label{tab4-1}
+\begin{tabular}{|c|rr|} \hline
+& 字 & (文) \\ \hline
+訓練 & 969497 & (21767) \\
+held-out & 85654 & (1953) \\
+評価 & 80098 & (1779) \\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+長さ制限の効果を見るため，superword unigramモデル
+について最大長を変化させてパープレキシティを求めた．その結果を
+図\ref{unigram}に示す．
+\begin{figure}
+\begin{center}
+\epsfile{file=unigram1.eps,width=.7\hsize}
+\caption{superword unigramモデルにおける長さ制限の効果}
+\label{unigram}
+\end{center}
+\end{figure}
+この結果から，長いsuperwordを許してもパープ\break
+レキシティは上がらないこと
+がわかる．これは，superwordの再現性の条件が適当であったことを示す．
+以下の実験では，\(L=20\)の場合を一般superword unigramモデルとして
+扱う．
+
+表\ref{tab2}に，提案したモデルおよび従来のモデルのパープレキシティを示
+す．上から4項目までがsuperwordに基づくモデルである．bigramとあるのは式
+(\ref{limited})の長さ制限付きモデルである．ここでは最大長を3とした．一
+般unigram+bigramとあるのは式(\ref{composite})の複合モデル，一般
+unigram+bigram+文字とあるのはさらに文字trigramで補間した式
+(\ref{charint})のモデルである．その\break
+場合の式(\ref{charmodel})の分布関数
+としては，指数分布を仮定した．表\ref{tab2}の残りの4項目は比較のために
+示\break
+してある．単語trigramは，訓練テキストをあらかじめ形態素解析システム
+JUMAN\cite{juman94}により分割して求めたものであり，削除補間法によ
+りスムージングしたものである．文字+単語trigramは，さらに文字のtrigram
+でスムージングしたもので，\break
+式\hspace{-0.1mm}(\ref{charmodel})\hspace{-0.1mm}と同様の式を用いている．
+文字列\hspace{-0.1mm}trigram\hspace{-0.1mm}は，
+訓練テキストに伊藤らの実験\hspace{-0.1mm}\cite{aito96}で最も有効で
+あった左最長一致による高頻度文字列への分割法を適用し，さらに文字の\break
+trigramでスムージングしたものである．抽出文字列数は約4000から12000まで
+変化させ，パープレキシティが極小となった約6000個を用いた時の値を示して
+ある．スムージングのためのheld-outデータにはsuperwordモデルと同じもの
+を用いている．
+\begin{table}[t]
+\begin{center}
+\caption{各モデルの性能評価}
+\label{tab2}
+\begin{tabular}{|c|c|} \hline
+モデル & パープレキシティ \\ \hline
+unigram & 32.4 \\
+bigram & 29.8 \\
+一般unigram+bigram & 28.5 \\
+一般unigram+bigram+文字 & 25.7 \\ \hline
+文字trigram & 28.9 \\
+単語trigram & 28.6 \\
+文字+単語trigram & 26.6 \\
+文字列trigram & 28.6 \\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+この結果から，次のことがわかる．まず，superword unigramモデルの性能が
+良くない．図\ref{unigram}\break
+の結果をも考慮すると，これはsuperwordの長さの
+問題ではなく，unigramでは語と語の連接関\break
+係が本質的に表現できないものと
+考えられる．これはATISデータベースの上でのmultigramの評価\cite{deligne95}
+といくぶん矛盾する結果であるが，伊藤ら\cite{aito96}も
+同様の結果を導いている．
+
+長さ制限付きsuperword bigramモデルの導入によって，性能の向上が見られた．
+しかし，ま\break
+だその性能は文字trigramモデルに及ばない．
+
+長さ制限付きsuperword bigramモデルと一般superword unigramモデルを
+融合させることで，若干の性能向上が見られた．これは，長いsuperwordは単
+独ではあまり性能に貢献しないが，語と語の連接関係だけでは表現しきれない
+部分を補う効果を持っているものと考えることができる．語と語の関係に関す
+る知識と語彙知識とを独立に表現する枠組は，形態素解析の原理と
+類似している．
+
+さらに，文字trigramモデルでスムージングすることにより，大き
+く性能が向上した．その結果，形態素解析を用いたモデルを超える性能
+が得られた．superwordに基づいたモデル単独では訓練テキストに対して
+過学習する傾向があり，未知テキストに対して脆弱な側面があるが，未知テキ
+ストに対して頑健な文字trigramモデルとの融合によりそれが克服できること
+を意味する．
+\section{あとがき}
+本論文では，superwordの概念に基づいた新しい言語モデルを提案した．このモ
+デルは従来の$n$-gram の枠組を包含したより一般的なものであり，コーパス
+以外の知識に全く依存しない．また，本論文で導入した長さ制限モデルとスムー
+ジング手法により，現実的なコーパスの量の範囲でモデルの学習が可能となっ
+た．評価実験の結果，長さ制限を施したsuperword bigramモデルを文字
+trigramモデルと組み合わせて頑健性を向上させたモデルの性能が高く，形態
+素解析\break
+に基づく手法，および高頻度文字列抽出による方法を超える能力が得ら
+れた．
+
+superwordに基づく言語モデルは，可搬性に優れた強力なものであるが，欠点
+として訓練テキストに比べモデルの規模が非常に大きいことが挙げられる．
+superword unigramモデルのパラメータ数はsuperword集合の大きさにほぼ比例
+する．通常の$n$-gramではモデルのサイズの上\break
+界がコーパスの量に対して線形
+のオーダーで与えられるのに対し，superwordの場合にはそれよりも大きくな
+る可能性がある．これはsuperwordを可能な限り一般的に定義したためであり，
+特に大規模なコーパスを用いてモデルを学習する場合には，再現性の仮定を見
+直す必要があることが考えられる．
+
+また，superword bigramモデルは長さ制限を加えた場合でも非常に大きくなる．
+今回構築した長さ3のsuperword bigram確率テーブルは約170Mbyteの大きさの
+ファイルとなり，一般superword unigram確率テーブルの約10倍である．これ
+は，与えられたテキストのsuperwordによる解析結果が極めて曖昧性が大きい
+ものであることが原因である．
+
+モデルのサイズを小さくし，実際のパターン認識システムで利用できるように
+するためには，モデルの最適化が必要である．すなわち，学習の過程で非常に
+小さな確率を付与された状態遷移のアークは刈り取る，あるいは外から遷移し
+てくる確率が十分小さな状態は削除する，などである．しかし，この種の枝刈
+りは，訓練サンプルに特化する危険がある．今後はパープレキシティを上げる
+ことなくモデルをコンパクトにするための枝刈り手法の開発が課題である．
+
+\vspace{-3mm}
+\bibliographystyle{jnlpbbl_old}
+\bibliography{v06n2_02}
+
+\begin{biography}
+\biotitle{略歴}
+\bioauthor{森 大毅}{
+1993年東北大学工学部通信工学科卒業．1998年同大大学院博士後期課程修了．
+博士(工学)．同年，同大大学院工学研究科助手．
+文字認識，音声認識，自然言語処理の研究に従事．
+電子情報通信学会，情報処理学会各会員．}
+\bioauthor{阿曽 弘具}{
+1974年東北大学大学院電気及通信工学専攻博士課程修了．
+現在，同\break
+大大学院工学研究科教授．
+並列処理，文書認識，音声認識，神経回路網などの研究に従事．
+平成3年度電子情報通信学会業績賞受賞．
+工学博士．
+}
+\bioauthor{牧野 正三}{
+1947年1月生まれ．1974年東北大学大学院工学研究科博士課程修了．
+工学博士．現在東北大学大型計算機センター及び東北大学大学院情報科学研究科
+計算機ネットワーク論講座教授．音声認識・理解，画像処理・理解，対話システム，
+自然言語処理の研究に従事．}
+
+\bioreceived{受付}
+\bioaccepted{採録}
+
+\end{biography}
+
+\end{document}

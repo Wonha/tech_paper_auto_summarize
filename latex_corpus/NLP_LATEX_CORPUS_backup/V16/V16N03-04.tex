@@ -1,0 +1,1040 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.1}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+
+\Volume{16}
+\Number{3}
+\Month{July}
+\Year{2009}
+
+\received{2009}{2}{4}
+\revised{2009}{4}{6}
+\accepted{2009}{6}{8}
+
+\setcounter{page}{81}
+
+\jtitle{品詞間接続制約のLR構文解析表への組み込みの局所性の解消}
+\jauthor{野呂　智哉\affiref{titech-cs} \and 田中　穂積\affiref{jaist} \and 橋本　泰一\affiref{titech-iri} \and 白井　清昭\affiref{jaist}}
+\jabstract{
+  LR構文解析表（LR表）を作成する際，CFG規則による制約だけでなく
+  品詞（終端記号）間の接続制約も同時に組み込むことによって，
+  LR表中の不要な動作（アクション）を削除することができる．
+  それにより，接続制約に違反する解析結果を受理しないLR表を作成できるだけでなく，
+  LR表のサイズを縮小することも可能であり，構文解析の効率の向上が期待できる．
+  これまでにも接続制約の組み込み手法はいくつか提案されているが，
+  従来手法では，
+  注目する動作の前後に実行され得る動作を局所的に考慮するため，
+  削除しきれない動作が存在する．
+  そこで，本論文では新しい組み込み手法を提案する．
+  提案手法では，初期状態から最終状態までの全体の
+  実行すべき動作列（アクションチェイン）を考慮し，接続制約を組み込む．
+  評価実験の結果，従来手法と比較して，
+  不要な動作をさらに約1.2\%削減でき，
+  構文解析所要時間は約2.4\%短縮できることが分かった．
+  最後に，提案手法の完全性について考察する．
+}
+\jkeywords{一般化LR構文解析，品詞間接続制約，文脈自由文法，局所性解消，アクションチェイン}
+
+\etitle{Globalization of Incorporating Adjacent Symbol Connection Constraints into an LR Parsing Table}
+\eauthor{Tomoya Noro\affiref{titech-cs} \and Hozumi Tanaka\affiref{jaist} \and Taiichi Hashimoto\affiref{titech-iri} \and \\
+	Kiyoaki Shirai\affiref{jaist}}
+\eabstract{
+  Adjacent symbol connection constraints (ASCCs) are very useful
+  for not only morphological analysis of non-segmenting language
+  such as Japanese language,
+  but also for continuous speech recognition of any language.
+  By incorporating ASCCs into an LR parsing table,
+  it is possible to reduce the size of the table,
+  as well as reject any locally implausible parsing results.
+  Although several algorithms have been proposed,
+  they cannot remove all of the unnecessary actions
+  because they consider only local context.
+  This paper proposes a new algorithm and show some evaluation results.
+  The proposed algorithm incorporates ASCCs
+  by searching for global action chains
+  from the initial state to the final state.
+  According to the results, the proposed algorithm can remove
+  about 1.2\% more actions than a conventional algorithm,
+  and the parsing time can be reduced by about 2.4\%.
+  Lastly, we show the completeness of our algorithm.
+}
+\ekeywords{Generalized LR Parsing, Adjacent Symbol Connection Constraints, Context-Free Grammar, Globalization, Action Chains}
+
+\headauthor{野呂，田中，橋本，白井}
+\headtitle{品詞間接続制約のLR構文解析表への組み込みの局所性の解消}
+
+\affilabel{titech-cs}{東京工業大学大学院情報理工学研究科}{Department of Computer Science, Tokyo Institute of Technology}
+\affilabel{jaist}{北陸先端科学技術大学院大学情報科学研究科}{School of Information Science, Japan Advanced Institute of Science and Technolgoy}
+\affilabel{titech-iri}{東京工業大学統合研究院}{Integrated Research Institute, Tokyo Institute of Technology}
+
+\begin{document}
+
+\maketitle
+
+\section{はじめに}
+
+インターネットの普及にともない，
+多種多様な電子情報が至るところに蓄積され，溢れている．
+我々は，インターネットを介して，時と場所を選ばず，
+即座にそれらの情報にアクセスすることができるが，
+その量は非常に膨大である．
+「情報爆発」というキーワードのもと，
+わが国でも文部科学省，経済産業省が新しいプロジェクトを立ち上げ，
+新技術の開発に取り組み始めている．
+この膨大な量の情報を人手で処理することは，不可能に近い．
+
+情報には文書，画像，音声，動画など様々なものがあるが，
+自然言語で書かれた文書情報は，その中で最も重要な情報の1つである．
+文書情報を機械的に処理する技術の研究，
+言い換えると自然言語処理技術の研究が極めて重要になっているのはそのためである．
+自然言語処理技術は，2つに大別される．
+コーパス（統計）ベースの手法とルール（文法規則）ベースの手法である．
+自然言語処理技術の1つである音声認識の精度のブレイクスルーがあったことにより，
+最近では，コーパスベースの手法が自然言語処理技術の世界を席巻している．
+これは網羅性のある文法規則を開発することが困難であったことが
+主な要因としてあげられる．
+これに対し，コーパスベースの手法は，
+そこから得られた統計データに文法規則性が反映されており，
+コーパスの量を増やすことで，
+文法規則性をより精密に反映させることができるという考えに基いている．
+ところが統計データからは陽に文法規則が取り出されるわけではなく，
+文法規則を取り出し，それをどう改良すべきかは分からない．
+
+文法規則は機械（コンピュータ）で扱うことができる規則でなければならない．
+多種多様な分野の日本語の文書処理を行う文法規則の数は，
+およそ数千の規模になると言われている．
+ところがこのような日本語の文法規則を
+言語学者ですら作成したという話をまだ聞かない．
+これに対し，コーパスベースの手法による
+日本語文の文節係り受け解析の精度は90\%に達する \cite{kudo:2002,uchimoto:99}．
+これがルールベースの方法が自然言語処理技術の中心ではなくなってきた
+大きな理由である．
+
+ところが，最近，コーパスベースの自然言語処理法も解析精度に飽和現象が見られる．
+精度をさらに向上させようとすれば，
+現存するコーパスの量を1桁以上増やさなくてはならないといわれている．
+これは，音声認識精度の向上でも問題になりはじめているが，
+コーパスの量を1桁以上増やすことは容易なことではない．
+この限界を越える技術として，闇雲にコーパスの量を増やすのではなく，
+ルールベースの方法を再考すべき時期に来ていると考えている．
+
+本論文では，一般化LR (Generalized LR; GLR)構文解析 \cite{deremer:82,aho:86,tomita:91} に注目する．
+一般化LR構文解析は，文法(CFG)規則をLR構文解析表（LR表）と呼ばれる
+オートマトンに変換し，効率的に解析を行う
+\footnote{一般化LR構文解析は，構文解析結果の順序付けに確率一般化LRモデル
+  \cite{inui:00,briscoe:93,charniak:96,jelinek:98}
+  を用いることができるので，
+  ルールベース手法にコーパスベース手法を融合した
+  ハイブリッドな方法であるといえる．}．
+このLR表には，CFG規則のほかに品詞（終端記号）間の接続制約
+(adjacent symbol connection constraints; ASCCs)を反映させることもできる．
+品詞間の接続制約を反映させることにより，
+接続制約に違反する解析結果を受理しないLR表を作成できるだけでなく，
+LR表のサイズ（状態数や動作（アクション）数）を縮小することもでき，
+その結果，構文解析の使用メモリ量や解析所要時間の削減，
+統計データを取り入れた場合の解析精度向上の効果の増大が期待できる．
+品詞間接続制約をCFG規則に直接反映させることも可能であるが，
+非終端記号の細分化によって規則数が組み合わせ的に増大し，
+CFG作成者への負担やLR表のサイズの増大を招く．
+品詞間接続制約のLR表への組み込み手法は，
+これまでにも提案されているが \cite{tanaka:95,li:95}，
+従来の手法では，LR表中の不要な動作を十分に削除できない問題があった．
+本論文では新しい組み込み手法を提案し，
+従来の手法では削除できなかった不要な動作も削除できることを
+実験により示す．
+
+本論文の構成は以下のとおりである．
+第\ref{sec:mslr}節では，まず，一般化LR構文解析アルゴリズムを採用している
+MSLRパーザ \cite{shirai:00} について説明し，
+従来の品詞間接続制約のLR表への組み込み手法の問題点を述べる．
+その問題点を踏まえ，第\ref{sec:improvement}節で
+新しい組み込み手法を提案し，
+第\ref{sec:evaluation}節で評価実験を行う．
+第\ref{sec:completeness}節では，提案アルゴリズムの完全性について
+考察を行う．
+最後に，第\ref{sec:conclusion}節で結論と今後の課題について説明する．
+
+
+
+
+\section{MSLRパーザと従来の組み込み手法}
+\label{sec:mslr}
+
+本節では，従来のLR表への接続制約の組み込み手法とその問題点を述べるが，
+その前に，第\ref{sec:evaluation}節の評価実験で使用する
+MSLRパーザ \cite{shirai:00} の原理について概略を説明する．
+
+
+\subsection{MSLRパーザの原理}
+\label{sec:principle}
+
+MSLR (Morpho-Syntactic LR) パーザは，GLR構文解析アルゴリズムを拡張し，
+日本語などの分かち書きされていない文の形態素解析と構文解析を
+同時に行うことのできるパーザである．
+図\ref{fig:mslr}に示すように，
+MSLRパーザは，文法(CFG)からLR表を生成し，
+それを参照しながら入力文の解析を行う．
+LR表を生成する段階では，文法のほかに
+品詞間接続制約を組み込むことも可能である．
+品詞間接続制約を組み込むことにより，
+LR表のサイズを小さくし，解析効率を向上させることができる．
+また，MSLRパーザは，平文を入力とすることで
+形態素解析と構文解析を同時に行うことができるが，
+形態素区切りや品詞，係り受けなどの部分的な制約を入力に加えて
+解析を行うこともできる．
+さらに，確率一般化LR (Probabilistic Generalized LR; PGLR)モデル
+\cite{inui:00} により，
+GLRアルゴリズムの枠組みにおいて構文木の生成確率を求めることもできる．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{16-3ia4f1.eps}
+\end{center}
+\caption{MSLRパーザの動作の流れ}
+\label{fig:mslr}
+\end{figure}
+
+MSLRパーザでは，$\varepsilon$規則（右辺の記号列長が0の規則）を含む文法は扱えない．
+文法が大規模化するにつれ，文法作成者が予期しない$\varepsilon$規則の適用や，
+それによる解析結果の曖昧性の増大が起きるため，
+MSLRパーザの仕様として，文法に$\varepsilon$規則は含まれないことを
+前提としている．
+本論文でも，$\varepsilon$規則を含まない文法を前提とする．
+
+
+\subsection{接続制約と接続表}
+
+終端記号と文末記号$\$$の集合 $\{t_1,t_2,\dots ,t_n,t_{n+1}(=\$)\}$
+の接続制約は，$n$行$n+1$列の表（接続表）で表現できる．
+\[
+  \mathrm{connect}[t_i,t_j]=
+  \begin{cases}
+    1 & \text{$t_it_j$ の順で接続可能な場合} \\
+    0 & \text{$t_it_j$ の順で接続不可能な場合}
+  \end{cases}
+\]
+ただし，$1\leq i\leq n$，$1\leq j\leq n+1$ である．
+また，終端記号または非終端記号$X$の直後に接続可能な終端記号の集合を
+返す関数Connectを
+\pagebreak
+以下のように定義する．
+\[
+  \mathrm{Connect}(X)=
+  \begin{cases}
+    \{t|\mathrm{connect}[X,t]=1 \wedge t\in\mathrm{Follow}(X)\}
+    & \text{$X$ が終端記号の場合}\\
+    \bigcup\{\mathrm{Connect}(t)\cap\mathrm{Follow}(X)|t\in\mathrm{Last}(X)\}
+    & \text{$X$ が非終端記号の場合}
+  \end{cases}
+\]
+ただし，$\mathrm{Follow(X)}$と$\mathrm{Last}(X)$は，それぞれ
+CFGの開始記号から展開した場合に非終端記号$X$の直後に出現し得る終端記号の集合，
+$X$を展開した場合に末尾に出現し得る終端記号の集合を表す．
+さらに，終端記号または非終端記号列$\alpha (=\beta Y)$の場合や，
+終端記号または非終端記号の集合$\Sigma$の場合は，
+関数Connectを以下のように定義する
+（$Y$は終端記号または非終端記号）．
+\begin{align*}
+  \mathrm{Connect}(\alpha)&=\mathrm{Connect}(Y)\\
+  \mathrm{Connect}(\Sigma)&=\bigcup_{X\in \Sigma}\mathrm{Connect}(X)
+\end{align*}
+
+
+\subsection{従来の接続制約組み込み手法}
+
+LR表への品詞間接続制約の組み込み手法には，
+まず接続制約を考慮しないLR表を作成してから不要な動作を削除する手法
+\cite{tanaka:95}，
+LR表作成前と作成後の両方で不要動作を削除する手法
+\cite{li:95}などがある．
+ここでは，MSLRパーザのLR表生成器で採用されている
+2つ目のLR表作成前と作成後の両方で不要動作を削除する手法（Liの手法）について述べる．
+
+LR構文解析では，LRアイテムを利用してCFGから状態遷移図（gotoグラフ）を作成する．
+Liらは，gotoグラフを作成する段階で，接続制約を利用して
+アイテムの生成を抑制することにより，
+接続制約を組み込んだgotoグラフを作成する．
+さらに，接続制約を組み込んだgotoグラフからLR表を作成した後，
+接続制約を伝播させることにより，
+LR表作成前に削除できなかった動作を削除する．
+
+接続制約を利用したLR(0)アイテムの生成の抑制は，
+核アイテム$[X\to\alpha\cdot\beta]\in\mathrm{Goto}(I,Z)$を
+closure展開する際，以下の2つの条件を満たすLR(0)アイテムのみを生成する
+ことにより行う
+\footnote{LR(1)アイテム$[X\to\alpha\cdot\beta;t]\in\mathrm{Goto}(I,Z)$の
+  場合は，第2条件を$t\in\mathrm{Connect}(\beta)$に置き換える．}．
+\begin{align*}
+  \mathrm{Connect}(Z)\cap\mathrm{First}(\beta)&\neq\emptyset\\
+  \mathrm{Follow}(X)\cap\mathrm{Connect}(\beta)&\neq\emptyset
+\end{align*}
+ただし，$\mathrm{Goto}(I,Z)$は，
+gotoグラフにおいて状態$I$から終端記号または非終端記号$Z$で遷移した
+先の状態を表す．
+また，$\mathrm{First}(\beta)$は，$\beta$を展開した場合に
+先頭に出現し得る終端記号の集合を表す．
+
+接続制約を組み込んだgotoグラフを作成したら，
+それをもとにLR表を作成する．
+この時点で既にいくらかの不要な動作は削除されているが，
+削除できずに残っている動作もあるため，
+LR表作成後に接続制約を伝播させることにより，
+さらに不要な動作を削除する．
+具体的には，LR表中の各動作について，
+その直前に実行すべき動作が存在しない場合，
+または直後に実行すべき動作が存在しない場合，
+その動作を削除する．
+
+
+\subsection{従来手法の問題点}
+\label{sec:problem}
+
+図\ref{fig:ex_cfg3}に示すような文法$G$
+\footnote{LR構文解析では，与えられた文法$G$からLR表を作成する際，便宜的に，
+  非終端記号$\mathit{SS}$を$G$の非終端記号集合に，
+  文末を表す終端記号$\$$を終端記号集合に追加し，
+  $\mathit{SS}\to S\$$を$G$に追加する
+ （$S$は元の$G$の開始記号）．
+  本論文では，新たに追加するCFG規則の番号を常に0番とする．}
+と接続制約$C$（と文法$G$から作成されるgotoグラフ）を
+例に，従来手法（Liの手法）の問題点を述べる．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{16-3ia4f2.eps}
+\end{center}
+  \caption{CFGと接続制約の例}
+  \label{fig:ex_cfg3}
+\end{figure}
+
+Liの手法により作成されるLR表を表\ref{tab:lr_table_hashimoto}に示す．
+ただし，括弧で囲まれた動作は，接続制約により削除されたものである．
+ここで，状態2，先読み$c$における移動(shift)動作$\mathrm{sh}_7$に注目する．
+この動作は，Liの手法では削除されない．
+
+このshift動作に関連する動作実行列として，
+以下のような場合が想定される
+（$(2,c,\mathrm{sh}_7)$は，状態2，先読み$c$における
+shift動作$\mathrm{sh}_7$を表す）．
+\[
+  (2,c,\mathrm{sh}_7) \to (7,d,\mathrm{sh}_{13}) \to (13,d,\mathrm{re}_6) \to (2, Z, \mathrm{goto}_5) \to (5,d,\mathrm{sh}_{11})
+\]
+一方，以下のような動作実行列も存在する．
+\[
+  (3,c,\mathrm{sh}_7) \to (7,d,\mathrm{sh}_{13}) \to (13,e,\mathrm{re}_6) \to (3, Z, \mathrm{goto}_9) \to (9,e,\mathrm{sh}_{14})
+\]
+接続制約より，終端記号$d$は終端記号$e$と接続するが，
+終端記号$d$とは接続しないため，前者の実行列は制約に違反する．
+その結果，$(13,d,\mathrm{re}_6)$は削除される．
+しかし，$(7,d,\mathrm{sh}_{13})$は，もう一方の接続制約を満たす動作実行列に含まれるため，残される．
+$(2,c,\mathrm{sh}_7)$は，接続制約を満たすどのような動作実行列にも含まれず，
+削除すべき動作であるが，次の$(7,d,\mathrm{sh}_{13})$が残されるため，
+Liの手法では削除できない．
+
+\begin{table}[t]
+  \caption{Liの手法により作成されるLR表}
+  \label{tab:lr_table_hashimoto}
+\input{04table01.txt}
+\end{table}
+
+従来手法では，1つ先または1つ前の動作が存在しないことが判明した場合に，
+その動作を削除する．
+この例では，2つ先の動作が存在するか否かを調べなければ，
+削除可能かどうかを判断できない．
+これを一般化すると，1つ先や2つ先だけでなく，$n$個先の動作が
+存在するか否かを調べる必要があり，
+連続する動作の存在を局所的に調べるだけでは，
+接続制約に違反する動作を完全に削除することはできない．
+このような例でも動作を削除できるようにするためには，
+その動作実行列が最終的にacc動作に到達可能であるか否かを
+調べる必要がある
+\footnote{動作実行列が（acc動作に到達できない）無限ループを形成するような
+  文法と接続制約の例も存在する．
+  これは$n$をどれだけ大きくしても，
+  無限ループ内の動作が削除可能であることを発見できない究極の例である．}．
+
+
+\section{提案アルゴリズム}
+\label{sec:improvement}
+
+初期状態から実行すべき動作を順番に決めていくと，
+動作の実行列（アクションチェイン）ができる．
+このアクションチェインがacc動作に到達すれば，
+解析が成功することになる．
+一方，実行すべき動作がLR表から決まらないときには，
+解析が失敗することになる．
+このアクションチェインは有向グラフ（アクションチェイングラフ） として表現できる．
+
+初期状態からacc動作に至るアクションチェインを成功パスと呼ぶ．
+成功パス上の動作は，必要な動作としてLR表に残す．
+提案アルゴリズムでは，アクションチェインを最終状態（acc動作）から
+逆向きに横型探索によりたどることにより，成功パスを探索する．
+すなわち
+開始記号を左辺に持つCFG規則について，
+その右辺の末尾の記号から順番に展開しながら
+（最右導出を行いながら）
+接続制約を満たすか否かをチェックする．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{16-3ia4f3.eps}
+\end{center}
+  \caption{gotoグラフ}
+  \label{fig:proposed}
+\end{figure}
+
+開始記号$S$を左辺に持つ $S\to X_1X_2\dots X_n$
+というCFG規則（規則番号を$m$とする）があったとする．
+gotoグラフには図\ref{fig:proposed}(a)に示すような
+状態とリンクが存在する（開始状態を0とする）．
+このCFG規則の展開に対応するLR表中の動作は，
+状態$s_n$，先読み$\$$におけるreduce動作 $\mbox{re}_m$と
+その後の状態0，非終端記号$S$における状態$s_0$への遷移であり，
+この動作をアクションチェインに追加する．
+そして，右辺の各終端記号または非終端記号について，
+$X_n$，$X_{n-1}$，…$X_1$の順に接続制約を満たすか否かをチェックする．
+$X_n$が終端記号の場合，$X_n$と$\$$の間の接続制約をチェックする．
+接続制約を満たすならば，
+状態$s_{n-1}$，先読み$X_n$におけるshift動作 $\mbox{sh}_{s_n}$
+をアクションチェインに追加し，$X_{n-1}$のチェックに移る（先読みは$X_n$となる）．
+$X_n$が非終端記号の場合は，$X_n$を左辺とするCFG規則で展開する．
+このCFG規則が$X_n\to Y_1Y_2\dots Y_{n^{\prime}}$（規則番号$m^{\prime}$）であるとすると，
+gotoグラフ中では図\ref{fig:proposed}(b)に示すような状態とリンクが存在する．
+このCFG規則の展開に対応する，
+状態$s^{\prime}_{n^{\prime}}$，先読み$\$$におけるreduce動作 $\mbox{re}_{m^{\prime}}$
+と状態$s_{n-1}$，記号$X_n$における状態$s_n$への遷移を
+アクションチェインに追加し，
+$Y_{n^{\prime}}$，$Y_{n^{\prime}-1}$，…$Y_1$の順に接続制約を満たすか否かを同様にチェックする．
+すべてのチェックが完了したら，$X_{n-1}$のチェックに移る
+（先読みは$Y_1$のチェックで最後にアクションチェインに追加した
+shift動作の先読みとなる）．
+以下，同様に続け，最終的に状態0におけるshift動作が
+アクションチェインに追加されたら，それが成功パスとなる．
+
+提案アルゴリズムの概要を図\ref{fig:algorithm}に示す．
+図中の記法については，以下のとおりである．
+\begin{description}
+\item[\protect{$[s,\mathrm{re}_n,\mathit{la},\mathit{status}]$}:]
+  状態$\mathrm{LastState}(s,n)$，先読み$\mathit{la}$ で実行される
+  $n$番目のCFG規則によるreduce動作を表すアクションチェインの要素．
+  reduce後，状態$s$，非終端記号$\mathrm{LHS}(n)$ で
+  状態$\mathrm{Goto}(s,\mathrm{LHS}(n))$へ遷移する．
+  ただし，$n=0$ の場合は，reduce動作ではなくacc動作を表す要素となる．
+  $\mathit{status}$は要素の処理状態を表す．
+  要素の処理状態には，
+  init（初期状態），wait（待機状態），check（調査中），pass（調査済），
+  end（最終状態）があり，この順番で遷移する（initは飛ばされることもある）．
+  \begin{description}
+  \item[init:] 要素を作成しただけの状態
+  \item[wait:] 次にアクションチェインに追加可能であることを表す状態
+  \item[check:] アクションチェインに追加され，
+    その後，解析開始状態（gotoグラフにおける状態0）に到達可能かどうか
+（最終的に接続制約を満たすかどうか） を調査中であることを表す状態
+  \item[pass:] 解析開始状態に到達可能であることが判明したことを表す状態
+  \item[end:] 成功パスの要素であることを表す状態
+  \end{description}
+\item[\protect{$[s,\mathrm{sh},\mathit{la},\mathit{status}]$}:]
+  状態$s$，先読み$\mathit{la}$ で実行されるshift動作を表す
+  アクションチェインの要素．
+\item[$\mathrm{Length}(n)$:] $n$番目のCFG規則の右辺の長さ．
+\item[$\mathrm{LHS}(n)$:] $n$番目のCFG規則の左辺の非終端記号．
+\item[$\mathrm{RHS}(n,i)$:] $n$番目のCFG規則の右辺の
+  $i$番目の終端記号または非終端記号．$1\leq i\leq\mathrm{Length}(n)$
+\item[$\mathrm{Rule}(\mathit{A})$:] 非終端記号$A$を左辺に持つ規則番号の集合．
+  $\mathrm{Rule}(\mathit{A})=\{n|\mathrm{LHS}(n)=A\}$
+\item[$\mathrm{PrevAction}(a)$:] 
+  reduce動作またはshift動作$a$に続く動作の集合．
+\item[$\mathrm{State}(s,n,i)$:] 
+  $n$番目のCFG規則について，状態$s$から
+  $\mathrm{RHS}(n,1)$，…$\mathrm{RHS}(n,i-1)$ を遷移した後の状態．
+\item[$\mathrm{LastState}(s,n)$:] 状態$s$から$n$番目のCFG規則の右辺の
+  終端記号または非終端記号列すべてを遷移した後の状態．
+\item[$\mathrm{LA}(s,n)$:] 
+  状態 $\mathrm{LastState}(s,n)$ における
+  $n$番目のCFG規則によるreduce動作の先読みの集合．
+\item[$\mathrm{PrevSym}(s)$:]
+  状態$s$への遷移記号の集合．
+  $\mathrm{PrevSym}(s)=\{\mathit{sym}|\mathrm{Goto}(s^{\prime},\mathit{sym})=s\}$
+\item[$\mathrm{PrevState}(s,\mathit{sym})$:] 
+  記号 $\mathit{sym}$ によって状態 $s$ に遷移する状態の集合．
+  $\mathrm{PrevState}(s,\mathit{sym})=\{s^{\prime}|\mathrm{Goto}(s^{\prime},\mathit{sym})=s\}$
+\end{description}
+
+\begin{figure}[t]
+\includegraphics{16-3ia4f4.eps}
+  \caption{アルゴリズム概略}
+  \label{fig:algorithm}
+\end{figure}
+
+\noindent
+図\ref{fig:algorithm}の（2）では，
+wait状態のreduce動作要素について，その状態をcheckとして，
+対象となる動作の実行後に解析開始状態まで
+接続制約に違反することなく到達可能かどうかのチェックを行う．
+wait状態のshift動作要素ならば，その状態をcheckとして，
+それに先行するinit状態の要素について，その状態をwaitとする．
+ただし，先行する要素がshift動作要素の場合は，
+両者の先読み記号の間の接続制約をチェックする．
+また，gotoグラフにおける状態0でのshift動作要素の場合は，
+解析開始状態まで到達可能であることが判明したので，要素の状態をpassとする．
+図\ref{fig:algorithm}の（4）では，
+pass状態の要素について，その状態をendとし，
+そこから（2）のときとは逆に要素をたどり，
+check状態の要素が解析開始状態まで到達可能であることを伝えていく
+（状態をcheckからpassにする）．
+最終的に状態がendとなった要素の列が成功パスとなる．
+
+図\ref{fig:ex_cfg3}に示す文法$G$と接続制約$C$に対し，
+上述のアルゴリズムを適用すると，
+以下のような手順で処理が進行する．
+
+\begin{figure}[p]
+\includegraphics{16-3ia4f5.eps}
+\vspace{1\baselineskip}
+  \caption{アクションチェイングラフ作成の経過}
+  \label{fig:chain}
+\end{figure}
+
+\begin{enumerate}
+\item $[0,\mathrm{re}_0,\$,\mbox{wait}]$を作成．
+\item $[0,\mathrm{re}_0,\$,\mbox{wait}]$について，
+  処理状態をcheckに変更し，\\
+  $[0,\mathrm{re}_1,\$,\mbox{wait}]$，
+  $[0,\mathrm{re}_2,\$,\mbox{wait}]$を作成．
+\item $[0,\mathrm{re}_1,\$,\mbox{wait}]$について，
+  処理状態をcheckに変更し，\\
+  $[0,\mathrm{sh},a,\mbox{init}]$，
+  $[2,\mathrm{re}_3,e,\mbox{init}]$，
+  $[4,\mathrm{sh},e,\mbox{wait}]$を作成．
+\item $[0,\mathrm{re}_2,\$,\mbox{wait}]$について，
+  処理状態をcheckに変更し，\\
+  $[0,\mathrm{sh},b,\mbox{init}]$，
+  $[3,\mathrm{re}_4,\$,\mbox{wait}]$を作成（図\ref{fig:chain}（1））．
+\item $[4,\mathrm{sh},e,\mbox{wait}]$について，
+  処理状態をcheckに変更し，\\
+  $[2,\mathrm{re}_3,a,\mbox{init}]$の処理状態をwaitに変更．
+\item $[3,\mathrm{re}_4,e,\mbox{wait}]$について，
+  処理状態をcheckに変更し，\\
+  $[3,\mathrm{re}_5,e,\mbox{init}]$，
+  $[3,\mathrm{re}_6,e,\mbox{init}]$，
+  $[9,\mathrm{sh},e,\mbox{wait}]$を作成．
+\item $[2,\mathrm{re}_3,e,\mbox{wait}]$について，
+  処理状態をcheckに変更し，\\
+  $[2,\mathrm{re}_5,d,\mbox{init}]$，
+  $[2,\mathrm{re}_6,d,\mbox{init}]$，
+  $[5,\mathrm{sh},d,\mbox{wait}]$を作成（図\ref{fig:chain}（2））．
+\item $[5,\mathrm{sh},d,\mbox{wait}]$について，
+  処理状態をcheckに変更し，\\
+  $[2,\mathrm{re}_5,d,\mbox{init}]$，$[2,\mathrm{re}_6,d,\mbox{init}]$の
+  処理状態をwaitに変更．
+\item $[9,\mathrm{sh},e,\mbox{wait}]$について，
+  処理状態をcheckに変更し，\\
+  $[3,\mathrm{re}_5,e,\mbox{init}]$，$[3,\mathrm{re}_6,e,\mbox{init}]$の
+  処理状態をwaitに変更．
+\item $[2,\mathrm{re}_5,d,\mbox{wait}]$について，
+  処理状態をcheckに変更し，
+  $[2,\mathrm{sh},b,\mbox{init}]$，
+  $[6,\mathrm{sh},c,\mbox{wait}]$を作成．
+\item $[2,\mathrm{re}_6,d,\mbox{wait}]$について，
+  処理状態をcheckに変更し，
+  $[2,\mathrm{sh},c,\mbox{init}]$を作成\\
+  （$[6,\mathrm{sh},d,\mbox{wait}]$は，
+  $\mathrm{connect}(d,d)=0$より作成しない）．
+\item $[3,\mathrm{re}_5,e,\mbox{wait}]$について，
+  処理状態をcheckに変更し，
+  $[3,\mathrm{sh},b,\mbox{init}]$を作成\\
+  （$[7,\mathrm{sh},c,\mbox{wait}]$は，
+  $\mathrm{connect}(c,e)=0$より作成しない）．
+\item $[3,\mathrm{re}_6,e,\mbox{wait}]$について，
+  処理状態をcheckに変更し，
+  $[3,\mathrm{sh},c,\mbox{init}]$，
+  $[7,\mathrm{sh},d,\mbox{wait}]$を作成．
+\item $[6,\mathrm{sh},c,\mbox{wait}]$について，
+  処理状態をcheckに変更し，\\
+  $[2,\mathrm{sh},b,\mbox{init}]$の処理状態をwaitに変更．
+\item $[7,\mathrm{sh},d,\mbox{wait}]$について，
+  処理状態をcheckに変更し，\\
+  $[3,\mathrm{sh},c,\mbox{init}]$の処理状態をwaitに変更．
+\item $[2,\mathrm{sh},b,\mbox{wait}]$について，
+  処理状態をcheckに変更し，\\
+  $[0,\mathrm{sh},a,\mbox{init}]$の処理状態をwaitに変更．
+\item $[3,\mathrm{sh},c,\mbox{wait}]$について，
+  処理状態をcheckに変更し，\\
+  $[0,\mathrm{sh},b,\mbox{init}]$の処理状態をwaitに変更．
+\item $[0,\mathrm{sh},a,\mbox{wait}]$について，
+  処理状態をpassに変更．
+\item $[0,\mathrm{sh},b,\mbox{wait}]$について，
+  処理状態をpassに変更（図\ref{fig:chain}（3））．
+\item $[0,\mathrm{sh},a,\mbox{pass}]$について，
+  処理状態をendに変更し，\\
+  $[2,\mathrm{sh},b,\mbox{check}]$の処理状態をpassに変更．
+\item $[0,\mathrm{sh},b,\mbox{pass}]$について，
+  処理状態をendに変更し，\\
+  $[3,\mathrm{sh},c,\mbox{check}]$の処理状態をpassに変更．
+\item $[2,\mathrm{sh},b,\mbox{pass}]$について，
+  処理状態をendに変更し，\\
+  $[6,\mathrm{sh},c,\mbox{check}]$の処理状態をpassに変更．
+\item $[3,\mathrm{sh},c,\mbox{pass}]$について，
+  処理状態をendに変更し，\\
+  $[7,\mathrm{sh},d,\mbox{check}]$の処理状態をpassに変更．
+\item 以下，同様に処理を続け，処理状態がpassの要素がなくなったら終了
+（図\ref{fig:chain}（4））．
+\end{enumerate}
+
+\begin{table}[b]
+  \caption{提案手法により作成されるLR表}
+  \label{tab:lr_table}
+\input{04table02.txt}
+\end{table}
+
+アルゴリズムを適用後，処理状態がendである動作要素をたどることにより，
+成功パスを抽出できる（図\ref{fig:chain}（4）の実線のリンクが成功パスである）．
+作成されるLR表を表\ref{tab:lr_table}に示す．
+また，表\ref{tab:lr_table}において，括弧で囲まれた動作は，
+Liの手法で削除できず，提案手法により削除されたものを表す．
+
+
+
+
+\section{実験と評価}
+\label{sec:evaluation}
+
+
+
+提案手法の効果を調べるため，従来手法との比較実験を行った．
+コーパスは東工大コーパス20,190文（1文あたり約23形態素）
+\cite{noro:05} を利用する．
+20,190文すべてから抽出した文法$G_{\mbox{all}}$を使用し，
+MSLRパーザで構文解析を行う．
+入力は平文とする．
+解析結果の順位付けはPGLRモデルにより行う．
+比較は，提案手法により生成されるLR表と，
+Liの手法により生成されるLR表，
+接続制約を組み込まないLR表の3つで行う．
+
+\begin{table}[b]
+  \caption{各LR表中の状態数と動作数}
+  \label{tab:action}
+\input{04table03.txt}
+\end{table}
+
+抽出したCFG規則数は2,722規則（非終端記号294個，終端記号412個）である．
+各手法により生成されたLR表中の状態数と動作数を表\ref{tab:action}に示す．
+状態数において，「shift後」，「reduce後」とは，それぞれ
+shift/reduceを実行した直後に到達する状態を指す．
+PGLRモデルによる確率計算ではこの2種類の状態を区別する必要があるため，
+参考として内訳を示している．
+また，動作数において，丸括弧，角括弧で囲まれた数字は，
+それぞれ，コンフリクトが生じる動作の数，
+PGLRモデルによる確率が1ではない動作の数を表す．
+前者は解析途中での曖昧性の大小の目安に，
+後者はPGLRモデルによる確率計算の影響の大小（パラメータ数の大小）の目安になる．
+この表より，状態数にはそれほど大きな差は生じないが，
+総動作数については，
+接続制約を組み込まない場合と比較して約64\%削減できていることが分かる．
+コンフリクトが生じる動作数，PGLRモデルによる確率が1にならない動作数は，
+それぞれ約56\%，71\%削減できている．
+一方，Liの手法と比較すると，総動作数では約1.2\%，
+コンフリクトが生じる動作数とPGLRモデルによる確率が1ではない動作数はどちらも約1.4\%削減できている．
+
+次に，全20,190文を構文解析する際の所要時間（ユーザCPU時間） を計測した．
+結果を表\ref{tab:time}に示す．
+ただし，計測はDual-Core Intel Xeon 3~GHz，メモリ4~GBの環境で行った．
+結果より，接続制約を組み込まない場合と比較して約52\%，
+Liの手法と比較して約2.4\%短縮された．
+
+接続制約を組み込まない場合，接続制約を満たさない構文木も解析結果として出力される．
+速度向上の要因は，接続制約を組み込んだことによる曖昧性の減少にあると考えられる．
+一方，Liの手法では，接続制約が組み込まれているため，
+最終的に出力される解析結果は提案手法の場合と同じである．
+しかし，不要な動作が残っているため，
+解析途中での無駄な曖昧性（最終的にaccに到達できない解析途中状態）が多く存在する．
+例えば，第\ref{sec:problem}節で示した動作実行列の場合，
+提案手法では，状態2，先読み記号$c$における動作がLR表中に存在しないことが分かった時点で解析を終了するが，
+Liの手法では，状態13，先読み記号$d$となるまで解析が継続する．
+提案手法とLiの手法の解析所要時間の差は，ここで生じる．
+
+\begin{table}[b]
+  \caption{構文解析所要時間（ユーザCPU時間）}
+  \label{tab:time}
+\input{04table04.txt}
+\end{table}
+\begin{table}[b]
+  \caption{各順位における文正解率 (\%)}
+  \label{tab:accuracy}
+\input{04table05.txt}
+\end{table}
+
+最後に，PGLRモデルによる順位付けの評価を10分割交差検定により行った．
+すなわち，全体の10分の9にあたる18,171文を利用してモデルの学習を行い，
+残りの2,019文で評価を行った（文法は$G_{\mbox{all}}$を使用した）
+\footnote{20,190文中93文について，確率計算の段階でメモリ不足となり，順位付けができなかった．
+  この93文は，今回の評価対象からは除外した（PGLRモデルの学習には利用した）．}．
+解析精度は，文正解率により比較した．文正解率は以下のように定義する．
+\[
+  \mbox{文正解率} = \frac{\mbox{上位$n$位までに正解が含まれる文の数}}{\mbox{解析した文の総数}}
+\]
+ここで「正解」とは，出力された解析木が
+正解とすべき構文木と完全に一致する場合を指す．
+結果を表\ref{tab:accuracy}に示す．
+提案手法では，
+PGLRモデルによる順位が1位の解析木のみを見た場合，
+接続制約を組み込まない場合と比較して0.74\%向上している．
+一方，Liの手法と比較すると，1位の解析木のみでは0.16\%向上しているが，
+上位10位までを見るとほとんど差がなく，
+LR表中の不要動作の削除が解析精度に与える影響は大きくないことが分かる．
+
+解析所要時間の差と同様，解析精度の差についても，
+提案手法と接続制約を組み込まない場合との間では，
+最終的に出力される解析木の数の違いが要因と考えられる．
+一方，Liの手法によるLR表での最終的な解析結果の曖昧性は提案手法の場合と同じである．
+また，提案手法でのみ削除可能な動作は，どのような動作実行列をたどっても，
+最終的にaccに到達することのないものであるため，学習データ中にも存在しない．
+PGLRモデルによるLR表中の各動作の確率は，
+学習データに付与された構文木を生成する際に実行する動作の使用回数をもとに計算されるが，
+最終的にaccに到達できない動作に対する確率は0となり，
+最終的に出力される各解析木の確率は提案手法の場合と同じになるはずである．
+しかし，MSLRパーザでは，確率計算の平滑化のため，
+全ての動作の実行回数に一定数（初期設定では0.5）を加えている．
+その結果，学習データ中で使用されない動作についても0ではない確率が与えられ，
+最終的に出力される各解析木の確率が提案手法の場合とLiの手法の場合との間で
+異なる場合があり，それが，解析精度に差が生じる要因になる．
+平滑化を行わなければ同じ結果になるが，その場合，
+accに到達可能であり，かつ，妥当な動作であるにもかかわらず
+学習データに偶然出現しなかった動作に対する確率も0となる．
+確率が0である動作が，接続制約を組み込んだことによってaccに到達不可能となった動作であるか，
+偶然学習データに出現しなかった動作であるかを，学習の段階で区別することは困難である．
+LR表を作成する段階でaccに到達不可能な動作を削除しておけば，この問題を回避することが可能であり，
+その点においても提案手法が有効であることが分かる．
+
+
+\section{提案アルゴリズムの完全性の証明}
+\label{sec:completeness}
+
+本節では，提案アルゴリズムの完全性について考察する．
+ここで，完全性とは，作成されるLR表に不要なアクションが存在しないことである．
+これを示すためには，LR表が以下の2つの性質を満たすことを示せばよい．
+\begin{itemize}
+\item 妥当性
+
+  任意の構文木$\mathit{tr}$に対し，以下が成り立つ．
+\[
+    \mathrm{Generate}(\mathit{tr}, G, C) = \mathrm{GenerateLR}(\mathit{tr}, T) 
+\]
+
+  ただし，
+  \begin{description}
+  \item[$G,C,T$:] CFG，接続制約，LR表
+  \item[$\mathrm{Generate}(\mathit{tr},G,C)$:]
+    文法$G$，接続制約$C$から構文木$\mathit{tr}$を生成可能ならば1，
+    不可能ならば0
+  \item[$\mathrm{GenerateLR}(\mathit{tr},T)$:]
+    LR表$T$から構文木$\mathit{tr}$を生成可能ならば1，不可能ならば0
+  \end{description}
+\item 最小性
+
+  妥当性を満たすLR表中の任意の要素（動作） $a$に対し，
+  以下が成り立つような構文木$\mathit{tr}$が存在する．
+\[
+    \mathrm{GenerateLR}(\mathit{tr}, T) = 1  \wedge \mathrm{GenerateLR}(\mathit{tr}, T_a) = 0
+\]
+
+  ただし，
+  \begin{description}
+  \item[$T_a$:] LR表$T$から要素$a$を除いたLR表
+  \end{description}
+\end{itemize}
+
+文法$G$は，第\ref{sec:principle}節で述べた，
+$\varepsilon$規則を含まないという条件のほかに，
+以下の条件を満たすことを前提とする．
+\begin{enumerate}
+\item 文法規則は重複しない．すなわち，文法$G$中の任意の2つの文法規則$A\to\alpha$，$B\to\beta$について，$A\neq B\vee\alpha\neq\beta$
+\item 循環する導出は存在しない．すなわち，文法$G$中の任意の非終端記号$A$について，$A\stackrel{\ast}{\to}A$ となるような導出は存在しない
+\end{enumerate}
+
+
+\subsection{妥当性の証明}
+
+提案アルゴリズムによって作成されるLR表が妥当性を満たすことを示すためには，
+以下の2つを示せばよい．
+\begin{enumerate}
+\item $\mathrm{Generate}(\mathit{tr}, G, C) = 1$ ならば $\mathrm{GenerateLR}(\mathit{tr}, \mathrm{Table}(\mathit{ACG})) = 1$
+\item $\mathrm{GenerateLR}(\mathit{tr}, \mathrm{Table}(\mathit{ACG})) = 1$ ならば $\mathrm{Generate}(\mathit{tr}, G, C) = 1$
+\end{enumerate}
+ただし，
+\begin{description}
+\item[$\mathit{ACG}$:]
+  提案アルゴリズムによって生成されるアクションチェイングラフ
+\item[$\mathrm{Table}(\mathit{ACG})$:] $\mathit{ACG}$から生成されるLR表
+\end{description}
+
+提案アルゴリズムでは，開始記号から最右導出を行いながら
+アクションチェイングラフを生成し，
+その中に含まれる成功パスからLR表を生成する．
+ここで，$\mathrm{Generate}(\mathit{tr}, G, C) = 1$ を満たす構文木
+$\mathit{tr}$ に相当する最右導出の際に，提案アルゴリズムによって生成される
+アクションチェインは，成功パスである．
+この成功パス中の要素に対応する動作は，
+このアクションチェイングラフから生成されるLR表に含まれるので，
+$\mathit{tr}$ は $\mathrm{Table}(\mathit{ACG})$ から生成可能である．
+すなわち，
+（1）
+が成り立つ．
+
+一方，ある構文木 $\mathit{tr}$ が
+$\mathrm{GenerateLR}(\mathit{tr}, \mathrm{Table}(\mathit{ACG})) = 1$
+を満たすと仮定する．
+このとき， $\mathrm{Table}(\mathit{ACG})$ から $\mathit{tr}$ を
+生成する際の実行動作列について，先頭の実行動作から順に，
+以下の法則に従って $\mathit{ACG}$ 中のアクションチェイン要素を
+たどることにより，成功パスを得ることができる．
+\begin{itemize}
+\item 注目する実行動作がacc動作の場合， $[0,\mathrm{re}_0,\$,\mathrm{end}]$ をたどる．
+\item 注目する実行動作が状態$s$，先読み$\mathit{la}$におけるshift動作の場合，
+  $[s,\mathrm{sh},\mathit{la},\mathrm{end}]$ をたどる．
+\item 注目する実行動作が状態$s$，先読み$\mathit{la}$における
+  規則番号$n$によるreduce動作，さらにその次の動作が
+  状態$s^\prime$，非終端記号$\mathrm{LHS}(n)$における
+  状態$s^{\prime\prime}$へのgoto動作の場合，
+  $[s^\prime,\mathrm{re}_n,\mathit{la},\mathrm{end}]$ をたどる．
+\end{itemize}
+$\mathit{ACG}$ 中の成功パスに対応する構文木は
+文法$G$，接続制約$C$を満たすので，
+（2）
+が成り立つ．
+
+以上より，提案アルゴリズムによって作成されるLR表は妥当性を満たす．
+
+
+\subsection{最小性の証明}
+
+$T=\mathrm{Table}(\mathit{ACG})$ が最小性を満たさないと仮定すると，
+次を満たす要素$a$が$T$中に少なくとも1つ存在する．
+\begin{quotation}
+  任意の$\mathit{tr}\in\{\mathit{tr}|\mathrm{GenerateLR}(\mathit{tr},T)=1\}$
+  に対して，$\mathrm{GenerateLR}(\mathit{tr},T_a)=1$
+\end{quotation}
+
+このとき，$\{\mathit{tr}|\mathrm{GenerateLR}(\mathit{tr},T)=1\}\equiv\{\mathit{tr}|\mathrm{GenerateLR}(\mathit{tr},T_a)=1\}$
+となり，$a$に対応する$\mathit{ACG}$中の要素を$e$とすると，
+$\{\mathit{tr}|\mathrm{GenerateLR}(\mathit{tr},T_a)=1\}$中の任意の構文木を
+生成する際の実行動作列に対応する$\mathit{ACG}$中の成功パスは，
+$e$を含まない．
+
+一方，$T$中に$a$が存在することから，
+$\mathit{ACG}$中には$e$を含む成功パスが存在する．
+その成功パスに対応する実行動作列は$a$を含み，
+その実行動作列で生成される構文木を$\mathit{tr}^\prime$とすると，
+以下が成り立つ．
+\[
+  \mathrm{GenerateLR}(\mathit{tr}^\prime, T) = 1 \wedge \mathrm{GenerateLR}(\mathit{tr}^\prime, T_a) = 0
+\]
+これは$T$が最小性を満たさないという仮定に矛盾する．
+
+以上より，提案アルゴリズムによって作成されるLR表は最小性を満たす．
+
+
+
+\section{結論と今後の課題}
+\label{sec:conclusion}
+
+コーパスベースの自然言語処理技術は，
+音声認識などにおいて，精度向上のブレイクスルーを持たらした．
+これは，コーパスの量を増やすことによって精度が向上したからであるが，
+それには限界が見えはじめている．
+この限界を越える技術として，コーパスの量を増やすのではなく，
+ルールベースの手法を再考すべき時期に来ていると考えている．
+
+本論文では，ルールベースの構文解析の1つである
+一般化LR構文解析に注目し，品詞間接続制約をLR表に組み込み，
+不要な動作を削除する手法を提案した．
+提案手法により，接続制約による削除を行わない場合と比較して約64\%の
+不要動作を削除でき，
+従来手法と比較するとさらに約1.2\%の不要動作を削減できた．
+提案手法により作成したLR表で構文解析を行った場合，
+解析所要時間は，接続制約を組み込まないLR表で構文解析を行った場合と比較して
+約52\%，従来手法と比較して約2.4\%短縮された．
+解析精度（文正解率）は，接続制約を組み込まない場合と比較すると向上が見られたが，
+従来手法と比較すると大きな差は見られなかった．
+しかし，
+PGLRモデルによる確率計算の平滑化における問題を回避するためにも，
+不要な動作を削除することは有効であり，
+今後，コーパスベースの手法を取り入れた場合の精度向上の効果が
+大きくなると考えている．
+
+
+実験で示した解析精度（文正解率）はコーパスベースの解析と比較すると
+低いと思われるかもしれない．
+しかし，MSLRパーザは品詞間の接続制約とCFGのみを利用して構文解析を行う．
+この結果に共起データ等の情報を加えれば，
+コーパスベースの解析と同程度の正解率が得られるものと期待される
+\footnote{日本語文節係り受け解析では，文節係り受け精度は90\%を超えるが，
+  1文中の全ての係り受けが正解となる割合は60〜65\%程度である \cite{noro:05}．
+  文節区切りや形態素解析の誤りを考慮すると，
+  文全体としての精度はさらに下がるものと考えられる．}．
+筆者らはルールベースの自然言語処理にはまだ検討の余地があると考えている．
+
+
+
+\vspace{1\baselineskip}
+
+\bibliographystyle{jnlpbbl_1.3}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Aho, Sethi, \BBA\ Ullman}{Aho et~al.}{1986}]{aho:86}
+Aho, A.~V., Sethi, R., \BBA\ Ullman, J.~D. \BBOP 1986\BBCP.
+\newblock {\Bem Compilers: Principles, Techniques, and Tools}.
+\newblock Addison Wesley.
+
+\bibitem[\protect\BCAY{Briscoe \BBA\ Carroll}{Briscoe \BBA\
+  Carroll}{1993}]{briscoe:93}
+Briscoe, T.\BBACOMMA\ \BBA\ Carroll, J. \BBOP 1993\BBCP.
+\newblock \BBOQ Generalized Probabilistic LR Parsing of Natural Language
+  (Corpora) with Unification-Based Grammars\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 19}  (1), \mbox{\BPGS\
+  25--59}.
+
+\bibitem[\protect\BCAY{Charniak}{Charniak}{1996}]{charniak:96}
+Charniak, E. \BBOP 1996\BBCP.
+\newblock {\Bem Statistical Language Learning}.
+\newblock The MIT Press.
+
+\bibitem[\protect\BCAY{DeRemer \BBA\ Pennello}{DeRemer \BBA\
+  Pennello}{1982}]{deremer:82}
+DeRemer, F.\BBACOMMA\ \BBA\ Pennello, T. \BBOP 1982\BBCP.
+\newblock \BBOQ Efficient Computation of LALR(1) Look-Ahead Sets\BBCQ\
+\newblock {\Bem ACM Transactions on Programming Languages and Systems}, {\Bbf
+  4}  (4), \mbox{\BPGS\ 615--649}.
+
+\bibitem[\protect\BCAY{Inui, Sornlertlamvanich, Tanaka, \BBA\ Tokunaga}{Inui
+  et~al.}{2000}]{inui:00}
+Inui, K., Sornlertlamvanich, V., Tanaka, H., \BBA\ Tokunaga, T. \BBOP
+  2000\BBCP.
+\newblock \BBOQ Probabilistic GLR Parsing\BBCQ\
+\newblock In Bunt, H.\BBACOMMA\ \BBA\ Nijholt, A.\BEDS, {\Bem Advances in
+  Probabilistic and Other Parsing Technologies}, \BCH~5, \mbox{\BPGS\ 85--104}.
+  Kluwer Academic Publishers.
+
+\bibitem[\protect\BCAY{Jelinek}{Jelinek}{1998}]{jelinek:98}
+Jelinek, F. \BBOP 1998\BBCP.
+\newblock {\Bem Statistical Methods for Speech Recognition}.
+\newblock The MIT Press.
+
+\bibitem[\protect\BCAY{工藤\JBA 松本}{工藤\JBA 松本}{2002}]{kudo:2002}
+工藤拓\JBA 松本裕治 \BBOP 2002\BBCP.
+\newblock \JBOQ チャンキングの段階適用による日本語係り受け解析\JBCQ\
+\newblock \Jem{情報処理学会論文誌}, {\Bbf 43}  (6), \mbox{\BPGS\ 1834--1842}.
+
+\bibitem[\protect\BCAY{Li \BBA\ Tanaka}{Li \BBA\ Tanaka}{1995}]{li:95}
+Li, H.\BBACOMMA\ \BBA\ Tanaka, H. \BBOP 1995\BBCP.
+\newblock \BBOQ A Method for Integrating the Connection Constraints into an
+  {LR} Table\BBCQ\
+\newblock In {\Bem Natural Language Processing Pacific Rim Symposium},
+  \mbox{\BPGS\ 703--708}.
+
+\bibitem[\protect\BCAY{Noro, Koike, Hashimoto, Tokunaga, \BBA\ Tanaka}{Noro
+  et~al.}{2005}]{noro:05}
+Noro, T., Koike, C., Hashimoto, T., Tokunaga, T., \BBA\ Tanaka, H. \BBOP
+  2005\BBCP.
+\newblock \BBOQ Evaluation for a Japanese CFG Grammar Derived from
+  Syntactically Annotated Corpus with Respect to Dependency Measures\BBCQ\
+\newblock In {\Bem the 5th Workshop on Asian Language Resources}, \mbox{\BPGS\
+  9--16}.
+
+\bibitem[\protect\BCAY{白井\JBA 植木\JBA 橋本\JBA 徳永\JBA 田中}{白井\Jetal
+  }{2000}]{shirai:00}
+白井清昭\JBA 植木正裕\JBA 橋本泰一\JBA 徳永健伸\JBA 田中穂積 \BBOP 2000\BBCP.
+\newblock \JBOQ 自然言語解析のためのMSLRパーザ・ツールキット\JBCQ\
+\newblock \Jem{自然言語処理}, {\Bbf 7}  (5), \mbox{\BPGS\ 93--112}.
+
+\bibitem[\protect\BCAY{Tanaka, Tokunaga, \BBA\ Aizawa}{Tanaka
+  et~al.}{1995}]{tanaka:95}
+Tanaka, H., Tokunaga, T., \BBA\ Aizawa, M. \BBOP 1995\BBCP.
+\newblock \BBOQ Integration of Morphological and Syntactic Analysis Based on
+  {LR} Parsing Algorithm\BBCQ\
+\newblock \Jem{自然言語処理}, {\Bbf 2}  (2), \mbox{\BPGS\ 59--74}.
+
+\bibitem[\protect\BCAY{Tomita}{Tomita}{1991}]{tomita:91}
+Tomita, M. \BBOP 1991\BBCP.
+\newblock {\Bem Generalized LR Parsing}.
+\newblock Kluwer Academic Publishers.
+
+\bibitem[\protect\BCAY{内元\JBA 関根\JBA 井佐原}{内元\Jetal
+  }{1999}]{uchimoto:99}
+内元清貴\JBA 関根聡\JBA 井佐原均 \BBOP 1999\BBCP.
+\newblock \JBOQ
+  最大エントロピー法に基づくモデルを用いた日本語係り受け解析\JBCQ\
+\newblock \Jem{情報処理学会論文誌}, {\Bbf 40}  (9), \mbox{\BPGS\ 3397--3407}.
+
+\end{thebibliography}
+
+\vspace{1\baselineskip}
+
+\begin{biography}
+\vspace{0.5\baselineskip}
+
+  \bioauthor{野呂　智哉}{
+    2000年東京工業大学工学部情報工学科卒業．
+    2005年同大学大学院情報理工学研究科博士課程修了．
+    同年同大学同研究科計算工学専攻助手．
+    現在，同大学同研究科計算工学専攻助教．博士（工学）．
+    自然言語処理，Web情報処理等の研究に従事．
+    言語処理学会，情報処理学会，日本ソフトウェア科学会各会員．
+  }
+\vspace{0.3\baselineskip}
+
+  \bioauthor{田中　穂積}{
+    1964年東京工業大学工学部情報工学科卒業．
+    1966年同大学院理工学研究科修士課程修了．
+    同年電気試験所（現産業技術総合研究所）入所．
+    1980年東京工業大学工学部情報工学科助教授．
+    1983年同教授．
+    1994年東京工業大学大学院情報理工学研究科教授．
+    2005年中京大学情報科学部認知科学科教授．
+    2006年東京工業大学先進研究機構機構長．
+    2009年北陸先端科学技術大学院大学情報科学研究科特任教授，現在に至る．
+    工学博士．
+    人工知能，自然言語処理に関する研究に従事．
+    情報処理学会，電子情報通信学会，認知科学会，人工知能学会，
+    計量国語学会，Association for Computational Linguistics，各会員．
+  }
+\vspace{0.3\baselineskip}
+
+  \bioauthor{橋本　泰一}{
+    1997年東京工業大学工学部情報工学科卒業．
+    2002年同大学大学院情報理工学研究科博士課程修了．
+    同年同大学同研究科計算工学専攻助手．
+    2006年同大学統合研究院特任助教授．
+    現在，同大学統合研究院特任准教授．
+    博士（工学）．
+    自然言語処理，情報検索に関する研究に従事．
+    言語処理学会，情報処理学会，人工知能学会，科学技術社会論学会，各会員．
+  }
+\vspace{0.3\baselineskip}
+
+  \bioauthor{白井　清昭}{
+    1993年東京工業大学工学部情報工学科卒業．
+    1998年同大学院情報理工学研究科博士後期課程修了．
+    同年同大学院情報理工学研究科計算工学専攻助手．
+    2001年北陸先端科学技術大学院大学情報科学研究科助教授．
+    現在同准教授．
+    博士（工学）．
+    自然言語処理に関する研究に従事．
+    言語処理学会，情報処理学会，人工知能学会，Association for Computational Linguistics，各会員．
+  }
+\end{biography}
+
+
+
+\biodate
+
+
+
+\end{document}

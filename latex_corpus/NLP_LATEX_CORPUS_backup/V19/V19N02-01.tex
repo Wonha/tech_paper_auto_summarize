@@ -1,0 +1,1155 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+\usepackage{lingexample}
+\usepackage{bm}
+\newcommand{\argmax}{}
+\newcommand{\w}{}
+\newcommand{\x}{}
+\newcommand{\y}{}
+\newcommand{\e}{}
+\newcommand{\f}{}
+\renewcommand{\Phi}{}
+\newcommand{\what}{}
+\newcommand{\score}{}
+
+\Volume{19}
+\Number{2}
+\Month{July}
+\Year{2012}
+
+\received{2011}{6}{17}
+\revised{2011}{10}{10}
+\rerevised{2011}{12}{27}
+\accepted{2012}{1}{11}
+
+\setcounter{page}{65}
+
+\jtitle{言い換えと逆翻字を用いた片仮名複合名詞の分割}
+\jauthor{鍜治　伸裕\affiref{Author_1} \and 喜連川　優\affiref{Author_1}}
+\jabstract{
+日本語を含めた多くの言語において，複合名詞内部の単語境界は空白で分かち書
+きされない．こうした複合名詞を構成語列へと分割する処理は，多くの自然言語
+処理の応用において重要な基礎技術となる．日本語の場合，片仮名語は生産性が
+高く未知語が多いことから，特に片仮名複合名詞の扱いが技術的な問題となる．
+この問題の解決を図るため，本論文は片仮名複合名詞の言い換えと逆翻字を分
+割処理に利用する方法を提案する．実験では，言い換えと逆翻字をラベルなしテ
+キストから抽出し，その情報を利用することによって，分割精度が統計的に有意
+に向上することを確認した．
+}
+\jkeywords{言い換え，逆翻字，片仮名語，複合名詞分割，単語分割}
+
+\etitle{Splitting Katakana Noun Compounds\\ by Paraphrasing and Back-transliteration}
+\eauthor{Nobuhiro Kaji\affiref{Author_1} \and Masaru Kitsuregawa\affiref{Author_1}} 
+\eabstract{
+	Word boundaries within noun compounds are not marked by white
+	spaces in a number of languages including Japanese, and it is
+	beneficial for various NLP applications to split such noun
+	compounds. In the case of Japanese, noun compounds made up of
+	katakana words are particularly difficult to split, because
+	katakana words are highly productive and are often
+	out-of-vocabulary. To overcome this difficulty, we propose using
+	paraphrases and back-transliteration of katakana noun compounds
+	for splitting them. Experiments demonstrated that splitting
+	accuracy is improved with a statistical significance by extracting
+	both paraphrases and back-transliterations from unlabeled
+	textual	data, and then using that information for constructing
+	splitting models.
+}
+\ekeywords{paraphrasing, back-transliteration, katakana words, noun compound splitting, word segmentation}
+
+\headauthor{鍜治，喜連川}
+\headtitle{言い換えと逆翻字を用いた片仮名複合名詞の分割}
+
+\affilabel{Author_1}{東京大学生産技術研究所}{IIS, the University of Tokyo}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+
+\subsection{片仮名語と複合名詞分割}
+
+外国語からの借用(borrowing)は，日本語における代表的な語形成の1つとして知
+られている\cite{Tsujimura06}．特に英語からの借用によって，新造語や専門用
+語など，多くの言葉が日々日本語に取り込まれている．そうした借用語は，主に
+片仮名を使って表記されることから片仮名語とも呼ばれる．日本語におけるもう
+1つの代表的な語形成として，単語の複合(compounding)を挙げることができる
+\cite{Tsujimura06}．日本語は複合語が豊富な言語として知られており，とりわ
+け複合名詞にその数が多い．これら2つの語形成は，日本語における片仮名複合
+語を非常に生産性の高いものとしている．
+
+日本語を含めたアジアおよびヨーロッパ系言語においては，複合語を分かち書き
+せずに表記するものが多数存在する（ドイツ語，オランダ語，韓国語など）．その
+ような言語で記述されたテキストを処理対象とする場合，複合語を単語に分割す
+る処理は，統計的機械翻訳，情報検索，略語認識などを実現する上で重要な基礎
+技術となる．例えば，統計的機械翻訳システムにおいては，複合語が構成語に分
+割されていれば，その複合語自体が翻訳表に登録されていなかったとしても，逐
+語的に翻訳を生成することが可能となる\cite{Koehn03}．情報検索においては，
+複合語を適切に分割することによって検索精度が向上することがBraschlerらの
+実験によって示されている\cite{Braschler04}．また，複合語内部の単語境界の
+情報は，その複合語の省略表現を生成または認識するための手がかりとして広く
+用いられている\cite{Schwartz03,Okazaki08}．
+
+高い精度での複合語分割処理を実現するためには，言語資源を有効的に活用する
+ことが重要となる．例えば，Alfonsecaら\citeyear{AlfonsecaCICLing08}は単語
+辞書を学習器の素性として利用しているが，これが分割精度の向上に寄与するこ
+とは直感的に明白である．これに加えて，対訳コーパスや対訳辞書といった対訳
+資源の有用性も，これまでの研究において指摘されている
+\cite{Brown02,Koehn03,Nakazawa05}．英語表記において複合語は分かち書きさ
+れるため，複合語に対応する英訳表現を対訳資源から発見することができれば，
+その対応関係に基づいて複合語の分割規則を学習することが可能になる．
+
+複合語分割処理の精度低下を引き起こす大きな要因は，言語資源に登録されてい
+ない未知語の存在である．特に日本語の場合においては，片仮名語が未知語の中
+の大きな割合を占めていることが，これまでにも多くの研究者によって指摘され
+ている\cite{Brill01,Nakazawa05,Breen09}．冒頭でも述べたように，片仮名語
+は生産性が非常に高いため，既存の言語資源に登録されていないものが多い．例
+えばBreen \citeyear{Breen09}らによると，新聞記事から抽出した片仮名語のう
+ち，およそ20\%は既存の言語資源に登録されていなかったことが報告されている．
+こうした片仮名語から構成される複合名詞は，分割処理を行うことがとりわけ困
+難となっている\cite{Nakazawa05}．
+
+分割が難しい片仮名複合名詞として，例えば「モンスターペアレント」がある．
+この複合名詞を「モンスター」と「ペアレント」に分割することは一見容易なタ
+スクに見えるが，一般的な形態素解析辞書
+\footnote{ここではJUMAN辞書 ver.~6.0とNAIST-jdic ver.~0.6.0を調べた．}に
+は「ペアレント」が登録されていないことから，既存の形態素解析器にとっては困難な処理
+となっている．実際に，MeCab ver.~0.98を用いて解析を行ったところ（解
+析辞書はNAIST-jdic ver.~0.6.0を用いた），正しく分割することはできなかった．
+
+
+\subsection{言い換えと逆翻字の利用}
+
+こうした未知語の問題に対処するため，本論文では，大規模なラベルなしテキス
+トを用いることによって，片仮名複合名詞の分割精度を向上させる方法を提案す
+る．近年では特にウェブの発達によって，極めて大量のラベルなしテキストが容
+易に入手可能となっている．そうしたラベルなしテキストを有効活用することが
+可能になれば，辞書や対訳コーパスなどの高価で小規模な言語資源に依存した手
+法と比べ，未知語の問題が大幅に緩和されることが期待できる．これまでにも，
+ラベルなしテキストを複合名詞分割のために利用する方法はいくつか提案されて
+いるが，いずれも十分な精度は実現されていない．こうした関連研究については
+\ref{sec:prev}節において改めて議論を行う．
+
+提案手法の基本的な考え方は，片仮名複合名詞の言い換えを利用するというもの
+である．一般的に，複合名詞は様々な形態・統語構造へと言い換えることが可能
+であるが，それらの中には，元の複合名詞内の単語境界の場所を強く示唆するも
+のが存在する．そのため，そうした言い換え表現をラベルなしテキストから抽出
+し，その情報を機械学習の素性として利用することによって，分割精度の向上が
+可能となる．これと同様のことは，片仮名語から英語への言い換え，すなわち逆
+翻字に対しても言うことができる．基本的に片仮名語は英語を翻字したものであ
+るため，単語境界が自明な元の英語表現を復元することができれば，その情報を
+分割処理に利用することが可能となる．
+
+提案手法の有効性を検証するための実験を行ったところ，言い換えと逆翻字のい
+ずれを用いた場合においても，それらを用いなかった場合と比較して，F値にお
+いて統計的に有意な改善が見られた．また，これまでに提案されている複合語分
+割手法との比較を行ったところ，提案手法の精度はそれらを大幅に上回っている
+ことも確認することができた．これらの実験結果から，片仮名複合名詞の分割処
+理における，言い換えと逆翻字の有効性を実証的に確認することができた．
+
+本論文の構成は以下の通りである．まず\ref{sec:prev}節において，複合名詞分
+割に関する従来研究，およびその周辺分野における研究状況を概観する．次に
+\ref{sec:approach}節では，教師あり学習を用いて片仮名複合名詞の分割処理を
+行う枠組みを説明する．続いて\ref{sec:para}節と\ref{sec:trans}節において
+は，言い換えと逆翻字を学習素性として使う手法について説明する．
+\ref{sec:exp}節では分割実験の結果を報告し，それに関する議論を行う．最後
+に\ref{sec:conclude}節においてまとめを行う．
+
+
+
+\section{関連研究} \label{sec:prev}
+
+\subsection{複合語分割}  \label{sec:prev_comp}
+
+これまでにも，ラベルなしテキストを用いた複合語分割手法はいくつか提案され
+ている．それらはいずれも，複合語の構成語の頻度をラベルなしテキストから推
+定し，その頻度情報に基づいて分割候補を順位付けするものとなっている
+\cite{Koehn03,Ando03,Schiller05,Nakazawa05,Holz08}．とりわけ本研究と関連
+が深いのは\cite{Nakazawa05}であり，彼らもまた片仮名複合名詞を対象として
+いる．しかし，こうした単語頻度に基づく手法は，対訳資源を用いた手法と比較
+して，十分な分割精度が得られないという問題が指摘されている
+\cite{Koehn03,Nakazawa05}．実際，我々の実験においても，これら単語頻度に
+基づく手法と提案手法との比較を行ったが，提案手法の方が大幅に高い分割精度
+を実現可能であることを確認した．
+
+一方，Alfonsecaら\citeyear{AlfonsecaCICLing08}は，ラベルなしテキストでは
+なくクエリログを複合語分割に利用することを提案している
+\footnote{彼らはウェブテキストのアンカーテキストを用いることも提案してい
+るが，精度の向上は実現されていない．}．しかし彼らの実験報告によると，ク
+エリログを用いなかった場合の精度が90.45\%であるのに対して，クエリログを
+用いた場合の精度は90.55\%であり，その改善幅は極めて小さい．一方，本研究
+の実験（\ref{sec:exp}節）では，提案手法の導入によって精度は83.4\%から
+87.6\%へと大きく向上し，なおかつ，その差は統計的に有意であることが確認さ
+れた．また，クエリログは一部の組織以外では入手が困難であるのに対し，提案
+手法に必要なラベルなしテキストは容易に入手することが可能である．
+
+HolzとBiemann \citeyear{Holz08}は独語の複合語に対する分割手法と言い換え
+手法を提案しており，本研究との関連性が高い．しかし，彼らが提案しているア
+ルゴリズムは，複合語の分割と言い換えをパイプライン的に行うものであるため，
+提案手法とは異なり，言い換えに関する情報は分割時に用いられない．
+
+
+\subsection{その他の関連研究}
+
+片仮名複合名詞の分割処理は単語分割の部分問題であると考えることができる．
+そのため，既存の単語分割器を用いて片仮名複合名詞の分割処理を行うことも可
+能であるが，実際問題として，それでは十分な分割精度を得ることは難しい
+（\ref{sec:exp}節の実験結果を参照）．この原因として，既存の単語分割器は辞
+書に強く依存した設計となっており，未知語が多い片仮名語の解析に失敗しやす
+いことが挙げられる．これに関する議論は\cite{Nakazawa05}が詳しい．単語分
+割の視点から見た本研究は，片仮名複合名詞という特に解析が困難な言語表現に
+焦点をあてた試みであると言える．
+
+\ref{sec:trans}節において我々は，片仮名複合名詞の分割のために逆翻字を利
+用する手法を提案する．提案手法は，技術的な観点から見ると，ウェブから片仮
+名語の逆翻字を自動抽出する既存手法\cite{Brill01,Cao07,Oh08,Wu09}と関連が
+深い．しかしながら，そうした関連研究は翻字辞書や翻字生成システムを構築す
+ることを目的としており，自動抽出した逆翻字を複合語の分割処理に利用する試
+みは本研究が初めてである．
+
+
+
+\section{教師あり学習に基づく手法} \label{sec:approach}
+
+本論文では，片仮名複合名詞$x$が入力として与えられたとき，それを
+構成語列$\y=(y_1,y_2\dots y_{|\y|})$へと分割する問題を取り扱う．ここでは，
+出力$\y$が1語（すなわち$|\y|=1$）である場合もありうることに注意をされたい．
+
+1節においても議論したように，片仮名名詞は英語の翻字が多く，提案する素性
+の1つもその性質を利用したものとなっているため，以下では入力される片仮名
+語は英語の翻字であると仮定する．この仮定が実テキストにおいてどの程度成立
+しているのかを検証することは難しいが，例えばウェブ検索エンジンのクエリに
+おいては，片仮名のクエリの約87\%は翻字であることが報告されている
+\cite{Brill01}．このデータから上記の仮定にはある程度の妥当性があることが
+推測され，実テキストを処理する際にも提案手法の効果を期待することができる．
+
+\begin{table}[b]
+   \caption{実験で使用した素性テンプレート}
+   \label{tab:feature}
+\input{02table01.txt}
+\vspace{-0.5\Cvs}
+\end{table}
+
+我々は片仮名複合名詞の分割処理を「片仮名複合名詞$x$に対する構成語列$\y$
+を予測する構造予測問題」と捉えて，これを以下のような線形モデルを用いて解
+く．
+\[
+ \y^{*}=\argmax_{\y\in\mathcal{Y}(x)}\w\cdot{\bm\phi}(\y)
+\]
+ここで$\mathcal{Y}(x)$は入力$x$に対する全分割候補の集合を表す．
+${\bm\phi}(\y)$は分割候補$\y$の素性ベクトル表現，$\w$は訓練事例から推定
+される重みベクトルである．
+
+表\ref{tab:feature}に我々が実験で用いた素性テンプレートを示す．テンプレー
+ト1からは，ある構成語$1$-gramが出現したか否かを示す2値素性が，訓練事例に
+出現した全ての構成語$1$-gramについて生成される．テンプレート2は同様の
+$2$-gram素性である．テンプレート3からは，構成語の文字数(1, 2, 3,
+4, $\geq$5)を示す2値素性が5種類生成される．テンプレート4は構成語$y$が外
+部辞書
+\footnote{外部辞書としてはNAIST-jdic ver.~0.6.0を用いた．}に登録されてい
+るか否かを表す2値素性であり，構成語$y$が外部辞書に登録されていれば1を返
+す2値素性が1つ生成される．テンプレート5から7は，片仮名複合名詞の言い換え
+と逆翻字を用いたものであり，\ref{sec:para}節と\ref{sec:trans}節において
+詳しく説明する．以下の議論では，テンプレート1から4によって生成される素性
+を基本素性，テンプレート5から生成される素性を言い換え素性，テンプレート6
+と7から生成される素性を逆翻字素性と呼んで互いに区別をする．
+
+重みベクトル$\w$は任意の学習アルゴリズムを用いて最適化することが可能であ
+るが，ここでは計算効率を考慮して平均化パーセプトロン\cite{Freund99}を用
+いた．平均化パーセプトロンはオンライン学習アルゴリズムの一種であり，高速
+に学習を行うことができると同時に，多くのタスクにおいてSVMなどのバッチ学
+習アルゴリズムと比較しても遜色のない精度を達成できることが知られている．
+パーセプトロンの訓練時およびテスト時には$\y^{*}$を求める操作が必要となる
+が，セミマルコフモデルにおいて用いられるのと同様の動的計画法によって効率
+的に実行可能である．
+
+
+\section{言い換え素性} \label{sec:para}
+
+本節では，片仮名複合名詞の言い換え表現を，教師あり学習の素性として使う方
+法について述べる（表\ref{tab:feature}におけるテンプレート5に対応する）．
+
+\subsection{複合名詞の言い換え}
+
+一般的に，複合名詞は様々な形へと言い換えることが可能であるが，そうした言
+い換え表現の中には，元の複合名詞の単語境界を認識する手がかりとなるものが
+存在する．以下に具体例を示す．
+
+\begin{lingexample}
+ \head{アンチョビパスタ}{ex:anchovy}
+ \sent{アンチョビ・パスタ\\[3pt]}
+ \sent{アンチョビのパスタ}
+\end{lingexample}
+
+\noindent
+(\ref{ex:anchovy}b)は，複合名詞(\ref{ex:anchovy}a)の構成語間に中黒を挿入
+することによって生成された言い換え表現である．同様に(\ref{ex:anchovy}c)
+は助詞「の」を挿入することによって生成された言い換え表現である．もしラベ
+ルなしテキストにおいて(\ref{ex:anchovy}b)や(\ref{ex:anchovy}c)のような言
+い換え表現を観測することができれば，このことは複合名詞
+(\ref{ex:anchovy}a)を「アンチョビ」と「パスタ」に正しく分割するための手
+がかりとなることが考えられる．
+
+\subsection{言い換え規則}
+
+このような言い換えを利用して片仮名複合名詞の分割処理を行うため，複合名詞
+の言い換え規則を7つ作成した（表\ref{tab:para}）．言い換え規則の作成にあたっ
+ては，Kageuraら\citeyear{Kageura04}の研究を参考にしながら，分割処理に有
+用と思われるものを人手で選定した．作成した言い換え規則は全て
+$X_1X_2\rightarrow X_1MX_2$という形式をしており（$X_1$と$X_2$は名詞，$M$
+は助詞などの機能語），左辺が言い換え前の複合名詞，右辺が言い換え後の表現
+に対応している．
+
+\begin{table}[b]
+\caption{作成した言い換え規則の一覧とその適用例．$X_1$と$X_2$は名詞を表す}
+\label{tab:para}
+\input{02table02.txt}
+\end{table}
+
+
+
+\subsection{言い換え頻度に基づく素性}
+
+これらの規則を用いて，次のように新しい素性を定義する．まず前処理として，
+以下のような正規表現を用いることにより，片仮名複合名詞の言い換え表現の出
+現頻度をラベルなしテキストから求める．
+\begin{quote}
+ (katakana)+\;・\;(katakana)+ \\
+ (katakana)+\;の\;(katakana)+ \\
+ (katakana)+\;する\;(katakana)+ \\
+ (katakana)+\;した\;(katakana)+ \\
+ (katakana)+\;な\;(katakana)+ \\
+ (katakana)+\;的\;(katakana)+ \\
+ (katakana)+\;的な\;(katakana)+ 
+\end{quote}
+ただし(katakana)は片仮名1文字にマッチする特殊文字である．
+また$+$は文字の繰り返しを表す量指定子であり，最長一致が適用されるものと
+する．
+
+このような正規表現を用いることによって，単語分割処理を行わずに言い換え表
+現を抽出することができるのは，表\ref{tab:para}のような片仮名複合語の言い
+換え表現に対象を限定しているためである．上記の正規表現にマッチするテキス
+トは，必ず前後が片仮名以外の文字（漢字や平仮名）に囲まれていることになる．
+そのような文字種の変わり目には，単語境界が存在する場合が多いため，このよ
+うな単純な文字列処理であっても言い換え表現を抽出することが可能になってい
+る．
+
+分割処理時に分割候補$\y$が提示された際には，構成語 2-gram に対する言い換え
+素性{\sc Para} ($y_{i-1}$, $y_{i}$)の値を次のように定義する．まず
+$X_1=y_{i-1}$，$X_2=y_i$と代入することにより，表\ref{tab:para}の規則から
+言い換え表現を生成する．そして，生成された7つの言い換え表現の頻度の和を
+$F$としたとき，その対数$\log(F+1)$を素性値として用いる．
+
+ここでは素性値の計算に非常に単純な方法を用いているため，$X_1$や$X_2$に名
+詞ではなく，名詞連続が代入された場合であっても，素性が発火してしまうとい
+うことがある．また逆に，正解となる構成語よりも小さな単位の文字列が代入さ
+れた場合であっても，同様に素性が発火してしまうことがあり，精度に悪影響を
+及ぼす可能性がある．しかし，このような手法であっても実験において分割精度
+の向上を十分確認することができたため，シンプルさを重視して現在のような手
+法とした．
+
+
+素性値として頻度ではなく対数頻度を用いているのはスケーリングのためである．
+予備的な実験においては，頻度をそのまま素性値として用いることも行ったが，
+対数頻度を用いた場合の方が高い精度が得られた．なお，$\log F$ではなく
+$\log(F+1)$としているのは，$F$ = 1 であった場合に素性値が0となるのを防ぐ
+ためである．
+
+
+
+\section{逆翻字素性} \label{sec:trans}
+
+\begin{table}[b]
+ \caption{単語対応付き翻字対の例．下線部に付与された数字は単語の対応を表
+ す}
+ \label{tab:trans}
+\input{02table03.txt}
+\end{table}
+
+片仮名語の多くは英語を翻字したものであり，元となる英語表現が存在する．以
+下では，そのような英語表現のことを{\bf 原語}と呼び，片仮名語と原語の対の
+ことを{\bf 翻字対}と呼ぶこととする．我々は，片仮名語が原語の発音情報をお
+およそ保持しているという特性を利用することによって，単語単位での対応関係
+が付与された翻字対（{\bf 単語対応付き翻字対}）をラベルなしテキストから自動
+抽出する（表\ref{tab:trans}）．そして，得られた単語対応付き翻字対に基づい
+て，分割結果$\y$に出現する単語$n$-gramが，英単語$n$-gramと対応付け可能で
+あるかを示す2値素性を用いる（表\ref{tab:feature}におけるテンプレート6と7
+に対応する）．以下本節では，テキストから単語対応付き翻字対を自動抽出する
+方法について説明する．
+  
+\subsection{括弧表現}
+
+日本語においては，括弧表現を使って片仮名語の原語がテキスト中に挿入される
+場合がある．
+
+\begin{lingexample}
+ \head{アメリカで\underline{ジャンクフード} (junk food)と言えば...}{ex:junk}
+ \sent{トラックバック\underline{スパム} (spam)を撃退するため...}{}
+\end{lingexample}
+
+\noindent
+いずれの例文においても，下線を引いた片仮名語に対して，その原語が括弧を使っ
+て併記されている．我々はこのような括弧表現を利用することにより，単語対応
+付き翻字対の自動抽出を行う．
+
+こうした括弧表現から単語対応付き翻字対の抽出を行うためには，少なくとも以
+下の3つのことが技術的な問題となる
+\begin{description}
+ \item[問題A]
+	    片仮名語の直後に出現する括弧表現が必ずしもその原語であるとは
+	    限らないため，原語が記述されている括弧表現とそうでない括弧表
+	    現を区別する必要がある．
+ \item[問題B]
+	    翻字対の関係にある片仮名語の開始位置を決定しなくてはならない．
+	    例えば(\ref{ex:junk}b)においては，原語「spam」の翻字は「トラッ
+	    クバックスパム」ではなく「スパム」である．
+ \item[問題C]
+	    片仮名語と原語の単語対応を求めるためには，片仮名語を分かち書
+	    きしなくてはならない．例えば(\ref{ex:junk}a)から表
+	    \ref{tab:trans}のような単語対応付き翻字対を獲得するためには，
+	    片仮名列「ジャンクフード」を「ジャンク」と「フード」に分割す
+	    ることが必要である．
+\end{description}
+
+
+\subsection{発音の類似性の利用}
+
+これまでにも，前述のような括弧表現から翻字対を自動抽出する研究は数多く存
+在するが，問題Cに対する本質的な解決策はいまだ提案されていない．これまで
+の研究においては，基本的に既存の単語分割器を用いることによって片仮名語の
+分割が行われている\cite{Cao07,Wu09}．しかし，\ref{sec:prev}節において議
+論を行ったように，片仮名語の分かち書きを行うことは現在のところ技術的に困
+難であり，このようなアプローチは望ましくない．
+
+我々は上記の3つの問題を解決するため，片仮名語と原語の発音の類似性を利用
+することを提案する．以下の議論では，説明のために，まず問題Cだけを議論の
+対象とする．具体例として，片仮名語「ジャンクフード」と原語「junk food」
+に対して，それらの発音の類似性に基づき以下のような部分文字列の対応関係が
+得られたとする．
+
+\begin{lingexample}
+ \head{[ジャン]$_1$[ク]$_2$[フー]$_3$[ド]$_4$}{ex:junk2}
+ \sent{[jun]$_1$[k]$_2$ [foo]$_3$[d]$_4$}
+\end{lingexample} 
+
+\noindent
+ここでは，括弧で囲まれて同じ番号を添えられている部分文字列が，互いに対応
+関係にあるものとする．括弧表現内の英語は空白を使って分かち書きされている
+ため，上記のような部分文字列の対応関係を利用すれば，片仮名語と英単語が1
+対1に対応するように片仮名列を分かち書きすることができる．また，その過程
+において，単語間の対応関係も明らかにすることができる．
+
+残る問題Aおよび問題Bに対しても，発音の類似性に基づいて同様に解決を図るこ
+とが可能である．以下の例において，下線が引かれた片仮名語と括弧内の英語表現が翻字対であ
+るか否かを判定することを考える．
+
+\begin{lingexample}
+ \head{検索\underline{エンジン} (Google)を使って...}{ex:google}
+ \sent{\underline{トラックバックスパム} (spam)を撃退する...}{}
+\end{lingexample}
+
+\noindent
+このように，括弧内に原語ではない表現が出現したり，片仮名語の開始位置が正
+しく認識されなかった場合には，片仮名列とアルファベット列の発音の類似度が
+低くなることが期待できるため，フィルタリングできると考えられる．単語対応
+付き翻字対の具体的な抽出手順については，\ref{sec:extraction}節において説
+明を行う．
+
+
+
+\subsection{発音モデル} \label{sec:phonetic_model}
+
+片仮名語と原語における部分文字列の対応関係の発見には，Jiampojamarnら
+\citeyear{Jiampojamarn07}が提案した生成モデルを用いる．$f$と$e$をそ
+れぞれ片仮名列とアルファベット列とし，これらの間の対応関係を見つけること
+を考える．ただし，原語には空白が存在する可能性があるが，空白に対応する片
+仮名文字列は存在しないことから，部分文字列の対応を求めるときにはアルファ
+ベット列から空白を取り除いておく．例えば「ジャンクフード」と「junk food」
+の部分文字列対応を求める場合には「$f=\text{ジャンクフード}$」「$e=\text{junkfood}$」と
+する．ここで，$\mathcal{A}$をそれらの間の部分文字列の対応とする．具体的
+には，$\mathcal{A}$は対応付けられている部分文字列の組($f_i$, $e_i$)の集合で
+あり，$f=f_1f_2\dots f_{|\mathcal{A}|}$および$e=e_1e_2\dots
+e_{|\mathcal{A}|}$となる．この部分文字列対応$\mathcal{A}$の確率を以下の
+ように定義する．
+\[
+ \log p(f,e,\mathcal{A})=\sum_{(f_i,e_i)\in\mathcal{A}}\log p(f_{i},e_{i})
+\]
+一般に$\mathcal{A}$は観測することができないため隠れ変数として扱い，モデ
+ルのパラメータは翻字対$(f,e)$の集合からEMアルゴリズムを用いて推定する．
+詳細は文献\cite{Jiampojamarn07}を参照されたい．表\ref{tab:alignment}に
+「ジャンクフード」と「junkfood」に対する部分文字列対応$\mathcal{A}$の具
+体例，および実験において計算された確率値を示す．
+
+この確率モデルを用いて，与えられた$(f,e)$に対する部分文字列の対応を次の
+ように決定する．
+\[
+\mathcal{A}^{*}=\argmax_{\mathcal{A}}\log p(f,e,\mathcal{A})
+\]
+このとき$\mathcal{A}^{*}$の中の部分文字列$e_i$が空白をまたいでしまうと
+（ジャンクフードの例であれば$e_i=\text{kfoo}$などとなった場合），
+$\mathcal{A}^{*}$を使って片仮名列$f$を分かち書きすることができなくなって
+しまう．そこで，アルファベット列$e$が空白を含んでいた場合は，前述のとお
+り空白を取り除いて確率値の計算を行うが，空白の存在した箇所は記憶しておき，
+部分文字列$e_i$が空白をまたがないという制約を加えて$\argmax$の計算を行う．
+
+\begin{table}[t]
+\hangcaption{片仮名列「$f=\text{ジャンクフード}$」とアルファベット列
+   「$e=\text{junkfood}$」に対する部分文字列対応$\mathcal{A}$の具体例
+   ($|\mathcal{A}|=4$)}
+\label{tab:alignment}
+\input{02table04.txt}
+\end{table}
+
+
+\subsection{単語対応付き翻字対の抽出} \label{sec:extraction}
+
+この発音モデルを用いて，以下のような手順で単語対応付き翻字対の抽出を行う．
+\begin{description}
+ \item[手順1]
+	    括弧内に出現するアルファベット列$e$と，その直前に出現する片
+	    仮名列$f$を抽出し，それらの組$(f,e)$を翻字対の候補とする．た
+	    だしアルファベット列は全て小文字に正規化する．
+ \item[手順2]
+	    翻字対候補$(f,e)$に対するスコアを以下のように定義し，それが
+	    閾値$\theta$を越えたものを正しい翻字対と判定する．
+	    \[
+	    \frac{1}{N}\log p(f,e,\mathcal{A}^{*})
+	    \]
+	    式中の$N$は$e$に含まれる単語数であり，$\frac{1}{N}$という項
+	    は単語数が多い場合にスコアが過剰に小さくなるのを防ぐために導
+	    入している．ここでスコアが閾値を下回っていた場合には，片仮名
+	    語の開始位置を正しく判定できていない可能性がある．そこで，片
+	    仮名列$f$の最左文字を1文字ずつ削除していき，閾値を上回るもの
+	    が見つかればそれを翻字対と判定し，次の翻字対候補の処理に移る．	    
+	    
+ \item[手順3]
+	    得られた翻字対$(f,e)$に対して，部分文字列対応
+	    $\mathcal{A}^{*}$に基づいて片仮名列$f$を分かち書きし，単語の
+	    対応関係を求める．これにより，単語対応付き翻字対のリストを得
+	    ることができる．
+\end{description}
+
+\noindent
+ただし，手順2においては，表記揺れやタイポなどの要因により，1つの片仮名列
+に対して複数の逆翻字が見つかる可能性がある．その場合は，各片仮名列$f$に
+対して，最もスコアの高い翻字対$(f,e)$のみを保持して，それ以外のものは使
+用しない．
+
+
+\section{実験と議論} \label{sec:exp}
+
+本節では，提案する2つの素性（言い換え素性と翻字素性）が片仮名複合名詞の分
+割処理の精度に与える効果について報告を行う．
+
+\begin{table}[b]
+    \caption{表\ref{tab:para}の規則をもとに抽出された言い換え表現（の候補）．
+    括弧内の数字は頻度を表す}
+    \label{fig:extract-para}
+\input{02table05.txt}
+\end{table}
+
+\subsection{実験設定} \label{sec:setting}
+
+発音モデルのパラメータ推定に必要な翻字対のデータは，外国人の名前を日本語
+で表記するときにはほぼ常に翻字が行われることに着目し，Wikipedia
+\footnote{http://ja.wikipedia.org/}を用いて自動的に構築した．
+構築手順としては，まず「存命人物」のカテゴリに所属するWikipeida記事のタ
+イトルを抽出することにより，片仮名表記の人名リストを作成した．そして次
+に，Wikipediaの言語間リンクを利用し，各人名に対する原語を抽出した．これ
+により17,509の翻字対を収集することができた．このように自動収集したデータ
+の中には翻字対として不適切なものも含まれている可能性があるが，大量のデー
+タを手軽に用意できるという利点を重視して，この方法を採用している．実際，
+このようにパラメータ推定のためのデータを大量に生成するアプローチは，翻字
+生成において有効であることが報告されている\cite{Cherry09}．パラメータ推
+定時には，EMアルゴリズムの初期値を無作為に10回変化させ，尤度が最大となっ
+たモデルを以降の実験で用いた．
+
+\begin{table}[t]
+\hangcaption{単語対応付き翻字対の例．スラッシュは抽出時に検出された片仮
+    名語の単語境界を示す．単語間の対応関係は自明なので省略する}
+    \label{fig:extract-backtrans}
+\input{02table06.txt}
+\end{table}
+
+平均化パープトロンの学習に必要なラベル付きデータは，日英対訳辞書EDICT
+\footnote{http://www.csse.monash.edu.au/\~{}jwb/edict\_doc.html}を利用し
+て手作業で作成した．具体的には，まず，EDICTの見出し語から，翻字である片
+仮名（複合）名詞を無作為に抽出した．そして，EDICTに記載されている英訳に基
+づき，単語境界のラベルを付与した．この結果，5286の片仮名語データを得た．
+このデータにおける構成語数の分布を調べたところ，構成語が1語のものが3041，
+2語のものが2081，3語以上のものが164となっていた($3041+2081+164=5286$)．ま
+た，複合名詞1つあたりの平均文字数および平均構成語数は6.60および1.46であっ
+た．以下本節において報告する実験結果は，このラベル付きデータを用いて2分
+割交差検定を行ったものである．
+
+言い換え及び逆翻字を抽出するためのテキストには，ウェブから収集した17億文
+のブログ記事を用いた．このテキストを用いることによって14,966,205の言い換
+え表現と，116,027の単語対応付き翻字対を抽出することができた．表
+\ref{fig:extract-para}と\ref{fig:extract-backtrans}に，実際に抽出され
+た言い換え表現（の候補）と単語対応付き翻字対の具体例を示す．
+
+単語対応付き翻字対の抽出を行う際には閾値$\theta$を設定する必要がある．
+$\theta$は確率の対数に対する閾値であるため，0より小さな任意の値を設定す
+ることが可能であるが，ここでは$\{-10,-20,\dots\linebreak
+-150\}$の範囲で値を変化さ
+せ，実験において最も高いF値が得られた値($\theta=-80$)を採用した．
+
+
+\subsection{ベースライン手法} \label{sec:baseline}
+
+実験では，3つの教師なし学習手法(Unigram, GMF, GMF2)，2つの教師あり学習手
+法(AP, AP $+$ GMF2)，3つの単語分割器(JUMAN, MeCab, KyTea)との比較を行った．
+以下ではこれらベースライン手法について簡単に説明を行う．
+
+\begin{description}
+ \item[教師なし学習]　
+	    \begin{description}
+	     \item[Unigram]
+			分割結果$\y$に対する$1$-gram言語モデルの尤度
+			$p(\y)$が最も大きくなる分割を選択する手法
+			\cite{Schiller05,AlfonsecaCICLing08}:
+			\[
+			 \y^{*}=\argmax_{\y\in\mathcal{Y}(x)}p(\y)=\argmax_{\y\in\mathcal{Y}(x)}\prod_{i}p(y_i)
+			\]
+			ここで$p(y_i)$は構成語$y_i$の出現確率であり，
+			\ref{sec:setting}節で述べたウェブテキストから推
+			定をした値を用いた．
+	     \item[GMF]
+			構成語$y_i$の頻度の幾何平均\mbox{GMF}$(\y)$が最
+			大となる分割$\y$を選択する手法\cite{Koehn03}:
+			\[
+			 \y^{*}=\argmax_{\y\in\mathcal{Y}(x)}\mbox{GMF}(\y)=\argmax_{\y\in\mathcal{Y}(x)}\Bigl\{\prod_{i}f(y_i)\Bigr\}^{1/|\y|}
+			\]
+			ここで$f(y_i)$は構成語$y_i$の出現頻度であり，
+			$p(y_i)$と同様にウェブテキストから推定した値を用
+			いた．
+	     \item[GMF2]
+			頻度の幾何平均に構成語の長さに基づく補正を導入し
+			たスコアを用いる手法\cite{Nakazawa05}:\pagebreak
+			\[
+			 \mbox{GMF2}(\y)=
+	     \begin{cases}
+	      \mbox{GMF}(\y) & (|\y|=1) \\[10pt]
+	      \frac{\mbox{GMF}(\y)}{\frac{C}{N^l}+\alpha} & (|\y|\geq2),
+	     \end{cases}
+			\]
+	    ここで$C$，$N$，$\alpha$は超パラメータ，$l$は構成語の平均文
+	    字数を表す．本実験ではNakazawaら\citeyear{Nakazawa05}と同じ
+	    く$C$ = 2500，$N$ = 4，$\alpha$ = 0.7とした．
+	    \end{description}
+ \item[教師あり学習]　
+	    \begin{description}
+	     \item[AP] 基本素性（\ref{sec:approach}節参照）のみを用いた平
+			均化パーセプトロン．
+	     \item[AP $+$ GMF2]
+			基本素性に加えて{\sc Gmf2}の処理結果を素性として
+			用いた平均化パーセプトロン．Alfonsecaら
+			\citeyear{AlfonsecaCICLing08}に従って，
+			(i) GMF2$(\y)$の値が全分割候補中で最大であるか否
+			かを表す2値素性，(ii) 分割を行わない候補
+			（i.e., $|\y|=1$となる候補）よりもGMF2の値が大きく
+			なるか否かを表す2値素性を追加した．
+	    \end{description}
+ \item[単語分割器]　
+	    \begin{description}
+	     \item[JUMAN]
+			ルールベースの単語分割器
+			\footnote{正確には形態素解析器であるが，本実験で
+			は品詞タグ付与の議論は行わないのでこう呼ぶ．}\ JUMAN ver.~6.0 \cite{Kurohashi94}．
+	     \item[MeCab]
+			対数線形モデルに基づく単語分割器 
+			MeCab ver.~0.98 \cite{Kudo04}．解析辞書にはNAIST-jdic
+			ver.~0.6.0を用いた．
+	     \item[KyTea]
+			点推定モデルに基づく単語分割器 KyTea ver.~0.3.1 \cite{Neubig11}．
+	    \end{description}
+\end{description}
+
+
+\subsection{ベースライン手法との比較}
+\label{sec:compare}
+
+\begin{table}[b]
+\hangcaption{ベースライン手法との比較．表中のP，R，F$_1$は，認識された単
+   語境界の適合率，再現率，F値を示す．またAccは分割精度，すなわち正しく
+   分割された片仮名複合名詞の割合を示す}
+   \label{tab:comparison_result}
+\input{02table07.txt}
+\vspace{-0.5\Cvs}
+\end{table}
+
+表\ref{tab:comparison_result}に提案手法(Proposed)とベースライン手法との
+比較結果を示す．この表の結果から以下のようなことが分かる．
+
+まず，ProposedとAPの結果の比較から，言い換え素性と逆翻字素性を導入するこ
+とにより，分割精度が大きく向上したことが分かる．マクネマー検定を行ったと
+ころ，この精度変化は統計的に有意なものであることが確認された($p<0.01$)．
+この結果は，提案する2つの素性の有効性を示すものである．
+
+次に，提案手法の精度は，全ての教師なし学習ベースライン(Unigram, GMF, GMF2)及びAP $+$ GMF2の精度を上回っていることが確認できる．これらの結果は，複
+合名詞の言い換えや逆翻字の情報が，構成語の頻度情報よりも効果的であること
+を示唆している．なお，マクネマー検定を行ったところ，これらの精度向上も全
+て統計的に有意であることが確認できた($p<0.01$)．
+
+単語分割器(JUMAN, MeCab, KyTea)の結果は，これまでに単語分割タスクにおい
+て報告されている精度\cite{Kudo04,Neubig11}を大きく下回っている．このこと
+から，一般的な単語分割と比較して，片仮名複合語の分割処理が困難なタスクで
+あることが分かる．さらに，提案手法の精度は，単語分割器の精度を大きく上回っ
+ており，提案手法が既存の単語分割器の弱点補強に有用であることが示唆されて
+いる．例えば，既存の単語分割器によって「片仮名表記の名詞の連続」と解析さ
+れた部分を，提案手法を用いて再分割することにより，解析結果の改善を期待す
+ることができる．
+
+\begin{table}[b]
+   \caption{MeCabとProposedの出力比較．スラッシュはシステムに認識された
+   単語境界を表す}
+   \label{tab:example}
+\input{02table08.txt}
+\end{table}
+
+表\ref{tab:example}に，MeCabでは分割に失敗したが，Proposedでは正しく分割
+することができた例を示す．まず最初の例では，片仮名語「ディクショナリー」が
+NAIST-jdicに登録されていなかったため，MeCabは分割に失敗している．一方，
+Proposedにおいては，以下のような単語対応付き翻字対が学習されており，これ
+に基づいて発火した逆翻字素性(1-gram)が有効に働いた結果，正しく分割するこ
+とに成功している．
+
+\begin{quote}
+ \underline{オックスフォード}$_1$\underline{ディクショナリー}$_2$\ \ \ \
+ \underline{oxford}$_1$ \underline{\mbox{dictionary}}$_2$
+\end{quote}
+
+\noindent
+次の例では「メイン」と「タイトル」が両方ともNAIST-jdicに登録されているに
+も関わらず，MeCabは分割に失敗している．これは，MeCabの未知語処理に起因す
+る誤りであると考えられる．その一方でProposedが分割に成功しているのは，例
+えば「メインのタイトル」といった言い換え表現に基づく素性など，分割を示唆
+する素性がより多く発火しているためだと推測できる．最後の例では，
+NAIST-jdicに人名「トミー」が登録されているため，MeCabは過分割を行ってし
+まっているが，Proposedでは「アナトミー」に対する逆翻字素性が適切に発火し
+ており，過分割を防ぐことに成功している．
+
+本論文の趣旨からは外れるが，3つの単語分割器のなかではKyTeaの精度が他の2
+つを大きく引き離している点は非常に興味深い．これは，JUMANやMeCabの解析ア
+ルゴリズムが，辞書引きによる候補選択に強く依存しているのに対して，KyTea
+はそのような候補選択を行っていないことが要因と考えられる．
+
+
+
+
+\subsection{未知語に関する考察}
+
+実験に使用した5286の片仮名複合名詞のうち，2542は少なくとも1つの未知語を
+構成語に含んでいた．ただし，ここで言う未知語とは，訓練データに出現せず，
+なおかつ外部辞書NAIST-jdicにも登録されていない単語のことを指す．未知語が
+分割精度に与える影響について考察するため，提案手法を含む3つの教師あり学
+習手法(AP, AP $+$ GMF2, Proposed)と単語分割器MeCabの分類結果を，1つ以上の未
+知語を含む2542の片仮名複合名詞と残る2744の片仮名複合名詞に分けて集計した
+（表\ref{tab:oov}）．以下では，前者のサブセットを w/ OOVデータ，後者を w/o
+OOV データと呼ぶ．
+
+\begin{table}[b]
+\hangcaption{未知語を含む片仮名複合名詞(w/ OOV)とそれ以外の片仮名複合名
+   詞(w/o OOV)に対する分割結果の比較}
+\label{tab:oov}
+\input{02table09.txt}
+\end{table}
+
+この表から，3つの教師あり学習手法については，w/o OOV データに対しては
+90\%を越える高い精度が達成されているのに対して，w/ OOV データの精度は大
+きく低下していることが確認できる．同様の傾向はMeCabの結果においても見ら
+れる．MeCabは汎用的な単語分割器であるため，複合名詞分割というタスクに特
+化して学習された提案手法(Proposed)やその他の教師あり学習手法（APや
+AP $+$ GMF2）と比べると，精度自体はどちらのデータにおいても大きく低下している．
+しかし，w/ OOV データよりもw/o OOV データのほうが精度が高くなるという傾向
+は，依然として確認することができる．これらの結果は，片仮名複合名詞の分割
+処理を困難にしている要因は未知語であるという我々の主張を支持するものであ
+る．
+
+3つの教師あり学習手法は，w/o OOV データについてはほぼ同じ精度を達成して
+いることが分かる．これは，既知語に対しては，基本素性だけを使ってすでに高
+い分類精度が達成されているため，これ以上の精度向上が困難であるからだと考
+えられる．一方，精度向上の余地が残されている w/ OOV データについては，3
+つのシステムの間に大きな精度の差を見てとることができる．そのため，表
+\ref{tab:comparison_result}の結果よりも，言い換え素性と翻字素性を導入す
+る効果をより直接的に確認することができる．
+
+
+
+\subsection{言い換え素性と翻字素性の効果}
+ \label{sec:effect}
+
+言い換え素性と翻字素性の有効性について詳細に検証するため，異なる4つの素
+性集合を用いたときの平均化パーセプトロンの分割結果の比較を行った（表
+\ref{tab:comparison}）．表の1行目は使用した素性集合を表す．{\sc Basic}は
+基本素性，{\sc Para}と{\sc Trans}はそれぞれ言い換え素性と翻字素性，{\sc
+All}は全ての素性集合を表す．この表より，言い換え素性と翻字素性の両方とも
+が分割精度向上に大きく貢献していることを確認することができた．いずれの場
+合においても，基本素性だけを使った場合と比較して，精度の向上は統計的に有
+意であった（$p<0.01$，マクネマー検定）．
+
+\begin{table}[b]
+\hangcaption{言い換え素性と逆翻字素性の効果．表中の{\sc Basic}, {\sc
+    Para}, {\sc BackTrans}は，それぞれ基本素性，言い換え素性，逆翻字素性
+    を示す．また{\sc All}はそれら全ての素性を示す}
+\label{tab:comparison}
+\input{02table10.txt}
+\end{table}
+
+\begin{figure}[b]
+ \begin{center}
+ \includegraphics{19-2ia927f1.eps}
+ \end{center}
+  \hangcaption{言い換えと単語対応付き翻字対の抽出に用いたブログデータのサイズ（横軸）と各素性の発火率（縦軸）の関係}
+  \label{fig:feature-coverage}
+\end{figure}
+
+次に，各素性の発火率について調査を行った．実験で用いたラベル付きデータに
+は7709の構成語が含まれており，そのうち64.0\% (4937/7709)は外部辞書に登録
+されていた．これに対して，単語対応付き翻字対に出現していた構成語の割合は
+64.0\% (4935/7709)，外部辞書か単語対応付き翻字対のいずれかに出現していた
+ものの割合は77.1\% (5941/7709)であった．これにより，翻字素性を導入するこ
+とによって，未知語の数が大幅に減少していることが確認された．
+
+一方，ラベル付きデータに含まれる構成語$2$-gramの数は2423であったが，それ
+らに対して発火していた言い換え素性と翻字素性の割合は，それぞれ
+79.5\% (1926/2423)と12.8\% (331/2423)であった．これらの結果から，提案素性
+はいずれも精度向上に寄与しているものの，カバレージにはまだ改善の余地があ
+ることが分かった．
+
+続いて，素性の発火率と収集元であるブログデータの大きさの関係を調査した
+（図\ref{fig:feature-coverage}）．ここではブログデータの大きさとして，収集
+したブログ記事（UTF8エンコーディング）をgzipで圧縮したデータのサイズをギガ
+バイト単位で表示している．この図から，大量のブログデータを使うことによっ
+て，高い発火率を実現できていることが確認できる．しかし，その一方で，デー
+タが増えるにつれて，発火率の向上の度合いは鈍りつつある．このことから，デー
+タを単純に増加させるだけでは，ここからの大幅な発火率の改善を期待すること
+は難しく，言い換え規則の拡張などの方法も併せて検討していくことが今後重
+要になると考えられる．
+
+\subsection{パラメータ$\theta$}
+ \label{sec:threshold}
+
+\begin{figure}[b]
+ \begin{center}
+ \includegraphics[clip]{19-2ia927f2.eps}
+ \end{center}
+  \caption{パラメータ$\theta$（横軸）と抽出された単語対応付き翻字対の数（縦軸）}
+  \label{fig:size}
+\end{figure}
+
+
+最後に，パラメータ$\theta$の値を変化させたときの影響について調査を行った
+（図\ref{fig:size}--\ref{fig:threshold}）．図
+\ref{fig:size}と\ref{fig:fire}は，様々な値の$\theta$に対する，単語対応
+付き翻字対の抽出数および逆翻字素性の発火した割合（\ref{sec:effect}節にお
+いて議論したもの）を示している．これらの図から，$\theta$の値をある程度小
+さく設定すれば，十分な数の翻字対が抽出され，その結果として多くの事例にお
+いて素性が発火するようになることが分かる．図\ref{fig:threshold}は
+$\theta$とF値の関係を示している．さきほどの2つの図との比較すると，翻字対
+の抽出数と素性の発火数の増加が，F値の向上に直接結びついているこ
+とが分かる．
+
+パラメータの値が極端に大きい場合(e.g., $-20$)においては，F値が低下する傾
+向が見られたものの，パラメータによらずF値はおおよそ一定であった．この結
+果から，提案手法の精度はパラメータ設定に敏感ではなく，パラメータ調整は難
+しい作業ではないことが示唆される．また，少なくとも実験において調べた範囲
+では，提案手法はパラメータ値によらず，基本素性のみを用いた場合よりも高い
+F値を達成することができた．そのため，パラメータの微調整が提案手法の性能
+に与える影響は小さいと言うことができる．
+
+\begin{figure}[t]
+ \begin{center}
+ \includegraphics[clip]{19-2ia927f3.eps}
+ \end{center}
+  \hangcaption{パラメータ$\theta$（横軸）と逆翻字素性の発火率（縦軸）．グラフ中
+  の三角と四角は，それぞれ構成語1-gramと2-gramに対する発火率を表す}
+  \label{fig:fire}
+\end{figure}
+
+\begin{figure}[t]
+ \begin{center}
+ \includegraphics[clip]{19-2ia927f4.eps}
+ \end{center}
+  \hangcaption{パラメータ$\theta$（横軸）とF値（縦軸）の関係．グラフ中の三角と四
+  角は，それぞれ全素性を使った場合と，基本素性のみを使った場合に相当する}
+  \label{fig:threshold}
+\end{figure}
+
+
+\subsection{誤りの分析} \label{subsec:error}
+
+提案手法が分割を誤った事例を調べたところ，「アップロード」を「アップ」と
+「ロード」，「トランスフォーマー」を「トランス」と「フォーマー」に分割す
+るなど，単語を過分割している事例が見られた．ここでの「アップ」や「トラン
+ス」は接頭辞であると考えられるため，これらの分割結果は形態論的分割
+(morphological segmentation)としては正しいものであるかもしれないが，単語
+分割としては不適切であると考えられる．
+
+こうした過分割が発生する要因として，接辞と単語の曖昧性を指摘することがで
+きる．例えば「アップ」は，確かに接頭辞の1つであるが，文脈によっては「給
+料がアップする」のように独立した名詞として使われる場合もある．同じく「ト
+ランス」に対しても「トランス状態」のような名詞用法を考えることができる．
+このような曖昧性によって引き起こされる最も顕著な問題は，辞書素性（表
+\ref{tab:feature}におけるテンプレートID4）が過剰に発火することである．前
+述の過分割の事例においては，NAIST-jdicに「アップ」と「トランス」がともに
+名詞として登録されていたため，本来不適切な分割結果であるにも関わらず辞書
+素性が発火していた．
+
+これと同様の問題は，辞書素性だけでなく，逆翻字素性においても発生しうる．
+\ref{sec:trans}節で説明した単語対応付き翻字対の抽出手法は，原語が正しく
+分かち書きされていることを前提としていた．しかしながら，実際には接頭辞や
+接尾辞の前後に空白区切りを挿入しているテキストも存在するため，不適切な対
+応関係が学習されてしまう場合がある．
+
+表\ref{tab:error}は上記の過分割結果に影響を与えたと思われる単語対応付き
+翻字対の一部である．この表から，「アップロード」と「トランスフォーマー」
+については，それぞれ原語との対応関係が適切に学習されていることが確認でき
+る．しかしながら「アップローダー」と「トランスフォーム」については，原語
+が接頭辞の直後で分かち書きされていたため，不適切な単語対応が学習されてい
+ることが分かる．こうした対応付け結果から導出された逆翻字素性（この例では
+特に1-gram）は分割に悪影響を与えている可能性がある．翻字抽出の手法を改善
+することにより，こうした誤りを減少させることは，今後の課題の一つであると
+考えている．
+
+\begin{table}[t]
+ \caption{過分割結果に影響を与えたと思われる単語対応付き翻字対の一部}
+ \label{tab:error}
+\input{02table11.txt}
+\end{table}
+
+過分割が多くみられた別要因としてデータの偏りを考えることもできる．今回使
+用したデータの半数以上は構成語数が1つであったため，そもそも過分割が発生
+しやすい設定の実験になっていた可能性がある（\ref{sec:setting}節を参照）．
+現在のところ，当該タスクに対する別のデータセットを用意することは難しいた
+め，この点をすぐに調査することはできないが，今後の研究の中で議論を深めて
+いくべきであると考えられる．
+
+
+\section{おわりに} \label{sec:conclude}
+
+本論文では，言い換えと逆翻字を用いて，片仮名複合語の分割処理の精度を向上
+させる方法を提案した．提案手法により，大規模なラベルなしテキストを分割処
+理に利用することが可能となり，分割精度の低下の要因となる未知語の影響を軽
+減させることが可能となる．実験においては，8つのベースライン手法との比較
+を通じて，提案手法の有効性を実証的に示した．
+
+今後の課題としては，提案手法と既存の単語分割手法を融合した解析モデルの構
+築に取り組みたい．\ref{sec:compare}節においては，提案手法を後処理に利用
+可能であることについて言及したが，そうしたアドホックな方法は，学術的立場
+からは必ずしも満足のいくものではないと考えている．提案手法と既存の単語分
+割を組み合わせる方法としては，今回提案した素性を統計的な単語分割器に追加
+することなどが考えられるが，現時点ではその有効性について十分な検証を行う
+ことができておらず，今後調査すべき課題であろう．また，近年では，教師なし
+学習による単語分割手法も盛んに研究されているが，そうした手法に言い換えや
+翻字の情報を取り入れることも興味深い問題である\cite{Mochihashi09}．
+
+これに加えて，本論文の中で提案したアイデアを一般化していくことも，今後重
+要な研究課題になると考えている．本論文では議論の対象を英語由来の片仮名複
+合名詞に限定していたが，同様の手法は，その他の片仮名語に対しても有効であ
+る可能性が高い．例えば，翻字素性は，英語以外の言語からの借用語に対しても
+有効に働くことが期待できる．また，言い換え素性は，和語や漢語の片仮名表記
+に対しても有効である可能性が高い（例えば「トンコツラーメン」に対する「ト
+ンコツのラーメン」などの言い換え）．さらに，言い換えを単語境界の認識に利
+用するという考え方は，複合名詞に限らず，単語分割処理一般に対しても適用で
+きる可能性がある．今後はこうした方向についても研究を進めていきたい．
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Alfonseca, Bilac, \BBA\ Pharies}{Alfonseca
+  et~al.}{2008}]{AlfonsecaCICLing08}
+Alfonseca, E., Bilac, S., \BBA\ Pharies, S. \BBOP 2008\BBCP.
+\newblock \BBOQ German Decompounding in a Difficult Corpus.\BBCQ\
+\newblock In {\Bem Proceedings of CICLing}, \mbox{\BPGS\ 128--139}.
+
+\bibitem[\protect\BCAY{Ando \BBA\ Lee}{Ando \BBA\ Lee}{2003}]{Ando03}
+Ando, R.~K.\BBACOMMA\ \BBA\ Lee, L. \BBOP 2003\BBCP.
+\newblock \BBOQ Mostly-unsupervised statistical segmentation of {J}apanese
+  kanji sequences.\BBCQ\
+\newblock {\Bem Natural Language Engineering}, {\Bbf 9}  (2), \mbox{\BPGS\
+  127--149}.
+
+\bibitem[\protect\BCAY{Braschler \BBA\ Ripplinger}{Braschler \BBA\
+  Ripplinger}{2004}]{Braschler04}
+Braschler, M.\BBACOMMA\ \BBA\ Ripplinger, B. \BBOP 2004\BBCP.
+\newblock \BBOQ How effective is stemming and decompounding for {G}erman text
+  retrieval?\BBCQ\
+\newblock {\Bem Information Retrieval}, {\Bbf 7}, \mbox{\BPGS\ 291--316}.
+
+\bibitem[\protect\BCAY{Breen}{Breen}{2009}]{Breen09}
+Breen, J. \BBOP 2009\BBCP.
+\newblock \BBOQ Identification of Neologisms in {J}apanese by Corpus
+  Analysis.\BBCQ\
+\newblock In {\Bem Proceedings of eLexicography in the 21st centry conference},
+  \mbox{\BPGS\ 13--22}.
+
+\bibitem[\protect\BCAY{Brill, Kacmarcik, \BBA\ Brockett}{Brill
+  et~al.}{2001}]{Brill01}
+Brill, E., Kacmarcik, G., \BBA\ Brockett, C. \BBOP 2001\BBCP.
+\newblock \BBOQ Automatically Harvesting Katakana-{E}nglish Term Pairs from
+  Search Engine Query Logs.\BBCQ\
+\newblock In {\Bem Proceedings of NLPRS}, \mbox{\BPGS\ 393--399}.
+
+\bibitem[\protect\BCAY{Brown}{Brown}{2002}]{Brown02}
+Brown, R.~D. \BBOP 2002\BBCP.
+\newblock \BBOQ Corpus-Driven Splitting of Compound Words.\BBCQ\
+\newblock In {\Bem Proceedings of TMI}.
+
+\bibitem[\protect\BCAY{Cao, Gao, \BBA\ Nie}{Cao et~al.}{2007}]{Cao07}
+Cao, G., Gao, J., \BBA\ Nie, J.-Y. \BBOP 2007\BBCP.
+\newblock \BBOQ A System to Mine Large-Scale Bilingual Dictionaries from
+  Monolingual {W}eb Pages.\BBCQ\
+\newblock In {\Bem Proceedings of MT Summit}, \mbox{\BPGS\ 57--64}.
+
+\bibitem[\protect\BCAY{Cherry \BBA\ Suzuki}{Cherry \BBA\
+  Suzuki}{2009}]{Cherry09}
+Cherry, C.\BBACOMMA\ \BBA\ Suzuki, H. \BBOP 2009\BBCP.
+\newblock \BBOQ Discriminative Substring Decoding for Transliteration.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP}, \mbox{\BPGS\ 1066--1075}.
+
+\bibitem[\protect\BCAY{Freund \BBA\ Schapire}{Freund \BBA\
+  Schapire}{1999}]{Freund99}
+Freund, Y.\BBACOMMA\ \BBA\ Schapire, R.~E. \BBOP 1999\BBCP.
+\newblock \BBOQ Large margin classification using the perceptron
+  algorithm.\BBCQ\
+\newblock {\Bem Machine Learning}, {\Bbf 37}  (3), \mbox{\BPGS\ 277--296}.
+
+\bibitem[\protect\BCAY{Holz \BBA\ Biemann}{Holz \BBA\ Biemann}{2008}]{Holz08}
+Holz, F.\BBACOMMA\ \BBA\ Biemann, C. \BBOP 2008\BBCP.
+\newblock \BBOQ Unsupervised and Knowledge-Free Learning of Compound Splits and
+  Periphrases.\BBCQ\
+\newblock In {\Bem Proceedings of CICLing}, \mbox{\BPGS\ 117--127}.
+
+\bibitem[\protect\BCAY{Jiampojamarn, Kondrak, \BBA\ Sherif}{Jiampojamarn
+  et~al.}{2007}]{Jiampojamarn07}
+Jiampojamarn, S., Kondrak, G., \BBA\ Sherif, T. \BBOP 2007\BBCP.
+\newblock \BBOQ Applying Many-to-many Alignment and Hidden {M}arkov Models to
+  Letter-to-phoneme Conversion.\BBCQ\
+\newblock In {\Bem HLT-NAACL}, \mbox{\BPGS\ 372--379}.
+
+\bibitem[\protect\BCAY{Kageura, Yoshikane, \BBA\ Nozawa}{Kageura
+  et~al.}{2004}]{Kageura04}
+Kageura, K., Yoshikane, F., \BBA\ Nozawa, T. \BBOP 2004\BBCP.
+\newblock \BBOQ Parallel Bilingual Paraphrase Rules for Noun Compounds:
+  Concepts and Rules for Exploring {W}eb Language Resources.\BBCQ\
+\newblock In {\Bem Proceedings of Workshop on Asian Language Resources},
+  \mbox{\BPGS\ 54--61}.
+
+\bibitem[\protect\BCAY{Koehn \BBA\ Knight}{Koehn \BBA\ Knight}{2003}]{Koehn03}
+Koehn, P.\BBACOMMA\ \BBA\ Knight, K. \BBOP 2003\BBCP.
+\newblock \BBOQ Empirical Methods for Compound Splitting.\BBCQ\
+\newblock In {\Bem Proceedings of EACL}, \mbox{\BPGS\ 187--193}.
+
+\bibitem[\protect\BCAY{Kudo, Yamamoto, \BBA\ Matsumoto}{Kudo
+  et~al.}{2004}]{Kudo04}
+Kudo, T., Yamamoto, K., \BBA\ Matsumoto, Y. \BBOP 2004\BBCP.
+\newblock \BBOQ Applying Conditional Random Fields to {J}apanese Morphological
+  Analysis.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP}, \mbox{\BPGS\ 230--237}.
+
+\bibitem[\protect\BCAY{Kurohashi \BBA\ Nagao}{Kurohashi \BBA\
+  Nagao}{1994}]{Kurohashi94}
+Kurohashi, S.\BBACOMMA\ \BBA\ Nagao, M. \BBOP 1994\BBCP.
+\newblock \BBOQ Improvements of {J}apanese Morphological Analyzer
+  {JUMAN}.\BBCQ\
+\newblock In {\Bem Proceedings of the International Workshop on Sharable
+  Natural Language Resources}, \mbox{\BPGS\ 22--38}.
+
+\bibitem[\protect\BCAY{Mochihashi, Yamada, Naonori, \BBA\ Ueda}{Mochihashi
+  et~al.}{2009}]{Mochihashi09}
+Mochihashi, D., Yamada, T., Naonori, \BBA\ Ueda \BBOP 2009\BBCP.
+\newblock \BBOQ Bayesian Unsupervised Word Segmentation with Nested
+  {P}itman-{Y}or Language Modeling.\BBCQ\
+\newblock In {\Bem Proceedings of ACL}, \mbox{\BPGS\ 100--108}.
+
+\bibitem[\protect\BCAY{Nakazawa, Kawahara, \BBA\ Kurohashi}{Nakazawa
+  et~al.}{2005}]{Nakazawa05}
+Nakazawa, T., Kawahara, D., \BBA\ Kurohashi, S. \BBOP 2005\BBCP.
+\newblock \BBOQ Automatic Acquisition of Basic {K}atakana Lexicon from a Given
+  Corpus.\BBCQ\
+\newblock In {\Bem Proceedings of IJCNLP}, \mbox{\BPGS\ 682--693}.
+
+\bibitem[\protect\BCAY{Neubig, Nakata, \BBA\ Mori}{Neubig
+  et~al.}{2011}]{Neubig11}
+Neubig, G., Nakata, Y., \BBA\ Mori, S. \BBOP 2011\BBCP.
+\newblock \BBOQ Pointwise Prediction for Robust, Adaptable {J}apanese
+  Morphological Analysis.\BBCQ\
+\newblock In {\Bem Proceedings of ACL}, \mbox{\BPGS\ 529--533}.
+
+\bibitem[\protect\BCAY{Oh \BBA\ Isahara}{Oh \BBA\ Isahara}{2008}]{Oh08}
+Oh, J.-H.\BBACOMMA\ \BBA\ Isahara, H. \BBOP 2008\BBCP.
+\newblock \BBOQ Hypothesis Selection in Machine Transliteration: A {W}eb Mining
+  Approach.\BBCQ\
+\newblock In {\Bem Proceedings of IJCNLP}, \mbox{\BPGS\ 233--240}.
+
+\bibitem[\protect\BCAY{Okazaki, Ananiadou, \BBA\ Tsujii}{Okazaki
+  et~al.}{2008}]{Okazaki08}
+Okazaki, N., Ananiadou, S., \BBA\ Tsujii, J. \BBOP 2008\BBCP.
+\newblock \BBOQ A Discriminative Alignment Model for Abbreviation
+  Recognition.\BBCQ\
+\newblock In {\Bem Proceedings of COLING}, \mbox{\BPGS\ 657--664}.
+
+\bibitem[\protect\BCAY{Schiller}{Schiller}{2005}]{Schiller05}
+Schiller, A. \BBOP 2005\BBCP.
+\newblock \BBOQ German Compound Analysis with wfsc.\BBCQ\
+\newblock In {\Bem Proceedings of Finite State Methods and Natural Language
+  Processing}, \mbox{\BPGS\ 239--246}.
+
+\bibitem[\protect\BCAY{Schwartz \BBA\ Hearst}{Schwartz \BBA\
+  Hearst}{2003}]{Schwartz03}
+Schwartz, A.~S.\BBACOMMA\ \BBA\ Hearst, M.~A. \BBOP 2003\BBCP.
+\newblock \BBOQ A simple algorithm for identifying abbreviation definitions in
+  biomedical text.\BBCQ\
+\newblock In {\Bem Proceedings of PSB}, \mbox{\BPGS\ 451--462}.
+
+\bibitem[\protect\BCAY{Tsujimura}{Tsujimura}{2006}]{Tsujimura06}
+Tsujimura, N. \BBOP 2006\BBCP.
+\newblock {\Bem An Introduction to {J}apanese Linguistics}.
+\newblock Wiley-Blackwell.
+
+\bibitem[\protect\BCAY{Wu, Okazaki, \BBA\ Tsujii}{Wu et~al.}{2009}]{Wu09}
+Wu, X., Okazaki, N., \BBA\ Tsujii, J. \BBOP 2009\BBCP.
+\newblock \BBOQ Semi-supervised Lexicon Mining from Parenthetical Expressions
+  in Monolingual {W}eb Pages.\BBCQ\
+\newblock In {\Bem Proceedings of NAACL}, \mbox{\BPGS\ 424--432}.
+
+\end{thebibliography}
+
+
+\clearpage
+\begin{biography}
+
+\bioauthor{鍜治　伸裕}{
+2005年東京大学大学院情報理工学系研究科博士課程修了．情報理工学博士．東京
+大学生産技術研究所産学官連携研究員および特任助教を経て，現在，同特任准教
+授．CGMテキストの解析を中心とした自然言語処理の研究に興味を持つ．}
+
+\bioauthor{喜連川　優}{
+ 1983年東京大学工学系研究科情報工学専攻博士課程修了．工学博士．東京大学
+ 生産技術研究所講師．助教授を経て，現在，同教授．東京大学地球観測データ
+ 統融合連携研究機構長．東京大学生産技術研究所戦略情報融合国際研究センター
+ 長．文部科学官．2005年から2010年まで文部科学省「情報爆発」特定研究領域代表，
+2007年から2009年まで経済
+ 産業省「情報大航海プロジェクト」戦略会議委員長，情報処理学会
+ フェロー，2008年から2009年まで副会長，データベース工学の研究に従事．
+ }
+
+\end{biography}
+
+\biodate
+
+
+
+\end{document}

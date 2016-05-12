@@ -1,0 +1,1045 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.2}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+
+\makeatletter
+\newcommand{\figcaption}[1]{}
+\newcommand{\tabcaption}[1]{}
+\makeatother
+
+
+
+\Volume{17}
+\Number{1}
+\Month{January}
+\Year{2010}
+
+\received{2009}{6}{16}
+\revised{2009}{8}{20}
+\accepted{2009}{9}{18}
+
+\setcounter{page}{161}
+
+\jtitle{テキスト結束性を考慮したentity gridに基づく\\局所的一貫性モデル}
+\jauthor{横野　　光\affiref{pi} \and 奥村　　学\affiref{pi}}
+\jabstract{
+本論文ではentity gridを用いたテキストの局所的な一貫性モデルに対する改善
+について述べる．entity gridベースの既存モデルに対して，テキスト結束性に
+寄与する要素である接続関係，参照表現，語彙的結束性，また，より詳細な構文
+役割の分類を組み込んだモデルを提案し，その性能を検証する．語彙的結束性に
+関しては，語彙的連鎖を用いたクラスタリングを行う．テキスト中の文の並びに
+対して，より一貫性のある文の順番の判定と，人手による評価に基づいた要約テ
+キストの比較の2種類の実験を行い，その結果，本論文で提案する要素がentity
+gridモデルの性能の改善に寄与することが明らかになった．
+}
+\jkeywords{テキスト一貫性，テキスト結束性，テキストの評価}
+
+\etitle{Local Coherence Model Based on Entity Grid \\
+	Augmented with Text Cohesion}
+\eauthor{Hikaru Yokono\affiref{pi} \and Manabu Okumura\affiref{pi}}
+\eabstract{
+This paper describes improvements made to the entity grid local
+coherence model for Japanese text. We investigate the effectiveness of
+taking into account cohesive devices, such as conjunction, explicit
+reference relation, lexical cohesion, and refining syntactic roles for a
+topic marker in Japanese. To take into account lexical cohesion, we
+consider lexical chaining. Through the experiments on discrimination
+where the system has to select the more coherent sentence ordering, and
+comparison of the system's ranking of automatically created summaries
+against human judgment based on quality questions, we show that these
+factors contribute to improve the performance of the entity grid model.
+}
+\ekeywords{text coherence, text cohesion, text evaluation}
+
+\headauthor{横野，奥村}
+\headtitle{テキスト結束性を考慮したentity gridに基づく局所的一貫性モデル}
+
+\affilabel{pi}{東京工業大学精密工学研究所}{Precision and Intelligence Laboratory, Tokyo Institute of Technology}
+
+
+
+\begin{document}
+\maketitle
+
+
+ \section{はじめに}\label{introduction}
+ テキストの評価は，自動要約や機械翻訳などのようなテキストを生成するタスクにお
+ いて手法の評価として用いられるだけでなく，例えば人によって書かれた小論文の
+ 自動評価\cite{miltsakaki2004}といったように，それ自体を目的とすることもある．
+ 言語処理の分野においては前者のような手法評価の観点からテキスト評価に着
+ 目することが多く，例えば自動要約の評価で広く用いられているROUGE \cite{lin2003,lin2004}や機械
+ 翻訳で用いられているBLEU \cite{papineni2002}のような評価尺度が存在している．これらの評価手
+ 法は特に内容についての評価に重点が置かれている．つまり，評価対象のテキ
+ ストが含んでいなければならない情報をどの程度含んでいるかというこ
+ とに焦点が当てられている．
+
+ しかし，実際にはテキストは単に必要な情報を含んでいれば良いというわけ
+ ではない．
+ テキストには読み手が存在し，その読み手がテキストに書かれた内
+ 容を正しく理解できなければ，そのテキストは意味をなさない．
+ 読み手の理解を阻害する原因には，難解な語彙の使用，不適切な論理展開や文
+ 章の構成などが挙げられる．
+ これらはテキストの内容に関する問題ではなく，テキストそのものに関する問題である．
+ 従って，テキストの内容が正しく読み手に伝わるかどうかを考慮するならば，
+ その評価においては内容に
+ 関する評価だけでなく，テキストそのものについての評価も重要となる．
+
+ テキストそのものについての性質のうち，テキスト一貫性\cite{danwa}とは
+ 文章の意味的なまとまりの良さであり，例えば因果関係や文章構造などによっ
+ て示される文同士の繋がりである．
+ 意味的なまとまりが悪ければ，テキストの内容を読み手が正確に理解すること
+ が困難になると考えられる．このことから一貫性の評価はテキストの内容が正
+ しく伝わることを保証するために必要であると言える．
+ また，テキスト一貫性が評価できるようになると，テキストを生成するシステムにおいて，例えば，一貫性が良く
+ なるように文章を構成したり，一貫性の観点からの複数の出力候補のランク付け
+ が可能となり，出力するテキストの質を高めることができる．
+ 
+ テキスト一貫性は局所的な一貫性と大域的な一貫性という2種類のレベルに
+ 分類できる．局所的な一貫性とは相前後する2文間における一貫性で
+ あり，大域的な一貫性とは文章における話題の遷移の一貫性のことである．
+ 一貫性の評価に関しては，この局所的な一貫性と大域的な一貫性の両方につい
+ てそれぞれ考えることができるが，局所的な一貫性は大域的な一貫性にとって
+ 重要な要素であり，局所的な一貫性の評価の精度の向上が大域的な一貫性の評
+ 価に影響すると考えられる．
+ 
+ 以上のことから，本論文では，テキスト一貫性，特に局所的な一貫性に焦点を当て，この観点
+ からのテキストの評価について述べる．
+
+ テキストの性質について，テキスト一貫性と並べて論じられるものにテキスト結束性\cite{halliday1976}がある．
+ これは意味的なつながりである一貫性とは異なり，文法的なつながりである．一
+ 貫性が文脈に依存しているのに対し，結束性は脱文脈的で規則的な性質である
+ \cite{iori2007}．
+ テキスト結束性に寄与する要素は大きく参照\footnote{代名詞の使用や省略は
+ 参照に含まれる．}，接続，語彙的結束
+ 性\footnote{同じ語の繰り返しは語彙的結束性に含まれる．}に分けられる．
+ これらはテキストの表層において現れる要素である．
+
+ 一貫性は先に述べたように意味のまとまりの良さであり，これに寄与する要素
+ は明示的な形では現れない．
+ 一貫性と結束性はどちらもテキストのまとまりに関する性質であり，
+ それぞれが独立ではなく互いに関係している．従って，テキストの表層に現れ
+ る，結束性に関係する要素である接続表現や語彙的結束性を一貫性モデルに
+ おいても考慮することで性能の向上が期待できる．
+
+ 2章で述べるように，局所的な一貫性に関する研究はテキスト中の隣接する文間
+ の関係を単語の遷移という観点から捉えているものが多い．
+ その中でもBarzilayら\cite{barzilay2005,barzilay2008}の研究は，
+ この領域における他の研究において多く採用されているentity gridという表現を提案しており，先駆的な研究として注目に値する．しかし，3章で詳述
+ するように，このモデルでは要素の遷移の傾向のみ考慮しており，テキストのまとまりに関係し
+ ている明示的な特徴はほとんど利用されていない．そこで本論文では4章で詳述するように，一貫性
+ モデルに結束性に関わる要素を組み込むことによって，結束性を考慮に入れた
+ 局所的な一貫性モデルを提案する．
+
+  
+ \section{関連研究}\label{relatedwork}
+
+ Barzilayら\cite{barzilay2005,barzilay2008}は局所的な一貫性の
+ モデルとしてentity gridを提案している．この
+ モデルはテキスト
+ 中で述べられている要素の遷移に着目している．これは，センタ
+ リング理論\cite{grosz1995}で示されているように，一貫性のあるテキストで
+ はその文中の要素の出現に規則性があるという考えに基づいている．
+
+ Elsnerら\cite{elsner2008}は，entity gridモデルがテキストの一貫性において要素の遷移
+ にのみ着目しているということに言及し，例えば参照表現や対象の要素がこれ
+ までに既に述べられている要素かどうかなどといった他の要素をモデルに組み
+ 込んでいる．Filippovaら\cite{katja2007}はentity gridモデルに要素
+ 間の関係を考慮したモデルを提案し，このモデルをドイツ語の新聞記事に対し
+ て適用した結果を報告している．
+
+ 大域的な一貫性について，Barzilayら\cite{barzilay2004}は隠れマルコフモデル(HMM)を採用したモデ
+ ルを提案している．このモデルでは文章中の話題をHMMにおける隠れ状態と見な
+ し，話題の一貫性を隠れ状態の遷移確率によって表現している．Soricutら\cite{soricut2006}や
+ Elsnerら\cite{elsner2007}は局所的な一貫性と大域的な一貫性を同時に考慮するモデルを
+ それぞれ提案している．これらのモデルは
+ entity gridモデルとHMMを組み合わせたものである．
+
+ 日本語の文章に対する一貫性の評価手法には，板倉ら\cite{itakura2008}の提案する段落の一貫性
+ 指標がある．これは段落内で用いられている単語間の意味的な関係に基づいている．
+
+ これらの手法では文書中の単語の出現に着目してテキスト一貫性を評価してお
+ り，\ref{introduction}章で述べたように一貫性に影響すると考えられる，テ
+ キスト結束性に関係する表層的な特徴は考慮されていない．
+
+
+
+ \section{Entity Gridに基づく局所的な一貫性モデル}
+
+\begin{figure}[b]
+   \begin{center}
+\includegraphics{17-1ia9f1.eps}
+   \end{center}
+    \caption{テキスト例（Wall Street Journalから引用）}
+\label{sample}
+  \end{figure}
+  \begin{table}[b]
+    \caption{図\ref{sample}のテキストに対するentity grid}\label{egsample}
+\input{09table01.txt}
+  \end{table}  
+
+
+ Barzilayら\cite{barzilay2008}は，一貫性のあるテキストではその中で述べられる要素の
+ 出現の分布には規則性があるという仮説に基づいた一貫性のモデルを提案して
+ いる．
+ また，このテキスト中の要素の分布パターンを捉えるために，entity gridと呼ばれる表現
+ を導入している．
+ これは，テキストを，行に文を，列に文章中の要素をそれぞれ対応させた行列とし
+ て表したものである．その各項には文にお
+ ける要素の構文役割が入る．用いられる構文役割は主語(S)，目的語
+ (O)，その他(X)，出現せず(-)の4種類である．
+ 図\ref{sample}に示すテキストに対応するentity gridを表\ref{egsample}に示
+ す．
+ この一貫性モデルではentity gridの作成の際に共参照
+ 解析を行い，異なる表現であっても同じ要素を指すものをまとめている．例え
+ ば，図\ref{sample}において$s_1$の``BELL INDUSTRIES Inc.''と$s_4$の
+ ``Bell''は同じ要素を指すと判定されると，それらの構文役割は表\ref{egsample}
+ の同じ列(``BELL'')に記述される．
+
+
+  
+ 局所的な一貫性の評価にはentity gridを基に作られた文書ベクトルを用
+ いる．ベクトルの要素は文n-gram($n \ge 2$)における構文役割の遷移
+ 確率と，構文役割の出現確率からなる．
+ 構文役割の遷移を計算する際には，文書始めと文書終わりを含んだ遷移も考慮
+ する．
+ この確率はentity grid中に存在する長さ$n$の全ての構文役割の遷移の数に対する対象の長
+ さ$n$の遷移列の割合である．例えば，表\ref{egsample}に示すentity gridに
+ おいて，[S-]という遷移の確率は，長さ2の全ての遷移の数（即ち，50）に対する
+ 対象の遷移列（即ち，3）の割合から求められる（即ち，0.06）．
+
+また，テキストにおいて頻出する要素は，そのテキストの話題に関連すると考えられ，そ
+ のような要素はそうでない要素とは異なる遷移の傾向を持つという仮定から，
+ 出現頻度によってテキスト中の要素をグループに分け，それぞれのグループにおい
+ てentity gridを作成している．連続する2文における遷移確率で構成さ
+ れた文書ベクトル$d_1$，$d_2$を図\ref{vecsample}に示す．
+ 図中の ``0''，``1''はそれぞれ文書始め，文書終わりを表す．
+
+ Barzilayらは構文役割をdependency parserを使って推
+ 定しているが，これに対して本論文では構文役割を格助詞によって決定する（表
+ \ref{sr_baseline}）．
+ また，文書ベクトルの作成において，考慮する構文役割の遷移は
+ Barzilayらの手法と同様に文3-gramまでとした．
+
+
+ \begin{figure}[b]
+   \begin{center}
+\includegraphics{17-1ia9f2.eps}
+   \end{center}   
+  \caption{長さ2の遷移列に基づく文書ベクトル}
+\label{vecsample}
+ \end{figure}
+   \begin{table}[b]
+    \caption{構文役割}\label{sr_baseline}
+\input{09table02.txt}
+   \end{table}
+
+ テキスト一貫性は，対象のテキストについて一貫性がある，一貫性がな
+ いといったように絶対的に評価することが困難であるため，Barzilayら
+ はテキストの文の順番を局所的一貫性に基づいて順位付けすることで相対的に
+ 評価するモデルを提案している．
+ テキストの順位付けにはスコア関数を導入し，その値を利用する．このスコア
+ 関数は，あるテキスト$d_i$の文の順番を並べ替えて生成したテキストを$x_{ij}$，
+ $x_{ik}$とし，$x_{ij}$の方が$x_{ik}$よりも一貫性があるとしたとき，
+ \[
+ {\bf w}\cdot\Phi(x_{ij})>{\bf w}\cdot\Phi(x_{ik})
+ \]
+ という条件を満たすような関数である．この{\bf w}の値は学習によって推定す
+ る．このパラメータの学習にはranking SVMが用いられる．$\Phi(x)$はテキス
+ト$x$の一貫性に関する性質を表す素性ベクトルであり，具体的に
+は上述のテキスト中の要素の遷移確率で構成された文書ベクトルである．
+
+ モデルの評価は，テキストの文の順番を決定するというタスクを順位付け問題
+ として定式化して行う．即ち，テキストを文の集合と見なし，それから生成で
+ きるテキストの順位付けを行う．元のテキストの順番で構成されたテキストの
+ 順位が最も高ければ，そのテキストに対する局所的な一貫性の良し悪しを正しく評
+ 価できたと見なす．
+ しかし，実際には，同じテキストから生成された異なる文の順番を持つテキストの一貫性
+ を比較することは困難であるため，元テキストとそのテキストから生成された異な
+ る順番を持つテキストのペアに対して比較を行い，どの程度元のテキストの方
+ に高い順位を割り当てることができているかで評価する．
+
+   この一貫性モデルは，テキスト中の要素の遷移列のみに着目している．参照
+   表現に関しては共参照解析を行い，異なる表現であっても同じ要素を指すも
+   のは同一の要素として扱っているが，接続表現や同義語，類義語といった
+   テキストのまとまりに関係しているその他の明示的な特徴は利用されていない．
+   
+
+
+ \section{テキスト結束性に関わる要素と構文役割の拡張}
+
+ 本論文では，Barzilayら\cite{barzilay2008}の局所的な
+ 一貫性モデルに対して，テキスト結束性に寄与する，テキストに表層的に現れる文法
+ 的要素を考慮することで，その性能の向上を図る．
+ これにより，既存手法では``正しい一貫性を持つテキストの性質''に着目したモ
+ デルを構築していたのに対し，本手法では``正しい結束性を持ち，且つ，一貫性
+ を保っているテキストの性質''に着目したモデルを構築できると考えられる．
+ 具体的には，\ref{introduction}章で述べたテキスト結束性に寄与する要素を，
+ それぞれ，文書ベクトルへ
+ の素性の追加，接続関係毎の遷移確率の計算，意味的な類似性に基づ
+ く文中の要素のクラスタリングという形で，局所的な一貫性モデルに組み込む．
+
+ また，構文役割について，日本語の主題表現を考慮に入れた拡張を行う．
+
+
+  \subsection{接続関係毎の遷移確率の計算}
+
+  本論文では文の展開において接続関係の種類毎に文中の要素の構文役割の遷移の傾向
+  が異なるという仮説を立てる．
+  例えば，ある時点までで主題として述べられていた要素は，話題転換後には全く出現しな
+  い，あるいは別の主題の補助的な役割として出現するということが考えられる．
+  この仮説による特徴を捉えるために，文の接続関係毎に遷移確率を計
+  算する．
+
+  文間の関係の推定には接続
+  表現を利用する．テキスト中の隣接する文に対して，後ろの文の接続詞の種類によっ
+  て文間の関係を決定する．
+
+  接続関係には市川の分類\cite{itikawa1978}を採用し，これに基づい
+  て接続詞を表\ref{conjtype}に示すグループに分類する．表中の括弧内の数
+  字はそのグループに属する接続詞の数である．各グループへの接続詞の対応付
+  けは人手で行った．接続詞が存在しない場合はその2文間には連鎖型の接続関係
+  があると見なす．
+
+  文間の関係の種類毎に遷移確率を計算するため，ベクトルの素性の数は接続関係の数に比例し
+  て増加する．このことはデータのスパース性を導くと考えられるので，さらに
+  この8種類の分類を表\ref{relation}に示す文脈形成の関係に基づく3種類の
+  グループにまとめる．
+
+  \begin{table}[b]
+     \caption{接続関係の分類}\label{conjtype}
+\input{09table03.txt}
+\end{table}
+\begin{table}[b]
+  \caption{文脈形成の観点に基づく接続関係の分類}\label{relation}
+\input{09table04.txt}
+\end{table}
+  \begin{table}[b]
+   \begin{minipage}[t]{.5\textwidth}
+    \begin{center}
+\includegraphics{17-1ia9f3.eps}
+    \end{center}
+    \figcaption{テキスト例2}\label{sample2}
+   \end{minipage}
+   \hfill
+   \begin{minipage}[t]{.45\textwidth}
+    \caption{図\ref{sample2}に対するentity grid}
+\label{egsample2}
+\input{09table05.txt}
+   \end{minipage}
+  \end{table}
+
+
+図\ref{sample2}に示すテキストとそのentity grid（表\ref{egsample2}）から生
+成される長さ2の構文役割の遷移確率のベクトルの例を示す．ここで$s_1, \dots , s_4$は文であり，
+$e_1, \dots , e_3$は文中の要素，図中の下付き文字はその要素の文中での構文役割であ
+る．
+
+  文$s_2$の文頭に接続詞``そして''があり，この接続詞は添加型に属するた
+  め，$s_1$と$s_2$間の関係は
+  Group 2となる．$s_2$と$s_3$間，$s_3$と$s_4$間に関しては$s_3$と$s_4$の文
+  頭に接続詞が存在しないので連鎖型と見なしGroup 3となる．
+  遷移確率の計算は各関係毎に行う．例えば，Group 3の[S-]という構文役割の
+  遷移確率は，Group 3の長さ2の全ての遷移の数（即ち，16）に対する[S-]の遷移
+  の数（即ち，1）の割合である0.06となる．図\ref{sample2}のベクトルを図
+  \ref{sample2vector}に示す．SS$_{\rm G_i}$はGroup $i$における構文役割の遷
+  移[SS]の遷移確率を表す．
+
+ \begin{figure}[t]
+   \begin{center}
+\includegraphics{17-1ia9f4.eps}
+   \end{center}   
+  \caption{接続関係を考慮した文書ベクトルの例（一部）}
+\label{sample2vector}
+\vspace{-0.5\baselineskip}
+ \end{figure}
+
+
+
+  \subsection{参照表現}
+
+  参照表現に関して，本論文ではその先行詞が明示的である指示表現のみを考慮
+  する．``この''や``あの''などの指示形容詞が使われている指示表現はその先
+  行詞が前文に現れることが多い．従って，逆に指示形容詞が出現している文の
+  前文にその先行詞が出現していなければ，その2文間のつながりは悪いと考え
+  ることができる．
+
+  このことを考慮するために，指示形容詞を含む参照表現がその先行詞を前文に
+  含む割合を文書ベクトルの素性として追加する．対象とする指示形容詞は``こ
+  の''など8種類で，割合は``指示形容詞+名詞''という表現の出現数に対する，
+  その先行詞が前文に現れている場合の数で求める．これは参照表現が正しく機
+  能している割合と見なすことができる．
+
+  Barzilayらの手法ではgridを作成する際に共参照解析を行い，異なる
+  表現であっても同じ要素を指す場合は同一要素と見なしている．これに対して，
+  本論文では共参照解析は行っていない．
+
+
+  \subsection{語彙的結束性に基づいた文中の要素のクラスタリング}
+
+   Barzilayらのentity gridモデルでは遷移確率を計算する際にそれぞれの要素を独立に扱っ
+   ている．そのために要素間の関係はモデルに反映されていない．
+  この問
+  題に対して，各要素を意味的なクラスタリングによってまとめ，得られたクラス
+  タを1つの要素として扱うことで対応する．
+  本論文ではクラスタリング手法として日本語語彙大系\cite{goitaikei}の意味体系を利用した手
+  法と語彙的連鎖を利用した手法の2種類を考える．
+
+  要素をクラスタにまとめた際，同じクラスタにまとめられる要素が1文中に複
+  数存在すると，そのクラスタに対して複数の構文役割が存在することになる．
+  このような場合における構文役割の扱いに対して，次の2種類を考える．
+  \begin{list}{}{}
+   \item[{\bf 手法1(1st). } ] 構文役割の優先順位\footnote{優先順位：S$>$O$>$X.}
+		に基づいて，クラスタに対して1つの構文役割を決定する．
+   \item[{\bf 手法2(comb). }] クラスタ中の構文役割を全て利用し，遷移は全組
+		合せを考える．
+  \end{list}
+
+  図\ref{select}にそれぞれの例を示す．図において，$e_1$，$e_2$，$e_3$は要素であ
+  り，$c_1$は$e_2$と$e_3$を含むクラスタである．手法1では，文$s_1$と$s_2$
+  間での$c_1$の遷移は[OS]のみとする．これに対して，手法2では，構文役割
+  の全ての組合せである[OO]，[OS]，[-O]，[-S]を$c_1$の遷移と見な
+  す．
+
+  \begin{figure}[t]
+   \begin{center}
+\includegraphics{17-1ia9f5.eps}
+   \end{center}
+     \caption{構文役割の選択}
+\label{select}
+  \end{figure}
+
+
+   \subsubsection{日本語語彙大系を利用したクラスタリング}
+
+   日本語語彙大系を使って，要素を同じ概念のグループにま
+   とめる．日本語語彙大系は最大12段からなる階層的な構造を持つ意味属性の
+   体系を持つシソーラスである．このそれぞれの意味属性をクラスタとして扱う．
+
+   テキスト中に出現する各要素に対して，その要素が持つ意味属性を日本語語
+   彙大系から検索する．このうち特定の段において同じ意味属性を有する要素を同じク
+   ラスタにまとめる．1つの要素に対して複数の意味属性が存在する場合は，その特
+   定の段の意味属性で見た時に数の多かった意味属性をその要素の意味属性と
+   見なす．
+
+   \subsubsection{語彙的連鎖を利用したクラスタリング}
+
+   語彙的連鎖\cite{morris1991}とは意味的に関連している語の列である．この語
+   の列をクラスタとして扱う．本論文ではMochizukiらの手法
+   \cite{mochizuki2000}に基づいて語彙的連鎖を求める．
+
+   はじめに，単語$X$，$Y$間の共起スコアはコサイン尺度(1)によって求める．
+   \begin{equation}
+    cos(X,Y)=\frac{\sum^n_{i=1}x_i\times y_i}{\sqrt{\sum^n_{i=1}x^2_i}
+    \times \sqrt{\sum^n_{i=1}y^2_i}}
+   \end{equation}
+   ここで$x_i$，$y_i$はテキスト$i$において単語$X$，$Y$が出現する回数であ
+   り，$n$はコーパス中のテキストの数である．次に，2つのクラスタ$C_i$，$C_j$間の類似度は式
+   (2)によって求める．
+   \begin{equation}
+    sim(C_i,C_j)= \underset{X,Y}{\max}\ cos(X \in C_i, Y \in C_j)
+   \end{equation}
+   
+   語彙的連鎖の生成アルゴリズムは1文中の要素のクラスタリングとテキスト全
+   体の要素のクラスタリングの2ステップからなり，テキスト中の全ての文に対
+   してこのステップを繰り返し行う．
+   1文中の要素のクラスタリングでは，まずテキストから文を取り出し，その文中のそれぞれの要素を1クラスタ
+   と見なして，全てのクラスタのペアに対して式(2)によって類似度を計算する．
+   類似度の最も高いペアの類似度が閾値以上であれば，そのペアをマージする．
+   この処理をマージするペアが無くなるまで繰り返す．
+   次に，テキスト全体のクラスタと先ほど生成した文中のクラスタの全てのペ
+   アの類似度を同様に式(2)によって計算する．類似度の最も高いペアの類似度
+   が閾値以上であれば，そのペアをマージする．この処理をマージするペアが
+   無くなるまで繰り返す．
+
+  \subsection{構文役割の拡張}
+
+  Barzilayら\cite{barzilay2008}のentity gridモデルではテキストにおいて顕著な使われ方をする要素をそ
+  うでない要素と分けて遷移確率を求めている．これは顕著に表れる要素はテキ
+  ストの主題を表すことが多く，そのような要素は特別な遷移傾向を持つという
+  仮説に基づいている．
+  主題に関しては，日本語の文章では助詞``は''を用いることでその文の主題を明示的
+  に表すことができる．また，主題かどうかというだけでなく，述部に直接係る要
+  素とそうでない要素では文章の展開への寄与が異なると考えられる．
+
+  これらのことをモデルに組み込むために，本論文ではBarzilayらのentity gridモデルで
+  用いられている4種類の構文役割を表\ref{sr_proposed}に示す主題と
+  述部要素を加えた6種類に拡張する．
+  この構文役割の集合においては，その役割間の優先順位関係をH$>$S$>$O$>$R$>$Xとする
+   (cf. \cite{marilyn1994})．
+
+
+  \begin{table}[t]
+   \caption{構文役割（拡張）}\label{sr_proposed}
+\input{09table06.txt}
+  \end{table}
+
+
+ \section{実験と考察}
+
+ 前章で述べた各要素の評価のために2種類の実験を行った．1つは文順序に関
+ するタスクであり，もう1つは自動要約で生成された要約テキストの
+ ランキングのタスクである．
+
+ 実験において性能を評価するモデルと各モデルから生成される文書ベクトル
+ の次元数を表\ref{features}に示す．各モデルに対して接続関係毎に遷移確率を計算してベクトルを作
+ 成した場合(+CONJ)と，
+ それを行わなかった場合(no CONJ)の両方で実験を行った．
+ 全て
+ のモデルにおいて頻出する要素とそうでない要素に分けてgridを作成する．そ
+ の閾値はBarzilayらの手法と同様に2とした．BaselineはBarzilayら
+ \cite{barzilay2008}の設定に従ったモデルである．但し，本論文ではBaselineにおいても共参照解析は行わない．
+
+   \begin{table}[t]
+     \caption{検討するモデル}\label{features}
+\input{09table07.txt}
+   \end{table}
+
+   実験では，形態素解析には
+   MeCab\footnote{http://mecab.sourceforge.net/}を，係り受け解析には
+   CaboCha\footnote{http://www.chasen.org/\~{}taku/software/cabocha/}を
+   使用した．
+
+
+
+ \subsection{予備実験}\label{pilot}
+
+ 語彙的結束性の考慮において，日本語語彙大系を利用したクラスタリングの際
+ に使用する意味属性の段と語彙的連鎖によるクラスタリングの際の閾値をあら
+ かじめ決定する必要がある．本論文ではこれらの値を予備実験によって決定した．
+
+ 予備実験は表\ref{features}のSC(1st)とLC(1st)のモデルに
+ 対して，\ref{sentenceordering}節と同じタスクを行った．使用したデータは
+ 朝日新聞コーパスの2003年の記事のうち，``人もの''というカテゴリに分類
+ されている記事100件である．この記事の順番を無作為に並べ替えたものと元の
+ 記事を比べて元の記事の方が一貫性があると判定したペアを正解と見なし，そ
+ の精度が最も良かった値を使用するパラメータとした．
+
+ 日本語語彙大系で用いられている意味属性体系は最大で12段あり1が最も抽象的な概
+ 念である．このうち3〜9の段に対して実験を行った．結果を
+ 表\ref{goitaikeipilot}に示す．
+
+ 同様に，語彙的連鎖のクラスタのマージに関する閾値について，0.05か
+ ら0.5まで0.05刻みで値を変えて行った実験の結果を表\ref{lcpilot}に示す．
+
+ これらの結果から，本実験では語彙的連鎖のクラスタのマージの閾値には0.35
+ を使用した．また，日本語語彙大系を用いたクラスタリングは語彙的連鎖のク
+ ラスタリングに比べて，精度が低いことが判明したため，以降の実験では
+ 文中の要素のクラスタリングでは語彙的連鎖によるクラスタリングについての
+ み行う．
+
+ 
+
+
+ \subsection{実験1: テキストの並べ替え}\label{sentenceordering}
+
+ 文順序に関するタスクでは，3章で述べた評価方法と同様にオリジナ
+ ルのテキストと文の順番を並べ替えたテキストとを比較し，どちらが一貫性があ
+ るかを正しく判定できた精度でモデルの評価を行った．
+
+ \begin{table}[b]
+   \caption{予備実験結果（日本語語彙大系）}\label{goitaikeipilot}
+\input{09table08.txt}
+ \end{table}
+ \begin{table}[b]
+   \caption{予備実験結果（語彙的連鎖）}\label{lcpilot}
+\input{09table09.txt}
+ \end{table}
+ \begin{table}[b]
+   \caption{各モデルのコストパラメータの値}\label{costparameter}
+\input{09table10.txt}
+ \end{table}
+
+
+ 学習にはSVM$^{light}$\footnote{http://www.cs.cornell.edu/people/tj/svm\_light/}
+ のranking SVMモードを使用した．
+ コストパラメータ$c$の値については各モデル毎に予備実験で使用
+ したデータを使って10分割交差検定を行い，最も精度が高いものを使用してい
+ る．各モデルに対する$c$の値を表\ref{costparameter}に示す．
+ 
+ また，並べ替えテキスト中の文の順番がオリジナルのテキストの文の順番と大きく異なってい
+ れば，一貫性の判定は容易になると考えられる．このことを
+ 検証するために，表\ref{permutation}に示す5種類の並べ替えの比較を行う．
+ swap1はオリジナルのテキストとの差が最も小さく，randomはその差が最も大き
+ くなる．mixはswap1，swap2，swap3の混合であり，swap3よりは差は小さい．
+
+ 本実験では朝日新聞コーパスの2003年分の記事から，``行政改
+ 革''，``医療''，``教育''というカテゴリに該当するもので，1記事あたり10文
+ 以上で構成されているものを使用した．データセット中に含まれる記事のカテゴリの割合は
+ 均等になるように調整している．
+ オリジナルのテキストと比較する並べ替えテキストに関して，表\ref{permutation}に
+ 示す各並べ替えの種類のそれぞれにおいて，1つの記事に対して20個の並べ替え
+ テキストを生成した．
+ 
+ この比較する並べ替えのテキストの数に関して，Karamanis \cite{karamanis2006}はセンタリング理論
+ に基づいた手法に対して，信頼できる結果を得るために100,000個の並べ替えテ
+ キストを生成して評価を行っているが，我々は
+ entity gridに基づいたモデルを用いており，このモデルでの精度向上を目的と
+ しているため，使用する並べ替えテキストの数はBarzilayら
+ \cite{barzilay2008}の実験の設定にあわせている．
+
+ \begin{table}[b]
+   \caption{並べ替えの種類}\label{permutation}
+\input{09table11.txt}
+ \end{table}
+
+ 実験はデータセットに対して10分割交差検定を行い，テストデータ中の各ペアにおいてオリジナルのテキストの
+ 方が一貫性があると判定されたペアの割合で評価した．
+ 
+ 表\ref{exp1_model}に100記事，300記事に対してmixの並べ替えを行ったデータ
+ を用いた各モデルの結果を示す．``no CONJ''は各モデルにおいて接続関係毎の
+ 遷移確率の計算を行わなかった場合，``+CONJ''は接続関係毎の遷移確率の計算
+ を行った場合を示す．
+ 
+
+ 表中の太字の
+ 数値は使用したデータにおいて最も良かったものを表し，斜字は
+ ベースライン（接続関係を未考慮のBaseline）
+ を下回ったものを表す．また，右肩の記号$ ^{**} (p < 0.01)$，$ ^{*} (p
+ < 0.05)$は符号検定においてベースラインの精度と有意な差があることを示す．
+
+ 全体としては，いくつかベースラインを下回っているものがあるものの，多く
+ のモデルにおいてベースラインを有意に上回る結果を得ることができた．
+ 接続関係毎に遷移確率を計算したモデル（``+CONJ''の列）の方がそうでないモデル
+ （``no CONJ''の列）に比べて良い結果を示している．特に各データセッ
+ トにおいて接続関係のタイプを考慮したモデルが最も良い精度を得ており，文
+ 脈の展開を明示的に示す接続表現から得られる接続関係が一貫性の判定に有用
+ であることを示している．
+
+\begin{table}[t]
+  \caption{モデル別の結果（実験1）}\label{exp1_model}
+\input{09table12.txt}
+\end{table}
+
+ gridから作成される文書ベクトルの素性は構文役割の遷移の組合せの数だけ存
+ 在する．従って，構文役割を拡張したモデル(SR(H))はベースラインのモデルに
+ 比べて素性の数が多くなり，
+ データが少なかった時の影響が顕著に表れると考えられる．
+
+ また，参照表現については少数の明示的な指示形容詞のみに限定したため，参照
+ 表現を考慮したモデル(REF)でもそれほど差が出なかったと考えられる．
+
+ 語彙的結束性に基づいたクラスタリングを行ったモデルでは良好な結果を得る
+ ことができた．
+
+ 本論文で提案した要素の全てを考慮したモデルは，全ての場合で最良の結果を
+ 得ることはなく語彙的結束性のみを考慮したモデルを下回った場合も
+ あった．これは構文役割を拡張したモデルと同様に，全ての要素を考慮したモデルと語彙的結束性のみを考慮したモ
+ デルとでは文書ベクトルの次元の数が異なることが影響していると考えられる．
+
+ 本論文で用いている一貫性モデルではモデルの学習に必要なデータは人間が書
+ いたテキストのみであり，学習のために特別な情報を付与する必要はない．従っ
+ て，学習データの作成に必要なコストはほとんどない．そこで，データを
+ 更に増やして実験を行った．この実験ではベースラインのモデル(Baseline)，構文役割を
+ 拡張したモデル(SR(H))，全ての要素を考慮したモデル(ALL-LC(comb))，接続関係毎に遷移確率を計算
+ したモデル(+CONJ, Baseline)と全ての要素を考慮した接続関係毎に遷移確率を
+ 計算したモデル(+CONJ, ALL-LC(comb))のみを使用した．
+ 結果を表\ref{exp1_add_tab}に，そのグラフを図\ref{exp1_add}に示す．
+
+  接続関係毎の遷移確率を考慮したモデルはそうでないモデルに比べて，データ
+  が増加するにつれて精度が向上することが明らかになった．一方，構文役割を
+  拡張したモデルはデータを増やしていってもベースラインに比べてあまり向上
+  は見られなかった．
+
+ 表\ref{exp1_data}に並べ替えの種類毎での結果を示す．
+ 比較するテキストの差と問題の難易度との関係については，差が一番小さい
+ swap1では精度が最も低く，一番大きいrandomでは精度が最も高くなっており，
+ 仮説通りの結果が得られた．また，全てのデータセットにおいてBaselineと比べて本論文のモデルの方が良
+ 好な結果を得ることができた．
+
+
+\begin{table}[t]
+  \caption{データ増加時の精度（実験1）}\label{exp1_add_tab}
+\input{09table13.txt}
+\end{table}
+  \begin{figure}[t]
+   \begin{center}
+\includegraphics{17-1ia9f6.eps}
+   \end{center}
+     \caption{データ増加時の精度（実験1）}
+\label{exp1_add}
+  \end{figure}
+\begin{table}[t]
+  \caption{データ別の結果（実験1）}\label{exp1_data}
+\input{09table14.txt}
+\end{table}
+
+
+
+ \subsection{実験2: 要約文書の比較}
+
+ \ref{sentenceordering}節で行った実験では，あるテキストとそのテキスト中
+ の文の順番を並べ替えたものとを比較している．このため比較する2つのテキストの単語の
+ 出現頻度分布は等しいと言える．しかし，実際にはこのような状況は稀であると考えら
+ れる．
+ 例えば，自動要約の評価においては同じ元文書から生成された要約を用いてシ
+ ステムの評価を行う．元文書が同じであっても，システム毎に異なる要
+ 約が生成されることがあり，これらの単語の出現傾向は異なると考えられる．
+
+ そこで，実際に自動要約システムによって生成された要約を比較し，どちらが
+ 一貫性があるかを判定するという実験を行った．
+ 実験に使用したデータは
+ NTCIR-4\footnote{http://research.nii.ac.jp/ntcir/ntcir-ws4/ws-en.html}\cite{ntcir4}
+ のサブタスクであったTSC3 (Text Summarization Challenge
+3)\footnote{http://www.lr.pi.titech.ac.jp/tsc/index-en.html}に提出された
+ 要約である．TSC3では11のシステムが30件の元文書に対してそれぞれ長短2種類
+ の要約を生成している．このうち実際に要約文が出力されている657件の要約を
+ 使用した．
+
+ それぞれの要約には被験者による評価結果が付与されている．この
+ 評価では，被験者は15個のQuality questionと呼ばれるテキストの質に関するチェック項
+ 目\cite{hirao2004}が示され，各項目毎にスコアを付ける．このQuality questionは主に要約の
+ 読みやすさに対する質問で構成されている．本実験では特に一貫性に関係する項目のスコ
+ アのみに着目し，これらから要約の一貫性に関するスコアを計算し比較を行った．
+
+ 要約のスコアの決定について述べる．TSC3で用いられた15個のチェック項目の
+ うち，付録\ref{qq}に示す8個の項目のスコアを利用した．
+
+ それぞれチェック項目のスコアは各項目の内容に該当する箇所の個数であり，$qq_2$〜$qq_8$については$qq_1$の項目に当てはまった重複文は除外して数え
+ られている．以上より，要約$S$のスコア$score(S)$を以下の式によって求める．
+ \begin{equation}
+  score(S)=\frac{N(qq_2)+\dots +N(qq_8)}{length(S)-N(qq_1)}+\frac{N(qq_1)}{length(S)}
+ \end{equation}
+ ここで，$N(qq_i)$はチェック項目$qq_i$のスコアであり，$length(S)$は要約
+ $S$の文数である．$qq_8$の回答は``矛盾している''，
+ ``どちらともいえない''，``矛盾していない''のいずれかであり，これらのス
+ コアは順に1，0.5，0として$N(qq_8)$の値とした．各スコアは文章中のおかし
+ な箇所の個数であることから，$score(S)$は小さい方が良いテキスト，即ち，本実験
+ においては一貫性が高いと考える．
+
+ この$score(S)$を用いて，本実験では同じテキストから生成された異なるシステムによる同じ長さの要約のペアに対し，どちら
+ の要約が一貫性があるかを判定する．従って，タスクとしては実験1と同じもの
+ となる．比較する要約のスコアが等しいペアは除外する．
+
+ テキスト一貫性の判定を実際に利用する状況では，判定が必要なデータを訓練データ
+ に用いることはできず，別に訓練データを用意する必要がある．
+ このことを考慮して，
+ 本実験では交差検定ではなく\ref{sentenceordering}節の実験
+ において作成した300記事とそのmixの並べ替えを訓練データとして用い，それによって
+ 得られたモデルを用いて判定を行った．実験に使用した学習器や各パラメータの
+ 値は\ref{sentenceordering}節での実験と同じである．
+
+ また，\ref{sentenceordering}節の実験と同様に，比較するテキストの差によ
+ る精度の違いの検証も行った．本実験ではそれぞれの要約のスコアの差が大き
+ ければ，一貫性の判定は容易になると考えられる．そこで比較する要約のペア
+ のスコアの差を0から2.0まで0.5刻みでの範囲で分割し，それぞれでの精度を計
+ 算した．
+
+
+ 用いたテストデータ全てに対する，各モデルの精度を表\ref{exp2_model}に示す．表
+ 中の記号，字体の意味については前節の実験と同様である．
+
+\begin{table}[b]
+  \caption{モデル別の結果（実験2）}\label{exp2_model}
+\input{09table15.txt}
+\end{table}
+
+
+ 学習データとテストデータのドメインが異なるために，前節の実験に比べて全
+ 体的な精度は低くなっているが，提案したほぼ全てのモデルにおいてベースラインよりも良い精度を得る
+ ことができた．
+
+ 接続関係を考慮したモデル（表中の``+CONJ''の列）とそうでないモデル
+ （表中の``no CONJ''の列）では，最も良い精度を得られたモデルは接続関係を考
+ 慮しない場合でのものであったが，それぞれのモデルにおいての接続関係の考慮
+ の有無による違いでは考慮した方が良い精度を示しているものが多くなってい
+ る．本実験においても，構文役割の拡張(SR(H))や参照表現の考慮(REF)を組み
+ 込んだモデルは，ほとんど改善が見られなかった．これは前節の実験結果と同
+ 様であった．
+
+
+ 語彙的結束性に基づくクラスタリングにおいても，同様にベースラインを上回
+ る結果を得ることができた．
+
+
+
+ 比較した要約のスコアの差が小さければ，それらの一貫性を判定することが困
+ 難になると考えられる．そこでテストデータの各ペアのスコアの差毎の精度を
+ 求めた．その結果を表\ref{exp2_data}に示す．1行目のラベルの括弧の中の数
+ 字はその範囲に該当する要約ペアの数である．差が2.0より大きいペアについて
+ は，該当するペアの数が多くなかったため省略している．
+
+ 要約のスコアの差と精度の関係については，こちらも仮説通りスコアの差が小
+ さければ判定は難しくなり，差が大きくなれば判定は容易であるという結果に
+ なった．
+ 
+
+ 本実験で用いたTSCのデータは1つの元文書に対して複数のシステム要約が存在
+ しており，上述の計算式で求められたスコアに基づいて同じ元文書から
+ 生成された要約を順位付けすることができる．そこで要約のペアの比較ではな
+ く，同一文書から生成された要約の順位を推定するという実験を行った．
+ 使用したモデルは前述の実験と同じ300記事とそのmixの並べ替えのデータで学
+ 習したものである．評価にはSpearmanの順位相関係数の平均を使用した．結果
+ を表\ref{rankcor}に示す．
+
+\begin{table}[t]
+  \caption{スコアの差毎の結果（実験2）}\label{exp2_data}
+\input{09table16.txt}
+\end{table}
+\begin{table}[t]
+  \caption{順位相関（実験2）}\label{rankcor}
+\input{09table17.txt}
+\end{table}
+
+ベースラインに比べて提案したモデルに高い相関を示すものがあったが，全体的に相関は低いという結果が得られた．
+これは特にスコアの差が小さい場合での判定精度が影響していると考えられる．
+
+
+ 本実験結果から，ベースラインと比べると，ある程度実際にテキスト一貫性の
+ 判定を行うような設定においても本論文で提案したモデルの方が有効であるこ
+ とが明らかになった．しかし，その精度は高いとは言えず，改良の余地がある．
+
+
+
+ \section{おわりに}
+
+ 本論文では接続関係，参照表現，語彙的結束性といった結束装置，また，日本語に特化
+ した構文役割をentity gridモデルに組み込むことで，結束性を考慮したテキス
+ トの局所的な一貫性モデルを提案し，その有効性の検証を行った．実験
+ から，提案モデルがテキスト一貫性の高いテキストの判定と自動
+ 要約によって作成されたテキストの評価の2つのタスクにおいて，オリジナルの
+ entity gridモデルを上回るということを示した．
+
+ entity gridによるテキストの一貫性モデルはテキストにおける文中の要素
+ の遷移に着目したものである．本論文ではその要素の遷移は文脈の展開によって
+ 違う傾向を示すという仮説を立て，文脈展開の種類を明示的に示す働きを持つ
+ 接続関係に着目し，その種類毎にgridを作成するというモデルを提案し
+ た．実験の結果，接続関係を考慮したモデルの方がそうでないモデルに比べて
+ 良い結果を得ることができ，この仮説がテキストの一貫性の評価において有効で
+ あることを示した．また，その他の項目についても一貫性の評価において有
+ 効であることを示した．
+
+ 本論文で採用したentity gridに基づいた局所的一貫性のモデルでは，テキストを1つのベクトル
+ として扱うため，テキスト全体についての一貫性の判定は行えても，テキスト
+ の部分についての一貫性の評価は行えない．テキストの部分の一貫性の評価は，小
+ 論文の自動評価など教育の現場での利用において有用であると考えられる．また，
+ 例えばテキストにおいて一貫性の悪い箇所の数を用いるなどによって，テキス
+ トの部分の一貫性の評価をテキスト全体の評価に用いることも可能であると考えられ
+ る．このことから，テキスト内の部分的な単位での一貫性の評価手法の提案が
+ 今後の課題である．
+
+ 
+\bibliographystyle{jnlpbbl_1.4}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Barzilay \BBA\ Lapata}{Barzilay \BBA\
+  Lapata}{2005}]{barzilay2005}
+Barzilay, R.\BBACOMMA\ \BBA\ Lapata, M. \BBOP 2005\BBCP.
+\newblock \BBOQ Modeling Local Coherence: an Entity-based Approach.\BBCQ\
+\newblock In {\Bem Proceedings of the 43rd Annual Meeting of the Association
+  for Computational Linguistics (ACL'05)}, \mbox{\BPGS\ 141--148}.
+
+\bibitem[\protect\BCAY{Barzilay \BBA\ Lapata}{Barzilay \BBA\
+  Lapata}{2008}]{barzilay2008}
+Barzilay, R.\BBACOMMA\ \BBA\ Lapata, M. \BBOP 2008\BBCP.
+\newblock \BBOQ Modeling Local Coherence: An Entity-Based Approach.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 34}  (1), \mbox{\BPGS\
+  1--34}.
+
+\bibitem[\protect\BCAY{Barzilay \BBA\ Lee}{Barzilay \BBA\
+  Lee}{2004}]{barzilay2004}
+Barzilay, R.\BBACOMMA\ \BBA\ Lee, L. \BBOP 2004\BBCP.
+\newblock \BBOQ Catching the Drift: Probabilistic Content Models, with
+  Applications to Generation and Summarization.\BBCQ\
+\newblock In {\Bem HLT-NAACL 2004: Main Proceedings}, \mbox{\BPGS\ 113--120}.
+
+\bibitem[\protect\BCAY{Elsner, Austerweil, \BBA\ Charniak}{Elsner
+  et~al.}{2007}]{elsner2007}
+Elsner, M., Austerweil, J., \BBA\ Charniak, E. \BBOP 2007\BBCP.
+\newblock \BBOQ A Unified Local and Global Model for Discourse Coherence.\BBCQ\
+\newblock In {\Bem Human Language Technologies 2007: The Conference of the
+  North American Chapter of the Association for Computational Linguistics;
+  Proceedings of the Main Conference}, \mbox{\BPGS\ 436--443}.
+
+\bibitem[\protect\BCAY{Elsner \BBA\ Charniak}{Elsner \BBA\
+  Charniak}{2008}]{elsner2008}
+Elsner, M.\BBACOMMA\ \BBA\ Charniak, E. \BBOP 2008\BBCP.
+\newblock \BBOQ Coreference-inspired Coherence Modeling.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-08: HLT, Short Papers}, \mbox{\BPGS\
+  41--44}.
+
+\bibitem[\protect\BCAY{Filippova \BBA\ Strube}{Filippova \BBA\
+  Strube}{2007}]{katja2007}
+Filippova, K.\BBACOMMA\ \BBA\ Strube, M. \BBOP 2007\BBCP.
+\newblock \BBOQ Extending the Entity-grid Coherence Model to Semantically
+  Related Entities.\BBCQ\
+\newblock In {\Bem Proceedings of the 11th European Workshop on Natural
+  Language Generation}.
+
+\bibitem[\protect\BCAY{Grosz, Weinstein, \BBA\ Joshi}{Grosz
+  et~al.}{1995}]{grosz1995}
+Grosz, B.~J., Weinstein, S., \BBA\ Joshi, A.~K. \BBOP 1995\BBCP.
+\newblock \BBOQ Centering: a Framework for Modeling the Local Coherence of
+  Discourse.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 21}  (2), \mbox{\BPGS\
+  203--225}.
+
+\bibitem[\protect\BCAY{Halliday \BBA\ Hasan}{Halliday \BBA\
+  Hasan}{1976}]{halliday1976}
+Halliday, M. A.~K.\BBACOMMA\ \BBA\ Hasan, R. \BBOP 1976\BBCP.
+\newblock {\Bem Cohesion in English}.
+\newblock Longman,London.
+
+\bibitem[\protect\BCAY{Hirao, Okumura, Fukushima, \BBA\ Nanba}{Hirao
+  et~al.}{2004}]{hirao2004}
+Hirao, T., Okumura, M., Fukushima, T., \BBA\ Nanba, H. \BBOP 2004\BBCP.
+\newblock \BBOQ Text Summarization Challenge 3 - Text summarization evaluation
+  at NTCIRWorkshop 4.\BBCQ\
+\newblock Working Notes of the 4th NTCIR Workshop Meeting.
+
+\bibitem[\protect\BCAY{市川}{市川}{1978}]{itikawa1978}
+市川孝 \BBOP 1978\BBCP.
+\newblock \Jem{国語教育のための文章論概説}.
+\newblock 教育出版.
+
+\bibitem[\protect\BCAY{池原\JBA 宮崎\JBA 白井\JBA 横尾\JBA 中岩\JBA 小倉\JBA
+  大山\JBA 林}{池原 \Jetal }{1997}]{goitaikei}
+池原悟\JBA 宮崎正弘\JBA 白井諭\JBA 横尾昭男\JBA 中岩浩巳\JBA 小倉健太郎\JBA
+  大山芳史\JBA 林良彦 \BBOP 1997\BBCP.
+\newblock \Jem{日本語語彙大系}.
+\newblock 岩波書店.
+
+\bibitem[\protect\BCAY{庵}{庵}{2007}]{iori2007}
+庵功雄 \BBOP 2007\BBCP.
+\newblock \Jem{日本語におけるテキストの結束性の研究}.
+\newblock くろしお出版.
+
+\bibitem[\protect\BCAY{板倉\JBA 白井\JBA 黒岩\JBA 小高\JBA 小倉}{板倉 \Jetal
+  }{2008}]{itakura2008}
+板倉由知\JBA 白井治彦\JBA 黒岩丈介\JBA 小高知宏\JBA 小倉久和 \BBOP 2008\BBCP.
+\newblock 単語の概念関係を用いた段落一貫性評価指標の有効性.\
+\newblock \Jem{情報処理学会研究報告NL-183}.
+
+\bibitem[\protect\BCAY{Kando}{Kando}{2004}]{ntcir4}
+Kando, N. \BBOP 2004\BBCP.
+\newblock \BBOQ Overview of the Fourth NTCIR Workshop.\BBCQ\
+\newblock Working Notes of the 4th NTCIR Workshop meeting.
+
+\bibitem[\protect\BCAY{Karamanis}{Karamanis}{2006}]{karamanis2006}
+Karamanis, N. \BBOP 2006\BBCP.
+\newblock \BBOQ Evaluating Centering for Sentence Ordering in Two New
+  Domains.\BBCQ\
+\newblock In {\Bem Proceedings of the Human Language Technology Conference of
+  the NAACL, Companion Volume: Short Papers}, \mbox{\BPGS\ 65--68}.
+
+\bibitem[\protect\BCAY{Lin}{Lin}{2004}]{lin2004}
+Lin, C.-Y. \BBOP 2004\BBCP.
+\newblock \BBOQ ROUGE:A Package for Automatic Evaluation of Summaries.\BBCQ\
+\newblock In {\Bem Proceedings of Worksop on Text Summarization Branches Out,
+  Post Conference Workshop of ACL 2004}, \mbox{\BPGS\ 74--81}.
+
+\bibitem[\protect\BCAY{Lin \BBA\ Hovy}{Lin \BBA\ Hovy}{2003}]{lin2003}
+Lin, C.-Y.\BBACOMMA\ \BBA\ Hovy, E. \BBOP 2003\BBCP.
+\newblock \BBOQ Automatic Evaluation of Summaries Using N-gram Co-Occurrence
+  Statistics.\BBCQ\
+\newblock In {\Bem Proceedings of HLT-NAACL-2003}.
+
+\bibitem[\protect\BCAY{Miltsakaki \BBA\ Kukich}{Miltsakaki \BBA\
+  Kukich}{2004}]{miltsakaki2004}
+Miltsakaki, E.\BBACOMMA\ \BBA\ Kukich, K. \BBOP 2004\BBCP.
+\newblock \BBOQ Evaluation of Text Coherence for Electronic Essay Scoring
+  Systems.\BBCQ\
+\newblock {\Bem Natural Language Engineering}, {\Bbf 10}  (1), \mbox{\BPGS\
+  25--55}.
+
+\bibitem[\protect\BCAY{Mochizuki, Iwayama, \BBA\ Okumura}{Mochizuki
+  et~al.}{2000}]{mochizuki2000}
+Mochizuki, H., Iwayama, M., \BBA\ Okumura, M. \BBOP 2000\BBCP.
+\newblock \BBOQ Passage-Level Document Retrieval Using Lexical Chains.\BBCQ\
+\newblock In {\Bem Proceedings of RIAO 2000}, \mbox{\BPGS\ 491--506}.
+
+\bibitem[\protect\BCAY{Morris \BBA\ Hirst}{Morris \BBA\
+  Hirst}{1991}]{morris1991}
+Morris, J.\BBACOMMA\ \BBA\ Hirst, G. \BBOP 1991\BBCP.
+\newblock \BBOQ Lexical Cohesion Computed by Thesaural Relations as an
+  Indicator of the Structure of Text.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 17}  (1), \mbox{\BPGS\
+  21--48}.
+
+\bibitem[\protect\BCAY{Papineni, Roukos, Ward, \BBA\ Zhu}{Papineni
+  et~al.}{2002}]{papineni2002}
+Papineni, K., Roukos, S., Ward, T., \BBA\ Zhu, W.-J. \BBOP 2002\BBCP.
+\newblock \BBOQ BLEU:a Method for Automatic Evaluation of Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 40th Annual Meeting of the Association
+  for Computational Linguistics}, \mbox{\BPGS\ 311--318}.
+
+\bibitem[\protect\BCAY{Soricut \BBA\ Marcu}{Soricut \BBA\
+  Marcu}{2006}]{soricut2006}
+Soricut, R.\BBACOMMA\ \BBA\ Marcu, D. \BBOP 2006\BBCP.
+\newblock \BBOQ Discourse Generation Using Utility-Trained Coherence
+  Models.\BBCQ\
+\newblock In {\Bem Proceedings of the COLING/ACL 2006 Main Conference Poster
+  Sessions}, \mbox{\BPGS\ 803--810}.
+
+\bibitem[\protect\BCAY{田窪\JBA 西山\JBA 三藤\JBA 亀山\JBA 片桐}{田窪 \Jetal
+  }{2004}]{danwa}
+田窪行則\JBA 西山佑司\JBA 三藤博\JBA 亀山恵\JBA 片桐恭弘 \BBOP 2004\BBCP.
+\newblock \Jem{談話と文脈}.
+\newblock 言語の科学7. 岩波書店.
+
+\bibitem[\protect\BCAY{Walker, Iida, \BBA\ Cote}{Walker
+  et~al.}{1994}]{marilyn1994}
+Walker, M., Iida, M., \BBA\ Cote, S. \BBOP 1994\BBCP.
+\newblock \BBOQ Japanese Discourse and the Process of Centering.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 20}  (2), \mbox{\BPGS\
+  193--232}.
+
+\end{thebibliography}
+
+
+
+\appendix
+\section{スコアの計算に使用したQuality question}\label{qq}
+\begin{list}{}{}
+ \item[${\bf qq_1}$.] 同一の，あるいはほぼ重複する文はいくつあるか?
+ \item[${\bf qq_2}$.] （ゼロ）代名詞化，指示表現化すべき箇所はいくつあるか?
+ \item[${\bf qq_3}$.] 先行詞のない指示表現はいくつあるか?
+ \item[${\bf qq_4}$.] 固有表現の出現位置がおかしい箇所はいくつあるか?
+ \item[${\bf qq_5}$.] 同一事物を参照する表現の一貫性という観点から修正すべき表現はいく
+	つあるか?
+ \item[${\bf qq_6}$.] （前後の文脈も踏まえた上で）必須要素が欠如している箇所はいくつある
+	か?
+ \item[${\bf qq_7}$.] 接続詞が必要・不必要な箇所はいくつあるか?
+ \item[${\bf qq_8}$.] 時系列の関係が矛盾してないか?
+\end{list}
+
+
+
+\begin{biography}
+\bioauthor{横野　　光（正会員）}{
+2003年岡山大学工学部情報工学科卒．
+2008年同大大学院自然科学研究科産業創成
+工学専攻単位取得退学．博士（工学）．
+同年東京工業大学精密工学研究所研究員，現在に至る．
+自然言語処理の研究に従事．情報処理学会，言語処理学会各会員．
+}
+\bioauthor{奥村　　学（正会員）}{
+1962年生．1984年東京工業大学工学部情報工学科卒業．1989年同大学院博士課
+程修了．工学博士．
+同年，東京工業大学工学部情報工学科助手．1992年北陸先端科学技術
+大学院大学情報科学研究科助教授，2000年東京工業大学精密工学研究所助教授，
+2009年同教授，現在に至る．自然言語処理，知的情報提示技術，語
+学学習支援，テキスト評価分析，テキストマイニングに関する研究に従事．
+情報処理学会，電子情報通信学会，人工知能学会．
+AAAI，言語処理学会，ACL, 認知科学会，計量国語学会各会員．\\
+oku@pi.titech.ac.jp, http://oku-gw.pi.titech.ac.jp/{\textasciitilde}oku/
+}
+\end{biography}
+
+
+
+
+
+
+\biodate
+
+
+
+
+\end{document}

@@ -1,0 +1,949 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+ \usepackage[usenames]{color}
+\def\ga{}
+\def\wo{}
+\newcommand{\y}{}
+\newcommand{\boldc}{}
+\newcommand{\prob}{}
+\newcommand{\Rubyb}[2]{}
+
+\Volume{20}
+\Number{2}
+\Month{June}
+\Year{2013}
+
+\received{2012}{12}{6}
+\revised{2013}{2}{13}
+\accepted{2013}{3}{22}
+
+\setcounter{page}{251}
+
+\jtitle{Markov Logicによる日本語述語項構造解析}
+\jauthor{吉川　克正\affiref{Author_1} \and 浅原　正幸\affiref{Author_2} \and 松本　裕治\affiref{Author_3}}
+\jabstract{
+本稿ではマルコフロジックを利用した日本語述語項構造解析について述べる．
+日本語述語項構造解析に関する従来研究の多くは，格毎に独立した解析器を用意し，
+他の述語項関係との依存関係を無視したまま解析を行っていた．
+これに対し，本研究では同一文内にある全ての述語項候補を同時に考慮して解析する手法を提案する．
+この手法は複数の述語項関係の間にある依存関係を考慮した上で，
+文内における全ての述語項関係の候補から，最適な状態を見つけ出すことができる．
+さらに，本研究では，述語の項として妥当でないものを削除するための
+新たな論理的制約を考案し，ゼロ照応も含めて正しい項を効果的に見つけ出すことができるように工夫した．
+NAISTテキストコーパスにおける実験で，本研究の提案手法は，大規模データを利用せずに，
+従来手法と同等の結果を達成した．
+}
+\jkeywords{マルコフロジック，述語項構造解析，ゼロ照応}
+
+\etitle{Jointly Extracting Japanese Predicate-Argument Relation \\with Markov Logic}
+\eauthor{Katsumasa Yoshikawa\affiref{Author_1} \and Masayuki Asahara\affiref{Author_2} \and Yuji Matsumoto\affiref{Author_3}} 
+\eabstract{
+This paper describes a new Markov Logic approach for Japanese Predicate-Argument (PA) relation extraction. 
+Most previous work built separated classifiers corresponding to each case role and independently identified the PA relations, neglecting dependencies (constraints) between two or more PA relations. 
+We propose a method which collectively extracts PA relations by optimizing all argument candidates in a sentence. 
+Our method can jointly consider dependency between multiple PA relations and find the most probable combination of predicates and their arguments in a sentence. 
+In addition, our model involves new constraints to avoid considering inappropriate candidates for arguments and identify correct PA relations effectively. 
+Compared to the state-of-the-art, our method achieves competitive results without large-scale data. 
+}
+\ekeywords{Markov Logic, Semantic Role Labeling, Zero-Anaphora}
+
+\headauthor{吉川，浅原，松本}
+\headtitle{Markov Logicによる日本語述語項構造解析}
+
+\affilabel{Author_1}{日本アイ・ビー・エム株式会社東京基礎研究所}{IBM Research-Tokyo, IBM Japan, Ltd.}
+\affilabel{Author_2}{人間文化研究機構国立国語研究所}{National Institute for Japanese Language and Linguistics}
+\affilabel{Author_3}{奈良先端科学技術大学院大学情報科学研究科}{Nara Institute of Science and Technology, Department of Information Science}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}\label{intro}
+
+述語項構造解析は，言語処理分野における挑戦的な研究分野の一つである．
+この解析は，自然文または自然文による文章から，「誰が，何を，誰に，どうした」というような，基本的な構造情報を抽出する．
+これらの情報は，文書要約や機械翻訳など，他の応用的な言語処理研究に不可欠なものであり，その他にも幅広い応用が期待されている．
+
+図\ref{example1}に，日本語の述語項構造の一例を示す．
+この例では，「行った」が\textbf{述語}であり，この述語が二つの\emph{項}を持っている．
+一つは\textbf{ガ格}の「彼」，もう一つは\textbf{ニ格}の「図書館」である．
+このように，述語とそれに対応する項を抽出し，\textbf{格}と呼ばれるラベルを付与するのが述語項構造解析である．
+それゆえに，述語項構造解析は，格解析と呼ばれることもある．
+本稿では，個々の述語—項の間にある関係を\emph{述語項関係}，
+そして，文全体における述語項関係の集合を\emph{述語項構造}と呼ぶことにする．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{20-2ia8f1.eps}
+\end{center}
+\caption{日本語述語項構造の例}
+\label{example1}
+\end{figure}
+
+尚，一般には図\ref{example1}の「昨日」という単語も時間格相当の項の対象となり得るが，
+本研究の述語項構造解析では限定的な述語項関係を対象としており，「昨日」はその対象としない．
+この対象の範囲は解析に利用するデータのアノテーション基準に依存する．
+本研究ではNAISTテキストコーパス~\cite{iida:2007:law}を利用しており，このデータのアノテーションに準拠した述語項関係のみの解析を行う．
+
+日本語以外の言語では，意味役割付与と呼ばれる述語項構造解析に相当する解析が行われている．
+特に英語では，FrameNet~\cite{fillmore:2001:paclic}やPropBank~\cite{palmer:2005:cl}など，意味役割を付与した中規模のコーパスが構築されてきた．
+さらに近年では，CoNLL Shared Task\footnote{CoNLL Shared Task 2004，2005では意味役割付与(Semantic Role Labeling)，同2008，2009では意味論的依存構造解析(Semantic Dependency Parsing)のタスクが設定された．}
+などの評価型ワークショップが意味役割付与をテーマとして複数行われ，盛んに研究されている．
+
+日本語の述語項構造解析はいくつかの点で英語の意味役割付与以上に困難であると考えられている．
+中でも特に大きな問題とされるのが，\emph{ゼロ照応}と呼ばれる現象である．
+この現象は，述語に対する必須格が省略される現象で，日本語では特にガ格の省略が頻繁に起きる．
+英語では対象となる述語の項がその述語と同一の文内に出現する上，
+必須格の述語項関係については，直接係り受け関係（係り受け木上の親子関係）になる場合が多い．
+ゆえにPropBankではタグ付与の範囲を同一文内に限定しており，解析も相対的に容易になる．
+ゼロ照応には分類があり，述語に対する項の出現位置によって，\emph{文内ゼロ照応}，\emph{文間ゼロ照応}，\emph{文章外ゼロ照応（外界照応）}の三つに大別される．
+述語項関係の種類は，この3種類のゼロ照応に加えて，直接係り受け関係にある場合（以下，「\emph{直接係り受け}」とする），
+そして同一文節内にある照応（以下，「\emph{同一文節内}」とする）がある．
+本研究では「直接係り受け」と「文内ゼロ照応」を対象に解析を行うものとする．
+
+日本語の述語項構造解析研究では，平ら~\cite{taira:2008:emnlp}や今村ら~\cite{imamura:2009:acl}がNAISTテキストコーパスを用いた研究を行っているが，
+彼らはいずれも，コーパス中に存在する3種類の格：ガ格，ヲ格，ニ格について，別々のモデルを構築して解析を行っている．
+また別の視点から見ると，彼らの手法は``述語毎''に解析を行っていると言える．
+英語における意味役割付与の手法でも，この``述語毎''の解析を行った手法が多い~\cite{toutanova:2008:cl,watanabe:2010:acl}．
+
+しかしながら，現実の文書では同じ述語に属する項の間には依存関係があると考えられる．
+例えば，次の文を考えてみる．
+
+\begin{enumerate}
+\item \textit{ライオン}$_i$ が\textit{シマウマ}$_j$ を\underline{食べた}$_{ガ:i,ヲ:j}$
+\end{enumerate}
+
+この例文の``食べた''という述語に対し，ガ格とヲ格がともに``ライオン''になることは考えに
+くいが，ガ格とヲ格を個別に扱う分類器で解析を行った場合，このような矛盾した結果を生んでしまうことがありうる．
+
+さらには，ある述語とその項の関係を同定する際に，文内にある他の述語との関係が同定の
+手がかりになることがある．次の例文を見てみよう．
+
+\begin{enumerate}
+		\setcounter{enumi}{1}
+\item ライオン$_i$ に\underline{追いかけ}$_{ガ:i,ヲ:j}$られた シマウマ$_j$ が谷底$_k$に\underline{落ちた}$_{ガ:j,二:k}$
+\end{enumerate}
+
+この例文(2) において``ライオン''が項として妥当なものであり，且つ，述語``落ちた''の項が``シマウマ''と``谷底''だけであると仮定すると，
+``ライオン''はもう一つの述語``追いかける''の項になることが確定する．
+このように，同一文内に複数の述語が存在し，固有表現などを手がかりとして，項候補が絞り込まれている時には，
+どの項候補をどの述語に割り当てるべきかという述語間の依存関係を考慮することで，
+最適な述語—項の配置を得ることができるのである．
+
+本研究では日本語の述語項構造解析を扱うが，``文毎''の解析を行う手法を用い，文内に複数ある述語項関係の重要な依存関係を利用できるようにする．
+このような依存関係を大域的な制約として扱うために，本研究ではMarkov Logicを利用した解析器を提案する．
+英語の意味役割付与ではMarkov Logicによる手法が提案されており，効果的であることが示されている~\cite{meza:2009:naacl}．
+これは，Markov Logicモデルが複数の述語項関係を捉え，その間の依存関係を考慮することにより，文内における論理的矛盾を軽減できるためである．
+
+さらに本研究では，述語項構造の要素として不適切な文節を効率的に削減するため，新たな大域的制約を導入する．
+明らかに不適切な候補を削除することは，適切な述語項構造を抽出するための探索空間を小さくすることができ，項同定を行う述語の推論をより確かなものとする．
+
+本稿の実験では，Markov Logicを用いた日本語述語項構造解析を行い，その大域的制約が効果的に働くことを詳細に示す．
+従来手法の結果と比較しても，本研究の提案手法は，同等以上の結果を達成していることを示す．
+また，定性的な分析においても，大域的制約が効果的に働いた事例を紹介する．
+
+なお，次章以降，本稿の構成は次のようになる．
+まず2章では関連研究についてまとめ，3章ではMarkov Logicについて導入の説明を行う．
+4章では提案手法として構築されるMarkov Logic Networkについて詳細に述べる．
+5章は評価実験について述べ，実験結果について考察する．
+6章はまとめである．
+
+
+
+\section{関連研究}\label{related}
+
+日本語における述語項構造のタグ付きコーパスとして代表的なものには，京都大学テキストコーパス~\cite{kawahara:2002:jnlp}とNAISTテキストコーパス~\cite{iida:2007:law}がある．
+これら二つのコーパスを中心にして日本語述語項構造解析の研究は進められてきた．
+また，CoNLL Shared Task 2009~\cite{hajivc:2009:conll} は多言語を対象にした意味役割付与のワークショップであり，
+日本語述語項構造解析もタスクの一つとして取り組まれた．
+
+本研究で用いたデータはNAISTテキストコーパスである．
+NAISTテキストコーパスは，毎日新聞から抽出された2,929記事，38,384文に対して，述語項構造及び照応・共参照のタグが付与されている．
+NAISTテキストコーパスでは，ガ格，ヲ格，ニ格の3種類の格のみを表層格レベルで扱っているが，
+格交替を考慮するなど，京都大学テキストコーパスとは異なるタグ付け基準を採用して述語項構造を付与している．
+
+NAISTテキストコーパスが付与するのは述語項構造と照応の情報だけであるが，
+京都大学テキストコーパスのテキストに対してアノテーションされているため，
+人手で整備された形態素や係り受けの情報を利用することができる．
+本研究でもこれらの情報については京都大学テキストコーパスのものを利用する．
+
+本研究で利用するNAISTテキストコーパスにおける日本語述語項構造解析の先行研究として代表的なものは二つある．
+一つは平らによるSVM分類器と決定リストの併用による述語項構造解析~\cite{taira:2008:emnlp}で，
+彼らの研究では動詞だけで無く，事態性名詞についても述語項構造の解析を行っている．
+もう一つは，最大エントロピー法に大規模データから構築した言語モデルを組み合わせることで，
+平らを上回る性能を達成した今村らの研究である~\cite{imamura:2009:acl}．
+今村らの研究では，述語項構造の解析対象を述語に限定しており事態性名詞は扱っていない．
+また，述語項が同一文節内にある場合は無視できる程に少ないため，
+直接係り受け，文内ゼロ照応，文間ゼロ照応の3種類のみの解析を行っている．
+本研究の解析対象は今村らの研究よりも一段狭く，述語と項が同一文内にある場合に限定される．
+これは文内の全体最適化を行うためだが，その従来研究手法との差異を以下で説明する．
+
+平らと今村らの手法は，ガ，ヲ，ニという3種類の格毎に別々の分類器を構築して解析するものであった（図\ref{models}左を参照）．
+ゆえに，彼らの手法では格の間にある依存関係を無視したまま解析を行っていた．
+しかし，この格間の依存関係を無視することは，しばしば矛盾した解析結果を出力する危険性を孕むことになる．
+例えば，図\ref{models}にある左のモデルでは，ガ格と二格の両方に，同じ名詞句``NP2''を出力しているが，
+一般に同じ名詞句が一つの述語の二つ以上の格を占めることは起こりにくく，このような事例は矛盾していることが多い．
+格間の依存関係を無視したモデルでは，このような事例が起こり得るのである．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{20-2ia8f2.eps}
+\end{center}
+\caption{本研究の提案手法と従来手法との相違}
+        \label{models}
+\end{figure}
+
+本研究で提案するMarkov Logicモデルは，三つの格を同時に取扱い，格間の依存関係を考慮しながら，最適な状態を見つけ出すことができる手法である．
+その結果として，先に示したような矛盾を排除できるのである（図\ref{models}右）．
+さらに，今村らのモデルとは対照的に，本研究の提案手法は大規模データを利用しない．
+今村らは大規模データを元に構築した言語モデルを利用することで，述語と項の間における選択選好性を考慮している．
+一方，本研究では，文内での全体最適化により，大規模データを利用することなく解析している．
+
+Markov Logicモデルによる述語項構造解析の先行研究はCoNLL Shared Task 2008，2009にある．
+また英語では特に詳しい報告がMeza-Ruizらによってなされている~\cite{meza:2009:naacl}．
+彼らの手法では，述語項構造解析を，述語同定，項同定，語義曖昧性解消，そして意味役割付与の四つの部分問題に分割しており，
+これらの部分問題を同時に解くモデルを提案している．
+本研究では彼らの手法を元にして日本語述語項構造解析器を構築する．
+実験結果を比較するため，平ら及び今村らの実験設定に合わせ，本研究では述語項構造解析問題のうち，項同定及び，意味役割付与のみを対象とする．
+ただし，日本語では格（ガ，ヲ，ニ）の同定が意味役割付与に代わることになる．
+
+Markov Logicを利用しない述語項構造解析の同時推定手法も，CoNLL Shared Taskの参加者を中心に様々なモデルが提案されている．
+例えば，\cite{toutanova:2008:cl}と\cite{watanabe:2010:acl}は，それぞれCoNLL Shared Task 2005と2009のデータを利用して同時推定モデルを提案している．
+ただし，彼らの手法は\emph{述語毎}の推定モデルであるのに対し，本研究やMeza-RuizらのMarkov Logicモデルが\emph{文毎}の推定を行うモデルであるのは大きな相違点である．
+NAISTテキストコーパスは，出現する述語の格フレーム辞書が整備されていない上に，格交替を考慮した述語項構造アノテーションを持ったデータである．
+特に日本語では主節と従属節とで格要素を共有する形式，ゼロ代名詞の出現が多く，
+このようなデータに対する述語項構造解析は，一つの述語を考慮するだけでは，その項の充足が決定できないため，
+文毎での解析により文全体での最適化手法が望ましいと考えられる．
+さらに，この最適化手法は直接係り受けの述語項関係と比較して，述語と項の統語的関係が弱い文内ゼロ照応の場合にこそ，高い効果を発揮すると期待できる．
+
+
+\section{Markov Logic}
+\label{mln}
+
+述語項構造解析を含めて，我々が現実に遭遇する問題の多くは，局所的な分類学習だけで挑んでも十分な解決を望めないことは古くから認識されてきた．
+局所的な分類学習に対し，統計的な変量の間にある全体的（大域的）な相互関係をとらえながら学習を行うのが，統計的関係学習である~\cite{ng:1992}．
+
+Markov Logicは近年急速に広まりつつある統計的関係学習法の一つであり，全体最適化を可能にする学習と推論のための統合的な枠組みである．
+これは一階述語論理とMarkov Networksを組み合わせたもので，
+本来矛盾が許されない一階述語論理式に，ある程度の罰則を以って矛盾を許容する枠組みであると考えることができる．
+また，それはMarkov Networksを一階述語論理式によって表現するテンプレート言語であるとの解釈もできる．
+自然言語処理の分野においても，実体解析~\cite{singla:2006:icdm}，情報抽出~\cite{poon:2007:aaai}，共参照解析~\cite{poon:2008:emnlp}など，大域的な制約が重要な分野において特に利用されてきた．
+
+本研究でこのMarkov Logicが日本語述語項構造解析に適した枠組みであると考える理由は三つある．
+一つ目は，二律背反の絶対的な制約をモデル化する\emph{hard}制約と，実数値による重みで強さを制御できる\emph{soft}制約の2種類の全体制約を利用できること，
+二つ目は，識別学習を利用できること，
+三つ目は，フリーで利用できるライブラリがあることである．
+統計的関係学習法としては，他にもPRM~\cite{koller:1999}や，RMN~\cite{taskar:2002:uai}があるが，
+上に挙げた3点を満たしてはいない．
+
+Markov Logicでは，重み付きの論理式の集合を\emph{Markov Logic Networks} (MLNs)と呼ぶ．
+一つのMLN \emph{M}は，$(\phi,w)$の組の集合であり，$\phi$が一階述語論理式，$w$が実数値の重みとなる．
+
+定義された一階述語に対する基底述語 (\emph{ground atom}) の集合を，可能世界と呼び，\emph{M}は一つの可能世界に対して，次のような確率分布を定義する．
+\begin{equation}
+\prob\left(\y\right)=\frac{1}{Z}\exp\left(
+\sum_{\left(\phi,w\right)\in M} w \sum_{\boldc\in C^{\phi}}f_{\boldc}^{\phi}\left(\y\right)
+\right)
+\label{eq:prob}
+\end{equation}
+ここで，$\boldc$は論理式$\phi$の中にある変数に対して割り当てられる定数の組であり，
+論理式$\phi$に$\boldc$を割り当てた論理式を基底論理式 (\emph{ground formula}) と呼んでいる．
+$f_{\boldc}^{\phi}$ は，対応する基底論理式が可能世界$\y$の中で真の場合には1，偽の場合は0となるような二値の素性関数である．
+$C^{\phi}$ は定数組の定義域であり，$\phi$が持つ変数はこの定義域内の値により全て置き換えることができる．
+また$Z$ は正規化定数である．
+この確率分布は，一つの Markov Network (\emph{Ground Markov Network}) に対応しており，このネットワーク構造の中で，頂点が示すのは基底述語，辺を含む部分完全グラフが示すのは基底論理式である．
+
+Markov Logicにおける論理式の設計は人手で行う必要があり，この作業は従来の機械学習器を利用する場合の素性選択に対応する．
+その前段階として，解くべき問題に合わせて有効な学習手法や効率的な推論手法を選択する必要があるのはMarkov Logicにおいても同様である．
+しかし，これらの実装については，{\it Alchemy}\footnote{http://alchemy.cs.washington.edu/} や{\it Markov thebeast}\footnote{http://code.google.com/p/thebeast/}など，既存のツールを利用することができるので，
+次節以降では，述語項構造解析のために，どのような論理式を設計するかに焦点を絞って述べるものとする．
+
+
+
+\section{提案手法}
+\label{method}
+
+この節では日本語述語項構造解析のためのMarkov Logicモデルについて，その詳細を述べる．
+
+
+\subsection{述語定義}
+
+まずはMarkov Logic Network (MLN) の構築に必要な論理述語を定義することからはじめる．
+論理述語には2種類ある．一つは推定したい情報を表すもので，モデルには学習時にだけその情報を与えるため，潜在述語 (\emph{hidden predicate}) と呼ばれる．
+もう一つは，観測述語 (\emph{observed predicate}) と呼ばれ，学習時と推定時の両方において，モデルにその情報が与えられる．
+
+表\ref{hidden}には本研究で定義した三つの潜在述語が示されている．
+これら三つの潜在述語が，我々の推定したい情報を定義している．
+即ち，文節$a$は述語の項になっているか（項同定），文節$i$は削除されるか（項候補削減），述語$p$は文節$a$を項に持ち，その意味役割が$r$になるか（意味役割付与）である．
+最初の二つの推定事項に対しては1変数の$\mathit{isArg}(a)$と$\mathit{delete}(i)$が対応し，残り一つに対しては$\mathit{role}(p,a,r)$という3変数の潜在述語が対応することになる．
+
+\begin{table}[b]
+\caption{潜在述語}
+\label{hidden}
+\input{08table01.txt}
+\end{table}
+
+本研究の手法はMarkov Logicによる英語意味役割付与~\cite{meza:2009:naacl}を元にしている．
+先に述べた通り，Meza-Ruizらは問題を四つの部分問題に分け，それに対して五つの潜在述語 (\emph{isPredicate, isArgument, hasRole, role, sense}) を定義している．
+しかし，本研究では，先行研究~\cite{taira:2008:emnlp,imamura:2009:acl}との比較のため，項同定と意味役割付与に限定して行っている．
+その結果，表\ref{hidden}の三つが本研究で定義する潜在述語となった．
+
+項同定を固有の推定問題として扱うことには議論の余地がある．
+項同定は述語との組で定義するべきで，$\mathit{isArg}$が単体で定義されるのは不自然と考えることもできる．
+しかし，固有表現抽出などにより同定される，「人物・組織」といった名詞は，高確率で何らかの述語の項となり，
+逆にどの述語とも結びつかないことが不自然である．
+そこで，項同定を一つの推定すべき問題として定義することで，
+項として同定されるものが，孤立するような事象を避けるように解析を行うのである．
+同様の議論はMeza-Ruizらの研究でも見られ，英語においても項同定を一つのタスクとして扱うことで，
+一定の性能向上が達成されることを彼らは報告している~\cite{meza:2009:naacl}．
+ただし，\emph{isArg}は\emph{role}や\emph{delete}と制約で結ばれるため，
+学習・推論時に項同定が独立して解析されるわけではなく，
+項から述語に対する制約を与えるために定義した潜在述語であると捉えることもできる．
+
+一方，観測述語は潜在述語の推定のために利用される手がかりとなる情報を定義する．
+例えば，$\mathit{form}(i,w)$は文節$i$が表層形$w$を持つことを表現する観測述語である．
+観測述語で表される情報には，表層形，品詞，固有表現など，様々なものが考えられるため，潜在述語に比べてその種類は多くなる．
+全ての観測述語は表\ref{observed}にまとめて示した．
+
+
+\begin{table}[t]
+  \caption{観測述語}
+\label{observed}
+\input{08table02.txt}
+\end{table}
+
+潜在述語と観測述語が定義されれば，次はこれらの組み合わせによって論理式を考えていくことになる．
+まずは$\mathit{isArg}$と$\mathit{role}$に着目し，その局所論理式と大域論理式について，それぞれ\ref{lf}節と\ref{gf}節で述べる．
+$\mathit{delete}$については\ref{deletion}節でまとめて説明する．
+
+
+\subsection{局所論理式}
+\label{lf}
+
+局所論理式 (\emph{local formula}) とは，潜在述語をただ一つしか含まない論理式のことである．
+一方，観測述語については任意の数含めることができる．
+即ち，一つの推定事項に対して，その素性や制約の組み合わせを考える論理式となる．
+
+$\mathit{isArg}$ や$\mathit{delete}$に対する局所論理式は，対象となる一つの文節について，語彙的及び構文的な特徴を捉えたものである．
+例えば単語表層形に対する局所的な特徴を表現した論理式は次のようになる
+\begin{equation}
+  \mathit{form}(a,+w) \Rightarrow \mathit{isArg}(a). \label{word}
+\end{equation}
+これは文節$a$が表層形$w$の単語を持つならば項であるということ表している．
+尚，$+$という表現は，この論理式が表層形$w$によって別々に重み付けされることを示す．
+
+$\mathit{role}$に対する局所論理式は，対象とする文節が二つあり，その間の特徴を捉えることになる．
+例えば，
+\begin{equation}
+  \mathit{ne}(a,+n) \wedge \mathit{dep}(p,a,+d) \Rightarrow \mathit{role}(p,a,+r) \label{path}
+\end{equation}
+が表すのは，文節$a$に対する固有表現と，述語$p$と文節$a$の間の係り受け関係を組み合わせた特徴である．
+この式(\ref{path})と同様に，表\ref{observed}にある$\mathit{goiMatch}$\footnote{$\mathit{goiMatch}$と$\mathit{goiCate}$にはシソーラスである日本語語彙大系~\cite{ikehara:1997}を利用している．}，$\mathit{dep}$，$\mathit{path}$の三つの観測述語は，他の観測述語と組み合わせで論理式を構築する．
+
+式(\ref{word})や式(\ref{path})などの一階述語論理式は，Markov Networkの素性テンプレートと考えることができる．
+即ち，一つのテンプレートからは複数の基底論理式 (\emph{ground formula}) が生成され，別々の重みがつくことになる．
+式(\ref{word})が生成する基底論理式を，図\ref{example1}の例から考えてみると，
+\begin{gather}
+  \mathit{form}\left(a,``\mbox{昨日''}\right)\Rightarrow \mathit{isArg}\left(a\right) \label{yesterday}\\
+  \mathit{form}\left(a,``\mbox{図書館''}\right)\Rightarrow \mathit{isArg}\left(a\right) \label{library}
+\end{gather}
+は，学習によってそれぞれ別の重みを獲得することになる．
+図\ref{example1}の事例から学習すれば，``図書館''はニ格になり，``昨日''は項となっていないため，
+式(\ref{library})が式(\ref{yesterday})よりも大きな重みを獲得するものと考えられる．
+このように，論理式のもつ曖昧さは重みによって制御されるため，
+曖昧な制約でも記述することができるのである．
+
+
+
+\subsection{大域論理式}
+\label{gf}
+
+局所論理式で扱う素性は，局所的な分類器でも捉えることできるが，
+Markov Logicではさらに次のような記述も可能である．
+\begin{equation}
+\mathit{isArg}\left(a\right) \Rightarrow \exists p. \exists \mathit{r.role}(p,a,r) \label{a2r}
+\end{equation}
+これはある文節$a$が項であるならば，少なくとも一つ以上の述語と関係があることを保証する論理式である．
+式(\ref{a2r})のように，二つ以上の潜在述語を持つ論理式のことを大域論理式と呼ぶ．
+この大域論理式を利用することで，本研究のモデルは複数の決定を同時に行うことができるようになる．
+即ち，$\mathit{isArg}$と$\mathit{role}$の依存関係まで考慮して，最適な状態を推定することが可能になるのである．
+このような大域的な素性は，局所的な分類器では捉えることが難しく，
+Markov Logicを利用する最大の利点となる．
+
+\begin{table}[t]
+  \centering
+  \caption{\emph{isArg} と \emph{role}のための大域論理式}
+\label{global}
+\input{08table03.txt}
+\end{table}
+
+本研究で$\mathit{isArg}$と$\mathit{role}$に対して定義する大域論理式は表\ref{global}にまとめて示した．
+表\ref{global}にある大域論理式は全てhard制約であり，潜在述語の間の一貫性を確保するための制約である．
+MLNの中で，hard制約は無限の重みを持つ特別な論理式として定義されており，
+この制約に違反した可能世界は決して解として選択されない．
+例えば，式(\ref{a2r})は$\mathit{isArg}$から$\mathit{role}$への一貫性を保証している．
+
+$\mathit{role}$と$\mathit{isArg}$の一貫性を保つためにあるもう一つの論理式は，
+\begin{equation}
+\mathit{role}(p,a,r) \Rightarrow \mathit{isArg}\left(a\right) \label{r2a}
+\end{equation}
+であり，文節$a$が述語$p$の項となるならば，文節$a$は項であることを保証する．
+
+残る大域論理式は，
+\begin{equation}
+\mathit{role}(p,a,r_1) \wedge r_1 \neq r_2 \Rightarrow \neg \mathit{role}(p,a,r_2) \label{r2r}
+\end{equation}
+のように二つ$\mathit{role}$間の関係を表現したもので，
+述語$p$と項$a$の間には，ただ一つの意味役割しか成立しないことを保証している．
+これにより，図\ref{models}で示したような論理的矛盾を回避できることになる．
+
+日本語述語項構造解析において，大きな障害となるゼロ照応に対しては，
+式(\ref{a2r})と式(\ref{r2r})が大きく貢献できると予想される．
+つまり，式(\ref{r2r})は，ある述語において格が重複することを防ぐものであり，
+式(\ref{a2r})は，述語との統語的な関係が弱い項候補であっても，孤立する（どの述語の格にもならない）ことが無いように，
+文全体の項候補に対して適切な述語と格の割り当てを行うためのものである．
+これにより，複数の述語に対して統語的関係の強い項候補が，他の候補との依存関係を考えずに，格を独占してしまう状態を回避できるのである．
+
+
+\subsection{削除論理式}
+\label{deletion}
+
+本節では項候補削減に関する論理式を解説する．
+項候補削減は，述語と項に関係のない文節を探索空間から削除することで，
+効率的に項の同定を行うとともに，精度の向上を狙うのが目的である．
+どのような考えに基づいて項候補を削減するか，その具体例を図\ref{example2}に示した．
+この例には，文末に``行った''という述語があり，その項候補となる文節が五つ存在する．
+この五つの中から，正しい項として，文節``彼は''をガ格に，``図書館に''をニ格に，それぞれ同定するのが述語項構造解析である．
+そして，項候補削減は，五つの候補から項を選ぶのではなく，項にならない候補を削除する．
+もしも``母の新しい車で''という抽出対象ではない具格を構成する句を削除できたなら，残り二つの候補から正しい項を選ぶことは容易である．
+この項候補削減の着想は文書自動要約の要素技術である文圧縮からきており，
+近年，係り受け関係を利用することによって，文の統語構造を維持したままに適切な単語の削除を行い，
+文を圧縮する手法が提案されている．~\cite{clarke:2008:jair,huang:2012:aaai}
+削除論理式のために定義された$\mathit{delete}$は，このような文圧縮の手法を利用して，
+述語と項にならない文節を削除するために定義されたものである．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{20-2ia8f3.eps}
+\end{center}
+  \caption{具格を持つ述語項構造の例}
+\label{example2}
+\end{figure}
+
+ただし，ここで重要なことは，本研究ではこの項候補削減を前処理として行うのではなく，項同定と同時に行っている点である．
+なぜなら，過剰な項候補の削減は，再現率を大幅に傷つけることになるからで，
+本研究ではこの現象を\emph{過剰削減}と呼んでいる．
+項同定，項候補削減，意味役割付与の三つを同時に行うモデルを作ることにより，
+過剰削減を防いだ上で述語項構造解析の性能を改善している．
+
+削除論理式にも局所論理式と大域論理式がある．
+まず，局所論理式として，次の式(\ref{notPred})のように，一つだけhard制約を導入する．
+\begin{equation}
+ \mathit{isPred}(i) \Leftrightarrow \neg \mathit{delete}(i). \label{notPred}
+\end{equation}
+これにより，述語になる文節は削除されないということを表現している．
+
+残りの局所論理式については，全てsoft制約で，\ref{lf}節で述べた$\mathit{isArg}$と同じ素性を使って定義している．
+例外は，次の式(\ref{bias})で，
+\begin{equation}
+ \mathit{dep}(i,j,+d) \wedge \mathit{isPred}(j) \Rightarrow \neg \mathit{delete}(i). \label{bias}
+\end{equation}
+これは述語と係り受け関係にある文節は削除しないという制約を表現している．
+一般に，述語項構造関係にある文節対の多くは統語構造的にも依存関係があることが知られている．
+表\ref{sts}にはコーパスの統計を示したが，述語項構造関係の多くが直接係り受け関係にあることが分かる．
+この制約もsoft制約であり，削除されないことを保証するわけではない．
+英語など，ラベルありの係り受け解析が行われる場合には，係り受けラベル$d$によってその制約の強弱が重み付けされる．
+しかし，日本語の係り受けラベルは，多くの場合``D''になるため，ラベルによる強弱の差は期待できない．
+
+しかし，局所論理式は一つの文節に対して，それを削除するか否かという視点しか持つことができず，削減による十分な性能改善は期待できない．
+\emph{delete}の追加により十分な効果を得るためには，大域論理式の利用が必要になる．
+
+\emph{delete}のための大域論理式は，表\ref{delFormula}に示すように，三つのhard制約と一つのsoft制約がある．
+この表\ref{delFormula}にある上の三つが，$\mathit{isArg}$及び$\mathit{role}$との整合性を保証するためのhard制約である．
+例えば，
+\begin{equation}
+ \mathit{delete}(i) \Rightarrow \neg \mathit{isArg}(i) 
+\end{equation}
+この論理式は削除された文節は項とならないことを保証している．
+
+\begin{table}[b]
+  \centering
+  \caption{大域削除論理式}
+\label{delFormula}
+\input{08table04.txt}
+\end{table}
+
+表\ref{delFormula}にある最後の論理式は次のsoft制約として定義している，
+\begin{equation}
+ \mathit{form}(h,+w) \wedge \mathit{pos}(h,+p) \wedge \mathit{dep}(h,m,+d) \wedge \mathit{delete}(h) \Rightarrow \mathit{delete}(m) \label{del}
+\end{equation}
+これは，親（ヘッド）となる文節$h$が削除された時，それに依存した子文節$m$も同じく削除するということを表した大域論理式である．
+この論理式は常に成り立つものではないが，コーパスからの学習した重みによって緩和された制約となり，適切な削除が行われる．
+式(\ref{del})による制約の働きで，先に述べたような具格になる句の削除が実現される．
+
+図\ref{example2}の例を考えてみると，
+式(\ref{del})は次のように展開される．
+\begin{equation}
+ \mathit{form}(4,``\mbox{車で}'') \wedge \mathit{pos}(4,\mbox{名詞+助詞—格助詞}) \wedge \mathit{dep}(4,2,``D'') \wedge \mathit{delete}(4) \Rightarrow \mathit{delete}(2)
+	\label{delGround}
+\end{equation}
+これはつまり，``車で''が削除されたならば，``母の''も同じく削除されるということを表現している．
+soft制約なので必ず保証される制約ではないが，割り当てられている重みに準じて削除が行われる．
+図\ref{tree}に示したのは，図\ref{example2}の文を解析して出力した係り受け木である．
+この木の中では，式(\ref{del})の制約によって，``車で''以下の部分木に属する文節が全て削除されることになる．
+本来，係り受け木でこのような枝刈りを行う場合，係り受けのラベルが大きな役割を果たすことが多い．
+英語の文圧縮では，係り受けラベルを利用した単語・句の削除が行われている~\cite{clarke:2008:jair,clarke:2010:cl}．
+しかし，日本語ではほとんどのラベルが``D（通常の係り受け）''であり，他の``P（並列）''，``A（同格）''，``I（部分並列）''，といったラベルは数が少なく，連用修飾や連体修飾といった係り受け関係情報を持たないため，
+係り受けラベル$d$によって式(\ref{del})の重みを変えることが述語項構造解析に寄与しないと考える．
+その代替になるものとして，表層形と品詞の組み合わせを利用している．
+例えば，式(\ref{delGround})のように表層形が``車で''になり，品詞が``名詞''+``助詞—格助詞''ならば，具格の可能性が高いので，重みを大きくすることになる．
+もし，英語に本研究の削減手法を適用するのであれば，
+係り受けのラベルを利用するのが単純で効果的であろう．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{20-2ia8f4.eps}
+\end{center}
+  \caption{係り受け木を利用した具格の削減}
+\label{tree}
+\end{figure}
+
+
+
+\section{実験と結果}
+\label{ex}
+
+\subsection{実験設定}
+
+本研究の実験は，先行研究である平ら~\cite{taira:2008:emnlp}と今村ら~\cite{imamura:2009:acl}の実験設定を元にする．
+まずは実験に利用したデータ及びツールについて述べる．
+実験データはNAISTテキストコーパスで，この最新版はバージョン$1.5$であるが，
+平ら及び今村らの実験設定に合わせるため，本研究ではバージョン$1.4\beta$を選択し，
+そのニュース記事及び社説記事の両方を利用する．
+実験に際してこのデータを三つに分割する．
+訓練データとして，1月1日から1月11日までのニュース記事と，1月から8月までの社説記事を，
+開発データとしては，1月12日と1月13日のニュース記事及び，9月の社説記事を，
+残りの1月14日から17日までのニュース記事と，10月から12月の社説記事を評価データとして利用するものとする．
+このデータの分割方法は，平ら~\cite{taira:2008:emnlp}の方法と同じである．
+
+次に評価データにおける統計を表\ref{sts}に示す．
+この表に示される通り，述語項関係の格ラベルとしては，ガ格が一番多いことが分かる．
+また，\ref{related}章でも述べた通り，述語項関係の種類として，直接の係り受け関係にあるもの（直接係り受け）が，文内のゼロ照応関係にあるもの（ゼロ照応（文内））よりも多い．
+しかしながら，日本語は英語などと比較すると，
+格の省略と呼ばれるゼロ照応が頻出することも確かであり，
+特にガ格では無視できない数となっている．
+述語項関係の種類について，より詳細な議論は\cite{iida:2006:acl}にある．
+
+日本語には文間の述語項関係も存在するが，
+本研究で扱う述語項関係は，文内のものに限られる．
+\ref{method}章で述べた通り，本研究で提案するMarkov Logicを利用した手法は，
+対象とする文全体で最適化を行うことで述語項関係を推定している．
+この全体最適化の枠組みは，計算量の点で，文から文章へと単純に拡張することが難しい．
+このことが本研究では文間の述語項関係を扱えなかった理由である．
+実験では，文内の最適化を正しく行うため，文間の述語項関係を含む文については省いた上で，学習・開発・評価を行うものとする．
+
+素性を抽出するため，本研究では，京都大学テキストコーパスの品詞タグ及び係り受けタグを利用する．
+さらに，CaboCha バージョン 0.53\footnote{http:/code.google.com/p/cabocha/}を利用して，固有表現タグを付与する．
+平ららの研究を参考にし，本研究でも選択選好の素性を扱うために，日本語語彙大系~\cite{ikehara:1997}を利用する．
+学習及び推定には，自然言語処理向けのMarkov LogicエンジンであるMarkov thebeastを利用している．
+
+\begin{table}[b]
+\caption{評価データにおける述語項関係の統計}
+\label{sts}
+\input{08table05.txt}
+\end{table}
+
+
+\subsection{実験結果}
+
+\begin{table}[b]
+  \caption{局所モデル vs 大域モデル（潜在述語の正解率，再現率，F値）}
+\label{ret1}
+\input{08table06.txt}
+\end{table}
+
+まず，表\ref{ret1}に示したのは，大域的制約を利用したモデルと利用しないモデルの比較である．
+\textbf{大域モデル (\textit{Global})}が，大域的制約を利用したモデルであり，
+\textbf{局所モデル (\textit{Local})}が，大域的制約を利用していないモデルである．
+ここで言う大域的制約とは，\ref{method}章で示した表\ref{global}と表\ref{delFormula}の論理式のことである．
+表\ref{ret1}には，潜在述語それぞれについて，精度(P)，再現率(R)，F値(F)を示した．
+F値で評価すれば，局所モデルに比べて大域モデルは，全ての述語について性能が改善されている．
+この改善はマクネマー検定により統計的に有意であることを確認した．
+大域モデルが局所モデルよりも性能が良いということは，ただ大域的制約が有効というだけでなく，
+本研究で扱っている三つの部分問題，項同定 (\emph{isArg})，項候補削減 (\emph{delete})，意味役割付与 (\emph{role}) の間には相互関係があり，
+同時に解くことが述語項構造解析の性能改善に意味があるということを示している．
+意味役割付与の結果で特に大きく改善したのは再現率で，
+より多くの述語項関係を抽出できるようになったことが分かる．
+
+表\ref{ret3}には，大域モデルに対して，\emph{isArg}（項同定）を削除した時と，
+\emph{delete}（項候補削減）を削除した時，
+それぞれの意味役割付与の結果がどのように変化するかを示してある．
+
+この表\ref{ret3}から，$\mathit{delete}$の削除は$\mathit{isArg}$よりも性能の低下が大きいことが分かる．
+また，$\mathit{isArg}$の削除が精度を下げるのに対し，$\mathit{delete}$の削除は再現率を傷つけることも分かる．
+両方の潜在述語を削除した時は，局所モデルと同じである．
+
+次に，表\ref{ret2}では，意味役割付与についてより詳細な結果を示す．
+この表では，意味役割付与の結果をガ格，ヲ格，ニ格，それぞれに分けて示し，
+直接係り受けか，文内ゼロ照応か，その種類によっても分けている．
+示した数値は全てF値である．
+
+\begin{table}[b]
+	\centering
+  \caption{潜在述語($\mathit{isArg}$, $\mathit{delete}$)を削除した時の意味役割付与 (role) の解析性能}
+\label{ret3}
+\input{08table07.txt}
+\end{table}
+\begin{table}[b]
+\centering
+  \caption{先行研究との比較}
+\label{ret2}
+\input{08table08.txt}
+\end{table}
+
+大域モデルは文内ゼロ照応において，局所モデルよりも性能が高いことが分かる．
+特にガ格の文内ゼロ照応では，$42.1\%$から$54.1\%$に大きく改善している．
+この結果は，大域的制約により，文全体での最適化を行ったことから導かれたものと考察できる．
+即ち，直接係り受け関係に無いということは，述語項間に構文的なつながりが薄いことを意味しており，
+局所的な素性のみでその関係を捉えることは難しいのである．
+本研究の大域的制約は特にそのような場合において大きな性能改善を実現している．
+
+続いて先行研究である平ら及び今村らの結果との比較を行う．
+この表\ref{ret2}には，格ごとに最も高い性能の数値を太字で示してある．
+ガ格では，本研究の大域モデルが二つの先行研究の結果を圧倒している．
+一方，ヲ格とニ格では，本研究の結果は相対的に低い数値となっている．
+本研究の提案手法は，三つの格を一つのモデル（大域モデル）で扱うため，
+ヲ格とニ格よりも数の多いガ格を多く同定し，出力するのである．
+しかしながら，ガ格は一般に必須格と呼ばれ，述語項構造解析で最も重要な格であることが知られている．
+従って，先行研究に比べ，その必須格を多く正確に抽出できる本研究の提案手法の意義は大きいと考えられる．
+本研究では，今村らのように大規模データを利用していないが，
+彼らのシステムと同等以上の結果を達成している．
+
+
+\paragraph{誤り分析}
+
+\begin{center}
+  
+  \Rubyb{この}{1} \Rubyb{ため}{2}，
+  \Rubyb{灰色狼の}{3} \Rubyb{\underline{\bf 米復活を}}{4} \Rubyb{\colorbox[gray]{.75}{進める}}{5} \Rubyb{\underline{\bf 魚類野生動物局が}}{6} 
+	
+	\Rubyb{カナダで}{7} \Rubyb{\colorbox[gray]{.75}{捕獲した}}{8} \Rubyb{野性の}{9} \Rubyb{\underline{\bf 十二匹を}}{10} \Rubyb{\colorbox[gray]{.75}{空輸}}{11}．
+\end{center}
+
+ここで示した例文では，三つの述語（網掛け）と三つの項（下線付き）がある．
+関係節を伴うために述語項関係が複雑で，システムにとって間違い易い事例である．
+
+局所モデルでこの文を解析した場合，出力される述語項関係 ($\mathit{role}$) は，
+\begin{gather*}
+\{\mathit{role}(5,6,\ga),\mathit{role}(5,4,\wo),\mathit{role}(8,6,\ga),\\
+\underline{\mbox{$\mathit{role}(11,2,\ga)$}},\mathit{role}(11,10,\wo)\}
+\end{gather*}
+
+まず，誤りとして挙げられる点は，``捕獲した''のヲ格が出力されていないことである．
+この理由は，NAISTテキストコーパスが格フレーム辞書を持っていないため，
+``捕獲した''という述語が一般にヲ格を取ることが分からないからである．
+
+もう一つの誤りは，下線のついている$\mathit{role}(11,2,\ga)$のように，``空輸''という述語に対し，
+``ため''をガ格として出力していることである．
+この理由は，``ため''が``空輸''と直接係り受けの関係にあるからである．
+
+一方，大域モデルで解析した結果を見ると，次のように改善されている．
+\begin{gather*}
+\{\mathit{role}(5,6,\ga),\mathit{role}(5,4,\wo),\mathit{role}(8,6,\ga),\\
+\underline{\mbox{$\mathit{role}(8,10,\wo)$}}, \underline{\mbox{$\mathit{role}(11,6,\ga)$}},\mathit{role}(11,10,\wo)\}.
+\end{gather*}
+
+大域モデルは，格フレーム情報など意味的な素性が少ないにも関わらず，
+``十二匹を''を``捕獲した''のヲ格として同定できている．
+この述語項関係は連体修飾である関係節と被修飾名詞との間に格関係が認められる「内の関係」と呼ばれるものであり，一般に同定することが難しい．
+阿辺川らは，連体修飾節と非修飾名詞が格関係にあるかどうかを判別するために，大規模データを利用している~\cite{abekawa:2005:ijcnlp}．
+しかし，Markov Logicを利用した本研究の提案手法では，文内の全体最適化でそれを実現している．
+
+さらに言えば，大域モデルでは，$\{\mathit{delete}(1), \mathit{delete}(2), \mathit{delete}(7)\}$ も出力されており，
+``この''と``ため''はともに項の候補になっていない．
+結果として，``魚類野性動物局が'' を正しく``空輸''に対するガ格として抽出できているのである．
+
+
+
+\section{おわりに}
+\label{conclusion}
+
+本稿では，Markov Logicを利用した日本語述語項構造解析手法を提案した．
+この提案手法は，複数の述語項関係の依存関係を捉える制約と，項候補削減を行う制約を組み合わせて文内最適化を行うもので，
+これらの大域的制約により，述語項構造解析の性能を大幅に向上させることに成功した．
+実験では，大規模データを利用していないにもかかわらず，先行研究と同等の性能を達成している．
+
+今後の展望としては，今村らの研究を参考に，大規模データの併用して，さらに解析性能を向上させることを考えている．
+大規模データから得られた選択選好性の素性は，本研究では先行研究に比べて性能が低かったヲ格，ニ格について，特に性能の改善が期待できる．
+また，今回は項候補を削減する際に，文内の局所的な素性・制約を考えるに留まったが，
+より正確に不要な項候補を削減できるようにするため，現在，文圧縮の技術についても調査を進めている．
+
+本研究の提案手法は文内最適化を主軸としたため，直接係り受けと文内ゼロ照応の2種類の述語項構造のみを扱った．
+つまり，文間ゼロ照応を含む一般の文書に対して解析を行った場合，本研究の手法のままでは性能が低下することが予想される．
+NAISTテキストコーパス中において，文間ゼロ照応が述語項関係全体に占める割合は，ヲ格及び二格では3\%未満に留まるが，
+ガ格の場合には15\%程度になり，無視できない数となる~\cite{iida:2007:law}．
+本研究の提案手法の優位性を保ったまま文間ゼロ照応を扱うために考えられる方法として，次の一つが有力だと考えている．
+\begin{enumerate}
+\item 文間ゼロ照応の項候補を別システムで抽出し，その候補を含めて文内最適化を行う
+\item 文書全体での最適化を行う
+\end{enumerate}
+まず，一つ目はゼロ照応があると仮定した時の，文外にある先行詞候補を常にリストの形式で保持しておき，
+文内の解析を行う際に，そのリスト内の候補を含めて解析を行う手法である．
+これはゼロ照応解析の先行詞同定では有効な手法~\cite{iida:2009:acl}であり，
+広大な先行詞の探索空間を大幅に削減して，効率的な解析を行える手段であると考える．
+ただし，文内の項候補に比べて，文外の項候補には利用できる素性が大幅に少なくなるため，
+推論時には文内と文外でバランスを取る必要があるものと考える．
+
+二つ目の手法は文内の最適化を，文書全体へと拡張する手法であるといえる．
+この手法の最大の問題点は文書全体が項の探索空間になることによる膨大な計算量である．
+現在の文書最適化手法を単純に拡張するだけでは時間・空間計算量共に実用的な範囲には収まらない．
+従って，この手法を実現するためには，文圧縮・文書要約の技術を併用することで，可能な限りに項の探索空間を削減すると共に，
+制約緩和などの近似手法を併用することも必要と考えられる．
+
+
+\acknowledgment
+ 本研究の一部は，国立国語研究所基幹型共同研究「コーパスアノテーションの基礎研究」および国立国語研究所「超大規模コーパス構築プロジェクト」による補助を得ています．
+
+
+\bibliographystyle{jnlpbbl_1.5}
+{\addtolength{\baselineskip}{-1pt}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Abekawa \BBA\ Okumura}{Abekawa \BBA\
+  Okumura}{2005}]{abekawa:2005:ijcnlp}
+Abekawa, T.\BBACOMMA\ \BBA\ Okumura, M. \BBOP 2005\BBCP.
+\newblock \BBOQ Corpus-Based Analysis of Japanese Relative Clause
+  Constructions.\BBCQ\
+\newblock In {\Bem Proceedings of 2nd International Joint Conference on Natural
+  Language Processing (IJCNLP)}, \mbox{\BPGS\ 46--57}, Jeju Island, Korea.
+
+\bibitem[\protect\BCAY{Clarke \BBA\ Lapata}{Clarke \BBA\
+  Lapata}{2008}]{clarke:2008:jair}
+Clarke, J.\BBACOMMA\ \BBA\ Lapata, M. \BBOP 2008\BBCP.
+\newblock \BBOQ Global Inference for Sentence Compression An Integer Linear
+  Programming Approach.\BBCQ\
+\newblock {\Bem Journal of Artificial Intelligence Research}, {\Bbf 31},
+  \mbox{\BPGS\ 399--429}.
+
+\bibitem[\protect\BCAY{Clarke \BBA\ Lapata}{Clarke \BBA\
+  Lapata}{2010}]{clarke:2010:cl}
+Clarke, J.\BBACOMMA\ \BBA\ Lapata, M. \BBOP 2010\BBCP.
+\newblock \BBOQ Discourse constraints for document compression.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 36}  (3), \mbox{\BPGS\
+  411--441}.
+
+\bibitem[\protect\BCAY{Fillmore, Wooters, \BBA\ Baker}{Fillmore
+  et~al.}{2001}]{fillmore:2001:paclic}
+Fillmore, C.~J., Wooters, C., \BBA\ Baker, C.~F. \BBOP 2001\BBCP.
+\newblock \BBOQ Building a Large Lexical Databank Which Provides Deep
+  Semantics.\BBCQ\
+\newblock In {\Bem Proceedings of the Pacific Asian Conference on Language,
+  Information and Computation (PACLIC)}, \mbox{\BPGS\ 3--26}, Hong Kong.
+
+\bibitem[\protect\BCAY{Haji\v{c}, Ciaramita, Johansson, Kawahara, Mart\'{\i},
+  M\`{a}rquez, Meyers, Nivre, Pad\'{o}, \v{S}t\v{e}p\'{a}nek, Stra\v{n}\'{a}k,
+  Surdeanu, Xue, \BBA\ Zhang}{Haji\v{c} et~al.}{2009}]{hajivc:2009:conll}
+Haji\v{c}, J., Ciaramita, M., Johansson, R., Kawahara, D., Mart\'{\i}, M.~A.,
+  M\`{a}rquez, L., Meyers, A., Nivre, J., Pad\'{o}, S., \v{S}t\v{e}p\'{a}nek,
+  J., Stra\v{n}\'{a}k, P., Surdeanu, M., Xue, N., \BBA\ Zhang, Y. \BBOP
+  2009\BBCP.
+\newblock \BBOQ The CoNLL-2009 Shared Task: Syntactic and Semantic Dependencies
+  in Multiple Languages.\BBCQ\
+\newblock In {\Bem Proceedings of the Thirteenth Conference on Computational
+  Natural Language Learning (CoNLL 2009): Shared Task}, \mbox{\BPGS\ 1--18},
+  Boulder, Colorado. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Huang, Shi, Jin, \BBA\ Zhu}{Huang
+  et~al.}{2012}]{huang:2012:aaai}
+Huang, M., Shi, X., Jin, F., \BBA\ Zhu, X. \BBOP 2012\BBCP.
+\newblock \BBOQ Using First-Order Logic to Compress Sentences.\BBCQ\
+\newblock In {\Bem Twenty-Sixth AAAI Conference on Artificial Intelligence
+  (AAAI'12)}, \mbox{\BPGS\ 1657--1663}.
+
+\bibitem[\protect\BCAY{Iida, Inui, \BBA\ Matsumoto}{Iida
+  et~al.}{2006}]{iida:2006:acl}
+Iida, R., Inui, K., \BBA\ Matsumoto, Y. \BBOP 2006\BBCP.
+\newblock \BBOQ Exploiting syntactic patterns as clues in zero-anaphora
+  resolution.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on
+  Computational Linguistics and the 44th annual meeting of the Association for
+  Computational Linguistics}, ACL-44, \mbox{\BPGS\ 625--632}, Stroudsburg, PA,
+  USA. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Iida, Inui, \BBA\ Matsumoto}{Iida
+  et~al.}{2009}]{iida:2009:acl}
+Iida, R., Inui, K., \BBA\ Matsumoto, Y. \BBOP 2009\BBCP.
+\newblock \BBOQ Capturing Salience with a Trainable Cache Model for
+  Zero-anaphora Resolution.\BBCQ\
+\newblock In {\Bem Proceedings of the Joint Conference of the 47th Annual
+  Meeting of the ACL and the 4th International Joint Conference on Natural
+  Language Processing of the AFNLP}, \mbox{\BPGS\ 647--655}, Suntec, Singapore.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Iida, Komachi, Inui, \BBA\ Matsumoto}{Iida
+  et~al.}{2007}]{iida:2007:law}
+Iida, R., Komachi, M., Inui, K., \BBA\ Matsumoto, Y. \BBOP 2007\BBCP.
+\newblock \BBOQ Annotating a Japanese text corpus with predicate-argument and
+  coreference relations.\BBCQ\
+\newblock In {\Bem Proceedings of the Linguistic Annotation Workshop}, LAW '07,
+  \mbox{\BPGS\ 132--139}, Stroudsburg, PA, USA. Association for Computational
+  Linguistics.
+
+\bibitem[\protect\BCAY{Ikehara, Miyazaki, Shirai, Yokoo, Nakaiwa, Ogura,
+  Ooyama, \BBA\ Hayashi}{Ikehara et~al.}{1997}]{ikehara:1997}
+Ikehara, S., Miyazaki, M., Shirai, S., Yokoo, A., Nakaiwa, H., Ogura, K.,
+  Ooyama, Y., \BBA\ Hayashi, Y. \BBOP 1997\BBCP.
+\newblock {\Bem Nihongo Goi Taikei, A Japanese Lexicon}.
+\newblock Iwanami Shoten, Tokyo.
+
+\bibitem[\protect\BCAY{Imamura, Saito, \BBA\ Izumi}{Imamura
+  et~al.}{2009}]{imamura:2009:acl}
+Imamura, K., Saito, K., \BBA\ Izumi, T. \BBOP 2009\BBCP.
+\newblock \BBOQ Discriminative Approach to Predicate-Argument Structure
+  Analysis with Zero-Anaphora Resolution.\BBCQ\
+\newblock In {\Bem Proceedings of the Joint Conference of the 47th Annual
+  Meeting of the ACL and the 4th International Joint Conference on Natural
+  Language Processing of the AFNLP (ACL-IJCNLP), Conference Short Papers},
+  \mbox{\BPGS\ 85--88}, Suntec, Singapore. Association for Computational
+  Linguistics.
+
+\bibitem[\protect\BCAY{Kawahara, Kurohashi, \BBA\ Hashida}{Kawahara
+  et~al.}{2002}]{kawahara:2002:jnlp}
+Kawahara, D., Kurohashi, S., \BBA\ Hashida, K. \BBOP 2002\BBCP.
+\newblock \BBOQ Construction of Japanese relevance-tagged corpus.\BBCQ\
+\newblock In {\Bem the 8th Annual Meeting of the Association for Natural
+  Language Processing}, \mbox{\BPGS\ 495--498}.
+
+\bibitem[\protect\BCAY{Koller}{Koller}{1999}]{koller:1999}
+Koller, D. \BBOP 1999\BBCP.
+\newblock {\Bem Probabilistic Relational Models}, \mbox{\BPGS\ 3--13}.
+\newblock Springer, Berlin/Heidelberg, Germany.
+
+\bibitem[\protect\BCAY{Meza-Ruiz \BBA\ Riedel}{Meza-Ruiz \BBA\
+  Riedel}{2009}]{meza:2009:naacl}
+Meza-Ruiz, I.\BBACOMMA\ \BBA\ Riedel, S. \BBOP 2009\BBCP.
+\newblock \BBOQ Jointly Identifying Predicates, Arguments and Senses using
+  Markov Logic.\BBCQ\
+\newblock In {\Bem Proceedings of Human Language Technologies: The 2009 Annual
+  Conference of the North American Chapter of the Association for Computational
+  Linguistics}, \mbox{\BPGS\ 155--163}, Boulder, CO, USA. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Ng \BBA\ Subrahmanian}{Ng \BBA\
+  Subrahmanian}{1992}]{ng:1992}
+Ng, R.\BBACOMMA\ \BBA\ Subrahmanian, V.~S. \BBOP 1992\BBCP.
+\newblock \BBOQ Probabilistic logic programming.\BBCQ\
+\newblock {\Bem Inf. Comput.}, {\Bbf 101}  (2), \mbox{\BPGS\ 150--201}.
+
+\bibitem[\protect\BCAY{Palmer, Kingsbury, \BBA\ Gildea}{Palmer
+  et~al.}{2005}]{palmer:2005:cl}
+Palmer, M., Kingsbury, P., \BBA\ Gildea, D. \BBOP 2005\BBCP.
+\newblock \BBOQ The Proposition Bank: An Annotated Corpus of Semantic
+  Roles.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 31}, \mbox{\BPGS\ 71--106}.
+
+\bibitem[\protect\BCAY{Poon \BBA\ Domingos}{Poon \BBA\
+  Domingos}{2007}]{poon:2007:aaai}
+Poon, H.\BBACOMMA\ \BBA\ Domingos, P. \BBOP 2007\BBCP.
+\newblock \BBOQ Joint Inference in Information Extraction.\BBCQ\
+\newblock In {\Bem Proceedings of the Twenty-Second National Conference on
+  Artificial Intelligence}, \mbox{\BPGS\ 913--918}, Vancouver, Canada. AAAI
+  Press.
+
+\bibitem[\protect\BCAY{Poon \BBA\ Domingos}{Poon \BBA\
+  Domingos}{2008}]{poon:2008:emnlp}
+Poon, H.\BBACOMMA\ \BBA\ Domingos, P. \BBOP 2008\BBCP.
+\newblock \BBOQ Joint Unsupervised Coreference Resolution with {Markov
+  Logic}.\BBCQ\
+\newblock In {\Bem Proceedings of the 2008 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 650--659}, Honolulu, Hawaii.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Singla \BBA\ Domingos}{Singla \BBA\
+  Domingos}{2006}]{singla:2006:icdm}
+Singla, P.\BBACOMMA\ \BBA\ Domingos, P. \BBOP 2006\BBCP.
+\newblock \BBOQ Entity Resolution with Markov Logic.\BBCQ\
+\newblock In {\Bem Proceedings of the Sixth International Conference on Data
+  Mining (ICDM)}, \mbox{\BPGS\ 572--582}, Washington, DC, USA. IEEE Computer
+  Society.
+
+\bibitem[\protect\BCAY{Taira, Fujita, \BBA\ Nagata}{Taira
+  et~al.}{2008}]{taira:2008:emnlp}
+Taira, H., Fujita, S., \BBA\ Nagata, M. \BBOP 2008\BBCP.
+\newblock \BBOQ A Japanese predicate argument structure analysis using decision
+  lists.\BBCQ\
+\newblock In {\Bem Proceedings of the Conference on Empirical Methods in
+  Natural Language Processing (EMNLP)}, \mbox{\BPGS\ 523--532}, Honolulu, HI,
+  USA. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Taskar, Pieter, \BBA\ Koller}{Taskar
+  et~al.}{2002}]{taskar:2002:uai}
+Taskar, B., Pieter, A., \BBA\ Koller, D. \BBOP 2002\BBCP.
+\newblock \BBOQ Discriminative Probabilistic Models for Relational Data.\BBCQ\
+\newblock In {\Bem Proceedings of the 18th Annual Conference on Uncertainty in
+  Artificial Intelligence (UAI-02)}, \mbox{\BPGS\ 485--492}, San Francisco, CA.
+  Morgan Kaufmann.
+
+\bibitem[\protect\BCAY{Toutanova, Haghighi, \BBA\ Manning}{Toutanova
+  et~al.}{2008}]{toutanova:2008:cl}
+Toutanova, K., Haghighi, A., \BBA\ Manning, C.~D. \BBOP 2008\BBCP.
+\newblock \BBOQ A global joint model for semantic role labeling.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 34}, \mbox{\BPGS\ 161--191}.
+
+\bibitem[\protect\BCAY{Watanabe, Asahara, \BBA\ Matsumoto}{Watanabe
+  et~al.}{2010}]{watanabe:2010:acl}
+Watanabe, Y., Asahara, M., \BBA\ Matsumoto, Y. \BBOP 2010\BBCP.
+\newblock \BBOQ A Structured Model for Joint Learning of Argument Roles and
+  Predicate Senses.\BBCQ\
+\newblock In {\Bem Proceedings of the ACL 2010 Conference Short Papers},
+  \mbox{\BPGS\ 98--102}, Uppsala, Sweden. Association for Computational
+  Linguistics.
+
+\end{thebibliography}
+}
+
+\begin{biography}
+\bioauthor{吉川　克正}{
+2005年東北大学工学部材料加工学科卒業．
+2006〜2007年アイダホ大学計算機科学科．
+2009年奈良先端科学技術大学院大学情報科学研究科博士前期課程修了．
+2011年同大学情報科学研究科博士後期課程修了．
+同年より日本学術振興会特別研究員．
+2011〜2012年東京工業大学精密工学研究所．
+2012年日本アイ・ビー・エム株式会社入社．
+同社東京基礎研究所にて自然言語処理の研究開発に従事．博士（工学）．
+}
+
+\bioauthor{浅原　正幸}{
+2003年奈良先端科学技術大学院大学情報科学研究科博士後期課程修了．
+2004年より同大学助教．
+2012年より国立国語研究所コーパス開発センター特任准教授．
+現在に至る．博士（工学）．自然言語処理・コーパス言語学の研究に従事．
+}
+
+\bioauthor{松本　裕治}{
+1977年京都大学工学部情報工学科卒業．
+1979年同大学工学研究科修士課程情報工学専攻修了．
+同年電子技術総合研究所入所．
+1984〜1985年英国インペリアルカレッジ客員研究員．
+1985〜1987年財団法人新世代コンピュータ技術開発機構に出向．
+京都大学助教授を経て，1993年より奈良先端科学技術大学院大学教授．現在に至る．工学博士．
+専門は自然言語処理．
+}
+\end{biography}
+
+\biodate
+
+
+
+
+\end{document}

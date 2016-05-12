@@ -1,0 +1,1199 @@
+    \documentclass[english]{jnlp_1.4_rep}
+
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\usepackage{array}
+
+
+\Volume{21}
+\Number{4}
+\Month{September}
+\Year{2014}
+
+\received{2012}{4}{18}
+\revised{2012}{7}{15}
+\accepted{2012}{7}{26}
+
+\setcounter{page}{941}
+
+\etitle{Particle Error Correction from Small Error Data \\for Japanese Learners\footnotetext{\llap{*~}This article has been partially revised for better understanding of overseas readers.}}
+\eauthor{Kenji Imamura\affiref{NTT} \and Kuniko Saito\affiref{NTT}\affiref{NTTCOM} \and Kugatsu Sadamitsu\affiref{NTT} \and Hitoshi Nishikawa\affiref{NTT}} 
+\eabstract{
+This paper shows how to correct the grammatical errors of Japanese
+particles made by Japanese learners. Our method is based on
+discriminative sequence conversion, which converts one sequence of
+words into another and corrects particle errors by substitution,
+insertion, or deletion. However, it is difficult to collect large
+learners' corpora. We solve this problem with a discriminative
+learning framework that uses the following two methods. First,
+language model probabilities obtained from large, raw text corpora are
+combined with $n$-gram binary features obtained from learners'
+corpora. This method is applied to measure the accuracy of Japanese
+sentences. Second, automatically generated pseudo-error sentences are
+added to learners' corpora to enrich the corpora
+directly. Furthermore, we apply domain adaptation, in which the
+pseudo-error sentences (the source domain) are adapted to the real
+error sentences (the target domain). Experiments show that the recall
+rate is improved using both language model probabilities and $n$-gram
+binary features. Stable improvement is achieved using pseudo-error
+sentences with domain adaptation.}
+\ekeywords{Particle Error Correction, Language Models, Pseudo-Error Generation, \linebreak
+	Domain Adaptation, Discriminative Sequence Conversion}
+
+\headauthor{Imamura et al.}
+\headtitle{Particle Error Correction from Small Error Data for Japanese Learners}
+
+\affilabel{NTT}{}{NTT Media Intelligence Laboratories, NTT Corporation}
+\affilabel{NTTCOM}{}{Presently with NTT Communications Corporation}
+
+\Reprint[T]{Vol.~19, No.~5, pp.~381--400}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+Case markers in a sentence are represented by postpositional particles
+in Japanese. Incorrect usage of particles causes serious communication
+errors because readers cannot understand the content of sentences
+through the case markers. For example, it is unclear as to what must
+be deleted in the following sentence.
+
+\begin{minipage}[t]{\textwidth}
+\begin{center}
+\begin{tabular}{cccccc}
+\textit{mail} & \textbf{o} & \textit{todoi} & \textit{tara} 
+& \textit{sakujo} & \textit{onegai-shi-masu} \\
+mail & \textbf{ACC.} & arrive & when & delete & please \\
+\multicolumn{6}{c}
+{``When $\phi$ has arrived an e-mail, please delete it.''} \\
+\end{tabular}
+\end{center}
+\end{minipage}
+
+If the accusative particle \textit{o} is replaced by a nominative one
+\textit{ga}, it becomes clear that the writer wants the e-mail to be
+deleted (``When the e-mail has arrived, please delete it.'').  Such
+particle errors frequently occur in sentences written by Japanese
+learners (c.f., Section \ref{sec-particle-errors}).
+
+Automatic error correction of texts written by Japanese learners is
+essential in education as well as business. For example, some Japanese
+corporations outsource the computer software 
+\linebreak
+development to foreign
+companies, especially China and India, using Japanese or English as
+the communication language. However, Japanese is a foreign language
+for most development companies, and texts such as e-mails can contain
+many errors that inhibit effective communication. Thus, automatic
+error correction is regarded as a key solution
+\cite{Ohki:ParticleError2011j,Suenaga:ErrorCorrection2012j}.
+
+
+
+This paper presents a method that can automatically correct Japanese
+particle errors. This task corresponds to preposition error correction
+in English. For English error correction, many studies employ
+classifiers, which select the appropriate prepositions/articles by
+restricting the error types to articles and frequent prepositions
+\cite{gamon:2010:NAACLHLT,HAN10.821,rozovskaya-roth:2011:ACL-HLT2011}.
+
+On the contrary, \citeA{mizumoto-EtAl:2011:IJCNLP-2011} proposed
+machine-translation-based error correction. This approach can handle
+all error types by converting learners' sentences into the correct
+version. Although the target of this paper is particle error, we
+employ a similar approach based on sequence conversion
+\cite{Imamura:MorphTrans2011} since it offers excellent
+scalability.
+
+
+However, the machine-translation-based approach requires a sufficient
+number of parallel sentences, which consist of learners' erroneous
+sentences and their manually corrected ones, to learn the
+models. However, collecting a large number of such pairs is difficult
+because of high costs. To avoid this problem, we propose the following
+two methods.
+
+
+\begin{enumerate}
+
+\item Using Large Raw Text Corpora \\
+(Combination of Language Model Probabilities and Binary Features)
+
+Because one half of the parallel sentences are correct Japanese, they
+can be easily obtained from raw text corpora. Thus, we regard a large
+text corpus as a set of corrected sentences and incorporate it into
+the error corrector models. The text corpus is used for computing
+language model probabilities. The error corrector models are jointly
+optimized with binary features acquired from the parallel sentences by
+using discriminative learning. We expect that the error correction
+coverage will be improved because the degree of sentence correctness
+is measured by language model probabilities, even if the errors rarely
+appear in the parallel sentences.
+
+\item Expansion of the Parallel Sentences Using Pseudo-Error Sentences \\
+(and Application of Domain Adaptation)
+
+Since collecting learners' erroneous sentences is not easy, we
+automatically generate pseudo-error sentences, which mimic learners'
+real errors, by applying error patterns to correct sentences
+\shortcite{rozovskaya-roth:2010:NAACLHLT}. An additional training
+corpus consists of the pairs of pseudo-error sentences and their
+source sentences. Note that the pseudo-error sentences do not
+completely reflect the error distribution of learners'
+sentences. Therefore, we further apply a domain adaptation technique
+that regards the pseudo-errors and real errors as the source and
+target domains, respectively. We expect stable improvement if the
+error distributions are partially different.
+
+\end{enumerate}
+
+The remainder of this paper is organized as follows. In Section
+\ref{sec-particle-errors}, we analyze errors in the sentences written
+by Japanese learners. Section \ref{sec-conversion} describes our error
+correction method and use of raw text corpora. Section
+\ref{sec-pseudo-sentences} describes the expansion of parallel
+sentences using pseudo-error sentences and domain adaptation. In
+Section \ref{sec-experiments}, we conduct experiments to confirm error
+correction accuracy. Section \ref{sec-related-work} introduces related
+studies, and Section \ref{sec-conclusion} concludes this study.
+
+
+\section{Errors in Sentences Written by Japanese Learners}
+\label{sec-particle-errors}
+
+In order to analyze error types, we first collected erroneous examples
+written by Chinese native speakers who are learning Japanese.
+
+
+Thirty seven subjects, who learnt Japanese while they are/were at
+engineering universities in Japan, participated in the experiment. The
+periods spent living in Japan ranged from six months to six years. We
+provided 80 English sentences obtained from Linux manuals and 24
+figures to each subject (104 tasks in total), and they re-wrote the
+sentences in Japanese (Hereafter ``learners' sentences''). As a
+result, 2,770 learners' sentences were collected. Each sentence was
+revised by Japanese native speakers (called the correct sentences). To
+make the revisions, a bare minimum of error correction was applied to
+the point at which the sentences become grammatically/pragmatically
+correct, while retaining the meaning. In other words, only fatal
+errors were corrected from the viewpoint of Japanese
+grammar.\footnote{Vocabulary errors were corrected even if the
+sentences were grammatically acceptable.}
+
+
+\subsection{Error Categorization and Distribution}
+
+We categorized the errors into three major types, grammatical,
+vocabulary, and surface form errors, and set sub-categories, as shown
+in Table \ref{tbl-error-class}.
+
+\begin{table}[t]
+\caption{Error Categorization and Examples}
+\label{tbl-error-class}
+\input{03table01.txt}
+\small
+X and Y of ``*X/Y'' in this table denote the error and its correction, respectively.
+\par
+\end{table}
+
+The rewriters revised 2,171 of 2,770 sentences. The unchanged
+sentences included 559 sentences without errors and 40 sentence
+fragments. The following analyses were applied to the 2,171 revised
+sentences.
+
+
+The number of corrected errors was 4,916 words/phrases (2.26 per
+sentence). From the perspective of distribution by categories, most
+were grammatical errors (54\%), followed by 
+\linebreak
+vocabulary errors (28\%)
+and surface form errors (16\%). The rest were compound errors. From
+the perspective of sub-categories, the most frequent errors were
+located in particles or auxiliary verbs (33\%), followed by
+transliteration (11\%) and synonyms (10\%).
+
+
+
+\subsection{Analyses and Discussion}
+
+With regard to the most frequent errors, particle errors appear widely
+in texts written by non-native Japanese speakers regardless of their
+first language. This is because particles are special grammatical
+units in Japanese,\footnote{Particles are also used in Korean.} and
+have various functions. For example, case particles specify the case
+of noun phrases such as nominative, accusative, and possessive. Topic
+particles work as topic markers, and can combine with case
+particles. There are other types such as conjunctive and sentence-end
+particles. Therefore, appropriate usage is difficult for most
+non-native speakers, and effective teaching should include correction
+of particle errors.
+
+
+Since fallibility depends on the particle, we calculated the frequency
+of particle errors. Table~\ref{tbl-particle-errors} shows the top 10
+particle errors.
+
+Correction type in Table \ref{tbl-particle-errors} denotes the edit
+operation needed to correct the errors: insertion (INS), deletion
+(DEL), or substitution (SUB). From the viewpoint of edit operation,
+substitutions were the most frequent (74\%), particle omissions (INS)
+were 17\%, and excess particles (DEL) were 9\%.
+
+
+
+\begin{table}[t]
+\caption{Frequent Particle Errors (Top 10)}
+\label{tbl-particle-errors}
+\input{03table02.txt}
+\vspace{1\Cvs}
+\end{table}
+
+The following are examples of substitution, insertion, and
+deletion. Rank 1 in Table \ref{tbl-particle-errors} implies that the
+topic particle \textit{wa} should appear only once in a sentence. If
+it appears twice, one of them should be replaced by a case particle
+\textit{ga} ({\it mondai- \underline{*wa/ga} aru-toki- \underline{wa}
+...} ``if you have problem ...''). Rank 3 shows an example of
+insertion. Lack of the possessive particle \textit{no} between a
+cardinal number and a noun was frequent ({\it futatsu *$\phi$/-no
+file} ``two files''). Rank 8 shows an example of deletion. Many
+learners appended the possessive particle \textit{no} after verbs or
+adjectives, which modify a noun ({\it chiisai *-no/$\phi$ e} ``small
+picture'').
+
+
+The above analyses confirmed that particle error correction is
+effective for Japanese learners. These errors are corrected by
+applying the edit operations of substitution, insertion, and deletion.
+
+
+
+\section{Error Correction by Discriminative Sequence Conversion}
+\label{sec-conversion}
+
+This section describes error correction using discriminative sequence
+conversion. Our error correction method converts learners' word
+sequences into correct sequences (sentences are segmented into words
+in advance by a morphological analyzer). The method is similar to
+phrase-based statistical machine translation (PBSMT), but has the
+following three differences: 1) it adopts conditional random fields,
+2) it allows insertion and deletion, and 3) combines $n$-gram binary
+features and language model probabilities. Unlike the classification
+approach (e.g., \shortcite{suzuki-toutanova:2006:COLACL}), the
+conversion approach can correct multiple errors of all types in a
+sentence.
+
+
+\subsection{Basic Procedure}
+
+We apply a morpheme conversion approach that converts the results of a
+speech recognizer into word sequences for language analyzer processing
+\shortcite{Imamura:MorphTrans2011}. It corrects particle errors in the
+input sentences as follows.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-4ia3f1.eps}
+\end{center}
+\caption{Example of Phrase Lattice (bold lines denote the correct sequence)}
+\label{fig-lattice}
+\end{figure}
+
+
+\begin{itemize}
+
+\item First, all modification candidates are obtained by referring to
+a phrase table. This table, called the confusion set
+\shortcite{rozovskaya-roth:2010:EMNLP} in the error correction task,
+stores pairs of incorrect and correct particles (Table
+\ref{tbl-particle-errors}).\footnote{Table \ref{tbl-particle-errors}
+shows a part of the phrase table. As we will describe in Section
+\ref{sec-experimental-settings}, all words whose part-of-speech is
+\texttt{Particle} according to the ipadic-2.7.0 dictionary are
+processed.}  The candidates are packed into a lattice structure,
+called the phrase lattice (Figure \ref{fig-lattice}).  To deal with
+unchanged words, it also copies the input words and inserts them into
+the phrase lattice.
+
+\item Next, the best phrase sequence in the phrase lattice is
+identified on the basis of the conditional random fields (CRFs)
+\cite{Lafferty:CRF2001}. The Viterbi algorithm is used for
+decoding because error correction does not change the word
+order. Although the phrase lattice includes obviously ungrammatical
+sequences (e.g., a sequence in which identical particles \textit{o}
+are adjacent), we do not prune them, and search for the best sequence
+according to the model.
+
+\item While training, word alignment is carried out by dynamic
+programming matching. From the alignment results, the phrase table is
+constructed by acquiring particle errors, and the CRF models are
+trained using the alignment results as supervised data.\footnote{We
+implemented a CRF learner using Okazaki's \texttt{libLBFGS} as the
+optimizer.\\ http://www.chokkan.org/software/liblbfgs/}
+
+\end{itemize}
+
+
+\subsection{Insertion/Deletion}
+
+The error correction in this paper uses insertion and deletion,
+whereas phrase-based SMTs generally translate a sentence using only
+substitution. Since an insertion can be regarded as replacing an empty
+word with an actual word and deletion is the replacement of an actual
+word with an empty one, we treat these operations as substitution
+without distinction while learning/applying the CRF models.
+
+
+However, insertion is a high cost operation because it may occur at
+any location and can cause the lattice size to explode. To avoid this
+problem, we permit one only word insertion and only immediately after
+nouns. This restriction makes a few errors impossible to correct
+(e.g., it becomes impossible to insert the topic particle \textit{wa}
+immediately after the dative particle \textit{ni}).
+
+
+Note that substitution can be represented as a sequence of insertion
+and deletion. In this paper, the supervised data for the CRF models
+are created while consecutive insertion and deletion are bundled as
+substitution. During error correction, multiple candidates consisting
+of the same surface forms exist in the phrase lattice; one is
+represented by substitution and the other is a sequence of insertion
+and substitution. However, substitution is selected in almost all
+cases by the learnt models.
+
+
+\subsection{Features}
+
+In this paper, we use mapping features and link features. The former
+measure the correspondence between input and output words (similar to
+the translation models of PBSMT), while the latter measure the fluency
+of the output word sequence (similar to language models). Figure
+\ref{fig-features} illustrates the features, and Table
+\ref{tbl-templates} shows the feature templates.
+
+Many natural language processing (NLP) tasks that employ
+discriminative models (e.g., named entity recognition) use not only
+the targeted word but also its neighboring words as features. We
+employ the same approach. The focused phrase and its two neighboring
+words in the input are regarded as the window. The mapping features
+are defined as the pairs of the output phrase and uni-, bi-, and
+tri-grams in the window. All mapping features are binary.
+
+Link features are detailed in the next section.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{21-4ia3f2.eps}
+\caption{Mapping and Link Features}
+\label{fig-features}
+\end{center}
+\end{figure}
+
+\begin{table}[t]
+\caption{Feature Templates}
+\label{tbl-templates}
+\input{03table03.txt}
+\vspace{4pt}\small
+$\delta(\cdot)$ in the table denotes a binary function that returns 1 
+iff all arguments match the function, and 0 otherwise.
+\par
+\end{table}
+
+
+\subsection{Using Raw Text Corpora and Incorporation into Link Features}
+
+The link features are important for the error correction task because
+the system has to judge output accuracy. The correct sentences can be
+easily obtained from raw text corpora. Using these corpora, we mix the
+two types of features, as follows, and optimize their weights in the
+CRF framework. We leverage a characteristic that discriminative models
+can handle features that depend on each other.
+
+\begin{itemize}
+\item \textbf{$N$-gram binary features}
+
+$N$-grams of the output words, from 1 to 3, are used as binary
+features. These are obtained from the correct side of a training
+corpus (parallel sentences). Since the weights of individual features
+are optimized considering all features (including the mapping
+features), fine-tuning can be achieved. The accuracy becomes almost
+perfect on the training corpus. In other words, we can certainly
+correct errors in new texts if the same error patterns are present in
+the training corpus.
+
+\item \textbf{Language model probability}
+
+This is a logarithmic value (real value) of the $n$-gram probability
+of the output word sequence. One feature weight is assigned. The
+$n$-gram language model can be constructed from large text corpora,
+i.e., it does not require parallel sentences. The language model
+probabilities provide grammatical correctness scores, regardless of
+whether the errors in the new texts appeared in the training corpus or
+not.
+\end{itemize}
+
+Incorporating binary and real features yields a rough approximation of
+generative models in semi-supervised conditional models
+\cite{suzuki-EtAl:2009:EMNLP,Suzuki:SemiSupervised2010j}. It can
+appropriately correct new sentences while maintaining high accuracy on
+the training corpus.
+
+
+\section{Expansion of Parallel Sentences Using Pseudo-error Sentences}
+\label{sec-pseudo-sentences}
+
+The error corrector described in Section \ref{sec-conversion} requires
+parallel sentences, which correspond to bilingual sentences in machine
+translation. However, it is difficult to collect a sufficiently large
+set of such sentences. We resolve this problem by using pseudo-error
+sentences to expand them. In this section, we describe the generation
+of pseudo-error sentences and their application using domain
+adaptation.
+
+
+\subsection{Pseudo-Error Generation}
+
+As we described before, correct sentences, which are halves of the
+parallel sentences, can be easily acquired from raw text corpora.  If we
+can generate errors that mimic learners' sentences, we can obtain new
+parallel sentences.
+
+
+We utilize the method of
+\shortciteA{rozovskaya-roth:2010:NAACLHLT}. Concretely, when particles
+appear in the correct sentence, they are replaced by incorrect ones in
+a probabilistic manner by applying the phrase table (which stores the
+error patterns) in the opposite direction.  The error generation
+probabilities are relative frequencies on the training corpus (i.e.,
+the real error corpus). Namely,
+\begin{equation}
+P_{\mathit{error}}(f|e)  =  \frac{C(f,e)}{C(e)},
+\end{equation}
+where $P_{\mathit{error}}(f|e)$ denotes the error generation probability,
+$C(f,e)$ denotes the co-occurrence frequency of the correct particle
+$e$ and its error particle $f$ in the real error corpus, and $C(e)$
+denotes the frequency of correct particle $e$ in the corpus.
+
+The models are learnt using both real error corpus and pseudo-error
+corpus.
+
+
+\subsection{Domain Adaptation by Feature Augmentation}
+\label{sec-domain-adaptation}
+
+Although the error generation probabilities are computed from the real
+error corpus, the error distribution is not exactly the same. To fit
+the pseudo-errors to the real errors better, we apply a domain
+adaptation technique. Namely, we regard the pseudo-error corpus as the
+source domain and the real error corpus as the target domain, and
+models that fit the target domain are learnt.
+
+
+In this paper, we use \shortciteA{daumeiii:2007:ACLMain}'s feature
+augmentation method for domain adaptation. This method learns the
+target domain models by expanding its feature space, and has
+the same effect; that is, the models for the source domain are
+regarded as prior distribution for the target domain. In addition, it
+eliminates the need to change the learning algorithm.
+
+
+We briefly review the feature augmentation. The feature space is
+segmented into three parts: common, source, and target. The features
+extracted from the source domain data ($D_s$) are deployed to the
+common and source spaces, and those from the target domain data
+($D_t$) are deployed to the common and target spaces. Namely, the
+feature space is tripled (Figure \ref{fig-augment}).
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{21-4ia3f3.eps}
+\end{center}
+\caption{Feature Augmentation}
+\label{fig-augment}
+\end{figure}
+
+Parameter estimation is carried out in the usual way on the above
+feature space. Consequently, the weights of the common features are
+emphasized if the features are consistent between the source and
+target. With regard to domain-dependent features (i.e., inconsistent
+between the source and target), the weights in the source or the
+target space are emphasized. With respect to the features that only
+appear in the source or target domain, the weights in the common and
+domain-dependent spaces are emphasized.
+
+
+Figure \ref{fig-augment} shows an example of feature
+augmentation. Here, we simplify the task to just asking whether the
+case particle \textit{ga} should be replaced with \textit{o} or left
+unchanged. We assume that the following three features are acquired
+from the source and target domain data (we assume template No. 11 in
+Table \ref{tbl-templates}).
+
+\begin{itemize}
+\item[A)] ``{\it Kinou \underline{ga} riyou}'' appears in both source
+and target domains, and \textit{ga} is replaced with \textit{o}.
+
+\item[B)] ``{\it Data \underline{ga} henkou}'' appears in both
+source and target domains.  However, it is unchanged in the source
+domain and is replaced with \textit{o} in the target domain data.
+
+\item[C)] ``{\it Kansuu \underline{ga} jikkou}'' only appears in the
+source domain data.
+\end{itemize}
+
+When we estimate parameters on the above feature space, the weights of
+A) in the common space are emphasized because it is consistent between
+the domains. On the contrary, the weights of B) in the common space
+become zero, and those in the source or target space are emphasized,
+depending on the correction, because the domains are
+inconsistent. Furthermore, the weights of C) in the common and source
+spaces are emphasized.
+
+Error correction uses only features in the common and target
+spaces. The error distribution approaches the real error distribution
+because the weights of the features are optimized to the target
+domain. In addition, it becomes robust against new sentences because
+the common features acquired from the source domain can be used even
+when they do not appear in the target domain. From the examples in
+Figure \ref{fig-augment}, the features of C), which only appeared in
+the source domain data, can be used to enhance error correction.
+
+
+\section{Experiments}
+\label{sec-experiments}
+
+\subsection{Experimental Settings}
+\label{sec-experimental-settings}
+
+\paragraph{Target Particles: }
+
+The target particles in this paper are words whose part-of-speech
+(POS) tag is \texttt{Particle}, according to the ipadic-2.7.0 morpheme
+dictionary. The dictionary includes not only case particles but also
+topic (focus), adverbial, conjunctive, sentence-ending, and parallel
+particles (236 particles in total). Thirty-eight particles in the
+dictionary, which appear in learners' corpus and were incorrectly used
+by the learners at least once, are targeted in the
+experiments.\footnote{In comparison with
+\shortciteA{suzuki-toutanova:2006:COLACL}'s study, which handled 10
+case particles and topic particle \textit{wa}, we exclude dative
+particle \textit{e} and include combined particle \textit{ni-yori}
+instead of \textit{yori} alone. In addition, we handle topic particle
+\textit{wa} as an individual word, whereas
+\shortciteA{suzuki-toutanova:2006:COLACL}'s study regarded a sequence
+of case and topic particles as one word.}
+
+
+\paragraph{Learners' Corpus (Real Error Corpus): }
+
+The learners' corpus used in the experiments consists of 2,770
+parallel sentences (104 tasks) collected in Section
+\ref{sec-particle-errors}. From these sentences, only particle errors
+were retained; the other errors were corrected by copying the
+corresponding parts of the correct sentence. Therefore, the parallel
+sentences for the experiments contain only particle errors. If just
+the POS tags of words were different (i.e., surface forms were
+identical) between the pairs, we did not regard them as errors, and
+POS tags of the correct sentence were copied to the learner's
+sentence. The number of incorrect particles was 1,087 (8.0\%) of
+13,534. Note that most particles did not need to be revised. The
+number of pair types of incorrect particles and their correct ones was
+132 (SUB: 95, INS:14, DEL: 23). All sentences in the experiments were
+segmented and tagged by the Japanese morphological analyzer
+MeCab,\footnote{http://mecab.sourceforge.net/} using the ipadic-2.7.0
+morpheme dictionary. The word information consisted of the surface
+form and its POS tag.
+
+
+\paragraph{Language Model: }
+
+This was constructed from Japanese Wikipedia articles on computers and
+Japanese Linux manuals, 527,151 sentences in total. SRILM
+\cite{Stolcke:SRILM2011} was used to train a trigram
+model. During model construction, the modified Kneser-Ney
+discounting and interpolation were used for backoff smoothing, and
+unknown unigrams were retained as pseudo-word \texttt{<unk>}.
+
+
+\paragraph{Pseudo-error Corpus: }
+
+The pseudo-errors were generated using 10,000 sentences randomly
+selected from the corpus for the language model. We changed the
+scaling factor of error generation probabilities from 0.0 (i.e., no
+errors) to 2.0, while the relative frequency in the real error corpus
+was taken as 1.0.
+
+
+\paragraph{Evaluation Metrics: }
+
+Five-fold cross-validation on the real error corpus was used. We used
+two metrics as follows.
+
+
+\begin{enumerate}
+\item Precision and recall rates, and F-measures of error correction
+by the systems. We compared only surface forms of the words for score
+computation.
+
+\item Most particles did not need to be revised in this task. The
+system may excessively revise particles that do not need to be
+corrected (over-correction). Therefore, we employ another metric
+called relative improvement, which represents the difference between
+the number of accurately corrected error particles and that of
+over-corrected particles (i.e., those that did not need to be
+corrected). This is a practical metric because it denotes the number
+of particles that human rewriters do not need to revise after system
+correction. The relative improvement becomes zero if the system does
+not change any particle.
+\end{enumerate}
+
+
+\subsection{Experiment 1: Using Raw Text Corpora}
+\label{sec-exp-raw-corpora}
+
+First, we evaluate the effects of language model probability using raw
+text corpora in error correction. The following three methods were
+compared.
+
+\begin{itemize}
+\item \textbf{Proposed Method:}
+Incorporating the language model probability as a link feature with
+$n$-gram binary features.
+
+\item \textbf{$N$-gram Binary Features:}
+Only $n$-gram binary features are used as link features (i.e., the
+language model probability is not used).
+
+\item \textbf{Language Model Probability:}
+Only the language model probability is used as the link feature (i.e.,
+$n$-gram binary features are not used).
+\end{itemize}
+
+Table \ref{tbl-exp-results} shows the results.  In the table,
+\mbox{\dag} denotes a significant difference between the proposed
+method and the $n$-gram binary feature method, and \mbox{\S} denotes a
+significant difference between the proposed method and the language
+model probability method ($p < 0.05$).\footnote{For the precision and
+recall rates, we used Pearson's $\chi^2$ test.  For the relative
+improvement, we used Student's $t$-test.}
+
+\begin{table}[b]
+\caption{Results for Various Link Features}
+\label{tbl-exp-results}
+\input{03table04.txt}
+\end{table}
+
+Focusing on precision rates, the proposed and $n$-gram binary feature
+methods yielded the same accuracies, while the language model
+probability method yielded lower accuracy than the other
+methods. Focusing on recall rates, the proposed method had
+significantly better accuracy than the other two methods (from 9.9\%
+and 11.2\% to 18.9\%). This indicated that the proposed method had the
+highest F-measure. Comparing with the $n$-gram binary features and the
+language model probability methods, the recall rate of the language
+model probability method was slightly higher. Consequently, F-measure
+scores, in decreasing order, were the proposed method, the language
+model probability method, and the $n$-gram binary feature method.
+
+However, focusing on relative improvements, the improvement of the
+language model probability method was degraded (i.e., over-correction
+occurred) even though the recall rate was higher than that of the
+$n$-gram binary feature method. This is because of the characteristic
+of this task; about 92\% of the particles did not need
+modification. Improving the recall rate sometimes causes
+over-correction.
+
+The proposed method had better relative improvement than the other two
+methods. However, the difference between the proposed and $n$-gram
+binary feature methods was not significant. We suppose that the
+$n$-gram binary features are especially effective in correcting
+certain errors, and have an advantage from the perspective of relative
+improvement. The proposed method improved the recall rate while
+maintaining the precision rate, and thus increased relative
+improvement. We conclude that combining the language model probability
+with the $n$-gram binary features is effective in improving error
+correction accuracy.
+
+
+\subsection{Experiment 2: Expansion of Parallel Sentences Using
+Pseudo-error Sentences}
+\label{sec-exp-adaptation}
+
+Next, we evaluate the effect of introducing pseudo-error
+sentences. The experiments were carried out by changing the usage of
+pseudo-error sentences; the link features are those proposed in
+Section \ref{sec-exp-raw-corpora}.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-4ia3f4.eps}
+\caption{Recall-Precision Curve (the scaling factor of error generation probabilities is 1.0)}
+\label{fig-graph1}
+\end{center}
+\end{figure}
+
+Figure \ref{fig-graph1} plots the precision/recall curves for the
+following four combinations of training corpora and method. Note that
+each precision rate in Figure \ref{fig-graph1} was, at the specified
+recall rate, achieved by selecting corrected particles from high score
+corrections.
+
+\begin{itemize}
+\item \textbf{TRG:}
+The models were trained using only the real error corpus (baseline).
+
+\item \textbf{SRC:}
+The models were trained using only the pseudo-error corpus.
+
+\item \textbf{ALL:}
+The models were trained using the real error and pseudo-error corpora
+by simply adding them.
+
+\item \textbf{AUG:} 
+The proposed method.  Feature augmentation was realized by regarding
+the pseudo-errors as the source domain and the real errors as the
+target domain.
+\end{itemize}
+
+The SRC case, which uses only the pseudo-error sentences, did not
+match the precision of TRG. The ALL case matched the precision of TRG
+at high recall rates. AUG, the proposed method, achieved higher
+precision than TRG at high recall rates. At the recall rate of 18\%,
+the precision rate of AUG was 55.4\%, while that of TRG was 50.5\%
+(the significance was $p = 0.16$). Note that the precision rate of SRC
+was 35.6\% at the recall rate of 18\%, which is better than random
+correction.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{21-4ia3f5.eps}
+\caption{Relative Improvement among Error Generation Probabilities}
+\label{fig-graph2}
+\end{center}
+\end{figure}
+
+Figure \ref{fig-graph2} shows the relative improvement of each method
+according to error generation probabilities. In this experiment, ALL
+achieved higher improvement than TRG at scaling factors of error
+generation probabilities ranging from 0.0 (no errors) to 0.6. Although
+the improvements were high, we have to control the error generation
+probability because the improvements in the SRC case fell as the
+scaling factor was raised. On the other hand, AUG achieved stable
+improvement regardless of the error generation probability. The
+relative improvement at a scaling factor of 1.0 was significantly
+improved because the improvement of TRG was +28 and that of AUG was
++59 ($p < 0.05$). Thus, we can conclude that domain adaptation to
+pseudo-error sentences is the preferred approach.
+
+
+\subsection{Examples of Error Correction}
+
+In the second experiment (c.f., Section \ref{sec-exp-adaptation}), the
+precision and recall rates of the proposed method (AUG) were 54.8\%
+(210/383) and 19.3\% (210/1,087), respectively, when the scaling factor
+of error generation probabilities was 1.0. The precision rate of 55\%
+was not high enough because 45\% of system modifications should be
+corrected again. However, some usages were clearly incorrect from the
+grammatical perspective, while others were acceptable because
+alternative particles can be accepted depending on the
+context. Accordingly, we carried out a subjective evaluation.
+
+One hundred and seventy-three particles, which the system modified
+without matching the answer, were evaluated by one evaluator. Note
+that 151 of them were over-corrections, where the answers were not
+modified from learners' sentences. We asked the evaluator whether the
+system modification would be acceptable, i.e., grammatically and
+semantically identical to the answer. As a result, 103 of the 173
+particles were acceptable. Therefore, the precision rate including
+acceptable modification became 81.7\% ($(210 + 103) / 383$).
+
+Table \ref{tbl-correct-examples} shows examples of system
+corrections. Successful corrections were realized by substitution,
+insertion, and deletion. The acceptable examples included substitution
+from topic particle \textit{wa} to case particle \textit{ga} (No. 4),
+and dividing a compound noun by inserting the correct particle
+(No. 5). Unacceptable examples included the following: idiomatic
+expression was over-corrected (No. 7), the case particle for the
+passive voice was replaced with that for the active voice (No. 8),
+correction is impossible without knowledge of Linux's free command
+(No. 10). No. 9 is similar to No. 4. However, it was judged
+unacceptable because ``\textit{watashi-tachi} (we)'' and
+``\textit{anata} (you)'' are concord. Therefore, the same particles
+should be used. Features used in this paper only reflect local context
+of particles. Uncorrectable particle errors will persist unless global
+context features are introduced.
+
+\begin{table}[t]
+\caption{Examples of Error Correction by Proposed Method}
+\label{tbl-correct-examples}
+\input{03table05.txt}
+\end{table}
+
+
+\section{Related Studies}
+\label{sec-related-work}
+
+Particle error correction for Japanese learners has been researched
+for a long time. Recently, \shortciteA{suzuki-toutanova:2006:COLACL}
+used maximum entropy (ME) classifiers to restore particles (mainly
+case markers) omitted from sentences. They inserted the appropriate
+particle at the given position of the parsed and tagged
+sentences. \shortciteA{Ohki:ParticleError2011j} detected incorrect
+usage of particles in a learner's sentence. They tagged and parsed the
+erroneous sentence and detected the incorrect usage (including lack of
+particles) by the support vector machines (SVMs), which used the
+features of neighboring words and dependency structure. Only detection
+was carried out.
+
+
+In English preposition/article correction, \shortciteA{HAN10.821}
+corrected preposition errors using ME classifiers, where the features
+were neighboring words and head words acquired by parsers. Similarly,
+\shortciteA{gamon:2010:NAACLHLT} proposed a method to detect and
+correct preposition and article errors. The detection was based on ME
+classifiers, and the correction was based on decision
+trees. \shortciteA{rozovskaya-roth:2010:EMNLP} corrected preposition
+errors using classifiers based on averaged perceptron models. These
+studies corrected errors by classifiers by restricting error types to
+those of particles, prepositions, and articles.
+
+
+However, \shortciteA{mizumoto-EtAl:2011:IJCNLP-2011} proposed an error
+correction method that did not restrict the error type. They collected
+numerous pairs of learners' sentences and their native correction from
+a social network service, and corrected errors by using a phrase-based
+SMT. Note that they did not segment learners' sentences into words
+because they included errors. The erroneous sentences were segmented
+into characters. Compared to our study, the sequence conversion used
+in this paper is similar to that used in phrase-based SMT. Therefore,
+our method can handle all error types, i.e., it does not need to
+restrict errors to particles. However, our method assumes that the
+input sentences are segmented into words in advance. The accuracies of
+tagging and parsing might decrease when erroneous sentences are
+analyzed. We need to investigate word segmentation methods for
+erroneous sentences \cite{Fujino:ErrorMorphAnalysis2012j}.
+
+
+From the perspective of correct sentence models,
+\shortciteA{suzuki-toutanova:2006:COLACL,Ohki:ParticleError2011j,HAN10.821,rozovskaya-roth:2010:EMNLP}
+modeled correct sentences using $n$-gram binary
+features. \shortciteA{gamon:2010:NAACLHLT,mizumoto-EtAl:2011:IJCNLP-2011}
+modeled them as language model probabilities. In this paper, we
+combined both features and optimized them together with mapping
+features. As a consequence, the recall rates were improved.
+
+
+From the perspective of learners' sentence usage, all studies reported
+that the error correction accuracies improved by incorporating models
+that represent trends in learners' errors with models of native
+speakers' texts
+\cite{HAN10.821,gamon:2010:NAACLHLT,rozovskaya-roth:2010:EMNLP,Kasahara:CaseParticleCorrection2012j}. The
+method in this paper encompasses the above findings by using mapping
+features that represent learners' error tendencies.
+
+
+\shortciteA{rozovskaya-roth:2010:NAACLHLT} have proposed the use of
+pseudo-error sentences, which mimic learners' sentences.  They
+reported that error correction accuracy was improved by adding
+pseudo-error sentences, which have the same distribution as learners'
+sentences. However, the best error generation method depended on the
+data (concretely, the learner's native language), and error generation
+should be manually controlled. In this paper, we adjust the difference
+between pseudo-errors and real errors using the domain adaptation
+technique; hence, stable improvement is achieved.
+
+
+\shortciteA{dahlmeier-ng:2012:EMNLP-CoNLL} proposed a decoder that can
+correct multiple errors in a sentence. The decoder handles not only
+preposition/article errors but also typos, punctuation errors, and
+number agreement errors. The correction hypotheses are generated using
+classifiers and rules, which depend on the error type, and an input
+sentence is rewritten by hill climbing. The decoder maintains multiple
+hypotheses while decoding in order to reduce the risk of falling into
+local optima. Our method maintains all hypotheses in the phrase
+lattice and uses the Viterbi algorithm to search for the best
+combination. The result is the optimal solution from the viewpoint of
+the models.
+
+
+We described how most particles do not need to be corrected, and that
+improving the recall rate does not directly affect the relative
+improvement in this task. This phenomenon, called the imbalanced data
+problem, is a major problem when applying machine learning techniques
+to practical tasks (c.f., the survey paper
+\shortcite{He:Imbalanced2009}). Many solutions have been proposed to
+address this problem. For example, sampling methods aim to balance
+data by decreasing majority data or increasing minority data. The
+minimum Bayes risk methods learn models with different costs,
+depending on the majority and minority classification errors (in this
+task, correction errors). We need to investigate what methods can be
+applied to our task. Note that the pseudo-error sentences proposed in
+this paper are different from the over-sampling method because our
+purpose is to increase the training data without changing error
+distribution.
+
+
+\section{Conclusion}
+\label{sec-conclusion}
+
+In this paper, we propose a method to correct particle errors in the
+sentences of Japanese learners. In the error correction task, it is
+difficult to collect sufficient number of pairs of learners' and
+correct sentences. To avoid this problem, we first combine the binary
+features acquired from parallel sentences (small scale) and the
+language model probability derived from large, raw text corpora. By
+optimizing the above features via discriminative learning, we improve
+the recall rate of error correction. In addition, we generate
+pseudo-error sentences, which mimic learners' sentences and add them
+to parallel sentences. By incorporating domain adaptation, stable
+improvement is achieved.
+
+
+Our discriminative sequence conversion can handle not only particle
+errors but also all other error types. In the future, we aim to apply
+this method to as many other error types as possible.
+
+
+\acknowledgment
+
+A part of this study was presented at \textit{the 50th Annual Meeting
+of the Association for Computational Linguistics}
+\cite{imamura-EtAl:2012:ACL2012short}. The authors are grateful
+to Dr.~Tomoko Izumi, who provided advice on the English translation of
+Japanese grammar. The authors appreciate helpful comments given by
+anonymous reviewers.
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Dahlmeier \BBA\ Ng}{Dahlmeier \BBA\
+  Ng}{2012}]{dahlmeier-ng:2012:EMNLP-CoNLL}
+Dahlmeier, D.\BBACOMMA\ \BBA\ Ng, H.~T. \BBOP 2012\BBCP.
+\newblock \BBOQ A Beam-Search Decoder for Grammatical Error Correction.\BBCQ\
+\newblock In {\Bem Proceedings of the 2012 Joint Conference on Empirical
+  Methods in Natural Language Processing and Computational Natural Language
+  Learning (EMNLP-CoNLL 2012)}, \mbox{\BPGS\ 568--578}, Jeju Island, Korea.
+
+\bibitem[\protect\BCAY{Daume}{Daume}{2007}]{daumeiii:2007:ACLMain}
+Daume, III, H. \BBOP 2007\BBCP.
+\newblock \BBOQ Frustratingly Easy Domain Adaptation.\BBCQ\
+\newblock In {\Bem Proceedings of the 45th Annual Meeting of the Association of
+  Computational Linguistics (ACL-2007)}, \mbox{\BPGS\ 256--263}, Prague, Czech
+  Republic.
+
+\bibitem[\protect\BCAY{Fujino, Mizumoto, Komachi, Nagata, \BBA\
+  Matsumoto}{Fujino et~al.}{2012}]{Fujino:ErrorMorphAnalysis2012j}
+Fujino, T., Mizumoto, T., Komachi, M., Nagata, M., \BBA\ Matsumoto, Y. \BBOP
+  2012\BBCP.
+\newblock ``Word Segmentation toward Error Correction of Documents Written by
+  Japanese
+  Learners（日本語学習者の作文の誤り訂正に向けた単語分割）\inhibitglue''.\
+\newblock In {\Bem Proceedings of the 18th Annual Meeting of the Association
+  for Natural Language Processing}, \mbox{\BPGS\ 26--29}, Hiroshima, Japan.
+
+\bibitem[\protect\BCAY{Gamon}{Gamon}{2010}]{gamon:2010:NAACLHLT}
+Gamon, M. \BBOP 2010\BBCP.
+\newblock \BBOQ Using Mostly Native Data to Correct Errors in Learners'
+  Writing.\BBCQ\
+\newblock In {\Bem Human Language Technologies: The 2010 Annual Conference of
+  the North American Chapter of the Association for Computational Linguistics
+  (HLT-ACL 2010)}, \mbox{\BPGS\ 163--171}, Los Angeles, California.
+
+\bibitem[\protect\BCAY{Han, Tetreault, Lee, \BBA\ Ha}{Han
+  et~al.}{2010}]{HAN10.821}
+Han, N.-R., Tetreault, J., Lee, S.-H., \BBA\ Ha, J.-Y. \BBOP 2010\BBCP.
+\newblock \BBOQ Using an Error-Annotated Learner Corpus to Develop an {ESL/EFL}
+  Error Correction System.\BBCQ\
+\newblock In {\Bem Proceedings of the Seventh International Conference on
+  Language Resources and Evaluation (LREC'10)}, Valletta, Malta.
+
+\bibitem[\protect\BCAY{He \BBA\ Garcia}{He \BBA\
+  Garcia}{2009}]{He:Imbalanced2009}
+He, H.\BBACOMMA\ \BBA\ Garcia, E.~A. \BBOP 2009\BBCP.
+\newblock \BBOQ Learning from Imbalanced Data.\BBCQ\
+\newblock {\Bem IEEE Transactions on Knowledge and Data Engineering}, {\Bbf 21}
+   (9), \mbox{\BPGS\ 1263--1284}.
+
+\bibitem[\protect\BCAY{Imamura, Izumi, Sadamitsu, Saito, Kobashikawa, \BBA\
+  Masataki}{Imamura et~al.}{2011}]{Imamura:MorphTrans2011}
+Imamura, K., Izumi, T., Sadamitsu, K., Saito, K., Kobashikawa, S., \BBA\
+  Masataki, H. \BBOP 2011\BBCP.
+\newblock \BBOQ Morpheme Conversion for Connecting Speech Recognizer and
+  Language Analyzers in Unsegmented Languages.\BBCQ\
+\newblock In {\Bem Proceedings of Interspeech 2011}, \mbox{\BPGS\ 1405--1408},
+  Florence, Italy.
+
+\bibitem[\protect\BCAY{Imamura, Saito, Sadamitsu, \BBA\ Nishikawa}{Imamura
+  et~al.}{2012}]{imamura-EtAl:2012:ACL2012short}
+Imamura, K., Saito, K., Sadamitsu, K., \BBA\ Nishikawa, H. \BBOP 2012\BBCP.
+\newblock \BBOQ Grammar Error Correction Using Pseudo-Error Sentences and
+  Domain Adaptation.\BBCQ\
+\newblock In {\Bem Proceedings of the 50th Annual Meeting of the Association
+  for Computational Linguistics (ACL-2012) Volume 2: Short Papers},
+  \mbox{\BPGS\ 388--392}, Jeju Island, Korea.
+
+\bibitem[\protect\BCAY{Kasahara, Fujino, Komachi, Nagata, \BBA\
+  Matsumoto}{Kasahara et~al.}{2012}]{Kasahara:CaseParticleCorrection2012j}
+Kasahara, S., Fujino, T., Komachi, M., Nagata, M., \BBA\ Matsumoto, Y. \BBOP
+  2012\BBCP.
+\newblock ``Case Particle Correction that Reflects Error Tendency of Japanese
+  Learners（日本語学習者の誤り傾向を反映した格助詞訂正）\inhibitglue''.\
+\newblock In {\Bem Proceedings of the 18th Annual Meeting of the Association
+  for Natural Language Processing}, \mbox{\BPGS\ 14--17}, Hiroshima, Japan.
+
+\bibitem[\protect\BCAY{Lafferty, McCallum, \BBA\ Pereira}{Lafferty
+  et~al.}{2001}]{Lafferty:CRF2001}
+Lafferty, J., McCallum, A., \BBA\ Pereira, F. \BBOP 2001\BBCP.
+\newblock \BBOQ Conditional Random Fields: Probabilistic Models for Segmenting
+  and Labeling Sequence Data.\BBCQ\
+\newblock In {\Bem Proceedings of the 18th \mbox{International} Conference on
+  Machine Learning (ICML-2001)}, \mbox{\BPGS\ 282--289}, Williamstown,
+  \mbox{Massachusetts}.
+
+\bibitem[\protect\BCAY{Mizumoto, Komachi, Nagata, \BBA\ Matsumoto}{Mizumoto
+  et~al.}{2011}]{mizumoto-EtAl:2011:IJCNLP-2011}
+Mizumoto, T., Komachi, M., Nagata, M., \BBA\ Matsumoto, Y. \BBOP 2011\BBCP.
+\newblock \BBOQ Mining Revision Log of Language Learning {SNS} for Automated
+  {Japanese} Error Correction of Second Language Learners.\BBCQ\
+\newblock In {\Bem Proceedings of 5th International Joint Conference on Natural
+  Language \mbox{Processing} (IJCNLP-2011)}, \mbox{\BPGS\ 147--155}, Chiang
+  Mai, Thailand.
+
+\bibitem[\protect\BCAY{Ohki, Oyama, Kitauchi, Suenaga, \BBA\ Matsumoto}{Ohki
+  et~al.}{2011}]{Ohki:ParticleError2011j}
+Ohki, M., Oyama, H., Kitauchi, A., Suenaga, T., \BBA\ Matsumoto, Y. \BBOP
+  2011\BBCP.
+\newblock ``Judgement of Incorrect Usage of Particles in Documents for System
+  Development Written by Non-natvie Japanese
+  Speakers（非日本語母国語話者の作成するシステム開発文書を対象とした助詞の誤用判定）\inhibitglue''.\
+\newblock In {\Bem Proceedings of the 17th Annual Meeting of the Association
+  for Natural Language Processing}, \mbox{\BPGS\ 1047--1050}, Toyohashi, Japan.
+
+\bibitem[\protect\BCAY{Rozovskaya \BBA\ Roth}{Rozovskaya \BBA\
+  Roth}{2010a}]{rozovskaya-roth:2010:EMNLP}
+Rozovskaya, A.\BBACOMMA\ \BBA\ Roth, D. \BBOP 2010a\BBCP.
+\newblock \BBOQ Generating Confusion Sets for Context-Sensitive \mbox{Error
+  Correction}.\BBCQ\
+\newblock In {\Bem Proceedings of the 2010 Conference on Empirical Methods in
+  \mbox{Natural} Language Processing (EMNLP-2010)}, \mbox{\BPGS\ 961--970},
+  Cambridge, Massachusetts.
+
+\bibitem[\protect\BCAY{Rozovskaya \BBA\ Roth}{Rozovskaya \BBA\
+  Roth}{2010b}]{rozovskaya-roth:2010:NAACLHLT}
+Rozovskaya, A.\BBACOMMA\ \BBA\ Roth, D. \BBOP 2010b\BBCP.
+\newblock \BBOQ Training Paradigms for Correcting Errors in Grammar and
+  Usage.\BBCQ\
+\newblock In {\Bem Human Language Technologies: The 2010 Annual Conference of
+  the North American Chapter of the Association for Computational Linguistics
+  (HLT-ACL 2010)}, \mbox{\BPGS\ 154--162}, Los Angeles, California.
+
+\bibitem[\protect\BCAY{Rozovskaya \BBA\ Roth}{Rozovskaya \BBA\
+  Roth}{2011}]{rozovskaya-roth:2011:ACL-HLT2011}
+Rozovskaya, A.\BBACOMMA\ \BBA\ Roth, D. \BBOP 2011\BBCP.
+\newblock \BBOQ Algorithm Selection and Model Adaptation for {ESL} Correction
+  Tasks.\BBCQ\
+\newblock In {\Bem Proceedings of the 49th Annual Meeting of the Association
+  for Computational Linguistics: Human Language Techologies (ACL-HLT 2011)},
+  \mbox{\BPGS\ 924--933}, Portland, Oregon.
+
+\bibitem[\protect\BCAY{Stolcke, Zheng, Wang, \BBA\ Abrash}{Stolcke
+  et~al.}{2011}]{Stolcke:SRILM2011}
+Stolcke, A., Zheng, J., Wang, W., \BBA\ Abrash, V. \BBOP 2011\BBCP.
+\newblock \BBOQ {SRILM} at Sixteen: Update and Outlook.\BBCQ\
+\newblock In {\Bem Proceedings of IEEE Automatic Speech Recognition and
+  Understanding Workshop (ASRU 2011)}, Waikoloa, Hawaii.
+
+\bibitem[\protect\BCAY{Suenaga \BBA\ Matsushima}{Suenaga \BBA\
+  Matsushima}{2012}]{Suenaga:ErrorCorrection2012j}
+Suenaga, T.\BBACOMMA\ \BBA\ Matsushima, T. \BBOP 2012\BBCP.
+\newblock ``Optimimal Prediction Method Using Hierarchical $N$-gram Models
+  Based on Bayes Decision Theory and its Application to Japanese Input
+  Support（ベイズ決定理論にもとづく階層Nグラムを用いた最適予測法と日本語入力支援技術への応用）\inhibitglue''.\
+\newblock In {\Bem Proceedings of the 18th Annual Meeting of the Association
+  for Natural Language Processing}, \mbox{\BPGS\ 6--9}, Hiroshima, Japan.
+
+\bibitem[\protect\BCAY{Suzuki \BBA\ Toutanova}{Suzuki \BBA\
+  Toutanova}{2006}]{suzuki-toutanova:2006:COLACL}
+Suzuki, H.\BBACOMMA\ \BBA\ Toutanova, K. \BBOP 2006\BBCP.
+\newblock \BBOQ Learning to Predict Case Markers in Japanese.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on
+  Computational Linguistics and 44th Annual Meeting of the Association for
+  Computational Linguistics (COLING-ACL 2006)}, \mbox{\BPGS\ 1049--1056},
+  Sydney, Australia.
+
+\bibitem[\protect\BCAY{Suzuki \BBA\ Isozaki}{Suzuki \BBA\
+  Isozaki}{2010}]{Suzuki:SemiSupervised2010j}
+Suzuki, J.\BBACOMMA\ \BBA\ Isozaki, H. \BBOP 2010\BBCP.
+\newblock ``Performance Validation of Dependency Parsing Using Large Unlabelled
+  Data（大規模ラベルなしデータを利用した係り受け解析の性能検証）\inhibitglue''.\
+\newblock In {\Bem Proceedings of the 16th Annual Meeting of the Association
+  for Natural Language Processing}, \mbox{\BPGS\ 19--22}, Tokyo, Japan.
+
+\bibitem[\protect\BCAY{Suzuki, Isozaki, Carreras, \BBA\ Collins}{Suzuki
+  et~al.}{2009}]{suzuki-EtAl:2009:EMNLP}
+Suzuki, J., Isozaki, H., Carreras, X., \BBA\ Collins, M. \BBOP 2009\BBCP.
+\newblock \BBOQ An Empirical Study of Semi-supervised Structured Conditional
+  Models for Dependency Parsing.\BBCQ\
+\newblock In {\Bem Proceedings of the 2009 Conference on Empirical Methods in
+  Natural Language Processing (EMNLP-2009)}, \mbox{\BPGS\ 551--560}, Singapore.
+
+\end{thebibliography}
+
+
+\vspace{-1\Cvs}
+\begin{biography}
+
+\bioauthor[:]{Kenji Imamura}{
+graduated from Chiba University, Chiba, Japan, in 1985 and received
+the Ph.D. degree in engineering from the Nara Institute of Science and
+Technology, Nara, Japan, in 2004.  He joined the Nippon Telegraph and
+Telephone Corporation (NTT) in 1985.  He was with the NTT Software
+Corporation from 1995 to 1998 and the Advanced Telecommunication
+Research Institute International (ATR), Kyoto, Japan, from 2000 to
+2006.  He is currently with the NTT Media Intelligence Laboratories,
+Yokosuka, Japan, as a Senior Research Scientist.  His research
+interests include machine translation, parsing, and predicate-argument
+structure analysis.  He is a member of the ACL, the IEICE, the IPSJ,
+and the NLP. }
+
+\bioauthor[:]{Kuniko Saito}{
+Senior Manager, Innovative Architecture Center, NTT Communications
+Corporation.  She received the B.S. and M.S. degrees in chemistry from
+the University of Tokyo in 1996 and 1998, respectively. She joined NTT
+Information and Communication Systems Laboratories in 1998 and then
+moved to NTT Cyber Space Laboratories (now NTT Media Intelligence
+Laboratories).  Her research focuses on part-of-speech tagging, named
+entity recognition, and term extraction. She is a member of the IPSJ
+and the NLP. }
+
+\bioauthor[:]{Kugatsu Sadamitsu}{
+Researcher, Audio, Speech, and Language Media Project, NTT Media
+Intelligence Laboratories.  He received the B.E., M.E., and
+Ph.D. degrees in engineering from Tsukuba University, Ibaraki, in
+2004, 2006, and 2009, respectively. He joined NTT Cyber Space
+Laboratories (now NTT Media Intelligence Laboratories) in 2009. His
+current research interests include NLP and machine learning. He is a
+member of the Association for Natural Language Processing and the
+Information Processing Society of Japan (IPSJ). }
+
+\bioauthor[:]{Hitoshi Nishikawa}{
+received B.A. (Policy Management) and M.M.G. from the Keio University
+in 2006 and 2008, respectively. He received his Dr.~Eng.\ from Nara
+Institute of Science and Technology in 2013. He is currently a
+researcher at the NTT Media Intelligence Laboratories. His research
+interests include NLP, especially automatic summarization. He is a
+member of the Association for Computational Linguistics, the
+Association for Natural Language Processing, the Japanese Society for
+Artificial Intelligence and the Information Processing Society of
+Japan. }
+\end{biography}
+
+\biodate
+
+
+\end{document}

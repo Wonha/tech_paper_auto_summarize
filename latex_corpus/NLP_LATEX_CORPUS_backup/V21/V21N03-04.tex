@@ -1,0 +1,1398 @@
+    \documentclass[english]{jnlp_1.4}
+
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{amsmath}
+\usepackage[multi]{otf}
+
+    \usepackage[small,hang,labelsep=quad]{caption}
+\usepackage{subcaption}
+
+
+\Volume{21}
+\Number{3}
+\Month{June}
+\Year{2014}
+
+\received{2013}{12}{10}
+\revised{2014}{2}{18}
+\accepted{2014}{4}{8}
+
+\setcounter{page}{485}
+
+\etitle{Unlabeled Dependency Parsing Based Pre-reordering \\
+	for Chinese-to-Japanese SMT}
+\eauthor{Dan Han\affiref{Author_1} \and Pascual Mart\'inez-G\'omez\affiref{Author_2} \and Yusuke Miyao\affiref{Author_1} \and \\
+	 Katsuhito Sudoh\affiref{Author_3} \and Masaaki Nagata\affiref{Author_3}} 
+\eabstract{
+In statistical machine translation, Chinese and Japanese is a well-known 
+long-distance language pair that causes difficulties to word alignment techniques. 
+Pre-reordering methods have been proven efficient and effective; however, they 
+need reliable parsers to extract the syntactic structure of the source sentences. 
+On one hand, we propose a framework in which only part-of-speech (POS) tags and 
+unlabeled dependency parse trees are used to minimize the influence of parse 
+errors, and linguistic knowledge on structural difference is encoded in the form 
+of reordering rules. We show significant improvements in translation quality of 
+sentences in the news domain over state-of-the-art reordering methods. On the 
+other hand, we explore the relationship between dependency parsing and our 
+pre-reordering method from two aspects: POS tags and dependencies. We observe 
+the effects of different parse errors on reordering performance by combining 
+empirical and descriptive approaches. In the empirical approach, we quantify the 
+distribution of general parse errors along with reordering quality. In the descriptive 
+approach, we extract seven influential error patterns and examine their correlations 
+with reordering errors.
+}
+\ekeywords{Statistical Machine Translation, Chinese-to-Japanese, Dependency Parsing, Error Analysis}
+
+\headauthor{Han et al.}
+\headtitle{Unlabeled Dependency Parsing Based Pre-reordering for C2J SMT}
+
+\affilabel{Author_1}{}{The Graduate University For Advanced Studies, National Institute of Informatics}
+\affilabel{Author_2}{}{Ochanomizu University, National Institute of Informatics}
+\affilabel{Author_3}{}{NTT Communication Science Laboratories, NTT Corporation}
+
+
+\begin{document}
+
+\maketitle
+
+
+\section{Introduction}
+\label{sec:introduction}
+
+The statistical machine translation (SMT) community has developed methods to 
+obtain useful translations in some domains. Language pairs that have provided 
+the highest translation quality are languages with similar sentence structure, 
+such as English, French, and Spanish. Such languages are typical subject-verb-object (SVO) 
+languages, and unsupervised word alignment methods \cite{Brown1993,Yamada2001,Zens2002,Koehn2003} 
+have performed reasonably well. Although these languages have similar sentence 
+structures, they may show slight local differences in word order, making word 
+alignments nonmonotonic. There have been efforts to address the issue of local 
+nonmonotonic word alignments; lexicalized reordering models are an example \cite{Tillmann2004,Koehn2005,Galley2008}.
+
+However, language pairs such as English-Japanese and Chinese-Japanese have larger 
+differences in sentence structure. Japanese is a typical subject-object-verb (SOV) 
+language, and the translation quality usually drops when translating between SVO 
+and SOV languages. The main reason behind this drop is the difficulty in finding 
+word-to-word alignments between words in sentences from these language pairs. 
+Methods addressing local nonmonotonic word alignments have proven ineffective 
+because words in SVO sentences usually should be aligned to those in SOV languages 
+that are in a very different position in the sentence.
+
+Estimating the likelihood of all possible word-to-word alignments in a bilingual 
+sentence pair is a combinatorial problem, and its complete exploration is unfeasible 
+for medium-length sentences. Therefore, huge computational cost when reordering 
+during decoding is a difficulty faced by SMT. Moreover, the introduction of weak 
+constraints by existing language-independent reordering models is another difficulty. 
+As will be discussed later in greater detail, using knowledge of structural differences 
+between SVO and SOV languages can contribute to overcome these problems. A popular 
+approach is to extract the syntactic structure of sentences from the source language, 
+and reorder the source words to imitate the word order of the target language. This 
+strategy is called pre-reordering; parsers play an important role in extracting 
+the syntactic structure of source sentences in this strategy.
+
+There have been important advances in syntactic parsers, and different types of 
+parsing technologies have been developed for several languages such as English and 
+Chinese. In general, two types of parsers have been used to pre-reorder sentences 
+in SMT: those following the paradigm of head-driven phrase structure grammar (HPSG) \cite{HPSG1994} 
+and dependency grammars. Both types of parsers infer the structure of sentences, 
+but they can recover different information from the sentence, such as phrase 
+constituents or dependency relations between words.
+
+Despite these considerable advances in parsing technology, current parsers are 
+still not perfect and may produce some errors with a certain frequency. The issue 
+of parse errors in syntax-based pre-reordering is crucial, as it may affect the 
+performance of reordering methods and the overall translation quality. Although 
+there has been extensive research in pre-reordering methods for SMT, there has 
+been little focus on the influence of parse errors to pre-reordering performance 
+and overall machine translation quality.
+
+In this study, we propose a novel pre-reordering framework with a hybrid approach 
+for SMT from Chinese (SVO) to Japanese (SOV). We use only part-of-speech (POS) 
+tags and word dependencies produced by an unlabeled dependency parser to determine 
+sentence reordering for releasing pre-reordering from constraints of 
+phrase structure grammar based parsing and reducing the effects of parse errors 
+on it. Moreover, since in our framework reorderings do not only occur inside chunks, 
+our method is more flexible and easily addresses the typical long-distance reordering 
+of speech used in news reports. The evaluation results show superior performance 
+of our method compared to a baseline system.
+
+Related studies are discussed in Section 2 and a detailed description of our 
+pre-reordering framework is included in Section 3. In Section 4, we evaluate the 
+performance of this reordering method and compare it with state-of-the-art 
+pre-reordering methods on the same corpora. Although our method is designed to be
+robust against parse errors, it is meaningful to quantitatively and qualitatively analyze 
+the influence of parse errors on this reordering method; this is discussed in 
+Section 5. We conclude this study in Section 6 with a summary of our findings.
+
+
+\section{Related Work}
+\label{sec:rw}
+
+Our study is not the first attempt to use pre-reordering methods for SMT.
+There are many studies on pre-reordering methods for translation between several languages into English 
+or vice versa \cite{FX2004,NH2007,CW2007,CHL2007,XCW2011}.
+However, as a representative of long-distance language pairs, translation from
+Chinese to Japanese has received little attention. Few previous studies
+focused on translation of this language pair, but used English as a pivot language \cite{Wu2007,Tsunakawa2009}.
+
+The most relevant study to ours is by \citeA{DH2012}, in which the authors 
+refined an existing reordering method (HFC) proposed by \citeA{HI2010}. 
+These reordering methods are based on HPSG \cite{HPSG1994}. 
+They used HPSG parsers \cite{YM2008,KY2011} to extract the structure of 
+sentences as binary trees and swap the head branches and their dependents 
+according to certain heuristics. However, since Chinese has a loose word order, 
+the binary structure of the parse trees imposes hard constraints in reordering. \shortciteA{DH2012} 
+also noted that reordering strategies that are derived from the HPSG theory 
+may not perform well when the head definition is inconsistent in the language 
+pair. As an exemplifying phenomenon, the word ``等 (Et cetera)'' would be the dependent 
+of its constituent in Chinese, but it would be the head of its constituent in Japanese.
+
+\citeA{PX2009} aimed at reordering sentences from English 
+to resemble the order of SOV languages by using dependency trees, dependency 
+labels, POS tags, and weights in order to perform local and global reorderings. 
+It performed well when translating English to other languages, and the idea of 
+using dependency trees instead of head-driven phrase trees is also advantageous 
+to reorder Chinese due to the simplicity and robustness of dependency trees. 
+However, this method has some limitations that arise from the need to use dependency 
+labels in Chinese, because those labels are complex and error-prone.
+
+It is well known that syntax-based pre-reordering methods suffer from parse errors, 
+regardless of whether handcrafted reordering rules \shortcite{CW2007,DH2012} or 
+automatically extracted rewriting patterns \shortcite{FX2004,NH2007,CHL2007,XCW2011} are 
+applied.
+In our method, we use a more straightforward approach that only uses information on
+POS tags and dependency relations to move all Vs (verbs) in SVO to the right-hand side of all 
+their objects to resemble the SOV word order.
+Thus, our method is not constrained by the binary structure of constituent trees
+nor influenced by errors in dependency labels (as our method does not use them).
+Furthermore, unlike 
+previous methods that forbid reordering from crossing punctuations and coordination 
+structures, our method does not prevent it, which is an important requirement for 
+long-distance reordering of reported speech, especially in the news domain.
+
+Although parse errors are influential on linguistically motivated pre-reordering 
+methods, there have not been studies related to observing the relationship between 
+parse errors and reordering performance. \shortciteA{CQ2006} observed the impact 
+of parsing accuracy on an SMT system. They presented a general idea of the sensitivity 
+of syntax-based SMT models. However, they did not further analyze concrete parse 
+error types that affect task accuracy. \shortciteA{NG2011} explored the effects 
+of noun phrase bracketing in dependency parsing in English, and examined English 
+to Czech SMT. However, the study focused on using noun phrase structures to improve 
+a machine translation framework. In another study, \citeA{JK2011} proposed 
+a method to train parsers with the objective to maximize an extrinsic metric, namely reordering performance.
+However, they did not study the direct relationship between the reordering quality and
+parse quality. Other studies have solely focused on parse error analysis \cite{RM2007,MD2007,TH2009,KY2011},
+regardless of machine translation.
+
+
+\section{Unlabeled Dependency Parsing based Pre-reordering (DPC)}
+\label{sec:met}
+
+Since the objective is to reorder words in Chinese to resemble the word order of 
+Japanese, namely from an SVO language to an SOV language, an intuitive way is to 
+move the V in SVO to the right-hand side of the O to produce SOV. Therefore, our method 
+consists of moving verbs to the right-hand side of their objects. For this purpose, 
+there are two prominent challenges: identifying the appropriate verbs to 
+trigger reordering and determining the precise reordering destination. 
+Nonetheless, based on linguistic studies and findings on conventional methods, 
+in most sentences, it is obvious that the reordering candidate V not only is the verb 
+but also may include surrounding words, such as particles, adverbs, or other 
+verbs in coordination structures. Accordingly, we refer to them as a verbal block 
+(Vb) in our pre-reordering method and the combination of POS tags and dependencies 
+produced by an unlabeled dependency parser can be used to identify a Vb. Consequently, 
+the first step of the pre-reordering framework is to correctly identify the verb 
+and its companion words that need to be reordered together. 
+After that, we need to identify the Vb's object in order to orientate the reordering. 
+Since object is the dependent of the Vb, certain types of right-most dependent (RM-D) 
+words (such as nouns and pronouns) encode the potential position of the Vb. Then, the second 
+step is to move the Vb to the right-hand side of its RM-D. In the case of multiple 
+objects for a Vb, the RM-D should be obtained from the right-most object.
+There are some other Chinese particles that need to be relocated when
+changing the order of Chinese words to resemble the word order of Japanese sentences; these particles will be 
+reordered relative to the verbs they accompany. In this study, we follow the POS tag guideline of 
+the Penn Chinese Treebank v3.0 \shortcite{POS2000}. Table~\ref{tab:posdef} in 
+Appendix~\ref{apx:posdef} presents the detailed definitions.
+
+Figure~\ref{fig:vbtree} demonstrates the reordering procedure with an example. 
+In Figure~\ref{fig:vbtreeB}, the outer box indicates the entire Vb of the sentence 
+including five words ``\UTFC{5DF2}\UTFC{7ECF} (has already) \UTFC{7F16}\UTFC{8F91} (edit) 和 (and) 出版 (publish) 
+了 (-ed)'' that must be reordered. According to the parse tree, since 
+the Vb's object is ``一 (a) 本 \UTFC{4E66} (book)'' and ``\UTFC{4E66} (book)'' is the RM-D, the Vb is moved to its
+right-hand side, as shown in Figure~\ref{fig:vbtreeC}. The word order becomes an SOV as in Japanese.
+
+It is well known that linguistically motivated pre-reordering methods are affected by
+parse errors. To reduce their effects, we minimize the use of parsing information 
+to trigger reordering by only considering POS tags and unlabeled dependency structures. 
+POS tags are used to categorize words (Table~\ref{tab:dpc}) and the dependency 
+structure provides clues for identifying Vbs and RM-D.
+
+\begin{figure}[p]
+\begin{subfigure}{1\textwidth}
+\begin{center}
+\includegraphics{21-3ia1004f1a.eps}
+\end{center}
+\caption{Original dependency tree}
+\label{fig:vbtreeA}
+\end{subfigure}
+\vspace{0.5\Cvs}
+
+\begin{subfigure}{1\textwidth}
+\begin{center}
+\includegraphics{21-3ia1004f1b.eps}
+\end{center}
+\caption{Vbs in rectangular boxes}
+\label{fig:vbtreeB}
+\end{subfigure}
+\vspace{0.5\Cvs}
+
+\begin{subfigure}{1\textwidth}
+\begin{center}
+\includegraphics{21-3ia1004f1c.eps}
+\end{center}
+\caption{Merged and reordered Vb}
+\label{fig:vbtreeC}
+\end{subfigure}
+\caption{Example of unlabeled dependency parsing based Chinese pre-reordering 
+method (DPC) shows how to detect and reorder a Vb in a 
+Chinese SVO sentence. In each subfigure, Chinese Pinyin, Chinese token, 
+and token-to-token English translations are listed in three lines.
+Figure~\ref{fig:vbtreeA} presents the original dependency tree.
+Figure~\ref{fig:vbtreeB} shows nested Vbs in two rectangular 
+boxes, and Figure~\ref{fig:vbtreeC} shows the reordered sentence and word 
+alignment between a reordered Chinese sentence and its Japanese counterpart.}
+\label{fig:vbtree}
+\end{figure}
+
+\begin{table}[t]
+\caption{List of Chinese POS tags (Xia 2000) for identifying words as different candidates}
+\label{tab:dpc}
+\vspace{8pt}
+\input{1004table01.txt}
+\vspace{4pt}
+\small
+For completeness, the detailed description of the Chinese POS tags can be found in the appendix.
+\par
+\end{table}
+
+{\bf Identifying verbal block (Vb)}\quad Verbal blocks comprise a head (Vb-H)
+and possibly accompanying dependents (Vb-D). For the example in Figure~\ref{fig:vbtreeB},
+for the outer Vb, ``\UTFC{7F16}\UTFC{8F91} (edit)'' is the main verb, and therefore Vb-H. 
+Other dependents, such as the adverb ``\UTFC{5DF2}\UTFC{7ECF} (has already)'' that add a preterit 
+tense to the verb, is considered as a Vb-D. As for the inner Vb, ``出版 (publish)''
+is the Vb-H while the aspect particle ``了 (-ed)'' is its Vb-D. The Vb-H entry 
+in Table~\ref{tab:dpc} lists all POS tags of words that can be Vb-H candidates.
+These POS tags indicate that Vb-H candidates consist of verbs (V*) and prepositions (P)\footnote{Similarly to verbs, prepositions
+in Chinese appear to the left of their dependents, while prepositions in Japanese appear to the right.
+Figure~\ref{fig:rs} illustrates an example of the preposition ``随着 (with)'' being considered as a Vb-H candidate.}.
+There are three conditions for a word to be considered as a Vb-H:
+
+\begin{itemize}
+\item Its POS tag is in the set of Vb-H in Table~\ref{tab:dpc}. 
+\item It is a dependency head, indicating that it may have an object as a dependent.
+\item It has no dependent whose POS tag is in the set of BEI in Table~\ref{tab:dpc}.
+BEI particles indicate that the verb is in the passive voice and
+should not be reordered since it already resembles the Japanese order. 
+\end{itemize}
+
+A bei-construction is a special structure that is commonly used to create
+passive voice in Chinese sentences.
+In order to compensate the lack of verb inflection in Chinese,
+particles are introduced to indicate the occurrence of a passive voice. 
+These particles have a POS tag LB or SB, and are dependents of the verb.
+In Chinese, bei-constructions follow the OV word order,
+which is the same as the Japanese word order.
+That is, the verb is on the right-hand side of its object.
+For this reason, reordering is not required and we exclude Vb-H candidates that are involved in 
+a bei-construction. Figure~\ref{fig:bei} illustrates this linguistic phenomenon.
+In the Chinese sentence, the main verb ``批\UTFC{8BC4} (criticize)''
+is already on the right-hand side of its object, ``学生 (student)'' in this case.
+This word order is the same as in the Japanese sentence.
+For this reason, no reorder is necessary between the main verb and its object,
+which motivates our condition on bei-constructions presented above.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{21-3ia1004f2.eps}
+\end{center}
+\caption{Example of bei-construction}
+\label{fig:bei}
+\end{figure}
+
+Since Chinese does not have inflection, conjugation, or case markers~\cite{Li1989},
+adverbs (AD), aspect particles (AS) or sentence-final particles (SP) are used 
+to signal modality, and indicate grammatical tense or add aspectual value to verbs.
+Coordinating conjunctions (CC) connect multiple verbs. They should thus be 
+reordered together with verbs as part of the Vb, and we refer to them as Vb-D. 
+Similarly, to be a Vb-D, there are three necessary conditions:
+
+\begin{itemize}
+\item Its POS tag is in the Vb-D entry in Table~\ref{tab:dpc}. 
+\item It is a dependent of a word that is already in the Vb. 
+\item It is next to its dependency head or only a coordination conjunction is in between them.
+\end{itemize}
+
+Accordingly, to build a Vb, we first examine words and confirm 
+the Vb-H to initialize the Vb. Then, we test the Vb-D conditions on words adjacent 
+to Vb-H and extend the Vb by including qualified ones. This process is iteratively 
+applied to adjacent words of the Vb, possibly nesting other Vbs if necessary. 
+Therefore, in Figure~\ref{fig:vbtreeB}, according to the definition introduced 
+above, ``\UTFC{7F16}\UTFC{8F91} (edit)'' and ``出版 (publish)'' are both Vb-Hs that form two separate 
+incipient Vbs simultaneously. By analyzing their adjacent words which are their 
+dependents, the words ``\UTFC{7F16}\UTFC{8F91} (has already)'', ``和 (and)'', ``出版 (publish)'' are 
+qualified Vb-Ds for the Vb started by ``\UTFC{7F16}\UTFC{8F91} (edit)'', and the word ``了 (-ed)'' 
+is the only qualified Vb-D for the Vb started by ``出版 (publish)''. We thus 
+obtain a nested Vb and merge nested Vbs at the end, as shown in Figure~\ref{fig:vbtreeC}. 
+
+{\bf Identifying right-most dependent (RM-D)}\quad Objects may be a single word 
+(e.g., noun, pronoun) or comprise noun phrases or clauses \cite{Downing2006} 
+such as nominal groups, finite clauses (e.g., \emph{that} clauses, \emph{wh-}clauses), 
+and non-finite clauses (e.g., \emph{-ing} clauses). It is a difficult task to recognize
+objects in a sentence. However, since an object is the dependent of a verb and our objective 
+is to move V to the right-hand side of O in an SVO language, we simplify our task 
+to identify the right-most dependent (RM-D) of the Vb instead of finding the entire object.
+We define RM-D as the word:
+
+\begin{itemize}
+\item whose POS tag is in the RM-D entry of Table~\ref{tab:dpc},
+\item whose dependency head is inside of the Vb, and
+\item belongs to the right-most object among all objects of the Vb.
+\end{itemize}
+
+Consequently, in Figure~\ref{fig:vbtree}, the RM-D of the Vb ``\UTFC{7F16}\UTFC{8F91} (has already) 
+\UTFC{7F16}\UTFC{8F91} (edit) 和 (and) 出版 (publish) 了 (-ed)'' is ``\UTFC{4E66} (book)''. Two more complex 
+examples are shown in Figures~\ref{fig:rmdb} and~\ref{fig:rmda}. In these
+figures, alignment lines between the original Chinese sentence and the reordered 
+Chinese sentence indicate the reordering trace of Vb, while those 
+between the reordered Chinese sentence and its Japanese counterpart show the reordering result.
+In Figure~\ref{fig:rmdb}, there is a coordination structure of verb phrases, and 
+the dependency tree shows that the first verb ``吃 (eat)'' appears as the dependency 
+head of the second verb ``去 (go to)''. Thus, ``午\UTFC{996D} (lunch)'' and ``学校 (school)'' are 
+the RM-Ds of ``吃 (eat)'' and ``去 (go to)'', respectively.
+Figure~\ref{fig:rmda} illustrates the case of a subordinate clause. Vb of 
+``鼓励 (encourage)'' has no dependent that can be considered as its RM-D. Instead, 
+an embedded clause appears as its object argument. We thus move Vb of 
+``鼓励 (encourage)'' to the end of the sentence. Meanwhile, ``\UTFC{5B9E}践 (practice)'' 
+is the RM-D of the Vb of ``参与 (participate)''. In the news domain, reported 
+speech is a frequent example that follows this pattern. In our method, if
+Vb that comprises the main verb (labeled as ROOT) has dependents but no 
+RM-D, we move the Vb to the end of the sentence. 
+
+\begin{figure}[p]
+\begin{subfigure}{1\textwidth}
+\begin{center}
+\includegraphics{21-3ia1004f3a.eps}
+\end{center}
+\caption{Example of a Chinese sentence with a coordination of verb phrases as the predicate}
+\label{fig:rmdb}
+\end{subfigure}
+\vspace{0.5\Cvs}
+
+\begin{subfigure}{1\textwidth}
+\begin{center}
+\includegraphics{21-3ia1004f3b.eps}
+\end{center}
+\caption{Example of a Chinese sentence, where a subordinate clause is an object}
+\label{fig:rmda}
+\end{subfigure}
+\caption{Subject (S), verbs (V), and objects (O) are displayed for main and subordinate 
+clauses in the Japanese translation} 
+\label{fig:rmd}
+\end{figure}
+
+
+{\bf Identifying particles (Oth-DEP)}\quad To resemble Japanese, the location 
+of certain particles in Chinese should be reordered relative to their dependency 
+heads. Typically, particles are similar to the bei4（被）particle (LB or SB) and subordinating 
+conjunctions (CS). These particles appear on the left-hand side of their dependency 
+head in Chinese and the right-hand side in Japanese. Reordering these particles 
+in our framework can be summarized as follows:
+
+\begin{enumerate}
+\item Find dependents of a head whose POS tags are in the Oth-DEP entry of Table~\ref{tab:dpc}.
+\item Move those particles to the direct right-hand side of the head.
+\item For multiple such particles, maintain the relative order among them while moving.
+\end{enumerate}
+
+Figure~\ref{fig:bei} shows an example of a Chinese sentence that includes the particle
+``被'' whose POS tag is SB. This particle aligns to ``られ'' in Japanese, which follows 
+its dependency head. Thus, if we reorder it according to our rules described above,
+the word alignment between the reordered Chinese sentence and
+the corresponding Japanese sentence becomes monotonic.
+
+{\bf Summary:}\quad Based on the definitions above, our dependency parsing based 
+pre-reordering framework is summarized by the following steps:
+
+\begin{enumerate}
+\item Obtain POS tags and an unlabeled dependency tree of a Chinese sentence.
+\item Obtain reordering candidates: Vbs.
+\item Obtain the object (RM-D) of each Vb.
+\item Reorder each Vb in two exclusive cases by following the order:
+\begin{enumerate}
+\item If RM-D exists, reorder Vb to be the right-hand side of RM-D.
+\item If Vb-H is a ROOT and its RM-D does not exist, reorder Vb to the end of the sentence.
+\item If none of the above conditions is met, reordering does not occur. 
+\end{enumerate}
+\item Reorder Oth-DEPs to the right-hand side of their corresponding Vbs.
+\end{enumerate}
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{21-3ia1004f4.eps}
+\end{center}
+\caption{Example of reported speech sentences}
+\label{fig:rs}
+\end{figure}
+
+Unlike other reordering frameworks for distant language pairs \shortcite{PX2009,HI2010,DH2012},\footnote{
+Note that the reordering model of HF \cite{HI2010} prevents words from crossing colons and semicolons,
+but it does not prevent reorderings from crossing other types of punctuations such as commas or quotes.
+}
+we do not prevent chunks from crossing punctuations or coordination structures.
+We illustrate an example in Figure~\ref{fig:rs}.
+According to our reordering model, ``\UTFC{62A5}道 (report)'' is reordered to the end of the sentence,
+regardless of a comma occurring after it.
+However, in a previous reordering model for Chinese \shortcite{DH2012},
+``\UTFC{62A5}道 (report)'' would not be reordered since they incorporated punctuation exception rules
+to block reordering over punctuations.
+Therefore, our method allows us to achieve a global inter-clause reordering.
+
+
+\section{Experiments}
+\label{sec:exp}
+
+To evaluate the performance of the pre-reordering method for Chinese 
+to Japanese machine translation, we used two corpora from the news domain. We 
+collected an in-house Chinese-Japanese corpus of news articles that we call News. 
+Then, we augmented this corpus with the CWMT corpus \cite{CWMT2011} to use it as an 
+extended training set. We extracted disjoint development and test sets from the News 
+corpus containing 1,000 and 2,000 sentences, respectively. 
+Table \ref{tab:corpus} shows the corpora statistics.
+
+\begin{table}[b]
+\caption{Basic statistics of the corpora}
+\label{tab:corpus}
+\vspace{8pt}
+\input{1004table02.txt}
+\vspace{4pt}
+\small
+News Devel. and News Test were used to tune and 
+test the systems trained with both training corpora. Data statistics were collected 
+after tokenizing and filtering sentences longer than 64 tokens.
+\par
+\end{table}
+
+We first segmented Japanese and Chinese sentences using 
+MeCab\footnote{http://mecab.googlecode.com/svn/trunk/mecab/doc/index.html} \cite{TK2000}
+and the Stanford Chinese segmenter\footnote{http://nlp.stanford.edu/software/segmenter.shtml} \cite{PCC2008}, respectively.
+POS tags of Chinese words were automatically extracted from the results of Berkeley 
+parser\footnote{http://nlp.cs.berkeley.edu/Software.shtml} \cite{SP2006}.
+Unlabeled dependency trees were constructed using Corbit \cite{Corbit2011}.
+In addition to the baseline system, we re-implemented the HFC \cite{DH2012} 
+using the Chinese Enju\footnote{http://www.nactem.ac.uk/enju/} \cite{KY2011} to obtain HPSG parse trees for comparison.
+
+Previous studies on translating English to Japanese \cite{HI2010}
+used artificial particle insertions in the source language to align them with
+Japanese particles that do not have a counterpart on the English side.
+In Chinese to Japanese translation, Chinese counterparts of Japanese particles are not present.
+Since the method for particle seed word insertion in \cite{Isozaki2012} proved to be effective,
+we have adapted the same method to HFC and DPC.
+Therefore, we can not entirely disclaim the use of constituent parsing at 
+the current stage. However, we believe that dependency parsing can provide sufficient
+information for inserting particles and this is considered as one of our
+future works.
+
+The described pre-reordering methods were applied at a pre-processing stage
+to increase the chances of monotonic alignments at a later stage.
+The standard Moses baseline was used \cite{MOSES2007}, where reordered 
+Chinese sentences were paired with their Japanese counterparts and word-to-word 
+alignments were estimated using MGIZA++ \cite{MGIZA2008}.
+Following standard practice, we used the default distance reordering model
+and ``msd-bidirectional-fe'' as a lexicalized reordering model \shortcite{Koehn2005,Galley2008}
+with the default distortion limit of $6$.
+We estimated a $5$-gram language model using SRILM \shortcite{SRILM2002} on 
+the target side of the corresponding training corpus.
+Then, the scaling factors of the log-linear combination of models were estimated
+using MERT \shortcite{MERT2003}.
+
+\begin{table}[b]
+\caption{Evaluation of translation quality of two test sets when CWMT, News, and the 
+combination of both corpora were used for training}
+\label{tab:results}
+\vspace{8pt}
+\input{1004table03.txt}
+\end{table}
+
+Translation quality can be evaluated from different perspectives, and two metrics 
+have been used in literature for this purpose. BLEU \cite{BLEU2002} is 
+a widely used metric that computes the geometric average between uni-gram, bi-gram, 
+tri-gram, and four-gram precisions, and emphasizes the importance of local fluency.
+When translating between language pairs with different sentence structure, such 
+as Chinese and Japanese, long-distance phrase mis-reorderings are a major source 
+of translation quality drop. RIBES \cite{RIBES2010} is a score based on rank 
+correlations of word orders that was specifically designed to evaluate translation 
+quality between distant language pairs.
+BLEU and RIBES are precision metrics, and higher scores suggest higher performance.
+Table~\ref{tab:results} summarizes the results of the baseline system (no pre-reordering 
+or particle word insertion), baseline system plus particle insertion ($\text{Base.} + \text{Part.}$), 
+HFC, and our DPC method.
+
+As shown, DPC obtains approximately $0.7$ BLEU points of improvement and $0.3$ 
+or $0.2$ RIBES points when compared to the second-best system in both corpora.
+We suspect that corpus diversity is a reason why HFC does not show any advantage in this setting. 
+By comparing the baseline system and the baseline system with pseudo particles
+inserted, we found that without reordering, particle insertion did not influence 
+much on the results, especially after increasing the size of the training data. We suspect 
+that the inserted pseudo particles are also suffering long distant word alignment. 
+For instance, we insert a pseudo particle for ``を'' after the object. 
+However, since objects are at the end of Chinese sentences, these pseudo particles
+are also at the end of sentences, far from their Japanese counterparts.
+We tested the significance of BLEU improvement for HFC and DPC when compared to 
+the baseline phrase-based system. HFC tests obtained p-values of $0.355$ and $0.135$ 
+on News and CWMT + News corpora, while our proposed DPC method obtained p-values of
+$0.002$ and $0.0$, which indicate significant improvements over the phrase-based 
+system.
+
+
+\section{Analysis on Causes of Reordering Errors}
+\label{sec:dis}
+
+In the previous section, we assessed the impact of reordering performance on machine 
+translation quality. In this section, we assess the influence 
+of parse errors on reordering quality. Because DPC is a parsing based reordering method, 
+to reveal the relationship between specific parse errors and reordering issues, 
+a straightforward method is to contrast the reordering based on error-free parse trees 
+(Gold-Trees) with the reordering based on automatic parse trees (Auto-Trees) that were obtained using Corbit.
+We refer to the former as Gold-DPC and the 
+latter as Auto-DPC. We first identify the most influential parse errors by using POS 
+tags, and then define concrete parse errors by comparing Gold-Trees with Auto-Trees 
+to quantify the effects of certain parse errors from the aspect of dependencies, 
+since the syntactic information that guides reordering in DPC is limited 
+to these two linguistic categories.
+
+The value of Kendall's tau ($\tau$) rank correlation coefficient \cite{Kendall1938} is used
+to measure word order similarities between reordered Chinese sentences and their Japanese counterparts, for both
+Gold-DPC and Auto-DPC. We use Equation~\ref{eq:tau}
+introduced in \shortcite{HI2010} that uses the alignment file ch-ja.A3.final
+generated by MGIZA++. In ch-ja.A3.final, parallel sentence pairs (Chinese and Japanese)
+are aligned to each other as follows:
+
+\begin{tabular}{ll}
+Chinese: & 我　去　\UTFC{4E1C}京　和　横\UTFC{6EE8}　。\\
+Japanese: & NULL ({ }) 私 ({ 1 }) は ({ }) 東京 ({ 3 }) と ({ 4 }) 横浜 ({ 5 }) へ ({ }) 行く ({ 2 }) 。 ({ 6 }) 
+\end{tabular}
+\begin{equation}
+\mathbf{\tau} = \frac{\# \mathrm{of~concordant~pairs}}{\# \mathrm{of~all~pairs}}\times 2 - 1
+\label{eq:tau}
+\end{equation}
+
+The alignment order of the previous example is ``1 3 4 5 2 6'', where the total 
+number of position pairs is $6\choose 2$. Pairs of the form ``1 3'', ``1 4'', 
+or ``4 5'' are concordant pairs, since the value of the first position is lower 
+than the second one. Pairs of the form ``3 2'' or ``5 2'' are not concordant, 
+since the first position is greater than the second one. Therefore, the $\tau$ 
+value of this Chinese sentence is $11/{6 \choose 2} \times 2 - 1 \approx 0.47$.
+
+
+\subsection{Gold Data}
+
+Human annotated sentences from Chinese Penn Treebank ver. 7.0 (CTB-7) are considered 
+as the source of building up gold data. CTB-7 is a widely used corpus that comprises 
+parsed sentences in Chinese from five genres: broadcast news (BN), broadcast 
+conversations (BC), news magazines (NM), newswire (NS), and newsgroup weblogs 
+(NW). We divide the corpus in the same manner as that introduced in \cite{YW2011} 
+and use the development set to obtain the gold data. 
+However, sentences from BC and NW tend to have faults such as repetitions, incomplete 
+sentences, corrections, and incorrect sentence segmentation. We thus randomly 
+sampled $2,643$ unique sentences from all five genres in the development set, 
+but with different numbers of sentences in each genre. Table~\ref{tab:ctb7} shows 
+the statistics of all selected sentences.
+In order to automatically align reordered Chinese sentences with their Japanese translation,
+we need the Japanese translations of the Chinese sentences of our gold data set.
+Since there is not any official Japanese translation for sentences from CTB-7,
+professional translators manually translated these Chinese sentences into Japanese.
+
+\begin{table}[b]
+\caption{Statistical characteristics of gold parsed and reordered corpus} 
+\label{tab:ctb7}
+\vspace{8pt}
+\input{1004table04.txt}
+\end{table}
+
+After obtaining the gold data set, it is necessary to convert the CTB-7 parsed text 
+to dependency Gold-Trees. An open utility Penn2Malt\footnote{http://stp.lingfil.uu.se/{\textasciitilde}nivre/research/Penn2Malt.html} 
+is used to convert Penn trees into MaltTab format containing dependency information. 
+However, CTB-$7$ contains three new phrase labels that are not covered in the head rules of Penn2Malt.
+These new phrase labels correspond to fillers (FLR), disfluencies (DFL), and incomplete sentences (INC).
+For this reason, we introduced three new rules to identify heads of FLR, DFL and INC phrases.
+For FLR and DFL phrases, we select the right-most branch as a head.
+For INC phrases, we follow the same rule as FRAG phrases (which are already defined in Penn2Malt tool).
+The complete list of rules of Penn2Malt tool can be found in Table~\ref{tab:hrdef},
+together with our newly introduced rules (at the bottom of the table).
+
+
+\subsection{Dependency Parse Errors by Part-of-Speech}
+\label{subsec:pos}
+
+\begin{figure}[b]
+\begin{subfigure}{1\textwidth}
+\begin{center}
+\includegraphics{21-3ia1004f5a.eps}
+\end{center}
+\caption{Gold dependency tree}
+\label{fig:errex}
+\end{subfigure}
+\vspace{0.5\Cvs}
+
+\begin{subfigure}{1\textwidth}
+\begin{center}
+\includegraphics{21-3ia1004f5b.eps}
+\end{center}
+\caption{Possible wrong dependency parse tree}
+\label{fig:poserr}
+\end{subfigure}
+\caption{Example for calculating parsing errors in terms of POS tag}
+\label{fig:poserror}
+\end{figure}
+
+
+We construct two types of parse errors in terms of POS tags to quantify the most influential
+parse errors in dependency parse trees: dependent error, where a word points to a wrong head, 
+and head error, where a word is wrongly recognized as a head for other words. We collect and calculate the 
+proportions of POS tags from those words. For example, Figure~\ref{fig:poserr} 
+presents a possible wrong parse tree of the example shown in Figure~\ref{fig:errex}.
+By comparing with the Gold-Tree in Figure~\ref{fig:errex}, Chinese characters 
+(English word, POS tag) of ``他 (he, PN)'', ``去 (went, VV)'', ``\UTFC{4E66}店 (bookstore, NN)'', 
+``\UTFC{4E70} (buy, VV)'', and ``。(., PU)'' in the dependency tree in Figure~\ref{fig:poserr}
+point to different wrong heads, and are dependent errors. Meanwhile, Chinese 
+characters (English word, POS tag) of ``去 (went, VV)'' and ``\UTFC{4E70} (buy, VV)'' are 
+wrongly recognized as heads for other words（e.g., ``他 (he)'', ``\UTFC{4E66}店 (bookstore)''）,
+and are head errors. Therefore, every head error has at least one corresponding 
+dependent error, whereas a dependent error may correspond with no head error as in 
+the case where a word is not the root in a Gold-Tree but is a root in the wrong tree.
+An example is the dependent-error ``去 (went, VV)'' in Figure~\ref{fig:poserr}.
+
+We use an $\tau$ value of Gold-DPC and Auto-DPC within the range of $0.1$ to group 
+sentences. For example, all sentences that gained $\tau$ in the set of $[0.7, 0.8)$ 
+are in one group. In each group, we collect all POS tags that are involved with 
+these two types of errors separately and calculate the frequency for each POS tag.
+Figure~\ref{fig:poserrortau} presents dependency parse errors and head errors segregated
+by three and two POS tags of highest frequency, respectively;
+the rest of the POS tags
+are considered negligible.\footnote{Although the range of $\tau$ value is [-1, 1], 
+there were no reordered sentences that fell into the interval [-1, 0.1) in our analysis
+results. For this reason, we only show the region of [0.1, 1] in all the figures.}
+
+\begin{figure}[b]
+\begin{minipage}[t]{196pt}
+\includegraphics{21-3ia1004f6a.eps}
+\subcaption{Distribution of dependency errors segregated by the three most frequent POS tags and their trends}
+\label{fig:deptau}
+\end{minipage}
+\hfill
+\begin{minipage}[t]{196pt}
+\includegraphics{21-3ia1004f6b.eps}
+\subcaption{Distribution of head errors segregated by the two most frequent POS tags and their trends}
+\label{fig:headtau}
+\end{minipage}
+\caption{Distribution of dependency and head errors segregated by the two and three most frequent POS tags, respectively}
+\label{fig:poserrortau}
+\end{figure}
+
+Figure~\ref{fig:deptau} shows the distribution of dependency parse errors segregated by
+the top three most frequent POS tags.
+That is, ``VV'', ``PU'', and ``NN'' are the three most frequent POS tag of words that 
+point to a wrong head in Auto-Trees. VV represents all verbs except predicative 
+adjectives (VA), copula (VC), and you3（有）\footnote{A Chinese character expresses 
+possession and existence.} as the main verbs (VE). PU represents punctuation and 
+NN represents all nouns except proper nouns (NR), temporal nouns (NT), and those 
+for locations that cannot modify verb phrases with or without de0（地）\footnote{A 
+Chinese character is specially used to connect the verb phrase and its modifier.}. 
+The dependent error on VV accounts for a larger proportion in low reordering accuracy 
+sentences, revealing that the case of a VV pointing to a wrong head tends to 
+largely reduce the reordering performance.
+
+Figure~\ref{fig:headtau} shows the distribution of head errors segregated by the most frequent POS tags.
+As expected, ``VV'' and ``NN'' are the two most frequent POS tag of words that have been 
+wrongly recognized as heads in Auto-Trees. Similarly to Figure~\ref{fig:deptau}, 
+VV appears to be dominant in the groups of sentences that display low reordering quality,
+whereas head errors that involve NN POS tags do not have an impact on reordering quality in general.
+
+
+\subsection{Dependency Parse Errors by Dependency Structure}
+\label{subsec:dp}
+
+The analysis on parse errors in terms of POS tags provides the general idea that parse
+errors on verbs are primary in low reordering performance.
+However, such analysis does not take into account the role of those verbs
+(or other words with different POS tags) in the structure of the sentence.
+We hence follow a descriptive approach to analyze dependency parse errors
+in terms of their structural role (whether errors occur on heads or dependents),
+to further explore the effects of more concrete parse errors.
+
+As introduced in Section~\ref{sec:met}, DPC first identifies Vb and RM-D, and 
+then reorders necessary words.
+The correct identification of Vbs and RM-Ds is essential for pre-reordering performance.
+For this reason, parsing errors that lead to misrecognitions of dependencies
+may impact on pre-reordering performance if such misrecognitions
+affect the identification of Vbs or RM-Ds.
+To discover the effects of more concrete parse 
+errors, we define seven parse error pattens that will mislead reordering
+and classify those errors into three categories of dependencies, i.e., {\bf ROOT}, {\bf RM-D}, 
+and {\bf BEI}. ROOT denotes whether the Vb-H candidate\footnote{Note that a Vb-H candidate is not an authorized Vb-H.
+A word is a Vb-H candidate if its POS tag appears in the Vb-H entry of Table~\ref{tab:dpc}.
+However, a Vb-H candidate needs to meet two more conditions to become an actual Vb-H, namely
+1) to be a dependency head, and 2) not to be involved in a bei-construction.}
+is the root of the sentence, 
+RM-D is the right-most dependent that belongs to the object of the Vb-H candidate if it has 
+one, and BEI denotes whether the Vb-H candidate is involved in a bei-construction. 
+
+\begin{figure}[t]
+\begin{subfigure}{1\textwidth}
+\begin{center}
+\includegraphics{21-3ia1004f7a.eps}
+\end{center}
+\caption{Gold dependency tree}
+\label{fig:rmddrootg}
+\end{subfigure}
+\vspace{0.5\Cvs}
+
+\begin{subfigure}{1\textwidth}
+\begin{center}
+\includegraphics{21-3ia1004f7b.eps}
+\end{center}
+\caption{Possible wrong dependency parse tree}
+\label{fig:rmddrootc}
+\end{subfigure}
+\caption{Example for parse error patterns of Root-C and RM\_D-D}
+\label{fig:rmddrootgc}
+\end{figure}
+
+According to the methodology of DPC in Section~\ref{sec:met}, a Vb-H candidate
+will be reordered to the end of the sentence if it meets the following three conditions,
+1) it is the ROOT in the parse tree; 2) it is not
+involved in a bei-construction; and 3) its RM-D does not exist.
+In the ROOT parse error, there are
+two types of parse error patterns, namely Root-C and Root-G. Root-C denotes the case
+where a Vb-H candidate matches the preceding three conditions in the automatically parsed tree (Auto-Tree), but not
+in the Gold-Tree. In such case, the Vb-H candidate would be reordered if the input
+were an Auto-Tree, but it would not be reordered if we had a Gold-Tree. Root-G is the opposite
+case of Root-C, where a Vb-H candidate would be reordered if we had a Gold-Tree,
+but it would not be reordered based on an Auto-Tree.
+Figure~\ref{fig:rmddrootgc} illustrates an example of error pattern Root-C. The Vb-H candidate ``\UTFC{5E94}\UTFC{8BE5} (should)''
+is the root in the Auto-Tree of Figure~\ref{fig:rmddrootc} whereas is not in the Gold-Tree
+of Figure~\ref{fig:rmddrootg}. Moreover, the Vb-H candidate ``\UTFC{5E94}\UTFC{8BE5} (should)'' does not have any RM-D dependent and is not involved
+in a bei-construction in both the Gold-Tree and the Auto-Tree.
+For this reason, ``\UTFC{5E94}\UTFC{8BE5} (should)'' will be reordered
+incorrectly to the end of the sentence given the Auto-Tree, but will remain in the correct position
+given the Gold-Tree.
+As an illustration of error pattern Root-G, the Vb-H candidate ``同意 (agree)'' in Figure~\ref{fig:rootgg}
+will be reordered to the end of the sentence. However, given an erroneous parse tree
+as in Figure~\ref{fig:rootgc}, ``同意 (agree)'' will not be reordered.
+
+\begin{figure}[t]
+\begin{subfigure}{1\textwidth}
+\begin{center}
+\includegraphics{21-3ia1004f8a.eps}
+\end{center}
+\caption{Gold dependency tree}
+\label{fig:rootgg}
+\end{subfigure}
+\vspace{0.5\Cvs}
+
+\begin{subfigure}{1\textwidth}
+\begin{center}
+\includegraphics{21-3ia1004f8b.eps}
+\end{center}
+\caption{Possible wrong dependency parse tree}
+\label{fig:rootgc}
+\end{subfigure}
+\vspace{0.5\Cvs}
+
+\begin{subfigure}{1\textwidth}
+\begin{center}
+\includegraphics{21-3ia1004f8c.eps}
+\end{center}
+\caption{Another possible erroneous parse tree}
+\label{fig:rmdcc}
+\end{subfigure}
+\caption{Example for parse error patterns of Root-G and RM\_D-C}
+\label{fig:rmdcrootg}
+\end{figure}
+
+In the RM-D category, there are three types of parse error patterns: RM\_D-C,
+RM\_D-G, and RM\_D-D. RM\_D-C is the case where the RM-D of a Vb-H candidate exists 
+in an Auto-Tree but not in a Gold-Tree. In other words, an RM-D candidate was 
+parsed wrongly on its head and may lead to incorrect reordering of its 
+corresponding Vb-H candidate. 
+Figure~\ref{fig:rmdcc} shows another possible erroneous parse of the Gold-Tree 
+in Figure~\ref{fig:rootgg}. Based on the wrong parse tree, our algorithm will 
+identify ``\UTFC{8BB0}者 (journalist)'' as the RM-D of the Vb-H candidate ``同意 (agree)'' 
+and thus ``同意 (agree)'' will be reordered incorrectly to the right-hand side 
+of ``\UTFC{8BB0}者 (journalist)'' instead of to the end of the sentence. Similar to the ROOT 
+category, RM\_D-G is the opposite case of RM\_D-C in that the RM-D of a Vb-H candidate 
+exists in the Gold-Tree instead of the Auto-Tree. The Vb-H candidate ``去 (went)'' 
+in the previous parse error example of Figure~\ref{fig:poserror} is an example 
+of such a case by the reason of reordering differently according to the Gold-Tree and 
+the possible wrong tree. RM\_D-D indicates that the RM-D of a Vb-H candidate exists 
+in both the Gold-Tree and the Auto-Tree but is different. For example, the Vb-H candidate 
+``加入 (join)'' in Figure~\ref{fig:rmddrootgc} has received different RM-Ds 
+in the two trees, causing a reordering problem by comparing the reordered results
+(R-Chinese) shown in the figure.
+
+The bei-construction is one necessary constraint to determine a Vb-H (see Section~\ref{sec:met}).
+For this reason, incorrect reorderings may occur if the head of a bei-construction
+differs between the Auto-Tree and the Gold-Tree.
+Therefore, we also defined two types of error patterns for the BEI 
+category: BEI-C and BEI-G. BEI-C is the case where a Vb-H candidate received a 
+wrong BEI dependent in the Auto-Tree; this will prevent reordering independently 
+on whether the Vb-H candidate has an RM-D or is the root. Inversely, BEI-G is the 
+case where a Vb-H candidate is missing its BEI dependent in the Auto-Tree.
+
+After defining seven parse error patterns in three categories that influence 
+reordering, we use the same analysis method as in Section~\ref{subsec:pos} to 
+distribute the average frequency proportions of each type in different $\tau$ 
+value groups of sentences.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-3ia1004f9.eps}
+\end{center}
+\caption{Distribution of three types of parse errors in terms of dependency and their trend lines}
+\label{fig:error}
+\end{figure}
+
+Figure~\ref{fig:error} presents the distribution of the three categories of parse 
+errors and their tendencies. ROOT errors show high relativity with low $\tau$ 
+value sentences, whereas RM-D errors are dominant in high $\tau$ value 
+sentences. This implies that the effects of ROOT errors on reordering are more 
+serious than the effects from RM-D errors. The reason could be that ROOT errors 
+cause long-distance reordering failure whereas RM-D errors lead to local reordering 
+errors. Due to the size limitation of the analysis corpus, there are very few BEI 
+errors and it is difficult to completely capture their trends.
+
+Figure~\ref{fig:rootrmderr} shows the correlations between parse error patterns 
+and reordering accuracy. In the ROOT errors of Figure~\ref{fig:rooterr}, Root-C errors
+occur more frequently than Root-G errors in poorly reordered sentences (low Kendall's tau).
+This is consistent with the distribution results 
+that are shown in Figure~\ref{fig:rmderr}. The error pattern of RM\_D-G has a higher
+percentage than the other two patterns, also implying that a Vb-H candidate 
+in an Auto-Tree tends to have less or no dependent as its object.
+
+\begin{figure}[t]
+\begin{subfigure}{195pt}
+\begin{center}
+\includegraphics{21-3ia1004f10a.eps}
+\end{center}
+\caption{Distribution of different patterns of ROOT errors and their trend lines}
+\label{fig:rooterr}
+\end{subfigure}
+\hfill
+\begin{subfigure}{195pt}
+\begin{center}
+\includegraphics{21-3ia1004f10b.eps}
+\end{center}
+\caption{Distribution of different patterns of RM-D errors and their trend lines}
+\label{fig:rmderr}
+\end{subfigure}
+\caption{Distribution of ROOT and RM-D errors}
+\label{fig:rootrmderr}
+\end{figure}
+
+
+\section{Conclusion}
+\label{sec:con}
+
+We have described a novel syntax-based pre-reordering method for Chinese to 
+Japanese SMT; the unlabeled dependency parsing based pre-reordering for Chinese (DPC). 
+This method uses linguistically motivated rules to reorder Chinese words to 
+resemble the word order in Japanese sentences. It relies on parsing technologies 
+to extract the syntactic structure of Chinese sentences, and the reordering 
+performance might be sensitive to parse errors.
+
+We first evaluated the impact on translation quality of the reordering method 
+on typical sentences used in the news domain and compared it with a state-of-the-art 
+reordering method (a refined Head finalization reordering method for Chinese). 
+DPC performed consistently better than both the baseline and the HFC methods 
+in terms of the BLEU and RIBES performance evaluators. 
+The significance test also confirmed the improvement obtained from DPC.
+
+We then assessed the influence of parse errors on reordering quality, as measured 
+by Kendall's $\tau$ rank correlation. For this purpose, we conducted linguistically 
+motivated analysis methods by combining empirical and descriptive approaches 
+from two aspects. Moreover, we not only profiled general parse errors but also examined 
+the effects of specific parse errors on reordering.
+
+Based on our findings, we believe that future developments of syntax-based pre-reordering 
+methods would improve the preliminary analysis of POS tagging and parsing accuracies. 
+On one hand, to develop more robust linguistically motivated pre-reordering 
+methods, reordering rules could be designed to suppress or reduce unreliable POS tags or 
+parsing relations. For example, those systems could be designed to make use of 
+N-best lists of certain POS tags or dependencies. 
+On the other hand, as for the POS tag or parser development, with the objective 
+to aid pre-reordering, we could attempt to maximize the accuracy of POS tags or dependencies 
+that are relevant to the reordering task, maybe at the expense of lower accuracies 
+on other elements.
+
+Therefore, to improve the robustness of DPC against parse errors is one of 
+our future goals. Since the current analysis on exploring influential parse errors 
+is not exhaustive, it should be meaningful to investigate the parse error patterns that 
+cause unexpected reordering on these words as well as the correlations between them. 
+In addition, increasing the number of sentences in the analysis corpus is interesting for further research.
+
+Currently, DPC is designed to use only information on dependency structure and
+POS tags that are defined in Chinese Penn Treebank
+v3.0. DPC has three limitations. The first one is the ordering problem between
+words in different languages that have the same function but different POS tag.
+``不 bu4'' in Chinese is an adverb that precedes and modifies its dependency head.
+Its English counterpart is ``not'' and its Japanese counterpart is ``ない''.
+Both of them modify the dependency heads by following them.
+For this reason, ``不 bu4'' should be moved to the right of its head.
+However, most English or Japanese words that correspond to other Chinese adverbs behave differently,
+and the same reordering rule does not apply to them, rendering ``不 bu4'' as an exception.
+Since there is not a special POS tag for ``不 bu4'' and we only use POS tags to distinguish Chinese words,
+DPC has a limitation on solving these cases. A more detailed POS tag definition may help on dealing
+with this problem. The second limitation is the lack of generalization to other sets of POS tags or definitions.
+For example, there are more and different POS tags
+defined by the Institute of Computing Technology (ICT) for Chinese,
+but our method does not guarantee a good performance given such different set of POS tags.
+The third limitation derives from the difficulty in the direct application of
+DPC to other language pairs since the definition of POS tags for other languages
+may be different. For this reason, we would like to improve our reordering model to
+automatically learn reordering rules based on POS tag and dependencies from the data.
+
+\acknowledgment
+
+The authors would like to thank the reviewers for their helpful comments 
+and constructive suggestions.
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Brown, Pietra, Pietra, \BBA\ Mercer}{Brown
+  et~al.}{1993}]{Brown1993}
+Brown, P.~F., Pietra, V. J.~D., Pietra, S. A.~D., \BBA\ Mercer, R.~L. \BBOP
+  1993\BBCP.
+\newblock \BBOQ The Mathematics of Statistical Machine Translation: Parameter
+  Estimation.\BBCQ\
+\newblock {\Bem Computational linguistics}, {\Bbf 19}  (2), \mbox{\BPGS\
+  263--311}.
+
+\bibitem[\protect\BCAY{Chang, Galley, \BBA\ Manning}{Chang
+  et~al.}{2008}]{PCC2008}
+Chang, P.-C., Galley, M., \BBA\ Manning, C.~D. \BBOP 2008\BBCP.
+\newblock \BBOQ Optimizing {Chinese} Word Segmentation for Machine Translation
+  Performance.\BBCQ\
+\newblock In {\Bem Proceedings of the 3rd Workshop on SMT}, \mbox{\BPGS\
+  224--232}.
+
+\bibitem[\protect\BCAY{Downing \BBA\ Locke}{Downing \BBA\
+  Locke}{2006}]{Downing2006}
+Downing, A.\BBACOMMA\ \BBA\ Locke, P. \BBOP 2006\BBCP.
+\newblock {\Bem English Grammar: A University Course}.
+\newblock Second Edition. Prentice Hall International English Language
+  Teaching. Abingdon, Oxon: Routledge.
+
+\bibitem[\protect\BCAY{Dredze, Blitzer, Talukdar, Ganchev, Graca, \BBA\
+  Pereira}{Dredze et~al.}{2007}]{MD2007}
+Dredze, M., Blitzer, J., Talukdar, P.~P., Ganchev, K., Graca, J., \BBA\
+  Pereira, F. \BBOP 2007\BBCP.
+\newblock \BBOQ Frustratingly Hard Domain Adaptation for Dependency
+  Parsing.\BBCQ\
+\newblock In {\Bem Proceedings of the CoNLL Shared Task Session of
+  EMNLP-CoNLL}, \mbox{\BPGS\ 1051--1055}.
+
+\bibitem[\protect\BCAY{Galley \BBA\ Manning}{Galley \BBA\
+  Manning}{2008}]{Galley2008}
+Galley, M.\BBACOMMA\ \BBA\ Manning, C.~D. \BBOP 2008\BBCP.
+\newblock \BBOQ A Simple and Effective Hierarchical Phrase Reordering
+  Model.\BBCQ\
+\newblock In {\Bem Proceedings of the Conference on Empirical Methods in
+  Natural Language Processing (EMNLP)}, \mbox{\BPGS\ 848--856}. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Gao \BBA\ Vogel}{Gao \BBA\ Vogel}{2008}]{MGIZA2008}
+Gao, Q.\BBACOMMA\ \BBA\ Vogel, S. \BBOP 2008\BBCP.
+\newblock \BBOQ Parallel Implementations of Word Alignment Tool.\BBCQ\
+\newblock In {\Bem Software Engineering, Testing, and Quality Assurance for
+  Natural Language Processing}, \mbox{\BPGS\ 49--57}.
+
+\bibitem[\protect\BCAY{Green}{Green}{2011}]{NG2011}
+Green, N. \BBOP 2011\BBCP.
+\newblock \BBOQ Effects of Noun Phrase Bracketing in Dependency Parsing and
+  Machine Translation.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-HLT, Student Session}, \mbox{\BPGS\
+  69--74}.
+
+\bibitem[\protect\BCAY{Habash}{Habash}{2007}]{NH2007}
+Habash, N. \BBOP 2007\BBCP.
+\newblock \BBOQ Syntactic Preprocessing for Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of Machine Translation Summit XI}, \mbox{\BPGS\
+  215--222}.
+
+\bibitem[\protect\BCAY{Han, Sudoh, Wu, Duh, Tsukada, \BBA\ Nagata}{Han
+  et~al.}{2012}]{DH2012}
+Han, D., Sudoh, K., Wu, X., Duh, K., Tsukada, H., \BBA\ Nagata, M. \BBOP
+  2012\BBCP.
+\newblock \BBOQ Head Finalization Reordering for {Chinese-to-Japanese} Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 6th Workshop on Syntax, Semantics and
+  Structure in Statistical Translation}, \mbox{\BPGS\ 57--66}.
+
+\bibitem[\protect\BCAY{Hara, Miyao, \BBA\ Tsujii}{Hara et~al.}{2009}]{TH2009}
+Hara, T., Miyao, Y., \BBA\ Tsujii, J.-i. \BBOP 2009\BBCP.
+\newblock \BBOQ Descriptive and Empirical Approaches to Capturing Underlying
+  Dependencies among Parsing Errors.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP}, \mbox{\BPGS\ 1162--1171}.
+
+\bibitem[\protect\BCAY{Hatori, Matsuzaki, Miyao, \BBA\ Tsujii}{Hatori
+  et~al.}{2011}]{Corbit2011}
+Hatori, J., Matsuzaki, T., Miyao, Y., \BBA\ Tsujii, J.-i. \BBOP 2011\BBCP.
+\newblock \BBOQ Incremental Joint {POS} Tagging and Dependency Parsing in
+  {C}hinese.\BBCQ\
+\newblock In {\Bem Proceedigns of the 5th International Joint Conference on
+  Natural Language Processing}, \mbox{\BPGS\ 1216--1224}.
+
+\bibitem[\protect\BCAY{Isozaki, Hirao, Duh, Sudoh, \BBA\ Tsukada}{Isozaki
+  et~al.}{2010a}]{RIBES2010}
+Isozaki, H., Hirao, T., Duh, K., Sudoh, K., \BBA\ Tsukada, H. \BBOP 2010a\BBCP.
+\newblock \BBOQ Automatic Evaluation of Translation Quality for Distant
+  Language pairs.\BBCQ\
+\newblock In {\Bem Proceedings of the 2010 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 944--952}. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Isozaki, Sudoh, Tsukada, \BBA\ Duh}{Isozaki
+  et~al.}{2010b}]{HI2010}
+Isozaki, H., Sudoh, K., Tsukada, H., \BBA\ Duh, K. \BBOP 2010b\BBCP.
+\newblock \BBOQ Head Finalization: A Simple Reordering Rule for {SOV}
+  Languages.\BBCQ\
+\newblock In {\Bem Proceedings of WMTMetricsMATR}, \mbox{\BPGS\ 244--251}.
+
+\bibitem[\protect\BCAY{Isozaki, Sudoh, Tsukada, \BBA\ Duh}{Isozaki
+  et~al.}{2012}]{Isozaki2012}
+Isozaki, H., Sudoh, K., Tsukada, H., \BBA\ Duh, K. \BBOP 2012\BBCP.
+\newblock \BBOQ {HPSG}-Based Preprocessing for {E}nglish-to-{J}apanese
+  Translation.\BBCQ\
+\newblock {\Bem ACM Transactions on Asian Language Information Processing
+  (TALIP)}, {\Bbf 11}  (3), \mbox{\BPGS\ 8:1--8:16}.
+
+\bibitem[\protect\BCAY{Katz-Brown, Petrov, McDonald, Och, Talbot, Ichikawa,
+  \BBA\ Seno}{Katz-Brown et~al.}{2011}]{JK2011}
+Katz-Brown, J., Petrov, S., McDonald, R., Och, F., Talbot, D., Ichikawa, H.,
+  \BBA\ Seno, M. \BBOP 2011\BBCP.
+\newblock \BBOQ Training a Parser for Machine Translation Reordering.\BBCQ\
+\newblock In {\Bem Proceedings of the 2011 Conference on EMNLP}, \mbox{\BPGS\
+  183--192}.
+
+\bibitem[\protect\BCAY{Kendall}{Kendall}{1938}]{Kendall1938}
+Kendall, M.~G. \BBOP 1938\BBCP.
+\newblock \BBOQ A New Measure of Rank Correlation.\BBCQ\
+\newblock {\Bem Biometrika}, {\Bbf 30}  (1/2), \mbox{\BPGS\ 81--93}.
+
+\bibitem[\protect\BCAY{Koehn, Axelrod, Mayne, Callison-Burch, Osborne, \BBA\
+  Talbot}{Koehn et~al.}{2005}]{Koehn2005}
+Koehn, P., Axelrod, A., Mayne, A.~B., Callison-Burch, C., Osborne, M., \BBA\
+  Talbot, D. \BBOP 2005\BBCP.
+\newblock \BBOQ Edinburgh System Description for the 2005 {IWSLT} Speech
+  Translation Evaluation.\BBCQ\
+\newblock In {\Bem Proceedings of International Workshop on Spoken Language
+  Translation (IWSLT)}, \mbox{\BPGS\ 68--75}.
+
+\bibitem[\protect\BCAY{Koehn, Hoang, Birch, Callison-Burch, Federico, Bertoldi,
+  Cowan, Shen, Moran, Zens, Dyer, Bojar, Constantin, \BBA\ Herbst}{Koehn
+  et~al.}{2007}]{MOSES2007}
+Koehn, P., Hoang, H., Birch, A., Callison-Burch, C., Federico, M., Bertoldi,
+  N., Cowan, B., Shen, W., Moran, C., Zens, R., Dyer, C., Bojar, O.,
+  Constantin, A., \BBA\ Herbst, E. \BBOP 2007\BBCP.
+\newblock \BBOQ Moses: Open Source Toolkit for Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the Association for Computational Linguistics
+  '07, Demonstration Sessions}, \mbox{\BPGS\ 177--180}.
+
+\bibitem[\protect\BCAY{Koehn, Och, \BBA\ Marcu}{Koehn et~al.}{2003}]{Koehn2003}
+Koehn, P., Och, F.~J., \BBA\ Marcu, D. \BBOP 2003\BBCP.
+\newblock \BBOQ Statistical Phrase-based Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 2003 Conference of the North American
+  Chapter of the Association for Computational Linguistics on Human Language
+  Technology-Volume 1}, \mbox{\BPGS\ 48--54}. Association for Computational
+  Linguistics.
+
+\bibitem[\protect\BCAY{Kudo \BBA\ Matsumoto}{Kudo \BBA\
+  Matsumoto}{2000}]{TK2000}
+Kudo, T.\BBACOMMA\ \BBA\ Matsumoto, Y. \BBOP 2000\BBCP.
+\newblock \BBOQ {J}apanese Dependency Structure Analysis Based on Support
+  Vector Machines.\BBCQ\
+\newblock In {\Bem Proceedings of the EMNLP/VLC-2000}, \mbox{\BPGS\ 18--25}.
+
+\bibitem[\protect\BCAY{Li \BBA\ Thompson}{Li \BBA\ Thompson}{1989}]{Li1989}
+Li, C.~N.\BBACOMMA\ \BBA\ Thompson, S.~A. \BBOP 1989\BBCP.
+\newblock {\Bem Mandarin {C}hinese: A Functional Reference Grammar}.
+\newblock Linguistics-Asian Studies. University of California Press.
+
+\bibitem[\protect\BCAY{Li, Li, Zhang, Li, Zhou, \BBA\ Guan}{Li
+  et~al.}{2007}]{CHL2007}
+Li, C.-H., Li, M., Zhang, D., Li, M., Zhou, M., \BBA\ Guan, Y. \BBOP 2007\BBCP.
+\newblock \BBOQ A Probabilistic Approach to Syntax-based Reordering for
+  Statistical Machine Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 45rd Annual Meeting on Association for
+  Computational Linguistics (ACL)}, \mbox{\BPGS\ 720--727}. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{McDonald \BBA\ Nivre}{McDonald \BBA\
+  Nivre}{2007}]{RM2007}
+McDonald, R.\BBACOMMA\ \BBA\ Nivre, J. \BBOP 2007\BBCP.
+\newblock \BBOQ Characterizing the Errors of Data-driven Dependency \linebreak
+  Parsing Models.\BBCQ\
+\newblock In {\Bem Proceedings of the 2007 Joint Conference on EMNLP-CoNLL},
+  \mbox{\BPGS\ 122--131}.
+
+\bibitem[\protect\BCAY{Miyao \BBA\ Tsujii}{Miyao \BBA\ Tsujii}{2008}]{YM2008}
+Miyao, Y.\BBACOMMA\ \BBA\ Tsujii, J. \BBOP 2008\BBCP.
+\newblock \BBOQ Feature Forest Models for Probabilistic {HPSG} Parsing.\BBCQ\
+\newblock {\Bem Computational linguistics}, {\Bbf 34}  (1), \mbox{\BPGS\
+  35--80}.
+
+\bibitem[\protect\BCAY{Nivre}{Nivre}{2004}]{add01}
+Nivre, J. \BBOP 2004\BBCP.
+\newblock {\Bem {\upshape ``Inductive Dependency Parsing.'' MSI Report 04070}}.
+\newblock V{\"{a}}xj{\"{o}} University: School of Mathematics and Systems
+  Engineering.
+
+\bibitem[\protect\BCAY{Och}{Och}{2003}]{MERT2003}
+Och, F.~J. \BBOP 2003\BBCP.
+\newblock \BBOQ Minimum Error Rate Training for Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the Association for Computational
+  Linguistics}, \mbox{\BPGS\ 160--167}.
+
+\bibitem[\protect\BCAY{Papineni, Roukos, Ward, \BBA\ Zhu}{Papineni
+  et~al.}{2002}]{BLEU2002}
+Papineni, K., Roukos, S., Ward, T., \BBA\ Zhu, W.-J. \BBOP 2002\BBCP.
+\newblock \BBOQ Bleu: A Method for Automatic Evaluation of Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the Association for Computational
+  Linguistics}, \mbox{\BPGS\ 311--318}.
+
+\bibitem[\protect\BCAY{Petrov, Barrett, Thibaux, \BBA\ Klein}{Petrov
+  et~al.}{2006}]{SP2006}
+Petrov, S., Barrett, L., Thibaux, R., \BBA\ Klein, D. \BBOP 2006\BBCP.
+\newblock \BBOQ Learning Accurate, Compact, and Interpretable Tree
+  Annotation.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st COLING and the 44th the Association
+  for Computational Linguistics}, \mbox{\BPGS\ 433--440}.
+
+\bibitem[\protect\BCAY{Pollard \BBA\ Sag}{Pollard \BBA\ Sag}{1994}]{HPSG1994}
+Pollard, C.~J.\BBACOMMA\ \BBA\ Sag, I.~A. \BBOP 1994\BBCP.
+\newblock {\Bem Head-driven Phrase Structure Grammar}.
+\newblock The University of Chicago Press and CSLI Publications.
+
+\bibitem[\protect\BCAY{Quirk \BBA\ Corston-Oliver}{Quirk \BBA\
+  Corston-Oliver}{2006}]{CQ2006}
+Quirk, C.\BBACOMMA\ \BBA\ Corston-Oliver, S. \BBOP 2006\BBCP.
+\newblock \BBOQ The Impact of Parse Quality on Syntactically-informed
+  Statistical Machine Translation.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP}, \mbox{\BPGS\ 62--69}.
+
+\bibitem[\protect\BCAY{Stolcke}{Stolcke}{2002}]{SRILM2002}
+Stolcke, A. \BBOP 2002\BBCP.
+\newblock \BBOQ {SRILM}---an Extensible Language Modeling Toolkit.\BBCQ\
+\newblock In {\Bem Proceedings of the 7th International Conference on Spoken
+  Language Processing}, \mbox{\BPGS\ 901--904}.
+
+\bibitem[\protect\BCAY{Tillmann}{Tillmann}{2004}]{Tillmann2004}
+Tillmann, C. \BBOP 2004\BBCP.
+\newblock \BBOQ A Unigram Orientation Model for Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the Annual Meeting of Human Language
+  Technology Conference/North American Chapter of the Association for
+  Computational Linguistics (HLT-NAACL)}, \mbox{\BPGS\ 101--104}. Association
+  for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Tsunakawa, Okazaki, Liu, \BBA\ Tsujii}{Tsunakawa
+  et~al.}{2009}]{Tsunakawa2009}
+Tsunakawa, T., Okazaki, N., Liu, X., \BBA\ Tsujii, J. \BBOP 2009\BBCP.
+\newblock \BBOQ A {Chinese-Japanese} Lexical Machine Translation through a
+  Pivot Language.\BBCQ\
+\newblock {\Bem ACM Transactions on Asian Language Information Processing
+  (TALIP)}, {\Bbf 8}  (2), \mbox{\BPGS\ 9:1--9:21}.
+
+\bibitem[\protect\BCAY{Wang, Collins, \BBA\ Koehn}{Wang et~al.}{2007}]{CW2007}
+Wang, C., Collins, M., \BBA\ Koehn, P. \BBOP 2007\BBCP.
+\newblock \BBOQ {C}hinese Syntactic Reordering for Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 2007 Joint Conference on EMNLP-CoNLL},
+  \mbox{\BPGS\ 737--745}.
+
+\bibitem[\protect\BCAY{Wang, Kazama, Tsuruoka, Chen, Zhang, \BBA\
+  Torisawa}{Wang et~al.}{2011}]{YW2011}
+Wang, Y., Kazama, J.-i., Tsuruoka, Y., Chen, W., Zhang, Y., \BBA\ Torisawa, K.
+  \BBOP 2011\BBCP.
+\newblock \BBOQ Improving {C}hinese Word Segmentation and {POS} Tagging with
+  Semi-supervised Methods using Large Auto-analyzed Data.\BBCQ\
+\newblock In {\Bem Proceedings of 5th IJCNLP}, \mbox{\BPGS\ 309--317}.
+
+\bibitem[\protect\BCAY{Wu \BBA\ Wang}{Wu \BBA\ Wang}{2007}]{Wu2007}
+Wu, H.\BBACOMMA\ \BBA\ Wang, H. \BBOP 2007\BBCP.
+\newblock \BBOQ Pivot Language Approach for Phrase-based Statistical Machine
+  Translation.\BBCQ\
+\newblock {\Bem Machine Translation}, {\Bbf 21}  (3), \mbox{\BPGS\ 165--181}.
+
+\bibitem[\protect\BCAY{Wu, Sudoh, Duh, Tsukada, \BBA\ Nagata}{Wu
+  et~al.}{2011}]{XCW2011}
+Wu, X., Sudoh, K., Duh, K., Tsukada, H., \BBA\ Nagata, M. \BBOP 2011\BBCP.
+\newblock \BBOQ Extracting Pre-ordering Rules from Predicate-Argument
+  Structures.\BBCQ\
+\newblock In {\Bem Proceedings of 5th International Joint Conference on Natural
+  Language Processing}, \mbox{\BPGS\ 29--37}.
+
+\bibitem[\protect\BCAY{Xia}{Xia}{2000}]{POS2000}
+Xia, F. \BBOP 2000\BBCP.
+\newblock {\Bem The Part-of-Speech Tagging Guidelines for the {Penn Chinese
+  Treebank} 3.0}.
+\newblock University of Pennsylvania Institute for Research in Cognitive
+  Science Technical Report No.~IRCS-00-07.
+
+\bibitem[\protect\BCAY{Xia \BBA\ McCord}{Xia \BBA\ McCord}{2004}]{FX2004}
+Xia, F.\BBACOMMA\ \BBA\ McCord, M. \BBOP 2004\BBCP.
+\newblock \BBOQ Improving a Statistical {MT} System with Automatically Learned
+  Rewrite Patterns.\BBCQ\
+\newblock In {\Bem Proceedings of the 20th International Conference on
+  Computational Linguistics (COLING)}, \mbox{\BPGS\ 508--514}. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Xu, Kang, Ringgaard, \BBA\ Och}{Xu
+  et~al.}{2009}]{PX2009}
+Xu, P., Kang, J., Ringgaard, M., \BBA\ Och, F. \BBOP 2009\BBCP.
+\newblock \BBOQ Using a Dependency Parser to Improve {SMT} for
+  Subject-Object-Verb Languages.\BBCQ\
+\newblock In {\Bem Proceedings of HLT: NA-ACL2009}, \mbox{\BPGS\ 245--253}.
+
+\bibitem[\protect\BCAY{Yamada \BBA\ Knight}{Yamada \BBA\
+  Knight}{2001}]{Yamada2001}
+Yamada, K.\BBACOMMA\ \BBA\ Knight, K. \BBOP 2001\BBCP.
+\newblock \BBOQ A Syntax-based Statistical Translation Model.\BBCQ\
+\newblock In {\Bem Proceedings of the 39th Annual Meeting on Association for
+  Computational Linguistics}, \mbox{\BPGS\ 523--530}, Stroudsburg, PA, USA.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Yu, Miyao, Matsuzaki, Wang, \BBA\ Tsujii}{Yu
+  et~al.}{2011}]{KY2011}
+Yu, K., Miyao, Y., Matsuzaki, T., Wang, X., \BBA\ Tsujii, J. \BBOP 2011\BBCP.
+\newblock \BBOQ Analysis of the Difficulties in {C}hinese Deep Parsing.\BBCQ\
+\newblock In {\Bem Proceedings of the 12th International Conference on Parsing
+  Technologies}, \mbox{\BPGS\ 48--57}.
+
+\bibitem[\protect\BCAY{Zens, Och, \BBA\ Ney}{Zens et~al.}{2002}]{Zens2002}
+Zens, R., Och, F.~J., \BBA\ Ney, H. \BBOP 2002\BBCP.
+\newblock \BBOQ Phrase-based Statistical Machine Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the German Conference on Artificial
+  Intelligence (KI2002)}, \mbox{\BPGS\ 18--32}. Springer.
+
+\bibitem[\protect\BCAY{Zhao, Lv, Ben, Huang, \BBA\ Liu}{Zhao
+  et~al.}{2011}]{CWMT2011}
+Zhao, H.-M., Lv, Y.-J., Ben, G.-S., Huang, Y., \BBA\ Liu, Q. \BBOP 2011\BBCP.
+\newblock {\Bem Evaluation Report for The 7th {C}hina Workshop on Machine
+  Translation ({CWMT}2011)}.
+
+\end{thebibliography}
+
+
+\clearpage
+\appendix
+
+\section{Summary of Part-of-Speech Tag Set in Penn Chinese Treebank}
+\label{apx:posdef}
+
+　　　　　　　　　　　　　　　　　　　　　　　　　　　　　
+
+\begin{table}[h]
+\vspace{-3\Cvs}
+\caption{POS tags defined in Penn Chinese Treebank v3.0 (Xia 2000)}
+\label{tab:posdef}
+\vspace{8pt}
+\input{1004table05.txt}
+\end{table}
+
+
+\clearpage
+\section{Head Rules for Penn2Malt to Convert the Penn Chinese Treebank}
+\label{apx:hrdef}
+
+　　　　　　　　　　　　　　　　　　　　　　　　　　　　　
+\begin{table}[h]
+\vspace{-3\Cvs}
+\caption{Rules for converting trees in the Penn Chinese Treebank format into MaltTab format using Penn2Malt tool (Joakim Nivre 2004)}
+\nocite{add01}
+\label{tab:hrdef}
+\vspace{8pt}
+\input{1004table06.txt}
+\vspace{4pt}
+\small
+These rules were originally compiled by Yuan Ding$^{12}$, and were used to identify head branches of phrase structures.
+As an example, in an ADJP branch (first row), in order to discover the head branch we scan from right (r) to left
+all branches. If we find an ADJP or JJ branch, then we select it as a head.
+If we do not find them, then we scan again the branches from right (r) to left, searching for AD, NN or CS.
+If we do not find them, then we select the right-most (r) branch.
+In this work, we introduced new rules to identify head branches for FLR, INC and DFL phrases,
+which are not originally covered in Penn2Malt tool.
+\par
+\end{table}
+
+{\hrule width .4\columnwidth}
+\kern 2.6pt
+\noindent{\footnotesize$^{12}$\ http://stp.lingfil.uu.se/{\textasciitilde}nivre/research/Penn2Malt.html}
+
+\clearpage
+
+\begin{biography}
+
+\bioauthor[:]{Dan Han}{
+She received her M.S. degree of software engineering from Sichuan University, China,
+in 2008. She is currently a Ph.D student at the Graduate University For Advanced Studies, 
+and research assistant at National Institute of Informatics.
+Her research interest is in natural language processing, especially statistical 
+machine translation and reordering models.}
+
+\bioauthor[:]{Pascual Mart\'inez-G\'omez}{
+He received his Ph.D. from the University of Tokyo in 2014.
+Currently, he is assistant professor at Ochanomizu University and visiting researcher
+at National Institute of Informatics.
+He is interested in pattern recognition, natural language processing,
+eye-tracking and multi-modal interfaces.
+His latest research focus is on recognizing textual entailment.
+}
+
+\bioauthor[:]{Yusuke Miyao}{
+He received his Ph.D. from the University of Tokyo in 2006. 
+He has been Assistant Professor at the University of Tokyo from 2001 to 2010, 
+and Associate Professor at National Institute of Informatics since 2010. 
+He has been engaged in research on natural language processing, in particular 
+on syntactic parsing and its applications.}
+
+\bioauthor[:]{Katsuhito Sudoh}{
+He received a bachelor's degree in engineering and a master's degree in informatics 
+from Kyoto University, Kyoto, Japan in 2000 and 2002 respectively. In 2002 he joined 
+NTT Corporation, and he works at NTT Communication Science Laboratories. His research 
+interest is machine translation.}
+
+\bioauthor[:]{Masaaki Nagata}{
+He received the B.E., M.E., and Ph.D. degrees in information science
+from Kyoto University, Kyoto, in 1985, 1987, and 1999,
+respectively. He joined NTT in 1987. He was with ATR Interpreting
+Telephony Research Laboratories from 1989 to 1993.  He is the leader
+of the Linguistic Intelligence Research Group at the NTT Communication
+Science Laboratories. His research interests include natural language
+processing, especially morphological analysis, named entity
+recognition, parsing, and machine translation.
+}
+
+\end{biography}
+
+\biodate
+
+
+
+
+\end{document}

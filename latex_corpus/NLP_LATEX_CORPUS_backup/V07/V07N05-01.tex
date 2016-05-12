@@ -1,0 +1,868 @@
+
+
+
+
+\documentstyle[epsf,jnlpbbl]{jnlp_j}
+
+\setcounter{page}{3}
+\setcounter{巻数}{7}
+\setcounter{号数}{5}
+\setcounter{年}{2000}
+\setcounter{月}{11}
+\受付{2000}{1}{6}
+\再受付{2000}{4}{13}
+\採録{2000}{4}{24}
+
+\setcounter{secnumdepth}{2}
+
+\title{後方文脈を考慮した係り受けモデル}
+\author{内元 清貴\affiref{CRL} \and 村田 真樹\affiref{CRL} 
+  \and 関根 聡\affiref{NYU} \and 井佐原 均\affiref{CRL}}
+
+\headauthor{内元, 村田, 関根, 井佐原}
+\headtitle{後方文脈を考慮した係り受けモデル}
+
+\affilabel{CRL}{郵政省通信総合研究所}
+{Communications Research Laboratory, Ministry of Posts and Telecommunications}
+\affilabel{NYU}{ニューヨーク大学 コンピュータサイエンス学科}
+{Computer Science Department, New York University}
+
+\jabstract{
+  係り受け解析は日本語解析の重要な基本技術の一つとして認識されている．
+  依存文法に基づく日本語係り受け解析では，文を文節に分割した後，
+  それぞれの文節がどの文節に係りやすいかを表す係り受け行列を作成し，
+  一文全体が最適な係り受け関係になるようにそれぞれの係り受けを決定する．
+  本論文ではそのうち，係り受け行列の各要素の値を計算するためのモデル
+  について述べる．
+  アプローチとしては，主にルールベースによる方法と統計的手法の
+  二つのものがあるが，我々は利用可能なコーパスが増加してきたこと，
+  規則の変更に伴うコストなどを考慮して，統計的手法をとっている．
+  統計的手法では行列の各要素の値は確率値として計算される．
+  これまでよく用いられていたモデル(旧モデル)では，
+  その確率値を計算する際に，着目している二つの文節が係るか係らないか
+  ということのみを考慮していた．
+  本論文では，着目している二つの文節(前文節と後文節)だけを考慮するのではなく，
+  前文節と前文節より文末側のすべての文節との関係(後方文脈)を考慮するモデルを
+  提案する．
+  このモデルをME(最大エントロピー)に基づくモデルとして実装した場合，
+  旧モデルを同じくMEに基づくモデルとして実装した場合に比べて，
+  京大コーパスに対する実験で，全く同じ素性を用いているにもかかわらず
+  係り受け単位で1\%程度高い精度(88\%)が得られた．
+}
+
+\jkeywords{係り受け解析，構文解析，最大エントロピー{\rm(ME)}モデル，後方文脈}
+
+\etitle{Dependency Model Using Posterior Context}
+\eauthor{Kiyotaka Uchimoto\affiref{CRL} \and Masaki Murata\affiref{CRL} 
+  \and Satoshi Sekine\affiref{NYU} \and Hitoshi Isahara\affiref{CRL}} 
+
+\eabstract{
+  Dependency structure analysis is
+  one of the basic techniques in Japanese sentence analysis, 
+  and the Japanese dependency structure is usually represented
+  by relationships between phrasal units called `bunsetsu.'
+  This analysis is a two-step procedure, and 
+  the first step is to prepare a dependency matrix 
+  in which each element represents how likely it is 
+  that one bunsetsu depends on another.
+  The second step of the analysis finds an optimal set of dependencies 
+  for the entire sentence. 
+  In this paper we discuss a model used in the first step,
+  a model for estimating dependency likelihood.
+  There are two approaches to estimating the dependency likelihood: 
+  rule-based, and statistical. We take the statistical approach 
+  because electrically available corpora are getting large, 
+  and changing hand-crafted rules is costly. 
+  In our approach the value of each element in a dependency matrix 
+  is an estimated probability. 
+  A statistical model (here called the ``old model'') 
+  that considers only the relationship between two bunsetsus 
+  when estimating those probabilities was earlier proposed. 
+  In this paper we propose a new model 
+  that estimates dependency likelihood by considering 
+  not only the relationship between two bunsetsus but also the relationship 
+  between the left bunsetsu and all of the bunsetsus to its right. 
+  Our implementation of this model is based on the ME (maximum entropy) model. 
+  When tested with the Kyoto University corpus 
+  the dependency accuracy obtained with this model was 88\%, 
+  which is about 1\% higher than that obtained with the old model 
+  even using exactly the same features. 
+}
+
+\ekeywords{dependency analysis, parser, maximum entropy (ME) model, 
+  posterior context}
+
+\input{prepictex}
+\input{pictexwd}
+\input{postpictex}
+\def\q{}
+\def\p{}
+
+\begin{document}
+\thispagestyle{plain}
+\maketitle
+
+
+\section{はじめに}
+\label{sec:introduction}
+
+係り受け解析は日本語解析の重要な基本技術の一つとして認識されている．
+係り受け解析には，
+日本語が語順の自由度が高く省略の多い言語であることを考慮して
+依存文法(dependency grammar)を仮定するのが有効である．
+依存文法に基づく日本語係り受け解析では，文を文節に分割した後，
+それぞれの文節がどの文節に係りやすいかを表す係り受け行列を作成し，
+一文全体が最適な係り受け関係になるようにそれぞれの係り受けを決定する．
+
+依存文法による解析には，主にルールベースによる方法と統計的手法の
+二つのアプローチがある．
+ルールベースによる方法では，
+二文節間の係りやすさを決める規則を人間が作成する
+\cite{kurohashi:ipsj92,SShirai:95}．
+一方，統計的手法では，コーパスから統計的に学習したモデルをもとに
+二文節間の係りやすさを数値化して表す
+\cite{collins:acl96,fujio:nl97,Haruno:ipsj98,ehara:nlp98,shirai:jnlp98:1}．
+
+我々は，ルールベースによる方法ではメンテナンスのコストが大きいこと，また
+統計的手法で利用可能なコーパスが増加してきたことなどを考慮し，
+係り受け解析に統計的手法を採用することにした．
+統計的手法では二文節間の係りやすさを確率値として計算する．
+その確率のことを係り受け確率と呼ぶ．
+これまでよく用いられていたモデル(旧モデル)では，
+係り受け確率を計算する際に，着目している二つの文節が係るか係らないか
+ということのみを考慮していた．
+本論文では，着目している二つの文節(前文節と後文節)だけを考慮するのではなく，
+前文節と前文節より文末側のすべての文節との関係(後方文脈)を考慮するモデルを
+提案する．このモデルは以下の二つの特徴を持つ．
+\begin{itemize}
+\item[(1)] 二つの文節(前文節と後文節)間の関係を，
+  「間」(前文節が二文節の間の文節に係る)か
+  「係る」(前文節が後文節に係る)か
+  「越える」(前文節が後文節を越えてより文末側の文節に係る)か
+  の三カテゴリとして学習する．
+  (旧モデルでは二文節が「係る」か「係らないか」の二カテゴリとして
+  学習していた．)
+\item[(2)] 着目している二つの文節の係り受け確率を求める際に，
+  その二文節に対しては「係る」確率，
+  二文節の間の文節に対しては
+  前文節がその文節を越えて後文節に係る確率(「越える」の確率)，
+  後文節より文末側の文節に対しては
+  前文節がその文節との間にある後文節に係る確率(「間」の確率)をそれぞれ計算し，
+  それらをすべて掛け合わせた確率値を用いて係り受け確率を求める．
+  (旧モデルでは，着目している二文節が係る確率を計算し，
+  係り受け確率としていた．)
+\end{itemize}
+このモデルをME(最大エントロピー)に基づくモデルとして実装した場合，
+旧モデルを同じくMEに基づくモデルとして実装した場合に比べて，
+京大コーパスに対する実験で，全く同じ素性を用いているにもかかわらず
+係り受け単位で1\%程度高い精度(88\%)が得られた．
+
+\section{係り受け確率モデル}
+\label{sec:dependency_model}
+
+統計的日本語係り受け解析では，二文節間の係りやすさは確率値で表される．
+この確率値は係り受け確率モデルから計算される．
+
+\subsection{係り受け確率モデル(旧モデル)}
+\label{sec:old_model}
+
+この節ではこれまでに依存文法に基づく係り受け解析によく用いられている
+モデル\cite{collins:acl96,fujio:nl97,Haruno:ipsj98,Uchimoto:ipsj99}について
+説明する．
+
+入力文$S$が与えられると，$S$は$n$個の文節$b_{1}, \ldots, b_{n}$に
+一意に分割されると仮定し，
+$S$をそれらの順序付き集合$B = \{b_{1}, \ldots, b_{n}\}$で表す．
+そして，文全体の係り受け関係$D$はそれぞれの文節$b_{i} (i=1,\ldots,n-1)$を
+係り元の文節とする
+係り受け関係$D_{i}$の順序付き集合$D = \{D_{1},\ldots,D_{n-1}\}$で
+表されると仮定する．
+さらに文節の集合$B$が決まると，それぞれ文節$b_{i}(1\leq i\leq n-1)$と
+文節$b_{m} (m>i,2\leq m\leq n)$に関して観測される素性$F_{i,m}$が
+一意に決まると仮定し，文節の集合$B$を素性の集合$F$
+\begin{eqnarray}
+  \label{eq:b}
+  F & = & \{F_{1,2},F_{1,3},\ldots,F_{i,m},\ldots,F_{n-1,n}\}
+\end{eqnarray}
+で表す．
+統計的係り受け解析とは，$S$が与えられたときに文全体の係り受けが$D$となる
+確率$P(D|S)$が最も高くなるものを全体の係り受け関係とする処理のことである．
+つまり，
+\begin{eqnarray}
+  \label{eq:d_best}
+  D_{best} & = & argmax_{D}P(D|S) \nonumber\\
+  & = & argmax_{D} P(D|B)\nonumber\\
+  & = & argmax_{D} P(D|F)
+\end{eqnarray}
+となるような$D_{best}$を求めることに相当する．
+
+日本語の係り受けには，主に以下の特徴があるとされている．
+\begin{enumerate}
+\item[(i)] \mbox{係り受けは前方から後方に向いている．(後方修飾)}
+\item[(ii)] 係り受け関係は交差しない．(非交差条件)
+\item[(iii)] 係り要素は受け要素を一つだけ持つ．
+\end{enumerate}
+以降では，
+これらの特徴を満たすような$D_{best}$を求めることを考える．
+まず，式(\ref{eq:d_best})の$P(D|F)$は以下のように変形できる．
+\begin{eqnarray}
+  \label{eq:p_db}
+  P(D|F) 
+  & = & P(D_{1},\ldots,D_{n-1}|F)\nonumber\\
+  & = & P(D_{n-1}|F)\times P(D_{n-2}|D_{n-1},F)
+  \times P(D_{n-3}|D_{n-2},D_{n-1},F)\nonumber\\
+  & & \times\ldots\times P(D_{1}|D_{2},\ldots,D_{n-1},F)
+\end{eqnarray}
+この式で各々の係り受けつまり$D_{1},\ldots,D_{n-1}$が独立であると仮定すると，
+$P(D|F)$は以下のようにそれぞれの文節に対する係り受けの確率の積で表せる．
+\begin{eqnarray}
+  \label{eq:p_db2}
+  P(D|F) 
+  & = & \prod_{i=1}^{n-1}P(D_{i}|F)
+\end{eqnarray}
+ここで，$D_{i,i+j}$を後で定義するように
+文節$b_{i}$と文節$b_{i+j}$の間の関係を表すフラグとし，
+$D_{i}$を文節$b_{i}$と文節$b_{i+j} (1\leq j\leq n-i)$との間の関係の集合として，
+以下のように表す．ここでは，上述の(i)の特徴を仮定している．
+\begin{eqnarray}
+  \label{eq:d_i}
+  D_{i} & = & \{D_{i,i+1},D_{i,i+2},\ldots,D_{i,n}\}
+\end{eqnarray}
+すると，式(\ref{eq:p_db2})から以下の式が導ける．
+\begin{eqnarray}
+  \label{eq:p_db3}
+  P(D|F) 
+  & = & \prod_{i=1}^{n-1}P(D_{i,i+1},\ldots,D_{i,n}|F)
+\end{eqnarray}
+
+旧モデルでは，$D_{i,i+j}$として文節$b_{i}$が文節$b_{i+j}$に
+係るか否かの1，0の二値をとると仮定していた．
+文節$b_{i}$と係り受けの関係にある文節が文節$b_{i}$の次から数えて
+$dep(i)\ (1\leq dep(i) \leq n-i)$番目
+の係り先の候補であるとき，上述の(iii)の特徴，
+つまり係り要素は受け要素を一つだけ持つということを仮定すると，
+\begin{eqnarray*}
+  D_{i,i+l} & = & 
+  \left\{
+    \begin{array}[c]{l}
+      0\ (l\not= dep(i), 1\leq l\leq n-i)\\
+      1\ (l = dep(i))
+    \end{array}
+    \right.
+\end{eqnarray*}
+となる．よって，式(\ref{eq:p_db3})は以下のように変形できる．
+\begin{eqnarray}
+  \label{eq:p_db4}
+  P(D|F) & = & \prod_{i=1}^{n-1}P(D_{i,i+dep(i)}=1|F)
+  \times P(D_{i,i+1}=0|D_{i,i+dep(i)}=1,F)\nonumber\\
+  & & \q \times P(D_{i,i+2}=0|D_{i,i+1}=0,D_{i,i+dep(i)}=1,F)\nonumber\\
+  & & \q \times\ldots\times 
+  P(D_{i,n}=0|D_{i,n-1}=0, \ldots, D_{i,i+1}=0, D_{i,i+dep(i)}=1,F) \nonumber\\
+\end{eqnarray}
+$D_{i,i+dep(i)}=1$のとき必ず$D_{i,i+j}=0\ (j\not= dep(i))$となるので，
+\clearpage
+\begin{eqnarray*}
+  P(D_{i,i+1}=0|D_{i,i+dep(i)}=1,F) & = & 1 \\
+  P(D_{i,i+2}=0|D_{i,i+1}=0,D_{i,i+dep(i)}=1,F) & = & 1 \\
+  \vdots\q\q\q\q\\
+  P(D_{i,n}=0|D_{i,n-1}=0,\ldots,D_{i,i+1}=0,D_{i,i+dep(i)}=1,F) & = & 1
+\end{eqnarray*}
+となり，式(\ref{eq:p_db4})は次のように表せる．
+\begin{eqnarray}
+  \label{eq:p_db5}
+  P(D|F) & = & \prod_{i=1}^{n-1}P(D_{i,i+dep(i)}=1|F)
+\end{eqnarray}
+さらに，$F_{i,m}$はそれぞれ独立で，
+文節$b_{i}$と文節$b_{i+dep(i)}$との関係$D_{i,i+dep(i)}$は
+$F_{i,i+dep(i)}$のみによって決まり，他の$F_{i,i+j} (j\not= dep(i))$
+とは独立であると仮定する．
+すると，式(\ref{eq:p_db5})は，以下のように変形できる．
+\begin{eqnarray}
+  \label{eq:p_db6}
+  P(D|F) & = & \prod_{i=1}^{n-1}P(D_{i,i+dep(i)}=1|F_{i,i+dep(i)})
+\end{eqnarray}
+式(\ref{eq:p_db6})と式(\ref{eq:d_best})とから$D_{best}$が導かれる．
+
+\subsection{後方文脈を考慮した係り受け確率モデル}
+\label{sec:new_model}
+
+この節では，我々が提案するモデルについて説明する．
+旧モデルでは，二つの文節の関係を「係る」か「係らない」かの
+二カテゴリとして学習し，それらの二文節が係る確率を計算して係り受け確率と
+していた．
+我々のモデルでは，(A)二つの文節(前文節と後文節)間の関係を，
+「間」か「係る」か「越える」かの三カテゴリとして学習し，
+(B)着目している二つの文節の係り受け確率を求める際に，
+その二文節に対しては「係る」確率，
+二文節の間の文節に対しては
+前文節がその文節を越えて後文節に係る確率(「越える」の確率)，
+後文節より文末側の文節に対しては
+前文節がその文節との間にある後文節に係る確率(「間」の確率)をそれぞれ計算し，
+それらをすべて掛け合わせた確率値を用いて係り受け確率を求める．
+
+このモデルでは，$D_{i,i+j}$の仮定が旧モデルにおけるものと異なる．
+$D_{i,i+j}$としては，「越える」，「係る」，「間」を表す0，1，2の三値をとると
+仮定する．
+この点がこのモデルの特徴の一つである．
+文節$b_{i}$と係り受けの関係にある文節が$dep(i)\ (1\leq dep(i) \leq n-i)$番目
+の係り先の候補であるとき，\ref{sec:old_model}節の(iii)の特徴，
+つまり係り要素は受け要素を一つだけ持つということを仮定すると，
+\begin{eqnarray*}
+  D_{i,i+l} & = & 
+  \left\{
+    \begin{array}[c]{l}
+      0\ (1\leq l< dep(i))\\
+      1\ (l = dep(i))\\
+      2\ (dep(i)< l\leq n-i)
+    \end{array}
+    \right.
+\end{eqnarray*}
+となる．よって，
+式(\ref{eq:p_db3})は以下のように変形できる．
+\begin{eqnarray}
+  \label{eq:p_db7}
+  P(D|F) & = & 
+  \prod_{i=1}^{n-1}
+  \left(\prod_{j=1}^{dep(i)-1} 
+    P(D_{i,i+j}=0|\{D_{i,i+k}=0|1\leq k<j\},F)\right.\nonumber\\
+  & & \q\p \times \prod_{j=dep(i)+1}^{n-i}
+  P(D_{i,i+j}=2|\{D_{i,i+k}=0|1\leq k<dep(i)\},\nonumber\\
+  & & \q\q\q\q\q\q\q\p \{D_{i,i+k}=2|j<k\leq n-i\},F) \nonumber\\
+  & & \q\p \times 
+  \left.P(D_{i,i+dep(i)}=1|
+    \{D_{i,i+k}|1\leq k<dep(i),dep(i)<k\leq n-i\},F)\right)\nonumber\\
+\end{eqnarray}
+$D_{i,i+l}$の値が決まるのは，
+$l<m$を満たすような$m$に対し
+$D_{i,i+m}=0$になる場合か，
+$l>m$を満たすような$m$に対し，
+$D_{i,i+m}=2$になる場合か，
+$D_{i,i+dep(i)}=1$となる$dep(i)$が決まる場合かのいずれかである．
+これらの条件を満たさないように両端から順に係り受け関係$D_{i,i+l}$
+を確率式の前件部に移していけば，式(\ref{eq:p_db7})の
+最後の項を除くそれぞれの項の確率値は一意には決まらない．
+式(\ref{eq:p_db7})の最後の項は$D_{i,i+l}$の値が
+すべて決まると$dep(i)$が決まるので確率値は1になる．
+式(\ref{eq:p_db7})のその他の項については，
+$\{D_{i,i+k}=0|1\leq k<j\}$ の間の独立性，および
+$\{D_{i,i+k}=0|1\leq k<dep(i)\},\{D_{i,i+k}=2|j<k\leq n-i\}$ 
+の間の独立性を仮定すると，
+式(\ref{eq:p_db7})は次のように表せる．
+\begin{eqnarray}
+  \label{eq:p_db8}
+  P(D|F) & = & 
+  \prod_{i=1}^{n-1}
+  \left(\prod_{j=1}^{dep(i)-1}P(D_{i,i+j}=0|F)
+    \times \prod_{j=dep(i)+1}^{n-i}P(D_{i,i+j}=2|F)\right)
+\end{eqnarray}
+
+\ref{sec:old_model}節の旧モデルにおける仮定と同様に
+$F_{i,m} (m=1,\ldots,n)$はそれぞれ独立で，
+$D_{i,i+j}$つまり文節$b_{i}$と文節$b_{i+j}$との関係は，$F_{i,i+j}$のみに
+よって決まると仮定する．すると，式(\ref{eq:p_db8})は，以下のように変形できる．
+\begin{eqnarray}
+  \label{eq:p_db9}
+  P(D|F) & = & 
+  \prod_{i=1}^{n-1}
+  \left(\prod_{j=1}^{dep(i)-1}P(D_{i,i+j}=0|F_{i,i+j})
+    \times \prod_{j=dep(i)+1}^{n-i}P(D_{i,i+j}=2|F_{i,i+j})\right)
+\end{eqnarray}
+この式の$P(D|F)$を$P_{new\_model}(D|F)$とし，
+旧モデルの式(\ref{eq:p_db6})における$P(D|F)$を$P_{old\_model}($ $D|F)$とする．
+$P_{old\_model}(D|F)$では素性$F_{i,i+dep(i)}$が用いられているが，
+$P_{new\_model}(D|F)$では用いられておらず，
+$P_{new\_model}(D|F)$では素性$F_{i,i+dep(i)}$以外の素性が用いられているが，
+$P_{old\_model}(D|F)$では用いられていない．
+したがって，$P_{old\_model}(D|F)$と$P_{new\_model}(D|F)$は相補的な
+関係にあるため，この二つを組み合わせる．すると以下の式が得られる．
+\begin{eqnarray}
+  \label{eq:p_db10}
+  P(D|F)^{2} & = & P_{old\_model}(D|F)\times P_{new\_model}(D|F)\nonumber\\
+  & = & 
+  \prod_{i=1}^{n-1}
+  \left(\prod_{j=1}^{dep(i)-1}P(D_{i,i+j}=0|F_{i,i+j})\right.\nonumber\\
+  & & \q\p \times\ P(D_{i,i+dep(i)}=1|F_{i,i+dep(i)})\nonumber\\
+  & & \q\p 
+  \times \left.\prod_{j=dep(i)+1}^{n-i}P(D_{i,i+j}=2|F_{i,i+j})\right)\
+\end{eqnarray}
+本節のモデルはこの式の平方根をとることによって係り受け確率$P(D|F)$を
+求めるものである．
+この$P(D|F)$と式(\ref{eq:d_best})とから$D_{best}$が導かれる．
+
+\begin{figure}[htbp]
+  \begin{center}
+    \leavevmode
+\atari(85,123)
+    \caption{係り受け確率の求め方の例}
+    \label{fig:dependency}
+  \end{center}
+\end{figure}
+
+実際にこのモデルから係り受け確率がどのように求まるかを
+図\ref{fig:dependency}を用いて説明する．
+図\ref{fig:dependency}はある文節$b_{i}$の係り先の候補が5個あったときに
+それぞれの候補に係るとしたときの係り受け確率を計算している様子を
+表している．
+このとき，文節$b_{i}$とそれぞれの候補との関係が
+それぞれ「越える」，「係る」，「間」となる確率
+として表\ref{table:example}のような値が得られたと仮定している．
+
+{\small
+\begin{table*}[htbp]
+  \begin{center}
+    \caption{「越える」，「係る」，「間」となる確率の例}
+    \label{table:example}
+    \renewcommand{\arraystretch}{}
+    \begin{tabular}[c]{llll}
+      \hline
+      候補 & \multicolumn{1}{c}{越える} & \multicolumn{1}{c}{係る} 
+      & \multicolumn{1}{c}{間}\\
+      \hline
+      候補1 & $P(D_{i,i+1}=0|F_{i,i+1})=0.6$ 
+      & $P(D_{i,i+1}=1|F_{i,i+1})=0.4$ 
+      & $P(D_{i,i+1}=2|F_{i,i+1})=0$ \\
+      候補2 & $P(D_{i,i+2}=0|F_{i,i+2})=0.6$ 
+      & $P(D_{i,i+2}=1|F_{i,i+2})=0.3$ 
+      & $P(D_{i,i+2}=2|F_{i,i+2})=0.1$ \\
+      候補3 & $P(D_{i,i+3}=0|F_{i,i+3})=0.3$ 
+      & $P(D_{i,i+3}=1|F_{i,i+3})=0.5$ 
+      & $P(D_{i,i+3}=2|F_{i,i+3})=0.2$ \\
+      候補4 & $P(D_{i,i+4}=0|F_{i,i+4})=0.1$ 
+      & $P(D_{i,i+4}=1|F_{i,i+4})=0.5$ 
+      & $P(D_{i,i+4}=2|F_{i,i+4})=0.4$ \\
+      候補5 & $P(D_{i,i+5}=0|F_{i,i+5})=0$ 
+      & $P(D_{i,i+5}=1|F_{i,i+5})=0.4$ 
+      & $P(D_{i,i+5}=2|F_{i,i+5})=0.6$ \\
+      \hline
+    \end{tabular}
+  \end{center}
+\end{table*}
+}
+例えば，候補3を係り先だと仮定したとき，候補1，候補2は越えて，
+文節$b_{i}$と候補4，候補5の間に係る確率は，
+式(\ref{eq:p_db6})の文節$b_{i}$に関する項を用いて
+\begin{eqnarray*}
+  P(D_{i}|F)^{2}
+  & = & \prod_{j=1}^{2}P(D_{i,i+j}=0|F_{i,i+j})
+  \times P(D_{i,i+3}=1|F_{i,i+3})
+  \times \prod_{j=4}^{5}P(D_{i,i+j}=2|F_{i,i+j})\\
+  & = & P(D_{i,i+1}=0|F_{i,i+1})\times P(D_{i,i+2}=0|F_{i,i+2})
+  \times P(D_{i,i+3}=1|F_{i,i+3})\\
+  & & \p \times P(D_{i,i+4}=2|F_{i,i+4})
+  \times P(D_{i,i+5}=2|F_{i,i+5})\\
+  & = & 0.6\times 0.6\times 0.5\times 0.4\times 0.6 = 0.0432
+\end{eqnarray*}
+つまり，
+\begin{eqnarray*}
+  P(D_{i}|F) & = & \sqrt{0.0432} = 0.208
+\end{eqnarray*}
+のように計算され，これが最も高い．各々の係る確率だけを考えた場合には
+それぞれの$P(D_{i,i+j}=1|F_{i,i+j})$を比較することになり，
+候補3と候補4の確率がどちらも0.5のため決まらないが，
+この方法によると，候補3を優先的に係り先とすることになる．
+一文全体の確率はそれぞれの文節について求めた係り受け確率の積で表され，
+その積の値が最も高くなるようにそれぞれの係り受けを決めることになる．
+
+我々は，式(\ref{eq:d_best})において$P(D|F)$を最大にする係り受け関係の
+集合$D_{best}$を求めるために，
+文末から文頭に向けて解析することにより，
+効率良く組み合わせの数を減らしながら一文全体の係り受けを決定する方法を
+提案している\cite{Sekine:99}．
+この方法では解の探索をビームサーチにより行う．
+この方法によると決定的に解析を行ってもビーム幅を広くしたときと
+ほとんど同じ精度が得られることが実験により分かっている．
+そこで，$D_{best}$を求めるためにこの方法を採用する．
+このとき，上述のモデルに\ref{sec:old_model}節で述べた(ii)の特徴，
+つまり非交差条件を仮定すると，
+文節$b_{i}$の係り先の候補はすでに解析の終わった
+文節$b_{i+1}$から文節$b_{n}$までの係り受け関係$D_{i+1},\ldots,D_{n}$
+に依存して制限されることになる．
+つまり，
+非交差条件のために文節$b_{i}$の係り先の候補とはなり得ない
+文節$b_{j}$に対しては，係る確率は0になり，「越える」か「間」かについては
+$b_{j}$の前後の文節のうち非交差条件を満たす文節と
+文節$b_{i}$との関係が決まれば一意に決まり確率は1になる．
+文節$b_{i}$の係り受け確率$P(D_{i}|F)$は文節$b_{i}$のすべての係り先の候補に
+つい確率値を足すと1になるように正規化する．
+
+実際にこのモデルから係り受け確率がどのように求まるかを
+図\ref{fig:dependency2}を用いて説明する．
+図\ref{fig:dependency2}は図\ref{fig:dependency}において
+非交差条件を考慮した場合の係り受け確率の計算の仕方を表している．
+ここで，ある文節$b_{i}$より後方の文節について，破線の矢印で表されるような
+係り受け関係が決まったものと仮定している．
+このとき，候補3と候補4は非交差条件を満たさないために文節$b_{i}$の係り先
+の候補とはなり得ない．
+また，文節$b_{i}$とそれぞれの候補との関係としては，
+図\ref{fig:dependency}と同様に
+表\ref{table:example}の値が得られたと仮定している．
+例えば，候補5を係り先だと仮定したとき，図\ref{fig:dependency2}の一番下の
+例のように，候補1，候補2に対しては越える確率，候補5に対しては係る確率を
+用いてそれぞれ掛け合わせ，その平方根をとることにより係り受け確率が得られる．
+一文全体の確率はそれぞれの文節について求めた係り受け確率の積で表され，
+その積の値が最も高くなるように各々の係り受けを決めることになる．
+\begin{figure}[htbp]
+  \begin{center}
+    \leavevmode
+\atari(100,123)
+    \caption{係り受け確率の求め方の例}
+    \label{fig:dependency2}
+  \end{center}
+\end{figure}
+
+\section{実験結果}
+\label{sec:results}
+
+この節では，新モデル(後方文脈を考慮したモデル)と
+旧モデルとの比較実験を行う．
+実験に用いたコーパスは，京大コーパス(Version 2)
+\cite{kurohashi:nlp97} の一般文の部分で，
+基本的に学習には1月1日と1月3日から8日までの7日分(7,958文)，
+試験には1月9日の1日分(1,246文)を用いた．
+
+\ref{sec:old_model}節に述べた旧モデルと
+\ref{sec:new_model}節に述べた新モデル(後方文脈を考慮したモデル)
+のそれぞれを文献\cite{Uchimoto:ipsj99}と同様にMEモデルとして実装し，
+テストコーパスに対する係り受け解析の精度を調べた．
+係り受け解析の実験に用いた素性は，文献\cite{Uchimoto:ipsj99}のものと
+同じものとした．これは表\ref{table:feature1}の基本素性と呼ばれるものと
+それらの組み合わせである．このうち，学習コーパス中に4回以上現れた素性
+約38,000個を用いている．
+
+\begin{table}[htbp]
+  \begin{center}
+    \caption{解析結果}
+    \label{Result} 
+    \begin{tabular}{|l@{ }|c@{ }|r@{}c@{ }|}
+      \hline
+      モデル & 係り受け正解率 & \multicolumn{2}{c|}{文正解率}\\
+      \hline      
+      新モデル & 87.93\% (9904/11263) & 43.58\% & (540/1239) \\
+      旧モデル & 87.02\% (9801/11263) & 40.68\% & (504/1239) \\
+      ベースライン & 64.09\% (7219/11263) & 6.38\% & ( 79/1239)\\
+      \hline
+    \end{tabular}
+  \end{center}
+\end{table}
+
+解析結果を表\ref{Result}に示す．
+ここで，
+係り受けの正解率というのは文末の一文節を除く残りすべての文節に対して，
+係り先を正しく推定していた文節の割合を求めたものである．
+また，文正解率というのは文全体の解析が正しいものの割合を意味する．
+表\ref{Result}の第1行および第2行はそれぞれ
+新モデル，旧モデルを用いて
+京大コーパス1月9日の\mbox{1,246}文を解析した結果である．
+いずれも，コーパスの形態素情報，文節区切情報を入力として，
+文節間係り受けの解析を決定的に(ビーム幅$k=1$)行なった．
+ビーム幅を大きくしても精度にほとんど違いはなかったため，
+決定的に解析した結果のみを示した．
+ベースラインとしては各文節がすべて隣に係るとしたときの精度をあげた．
+新モデルとしては\ref{sec:new_model}節に述べた後方文脈を考慮したモデル
+の精度をあげた．
+
+\begin{table}[phtb]
+  \begin{center}
+    \caption{学習に利用した素性(基本素性)}
+    \label{table:feature1}
+    \renewcommand{\arraystretch}{}
+    \leavevmode
+    \begin{tabular}[c]{|l|l|}
+      \hline
+      \multicolumn{2}{|c|}{\bf 基本素性(43種類)}\\
+      \hline
+      素性名 & 素性値\\
+      \hline
+      \hline
+      前(後)文節主辞見出し & (2204個) \\
+      \hline
+      前(後)文節主辞品詞(Major) & 動詞 名詞 $\ldots$ (11個) \\
+      前(後)文節主辞品詞(Minor) & 普通名詞 数詞 $\ldots$ (24個) \\
+      \hline
+      前(後)文節主辞活用(Major) & 母音動詞 $\ldots$ (30個) \\
+      前(後)文節主辞活用(Minor) & 語幹 基本形 命令形 $\ldots$ (60個) \\
+      \hline
+      前(後)文節語形(String) & と に も $\ldots$ (73個) \\
+      前(後)文節語形(Major) & 助詞 子音動詞カ行 $\ldots$ (43個)\\
+      前(後)文節語形(Minor) & 格助詞 基本連用形 $\ldots$ (102個)\\
+      \hline
+      前(後)文節助詞1(String) & から まで へ $\ldots$ (63個)\\
+      前(後)文節助詞1(Minor) & (無) 格助詞 副助詞 (5個)\\
+      \hline
+      前(後)文節助詞2(String) & けど まま や よ か $\ldots$ (63個) \\
+      前(後)文節助詞2(Minor) & 格助詞 副助詞 (4個) \\
+      \hline
+      前(後)文節句読点の有無 & (無) 読点 句点 (3個) \\
+      \hline
+      前(後)文節括弧開の有無 & (無) 「 ‘ （ “ ［ $\ldots$ (14個) \\
+      \hline
+      前(後)文節括弧閉の有無 & (無) 」 ’ ） ” ］ $\ldots$ (14個) \\
+      \hline
+      文節間距離 & A(1) B(2〜5) C(6以上) (3個) \\
+      \hline
+      文節間読点の有無 & 無 有 (2個) \\
+      \hline
+      文節間"は"の有無 & 無 有 (2個) \\
+      \hline
+      文節間括弧開閉の有無 & 無 開 閉 開閉 (4個) \\
+      \hline
+      文節間前文節同一語形の & \\
+      \q\q 有無 & 無 有 (2個) \\
+      \q\q 主辞品詞(Major) & 動詞 名詞 $\ldots$ (11個) \\
+      \q\q 主辞品詞(Minor) & 普通名詞 数詞 $\ldots$ (24個)\\
+      \q\q 主辞活用(Major) & 母音動詞 $\ldots$ (30個) \\
+      \q\q 主辞活用(Minor) & 語幹 基本形 命令形 $\ldots$ (60個) \\
+      \hline
+      文節間後文節同一主辞の & \\
+      \q\q 有無 & 無 有 (2個) \\
+      \q\q 語形(String) & と に も $\ldots$ (73個) \\
+      \q\q 語形(Major) & 助詞 子音動詞カ行 $\ldots$ (43個)\\
+      \q\q 語形(Minor) & 格助詞 基本連用形 $\ldots$ (102個)\\
+      \hline
+    \end{tabular}
+  \end{center}
+\end{table}
+
+\subsection{旧モデルとの比較}
+\label{sec:comparison_with_old_model}
+
+本節では，\ref{sec:old_model}節に述べた旧モデルと
+\ref{sec:new_model}節に述べた新モデル(後方文脈を考慮したモデル)を
+それぞれ理論と実験の観点，学習の観点から比較する．
+
+\vspace{1em}
+\noindent
+[{\bf 理論と実験の観点から}]
+
+式(\ref{eq:p_db10})は式(\ref{eq:p_db6})を包含するものであり，
+式(\ref{eq:p_db6})に比べるとより多くの文節との関係
+(素性$F_{i,i+j}$で表される)が考慮されている．
+ただし，式(\ref{eq:p_db7})から式(\ref{eq:p_db8})を導くときに用いている
+独立性の仮定は，実際の現象そのままではなく近似になっているので，
+旧モデルに比べると近似の部分が多い．
+しかしながら，同じ素性を用いた実験(表\ref{Result})で，
+新モデルは旧モデルに比べて1\%程度良い結果を得ている．
+これは多少近似があっても実際に係り受け確率の計算に
+多くの情報を考慮している新モデルの方が良いということを示している．
+
+\begin{figure}[htbp]
+\hspace*{3em}
+\beginpicture
+\setcoordinatesystem units <6pt,6pt>
+\setplotarea x from 0 to 30, y from 70 to 100
+
+\axis bottom label { 文節数 }
+      ticks short quantity 7 numbered at 0 10 20 30  /  / 
+\axis left   label { 係り受け正解率 }
+      ticks short quantity 4 numbered at 70 80 90 100 /  /
+
+\put {*} at 20 98
+\put {+} at 20 95
+\put {: 新モデル} at 25 98.5
+\put {: 旧モデル} at 25 95
+
+\multiput {*}   at 
+3 93.75   4 93.52   5 92.06   6 91.65
+7 90.48   8 90.48   9 89.25   10 90.53
+11 88.07   12 86.67   13 86.22   14 89.14
+15 86.40   16 86.32   17 83.93   18 86.90
+19 83.86   20 86.32   21 84.23   22 83.73
+23 85.45   24 86.96   25 81.25   26 86.40
+27 83.33   28 85.93   /
+
+\setlinear \plot
+3 93.75   4 93.52   5 92.06   6 91.65
+7 90.48   8 90.48   9 89.25   10 90.53
+11 88.07   12 86.67   13 86.22   14 89.14
+15 86.40   16 86.32   17 83.93   18 86.90
+19 83.86   20 86.32   21 84.23   22 83.73
+23 85.45   24 86.96   25 81.25   26 86.40
+27 83.33   28 85.93   /
+
+\multiput {+}   at 
+3 93.75   4 93.98   5 91.12   6 89.01
+7 90.99   8 90.30   9 88.38   10 88.34
+11 86.39   12 87.88   13 85.88   14 87.93
+15 86.95   16 84.04   17 84.38   18 85.29
+19 83.07   20 83.68   21 82.69   22 81.75
+23 86.82   24 83.85   25 81.25   26 83.20
+27 79.49   28 90.37   /
+
+\setlinear \plot
+3 93.75   4 93.98   5 91.12   6 89.01
+7 90.99   8 90.30   9 88.38   10 88.34
+11 86.39   12 87.88   13 85.88   14 87.93
+15 86.95   16 84.04   17 84.38   18 85.29
+19 83.07   20 83.68   21 82.69   22 81.75
+23 86.82   24 83.85   25 81.25   26 83.20
+27 79.49   28 90.37   /
+
+\endpicture
+  \caption{文節長と解析精度の関係}
+  \label{fig:length}
+\end{figure}
+
+
+次に，図~\ref{fig:length} に文節長と解析精度の関係をあげる．
+この図から，
+どの文節数に対しても新モデルの精度は
+旧モデルの精度とほぼ同等以上であることが分かる．
+
+\vspace{1em}
+\noindent
+[{\bf 学習の観点から}]
+
+学習には学習コーパス中で非交差条件を満たす任意の二文節を用いる．
+旧モデルでは各二文節に対し「係る」と「係らない」の二つのカテゴリを
+学習しているのに対し，新モデルでは「越える」と「係る」と「間」の
+三つのカテゴリを学習している．
+一般に学習するカテゴリを多くするとデータスパースネスになりやすいが，
+新モデルでは三つのカテゴリに分けてもデータスパースネスの問題は生じない．
+これは新モデルで「越える」と「間」の二つのカテゴリに分けた，
+旧モデルの「係らない」というカテゴリにはもともと十分な学習データが
+あったためである．
+例えば，ある文節の係り先の候補が10個あるときには，そのうち1個だけが
+「係る」に対するデータであり，残りの9個は「係らない」に対するデータである．
+ここで「係らない」を「越える」と「間」の二つに分けても，
+「係る」に比べるとそれぞれ十分な量の学習データがある．
+
+\begin{figure}[htbp]
+  \begin{center}
+    \leavevmode
+\atari(113,77)
+    \caption{学習コーパスの量と解析精度の関係}
+    \label{fig:learning_curve}
+  \end{center}
+\end{figure}
+次に，新モデルが旧モデルに比べて優れていることを定量的に示す
+データを図~\ref{fig:learning_curve} にあげる．
+これはそれぞれのモデルに対し，
+学習コーパスの量と解析精度の関係をプロットしたものである．
+学習コーパスの量にかかわらず，新モデルの方が旧モデルに比べて
+常に1\%程度精度がよいことが分かる．
+
+\subsection{その他のモデルとの比較}
+\label{sec:comparison_with_related_works}
+
+統計的な手法では，ルールベースに比べて
+並列構造や従属節間の係り受け関係に対する解析誤りが多い．
+西岡山らは，この後者の問題を取り上げ，
+二つの文節の関係が係るか係らずに越えるかを学習する
+モデルを提案した\cite{Nishiokayama:98}．
+このモデルを用いることにより，二つの文節だけでなく
+その二文節とそれらの間にある文節との関係も扱えるようになる．
+本論文で我々が提案したモデル(後方文脈を考慮したモデル)は
+さらにその二文節とそれらよりも文末に近い側の文節との関係も扱うため，
+彼らのモデルよりも多くの情報を考慮していることになる．
+
+\begin{table}[htbp]
+  \begin{center}
+    \caption{解析結果}
+    \label{Result2} 
+    \begin{tabular}{|l@{ }|c@{ }|r@{}c@{ }|}
+      \hline
+      モデル & 係り受け正解率 & \multicolumn{2}{c|}{文正解率}\\
+      \hline      
+      「係る」と「越える」 & 85.40\% (9618/11263) & 41.40\% & (513/1239) \\
+      「係る」と「係らない」 & 86.95\% (9793/11263) & 40.27\% & (499/1239) \\
+      「間」「係る」「越える」 
+      & 87.93\% (9904/11263) & 43.58\% & (540/1239) \\
+      \hline
+    \end{tabular}
+  \end{center}
+\end{table}
+
+表~\ref{Result2} の一行目に西岡山らのモデルを用いたときの実験結果を示す．
+実験に用いた素性，コーパスは \ref{sec:results} 章の最初に説明したものと
+同じである．後方文脈を考慮したモデルを用いた実験のときと異なるのは，
+「係る」と「越える」の二つのカテゴリを学習するモデルを用いている部分のみ
+である．表~\ref{Result2} より定量的にも，
+後方文脈を考慮したモデルのように「間」というカテゴリも
+考慮した方がよいことが分かる．
+
+次に，後方文脈を考慮したモデルにおいて
+三カテゴリを学習する必要があることを示す．
+後方文脈を考慮したモデルでは特徴(1)としてあげたように二文節間の関係を
+「間」か「係る」か「越える」かの三カテゴリとして学習する．
+この三カテゴリのうち二つのカテゴリ「間」と「越える」を，
+旧モデルの二カテゴリのうち「係らない」によって代用させたモデルを考える．
+このモデルは，係り受け確率を求める際に，
+着目している二つの文節(前文節と後文節)だけを考慮するのではなく，
+前文節と前文節より文末側のすべての文節との関係(後方文脈)を考慮している点が
+旧モデルとは異なる．
+表~\ref{Result2} の二行目にこのモデルを用いたときの実験結果を示す．
+この表より，「間」と「越える」の違いは区別して学習するべきであることが
+分かる．
+
+\section{おわりに}
+\label{sec:conclusion}
+
+係り受け解析は日本語解析の重要な基本技術の一つとして認識されている．
+依存文法に基づく解析には，主にルールベースによる方法と統計的手法の
+二つのアプローチがあるが，我々は利用可能なコーパスが増加してきたこと，
+規則の変更に伴うコストなどを考慮して，統計的手法をとっている．
+
+統計モデルとしてこれまでよく用いられていたもの(旧モデル)では，
+係り受け確率を計算する際に，着目している二つの文節が係るか係らないか
+ということのみを考慮していた．
+本論文では，着目している二つの文節(前文節と後文節)だけを考慮するのではなく，
+前文節と前文節より文末側のすべての文節との関係(後方文脈)を考慮するモデルを
+提案した．
+このモデルをME(最大エントロピー)に基づくモデルとして実装した場合，
+旧モデルを同じくMEに基づくモデルとして実装した場合に比べて，
+京大コーパスに対する実験で，全く同じ素性を用いているにもかかわらず
+係り受け単位で1\%程度高い精度(88\%)が得られた．
+また，後方文脈を考慮したモデルの精度は旧モデルに比べて，
+どの文長に対してもほぼ常に良く，学習コーパスの量によらず常に1\%程度良かった．
+
+
+
+\bibliographystyle{jnlpbbl}
+\bibliography{jpaper}
+
+
+\begin{biography}
+\biotitle{略歴}
+\bioauthor{内元 清貴}{
+1994年京都大学工学部卒業．
+1996年同大学院修士課程修了．
+同年郵政省通信総合研究所入所．研究官．
+自然言語処理の研究に従事．
+言語処理学会，情報処理学会，ACL，各会員．}
+\bioauthor{村田 真樹}{
+1993年京都大学工学部卒業．
+1995年同大学院修士課程修了．
+1997年同大学院博士課程修了，博士（工学）．
+同年，京都大学にて日本学術振興会リサーチ・アソシエイト．
+1998年郵政省通信総合研究所入所．研究官．
+自然言語処理，機械翻訳，情報検索の研究に従事．
+言語処理学会，情報処理学会，人工知能学会，ACL，各会員．}
+\bioauthor{関根 聡}{
+1987年東京工業大学応用物理学科卒．同年松下電器東京研究所入社．
+1990-1992年UMIST，CCL，Visiting Researcher．1992年MSc．
+1994年からNew York University，Computer Science Department，
+Assistant Research Scientist．1998年PhD．
+同年からAssistant Research Professor．
+自然言語処理の研究に従事．
+情報処理学会，人工知能学会，言語処理学会，ACL会員．}
+\bioauthor{井佐原 均}{
+1978年京都大学工学部電気工学第二学科卒業．
+1980年同大学院修士課程修了．博士（工学）．
+同年通商産業省電子技術総合研究所入所．
+1995年郵政省通信総合研究所
+関西支所知的機能研究室室長．自然言語処理，機械翻訳の研究に従事．
+言語処理学会，情報処理学会，人工知能学会，日本認知科学会，ACL，各会員．}
+
+\bioreceived{受付}
+\biorevised{再受付}
+\bioaccepted{採録}
+
+\end{biography}
+
+\newpage
+\thispagestyle{plain}
+
+\verb+ +
+
+\end{document}
+

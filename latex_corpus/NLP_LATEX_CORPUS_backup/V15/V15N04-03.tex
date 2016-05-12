@@ -1,0 +1,733 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.1}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+
+
+\Volume{15}
+\Number{4}
+\Month{September}
+\Year{2008}
+\received{2007}{10}{10}
+\revised{2008}{1}{5}
+\accepted{2008}{3}{18}
+
+\setcounter{page}{43}
+
+\jtitle{文脈的素性を用いた固有表現間の関係性判定}
+\jauthor{平野　　徹\affiref{KUEE} \and 松尾　義博\affiref{KUEE} 
+	\and 菊井玄一郎\affiref{KUEE}}
+\jabstract{
+本論文では，テキストに出現する固有表現の組が意味的な関係を有するか否かを判定する手法，特に異なる文に出現する固有表現の組に有効な手法を提案する．
+提案手法では，Salient Referent Listに基づく文脈的素性を新たに導入し，単語や品詞，係り受けなどの伝統的に利用されている素性と組合わせた．
+これらの素性はひとつの木構造として表現され，ブースティングに基づく分類アルゴリズムに渡される．
+実験結果では，提案手法は従来手法より精度11.3\% ，再現率14.2\% 向上することが確認できた．
+}
+\jkeywords{固有表現，関係性判定，文脈的素性}
+
+\etitle{Detecting Semantic Relations between \\Named Entities Using Contextual Features}
+\eauthor{Toru Hirano\affiref{KUEE} \and Yoshihiro Matsuo\affiref{KUEE} 
+	\and Genichiro Kikui\affiref{KUEE}} 
+\eabstract{
+This paper proposes a supervised learning method for detecting 
+a semantic relation between a given pair of named entities, which may be located in different sentences. 
+The method employs newly introduced contextual features based 
+on Salient Referent List as well as conventional syntactic and word-based features. 
+These features are organized as a tree structure and are fed into a boosting-based 
+classification algorithm. Experimental results show the proposed method outperformed 
+prior methods, and increased precision and recall by 11.3\% and 14.2\%.
+}
+\ekeywords{Named Entities, Relation Detection, Contextual Features}
+
+\headauthor{平野，松尾，菊井}
+\headtitle{文脈的素性を用いた固有表現間の関係性判定}
+
+\affilabel{KUEE}{日本電信電話株式会社 NTTサイバースペース研究所}{NTT Cyber Space Laboratories, NTT Corporation}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+\label{hajimeni}
+
+近年，統計的言語処理技術の発展によりテキスト中の人名や地名，組織名といった固有表現(Named Entity)を高精度で抽出できるようになってきた．
+これを更に進めて，「福田康夫（人名）」は「日本（地名）」の「首相（関係ラベル）」であるといった固有表現間の関係を抽出する研究が注目されている
+\cite{brin1998epa,agichtein2000ser,hasegawa2004dra,zelenko2003kmr}．
+固有表現間の関係が抽出できれば，
+テキストからRDF (Resource Description Framework) で表現される様な構造化データを構築することが可能となる．
+この構造化データを用いれば，
+例えば「大阪に本社がある会社の社長」といった「地名⇔組織名」と「組織名⇔人名」の関係を辿るような「推論」を行なうことができ，
+より複雑な情報検索，質問応答や要約に有益である．
+
+我々は，入力されたテキストから
+関係3つ組である［固有表現$_{1}$，固有表現$_{2}$，関係ラベル］を抽出する
+研究を進めている．
+例えば，「福田康夫氏は日本の首相です。」というテキストから
+［福田康夫，日本，首相］の関係3つ組を抽出する．
+この関係3つ組をテキストから抽出するには，
+(a)テキストにおける固有表現の組の意味的関係の有無を判定（{\bf 関係性判定}）する技術と，
+(b)固有表現の組の関係ラベルを同定する技術が必要である．
+
+本論文では，
+(a)のテキスト内で共起する固有表現の組が，そのテキストの文脈において意味的な関係を有するか否かを判定する手法を提案する．
+ここでは，英語での関係抽出の研究であるACE\footnote{http://projects.ldc.upenn.edu/ace}のRelation Detection and Characterizationの指針に準じて，
+固有表現間の意味的関係について以下のように定義する．
+
+\vspace{1\baselineskip}
+\begin{itemize}
+\item 次の2種類の単位文，(1)『固有表現$_{1}$が固有表現$_{2}$を〜する』
+もしくは
+(2)『固有表現$_{1}$の〜は固有表現$_{2}$だ』
+で表現しうる関係が，テキストにおいて言及，
+または含意されている場合，単位文の要素となる二つの固有表現は意味的関係を有する．
+\end{itemize}
+\vspace{1\baselineskip}
+
+ここで，単位文(1)『固有表現$_{1}$が固有表現$_{2}$を〜する』においては，格助詞を「が」「を」に固定しているわけでなく，
+任意の格助詞，『固有表現$_{1}$が固有表現$_{2}$で〜する』や『固有表現$_{1}$を固有表現$_{2}$に〜する』，でも良い．
+
+意味的関係を有する固有表現の組について例を示す．
+例えば「温家宝首相は人民大会堂で日本の福田康夫首相と会談した。」というテキストでは，
+『温家宝が福田康夫と会談した』，『温家宝が人民大会堂で会談した』，『福田康夫が人民大会堂で会談した』，『日本の首相は福田康夫だ』が
+言及されているため，
+「温家宝⇔福田康夫」，「温家宝⇔人民大会堂」，「福田康夫⇔人民大会堂」，「日本⇔福田康夫」の組が意味的関係を有する．
+また，「山田さんが横浜を歩いていると，鈴木さんと遭遇した。」というテキストでは，
+『山田が横浜を歩いていた』，『山田が鈴木と遭遇した』が言及されており，
+また『鈴木が横浜にいた』が含意されているため，
+「山田⇔横浜」，「山田⇔鈴木」，「鈴木⇔横浜」の組が意味的関係を有する．
+
+固有表現間の関係性判定の従来研究は，
+単語や品詞，係り受けなどの素性を用いた機械学習の研究が多い
+\cite{culotta2004dtk,kambhatla2004cls,zelenko2003kmr}．
+例えば，\citeA{kambhatla2004cls}らの研究では，
+与えられた二つの固有表現の関係の有無を判断するのに，
+係り受け木における二つの固有表現の最短パスと，
+二つの固有表現の間の単語とその品詞を素性として利用した手法を提案している．
+特に，係り受け木における二つの固有表現の最短パスを素性として利用することが，
+固有表現間の関係性判定に有効であることを報告している．
+
+しかし，{\ref{method}}で後述するように，
+実データ中に存在する意味的関係を有する固有表現の組のうち，
+異なる文に出現する固有表現の組は全体の約43.6\% を占めるにも関わらず，
+従来手法では，係り受けなどの文に閉じた素性だけを用いている．
+この文に閉じた素性は，異なる文に出現する固有表現間の組には利用できず，
+従来手法では，
+二つの固有表現の間の単語とその品詞だけを素性として利用するため，
+適切に意味的関係の有無を判別することができない．
+
+本論文では，係り受けなどの文に閉じた素性だけでなく，
+文脈的情報などの複数の文をまたぐ素性を導入した機械学習に基づく関係性判定手法を提案し，その有効性について議論する．
+
+\section{関係性判定における文脈的素性の利用}
+\label{teian}
+
+提案手法では，Salient Referent List\cite{nariyama2002ger}に基づく文脈的素性を導入し，
+単語や品詞，係り受けなどの伝統的に利用されている素性と組合わせる．
+これらの素性はひとつの木構造として表現され，ブースティングに基づく分類アルゴリズムに渡される．
+本手法における処理の流れは次の通りである．テキストに出現する固有表現の組が入力され，
+(1)形態素解析や固有表現抽出，係り受け解析を行なう基盤解析部，
+(2)提案する文脈的素性や係り受けなどに基づく素性を抽出する素性抽出部，
+(3)抽出された素性に基づいて正例と負例に分ける分類部を通り，
+入力された固有表現の組が意味的関係を有するか否かを判定した結果を出力する．
+ここでは，
+文脈的素性の基本的な考え方と関係性判定に利用する具体的な素性について説明する．
+
+
+\subsection{文脈的素性の基本的な考え方}
+\label{anaphora}
+
+異なる文に出現する固有表現の組が意味的関係を有するということは，
+与えられた固有表現の組のうち，先に出現する固有表現が，
+後に出現する固有表現を含む文において
+「文脈的に参照され易い」ことを意味する．
+例えば，例1のテキストにおいて，「ケン⇔アメリカ」の組は先に出現する「ケン」が後に出現する「アメリカ」を含む文に
+おいて文脈的に参照され易い（実際にガ格ゼロ代名詞の先行詞である）ため
+『ケンがアメリカに渡る』という意味的関係を持つが，
+「ナオミ⇔アメリカ」の組の場合は文脈的に参照されにくいため意味的関係を持たない．
+
+\vspace{1\baselineskip}
+（例1）明日、$ケン_{i}$は大阪を訪れ、ナオミと会う。\\
+　　\phantom{（例1）}その後（$\phi_{i}$ ガ）アメリカに渡りトムと旅行する。
+\vspace{1\baselineskip}
+
+
+
+以上のことから，
+与えられた固有表現の組のうち，先に出現する固有表現が，
+後側の固有表現が出現する文脈において参照されるか否かという情報を素性として用いることが
+意味的関係の有無を判定するのに有用であると考えられる．
+本研究では，上記の情報を取得するために，
+ある名詞句が後続する文脈において「どの程度参照され易いか」を評価する
+アルゴリズムの\citeA{nariyama2002ger}手法を用いる．
+
+
+\begin{figure}[t]
+  \begin{center}
+  \includegraphics{15-4ia3f1.eps}
+  \end{center}
+  \caption{Salient Referent Listに保持された情報}
+  \label{center}
+\end{figure}
+
+\subsection{Salient Referent Listと優先規則}
+\label{centering}
+
+Nariyamaは，談話の構造と焦点の移り変わりを説明する理論であるセンタリング理論{\cite{grosz1983pua}}を
+日本語ゼロ代名詞の照応解析に適用するアルゴリズムとしてSalient Referent Listとその優先規則を提案した．
+このアルゴリズムは，言い換えると，ゼロ代名詞よりテキスト前方に出現した名詞句を先行詞になりやすい順に並び替えるものである．
+Nariyamaのゼロ代名詞照応解析手法は，1文前の先行詞候補のみを対象としてきたセンタリング理論の考え方に対し，
+先行詞候補を蓄える記憶領域であるSalient Referent Listに2文以上前の候補も保持することができる．
+また，この手法では，次に示す先行詞らしさの選好を用いる．
+
+\vspace{1\baselineskip}
+\begin{itemize}
+\item 主題（``は''）{$>$} 主語（``ガ格''）{$>$} 間接目的（``二格''）{$>$} 直接目的（``ヲ格''）{$>$} その他
+\end{itemize}
+\vspace{1\baselineskip}
+
+この選好は，日本語は主題であるほど省略されやすく，また主題は助詞``は''を用いて記される傾向があるという知見に基づいたものである．
+Salient Referent Listは上記の要素（主題，主語，間接目的，直接目的，その他）のそれぞれにスタック（後入れ先出し構造）を持ち，
+先行詞候補を保持する際には，ゼロ代名詞の直前まで，次の処理を繰り返す．
+
+\vspace{1\baselineskip}
+\begin{itemize}
+\item テキストの先頭から文の流れに沿って1つずつ先行詞候補（名詞句）を抽出し，格情報に対応するスタックにPushする．
+\end{itemize}
+\vspace{1\baselineskip}
+
+ゼロ代名詞を補完する際は，Salient Referent Listに保持されている情報と，
+上に示した選好，スタックに基づき，
+優先度の高い候補から順にガ格，二格，ヲ格に同定する．
+
+例1のテキストを用いて，ゼロ代名詞（{$\phi_{i}$}ガ）の照応解析時の処理の流れを示す．
+まず，
+テキスト先頭から文の流れに沿って，ゼロ代名詞の直前までにある「明日」，「ケン」，「大阪」，「ナオミ」を，
+順に格助詞に対応するスタックにPushする．
+結果，図{\ref{center}}のような情報がSalient Referent Listに保持される．
+次に，ゼロ代名詞を補完するために，先に示した選好とスタックに基づき，
+1.「ケン」，2.「大阪」，3.「ナオミ」，4.「明日」と優先度の高い順に並び替える．
+この並び替えによって最上位になった「ケン」をゼロ代名詞（{$\phi_{i}$}ガ）の先行詞に同定する．
+
+
+
+\subsection{固有表現間の関係性判定への適用方法}
+
+固有表現間の関係性判定では，与えられた固有表現の組のうち，
+先に出現する固有表現が，後に出現する固有表現を含む文脈において参照され易いか否かを取得するために，
+上記のSalient Referent Listを利用する．
+ここで，本研究においては，
+ゼロ代名詞を見つけ，その先行詞を同定するといった
+明示的な省略補完は行わないことに注意されたい．
+
+
+\subsubsection{Salient Referent Listの最上位を利用}
+\label{tekiyou}
+
+固有表現間の関係性判定にSalient Referent Listを適用するにあたって，
+Nariyamaアルゴリズムにおける
+Salient Referent Listへの名詞句の格納処理を，
+「ゼロ代名詞の直前まで」ではなく，
+「{\bf 後に出現する固有表現の直前まで}」と変更する．
+つまり，与えられた固有表現の組のうち，後に出現する固有表現の直前まで，次の処理を繰り返し，
+Salient Referent Listに名詞句を保持する．
+
+\vspace{1\baselineskip}
+\begin{itemize}
+\item テキストの先頭から文の流れに沿って1つずつ名詞句を抽出し，格情報に対応するスタックにPushする．
+\end{itemize}
+\vspace{1\baselineskip}
+
+そして，Salient Referent Listに保持されている情報と，{\ref{centering}}で示した選好，スタックに基づき，
+優先度の高い順に並び替える．
+提案手法では，
+先に出現する固有表現が，
+並び替えられた情報の中で最上位の名詞句か否かを文脈的素性として利用する．
+つまり，先に出現する固有表現と並び替えによって最上位になった名詞句が一致すれば，
+先に出現する固有表現は，後に出現する固有表現を含む文脈において参照され易いと判断する．
+この参照され易いか否かを文脈的素性として利用する．
+本論文では，本素性を``SRL-T'' (Salient Referent List Top) と呼び，
+素性の値は，参照され易い
+と判断されれば1となる．
+
+例1のテキストにおいて，「ケン⇔アメリカ」の組が与えられた時の処理の流れを示す．
+テキストの先頭から文の流れに沿って，後に出現する固有表現「アメリカ」の直前までにある
+名詞句の「明日」，「ケン」，「大阪」，「ナオミ」を順に，格情報に対応したスタックにPushする．
+結果，図{\ref{center}}のような情報がSalient Referent Listに保持される．
+次に，{\ref{centering}}で示した選好とスタックに基づき，
+1.「ケン」，2.「大阪」，3.「ナオミ」，4.「明日」と優先度の高い順に並び替える．
+ここで，先に出現する固有表現「ケン」と最上位になった名詞句「ケン」が一致するので，
+「ケン」は「アメリカ」を含む文脈において参照され易いと判断し，文脈的素性``SRL-T''を1とする．
+一方，同テキストにおいて，「ナオミ⇔アメリカ」の組が与えられた時は，後に出現する固有表現「アメリカ」が上の例と同じため，
+同じ並び替え結果（1.「ケン」，2.「大阪」，3.「ナオミ」，4.「明日」）が得られる．ここでは，先に出現する固有表現「ナオミ」と
+最上位になった名詞句「ケン」が一致しないので，
+「ナオミ」は「アメリカ」を含む文脈において参照されにくいと判断し，文脈的素性``SRL-T''を0とする．
+
+\begin{figure}[t]
+  \begin{center}
+  \includegraphics{15-4ia3f2.eps}
+  \end{center}
+  \caption{Salient Referent Listに保持された情報（テキスト例2の「大阪⇔ケン」）}
+  \label{center2}
+\end{figure}
+
+このようにSalient Referent Listを利用した文脈的素性によって，
+{\ref{anaphora}}で述べた例1のテキストにおける「ケン⇔アメリカ」と「ナオミ⇔アメリカ」の意味的関係の有無を適切に判定できると期待できる．
+
+
+\subsubsection{Salient Referent Listの構造を利用}
+\label{riyou}
+
+{\ref{centering}}で述べたNariyamaのゼロ代名詞照応解析手法で用いられている選好は，
+日本語は主題であるほど省略されやすいという知見に基づいており，
+この選好によって並び替えられる名詞句は，当然主題になりやすいものが上位にくる傾向にある．
+つまり，上記のようにSalient Referent Listを選好で並び替え，その最上位を用いる方法では，
+与えられた固有表現の組のうち，先に出現する固有表現が地名や時間などの主題になりにくい固有表現の場合，
+後に出現する固有表現を含む文脈において，参照されにくいと判断されることが多い．
+
+\vspace{1\baselineskip}
+（例2）昨日、大阪でパーティーが開かれた。\\
+　　\phantom{（例2）}ケンやトムが出席した。
+\vspace{1\baselineskip}
+
+例えば，例2のテキストにおいて「大阪⇔ケン」の組が与えられた時，
+テキストの先頭から文の流れに沿って，後に出現する固有表現「ケン」の直前までにある
+名詞句の「昨日」，「大阪」，「パーティー」を順に，格情報に対応したスタックにPushし，
+図{\ref{center2}}の情報がSalient Referent Listに保持される．
+そして{\ref{centering}}で示した選好とスタックに基づき，
+1.「パーティー」，2.「大阪」，3.「昨日」と優先度の高い順に並び替えられる．
+ここで，先に出現する固有表現「大阪」と最上位になった名詞句「パーティー」が一致しないので，
+「大阪」は「ケン」を含む文脈において参照されにくいと判断され，
+文脈的素性``SRL-T''は0となる．
+
+このように，Salient Referent Listをゼロ代名詞照応解析のための選好で並び替える方法では，
+地名や時間などの主題になりにくい固有表現が，後続する文脈において参照され易いか否かを判定することができない．
+これはゼロ代名詞照応解析は述語の場所格や時間格などの任意格要素の補完を対象としていないからである．
+
+\begin{figure}[t]
+\setlength{\captionwidth}{0.48\textwidth}
+\begin{minipage}[b]{0.48\hsize}
+\begin{center}
+\includegraphics{15-4ia3f3.eps}
+\end{center}
+  \hangcaption{図\ref{center2}のSalient Referent Listから生成された構造情報}
+  \label{center_str2}
+  \end{minipage}
+\hfill
+  \begin{minipage}[b]{0.48\hsize}
+  \begin{center}
+  \includegraphics{15-4ia3f4.eps}
+  \end{center}
+  \hangcaption{構造情報における最短パスの構造（テキスト例2の「大阪⇔ケン」）}
+  \label{feature2}
+  \end{minipage}
+\end{figure}
+
+そこで，地名や時間などの固有表現が，後続する文脈において参照され易いか否かを判定するために，
+Salient Referent Listをゼロ代名詞照応解析のための選好で並び替えず，
+地名や時間としてどの程度参照され易いかを素性として利用する．
+本論文では，
+Salient Referent Listに保持された情報を，
+構造を持つ情報と捉え，その構造情報を固有表現間の関係性判定に用いる．
+Salient Referent Listに保持された情報から構造情報を生成する方法は，
+まず，Salient Referent Listに保持された情報は，与えられた固有表現の組のうち，後に出現する固有表現の直前の情報であるため，
+生成する構造情報の根ノードを後に出現する固有表現とする．
+次に，各要素（主題，主語，間接目的，直接目的，その他）ごとに
+スタックから最上位の名詞句をPopして，根ノードの子ノードに配置し，
+そして，スタックが空になるまで，名詞句を順次Popし，1つ前にPopされた名詞句の子ノードに配置する．
+ここで各ノードに，どの要素の情報かを区別するため，``は''などのラベルも付与する．
+提案手法では，
+地名や時間としてどの程度参照され易いかを得るために，
+生成した構造情報における二つの固有表現の最短パスの構造を文脈的素性として利用する．
+本論文では，本素性を``SRL-S'' (Salient Referent List Structure) と呼ぶ．
+
+例2のテキストの「大阪⇔ケン」の組が与えられたときの処理の流れを示す．
+後に出現する固有表現「ケン」の直前までの名詞句の「昨日」，「大阪」，「パーティー」を順に，格情報に対応するスタックにPushし，
+図{\ref{center2}}の情報がSalient Referent Listに保持される．
+このSalient Referent Listに保持された情報は，後に出現する固有表現「ケン」の直前の情報であるため，
+構造情報の根ノードを「ケン」とする．
+次に，``主題''は情報が空のためスキップし，``主語''の最上位の名詞句「パーティー」をPopして根ノードの子ノードに
+要素ラベルを付与した「ガ格：パーティー」配置する．
+そして，``間接目的''と``直接目的''の情報も空のためスキップし，
+``その他''の最上位の名詞句「大阪」をPopして根ノードの子ノードに「他：大阪」を配置する．最後に，``その他''の名詞句「昨日」をPopして，
+1つ前にPopした名詞句「他：大阪」の子ノードに「他：昨日」を配置する．
+生成された構造情報を図{\ref{center_str2}}を示す．
+この構造において二つの固有表現「大阪⇔ケン」の最短パスの構造（図{\ref{feature2}}）を文脈的素性``SRL-S''とする．
+
+このように，Salient Referent Listに保持された情報を構造として捉えることで，
+先に出現する固有表現が地名や時間の場合も，後続する文脈において参照され易いか否かが取得でき，
+例2のテキストにおける「大阪⇔ケン」の意味的関係の有無を適切に判定できると期待できる．
+
+
+
+
+\subsubsection{2つの文脈的素性の組み合わせ}
+\label{kumiawase}
+
+提案した2つの文脈的素性は，共に，先に出現する固有表現が，後続する文脈で参照され易いか否かを表現しているが，
+前者のSalient Referent Listの最上位を用いた素性``SRL-T''は，主題になりやすい人名や組織名の，
+後者のSalient Referent Listの構造を用いた素性``SRL-S''は，主題になりにくい地名や時間の参照され易さを示している．
+Salient Referent Listの構造を用いた素性``SRL-S''でも，主題になり易い人名や組織名の参照され易さを表現することができるが，
+``SRL-S''は，先に出現する固有表現が保持されているスタックしか考慮しないため，
+例えば，
+先に出現する固有表現が``主語''の1番目に保持されている時，
+``SRL-S''は，``主題''に他の名詞句が保持されている・いないに関わらず同じ構造が素性となるが，
+``SRL-T''は，``主題''に他の名詞句が保持されていれば0に，``主題''に他の名詞句が保持されていなければ1になる．
+このように提案した2つの素性は，常に同じ情報になるわけではない．
+そこで，本論文では，{\ref{bunrui}}で後述すように，2つの文脈的素性を組み合わせる．
+
+
+
+\subsection{分類器}
+\label{bunrui}
+
+
+分類器には，構造情報を用いた研究で高精度な分類結果が報告されている構造情報を明示的に利用した分類手法を用いる．
+構造情報を明示的に利用した分類手法には，Tree Kernel\cite{collins2002ckn}やHDAG Kernel\cite{suzuki2005kai}などの
+カーネル法を利用した手法と，部分木を素性とするブースティングに基づく手法\cite{kudo2004han}などがある．
+今回の実験では，
+比較的学習時間が短く実験が容易に行える
+工藤らのアルゴリズムが実装された分類器BACT\footnote{
+http://chasen.org/\~{}taku/software/bact/}
+を使用した．
+
+固有表現間の関係性判定では，
+{\ref{tekiyou}}で提案した2つの文脈的素性と
+従来から用いられている固有表現間の単語や係り受けに基づく素性
+を，まとめてひとつの大きな木構造で表現する．
+ここで，Salient Referent Listの最上位を利用した素性と固有表現間の間の単語とその品詞に基づく素性は
+木構造で表現されていないため，各素性を1つのノードからなる木構造とする．
+そして，全ての木構造をまとめる際は，
+根ノードに``Root''と書かれたノードを用意して，その子ノードに各木構造を配置する．
+また，どの素性に属するノードかを区別するため，各ノードに``SRL-T''などのラベルを付与した．
+例えば，例2のテキストにおける「ケン⇔大阪」の組の素性をひとつの大きな木構造で表現すると図{\ref{tree}}のようになる．
+
+\begin{figure}[t]
+  \begin{center}
+  \includegraphics{15-4ia3f5.eps}
+  \end{center}
+  \caption{素性の木構造（例2のテキストにおける「ケン⇔大阪」の組の例）}
+  \label{tree}
+\end{figure}
+
+この木構造を用いて，学習時には，分類に有効な規則集合（部分木）を学習し，
+解析時には，学習した規則集合を適用することで固有表現の組が意味的関係を有するか否かを判定する．
+
+
+
+\section{評価実験}
+\label{eva}
+
+
+
+\subsection{評価データ}
+\label{evadata}
+
+テキスト中の固有表現の組に人手で意味的関係の有無を判定した日本語の新聞記事1,400記事とブログ4,800記事の計6,200記事を用いる．
+なお固有表現の組として
+［人名⇔地名］，［人名⇔組織名］，［組織名⇔地名］，［人名⇔人名］，［組織名⇔組織名］，［地名⇔地名］の
+組合わせを対象に評価データを作成した．
+作業者には{\ref{hajimeni}}で述べた意味的関係の定義に加え，
+注意すべき点として，
+否定・願望・仮定で記述された内容に関しては意味的関係はないとすること，
+実世界で関係があると分かっていても，
+テキストの文脈から読み取ることができなければ意味的関係はないとすること
+をインストラクションとして与えた．
+また作業者間の一致率を調べるために，2人の作業者（作業者Aと作業者B）がタグ付け作業を行なった．
+データの詳細を表\ref{data_icchi}に示す．
+6つの組合わせの総数537,411組に対して，作業者Aは24,329組が，作業者Bは22,263組が意味的関係を有すると判断し，作業者間の $\kappa$ 値は0.827となった．
+また，作業者Aを正解，作業者Bをシステムと見なして\ref{result}で示す精度と再現率を計算すると，
+精度0.873，再現率0.799となった．
+
+\begin{table}[t]
+\caption{2人の作業者によるタグ付け作業の一致率}
+\label{data_icchi}
+\input{03table01.txt}
+\end{table}
+\begin{table}[t]
+\caption{評価データにおける(A)文内と(B)文間の内訳}
+\label{uchiwake}
+\input{03table02.txt}
+\end{table}
+
+このようなデータにおいて，作業者Aが作成したデータ，537,411組のうち24,329組が意味的関係を有すると判断されたデータ，
+を用いて5分割交差検定を行なった．
+
+
+\subsection{学習方法}
+\label{method}
+
+今回の実験では，
+［人名⇔地名］，［人名⇔組織名］，［組織名⇔地名］，［人名⇔人名］，［組織名⇔組織名］，［地名⇔地名］の
+各組合わせごとに，
+対象となる二つの固有表現が(A)同じ文に出現する場合と(B)異なる文に出現する場合に分けて学習しモデルを作成した．
+このように対象を2つに分ける理由として，
+(A)には
+係り受けに基づく素性などの文に閉じた素性が，
+(B)には
+提案した文脈的素性などの
+複数の文をまたぐ素性が特に有効であると考えられ，
+分けずに学習すると各々の特徴が平滑化され適切な学習ができないと考えられるからである．
+また評価データにおける(A)文内と(B)文間の内訳は表\ref{uchiwake}のようになっており，
+(A)と(B)で組合わせ総数に対する意味的関係のある組の割合が極端に異なることからも
+(A)と(B)を分けて学習することが考えられる．
+
+
+\subsection{実験結果と考察}
+\label{result}
+
+テキストにおける固有表現間の関係性判定実験において，
+提案した文脈的素性を用いることによりどの程度解析性能が向上するかを調査
+するために，次の5つの手法を比較評価した．
+なお，固有表現の間の単語とその品詞，係り受けに基づく素性や文脈的素性の抽出は，
+既存の形態素解析器・固有表現抽出器・係り受け解析器で得られた結果を利用した．
+
+\vspace{1\baselineskip}
+\begin{description}
+\item [WD]固有表現の組が$n$単語内に出現するなら意味的関係にあると判定する手法
+\item [DEP]固有表現の組の間の単語と品詞，係り受けに基づいた素性を用いた機械学習手法
+\item [DEP+SRL-T]``DEP''に加え，Salient Referent Listの最上位を用いた手法
+\item [DEP+SRL-S]``DEP''に加え，Salient Referent Listの構造を用いた手法
+\item [DEP+SRL-T+SRL-S]``DEP''に加え，Salient Referent Listの最上位と構造を用いた手法
+\end{description}
+\vspace{1\baselineskip}
+
+\begin{figure}[t]
+  \begin{center}
+  \includegraphics{15-4ia3f6.eps}
+  \end{center}
+  \caption{全組合わせの再現率—精度曲線}
+  \label{rpc_all}
+\end{figure}
+
+実験結果として，全組合わせの再現率—精度曲線を図\ref{rpc_all}に示す．
+この曲線は，分類器の出力した識別関数の値を動かして描いた．
+ただし，WDでは，単語距離{$n$}を変化させて再現率—精度曲線を描いた．
+なお精度と再現率は次式の通りである．
+\vspace{0.5\baselineskip}
+\begin{gather*}
+ 精度 = \frac{システムが出力した正解関係あり数}{システムが出力した関係あり数}\\[0.5zw]
+ 再現率 = \frac{システムが出力した正解関係あり数}{正解関係あり数}
+\end{gather*}
+\vspace{0.5\baselineskip}
+
+
+図\ref{rpc_all}において
+``DEP''と``DEP+SRL-T''，``DEP+SRL-S''，``DEP+SRL-T+SRL-S''を比較すると，
+文脈的素性を用いた提案手法が関係性判定に有効であることがわかる．
+分類器の出力した識別関数の値が0における各手法の精度と再現率は，
+``DEP''が精度0.691，再現率0.508，
+``DEP+SRL-T''が精度0.762，再現率0.603，
+``DEP+SRL-S''が精度0.749，再現率0.590，
+``DEP+SRL-T+SRL-S''が精度0.804，再現率0.650と
+提案手法によって，精度が約0.113，再現率が約0.142向上することが確認できた．
+ここで，``DEP+SRL-T''と``DEP+SRL-S''を比較すると，精度，再現率の数値に大きな差は見られないが，
+これらを導入することにより正しく判定できるようになった事例をみると，
+``DEP+SRL-T''は主題になり易い人名と組織名が先に出現する組に，
+``DEP+SRL-S''は主題になりにくい地名が先に出現する組に有効であることが確認できた．
+また，これらを組み合わせた``DEP+SRL-T+SRL-S''では，この両組が正しく判定できるようになっており，
+2つの文脈的素性が補いあうことで更に精度・再現率が向上したことが確認できた．
+
+\begin{table}[t]
+\caption{全組合わせの(A)文内と(B)文間の精度と再現率}
+\label{res_type}
+\input{03table03.txt}
+\end{table}
+\begin{table}[t]
+\caption{［人名⇔地名］，［人名⇔組織名］，［組織名⇔地名］の精度と再現率}
+\label{res_pare1}
+\input{03table04.txt}
+\end{table}
+
+
+次に，提案手法が，文間の精度と再現率の向上にどの程度寄与したかを調査した．
+実験結果として，表\ref{res_type}に全組合わせの(A)文内と(B)文間に対する各手法の精度と再現率を示す．
+表\ref{res_type}からわかるように，
+提案手法``DEP+SRL-T+SRL-S''は，``DEP''に比べ，
+文間の場合，精度が約0.220，再現率が約0.223向上したことが確認できた．
+
+最後に，今回対象にした
+［人名⇔地名］，［人名⇔組織名］，［組織名⇔地名］，［人名⇔人名］，［組織名⇔組織名］，［地名⇔地名］の
+各組合わせに対して提案手法が有効かを調査した．
+実験結果として，表\ref{res_pare1}と表\ref{res_pare2}に各組合わせに対する各手法の精度と再現率を示す．
+これらの結果から，提案手法は全ての組合わせで精度，再現率が向上していることが確認できる．
+またもっとも効果があったのは，［組織名⇔組織名］に対してで精度が約0.166，再現率が約0.190向上することがわかった．
+
+\begin{table}[t]
+\caption{［人名⇔人名］，［組織名⇔組織名］，［地名⇔地名］の精度と再現率}
+\label{res_pare2}
+\input{03table05.txt}
+\end{table}
+
+
+
+\subsection{誤り分析}
+\label{ayamari}
+
+テキストにおける固有表現間の関係性判定の評価実験おいて，
+提案手法が，誤って意味的関係を有すると判定した3,853事例と
+意味的関係を有すると判定できなかった8,504事例の計12,357事例のうち
+分類器の出力する識別関数の絶対値が大きいものから1,000事例（但し，前処理の係り受け解析が誤っている事例は除く）を分析した結果，
+次の2つ誤りが約80％の誤りをカバーすることがわかった．
+
+\vspace{1\baselineskip}
+\begin{enumerate}
+\item 文間に出現する固有表現の組の誤りとして，
+首相や社長といった役職を示す一般名詞が出現することによって，
+異なる文に出現する固有表現の組が意味的関係を有すると人なら判断できるものが多い．
+例えば，次の例3のようなテキストにおいて，首相という一般名詞が2文目にあることで，1文目の福田首相と2文目のアメリカが意味的関係を有するとなる．
+これは，首相や社長といった役職を示す一般名詞が，代名詞と同様に先行詞を持つことが原因と考えられる．
+同様に，同社や同県などのように「同…」といった名詞による照応も存在する．
+これに対処するには，どの一般名詞が先行詞を持つか，またその先行詞は何かを見つける必要があると考えられる．
+
+\vspace{1\baselineskip}
+（例3）明日、福田首相は中国を訪れ、胡錦濤国家と会談する。\\
+　\phantom{（例3）}その後、首相はアメリカに渡りブッシュ大統領と会談を予定している。
+\vspace{1\baselineskip}
+
+\item 文間に出現する固有表現の組の誤りとして，
+ブログ記事で頻繁に見られる，ひとつの記事に複数の話題について記述されている場合の誤りが多かった．
+例えば，ある記事の前半には「サッカー」について記述されており，その後「選挙」について記述されているものなどがある．
+これらの記事において，異なる話題に出現する固有表現の組は，ほとんどの場合は意味的関係はない．
+これに対処するには，入力テキストの話題の区切りを適切に見つける必要があると考えられる．
+\end{enumerate}
+
+
+\section{おわりに}
+\label{sec:owarini}
+
+本論文では，テキストにおける固有表現間の関係性判定に取り組み，
+従来の係り受けなどの文に閉じた素性だけでなく，複数の文をまたぐ
+Salient Referent Listに基づいた文脈的素性を導入した機械学習に基づく手法を提案した．
+
+
+［人名⇔地名］，［人名⇔組織名］，［組織名⇔地名］，［人名⇔人名］，［組織名⇔組織名］，［地名⇔地名］
+の固有表現の組に対する評価実験では，
+提案手法は精度80.4％，再現率65.0％と，
+従来研究より精度が約11.3％，再現率が約14.2％向上したことがわかり，
+提案手法の有効性が確認できた．
+また提案手法は，
+実験した全ての固有表現の組に対して効果があることも確認できた．
+
+今後は，固有表現間の関係性判定の更なる精度向上を目指し，上記の考察で述べた問題に取り組むとともに，
+次のステップである(b)固有表現の組の関係ラベルを同定する技術にも取り組む予定である．
+
+
+
+
+
+\bibliographystyle{jnlpbbl_1.3}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Agichtein \BBA\ Gravano}{Agichtein \BBA\
+  Gravano}{2000}]{agichtein2000ser}
+Agichtein, E.\BBACOMMA\ \BBA\ Gravano, L. \BBOP 2000\BBCP.
+\newblock \BBOQ Snowball: Extracting Relations from Large Plain-Text
+  Collections\BBCQ\
+\newblock In {\Bem Proceedings of the 5th ACM conference on Digital libraries},
+  \mbox{\BPGS\ 85--94}.
+
+\bibitem[\protect\BCAY{Brin}{Brin}{1998}]{brin1998epa}
+Brin, S. \BBOP 1998\BBCP.
+\newblock \BBOQ Extracting Patterns and Relations from the World Wide Web\BBCQ\
+\newblock In {\Bem WebDB Workshop at 6th International Conference on Extending
+  Database Technology}, \mbox{\BPGS\ 172--183}.
+
+\bibitem[\protect\BCAY{Collins \BBA\ Duffy}{Collins \BBA\
+  Duffy}{2002}]{collins2002ckn}
+Collins, M.\BBACOMMA\ \BBA\ Duffy, N. \BBOP 2002\BBCP.
+\newblock \BBOQ Convolution Kernels for Natural Language\BBCQ\
+\newblock {\Bem Advances in Neural Information Processing Systems}, {\Bbf 14},
+  \mbox{\BPGS\ 625--632}.
+
+\bibitem[\protect\BCAY{Culotta \BBA\ Sorensen}{Culotta \BBA\
+  Sorensen}{2004}]{culotta2004dtk}
+Culotta, A.\BBACOMMA\ \BBA\ Sorensen, J. \BBOP 2004\BBCP.
+\newblock \BBOQ Dependency Tree Kernels for Relation Extraction\BBCQ\
+\newblock In {\Bem Proceedings of the 42nd Annual Meeting on Association for
+  Computational Linguistics}, \mbox{\BPGS\ 423--429}.
+
+\bibitem[\protect\BCAY{Grosz, Joshi, \BBA\ Weinstein}{Grosz
+  et~al.}{1983}]{grosz1983pua}
+Grosz, B.~J., Joshi, A.~K., \BBA\ Weinstein, S. \BBOP 1983\BBCP.
+\newblock \BBOQ Providing a Unified Account of Definite Noun Phrases in
+  Discourse\BBCQ\
+\newblock In {\Bem Proceedings of the 21st annual meeting on Association for
+  Computational Linguistics}, \mbox{\BPGS\ 44--50}.
+
+\bibitem[\protect\BCAY{Hasegawa, Sekine, \BBA\ Grishman}{Hasegawa
+  et~al.}{2004}]{hasegawa2004dra}
+Hasegawa, T., Sekine, S., \BBA\ Grishman, R. \BBOP 2004\BBCP.
+\newblock \BBOQ Discovering Relations among Named Entities from Large
+  Corpora\BBCQ\
+\newblock In {\Bem Proceedings of the 42nd Annual Meeting on Association for
+  Computational Linguistics}, \mbox{\BPGS\ 415--422}.
+
+\bibitem[\protect\BCAY{Kambhatla}{Kambhatla}{2004}]{kambhatla2004cls}
+Kambhatla, N. \BBOP 2004\BBCP.
+\newblock \BBOQ Combining Lexical, Syntactic, and Semantic Features with
+  Maximum Entropy Models for Extracting Relations\BBCQ\
+\newblock In {\Bem Proceedings of the 42nd Annual Meeting on Association for
+  Computational Linguistics}, \mbox{\BPGS\ 178--181}.
+
+\bibitem[\protect\BCAY{工藤\JBA 松本}{工藤\JBA 松本}{2004}]{kudo2004han}
+工藤拓\JBA 松本裕治 \BBOP 2004\BBCP.
+\newblock \JBOQ 半構造化テキストの分類のためのブースティングアルゴリズム\JBCQ\
+\newblock \Jem{情報処理学会論文誌}, {\Bbf 45}  (9), \mbox{\BPGS\ 2146--2156}.
+
+\bibitem[\protect\BCAY{Nariyama}{Nariyama}{2002}]{nariyama2002ger}
+Nariyama, S. \BBOP 2002\BBCP.
+\newblock \BBOQ Grammar for Ellipsis Resolution in Japanese\BBCQ\
+\newblock In {\Bem Proceedings of the 9th International Conference on
+  Theoretical and Methodological Issues in Machine Translation}, \mbox{\BPGS\
+  135--145}.
+
+\bibitem[\protect\BCAY{鈴木\JBA 佐々木\JBA 前田}{鈴木\Jetal
+  }{2005}]{suzuki2005kai}
+鈴木潤\JBA 佐々木裕\JBA 前田英作 \BBOP 2005\BBCP.
+\newblock \JBOQ 階層非循環有向グラフカーネル\JBCQ\
+\newblock \Jem{電子情報通信学会論文誌 D}, {\Bbf 88}  (2), \mbox{\BPGS\
+  230--240}.
+
+\bibitem[\protect\BCAY{Zelenko, Aone, \BBA\ Richardella}{Zelenko
+  et~al.}{2003}]{zelenko2003kmr}
+Zelenko, D., Aone, C., \BBA\ Richardella, A. \BBOP 2003\BBCP.
+\newblock \BBOQ Kernel Methods for Relation Extraction\BBCQ\
+\newblock {\Bem Journal of Machine Learning Research}, {\Bbf 3}, \mbox{\BPGS\
+  1083--1106}.
+
+\end{thebibliography}
+
+\begin{biography}
+\bioauthor{平野　　徹（正会員）}{
+2003年和歌山大学システム工学部情報通信システム学科卒．
+2005年奈良先端科学技術大学院大学情報科学研究科博士前期課程修了．
+同年日本電信電話（株）入社．
+自然言語処理の研究に従事．}
+
+\bioauthor{松尾　義博（正会員）}{
+1988年大阪大学理学部物理学科卒．
+1990年同大大学院研究科博士前期課程修了．
+同年日本電信電話（株）入社．
+機械翻訳，自然言語処理の研究に従事．
+情報処理学会会員．}
+
+\bioauthor{菊井玄一郎（正会員）}{
+1984年京都大学工学部電気工学科卒．
+1986年同大学大学院工学研究科修士課程電気工学第二専攻修了．
+同年日本電信電話（株）入社．
+1990〜94および2001〜06（株） 国際電気通信基礎技術研究所(ATR)に出向．
+現在，日本電信電話（株）サイバースペース研究所，音声言語メディア処理研究プロジェクト，音声・言語基盤技術グループリーダ．
+言語処理に関する研究開発に従事．博士（情報学）．
+情報処理学会，電子情報通信学会，人工知能学会各会員．}
+
+\end{biography}
+
+
+\biodate
+
+
+\end{document}

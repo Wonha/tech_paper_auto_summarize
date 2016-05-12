@@ -1,0 +1,842 @@
+    \documentclass[english]{jnlp_1.4}
+
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\makeatletter
+\newcounter{algoX}
+\renewcommand{\thealgoX}{}
+\def\fps@algoX{}
+\def\ftype@algoX{}
+\def\ext@algoX{}
+\def\fnum@algoX{}
+\newenvironment{algorithmX}{}{}
+\newcommand{\algoXname}{}
+\newlength{\AlgoWd}\settowidth{\AlgoWd}{\small\textbf{Algorithm~0}\hskip1zw}
+\makeatother
+
+
+\usepackage{algorithm}
+\usepackage[noend]{algorithmic}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\sgn}{sgn}
+
+
+\Volume{21}
+\Number{3}
+\Month{June}
+\Year{2014}
+
+\received{2013}{11}{1}
+\revised{2014}{1}{9}
+\accepted{2014}{2}{28}
+
+\setcounter{page}{541}
+
+\etitle{Collective Sentiment Classification Based on User Leniency and Product Popularity\footnotetext{\llap{*~}This work was conducted while the second and third authors were  at the Institute of Industrial Science, The University of Tokyo.}}
+\eauthor{Wenliang Gao\affiref{Author_1}\and  Nobuhiro Kaji\affiref{Author_2}\affiref{Author_3}
+ \and Naoki Yoshinaga\affiref{Author_2}\affiref{Author_3}\and Masaru Kitsuregawa\affiref{Author_2}\affiref{Author_4}}
+\eabstract{
+We propose a method of collective sentiment  classification that assumes dependencies among labels of an input set of reviews. 
+The key observation behind our method is that the distribution of polarity labels over reviews written by each user or written on each product is often skewed in the real world; intolerant users tend to report complaints while popular products are likely to receive praise.  
+We encode these characteristics of users and products (referred to as \textit{user leniency} and \textit{product popularity}) by introducing global features in supervised learning. 
+To resolve dependencies among labels of a given set of reviews, we explore two approximated decoding algorithms, ``easiest-first decoding'' and ``two-stage decoding.''
+Experimental results on real-world datasets with user and/or product information confirm that our method contributed greatly to classification accuracy.
+}
+\ekeywords{sentiment classification, user leniency, product popularity, easiest-first \linebreak decoding, two-stage decoding}
+
+\headauthor{Gao et al.}
+\headtitle{Collective Sentiment Classification Based on User Leniency and Product Popularity}
+
+\affilabel{Author_1}{}{Graduate School of Information Science and Technology, The University of Tokyo}
+\affilabel{Author_2}{}{Institute of Industrial Science, The University of Tokyo}
+\affilabel{Author_3}{}{National Institute of Information and Communications Technology (NICT)}
+\affilabel{Author_4}{}{National Institute of Informatics}
+
+\begin{document}
+
+
+\maketitle
+
+
+\section{Introduction}
+
+In document-level sentiment classification, early studies
+exploited language-based clues (e.g., $n$-grams) extracted from
+textual content \cite{Turney:2002,Pang:2002}, followed by more recent studies that adapt the classifier to reviews written by a specific user or written on a specific product \cite{TanLTJZL11,Seroussi:2010,speriosu2011,LiFangtao:2011}. 
+Although user- and product-aware methods exhibited better performance over those based on purely textual clues, most of them use only the user information \cite{TanLTJZL11,Seroussi:2010,speriosu2011}, or they assume that the user and product of a test review are seen in the training data \cite{LiFangtao:2011}. 
+These assumptions heavily limit their applicability in a real-world scenario where new users and new products are constantly emerging.
+
+This paper proposes a method of collective sentiment classification that is aware of the user and product of the target review.
+Our method benefits from the biased distributions of polarity labels in the real world;  intolerant users tend to report complaints while popular products are likely to receive praise. 
+We introduce global features to encode the bias of a user and of a product (referred to as user leniency and product popularity), and then compute the global features along with testing. 
+In this way, the global features are collectively computed with respect to the labels of other test reviews. 
+Our method is therefore applicable to reviews written by emerging users and on emerging products that are not observed in the training data.
+
+The major difficulty in realizing our collective sentiment classifier is in decoding. Because global features depend on test review labels and labels conversely depend on the global features, we need to optimize a global label configuration for the test reviews. 
+In this study, we tackle this problem by resorting to two approximate decoding algorithms, easiest-first \cite{Tsuruoka05} and two-stage strategies \cite{Krishnan06}.
+We also empirically compare the speed and accuracy of these two strategies.
+
+We evaluate our methods on three datasets with user and/or product information \cite{Pang:2004,Blitzer:2007,maas:2011}.
+Experimental results demonstrate that when user- or product-bias exists, our collective method can improve classification accuracy against state-of-the-art methods.
+
+The remainder of this paper is organized as follows. 
+Section~\ref{sec:related} discusses related work that exploits user and product information in a sentiment classification task. 
+Section~\ref{sec:method} proposes a method that collectively classifies a given set of reviews. 
+Section~\ref{sec:exp} reports experimental results. 
+Finally, Section~\ref{sec:con} concludes this study and addresses future work.
+
+
+\section{Related Work}
+\label{sec:related}
+
+Document-level sentiment classification focuses on labeling a given review \cite{Turney:2002}. 
+Normally, the content of the review, the user who wrote the review, and the product on which the review is written are considered contributive to this research \cite{Pang:2008}.
+In what follows, we briefly glance at traditional approaches based on purely textual content, and introduce user- or product-aware approaches in depth.
+
+
+\subsection{Text-based Methods}
+
+Early studies  consider only textual content for classifying the sentiment. 
+Pang et~al. (2002) developed a supervised sentiment classifier that takes only word $n$-grams as features.
+\nocite{Hu:2004} Hu and Liu (2004) analyzed the sentiment of products' aspects. 
+\nocite{Blitzer:2007} Blitzer et~al. (2007) built a classifier that learns weights of textual features depending on the product domain. 
+    \citeA{NakagawaIK10} and \citeA{Socher:2011} 
+considered structural interaction between words to capture complex intra-sentential phenomena such as polarity shifting \cite{Li:2010}.
+    \citeA{Qiu:2011} 
+used a bootstrap method to expand sentiment lexicon, which greatly helps to identify the sentiment.
+
+
+\subsection{User- or Product-Aware Methods}
+
+Recently, user-generated content has been the focus of considerable attention stimulating researchers to explore the effectiveness of user and product information.
+Tan et~al. (2011) and Speriosu et~al. (2011) exploited a user network behind a social media (Twitter, in their case), and developed a graph-based method under the assumption that friends give similar ratings towards  the same products. 
+However, such user networks are not always available in the real world.
+
+Seroussi et~al. (2010) computed the
+similarities among users on the basis of text and their rating histories. 
+Then, they classified a given review by referring to the ratings given for the same product by other users who were similar to the user in question.
+Li et~al. (2011) incorporated user- or product-dependent $n$-gram features into a classifier.  
+They argued that users employ user-specific language to express their sentiment, while the sentiment toward a product is described in product-specific language.
+These approaches, however, assume that the training data contains reviews written by the test users or on the test products. 
+This  is an unrealistic assumption, since we need to label reviews required for every emerging user or product. 
+
+In this study, we intend to handle reviews written by emerging users or on emerging products by capturing their characteristics from the test reviews. 
+As we later confirm in experiments, our method improves classification accuracy even when only a few reviews are available for the users or products in question.
+
+
+\section{Method}
+\label{sec:method}
+
+This section describes our method of collective sentiment classification that uses user leniency and product popularity. 
+
+
+\subsection{Overview}
+
+Our task is, given a set of $N$ reviews $\mathcal{R}$, to estimate labels $\mathcal{Y}$, where $y_r
+\in \{+1,-1\}$ for each given review $r\in\mathcal{R}$, $+1$ and $-1$ represent positive and negative polarity, respectively. Each review label is estimated based on the following scoring function,
+\begin{equation}
+score(\boldsymbol{x}_r)= \boldsymbol{w}^\mathrm{T}\boldsymbol{x}_r, \label{eq:fun}
+\end{equation}
+where $\boldsymbol{x}_r$ is feature vector representation of the review $r$, and $\boldsymbol{w}$ is a weight vector that we learn from labeled data.
+With this scoring function, the label is estimated as follows:
+\[
+y_r=\sgn(\mathit{score}(\boldsymbol{x}_r))=\left\{
+\begin{array}{ll}
+ +1& \text{if}\ \mathit{score}(\boldsymbol{x}_r)>0,\\
+ -1& \text{otherwise}.\\
+\end{array}\right.
+\]
+
+As discussed in the introduction, our aim is to exploit user leniency and product popularity to improve sentiment classification. 
+We therefore encourage reviews written by the same user or on the same product to receive the same polarity when their polarity labels are found to be biased.
+We realize this by encoding such biases  as two global features in addition to local textual features, as detailed in Section \ref{subsec:features}. 
+Since global features make it impossible to estimate review labels independently, we explore using two approximate decoding strategies in Section \ref{subsec:decoding}.
+
+Note that here we assume each review  to be associated with either the user who wrote that review, the product on which the review was written, or both. 
+This assumption is not unrealistic, since the user or product can be identified in many review websites.
+We should emphasize that our method does not require user profiles, product descriptions, or any type of extrinsic knowledge of the users or products, and therefore it can  handle reviews written by emerging users or on emerging products.
+
+
+\subsection{Features}
+\label{subsec:features}
+
+Our features can be divided into local and global, such that $\boldsymbol{x}_r=(\boldsymbol{x}_r^l, \boldsymbol{x}_r^g)$. 
+The local features ($\boldsymbol{x}_r^l$) are  conventional word $n$-grams ($n=1$ and $n=2$) with binary values that indicate the existence of the $n$-grams.
+The global features ($\boldsymbol{x}_r^g$) are the user leniency and product popularity that are represented as real values.
+
+Our global features are decomposed as:
+\[
+\boldsymbol{x}_r^g=(f\_u^+(r),f\_u^-(r),f\_p^+(r),f\_p^-(r)),
+\]
+where
+\begin{gather*}
+f\_u^+(r) = \frac{|\{r_j\,|\,y_j=+1, r_j \in \mathcal{S}_u(r)\}|}{|\mathcal{S}_u(r)|},\quad 
+	f\_u^-(r)=\frac{|\{r_j\,|\,y_j=-1, r_j \in \mathcal{S}_u(r)\}|}{|\mathcal{S}_u(r)|},\\
+f\_p^+(r)=\frac{|\{r_j\,|\,y_j=+1, r_j \in \mathcal{S}_p(r)\}|}{|\mathcal{S}_p(r)|},\quad
+	f\_p^-(r)=\frac{|\{r_j\,|\,y_j=-1, r_j \in \mathcal{S}_p(r)\}|}{|\mathcal{S}_p(r)|}.
+\end{gather*}
+Here, $\mathcal{S}_u(r)$ is the user-related neighbor set of $r$, which contains the reviews written by the  same user $u$ as $r$, while  $\mathcal{S}_p(r)$ is the product-related neighbor set of $r$,  which contains reviews written on the same product $p$ as $r$.
+If $\mathcal{S}_u(r)$ (or $\mathcal{S}_p(r)$) is empty, we set $f\_u^+(r)$ and $f\_u^-(r)$ (or $f\_p^+(r)$ and $f\_p^-(r)$) to be $0$.
+
+We use $f\_u^+(r)$ and $f\_u^-(r)$ to capture user leniency, i.e., how likely the user is to write positive and negative reviews, respectively, 
+while we use $f\_p^+(r)$ and $f\_p^-(r)$ to capture product popularity, i.e., how likely positive and negative reviews are written on the product, respectively.\footnote{
+	Considering  $f\_u^+$ and $f\_u^-$ ($f\_p^+$ and $f\_p^-$) always add up to 1, we could also use only one feature for each leniency and popularity (e.g. $f\_u^+$ and $f\_p^+$). We ran some experiments and found that the two-feature designation outperformed the one-feature designation ($f\_u^+$, $f\_p^+$) on two out of three datasets (Maas and Blitzer). Therefore, we choose to represent user leniency and product popularity using positive and negative ratio of labels.}
+
+
+\subsection{Two Approximate Decoding Strategies}
+\label{subsec:decoding}
+
+The global features make it difficult to perform decoding (i.e., labeling reviews) since each review can no longer be labeled independently. 
+Exact decoding algorithms based on dynamic programming are not feasible in our case because the search space grows exponentially as the number of test reviews increases.
+Instead, we explore and empirically compare two approximate  algorithms, easiest-first \cite{Tsuruoka05} and two-stage decoding strategy \cite{Krishnan06}.
+ The easiest-first decoding is slower but expected to be more accurate than the two-stage decoding.
+
+Algorithm~\ref{alg:ef} depicts the easiest-first decoding algorithm. This strategy iteratively determines review labels one by one. 
+In each iteration, the review that is easiest to label, i.e., review $r_{max}$ with the highest absolute score $score(\boldsymbol{x}_r)$, is chosen (line \ref{alg:ef:line:argmax} in Algorithm~\ref{alg:ef}), and then labeled (line \ref{alg:ef:line:label} in Algorithm~\ref{alg:ef}). 
+This process is repeated until all the reviews are labeled. 
+The global features are incrementally updated using the  review labels that are already assigned. 
+That is, at the beginning of decoding, all global features are set to 0; when the labeling process proceeds, the global features become more accurate as more labels are used to compute them.
+
+
+Algorithm~\ref{alg:ts} depicts a two-stage decoding algorithm \cite{Krishnan06}.  
+This strategy performs decoding twice.
+In the first stage (lines \ref{alg:ts:line:firststart}--\ref{alg:ts:line:firstend} in Algorithm~\ref{alg:ts}), we use only local features to classify the reviews. 
+In the second stage (lines \ref{alg:ts:line:secondstart}--\ref{alg:ts:line:secondend} in Algorithm~\ref{alg:ts}), those labels are used to compute global features, and the labels are reassigned using the additionally computed global features. 
+In our case, the two-stage decoding at first only uses word $n$-gram features to estimate the labels. 
+Thereafter, those labels are used to compute global features in the second stage.
+
+\begin{algorithmX}[t]
+\begin{minipage}[t]{232pt}
+\newlength{\AlgoCapWd}\setlength{\AlgoCapWd}{232pt}\addtolength{\AlgoCapWd}{-\AlgoWd}
+{\hrule height1pt}
+    \caption{\hbox to\AlgoCapWd{Easiest-first strategy\hfill}}
+    \label{alg:ef}
+\vspace{2pt}
+{\hrule height0.25pt}
+\input{1010algo01.txt}
+{\hrule height0.25pt}
+\end{minipage}
+\hfill
+\begin{minipage}[t]{178pt}
+\setlength{\AlgoCapWd}{178pt}\addtolength{\AlgoCapWd}{-\AlgoWd}
+{\hrule height1pt}
+    \caption{\hbox to\AlgoCapWd{Two-stage strategy\hfill}}
+    \label{alg:ts}
+\vspace{2pt}
+{\hrule height0.25pt}
+\input{1010algo02.txt}
+{\hrule height0.25pt}
+\end{minipage}
+\end{algorithmX}
+
+The major difference in the two algorithms is in the way they compute global features. 
+The easiest-first strategy uses labels estimated by local features and previously computed global features, while the two-stage strategy uses labels estimated only by local features. 
+We expect the easiest-first decoding will exhibit better classification accuracy over the two-stage strategy, which we will confirm later in experiments. 
+
+
+\noindent
+\textbf{Time Complexity}
+
+We here analyze the time complexity of the two decoding strategies with respect to the number of test reviews, $N$.
+
+In the easiest-first strategy, two processes consume most of the computation time, 
+one of which is choosing the easiest review to label (line \ref{alg:ef:line:argmax} in Algorithm~\ref{alg:ef}).  
+The $arg\,max$ operation spends $O(\log{N})$ time in each iteration, using a heap structure to maintain the scores. 
+Thus, the time complexity of this step is $O(N\log{N})$ for $N$ iterations. 
+Another bottleneck is score recomputation (line \ref{alg:ef:line:recomp} in Algorithm~\ref{alg:ef}). 
+To update the score for each review $r\in \mathcal{S}_u(r_{max})\cap \mathcal{S}_p(r_{max})$, we need $|\mathcal{S}_u(r_{max})\cap \mathcal{S}_p(r_{max})|$ times {\em delete} and {\em insert} operations to the heap. 
+If we can assume the maximal number of reviews for each user or each product, $|\mathcal{S}_u(r_{max})\cap \mathcal{S}_p(r_{max})|$ is upper-bounded by a constant $C$.\footnote{However, based on our experiment as shown in Fig.~\ref{fig:speed}, the number $|\mathcal{S}_u(r_{max})\cap \mathcal{S}_p(r_{max})|$ is weakly related to $N$.} 
+The overall time complexity adds up to $O(N(\log{N}+C\log{N}))=O(N\log{N})$.
+
+In the two-stage strategy, the complexity is $O(N)$ for both stages. 
+Then the total complexity is also $O(N)$ , which is the same as the baseline method that uses only local textual features.
+ 
+
+\subsection{Training}
+
+It is straightforward to train the parameters of the scoring function for the two decoding algorithms. 
+We train a binary classifier as the score estimation function in Eq.~\ref{eq:fun}, considering word $n$-gram, user leniency and product popularity features. 
+The values of global features are computed using the gold labels of training data.
+This classifier is used for the easiest-first decoding and second stage of the two-stage decoding.
+A classifier used in the first stage of the two-stage decoding is trained only with word $n$-gram features.
+
+
+\section{Experiments}
+\label{sec:exp}
+
+In this section, we evaluate our method of collective sentiment classification on three real-world review datasets with user and/or product information \cite{Pang:2004,Blitzer:2007,maas:2011}.  
+
+
+\subsection{Setting}
+\label{subsec:setting}
+
+We preprocessed each review in the datasets using OpenNLP\footnote{http://opennlp.apache.org/} toolkit to detect sentence boundaries and to tokenize sentences. 
+Following Pang et~al. (2002), we induced word unigrams and bigrams as local features while taking negation into account. 
+We ignored the $n$-grams that appeared less than a predefined number of times (we set this number to be six) in the training data to limit the feature size.
+
+We used an online linear classifier called  confidence-weighted \cite{Dredze:2008} in our methods.\footnote{The code was kindly provided by the author of this paper.}
+We should emphasize here that the confidence-weighted algorithm is reported to perform as well as Support Vector Machine in a document-level sentiment classification \cite{Dredze:2008},  and it thereby constructs a strong baseline.
+
+For each confidence-weighted classifier, we tune the two hyper-parameters (confidence parameter $\phi$ and the number of iterations for training) on the training data.
+Confidence-weighted learning adjusts a multivariate Gaussian distribution over the weight parameters where $\phi$ controls the update rate of the variance and mean.
+Given a larger $\phi$, the variance decreases faster and the mean is updated more gradually.
+The number of iterations controls how many times each training instance is used to update the parameters. 
+We divided the training data into two equal-sized parts.
+In tuning, one part is used as training data and the other as development data.
+The parameter $\phi$ is chosen between \{1, 2, 5, 10, 20, 50\} and the number of iterations is chosen between \{1, 2, 5, 10, 15, 20, 25\}.
+After tuning, we used the tuned hyper-parameters to train a classifier with the entire training data.
+
+
+\subsection{Datasets}
+
+Pang et~al. (2004), Blitzer et~al. (2007), and Maas et~al. (2011)  collected three datasets that contain user and/or product information. 
+All of the polarities (positive and negative labels) in these datasets are balanced.
+Table~\ref{table:datasets} summarizes the statistics of these datasets. 
+
+\begin{table}[b]
+\caption{ Dataset statistics}
+\label{table:datasets}
+\input{1010table01.txt}
+\end{table}
+
+\noindent
+\textbf{Pang:}
+This dataset is a small subset of reviews manually chosen from a movie review archive\footnote{http://reviews.imdb.com/Reviews} collected from a discussion newsgroup on art movies. 
+2,000 reviews are randomly chosen from a large archive that contains over 30,000 reviews. 
+
+\noindent
+\textbf{Blitzer:}
+This dataset is collected from a shopping website\footnote{http://www.amazon.com} on various domains of products.
+We used part of its total 780~k reviews, to be consistent with the other two datasets. 
+We automatically deleted replicated reviews written by the same author on the same product (resulting in 740~k raw reviews). 
+Then, the reviews are balanced for positive and negative labels (over 90~k reviews for each, by randomly sampling the equal number of positive and negative reviews). 
+
+\noindent
+\textbf{Maas:}
+This dataset is collected from the same movie review website as the Pang dataset except that the reviews are not constrained on any discussion newsgroup.
+The choosing  process is automatically performed by collecting (upper-bounded number of) reviews for each product (movie).
+
+We automatically recovered the user and product information (implicitly) included in the datasets.
+The Pang and Blitzer datasets are accompanied  by the original html files, from which we automatically extracted the user and product for each review.
+We used a URL (link to the movie title) provided by the Maas dataset for each review as the identifier of the product, in this case, a movie.
+Because user information cannot be fully recovered in the Maas dataset, we only consider the product popularity in this dataset.
+
+When we split the datasets for cross-validation, we maintained the order of the Pang dataset and shuffled the Blitzer and Maas datasets for training and testing before splitting.
+Since our method  takes advantage of the user and product information, the more reviews each user or product has, the higher accuracy our method is expected to achieve (as we will later confirm in Section \ref{sec:exp:acc}).
+In the Blitzer and Maas datasets, the reviews were originally ordered by the user and product, respectively.
+Therefore, if we naively use the original order given by the datasets without shuffling when splitting them, the average number of reviews for each user or product becomes unnaturally high, which generates advantages to our method.
+In order to prevent the seemingly unfair accuracy gain in this particular splitting, we shuffled the reviews before any experiment rather than using the split provided by the authors.  
+We performed a two-fold cross-validation on all three datasets.
+
+
+\subsection{Results}
+\label{sec:exp:acc}
+
+We compared the accuracy of our method with two other methods: a baseline method using a confidence-weighted linear classifier with $n$-gram features and an existing user-aware sentiment classifier proposed by Seroussi {\em et al.} (2010). 
+For reference, we also listed the results reported in \nocite{maas:2011} Maas {\em et al.} (2011), which was evaluated using a different two-fold splitting.
+
+Seroussi {\em et al.} (2010) proposed a framework that combines scores given by classifiers trained on other users, according to the similarity to the target user. 
+We build a personalized classifier for each user on his/her training reviews if he/she has more (positive and negative) reviews than a predefined threshold.
+For any pair of users, they compute the similarity as the jacquard distance of word $n$-grams from their (testing and training) reviews (called ``AIT,'' which performed best in their paper).
+To classify a review written by a given user, they combine the scores generated by the other users' personalized classifiers weighted by the similarities between those users and the given user.
+If we set the aforementioned threshold too high, many word $n$-gram features will be lost because many reviews will be ignored.
+We tuned the threshold (from 1 to 5) using the identical method we used to tune the hyper-parameters for the confidence-weighted classifier.\footnote{Seroussi et~al. (2010) chose users who had more than 50 positive and 50 negative reviews. However, in our datasets, users have fewer reviews so we set the boundary to be 5.}
+In our datasets, many test users had a similarity of 0 to the users in the training data because the number of reviews written by each user is much smaller than that in the Seroussi's dataset.
+For labeling reviews written by such test users, we constructed and used a default classifier trained on all the training data.
+
+Table~\ref{table:acc} shows the experimental results. 
+Our method improves accuracies on the Blitzer and Maas datasets against the baseline classifiers. 
+A larger improvement is achieved on the Maas dataset, probably because the average  number of reviews for each product is higher than that of the Blitzer dataset such that we could estimate more reliable global features. 
+On the Pang dataset, however, our method had no advantage.
+We will further analyze the reason in the following paragraphs.
+{\makeatletter\def\@makefnmark{}
+\footnote{\llap{$^8$~}This result used different two-fold splitting from ours. Under their splitting, our accuracies were 90.79\%, 92.39\%, and 92.27\% for baseline, easiest-first, and two-stage strategies, respectively. Both strategies easily beat Maas et~al. (2011)'s accuracy, 88.89\%. Our baseline is superior to their method, partly because of the features we used. They used only unigram features, whereas we used unigram and bigram (which considers negation) as features. With only unigram features, our baseline classifier achieved 87.80\% accuracy.}
+\makeatother}
+
+\begin{table}[b]
+\caption{Accuracy (\%) on review datasets}
+\label{table:acc}
+\input{1010table02.txt}
+\vspace{4pt}\small
+$+\mathit{user}$ and $+\mathit{product}$ mean considering  user leniency and product popularity features. Accuracy marked with ``$\gg$''  was significantly better than baseline ($p < 0.01$, assessed by McNemar's test).
+\par
+\end{table}
+
+On the Blitzer dataset, user leniency was more helpful than  product popularity.  
+This is probably because the Blitzer dataset includes all the reviews written by each user. 
+On the other hand, product information plays an important role because the Maas dataset includes all the reviews for each product. 
+
+Among the two decoding methods, the easiest-first decoding consistently achieves higher accuracy. 
+This confirms our expectation that easiest-first decoding is more cautious than two-stage decoding.
+However, easiest-first decoding has its own weakness in speed.
+
+Seroussi {\em et al.} (2011) performed badly because the number of reviews for each user in our datasets was lower than theirs, hence, the personalized classifiers learned on limited instances would be unreliable.
+
+
+\subsection{Analysis}
+
+In this section, we analyze our experimental results on accuracy.
+We first investigate the impact on accuracy when we change the testing data size  in Analysis  {\romannumeral 1}.
+Next, we show how much improvement will be gained by our method if a user (or a product) has a different number of reviews in Analysis {\romannumeral 2}.
+Then, we show the biases of each dataset, and the performance of our method on both emerging and existing users (and products) in Analysis {\romannumeral 3} and { \romannumeral 4}.
+Finally, in Analysis {\romannumeral 5} and { \romannumeral 6}, we show the learning curves and some examples.
+
+
+\noindent
+\textbf{Analysis {\romannumeral 1}: Impact of testing data size on speed and accuracy}
+
+First, we investigate the impact of the number of test reviews on speed and accuracy in our collective sentiment classification. 
+We use the Blitzer dataset for evaluation because of its larger size. 
+User leniency and product popularity are both considered. 
+We use the fixed hyper-parameters ($\phi=1.0$, $\#$ $iterations=10$) for all the confidence-weighted classifiers used in this experiment.
+
+To illustrate the impact of the size of test data on classification accuracy, we changed the number of test reviews processed at once.  
+Here, instead of decoding the whole testing data, we split the test reviews into equal-sized smaller subsets and apply our classifier independently to each.\footnote{We used the same two-fold cross-validation as the main experiment for accuracy.} 
+We accumulate the results for all the subsets to compare the accuracy for the entire test data.
+Fig.~\ref{fig:acc} shows the experimental results. 
+When we process a larger number of reviews at once, we have more reviews per user or per product to compute the global features. 
+The computed global features thereby become more statistically reliable and accurately capture user leniency and product popularity, which results in higher classification accuracy. 
+We will confirm this in Analysis {\romannumeral 2}.
+ 
+We then measured the testing speed using the same setting as the above experiment, while evaluating the average time consumed by one single subset. 
+As shown in Fig.~\ref{fig:speed}, the speed of the easiest-first decoding  drastically slows down as the number of processed reviews grows, whereas the speed of the two-stage decoding increases linearly.
+Meanwhile, the accuracy of the two strategies are competitive, as shown in Fig.~\ref{fig:acc}.  
+
+\begin{figure}[t]
+\setlength{\captionwidth}{200pt}
+	\begin{minipage}[t]{200pt}
+\begin{center}
+	\includegraphics{21-3ia1010f1.eps}
+\end{center}
+	\hangcaption{Classification accuracy computed accumulatively when the number of testing reviews was changed}
+	\label{fig:acc}
+	\end{minipage}
+	\hfill
+	\begin{minipage}[t]{200pt}
+\begin{center}
+	\includegraphics{21-3ia1010f2.eps}
+\end{center}
+	\hangcaption{Average computation time when the number of testing reviews was changed}
+	\label{fig:speed}
+	\end{minipage}
+\end{figure}
+
+Based on these observations, the key factor in achieving better accuracy is not the choice of decoding strategy, but the amount of test data processed at once. 
+We conclude that when we have too much test data for the easiest-first decoding to process in a practical time we should adopt the two-stage decoding strategy to induce and exploit more reliable global features. 
+Otherwise, we can choose the easiest-first decoding to enjoy a modest gain in accuracy.
+
+
+\noindent
+\textbf{Analysis {\romannumeral 2}: Accuracy in terms of size of neighbors}
+
+The accuracy gain is rooted in global features, while global features are computed by referring to labels of (user- and product-related) neighboring reviews, $\mathcal{S}_u(r)$ and $\mathcal{S}_p(r)$.
+When only one such neighbor is available, global features may be unreliable compared with those computed from many neighbors.  
+We then investigate how the number of (user- and product-related) neighboring reviews affect accuracy improvement.
+
+Both user leniency and product popularity features show no improvement on the Pang dataset, as in Table~\ref{table:accDistPang}, because of the limited review size, as we illustrated in Analysis {\romannumeral 1}.
+It is also probablly because the biases of the user and product are not sufficient in this dataset, which  will be shown in Analysis {\romannumeral 3}.
+Table~\ref{table:accDistBlitzer} shows that user leniency features greatly contribute to the improvement, while product popularity has limited influence on the Blitzer dataset.
+Popularity features play an important role on the Maas dataset, as shown in Table~\ref{table:accDistMaas}.
+In general, we expect further improvement if we collect some unlabeled reviews for the user (or product).
+
+We noticed that when the number of reviews written by a user or on a product is large enough ($3\leq|\mathcal{S}_u(r)|\leq7$ in the Blitzer dataset and $2\leq|\mathcal{S}_p(r)|\leq5$ in the Maas dataset) having more reviews for such users and products does not improve the accuracy any further. 
+Considering that a larger $|\mathcal{S}_u(r)|$ or $|\mathcal{S}_p(r)|$ results in lower speed of easiest-first decoding, as shown earlier, we could bound the number of reviews written by each user or on each product to save computation without losing accuracy.
+
+\begin{table}[p]
+\hangcaption{Accuracy (\%, lower inside cell) of proposed method (two-stage) and review size (upper inside cell) of the {\bf Pang} dataset divided according to the number of reviews written by the user and number of reviews on the product}
+\label{table:accDistPang}
+\input{1010table03.txt}
+\vspace{4pt}\small
+The float inside parentheses is the difference from the baseline method. No accuracy is significantly different from baseline ($p \geq 0.01$, assessed by McNemar's test).
+\par
+\end{table}
+\begin{table}[p]
+\hangcaption{Accuracy (\%, lower inside cell) of proposed method (two-stage) and review size (upper inside cell) on the {\bf Blitzer} dataset divided according to number of reviews written by the user and the number of reviews on the product}
+\label{table:accDistBlitzer}
+\input{1010table04.txt}
+\vspace{4pt}\small
+The float inside parentheses is the difference from the baseline method. Accuracy marked with ``$\gg$''  was significantly better than baseline ($p < 0.01$, assessed by McNemar's test).
+\par
+\end{table}
+\begin{table}[p]
+\hangcaption{Accuracy (\%, lower inside cell) of proposed method (two-stage) and review size (upper inside cell) on the  {\bf Maas} dataset divided according to number of reviews on the product}
+\label{table:accDistMaas}
+\input{1010table05.txt}
+\vspace{4pt}\small
+The float inside parentheses is the difference from the baseline method. Accuracy marked with ``$\gg$''  was significantly better than baseline ($p < 0.01$, assessed by McNemar's test).
+\par
+\end{table}
+
+
+\noindent
+\textbf{Analysis {\romannumeral 3}: Polarity bias in terms of user or product}
+
+Since our method takes advantage of biased distributions over polarity labels in terms of a user or product, larger the bias in the data, greater our method could improve classification accuracy.
+We then compute the polarity bias in terms of users (in short, $user\_bias$) and products ($product\_bias$) as follows:
+\begin{align*}
+user\_bias(u)&=\frac{|N^+(u)-N^-(u)|}{N^+(u)+N^-(u)},\\
+product\_bias(p)&=\frac{|N^+(p)-N^-(p)|}{N^+(p)+N^-(p)},
+\end{align*}
+where, $N^{+/-}(u)$ or $N^{+/-}(p)$ are the number of reviews written by user $u$ or written on product $p$ with polarity $\in\{+,-\}$.\footnote{The numbers are counted using all the reviews, including training and testing data.} 
+With this definition, for instance, user $u$ who only writes positive reviews will have $user\_bias(u)=1$ while user $u$ who writes positive and negative reviews evenly will be assigned as $user\_bias(u)=0$.
+Higher the $user\_bias$ and $product\_bias$ values that exist, the more potential our method has to improve accuracy.
+
+\begin{figure}[b]
+\setlength{\captionwidth}{200pt}
+	\begin{minipage}[t]{200pt}
+\begin{center}
+	\includegraphics{21-3ia1010f3.eps}
+\end{center}
+	\hangcaption{User bias distribution. The users who have only one review are eliminated. }
+	\label{fig:userbias}
+	\end{minipage}
+	\hfill
+	\begin{minipage}[t]{200pt}
+\begin{center}
+	\includegraphics{21-3ia1010f4.eps}
+\end{center}
+	\hangcaption{Product bias distribution. The products that have only one review are eliminated.}
+	\label{fig:prodbias}
+	\end{minipage}
+\end{figure}
+
+Because of the different collecting methods, the three datasets we used show different bias properties. 
+The distributions of $user\_bias$ and $product\_bias$ values are shown in Fig.~\ref{fig:userbias} and Fig.~\ref{fig:prodbias}, respectively. 
+Possibly, because the Pang dataset is collected from a discussion newsgroup, the users in it are less biased than those in the Blitzer dataset, which is collected from a general domain.
+As such, the user leniency features extracted from the Pang dataset might be unreliable since users do not have much bias.
+The products in the Maas dataset are more biased than those in the other two datasets.
+This could be a reason user information in the Blitzer dataset and product information in the Maas dataset contribute the most to improvement. 
+
+As illustrated in Fig.~\ref{fig:acc}, when the number of reviews is small, the accuracy of our method decreases.
+Thus, the small size of the Pang dataset (Table~\ref{table:datasets}) and low user bias values seem to be the reasons our method performed badly on this dataset.
+
+
+\noindent
+\textbf{Analysis {\romannumeral 4}: Impact of training reviews written by test users  (on test products)}
+
+Aiming at revealing how well our method works for reviews written by unseen (emerging) users or on unseen (emerging) products,
+we investigated classification accuracy depending on whether we observed the same user (or product)  in the training data.
+We use user leniency and product popularity features on the Pang and Blitzer datasets, while we consider only product popularity features on the Maas dataset.
+The baseline classifier is expected to estimate the labels of reviews written by seen users or on seen products better than those unseen ones' because the classifier learns {\em n}-grams specific to these users or the products (and thus is more effective in classification).
+On the other hand, our method performed well when more reviews were available for users and products in the test data, so we can expect consistent improvement for seen and unseen users (products).
+
+On the Pang dataset, as shown in Table~\ref{table:pangSplit}, the smaller number of training data resulted in poor classification accuracy, particularly on unseen users and unseen products.
+Unlike in the other two datasets, lack of biases and the small number of reviews seem to be responsible.
+
+\begin{table}[b]
+\caption{Accuracy (\%) on seen/unseen user or product splits of {\bf Pang} dataset}
+\label{table:pangSplit}
+\input{1010table06.txt}
+\small
+\textit{su}, \textit{uu}, \textit{sp} and \textit{up} denote \textit{seen user}, \textit{unseen user}, \textit{seen product}, and \textit{unseen product}, respectively. The float inside parentheses is the difference between our method and baseline classifier. No accuracy is significantly different from baseline ($p \geq 0.01$, assessed by McNemar's test).
+\par
+\end{table}
+
+As shown in Table~\ref{table:blitzerSplit}, a larger improvement was observed on reviews written by the seen users in the Blitzer dataset. 
+We found that the average number of reviews written by a user was extremely low (1.04 reviews), and no global features were fired in most of these reviews.
+We consider this may be the main reason for the poor improvement in accuracy on reviews written by unseen users.
+
+On the Maas dataset, as shown in Table~\ref{table:maasSplit}, the improvement on the reviews written on unseen products is significantly larger than the reviews on seen products.
+This may seem counterintuitive since we have a smaller number of reviews written on the unseen products (which means fewer reliable global features). 
+The reason is probably that baseline classifier performed poorly on reviews written on unseen products, and hence left our method larger space for improvement.
+
+\begin{table}[t]
+\caption{ Accuracy (\%) on seen/unseen user or product splits of {\bf Blitzer} dataset}
+\label{table:blitzerSplit}
+\input{1010table07.txt}
+\small\textit{su}, \textit{uu}, \textit{sp} and \textit{up} denote \textit{seen user}, \textit{unseen user}, \textit{seen product}, and \textit{unseen product}, respectively. The float inside parentheses is the difference between our method and baseline classifier. Accuracy marked with ``$\gg$''  was significantly better than baseline ($p < 0.01$, assessed by McNemar's test).
+\par
+\end{table}
+\begin{table}[t]
+\caption{Accuracy (\%) on seen/unseen product splits of {\bf Maas} dataset}
+\label{table:maasSplit}
+\input{1010table08.txt}
+\vspace{4pt}
+\small
+\textit{sp} and \textit{up} denote \textit{seen product} and \textit{unseen product}, respectively. The float inside parentheses is the difference between our method and baseline classifier. Accuracy marked with ``$\gg$''  was significantly better than baseline ($p < 0.01$, assessed by McNemar's test).
+\par
+\end{table}
+
+
+\noindent
+\textbf{Analysis {\romannumeral 5}: Learning curves}
+
+Using the same setting as in Analysis {\romannumeral 1}, we divided the training data and investigated the effect on accuracy.
+Fig.~\ref{fig:train} shows the accuracy when we change the size of the training data. 
+Our method has a clear advantage over the baseline method, even when the size of the training data is small (1,800 reviews).
+In other words, we do not need much training data to learn the correlation between the label and global features.
+Our method trained with half of the training data achieved a higher accuracy (90.53\%) than the baseline method trained on the entire data (90.31\%).
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{21-3ia1010f5.eps}
+\end{center}
+\caption{Average accuracy when size of the training data is changed}
+\label{fig:train}
+\end{figure}
+
+
+\noindent
+\textbf{Analysis {\romannumeral 6}: Examples}
+
+Some examples are given to explain how our model works.
+As shown in Table~\ref{table:examples},  our method  successfully classifies some reviews that are  hard to  classify correctly when only textual features are used.
+
+\begin{table}[t]
+\hangcaption{Examples show the influence of leniency and popularity global features}
+\label{table:examples}
+\input{1010table09.txt}
+\small
+The {\bf bold} content is the negative evidence learned by classifier.
+\par
+\end{table}
+
+In the first two examples, weak negative textual features are found in the test review.
+However, since the two users are lenient  and product of the first review is relatively popular (these characteristics are captured by our proposed method), the two reviews should still be given positive labels.
+
+Frequently, sentiment expressed inside a review is not obvious if the classifier does not know the meaning of the words (sometimes, even a human finds it hard to identify sentiment from words). 
+As we can see in the third example in Table~\ref{table:examples}, the baseline classifier could recognize no obvious sentiment evidence from the textual features, 
+while our method classified it as negative by detecting that it is about a notorious product and the user is critical.
+
+These examples illustrate that our model can successfully exploit the user and product biases to improve accuracy of sentiment classification.
+
+
+\section{Conclusion}
+\label{sec:con}
+
+We presented a method of collective sentiment classification that captures and utilizes  user leniency and
+ product popularity. 
+Different from most of the previous studies that are aware of the user and product of the review, our model does not assume the training data to contain reviews written by the same user or on the same product in the test reviews. 
+To determine a label configuration for a given set of reviews,  we adopted and compared two strategies, namely, easiest-first decoding and two-stage decoding. 
+
+We conducted experiments on three real-world review datasets  to compare with existing methods. 
+The proposed method  performed more accurately than the baseline, which uses only word $n$-grams as features when the users and products are biased on sentiment (which is often true in the real-world). 
+It also outperformed the state-of-the-art method that combines personalized classifiers. 
+The more reviews per user or per product are available, larger the improvement our method gains.
+The two-stage strategy runs in time that is linear to the number of test reviews (expected to be the same order of speed as the baseline classifiers), while achieving slightly less accuracy compared with the easiest-first strategy. 
+
+
+We consider our proposed method as a first step toward modeling more complex properties of reviews.
+A future extension of this work is to detect a user's preference for a certain kind of product. 
+We also plan to use dual decomposition \cite{Koo:2010} as an advanced decoding strategy for our collective sentiment classification. 
+
+
+\acknowledgment
+
+The authors would like to thank the reviewers for their valuable comments.
+This work is based on the conference paper \cite{Gao:paclic2013} with extended experiment and detailed result analysis.
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Blitzer, Dredze, \BBA\ Pereira}{Blitzer
+  et~al.}{2007}]{Blitzer:2007}
+Blitzer, J., Dredze, M., \BBA\ Pereira, F. \BBOP 2007\BBCP.
+\newblock \BBOQ Biographies, Bollywood, Boom-boxes and Blenders: Domain
+  Adaptation for Sentiment Classification.\BBCQ\
+\newblock In {\Bem Proceedings of ACL}, \mbox{\BPGS\ 440--447}, Prague, Czech
+  Republic.
+
+\bibitem[\protect\BCAY{Dredze, Crammer, \BBA\ Pereira}{Dredze
+  et~al.}{2008}]{Dredze:2008}
+Dredze, M., Crammer, K., \BBA\ Pereira, F. \BBOP 2008\BBCP.
+\newblock \BBOQ Confidence-weighted Linear Classification.\BBCQ\
+\newblock In {\Bem Proceedings of ICML}, \mbox{\BPGS\ 264--271}, Helsinki,
+  Finland.
+
+\bibitem[\protect\BCAY{Gao, Yoshinaga, Kaji, \BBA\ Kitsuregawa}{Gao
+  et~al.}{2013}]{Gao:paclic2013}
+Gao, W., Yoshinaga, N., Kaji, N., \BBA\ Kitsuregawa, M. \BBOP 2013\BBCP.
+\newblock \BBOQ Collective Sentiment Classification Based on User Leniency and
+  Product Popularity.\BBCQ\
+\newblock In {\Bem Proceedings of Paclic}, \mbox{\BPGS\ 357--365}, Taipei,
+  Taiwan.
+
+\bibitem[\protect\BCAY{Hu \BBA\ Liu}{Hu \BBA\ Liu}{2004}]{Hu:2004}
+Hu, M.\BBACOMMA\ \BBA\ Liu, B. \BBOP 2004\BBCP.
+\newblock \BBOQ Mining and Summarizing Customer Reviews.\BBCQ\
+\newblock In {\Bem Proceedings of KDD}, \mbox{\BPGS\ 168--177}, Seattle, WA,
+  USA.
+
+\bibitem[\protect\BCAY{Koo, Rush, Collins, Jaakkola, \BBA\ Sontag}{Koo
+  et~al.}{2010}]{Koo:2010}
+Koo, T., Rush, A.~M., Collins, M., Jaakkola, T., \BBA\ Sontag, D. \BBOP
+  2010\BBCP.
+\newblock \BBOQ Dual Decomposition for Parsing with Non-projective Head
+  Automata.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP}, \mbox{\BPGS\ 1288--1298}, Cambridge,
+  MA, USA.
+
+\bibitem[\protect\BCAY{Krishnan \BBA\ Manning}{Krishnan \BBA\
+  Manning}{2006}]{Krishnan06}
+Krishnan, V.\BBACOMMA\ \BBA\ Manning, C.~D. \BBOP 2006\BBCP.
+\newblock \BBOQ An Effective Two-stage Model for Exploiting Non-local
+  Dependencies in Named Entity Recognition.\BBCQ\
+\newblock In {\Bem Proceedings of COLING-ACL}, \mbox{\BPGS\ 1121--1128},
+  Sydney, NSW, Australia.
+
+\bibitem[\protect\BCAY{Li, Liu, Jin, Zhao, Yang, \BBA\ Zhu}{Li
+  et~al.}{2011}]{LiFangtao:2011}
+Li, F., Liu, N., Jin, H., Zhao, K., Yang, Q., \BBA\ Zhu, X. \BBOP 2011\BBCP.
+\newblock \BBOQ Incorporating Reviewer and Product Information for Review
+  Rating Prediction.\BBCQ\
+\newblock In {\Bem Proceedings of IJCAI}, \mbox{\BPGS\ 1820--1825}, Barcelona,
+  Spain.
+
+\bibitem[\protect\BCAY{Li, Lee, Chen, Huang, \BBA\ Zhou}{Li
+  et~al.}{2010}]{Li:2010}
+Li, S., Lee, S. Y.~M., Chen, Y., Huang, C.-R., \BBA\ Zhou, G. \BBOP 2010\BBCP.
+\newblock \BBOQ Sentiment Classification and Polarity Shifting.\BBCQ\
+\newblock In {\Bem Proceedings of COLING}, \mbox{\BPGS\ 635--643}, Beijing,
+  China.
+
+\bibitem[\protect\BCAY{Maas, Daly, Pham, Huang, Ng, \BBA\ Potts}{Maas
+  et~al.}{2011}]{maas:2011}
+Maas, A.~L., Daly, R.~E., Pham, P.~T., Huang, D., Ng, A.~Y., \BBA\ Potts, C.
+  \BBOP 2011\BBCP.
+\newblock \BBOQ Learning Word Vectors for Sentiment Analysis.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-HLT}, \mbox{\BPGS\ 142--150}, Portland,
+  Oregon, USA.
+
+\bibitem[\protect\BCAY{Nakagawa, Inui, \BBA\ Kurohashi}{Nakagawa
+  et~al.}{2010}]{NakagawaIK10}
+Nakagawa, T., Inui, K., \BBA\ Kurohashi, S. \BBOP 2010\BBCP.
+\newblock \BBOQ Dependency Tree-based Sentiment Classification Using CRFs with
+  Hidden variables.\BBCQ\
+\newblock In {\Bem Proceedings of NAACL-HLT}, \mbox{\BPGS\ 786--794}, Los
+  Angeles, CA, USA.
+
+\bibitem[\protect\BCAY{Pang \BBA\ Lee}{Pang \BBA\ Lee}{2004}]{Pang:2004}
+Pang, B.\BBACOMMA\ \BBA\ Lee, L. \BBOP 2004\BBCP.
+\newblock \BBOQ A Sentimental Education: Sentiment Analysis using Subjectivity
+  Summarization Based on Minimum Cuts.\BBCQ\
+\newblock In {\Bem Proceedings of ACL}, \mbox{\BPGS\ 271--278}, Barcelona,
+  Spain.
+
+\bibitem[\protect\BCAY{Pang \BBA\ Lee}{Pang \BBA\ Lee}{2008}]{Pang:2008}
+Pang, B.\BBACOMMA\ \BBA\ Lee, L. \BBOP 2008\BBCP.
+\newblock \BBOQ Opinion Mining and Sentiment Analysis.\BBCQ\
+\newblock {\Bem Foundation and Trends in Information Retrieval}, {\Bbf 2}
+  (1-2), \mbox{\BPGS\ 1--135}.
+
+\bibitem[\protect\BCAY{Pang, Lee, \BBA\ Vaithyanathan}{Pang
+  et~al.}{2002}]{Pang:2002}
+Pang, B., Lee, L., \BBA\ Vaithyanathan, S. \BBOP 2002\BBCP.
+\newblock \BBOQ Thumbs Up? Sentiment Classification Using Machine Learning
+  Techniques.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP}, \mbox{\BPGS\ 79--86}, Pennsylvania,
+  PA, USA.
+
+\bibitem[\protect\BCAY{Qiu, Liu, Bu, \BBA\ Chen}{Qiu et~al.}{2011}]{Qiu:2011}
+Qiu, G., Liu, B., Bu, J., \BBA\ Chen, C. \BBOP 2011\BBCP.
+\newblock \BBOQ Opinion Word Expansion and Target Extraction through Double
+  Propagation.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 37}  (1), \mbox{\BPGS\
+  9--27}.
+
+\bibitem[\protect\BCAY{Seroussi, Zukerman, \BBA\ Bohnert}{Seroussi
+  et~al.}{2010}]{Seroussi:2010}
+Seroussi, Y., Zukerman, I., \BBA\ Bohnert, F. \BBOP 2010\BBCP.
+\newblock \BBOQ Collaborative Inference of Sentiments from Texts.\BBCQ\
+\newblock In {\Bem Proceedings of UMAP}, \mbox{\BPGS\ 195--206}, Big Island,
+  HI, USA.
+
+\bibitem[\protect\BCAY{Socher, Pennington, Huang, Ng, \BBA\ Manning}{Socher
+  et~al.}{2011}]{Socher:2011}
+Socher, R., Pennington, J., Huang, E.~H., Ng, A.~Y., \BBA\ Manning, C.~D. \BBOP
+  2011\BBCP.
+\newblock \BBOQ Semi-Supervised Recursive Autoencoders for Predicting Sentiment
+  Distributions.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP}, \mbox{\BPGS\ 151--161}, Edinburgh,
+  Scotland, UK.
+
+\bibitem[\protect\BCAY{Speriosu, Sudan, Upadhyay, \BBA\ Baldridge}{Speriosu
+  et~al.}{2011}]{speriosu2011}
+Speriosu, M., Sudan, N., Upadhyay, S., \BBA\ Baldridge, J. \BBOP 2011\BBCP.
+\newblock \BBOQ Twitter Polarity Classification with Label Propagation over
+  Lexical Links and the Follower Graph.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP, Workshop on Unsupervised Learning in
+  NLP}, \mbox{\BPGS\ 53--63}, Edinburgh, UK.
+
+\bibitem[\protect\BCAY{Tan, Lee, Tang, Jiang, Zhou, \BBA\ Li}{Tan
+  et~al.}{2011}]{TanLTJZL11}
+Tan, C., Lee, L., Tang, J., Jiang, L., Zhou, M., \BBA\ Li, P. \BBOP 2011\BBCP.
+\newblock \BBOQ User-level Sentiment Analysis Incorporating Social
+  Networks.\BBCQ\
+\newblock In {\Bem Proceedings of KDD}, \mbox{\BPGS\ 1397--1405}, San Diego,
+  California, USA.
+
+\bibitem[\protect\BCAY{Tsuruoka \BBA\ Tsujii}{Tsuruoka \BBA\
+  Tsujii}{2005}]{Tsuruoka05}
+Tsuruoka, Y.\BBACOMMA\ \BBA\ Tsujii, J. \BBOP 2005\BBCP.
+\newblock \BBOQ Bidirectional Inference with the Easiest-first Strategy for
+  Tagging Sequence Data.\BBCQ\
+\newblock In {\Bem Proceedings of HLT-EMNLP}, \mbox{\BPGS\ 467--474},
+  Vancouver, B.C., Canada.
+
+\bibitem[\protect\BCAY{Turney}{Turney}{2002}]{Turney:2002}
+Turney, P.~D. \BBOP 2002\BBCP.
+\newblock \BBOQ Thumbs Up or Thumbs Down?: Semantic Orientation Applied to
+  Un\-supervised Classification of Reviews.\BBCQ\
+\newblock In {\Bem Proceedings of ACL}, \mbox{\BPGS\ 417--424}, Pennsylvania,
+  PA, USA.
+
+\end{thebibliography}
+
+
+\begin{biography}
+
+\bioauthor[:]{Wenliang Gao}{
+He received his B.Sc.~in Software Engineering and M.Sc\@. in Computer Science and Technology from the Dalian University of Technology, China in 2007 and 2009, respectively.
+He is currently pursuing his Ph.D.~at the Graduate School of Information Science and Technology, the University of Tokyo, Japan.
+His research interests include natural language processing and machine learning.
+}
+
+\bioauthor[:]{Nobuhiro Kaji}{
+He received his Ph.D.~in Information Science and Technology from
+the University of Tokyo, Japan, in 2005. He worked at the Institute of
+Industrial Science, the University of Tokyo, as a Research Associate and
+Project Assistant Professor from 2005 to 2006 and from 2006 to 2012, respectively.
+He is currently a Project Associate Professor at the Institute of Industrial Science, the University of
+Tokyo, and a Senior Researcher at the National Institute of Information
+and Communications Technology (NICT), Japan.
+His research
+interests include natural language processing and machine learning.
+}
+\bioauthor[:]{Naoki Yoshinaga}{
+He received his B.Sc.~and M.Sc.~in Information Science and
+Ph.D.~in Information Science and Technology from the University
+of Tokyo, Japan in 2000, 2002, and 2005, respectively. He was a
+JSPS research fellow from 2002 to 2005 (DC1) and from 2005 to
+2008 (PD). He worked at the Institute of Industrial Science, the University of Tokyo, as a
+Project Researcher and a Project Assistant Professor from 2008 to
+2012. He is currently a Project Associate Professor at the
+Institute of Industrial Science, the University of Tokyo, and a Senior
+Researcher at the National Institute of Information
+and Communications Technology (NICT), Japan. His research
+interests include computational linguistics and machine learning.
+}
+\bioauthor[:]{Masaru Kitsuregawa}{
+He received his Ph.D.~in Information Engineering
+from the University of Tokyo, Japan, in 1983. He is currently a
+Professor at the Institute of Industrial Science, the University of
+Tokyo, Director General/Professor at Earth Observation Data Integration
+\& Fusion Research Initiative of the University of Tokyo, Director
+General of the National Institute of Informatics, and President of
+Information Processing Society of Japan. His research interests include
+high performance database engineering and big data systems. He is a
+recipient of the ACM SIGMOD Edgar F. Codd Innovations Award (2009),
+and a co-recipient of the IPSJ Contribution Award (2010) and the Medal
+with Purple Ribbon (2013).
+}
+\end{biography}
+
+
+\biodate
+
+
+
+\end{document}

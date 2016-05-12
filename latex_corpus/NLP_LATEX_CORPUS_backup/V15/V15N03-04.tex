@@ -1,0 +1,723 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.1}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+\usepackage{lingexample}
+\usepackage{tree-dvips}
+\usepackage{fancybox}
+
+\Volume{15}
+\Number{3}
+\Month{July}
+\Year{2008}
+
+\received{2007}{11}{15}
+\revised{2008}{2}{20}
+\accepted{2008}{3}{19}
+
+\setcounter{page}{77}
+
+\jtitle{HTML文書集合からの評価文の自動収集}
+\jauthor{鍜治　伸裕\affiref{iis} \and 喜連川　優\affiref{iis}}
+\jabstract{
+ 本論文では大規模なHTML文書集合から評価文を自動収集する手法を提案する．
+ 基本的なアイデアは「定型文」「箇条書き」「表」といった記述形式を利用す
+ るというものである．本手法に必要なのは少数の規則だけであるため，人手を
+ ほとんどかけずに評価文を収集することが可能である．また，任意のHTML文書
+ に適用できる手法であるため，様々なドメインの評価文を収集できることが期
+ 待される．実験では，提案手法を約10億件のHTML文書に適用したところ，約65
+ 万の評価文を獲得することができた．
+}
+\jkeywords{評価情報分析，評価極性}
+
+\etitle{Acquiring Polar Sentences from HTML Documents}
+\eauthor{Nobuhiro Kaji\affiref{iis} \and Masaru Kitsuregawa\affiref{iis}} 
+\eabstract{
+ This paper represents a method of acquiring polar sentences from HTML
+ documents. The basic idea is to exploit three lexico-syntactic patterns
+ and two layout structures of HTML documents. The method requires only a
+ small amount of hand-crafted rules and can be implemented in low
+ cost. In our experiment, the method was applied to one billion
+ documents and 650 thouthands polar sentences were aquired.
+}
+\ekeywords{Sentiment Analysis, Polarity, Semantic Orientation}
+
+\headauthor{鍜治，喜連川}
+\headtitle{HTML文書集合からの評価文の自動収集}
+
+\affilabel{iis}{東京大学生産技術研究所}{Institute of Industrial Science, University of Tokyo}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+
+近年，自然言語処理において評価情報処理が注目を集めている\cite{Inui06}．
+評価情報処理とは，物事に対する評価が記述されたテキストを検索，分類，要約，
+構造化するような処理の総称であり，国家政治に対する意見集約やマーケティン
+グといった幅広い応用を持っている．具体的な研究事例としては，テキストから
+特定の商品やサービスに対する評価情報を抽出する処理や，文書や文を評価極性
+（好評と不評）に応じて分類する処理などが議論されている
+\cite{Kobayashi05,Pang02,Kudo04,Matsumoto05,Fujimura05,Osashima05,McDonald07}．
+
+評価情報処理を行うためには様々な言語資源が必要となる．例えば，評価情報を
+抽出するためには「良い」「素晴しい」「ひどい」といった評価表現を登録した
+辞書が不可欠である\cite{Kobayashi05}．また，文書や文を評価極性に応じて分
+類するためには，評価極性がタグ付けされたコーパスが教師あり学習のトレーニ
+ングデータとして使われる\cite{Pang02}．我々は，評価情報処理のために利用
+する言語資源の一つとして，評価文コーパスの構築に取り組んでいる．ここで言
+う評価文コーパスとは，何かの評価を述べている文（評価文）とその評価極性を示
+すタグが対になったデータのことである（表\ref{tab:corpus}）．タグは好評と不
+評の2種類を想定している．大規模な評価文コーパスがあれば，それを評価文分
+類器のトレーニングデータとして利用することや，そのコーパスから評価表現を
+獲得することが可能になると考えられる．
+
+\begin{table}[b]
+\caption{評価文コーパスの例．$+$は好評極性，$-$は不評極性を表す．}
+\label{tab:corpus}
+\input{04table1.txt}
+\end{table}
+\begin{figure}[b]
+\input{04fig1.txt}
+  \caption{不評文書に好評文が出現するレビュー文書}
+  \label{fig:pang}
+\end{figure}
+
+評価文コーパスを構築するには，単純に考えると以下の2つの方法がある．人手
+でコーパスを作成する方法と，ウェブ上のレビューデータを活用する方法である．
+後者は，例えばアマゾン
+\footnote{http://amazon.com/}のようなサイトを利用するというものである．
+アマゾンに投稿されているレビューには，そのレビューの評価極性を表すメタデー
+タが付与されている．そのため，メタデータを利用することによって，好評内容
+のレビューと不評内容のレビューを自動的に収集することができる．
+
+しかしながら，このような方法には問題がある．まず，人手でコーパスを作ると
+いう方法は，大規模なコーパスを作ることを考えるとコストが問題となる．また，
+レビューデータを利用する方法には，文単位の評価極性情報を取得しにくいとい
+う問題がある．後者の具体例として図\ref{fig:pang}に示すレビュー文書
+\cite{Pang02}を考える．これは文書全体としては不評内容を述べているが，そ
+の中には好評文がいくつも出現している例である．このような文書を扱う場合，
+文書単位の評価極性だけでなく，文単位の評価極性も把握しておくことが望まし
+い．しかし，一般的にレビューのメタデータは文書に対して与えられるので，文
+単位の評価極性の獲得は難しい．さらに，レビューデータを利用した場合には，
+内容が特定ドメインに偏ってしまうという問題もある．
+
+こうした問題を踏まえて，本論文では大規模なHTML文書集合から評価文を自動収
+集する手法を提案する．基本的なアイデアは「定型文」「箇条書き」「表」といっ
+た記述形式を利用するというものである．本手法に必要なのは少数の規則だけで
+あるため，人手をほとんどかけずに大量の評価文を収集することが可能となる．
+また，評価文書ではなく評価文を収集対象としているため，図\ref{fig:pang}の
+ような問題は緩和される．さらに任意のHTML文書に適用できる方法であるため，
+様々なドメインの評価文を収集できることが期待される．実験では，提案手法を
+約10億件のHTML文書に適用したところ，約65万の評価文を獲得することができた．
+
+\section{アイデア} \label{sec:idea}
+
+提案手法は「定型文」「箇条書き」「表」という3つの記述形式を利用して評価
+文を自動抽出する．本節では，これら3つの形式で記述された評価文の例を概観
+して，基本的な考え方を説明する．手法の詳細は次節で述べる．
+
+\subsection{定型文}
+
+まず我々が着目したのは定型的な評価文である．
+
+\begin{lingexample}
+ \head{これの\underline{良いところは} \fbox{計算が速い} \underline{ことです}．}
+ \sent{\underline{悪い点は}，\fbox{慣れるまで時間がかかる} \underline{こと}．}
+\end{lingexample}
+
+\noindent
+いずれの評価文も「良いところ／悪い点は〜なこと」という定型的な表現を使っ
+て記述されている．そのため，下線部にマッチするような語彙統語パターンを用
+意すれば，四角で囲まれたテキストを評価文として抽出することができる
+\footnote{四角で囲まれたテキストは正確には文ではなく句と呼ぶべきであるが，
+箇条書きと表から抽出される評価文との整合性を考えて，ここでは文と呼ぶこと
+にする．}．
+
+以下では「良いところ」「悪い点」のように，評価文の存在を示唆する表現のこ
+とを手がかり句と呼ぶ．特に好評文の存在を示す手がかり句を「好評手がかり句」
+と呼ぶ．例えば「良いところ」は好評手がかり句である．同様に，不評文の存在
+を示す手がかり句を「不評手がかり句」と呼ぶ．
+
+
+\subsection{箇条書き}
+
+次に着目したのは，図\ref{fig:itemize}のように箇条書き形式で列挙された評
+価文である．この箇条書きは手がかり句（良い点，悪い点）を見出しに持つため，
+各項目に評価文が含まれていることが分かる．
+
+\begin{figure}[b]
+\input{04fig2.txt}
+  \caption{箇条書き形式で記述された評価文}
+  \label{fig:itemize}
+\end{figure}
+
+
+
+\subsection{表}
+
+箇条書きと同様に，図\ref{fig:table}のような表形式からも評価文を自動収集
+することができる．この表は左側の列が見出しの働きをしているが，ここにも手
+がかり句（気に入った点，イヤな点）が使われているので，表中に評価文が記述さ
+れていることが分かる．
+
+
+\begin{figure}[b]
+\input{04fig3.txt}
+   \caption{表形式で記述された評価文}
+   \label{fig:table}
+\end{figure}
+
+
+
+
+\section{評価文の自動収集}
+
+HTML文書から評価文を収集する手続きは次のようになる．
+
+\begin{enumerate}
+ \item 手がかり句のリストを作成する．
+ \item HTML文書をタグとテキストに分割する．一部の箇条書きと見出しはHTML
+       タグを使わないで記述されているので，ルールでタグを補完する．
+ \item 手がかり句のリストを利用して「定型文」「箇条書き」「表」から評価
+       文を抽出する．
+\end{enumerate}
+
+\noindent
+以下では，まず実験で用いた手がかり句について説明する．そして「定型文」
+「箇条書き」「表」から評価文を抽出する方法を順に説明する．
+
+
+\subsection{手がかり句}
+
+実験で用いた手がかり句の一覧を表\ref{tab:cue}に示す．これらは予備実験を
+通して人手で選定した．表中の動詞，形容詞，形容動詞（「良い」など）は「所」
+「点」「面」という3つの名詞と組み合わせて使う．例えば「良い」は「良い所」
+「良い点」「良い面」の3つを手がかり句として使うことを意味する．「長所」
+や「メリット」のような名詞は，単語そのものを手がかり句として使う．なお，
+詳細は省略しているが「駄目な所」と「ダメな所」または「良い所」と「良いと
+ころ」のような表記揺れも網羅的に人手で記述している．
+
+\begin{table}[b]
+  \caption{実験で使用した手がかり句}
+  \label{tab:cue}
+\input{04table2.txt}
+\end{table}
+
+
+\subsection{定型文からの抽出}
+
+定型文から評価文を抽出するために，3種類の語彙統語パターンを人手で作成し
+た．各パターンとそれにマッチする定型文の具体例を表\ref{tab:pattern}に示
+す．
+
+\begin{table}[b]
+  \caption{語彙統語パターンと評価文抽出の例}
+  \label{tab:pattern}
+\input{04table3.txt}
+\end{table}
+
+最初のパターン（表\ref{tab:pattern}上）は，主部が手がかり句（良いところ）で
+述部が評価文であるような定型文にマッチする．パターン中の矢印は文節間の依
+存関係，\fbox{手がかり句}\ は手がかり句をそれぞれ表している．また\ \ovalbox
+{評価文}\ は，この部分にマッチしたテキストが評価文として抽出されることを意
+味する．表の右側に評価文が抽出される様子を示す．
+
+残り2つのパターンも同様である．それぞれ，主部が評価文で述部が手がかり句
+である定型文にマッチするパターン（表\ref{tab:pattern}中）と，評価文と手が
+かり句が同格になっている定型文にマッチするパターン（表\ref{tab:pattern}下）
+である．
+
+
+\subsection{箇条書きからの抽出}
+
+箇条書きからの評価文抽出は，手がかり句リストとHTMLタグを利用すれば容易に
+実現できる．すなわち，手がかり句が見出しになっている箇条書きを見つけて，
+その箇条書きの項目を順に取り出していけばよい．例えば，前節の図
+\ref{fig:itemize}からは「変に加工しない素直な音を出す」「曲の検索が簡単
+にでる」が好評文として，「リモコンに液晶表示がない」「ボディに傷や指紋が
+つきやすい」が不評文として取り出される．
+
+ここで問題となるのは，1つの項目に複数文が記述されている場合の処理である
+（図\ref{fig:itemize2}の3番目の項目）．このような場合は1項目に好評文と不評
+文が混在している可能性がある．各文の評価極性を自動判定することは難しいの
+で，1つの項目に複数文が存在した場合，その項目は抽出に使わないことにした．
+例えば図\ref{fig:itemize2}からは「発色がものすごくよい．」と「撮っていく
+うちに楽しくなる．」「カメラ背面の液晶画面が大きく，見やすい．」が好評文
+として抽出される．
+
+\begin{figure}[b]
+\begin{minipage}[b]{200pt}
+\input{04fig4.txt}
+  \caption{1項目に複数文が記述されている箇条書き}
+  \label{fig:itemize2}
+\end{minipage}
+\hfill
+\begin{minipage}[b]{200pt}
+\input{04fig5.txt}
+   \caption{評価文を抽出するときに考慮する表タイプ}
+  \label{fig:table_pattern}
+\end{minipage}
+\end{figure}
+
+
+\subsection{表からの抽出}
+
+最後に，表から評価文を抽出する方法を述べる．基本的には手がかり表現と
+$<$table$>$タグを利用すればよいのだが，HTML文書には多種多様な表が出現す
+るので，あらゆる表に対応した抽出規則を作成することは難しい．そこで2種類
+の表だけを考えることにした（図\ref{fig:table_pattern}）．図中の$C_{+}$と
+$C_{-}$は好評手がかり句と不評手がかり句を表し，＋と−は好評文と不評文を
+表す．タイプAは，1列目に手がかり句があって，その横に評価文があるタイプで
+ある．前節で紹介した図\ref{fig:table}はこのタイプに相当する．タイプBは，
+1行目に手がかり句があって，その下に評価文があるタイプである．
+
+
+
+与えられた表のタイプは，1列目（1行目）を調べて，好評手がかり句と不評手が
+かり句の両方が出現していればタイプA（タイプB）であると判定する．表のタイプ
+が決まれば，あとは図の＋と−に対応するマスから評価文を抽出すればよい．た
+だし，1つのマスに複数文が記述されている場合は抽出対象としない．これは箇
+条書きの1項目に複数文が記述されている場合と同様の理由からである．
+
+
+\section{実験}
+
+約10億件のHTML文書集合を用いて評価文の収集実験を行った結果，約65万の評価
+文を獲得することができた．ただし，使用したHTML文書にはミラーサイトなどの
+重複文書も含まれているため，同一の評価文が複数回抽出された場合は集計に入
+れていないようにした．表\ref{tab:result}に収集された評価文数の詳細を示す．
+定型文は，3種類の語彙統語パターン（表\ref{tab:pattern}）から抽出された評価
+文数を分けて示している．定型文1，2，3というのは，それぞれ表
+\ref{tab:pattern}の上，中，下に記述されたパターンに相当する．表
+\ref{tab:example}に自動収集された評価文の一例を示す．
+
+\begin{table}[b]
+\begin{minipage}[t]{168pt}
+  \caption{収集された評価文の数}
+  \label{tab:result}
+\input{04table4.txt}
+\end{minipage}
+\hfill
+\begin{minipage}[t]{220pt}
+  \caption{収集された評価文の例}
+  \label{tab:example}
+\input{04table5.txt}
+\end{minipage}
+\end{table}
+
+
+収集された評価文コーパスから250文（各抽出法ごとに50文ずつ）を無作為に取り
+出し，妥当な評価文が集められているかどうかを2人の評価者が人手で調査した．
+評価者には収集された文のみを提示して，それを好評，不評，曖昧の3つに分類
+するように指示した．曖昧というカテゴリは，好評文か不評文かを決めるのが困
+難な場合に使用するものとした．評価の結果を表\ref{tab:acc1}に示す．抽出に
+利用した記述形式によって精度にややばらつきが見られるものの，おおよそ80\%
+から90\%の収集精度で評価文が収集できたことが分かる．ただし，評価者が曖昧
+と判断した文は不正解としている．さらに表\ref{tab:acc2}に，評価者が曖昧と
+判断した文を除いた場合の精度を示す．表\ref{tab:acc1}の結果と比べて，精度
+は大きく向上している．この結果から，表\ref{tab:acc1}で不正解に数えられて
+いる事例は，ほとんどが人間でも判断に迷う（=評価者が「曖昧」に分類していた）
+ケースであったことが分かる．曖昧に分類された文の典型例は文脈情報が欠如し
+ている文であった．これについては次節で詳しく議論する．なお，調査で用いた
+250文のうち，2人の評価者の分類結果が一致したものは208文であった（Kappa値
+は0.748）．
+
+\begin{table}[b]
+\begin{minipage}{176pt}
+  \caption{評価文の収集精度}
+  \label{tab:acc1}
+\input{04table6.txt}
+\end{minipage}
+\hfill
+\begin{minipage}{228pt}
+  \caption{評価者が曖昧と判断した評価文を除いた収集精度}
+  \label{tab:acc2}
+\input{04table7.txt}
+\end{minipage}
+\end{table}
+
+
+次に，自動構築した評価文コーパスをトレーニングデータに使って評価文分類器
+を構築し，その分類精度を調べた（表\ref{tab:classify}）．テストデータは，レ
+ストラン，コンピュータ，自動車の3ドメインのレビューサイトから収集したも
+のを用いた．分類器はナイーブベイズ，素性は形容詞の原形を用いた．「良くな
+い」などの言い回しに対応するため，形容詞と同一文節内に「ない」「ぬ」があ
+る場合には，形容詞の原形に否定を示すタグを付与したものを素性に使った．ま
+た，自動収集した好評文と不評文の数に偏りがあったため，クラスの事前分布は
+好評，不評ともに0.5に設定した．
+
+\begin{table}[b]
+  \caption{本コーパスを用いた評価文分類の結果}
+  \label{tab:classify}
+\input{04table8.txt}
+\end{table}
+\begin{table}[b]
+  \caption{レビューデータを用いた評価文分類の結果}
+  \label{tab:classify2}
+\input{04table9.txt}
+\end{table}
+
+
+比較のため，上記3種類のレビューデータを，それぞれトレーニング／テストデー
+タとして使ったときの分類精度も調査した（表\ref{tab:classify2}）．ただし，
+トレーニングとテストで同一データを用いた場合には，10分割の交差検定を行っ
+た．この表から，トレーニングとテストに同一データを使った場合は，本コーパ
+スを用いた場合と同等の精度であることが分かる．その一方で，異なるデータを
+用いた場合には精度が大きく低下していることが確認できる．この実験結果から，
+レビューデータよりも本コーパスの方がドメインの変化に頑健であると言うこと
+ができる．これは，大量のHTML文書から評価文を収集しているため，幅広いドメ
+インの表現を網羅しているからであると考えられる．
+
+
+\section{議論}
+
+実験の結果から，提案手法は80\%から90\%という精度で評価文を獲得できること
+が分かった．また，収集した評価文が分類タスクに対して有効であることも確認
+することができた．今後の課題としては，定型文から収集された評価文が多かっ
+たことから，新しい語彙統語パターンを利用して収集量をさらに拡大させること
+を検討している．また，収集した評価文からの評価表現辞書の構築にも取り組ん
+でいる．
+
+評価者が「曖昧」と分類した評価文を分析したところ，評価極性を決定するため
+に十分な文脈情報が与えられていない場合が大半であることが分かった．それ以
+外のものとしては，文分割と構文解析の誤りに起因するものが3例だけ見つかっ
+た．3例とも定型文から抽出されていた．文脈情報が欠落している例として「何
+しろ情報量が多い」という文が好評文として獲得されていた．この文の評価極性
+は文脈に依存するため，この文単独で評価極性を決定することは困難である．し
+たがって，この評価文を人手で評価した場合には「曖昧」に分類される可能性が
+高い．しかし，実際にこの文が抽出された元テキストを調べてみると，次のよう
+なものであった．
+
+\begin{lingexample}
+ \single{このガイドブックのいいところは\underline{何しろ情報量が多い}ところです．}
+\end{lingexample}
+
+\noindent
+これを見ると「何しろ情報量が多い」という文は，少なくとも原文では好評文と
+して使われていたことが分かる．このことから，表\ref{tab:acc1}で不正解に数
+えられている評価文の中には，完全な間違いとは言いきれないものが含まれてい
+ると考えている．
+
+利用した記述形式によって，収集される好評文と不評文の割合に大きな差が見ら
+れた．特に定型文2の内訳を見ると，不評文の数が圧倒的に多いことが分かる（表
+\ref{tab:result}の定型文2）．この理由を調べたところ「〜なのが難点」という
+言い回しが頻出していることが原因であった．このような好不評の偏りは，例え
+ば本コーパスを評価文分類器のトレーニングデータとして使うときには考慮して
+おく必要があると考えられる．
+
+本実験ではHTML文書から評価文の収集を行ったが，提案手法自体はHTML文書に特
+化したものではないと考えている．たしかに，箇条書きと表形式を利用した抽出
+処理は，HTML文書の特性を利用している．しかし，表\ref{tab:result}から分か
+るように，抽出された評価文のうち80\%以上が定型文から抽出されている．この
+ことから，提案手法はHTML文書以外のコーパスに対しても有効に働くと考えられ
+る．
+
+
+\section{関連研究}
+
+我々の知る限り，評価文の自動収集を行ったという研究はこれまでに報告されて
+いない．最も関連が深いのは，評価語や評価句の自動獲得に関する研究である．
+これには主に2つのアプローチがあり，1つはシソーラスや国語辞典のような言語
+資源を利用して評価語を獲得する手法である．Kampsらは，類義語／反義語は同一
+／逆極性を持ちやすいという仮定にもとづき，WordNetを利用して評価語を獲得す
+る手法を提案した\cite{Kamps04}．同様の考え方にもとづく手法はこれまでに多
+数提案されている\cite{Hu04,Kim04,Takamura05}．一方で，Esuliらは語の評価
+極性の判定を定義文の分類問題として解いている\cite{Esuli05,Esuli06a}．
+
+評価語や評価句を獲得するためのもう1つのアプローチは，評価表現同士の共起
+関係を利用する方法である．Turneyは，評価表現は同一ウィンドウ内に共起しや
+すいとことに着目し，語句の評価極性を判定する手法を提案した
+\cite{Turney02a,Turney02b}．共起頻度を求めるときに既存のコーパスを利用す
+るのではなく，検索エンジンを利用してウェブという大規模コーパスでの頻度を
+見積もり，データスパースネスの問題に対処している点が特徴である．
+Hatzivassiloglouらは，コーパス中で2つの形容詞が{\it and}などの順接を表す
+接続詞で結ばれていれば同一評価極性を持ちやすく，逆に{\it but}のような逆
+接で結ばれていれば逆極性を持ちやすいという観察にもとづき，コーパスから評
+価語を獲得する手法を提案した\cite{Hatzivassiloglou97}．この考え方は
+Kanayamaらによってさらに拡張されている\cite{Kanayama06}．
+
+語句の評価極性ではなく主観性に着目した研究報告も存在する．Wiebeは，人手
+でタグ付けされたトレーニングデータ利用して，主観的形容詞を学習する手法を
+提案している\cite{Wiebe00}．Riloffらは主観的名詞の獲得を行っている
+\cite{Riloff03a}．Riloffらの手法では，主観的名詞とその抽出パターンが交互
+に学習される．まずシステムには少数の主観的名詞が入力として与えられる．そ
+して，それを利用して主観的名詞の抽出パターンを学習する，学習されたパター
+ンで新たな主観的名詞を獲得する，という処理が繰り返される．これにより大量
+の主観的名詞の獲得が行われる．\cite{Riloff03a}では名詞が対象とされていた
+が，\cite{Riloff03b}では名詞以外の句も獲得対象となっている．同様のブート
+ストラップ的な手法は\cite{Wiebe05}でも議論されている．
+
+提案手法のように語彙統語パターンやレイアウト（箇条書きや表）パターンを用い
+て知識獲得を行う手法は古くから研究されてきている．Hearstは，{\it such
+as}のようなパターンに着目して，単語間の上位下位関係をコーパスから獲得す
+る手法を提案した\cite{Hearst92}．Hearstの手法は英語を対象としているが，
+日本語においても安藤らが同様の手法を試している\cite{Ando03}．一方，新里
+らは，同一箇条書きに出現する単語は共通の上位語を持ちやすいという仮説にも
+とづき，上位下位関係を獲得する手法を提案している\cite{Shinzato05}．これ
+以外にも，全体部分関係にある単語対の獲得や，属性と属性値の獲得といったタ
+スクにも，同様の手法が用いられている
+\cite{Berland99,Chklovski04,Yoshinaga06}．我々の知る限り，評価情報処理に
+同様の手法を適用したという報告はない．HuらやKimらの手法ではレイアウトパ
+ターンが利用されているが，これらの研究では，レイアウトは特定サイトに固有
+の手がかりとして議論されているため意味合いが異なる\cite{Hu05,Kim06}．
+
+
+\section{おわりに}
+
+本論文では大規模なHTML文書集合から評価文を自動収集する手法を提案した．提
+案手法を約10億件のHTML文書に適用したところ，約65万の評価文を獲得すること
+ができた．収集精度はおおよそ80\%から90\%であったが，文脈依存する評価文の
+存在を考慮すると，良好な結果であると考えている．今後は，このコーパスから
+の評価表現の収集に取り組む予定である．
+
+\acknowledgment
+
+本研究は文部科学省リーディングプロジェクトe-society: 先進的なウェブ解析技
+術によって支援された．また，実験を進めるにあたって，東京大学の荒牧英治氏
+と田渕史郎氏に協力していただきました．感謝いたします．
+
+
+\bibliographystyle{jnlpbbl_1.3}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{安藤まや\JBA 関根聡\JBA 石崎俊}{安藤まや\Jetal
+  }{2003}]{Ando03}
+安藤まや\JBA 関根聡\JBA 石崎俊 \BBOP 2003\BBCP.
+\newblock \JBOQ 定型表現を利用した新聞記事からの下位概念単語の自動抽出\JBCQ\
+\newblock \Jem{情報処理学会研究報告 2003-NL-157}, \mbox{\BPGS\ 77--82}.
+
+\bibitem[\protect\BCAY{Berland \BBA\ Charniak}{Berland \BBA\
+  Charniak}{1999}]{Berland99}
+Berland, M.\BBACOMMA\ \BBA\ Charniak, E. \BBOP 1999\BBCP.
+\newblock \BBOQ Finding Parts in Very Large Corpora\BBCQ\
+\newblock In {\Bem Proceedings of the 37th Annual Meeting of the Association
+  for Computational Linguistics (ACL)}, \mbox{\BPGS\ 57--64}.
+
+\bibitem[\protect\BCAY{Chklovski \BBA\ Pantel}{Chklovski \BBA\
+  Pantel}{2004}]{Chklovski04}
+Chklovski, T.\BBACOMMA\ \BBA\ Pantel, P. \BBOP 2004\BBCP.
+\newblock \BBOQ {\sc VerbOcean}: Mining the Web for Fine-Grained Semantic Verb
+  Relations\BBCQ\
+\newblock In {\Bem Proceedings of the Conference on Empirical Methods in
+  Natural Language Processing (EMNLP)}.
+
+\bibitem[\protect\BCAY{Esuli \BBA\ Sebastiani}{Esuli \BBA\
+  Sebastiani}{2005}]{Esuli05}
+Esuli, A.\BBACOMMA\ \BBA\ Sebastiani, F. \BBOP 2005\BBCP.
+\newblock \BBOQ Determining the Semantic Orientation of Terms throush Gloss
+  Classification\BBCQ\
+\newblock In {\Bem Proceedings of Conference on Information and Knowledge
+  Management (CIKM)}, \mbox{\BPGS\ 617--624}.
+
+\bibitem[\protect\BCAY{Esuli \BBA\ Sebastiani}{Esuli \BBA\
+  Sebastiani}{2006}]{Esuli06a}
+Esuli, A.\BBACOMMA\ \BBA\ Sebastiani, F. \BBOP 2006\BBCP.
+\newblock \BBOQ Determining Term Subjectivity and Term Orientation for Opinion
+  Mining\BBCQ\
+\newblock In {\Bem Proceedings of European Chapter of the Association of
+  Computational Linguistics(EACL)}, \mbox{\BPGS\ 193--200}.
+
+\bibitem[\protect\BCAY{藤村滋\JBA 豊田正史\JBA 喜連川優}{藤村滋\Jetal
+  }{2005}]{Fujimura05}
+藤村滋\JBA 豊田正史\JBA 喜連川優 \BBOP 2005\BBCP.
+\newblock \JBOQ 文の構造を考慮した評判抽出手法\JBCQ\
+\newblock \Jem{電子情報通信学会第16回データ工学ワークショップ}.
+
+\bibitem[\protect\BCAY{Hatzivassiloglous \BBA\ McKeown}{Hatzivassiloglous \BBA\
+  McKeown}{1997}]{Hatzivassiloglou97}
+Hatzivassiloglous, V.\BBACOMMA\ \BBA\ McKeown, K.~R. \BBOP 1997\BBCP.
+\newblock \BBOQ Predicting the Semantic Orientation of Adjectives\BBCQ\
+\newblock In {\Bem Proceedings of the 35th Annual Meeting of the Association
+  for Computational Linguistics (ACL)}, \mbox{\BPGS\ 174--181}.
+
+\bibitem[\protect\BCAY{Hearst}{Hearst}{1992}]{Hearst92}
+Hearst, M. \BBOP 1992\BBCP.
+\newblock \BBOQ Automatic Acquisition of Hyponyms from Large Text Corpora\BBCQ\
+\newblock In {\Bem Proceedings of International Conference on Computational
+  Linguistics (COLING)}, \mbox{\BPGS\ 539--545}.
+
+\bibitem[\protect\BCAY{Hu \BBA\ Liu}{Hu \BBA\ Liu}{2004}]{Hu04}
+Hu, M.\BBACOMMA\ \BBA\ Liu, B. \BBOP 2004\BBCP.
+\newblock \BBOQ Mining and Summarizing Customer Reviews\BBCQ\
+\newblock In {\Bem Proceedings of International Conference on Knowledge
+  Discovery and Data Mining (KDD)}, \mbox{\BPGS\ 168--177}.
+
+\bibitem[\protect\BCAY{乾孝司\JBA 奥村学}{乾孝司\JBA 奥村学}{2006}]{Inui06}
+乾孝司\JBA 奥村学 \BBOP 2006\BBCP.
+\newblock \JBOQ テキストを対象とした評価情報の分析に関する研究動向\JBCQ\
+\newblock \Jem{自然言語処理}, {\Bbf 13}  (3), \mbox{\BPGS\ 201--241}.
+
+\bibitem[\protect\BCAY{Kamps, Marx, Mokken, \BBA\ de~Rijke}{Kamps
+  et~al.}{2004}]{Kamps04}
+Kamps, J., Marx, M., Mokken, R.~J., \BBA\ de~Rijke, M. \BBOP 2004\BBCP.
+\newblock \BBOQ Using WordNet to Measure Semantic Orientations of
+  Adjectives\BBCQ\
+\newblock In {\Bem In proceedings of the International Conference on Language
+  Resources and Evaluation (LREC)}.
+
+\bibitem[\protect\BCAY{Kanayama \BBA\ Nasukawa}{Kanayama \BBA\
+  Nasukawa}{2006}]{Kanayama06}
+Kanayama, H.\BBACOMMA\ \BBA\ Nasukawa, T. \BBOP 2006\BBCP.
+\newblock \BBOQ Fully Automatic Lexicon Expansion for Domain-oriented Sentiment
+  Analysis\BBCQ\
+\newblock In {\Bem Proceedings of the Conference on Empirical Methods in
+  Natural Language Processing (EMNLP)}, \mbox{\BPGS\ 355--363}.
+
+\bibitem[\protect\BCAY{Kim \BBA\ Hovy}{Kim \BBA\ Hovy}{2004}]{Kim04}
+Kim, S.-M.\BBACOMMA\ \BBA\ Hovy, E. \BBOP 2004\BBCP.
+\newblock \BBOQ Determining the Sentiment of Opinions\BBCQ\
+\newblock In {\Bem Proceedings of International Conference on Computational
+  Linguistics (COLING)}, \mbox{\BPGS\ 1367--1373}.
+
+\bibitem[\protect\BCAY{Kim \BBA\ Hovy}{Kim \BBA\ Hovy}{2006}]{Kim06}
+Kim, S.-M.\BBACOMMA\ \BBA\ Hovy, E. \BBOP 2006\BBCP.
+\newblock \BBOQ Automatic Identification of Pro and Con Reasons in Online
+  Reviews\BBCQ\
+\newblock In {\Bem Proceedings of International Conference on Computational
+  Linguistics, Poster Sessions (COLING)}, \mbox{\BPGS\ 483--490}.
+
+\bibitem[\protect\BCAY{小林のぞみ\JBA 乾健太郎\JBA 松本裕二\JBA 立石健二\JBA
+  福島俊一}{小林のぞみ\Jetal }{2005}]{Kobayashi05}
+小林のぞみ\JBA 乾健太郎\JBA 松本裕二\JBA 立石健二\JBA 福島俊一 \BBOP 2005\BBCP.
+\newblock \JBOQ 意見抽出のための評価表現の収集\JBCQ\
+\newblock \Jem{自然言語処理}, {\Bbf 12}  (3), \mbox{\BPGS\ 203--222}.
+
+\bibitem[\protect\BCAY{Kudo \BBA\ Matsumoto}{Kudo \BBA\
+  Matsumoto}{2004}]{Kudo04}
+Kudo, T.\BBACOMMA\ \BBA\ Matsumoto, Y. \BBOP 2004\BBCP.
+\newblock \BBOQ A Boosting Algorithm for Classification of Semi-Structured
+  Text\BBCQ\
+\newblock In {\Bem Proceedings of the Conference on Empirical Methods in
+  Natural Language Processing (EMNLP)}.
+
+\bibitem[\protect\BCAY{Liu, Hu, \BBA\ Cheng}{Liu et~al.}{2005}]{Hu05}
+Liu, B., Hu, M., \BBA\ Cheng, J. \BBOP 2005\BBCP.
+\newblock \BBOQ Opinion Observer: Analyzing and Comparing Opinions on the
+  Web\BBCQ\
+\newblock In {\Bem Proceedings of WWW}.
+
+\bibitem[\protect\BCAY{Matsumoto, Takamura, \BBA\ Okumura}{Matsumoto
+  et~al.}{2005}]{Matsumoto05}
+Matsumoto, S., Takamura, H., \BBA\ Okumura, M. \BBOP 2005\BBCP.
+\newblock \BBOQ Sentiment Classification Using Word Sub-sequences and
+  Dependency Sub-tree\BBCQ\
+\newblock In {\Bem Proceedings of Pacific Asia Conference on Knowledge
+  Discovery and Data Mining (PAKDD)}, \mbox{\BPGS\ 301--311}.
+
+\bibitem[\protect\BCAY{McDonald, Hannan, Neylon, Wells, \BBA\ Reynar}{McDonald
+  et~al.}{2007}]{McDonald07}
+McDonald, R., Hannan, K., Neylon, T., Wells, M., \BBA\ Reynar, J. \BBOP
+  2007\BBCP.
+\newblock \BBOQ Structured Models for Fine-toCoarse Sentiment Analysis\BBCQ\
+\newblock In {\Bem Proceedings of the 45th Annual Meeting of the Association
+  for Computational Linguistics (ACL)}.
+
+\bibitem[\protect\BCAY{筬島郁子\JBA 嶋田和孝\JBA 遠藤勉}{筬島郁子\Jetal
+  }{2005}]{Osashima05}
+筬島郁子\JBA 嶋田和孝\JBA 遠藤勉 \BBOP 2005\BBCP.
+\newblock \JBOQ 系列パターンを利用した評価表現の分類\JBCQ\
+\newblock \Jem{言語処理学会第11回年次大会発表論文集}, \mbox{\BPGS\ 448--451}.
+
+\bibitem[\protect\BCAY{Pang, Lee, \BBA\ Vaihyanathan}{Pang
+  et~al.}{2002}]{Pang02}
+Pang, B., Lee, L., \BBA\ Vaihyanathan, S. \BBOP 2002\BBCP.
+\newblock \BBOQ Thumbs up? Sentiment Classification using Machine Learning
+  Techniques\BBCQ\
+\newblock In {\Bem Proceedings of the Conference on Empirical Methods in
+  Natural Language Processing (EMNLP)}.
+
+\bibitem[\protect\BCAY{Riloff \BBA\ Wiebe}{Riloff \BBA\
+  Wiebe}{2003}]{Riloff03b}
+Riloff, E.\BBACOMMA\ \BBA\ Wiebe, J. \BBOP 2003\BBCP.
+\newblock \BBOQ Learning Extraction Patterns for Subjective Expressions\BBCQ\
+\newblock In {\Bem Proceedings of the Conference on Empirical Methods in
+  Natural Language Processing (EMNLP)}.
+
+\bibitem[\protect\BCAY{Riloff, Wiebe, \BBA\ Wilson}{Riloff
+  et~al.}{2003}]{Riloff03a}
+Riloff, E., Wiebe, J., \BBA\ Wilson, T. \BBOP 2003\BBCP.
+\newblock \BBOQ Learning Subjective Nouns using Extraction Pattern
+  Bootstrapping\BBCQ\
+\newblock In {\Bem Proceedings of the Seventh Conference on Natural Language
+  Learning (CoNLL)}.
+
+\bibitem[\protect\BCAY{新里圭司\JBA 鳥澤健太郎}{新里圭司\JBA
+  鳥澤健太郎}{2005}]{Shinzato05}
+新里圭司\JBA 鳥澤健太郎 \BBOP 2005\BBCP.
+\newblock \JBOQ HTML文書からの単語間の上位下位関係の自動獲得\JBCQ\
+\newblock \Jem{自然言語処理}, {\Bbf 12}  (1), \mbox{\BPGS\ 125--150}.
+
+\bibitem[\protect\BCAY{Takamura, Inui, \BBA\ Okumura}{Takamura
+  et~al.}{2005}]{Takamura05}
+Takamura, H., Inui, T., \BBA\ Okumura, M. \BBOP 2005\BBCP.
+\newblock \BBOQ Extracting Semantic Orientation of Words using Spin Model\BBCQ\
+\newblock In {\Bem Proceedings of the 43th Annual Meeting of the Association
+  for Computational Linguistics (ACL)}, \mbox{\BPGS\ 133--140}.
+
+\bibitem[\protect\BCAY{Turney}{Turney}{2002}]{Turney02a}
+Turney, P.~D. \BBOP 2002\BBCP.
+\newblock \BBOQ Thumbs up or Thumbs Down ? Semantic Orientation Applied to
+  Unsupervised Classification of Reviews\BBCQ\
+\newblock In {\Bem Proceedings of the 40th Annual Meeting of the Association
+  for Computational Linguistics (ACL)}, \mbox{\BPGS\ 417--424}.
+
+\bibitem[\protect\BCAY{Turney \BBA\ Littman}{Turney \BBA\
+  Littman}{2002}]{Turney02b}
+Turney, P.~D.\BBACOMMA\ \BBA\ Littman, M.~L. \BBOP 2002\BBCP.
+\newblock \BBOQ Unsupervised Learning of Semantic Orientation from a
+  Hundred-Billion-Word Corpus\BBCQ\
+\newblock \BTR, National Research Council Canada.
+
+\bibitem[\protect\BCAY{Wiebe \BBA\ Riloff}{Wiebe \BBA\ Riloff}{2005}]{Wiebe05}
+Wiebe, J.\BBACOMMA\ \BBA\ Riloff, E. \BBOP 2005\BBCP.
+\newblock \BBOQ Creating Subjective and Objective Sentence Classifiers from
+  Unannotated Texts\BBCQ\
+\newblock In {\Bem Proceedings of the Sixth International Conference on
+  Intelligent Text Processing and Computational Linguistics (CICLing-2005)}.
+
+\bibitem[\protect\BCAY{Wiebe}{Wiebe}{2000}]{Wiebe00}
+Wiebe, J.~M. \BBOP 2000\BBCP.
+\newblock \BBOQ Learning Subjective Adjectives from Corpora\BBCQ\
+\newblock In {\Bem Proceedings of the Seventh National Conference on Artificial
+  Intelligence (AAAI)}.
+
+\bibitem[\protect\BCAY{吉永直樹\JBA 鳥澤健太郎}{吉永直樹\JBA
+  鳥澤健太郎}{2006}]{Yoshinaga06}
+吉永直樹\JBA 鳥澤健太郎 \BBOP 2006\BBCP.
+\newblock \JBOQ Webからの属性情報記述ページの発見\JBCQ\
+\newblock \Jem{人工知能学会論文誌}, {\Bbf 21}  (6), \mbox{\BPGS\ 493--501}.
+
+\end{thebibliography}
+
+
+
+\begin{biography}
+
+\bioauthor{鍜治　伸裕}{2005年東京大学大学院情報理工学系研究科博士課程修
+了．情報理工学博士．現在，東京大学生産技術研究所特任助教．自然言語処理
+の研究に従事．}
+
+\bioauthor{喜連川　優}{1978年東京大学工学部電子工学科卒業．1983年同大大学
+ 院工学系研究科情報工学専攻博士課程修了．工学博士．同年同大生産技術研究
+ 所講師．現在，同教授．2003年より同所戦略情報融合国際研究センター長．デー
+ タベース工学，並列処理，Webマイニングに関する研究に従事．現在，日本デー
+ タベース学会理事，情報処理学会，電子情報通信学会各フェロー．ACM SIGMOD
+ Japan Chapter Chair，電子情報通信学会データ工学研究専門委員会委員長歴任．
+ VLDB Trustee (1997--2002), IEEE ICDE, PAKDD, WAIMなどステアリング委員．
+ IEEE データ工学国際会議 Program Co-chair (99), General Co-chair (05).}
+\end{biography}
+
+
+\biodate
+
+
+\end{document}

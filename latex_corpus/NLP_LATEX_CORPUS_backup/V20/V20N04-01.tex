@@ -1,0 +1,753 @@
+\documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+\usepackage{lingmacros}
+\usepackage{array}
+
+
+\Volume{20}
+\Number{4}
+\Month{September}
+\Year{2013}
+
+\received{2013}{1}{9}
+\revised{2013}{3}{29}
+\rerevised{2013}{5}{14}
+\accepted{2013}{5}{22}
+
+
+\setcounter{page}{539}
+
+\jtitle{複数の言語的特徴を用いた日本語述部の同義判定}
+\jauthor{泉　　朋子\affiref{NTT}\affiref{KyotoUniv} \and 柴田　知秀\affiref{KyotoUniv} \and 齋藤　邦子\affiref{NTT} \and 松尾　義博\affiref{NTT} \and 黒橋　禎夫\affiref{KyotoUniv}}
+\jabstract{
+大量のテキストから有益な情報を抽出するテキストマイニング技術では，ユーザの苦情や要望を表す述部表現の多様性が大きな問題となる．本稿では，同じ出来事を表している述部表現をまとめ上げるため，「メモリを消費している」と「メモリを食っている」の「消費している」と「食っている」のような述部表現を対象に，異なる2つの述部が同義か否かを認識する同義判定を行う．述部の言語構造分析をもとに，「辞書定義文」，「用言属性」，「分布類似度」，「機能表現」という複数の言語知識を用い，それらを素性とした識別学習で同義判定を行った．実験の結果，既存手法に比べ，高い精度で述部の同義性を判定することが可能になった．
+}
+\jkeywords{同義判定，述部，機能表現，テキストマイニング，言い換え，分布類似度}
+
+\etitle{Recognizing Semantically Equivalent Predicate Phrases Based on Several Linguistic Clues}
+\eauthor{Tomoko Izumi\affiref{NTT}\affiref{KyotoUniv} \and Tomohide Shibata\affiref{KyotoUniv} \and Kuniko Saito\affiref{NTT} \and Yoshihiro Matsuo\affiref{NTT} \and Sadao Kurohashi\affiref{KyotoUniv}} \eabstract{
+This paper proposes the recognition of semantically equivalent predicate 
+phrases such as ``consumes'' and ``eats'' in ``it consumes/eats a lot of 
+memory.'' Differences in predicate expressions pose a serious problem in 
+natural language processing applications such as text mining, which extracts 
+text data according to a user's needs and wants. We propose a novel 
+technique that uses various linguistic clues ranging from abstract semantic 
+features to contextual features in order to detect a semantic similarity in 
+different predicates. The results indicate that our proposed method achieved 
+the highest f-score compared with baseline methods.
+}
+\ekeywords{synonym recognition, predicate phrases, functional expressions, text mining, paraphrasing, distributional similarity}
+
+\headauthor{泉，柴田，齋藤，松尾，黒橋}
+\headtitle{複数の言語的特徴を用いた日本語述部の同義判定}
+
+\affilabel{NTT}{日本電信電話株式会社 NTTメディアインテリジェンス研究所}{NTT Media Intelligence Laboratories, Nippon Telegraph and Telephone Corporation}
+\affilabel{KyotoUniv}{京都大学大学院情報学研究科}{Graduate School of Infomatics, Kyoto University}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+
+近年，新聞やWeb上のブログだけではなく，ツイートや音声対話ログなど様々な分野のテキスト情報を利用することが可能である．これらの多様なテキストから欲しい情報を抽出する検索技術や，有益な情報のみを自動で抽出・分析するテキストマイニング技術では，表現の違いに頑健な意味を軸にした情報抽出が求められている．たとえば，お客様の声を分析するコールセンタマイニング（e.g., 那須川 2001）では，下記のa，bの表現を，「同義である」と正しく認識・集計する必要がある．
+
+\eenumsentence{
+\item メモリを\underline{消費している}
+\item メモリを\underline{食っている}
+}
+\eenumsentence{
+\item キーボードが\underline{壊れた}
+\item キーボードが\underline{故障した}
+}
+検索においても，「キーボード　壊れた」で検索した際に，「キーボード　故障した」が含まれているテキストも表示されれば，よりユーザの意図を理解した検索が行えると考えられる．
+
+テキストマイニングのようなユーザの声の抽出・分析において重要となるのは，「消費している」，「壊れた」などといった述部である．述部は，文情報の核を表しており，商品の評判（e.g., 満足している）や苦情（e.g., 壊れた，使いにくい），ユーザの経験（e.g., 堪能した）や要望（e.g., 直してほしい）などを表す．
+
+しかし，あらゆる分野，文体のテキストを対象とした場合，述部の多様性が顕著になる．たとえば，「正常な動作が損なわれる」という出来事を表現する場合，新聞などフォーマルな文書では「故障する」と表現されることが多いが，ブログなどインフォーマルな文書では「壊れる」と表現されることが多い\footnote{2007年の毎日新聞では，「故障する」と「壊れる」の出現頻度の比が「1 : 2.5」である．一方，2007年4月のブログでは「故障する」と「壊れる」の出現頻度の比が「1 : 42」であり，「壊れる」と「故障する」は意味が完全に 1 対 1 対応するわけではないものの，出現頻度の比がテキストによって大きく異なる．}．テキストの種類により同じ出来事でも異なる文字列で表現されるため，異なる分野のテキストを統合した情報抽出や，テキストマイニングを行う場合は，述部の同義性を計算機で正しく認識して分析しなくてはいけない．述部の同義性を計算機で識別することができれば，テキストマイニングなどにおいて，同義表現を正しくまとめ上げ，高精度に集計・分析を行うことが可能となる．また，検索技術においては，表現が異なるが同じことを表しているテキストを拾い上げることができ，再現率の向上が期待できる．
+
+本稿では，日本語の述部に焦点を置き，異なる2つの述部が同義か否かを判別する述部の同義判定手法を提案する．既存の手法では，単一のリソースにのみ依存しているために，まとめ上げられる述部の数が少ないという再現率の問題や，異なる意味のものまで誤ってまとめ上げてしまうという精度の問題がある．そこで本稿では，述部の言語的構造を分析し，同義述部の認識という観点で必要な「述部の語義（辞書定義文）」，「抽象的な意味属性（用言属性）」，「文脈（分布類似度）」，「時制・否定・モダリティ（機能表現）」といった言語情報を複数の言語リソースから抽出することで，精度と再現率の双方のバランスをとった述部のまとめ上げを行う．なお，本稿では「消費／し／て／いる」などの「内容語＋機能表現」を述部と定義し，「メモリを‐消費している」と言った「項‐述部」を単位として述部の同義判定を行う．
+
+本稿の構成は次のとおりである．2節では，関連研究とその問題点について論じる．3節では，述部の言語構造について論じる．4節では，本稿の提案手法である複数の言語的特徴を用いた同義判定について述べる．5節では，同義述部コーパスについて述べる．6節，7節では述部の同義判定実験とその考察を行う．8節は結論である．
+
+
+
+\section{関連研究}
+
+\subsection{辞書を用いた言い換え研究}
+
+2つの異なる表現が同義か否かを判別する研究のひとつとして，述部を対象にした言い換え研究がある．藤田・降幡・乾・松本 (2004) は，語彙概念構造（Lexical Conceptual Structure; Jackendoff 1992; 竹内，乾，藤田 2006）を用いて，「株価の変動が為替に\underline{影響を与えた}」のような述部が機能動詞構造で構成されている文を，「株価の変動が為替に\underline{影響した}」といった単純な述部に変換する言い換えを行っている．同様に，鍜治・黒橋 (2004) は，「名詞＋格助詞＋動詞」の構造をもつ述部を対象に，「非難を浴びる」と言った迂言表現や，「貯金をためる」と言った重複表現の認識と言い換えを，国語辞典からの定義文を手掛かりに行っている．松吉・佐藤 (2008) は，階層構造化された日本語の機能表現辞書 (松吉，佐藤，宇津呂 2007) をもとに，「やる\underline{しか／ない}」の機能表現にあたる「しか／ない」を，「やら\underline{ざる／を／得ない}」という別の表現に自動で言い換える方法を提案している．
+
+述部を対象とした言い換えの研究を用いて，複数の言い換え表現をあらかじめ生成することで，本稿が目的とする同義述部のまとめ上げが可能である．しかし，語彙概念辞書などの特殊な言語リソースを用いて言い換えを生成する場合，リソースの規模が十分でなければ，ブログなどの幅広い表現を扱う際にカバレッジが問題となる．
+
+
+\subsection{コーパスからの分布類似度計算}
+
+2つの異なる表現の意味が似ているか否かを判定する研究に，大量のコーパスを用いた分布類似度の研究がある(Curran 2004; Dagan, Lee, and Pereira 1999; Lee 1999; Lin 1998)．分布類似度とは，文脈が似ている単語は意味も似ているという分布仮説 (Firth 1957) に基づき，対象の単語の周辺に現れる単語（文脈）を素性として計算される単語の類似度である．
+
+Szpektor and Dagan (2008) は，``X takes a nap''と``X sleeps''の関係のように，述部と1つの変数を単位として分布類似度計算を行い，述部を対象に含意ルールの獲得を行った．柴田・黒橋 (2010) は，「景気が\underline{冷え込む}」の「冷え込む」と「景気が\underline{悪化する}」の「悪化する」のように組み合わさる項によって同義になる表現をも考慮し，大規模コーパスから項と述部（e.g., 景気が‐悪化）を単位にした分布類似度ベクトルを用いて同義語獲得を行った．
+
+大規模コーパスから周辺単語を用いて単語の意味類似度を測る分布類似度計算は，WordNetなどの特定の言語リソースを用いる手法に比べてバリエーションに富んだ表現を獲得することが可能である．しかし，分布類似度計算には柴田・黒橋 (2010)で述べられているように，2つの問題がある．1つ目は，反義関係にある単語の類似度が高くなってしまう問題である．「泳ぎが\underline{得意だ}」と「泳ぎが\underline{苦手だ}」のように，反義関係の単語は同一の文脈で現れることができ，結果として類似度が高くなる．2つ目は，時間経過を表す述部同士の類似度が高くなる問題である．たとえば，「（小鼻の脇などの狭い場所には）ブラシを使って粉を取って，（粉を）つけます」の「粉を取る」と「粉をつける」のような時間経過の関係にある述部の場合，下記のように類似した文脈で出現しやすい．
+
+\enumsentence{
+「粉を取る」と「粉をつける」の文脈の例
+\begin{gather*}
+ \left.\begin{array}{l}
+	\text{\textbf{ブラシを使う}}\\
+	\text{\textbf{パフを使う}}\\
+	\text{水で洗う}\\
+	\cdots
+ \end{array}\right\}
+ \text{粉を取る}
+ \left\{\begin{array}{l}
+	\text{袋に入れる}\\
+	\text{\textbf{肌に乗せる}}\\
+	\text{粉をつける}\\
+	\cdots
+ \end{array}\right. \\
+ \left.\begin{array}{l}
+	\text{\textbf{ブラシを使う}}\\
+	\text{\textbf{パフを使う}}\\
+	\text{形を整える}\\
+	\cdots
+ \end{array}\right\}
+\text{粉をつける}
+ \left\{\begin{array}{l}
+ \text{卵に通す}\\
+ \text{\textbf{肌に乗せる}}\\
+ \text{粉を落とす}\\
+	\cdots
+ \end{array}\right.
+\end{gather*}
+}
+2つの文があった場合，双方とも「ブラシを使う」や「パフを使う」という「項‐述部」を共有しているため，「粉を取る」と「粉をつける」という時間経過を表す述部同士の類似度が高くなってしまう．
+
+Yih and Qazvinian (2012) は，WikipediaとWebスニペットを用いて計算した分布類似度や，WordNetなどのシソーラスで計算された類似度を統合することで，語の関連度を計算している．しかし，複数の類似度の平均値をとっているだけであり，それぞれの類似度に重みづけがされていない．また，類似度のみを手掛かりとしているため，反義表現と同義表現の識別は困難である． 
+
+
+
+\subsection{教師あり学習を用いた同義判定}
+
+教師あり学習として同義表現の識別や獲得を行っている研究としてHashimoto, Torisawa, De Saeger, Kazama, and Kurohashi (2011)がある．Hashimoto et al. (2011)では，Webコーパスから定義文を自動で抽出し，同じコンセプトを表している定義文ペアから大量の言い換え表現を獲得している．例えば，``Osteoporosis（骨粗鬆症）''というコンセプトを定義している文のペアから，``makes bones fragile（骨がもろくなる）''と``increases the risk of bone fracture（骨折リスクを高める）''といった言い換え表現を獲得している．しかし，Hashimoto et al. (2011)では，言い換え表現の獲得に定義文を用いているため，獲得される表現は必ず何らかのコンセプトを説明している表現（もしくはその一部）になる．そのため，対象の同義表現によって説明されるコンセプトが存在しない場合は，定義文からそれら同義表現を獲得することが不可能である．例えば，「食パン‐が‐出来上がった」と「食パン‐が‐焼けた」のような表現で定義されるコンセプトは想像が難しいため，定義文にも出現しづらい表現であると考えられる．本稿が目的とする意見集約などのマイニングにおけるまとめ上げを行うためには，定義文に出てこない表現（すなわち，それらの表現によって説明されるコンセプトが存在しない場合）に対するカバレッジを補う必要がある．つまり，定義文という制約を加えずにブログなどの多様な表現を含む幅広い言語リソースを用いて，高い精度で同義表現の識別をする必要がある．
+
+Hagiwara (2008)は，分布類似度の素性と文中の単語ペアの統語構造を組み合わせて，教師あり学習の識別問題として，分布類似度単体よりも高精度に同義識別を行った．しかし，Hagiwara (2008)の手法では，コーパスからの言語情報のみしか用いておらず，分布類似度が不得意とする反義単語と同義単語の識別の有効性については述べられていない．Turney (2008)は，同義語 (synonym)・反義語 (antonym)・関連語 (association)という3つの異なる意味関係を表す単語ペアを対象に，コーパスの周辺単語情報を素性とした識別学習を行った．Turney (2008)の手法は，あらゆる意味関係もひとつのアルゴリズムで分類できるという点で有益だが，彼が述べているように，同義を認識するタスクに特化した場合，複数のアルゴリズムや言語情報を組み合わせた手法 (Turney, Littman, Bigham, and Shnayder, 2003) に対して精度が劣ってしまう．
+
+Weisman, Berant, Szpektor, and Dagan (2012)は，``snore（いびきをかく）''と``sleep（寝る）''といった含意関係（snoreはsleepを含意する）にある動詞ペアを対象に，文，文書，文書全体それぞれにおける動詞ペアの共起情報を用いて含意関係の認識を行った．含意関係を認識するうえで必要な情報を言語学的に分析し，動詞のクラスや，副詞を素性とした分布類似度など新しい言語情報を入れることで，既存の手法に比べて高精度に含意関係の認識を行った．しかし，Weisman et al. (2012)は英語の動詞を対象としており，素性も英語に特化したものがある．例えば，``cover up''のようなphrasal verbs （句動詞）に対して，``up''などのparticleと共起しやすいかを手掛かりに，動詞の意味の一般性を計測しており，英語のような句動詞をもたない日本語で同様の事を行うのは困難である．また，日本語のように動詞以外の単語が述部に現れたり，複数の文末表現と組み合わさって述部を構成する言語を対象にする場合には，それらの意味を表現する素性を工夫する必要がある．
+
+
+\section{述部の言語的特徴}
+
+2節で述べたように，既存手法を日本語の述部の同義判定にそのまま適用した場合，再現率もしくは精度に問題が出る．そこで，本節では述部の同義性を正しく計算機で判別するために必要な情報を考察するため，述部の言語構造を言語学的な視点で分析する．本稿の対象である述部は，(4)のように内容語と複数の機能語の集まりである「機能表現」(松吉 他 2007)で構成されている．「／」は形態素の区切りを表す．
+
+\enumsentence{
+捨て／【内容語】 なく／て／は／いけ／ない【機能表現】 
+}
+述部の主な意味は，動詞，形容詞，形容動詞，名詞などの内容語が担っており，機能表現は内容語で表現される意味に対し，時制（アスペクト），モダリティ，否定などの意味を加えている(Narrog 2005; Portner 2005)．
+
+ここで，述部の主な意味を担っている内容語の言語構造を考える．図1はRamchand (2010, p.~4)から抜粋した動詞``run''の言語的情報を，複数の言語レベルに分類したものである\footnote{これらの情報が人間の言語理解のどのレベルに存在するかは複数の議論が存在するが，それらは本稿の趣旨とは異なるためここでは論じない．}．図1の，``$+$dynamic''と``-telic''は，``run''という動詞そのものが，動作の変化を伴う動詞であるが($+$dynamic)，動作に終点がない動詞(-telic)であることを表している（Dowty (1979)の``Activities'', 金田一(1976)の「継続動詞」を表している）．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{20-4ia1f1.eps}
+\end{center}
+\caption{動詞``run''の言語構造}
+\end{figure}
+
+図1が表すように，述部の意味を考えた場合，複数の言語レベルの要素が絡み合って意味を構成していることがわかる．我々が知らない単語に出くわした場合，その単語の意味を理解するために，辞書を引いたり(Lexical-Encyclopedic information)，周辺単語を手掛かりに推測したり(Syntax, Context)，また見覚えのある単語であればその本来の意味から派生されそうな意味(Semantic)を考え，対象単語の言語情報をできるだけ集めて意味を理解する．さらに，時制や否定，モダリティ表現なども手掛かりに，述部の意味を推測する．つまり，図1の複数の言語的情報を埋めていくことで，意味を理解すると考えることができる\footnote{Phonetics/Phonologyのような音の情報に関しては，オノマトペを除き意味と直接かかわりがないため，本提案手法の言語情報には取り入れない．}．
+
+計算機に意味を理解させるためには，これらの複数の言語的特徴を与えなくてはいけないと言える．そこで，本稿では述部の言語情報を複数のレベルに分類し，同義述部の認識という観点で必要な情報を用い
+て，計算機に同義の述部を認識させる．
+
+
+\section{提案手法：複数の言語的特徴を用いた同義判定}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{20-4ia1f2.eps}
+\end{center}
+\caption{同義判定処理フロー}
+\end{figure}
+
+本稿では，述部の同義判定を行うために，4つの言語情報を素性とし，識別学習を用いて同義か否かを判定する．処理の流れを図2に示す．4つの言語情報は，「辞書定義文」，「用言属性」，「分布類似度」，「機能表現」である．以下に素性の具体的な説明を行う．
+
+
+\subsection{辞書定義文を用いた相互補完性・定義文類似性}
+
+述部の同義性を判別するためには，まず単語そのものの定義が必要となる(Lexical-Encyclopedic information)．我々が，単語の意味を調べるために辞書を用いるように，本稿でも国語辞書の定義文からの情報を素性として用いる．なお，国語辞書などの定義文は，言い換え研究においても有効性が確認されている．（e.g., 土屋・黒橋 2000; 藤田・乾 2001; 鍜治，河原，黒橋，佐藤 2003）
+
+述部の同義性を判別するという目的で，辞書定義文を考察すると，2つの有益な特徴を見出すことができる．1つ目は，同義の述部同士は，お互いの定義文内に現れやすいという点である．これを，定義文の相互補完性とここでは呼ぶ．下記は，同義述部のペアである「出来上がる」と「完成する」の定義文の一例である．
+
+\enumsentence{
+[出来上がる]\\
+定義文：すっかりできる．\textbf{\underline{完成する}}．
+}
+\enumsentence{
+[完成する]\\
+定義文：すっかり\textbf{\underline{できあがる}}こと．全部しあげること．
+}
+「出来上がる」の意味を定義するために，同義の「完成する」という述部を用いており，同様に，「完成する」の意味を定義するために，同義の「できあがる（出来上がる）」という述部を用いている．このように，同じ意味をあらわす述部同士は，お互いの定義文内に現れやすいという特徴がある．そこで，2つの述部が与えられた際に，それぞれの述部に対して「相手述部の辞書定義文内に現れるか」という相互補完性の有無を第一の素性として用いる．また，「プリンターが‐動かない」といった「項‐述部」の単位で同義判定を行うため，項（プリンター）もしくは項と同様の名詞クラスが相手の定義文に現れたか否かも素性として用いる．名詞クラスは，日本語語彙大系(池原，宮崎，白井，横尾，中岩，小倉，大山，林 1999)の一般名詞意味属性を用いる．
+
+次に，意味が似ている述部同士は，定義文同士も似ているという特徴がある．下記は，「高値だ」と「高い」という同義の述部の定義文の一例である．
+
+\enumsentence{
+[高い]\\
+定義文：買うのに多額の金銭がかかる．量や質にくらべて，\textbf{\underline{値段}}が多い．
+}
+\enumsentence{
+[高値]\\
+定義文：\textbf{\underline{値段}}が高いこと．高い\textbf{\underline{値段}}．
+}
+(7)，(8)が示すように，双方の定義文に「値段」という単語が含まれている．そこで，これらの定義文同士の語彙の重なりを，定義文間の内容語の重なり数を用いて素性とする．
+
+このように，同義判別に必要なLexical-encyclopedicな情報として，辞書定義文の相互補完性と定義文中の語彙の重なりを素性として用いる．なお，「辞書定義文内に相互補完性があり，かつ片方の述部にのみに否定表現が入っているか否か」を区別する素性も作成した．これは，本稿が機能表現を含んだ述部を対象としており，機能表現に含まれる否定表現が同義関係を逆転させてしまうために特別に組み込んだ素性である．
+
+
+\subsection{用言属性を用いた述部の抽象的意味属性}
+
+同義の述部は，辞書的な意味だけではなく，より抽象的な意味レベル(Semantics)でも共通性があると考えられる．例えば(9)の同義述部は，日本語語彙大系(池原 他 1999)において以下のような用言属性を持つ．
+
+\enumsentence{
+用言属性の例\\
+a. 出来上がる　　　\textbf{\underline{【生成】}}\\
+b. 完成する　　　　\textbf{\underline{【生成】}}，【属性変化】
+}
+
+双方とも，「新しく何かを作り上げる」事を意味する，「生成」という属性を共通に保持している．
+
+そこで，同義判定に必要なSemanticレベルの素性として，日本語語彙大系(池原 他 1999)の用言属性を用いて，述部同士の抽象的な意味の重なりを抽出する．日本語語彙大系の用言属性には，「生成」，「知覚状態」，「物理的移動」など36種類の用言属性ラベルがあり，それらが階層的に構造化されている（図3）．これらの用言属性を用いて，次の2種類の素性を抽出する．
+
+1つ目は，共通して保持している用言属性そのものである．(9)の場合，「出来上がる」と「完成する」が共通して保持している「生成」という用言属性を素性として用いる．2つ目は，用言属性の重なり度合いである．(9b)が表すように，1つの述部が複数の用言属性を持つ場合がある．複数の用言属性が付与されている場合，それらの重なりが大きければ大きいほど，2つの述部は似ていると考えられる．また，重なっている用言属性がより具体的であればあるほど，より類似していると考えられる．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{20-4ia1f3.eps}
+\end{center}
+\caption{日本語語彙大系用言属性 (池原 他 1999)}
+\end{figure}
+
+そこで，用言属性の重なり度というものを用いて，2つの述部の用言属性の共通性を計算する．より詳細なレベルで用言属性が重なっている方がより共通性が高いと言えるため，重なり度の算出の際に，下層の用言属性に重みをつける．重みは，ヒューリスティックに決定した．下記が，用言属性の重なり度の算出方法である．
+\[
+\text{・用言属性重なり度} = 
+	\frac{\vbox{\hbox{$(|\text{Pred1 の階層 1 用言属性集合}\cap \text{Pred2の階層1 用言属性集合}|)*1$}
+		\hbox{${}+(|\text{Pred 1 の階層2の用言属性集合}\cap \text{Pred2の階層2の用言属性集合}|)*1.5$}
+		\hbox{${}+(|\text{Pred 1 の階層3の用言属性集合} \cap \text{Pred2の階層3の用言属性集合}|)*2.0$}
+		\hbox{${}+(|\text{Pred1の階層4の用言属性集合}\cap \text{Pred2の階層4の用言属性集合}|)*2.5$}
+}}{(|\text{Pred1の用言属性集合} \cup \text{Pred2の用言属性集合}|)}
+\]
+これらの用言属性を用いることで，辞書定義文など語義そのものの重なり以外に，抽象的な意味レベル(Semantics)での共通性を素性として用いることができる．
+
+
+\subsection{分布類似度}
+
+述部が同義であれば，それら述部が現れる文脈も類似していると考えられる．Firth (1957)で述べられたように，対象の述部がどのような単語とともに現れるかが，述部の意味類似度を測るための重要な言語情報となる．
+
+そこで，本稿ではこれらの周辺の項や文脈の情報を，分布類似度の値を用いて表す．分布類似度の計算は，柴田・黒橋(2010)の手法を用いて，「項‐述部」もしくは「述部」を単位として行う．柴田・黒橋(2010)は，「メモリを‐消費している」のような「項‐述部」，もしくは「消費する」という述部を単位 (u)として，係り受け関係にある単語を素性に，分布類似度の計算を行っている．素性は，対象の単位 (u)に前出する素性をpre，対象の単位 (u)に後続する素性をpostとして抽出する．例えば，「ソフトが常駐し，メモリを消費している」というような文があった場合，「メモリを‐消費する」に対して，素性「常駐する：pre」を抽出する．(10)が具体的な素性の種類である．
+
+\enumsentence{
+柴田・黒橋(2010)の類似度計算の単位と素性（e.g., メモリを‐消費する）
+}
+\vspace{0.5\Cvs}
+\begin{center}
+\begin{tabular}{p{11zw}|p{22zw}}
+\hline
+\multicolumn{1}{c|}{単位(u)} & \multicolumn{1}{c}{素性(f)} \\
+\hline
+項‐述部 \par ``メモリを‐消費する''& 
+前後の係り受け関係にある述部 \par 　-常駐する：pre, 立ち上げる：pre, \par 　-重たくなる：post, 固まる：post \\
+\hline
+述部 \par ``消費する''& 
+前後の係り受け関係にある格要素，ならびに述部 \par 　-[格要素]‐カロリーを，燃料を，メモリを \par 　-[述部] 燃焼する：pre, 代謝する：pre, \par 　\phantom{-[述部]} 排出する：post \\
+\hline
+\end{tabular}
+\end{center}
+\vspace{1\Cvs}
+
+分布類似度の計算は，Curran (2004)をもとに，下記のようにweight関数とmeasure関数に分けて行う．weight関数は，素性ベクトルの値を適切な値に変換するためのものであり，柴田・黒橋 (2010)では，下記のように定義した．
+
+・weight関数
+\[
+ \text{weight} = \begin{cases}
+	1 & (\text{MI} > 0) \\
+	0 & (\text{Otherwise})
+ \end{cases}
+\]
+
+MI は，下記の式を用いて計算する．P(u) は，素性ベクトルを作る対象単位(u)の出現確率を表す（すなわち，「項‐述部」また「述部」の出現確率）．P(f)は，対象に対する素性(f)の出現確率を表す（すなわち，対象単位と係り受け関係にある格要素もしくは述部）．P(u,f)は分布類似度計算の対象単位とその素性の共起確率である．
+\[
+ \text{MI} = \log \frac{\mathrm{P(u,f)}}{\mathrm{P(u)P(f)}}
+\]
+
+分布類似度の計算には，JACCARD係数とSIMPSON係数の平均値を用いる．JACCARD係数は，分布類似度を計算する対象(u)（項‐述部もしくは述部）が共通して持つ素性(f)を，それぞれがもつ素性の和集合で割った値である．SIMPSON係数は，2つの対象が共通して持つ素性を，2つの対象の間で素性の数が少ない方の素性の数で割った値である．
+
+・measure関数
+{\allowdisplaybreaks
+\begin{align*}
+ & \text{measure} = \frac{1}{2} (\text{JACCARD}+\text{SIMPSON}) \\
+ & \quad \text{JACCARD} = \frac{|(\mathrm{u1}, \ast) \cap (\mathrm{u2}, \ast)|}{|(\mathrm{u1}, \ast) \cup (\mathrm{u2}, \ast)|} \\
+ & \quad \text{SIMPSON} = \frac{|(\mathrm{u1}, \ast) \cap (\mathrm{u2}, \ast)|}{\min (|\mathrm{u1}, \ast|, |\mathrm{u2}, \ast|)}\\
+ & \quad \text{where} \\
+ & \quad (\mathrm{u},\ast) \equiv \{ f|\text{weight}(\mathrm{u},\mathrm{f})=1\}
+\end{align*}
+}
+上記で算出された，述部および項‐述部を単位とした分布類似度を文脈(Context)の情報として用いる．
+
+
+\subsection{述部の機能表現}
+
+述部は「内容語」と「機能表現」から構成されている．この，機能表現の意味そのものも述部の同義性に影響する．
+
+\eenumsentence{
+\item
+辞書に‐入っ\underline{て／い／ない【てい（る）：継続】【ない：否定】}
+
+\item
+辞書に‐載っ\underline{て／い／ない【てい（る）：継続】【ない：否定】}
+
+\item
+辞書に‐載る
+}
+
+(11a)と(11b)は，機能表現「て／い／ない」を共有しており，同義述部になるが，機能表現を共有しない(11a)と(11c)は同義ではない．このように，述部の機能表現が重なっているか否かにより，同義か否かが変わってくる．
+
+そこで，松吉 他(2007)の日本語機能表現辞書を用いて，述部の機能表現に「継続」や「否定」と言った意味ラベルを付与し，対象述部の機能表現の意味ラベルが重なっている場合に，その重なった意味ラベルを素性として抽出する．またどの程度，機能表現の意味を共有しているかを表す指標として，意味ラベルの重なり率を素性として用いる．意味ラベルの重なり率は，
+下記のように算出する．
+\[
+  \text{機能表現意味ラベル重なり率}=\frac{(|\text{述部1の意味ラベルの集合}\cap \text{述部2の意味ラベルの集合}|)}{(|\text{述部1の意味ラベルの集合}\cup \text{述部2の意味ラベルの集合}|)}
+\]
+以上のように，提案手法では，「辞書定義文」，「用言属性」，「分布類似度」，「機能表現」という4つの異なる言語的特徴を用いて，述部の同義判定を行う．素性の一覧を表1に示す．
+
+
+\begin{table}[t]
+\caption{素性一覧}
+\input{01table01.txt}
+\end{table}
+
+\section{同義述部コーパスの作成}
+
+同義判定モデルの作成と提案手法の評価のため，「メモリを‐消費している」のような「項‐述部」を単位とした同義述部コーパスを作成した．
+
+2010年4月のブログからランダム抽出した約810万文を対象に，係り受け関係にある「項‐述部」を抽出した．述部は，Izumi, Imamura, Kikui, and Sato (2010)を用いて，述部の機能表現から終助詞など出来事の意味に影響を与えない表現を自動で削除し，単純な述部表現に正規化した．項は，日本語語彙大系(池原 他 1999)の具体名詞に属する名詞のブログ出現頻度上位700語を使用した．
+
+抽出した「項‐述部」の集合から，項をキーとして「同義」，「含意」，「推意」，「反義」，「その他」の意味関係に属する述部のペアを抽出した．これらの意味関係を明確にするため，Chierchia 
+and McConnell-Ginet (2000)を参考に，異なる2つの述部の意味関係を下記のように5種類に分類し，言語テストを作成した．これに基づき作業者は「同義」，「含意」，「推意」，「反義」，「その他」を判断した．（＃は「文法的には正しいが意味的におかしい文」を表す．）
+
+・同義 (Mutual Entailment)
+
+　　　定義：表層が異なる2つの述部が同じ出来事(Event)を表している
+
+　　　言語テスト1：片方の述部を否定すると，意味が通じない
+
+　　　　　　　　　×「\underline{\mbox{述部A}}，\textbf{でも，}\underline{\mbox{述部B}}\textbf{という訳ではない}」
+
+　　　　　　　　　×「\underline{\mbox{述部B}}，\textbf{でも，}\underline{\mbox{述部A}}\textbf{という訳ではない}」
+
+　　　例：＃「土産を\underline{買った}．\textbf{でも，}（その土産を）\underline{購入した}\textbf{という訳ではない．}」
+
+　　　言語テスト2：片方の述部を推測表現（または疑問表現）にすると，意味が通じない
+
+　　　　　　　　　×「\underline{\mbox{述部A}}，\underline{\mbox{述部B}} \textbf{かも知れない／のか？}」
+
+　　　　　　　　　×「\underline{\mbox{述部B}}，\underline{\mbox{述部A}} \textbf{かも知れない／のか？}」
+
+　　　例：＃「土産を\underline{購入した}．（その土産を）\underline{買った}\textbf{かも知れない／のか？}」
+
+・含意（Entailment，「衝動買いした」は「買った」を含意する）
+
+　　　定義：どちらか一方の述部がもう一方の述部の意味を包含していること
+
+　　　言語テスト：含意されている述部を否定することができない
+
+　　　　　　　　　×「\underline{\mbox{述部A}}，\textbf{でも，}\underline{\mbox{述部B}}\textbf{という訳ではない}」
+
+　　　　　　　　　○「\underline{\mbox{述部B}}，\textbf{でも，}\underline{\mbox{述部A}}\textbf{という訳ではない}」
+
+　　　例：＃「土産を\underline{衝動買いした}．でも，（その土産を）\underline{買った}\textbf{という訳ではない}．」
+
+　　　　　○「土産を\underline{買った}．でも，\underline{衝動買いした}\textbf{という訳ではない}．」
+
+・推意 （Implicature，「（土産が）お買い得だった」は「（土産を）買った」を推測させる）
+
+　　　定義：どちらか一方の述部によってもう一方の述部が「自然に推測される」
+
+{\addtolength{\leftskip}{4zw}\noindent 言語テスト：もう一方の述部が自然に推測されるが，含意と異なり推測される述部を否定することができる\par}
+
+　　　　　　　　　○「\underline{\mbox{述部A}}，\textbf{でも，}\underline{\mbox{述部B}}\textbf{という訳ではない}」
+
+　　　　　　　　　○「\underline{\mbox{述部B}}，\textbf{でも，}\underline{\mbox{述部A}}\textbf{という訳ではない}」
+
+　　　例：○「土産が\underline{お買い得だった}．でも，\underline{買った}\textbf{という訳ではない}．」 
+
+・反義 (Contradiction)
+
+　　　定義：表層が異なる2つの述部において，両方の述部が真であることが成立しない
+
+　　　言語テスト：両方の述部を「でも」でつなげると，意味が矛盾する
+
+　　　　　　　　　×「述部A．\textbf{でも}述部B」
+
+　　　　　　　　　×「述部B．\textbf{でも}述部A」
+
+　　　例：＃「土産が\underline{多い}．\textbf{でも，}（その土産が）\underline{少ない}．」
+
+・その他 (Others)
+
+　　　定義：異なる 2 つの述部において意味的な関係がない
+
+上記の言語テストをもとに，同義述部コーパスを作成した．コーパスは，1次作業者が述部ペアの作成・意味関係の付与を行い，1次評価者が指針にあっているか否かを評価した\footnote{1次作業者と1次評価者の一致率（kappa率）は0.85であった．}．2人が合意した意味関係を付与したデータを1次データとし，2次作業者と2次評価者（第一著者）が 1 次データの修正（2 次作業者）とそのチェック（2次評価者）を行った．その際，「推意」に関する述部ペアに関しては 1 次データでの一致率が良くなかったため，本研究のデータから排除した．これは，推意の定義にある「自然に推測される」という判断に個人差があるからだと考えられる．最終的には，「同義」，「含意」，「反義」，「その他」の意味関係に対し，4名の合意が取れた述部ペアを使用した．下記が，作成されたデータの例と総数である．
+
+\enumsentence{
+同義ペア（2,843ペア）\\
+\begin{tabular}{p{14zw}l}
+ 車が‐ぶつかっていた & 車が‐衝突していた \\
+ 食パンが‐出来上がった & 食パンが‐焼けた \\
+ バスが‐発車した & バスが‐発した
+\end{tabular}
+}
+\enumsentence{
+含意ペア（2,368ペア）\\
+\begin{tabular}{p{14zw}l}
+ 時計を‐チェックした & 時計を‐見た \\
+ 庭を‐散策した & 庭を‐歩いた \\
+\end{tabular}
+
+\begin{tabular}{p{14zw}l}
+ バッグを‐新調した & バッグを‐買った
+\end{tabular}
+}
+\enumsentence{
+反義ペア（2,227ペア）\\
+\begin{tabular}{p{14zw}l}
+ 車が‐渋滞していた & 車が‐流れていた \\
+ 食パンを‐購入した & 食パンが‐売り切れていた \\
+ バスを‐降りた & バスに‐乗った
+\end{tabular}
+}
+\enumsentence{
+その他ペア（4,948ペア）\\
+\begin{tabular}{p{14zw}l}
+ 車が‐ぶつかっていた & 車を‐止める \\
+ 食パンに‐挟んだ & 食パンが‐焼けた \\
+ バスを‐降りた & バスに‐間に合った
+\end{tabular}
+}
+
+
+\section{実験}
+
+5節で作成した同義述部コーパスを用いて提案手法の評価を行った．辞書定義文素性の抽出には，金田一・池田(1988)の「学研国語大辞典 
+第二版」を，抽象的な意味属性の抽出には，日本語語彙大系(池原 他 1999)の「用言属性」を用いる．分布類似度計算には，柴田・黒橋(2010)と同様の手法で作成された「項‐述部」の分布類似度モデルと，「述部」のみを単位とした分布類似度モデルを用いる．素性ベクトルの構築には，Web10億ページから抽出し，重複を除いた約69億文を用いた．機能表現の特徴抽出に関しては，松吉 他(2007)の日本語機能表現辞書にある機能表現の意味カテゴリーのラベルを用いる．この意味ラベルの付与には，今村, 泉, 菊井, 佐藤 (2011)のタガーを用いる．
+
+
+\subsection{学習データ}
+
+5節で作成した同義述部コーパスから，本稿で使用するリソースである学研国語大辞典と語彙大系の用言属性にエントリがあり，かつ分布類似度計算の「項‐述部」の出現頻度10以上のデータのみを選出した．項が422種類からなる「同義」，「含意」，「反義」，「その他」の述部ペアのうち，91種類の項に対する述部ペアは，本提案手法の言語的特徴を分析するための考察用データ（372ペア，held out data）として用い，実験には使用しなかった．残りを学習データ（3,503ペア）とし，「同義」と「含意」の述部ペアを正例，「反義」と「その他」のペアを負例として同義判定モデルの学習を行った．学習にはLIBSVM (Chang {\&} Lin 2011)を使用し，実験の評価には，5分割交差検定を行い，学習データの4/5を用いてトレーニングを行い，残りの1/5で評価し，これを5回繰り返した\footnote{SVMの学習には線形カーネルを用い，パラメータはデフォルト値を用いた．}．学習データに属する「同義」，「含意」，「反義」，「その他」の述部ペアの数は下記のとおりである．
+
+\begin{itemize}
+\item 学習データの内訳
+	\begin{itemize}
+	\item 同義ペア（956ペア）
+	\item 含意ペア（669ペア）
+	\item 反義ペア（758ペア）
+	\item その他ペア（1,120ペア）
+	\end{itemize}
+\end{itemize}
+
+
+\subsection{比較手法}
+
+Baselineとして，次にあげる手法と比較した．1つ目が，既存の大規模語彙シソーラスである日本語WordNet (Bond, Isahara, Fujita, Uchimoto, Kuribayashi, and Kanzaki 2009)を用いた方法である．2節で述べたように，既存の言い換え研究ではシソーラスなどの特定の言語資源を用いて言い換えを行う．そこで，本稿では大規模シソーラスであるWordNetを用いて，入力された述部が同じSynsetに属していれば，同義とみなす方法で同義判定を行った．2つ目，3つ目は分布類似度のみを用いて同義判定を行う手法である．Baseline2 (DistPAVerb-$\theta)$は，提案手法の素性のひとつである項‐述部と述部単体の分布類似度を用いて，これらが特定の閾値以上の場合は，正例とみなす方法である．Baseline3 (DistMultiAve-$\theta$)\footnote{Yih and Qazvinian (2012)で提案された複数の類似度の平均値という意味で，Dist(ributional similarity) Multi(model) Ave(rage)と呼ぶ．}は，Yih and Qazvinian (2012)の方法をもとに，本提案手法で用いた言語資源である大規模コーパスからの分布類似度（項‐述部と述部），辞書定義文を用いた分布類似度，語彙大系の属性から生成した分布類似度をそれぞれ計算し，その平均値を用いて，特定の閾値以上のものを正例とみなした．辞書定義文に関しては，対象の単語の定義文内にある内容語とその出現頻度をベクトルの素性とした．用言属性に関しては，対象の単語が持つ用言属性を用いてベクトルを構築した．Baseline2とBaseline3の閾値調整には，提案手法同様に，5分割交差検定を行い，学習データの4/5を用いてF値が最大になる閾値を求め，その閾値を用いて残りの1/5の評価を行うという方法を5回繰り返した．Baseline4〜Baseline7は，本提案手法で提案した特徴である「辞書定義文素性 (Definition-SVM)」，「用言属性素性 (PredClass-SVM)」，「分布類似度素性 (DistPAVerb-SVM)」，「機能表現素性 (Func-SVM)」それぞれ単体を用いてSVMで同義判定を行う手法である．これらも，5分割交差検定を行う．
+
+
+・比較手法
+\begin{itemize}
+\item Baseline1 (WordNet)\\
+ 日本語WordNet (Bond et al. 2009) のSynsetにあれば「正例」
+\item Baseline2 (DistPAVerb-$\theta)$\\
+ 項‐述部もしくは述部単体の分布類似度が閾値以上のものを「正例」
+\item Baseline3 (DistMultiAve-SVM)\\
+ 大規模コーパス，辞書定義文，用言属性から個別に計算した分布類似度の平均を用いて閾値以上のものを「正例」
+\item Baseline4〜7 (Definition-SVM, PredClass-SVM, DistPAVerb-SVM, Func-SVM) \\
+ 提案手法の素性単体を用いてSVMで同義判定を行う
+\end{itemize}
+評価は，Precision（精度），Recall（再現率），F値を用いて行う．なお，精度の比較には5分割交差検定の平均値を用いる．
+
+・精度評価の指標
+\begin{gather*}
+ \text{Precision（精度）}= \frac{|\text{正解の同義の集合} \cap \text{システムが同義と判別した集合}|}{|\text{システムが同義と判別した集合}|} \\
+ \text{Recall（再現率）} = \frac{|\text{正解の同義の集合} \cap \text{システムが同義と判別した集合}|}{|\text{正解の同義の集合}|} \\
+ \mathrm{F}値 = \frac{2 * \text{Precision} * \text{Recal}l}{\text{Precision} + \text{Recall}}
+\end{gather*}
+
+
+\subsection{結果}
+
+\begin{table}[b]
+\caption{実験結果}
+\input{01table02.txt}
+\end{table}
+
+表2が示すように，提案手法が最も高いF値を示した．BL1 (WordNet)の場合，Precisionが0.873と一番高いが，Recallが0.331と一番低い．一方，Yih and Qazvinian (2012)をもとに複数の類似度計算の平均を取るBL3 (DistMultiAve-$\theta)$の場合，Recallがすべての手法の中で一番高いものの，Precisionが0.537と最も低い値を出しており，提案手法のように教師あり識別問題として同義述部の判定を行う事の有効性が確認できた．また，本提案手法の素性を単体で用いるよりも（BL4〜BL7），すべての素性を用いた方が精度が高いことから，複数の言語的特徴を組み合わせた同義判定の有効性が確認できた．なお，比較手法と提案手法とのF値には $\mathrm{p} < 0.01$ で統計的な有意差があった\footnote{F値の結果をもとに，t検定を行った．}．
+
+
+次に，どの素性が有効であるかを調べるために，提案手法から各素性を除いたAblationテストを行った．すべての素性において，それぞれの素性を抜いた場合にF値が低下し，分布類似度と用言属性の素性を抜いた場合にはF値に統計的な有意差が出た．特に，分布類似度の素性を抜いた場合，Precision，Recall，F値すべてが低下したため，大規模コーパスから計算した分布類似度が同義判定の素性として一番効果があった．
+
+
+\section{考察}
+
+同義・類義表現等を集めた大規模シソーラスである日本語WordNet (Bond et al., 2009) を用いた場合，同義まとめ上げのPrecisionは高いものの (0.873)，Recallが低かった (0.331)．実験で用いたデータは，提案手法の個々の素性の精度を正確に測るため，学研国語大辞典と日本語語彙大系に存在し，かつ分布類似度計算の「項‐述部」の出現頻度10以上のデータのみ使用するという制約を加えた．そのため，正確な比較は難しいものの，語彙大系や国語辞書などにエントリがある語彙のみを対象にした場合でも，WordNetのような大規模シソーラスのSynsetsだけでは，カバーできない同義表現があると考えられる．下記は，BL1 (WordNet) で同義と判定することができなかった同義述部表現の一例である．
+
+\eenumsentence{
+\item メモリを‐食っている
+\item メモリを‐消費している
+}
+\eenumsentence{
+\item 酒を‐満喫する
+\item 酒を‐楽しむ
+}
+上記の例は，本提案手法では，正しく「同義である」と判別された述部ペアである．
+
+一方，大規模コーパスから構築した分布類似度計算のみを用いた場合 (BL2 (DistPAVerb-$\theta )$, BL3 (DistMultiAve-$\theta )$)，Recallは最も高い値を出したものの，下記のように，「反義述部ペア」や「時間経過を表す述部ペア」も高い類似度を出してしまい，Precisionが低下してしまった．
+
+\enumsentence{
+分布類似度が閾値以上の反義ペア \\
+a. ハンドルを‐握る \\
+b. ハンドルを‐離す
+}
+
+\enumsentence{
+分布類似度が閾値以上の時間経過を表す述部ペア\\
+a. カレーを‐食べた \\
+b. カレーが‐美味しかった
+}
+これらは，本提案手法では，正しく「同義ではない」と認識された．
+
+このように，提案手法では，従来の大規模シソーラスでは同義と判断できなかった幅広い同義の述部を認識しつつ，同義ではない述部を正しく判別することができた．分布類似度が高い値を出してしまう反義関係・時間経過を表す述部の識別が，本提案手法で正しく行われたのには次のような理由があると考えられる．第一に，反義関係の識別に辞書定義文からの素性が効いた点である．下記の，動詞「握る」の定義文が表すように，辞書定義文には，同義の単語を使ってその語彙の意味を定義する傾向があるが，反義の単語を使って定義することが少ない．
+
+\enumsentence{
+「握る」の定義文の一例\\
+物を\underline{つかんだり持ったり}する．
+}
+「握る」という単語を別の同義の単語である「つかむ」や類義表現である「持つ」という単語で表現しており，「離さない事」のように，反対の意味を表す単語にさらに否定表現をつけて定義することが少ない．相互補完性や語彙の重なりを特徴としたことで，同義述部を認識するだけでなく，同義ではない述部を正しく排除することができたと考えられる．
+
+次に，時間経過を表す述部ペアも，本提案手法では正しく「同義ではない」と識別できた．これは，抽象的な述部の意味を表す用言属性の重なりを素性として加えたことによるものと考えられる．
+
+\enumsentence{
+時間経過を表す述部ペアの用言属性 \\
+a. 食べた 【身体動作】，【状態】\\
+b. 美味しかった 【属性】
+}
+
+上記のように，「食べた」と「美味しかった」は時間経過の関係を表す述部ではあるが，同義の述部と異なり，必ずしも同じ意味属性を持っているとは限らない．そのため，用言属性にも重なりがなく，正しく「同義ではない」と判別できたと考えられる．
+
+このように，提案手法では，WordNetのような大規模シソーラスと同等のPrecisionを保ちつつ，Recallをあげることできた．述部の言語構造に関する分析をもとに，複数の言語情報を素性として組み込むことによって，同義の述部は同義，それ以外の述部は同義ではないと正しく判別できるようになった．
+
+一方，提案手法でうまく同義と識別できなかった述部ペアは，片方の内容語が「入れる」のように多義性の高い述部ペアや，内容語と機能表現の意味の組み合わせを考慮しなくてはいけない同義述部ペアであった．
+
+\eenumsentence{
+\item カラオケに‐入れてほしい（入れる＋願望）
+\item カラオケに‐参加したい（参加する＋願望）
+}
+\eenumsentence{
+\item 筆が‐重い
+\item 筆が‐進まない（進む＋否定）
+}
+\eenumsentence{
+\item マンガが‐大好きだ（大好き）
+\item マンガに‐はまっている（はまる＋継続）
+}
+提案手法では，「否定」や「継続」など機能表現が共有されていると素性として考慮されるが，上記の例のように，片方にのみ特定の機能表現が入ることによって同義になる述部を識別することは不可能である．今後は，機能表現の素性の加え方を工夫し，上記のように特定の機能表現をもった述部とのみ同義になるような述部ペアの同義判定も考慮していきたい．また，本提案手法では項にあたる名詞句は同じ条件での同義判定であるため，「景気が‐冷え込む」と「経済が‐悪化する」のように名詞句が異なる場合の同義判定への適用には，名詞句のまとめ上げも検討する必要がある．今後は，項が異なる場合の同義判定も考慮し，大規模データからの情報抽出・集計を行うマイニングでの本提案手法の有効性を検討したい．
+
+
+\section{結論}
+
+本稿では，「メモリを消費している」と「メモリを食っている」の「消費している」と「食っている」といった内容語と機能表現からなる述部を対象に，異なる2つの述部が同義か否かを判定する同義判定手法を提案した．述部の言語構造に着目し，同義述部を認識するという観点で必要な特徴を複数の言語的レベルで分析した．これらの分析をもとに，述部の同義判定に「辞書定義文」，「用言属性」，「分布類似度」，「機能表現」という4つの言語知識を用いた．実験の結果，既存の分布類似度のみを用いた手法では判別できなかった反義・時間経過関係の述部を正しく識別しつつ，大規模シソーラスではカバーできなかった多様な同義述部の識別が可能となった．さらに，文情報の核を表す述部単体の同義判定だけではなく，「メモリを消費している」と「メモリを食っている」のように項が加わることで同義となる表現も扱うことが出来るようになり，テキストに記述されている評判や苦情，ユーザの経験など重要な情報を表す表現の抽出やまとめ上げが可能になると考える．
+
+今後は，これらの同義判定を実際のテキストマイニングアプリケーションに用いることで同義述部まとめ上げの効果を明確にするとともに，本提案手法で考察した複数の言語的特徴を用いて，反義関係の識別など他の意味関係抽出への適用性を検討したい．
+
+
+\bibliographystyle{jnlpbbl_1.5}
+
+\begin{thebibliography}{}
+\item
+Bond, F., Isahara, H., Fujita, S., Uchimoto, K., Kuribayashi, T. and Kanzaki, K. (2009). ``Enhancing the Japanese WordNet.'' In \textit{Proceedings of the 7th Workshop on Asian Language Resources, in Conjunction with ACL-IJCNLP 2009}, pp.~1--8, Singapore.
+
+\item
+Chang, C.-C. and Lin, C.-J. (2011). ``LIBSVM: A Library for Support Vector 
+Machines.'' \textit{ACM Transactions on Intelligent Systems and Technology (TIST)}, \textbf{2}(3), No.~27, pp.~1--27.
+
+\item
+Chierchia, G. and McConnell-Ginet, S. (2000). \textit{Meaning and Grammar: An Introduction to Semantics (2nd ed).} Cambridge, MA: The MIT Press.
+
+\item
+Curran, J.~R. (2004). \textit{From Distributional to Semantic Similarity}. Doctoral Dissertation, University of Edinburgh, 
+United Kingdom.
+
+\item
+Dagan, I., Lee, L. and Pereira, F. C. N. (1999). ``Similarity-Based Models 
+of Word Cooccurrence Probabilities.'' Machine Learning---Special Issue on 
+Natural Language Learning, \textbf{34}(1-3), pp.~43--69.
+
+\item
+Dowty, D. (1979). \textit{Word Meaning and Montague Grammar: The Semantics of Verbs and Times in Generative Semantics and in Montague's PTQ}. Dordrecht: D. Reidel.
+
+\item
+Firth, J. (1957). ``A Synopsis of Linguistic Theory, 1930--1955.'' Studies in 
+Linguistic Analysis, pp.~10--32.
+
+\item
+藤田篤, 乾健太郎 (2001). 
+語釈文を利用した普通名詞の同概念語への言い換え．言語処理学会第7回年次大会発表論文集，pp.~331--334.
+
+\item
+藤田篤, 乾健太郎 (2004). 言い換え技術に関する研究動向．自然言語処理, 
+\textbf{11}(5), pp.~151--198.
+
+\item
+藤田篤, 降幡建太郎, 乾健太郎, 松本裕治 (2004). 
+語彙概念構造に基づく言い換え生成—機能動詞構文の言い換えを例題に．情報処理学会論文誌, 
+\textbf{47} (6), pp.~1963--1975.
+
+\item
+Hagiwara, M. (2008). ``A Supervised Learning Approach to Automatic Synonym 
+Identification based on Distributional Features.'' In \textit{Proceedings of the ACL-08: HLT Student Research Workshop (Companion Volume)}, pp.~1--6.
+
+\item
+Hashimoto, C., Torisawa, K., De Saeger, S., Kazama, J. and Kurohashi, S. 
+(2011). ``Extracting Paraphrases from Definition Sentences on the Web.'' In 
+\textit{Proceedings of the 49th Annual Meeting of the Association for Computational Linguistics}, pp.~1087--1097.
+
+\item
+池原悟, 宮崎正弘, 白井諭, 横尾昭男, 中岩浩巳, 小倉健太郎, 大山芳史, 林良彦 
+(1999). 日本語語彙大系 CD-ROM版. 岩波書店.
+
+\item
+今村賢治, 泉朋子, 菊井玄一郎, 佐藤理史 (2011). 
+述部機能表現の意味ラベルタガー．言語処理学会第17回年次大会発表論文集，pp.~308--311.
+
+\item
+Izumi, T., Imamura, K., Kikui, G. and Sato, S. (2010). ``Standardizing 
+Complex Functional Expressions in Japanese Predicates: Applying 
+Theoretically-based Paraphrasing Rules.'' In \textit{Proceedings of the Workshop on Multiword Expressions: from Theory to Applications}, pp.~63--71.
+
+\item
+Jackendoff, R.~S. (1992). \textit{Semantic Structure}. Cambridge, MA: The MIT Press.
+
+\item
+鍜治伸裕, 河原大輔, 黒橋禎夫, 佐藤理史 (2003). 
+格フレームの対応付けに基づく用言の言い換え．自然言語処理, \textbf{10} (4), 
+pp.~65--81.
+
+\item
+鍜治伸裕, 黒橋禎夫(2004). 迂言表現と重複表現の言い換え．自然言語処理, 
+\textbf{11} (1), pp.~83--106.
+
+\item
+金田一春彦 (1976). 日本語動詞のアスペクト．むぎ書房.
+
+\item
+金田一春彦, 池田弥三郎 (1988). 学研国語大辞典 第二版. 学習研究社.
+
+\item
+Lee, L. (1999). ``Measures of Distributional Similarity.'' In \textit{Proceedings of the 37th Annual Meeting of the Association for Computational Linguistics}, pp.~25--32.
+
+\item
+Lin, D. (1998). ``An Information-Theoretic Definition of Similarity.'' In 
+\textit{Proceedings of the 15th International Conference on Machine Learning}, pp.~296--394.
+
+\item
+松吉俊, 佐藤理史, 宇津呂武仁 (2007). 日本語機能表現辞書の編纂．自然言語処理, 
+\textbf{14} (5), pp.~123--146.
+
+\item
+松吉俊, 佐藤理史 (2008). 
+文体と難易度を制御可能な日本語機能表現の言い換え．自然言語処理, \textbf{15} 
+(2), pp.~75--99.
+
+\item
+Narrog, H. (2005). ``On Defining Modality Again.'' \textit{Language Sciences}, \textbf{27}(2), pp.~165--192.
+
+\item
+那須川哲哉 (2001). コールセンターにおけるテキストマイニング．人工知能学会誌, 
+\textbf{16} (2), pp.~219--225.
+
+\item
+Portner, Paul H. (2005). \textit{What is meaning?: Fundamentals of formal semantics}. Malden, MA: Blackwell.
+
+\item
+Ramchand, G.~C. (2010). \textit{Verb Meaning and the Lexicon: A First-Phase Syntax}. New York: Cambridge University Press.
+
+\item
+柴田知秀, 黒橋禎夫 (2010). 
+文脈に依存した述語の同義関係獲得．情報処理学会研究報告 (IPSJ SIG Technical Report), pp.~1--6.
+
+\item
+Szpektor, I. and Dagan, I. (2008). Learning Entailment Rules for Unary 
+Templates. In \textit{Proceedings of the 22nd International Conference on Computational Linguistics (Coling 2008)}, pp.~849--856.
+
+\item
+竹内孔一, 乾健太郎, 
+藤田篤 (2006)．語彙概念構造に基づく日本語動詞の統語・意味特性の記述．影山太郎（編）．レキシコンフォーラムNo.~2, 
+pp.~85--120．ひつじ書房.
+
+\item
+土屋雅稔, 黒橋禎夫 (2000). 
+MDL原理に基づく辞書定義文の圧縮と共通性の発見．情報処理学会自然言語処理研究会 (NL-140-7), 
+pp.~47--54. 
+
+\item
+Turney, P. (2008). ``A Uniform Approach to Analogies, Synonyms, Antonyms and 
+Associations.'' In \textit{Proceedings of the 22nd International Conference on Computational Linguistics}, pp.~905--912.
+
+\item
+Turney, P., Littman, M., Bigham, J. and Shnayder, V. (2003). ``Combining 
+Independent Modules to Solve Multiple-choice Synonym and Analogy Problems.'' 
+In \textit{Proceedings of the International Conference on Recent Advances in Natural Language Processing}, pp.~482--489.
+
+\item
+Weisman, H., Berant, J., Szpektor, I. and Dagan, I. (2012). ``Learning Verb 
+Inference Rules from Linguistically-Motivated Evidence.'' In \textit{Proceedings of the 2012 Joint Conference on Empirical Methods in Natural Language Processing and Computational Natural Language Learning}, pp.~194--204.
+
+\item
+Yih, W. and Qazivinian, V. (2012). ``Measuring Word Relatedness Using 
+Heterogeneous Vector Space Models.'' In \textit{Proceedings of 2012 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies}, pp.~616--620.
+\end{thebibliography}
+
+\begin{biography}
+
+\bioauthor{泉　　朋子}{
+2005年北海道教育大学国際理解教育課程卒業，2007年ボストン大学大学院人文科学部応用言語学科修了，2008年日本電信電話株式会社入社．現在，NTTメディアインテリジェンス研究所研究員，京都大学大学院情報学研究科博士後期課程在学．自然言語処理研究開発に従事．言語処理学会会員．
+}
+
+\bioauthor{柴田　知秀}{
+2002年東京大学工学部電子情報工学科卒業，2007年東京大学大学院情報理工学系研究科博士課程修了．博士（情報理工学）．京都大学大学院情報学研究科特任助教を経て，2009年より同助教，現在に至る．自然言語処理の研究に従事．言語処理学会，情報処理学会，各会員．
+}
+
+\bioauthor{齋藤　邦子}{
+1996年東京大学理学部化学科卒業，1998年同大学院修士課程修了，同年日本電信電話株式会社入社．現在，NTTメディアインテリジェンス研究所主任研究員．自然言語処理研究開発に従事．言語処理学会，情報処理学会，各会員．
+}
+
+\bioauthor{松尾　義博}{
+1988年大阪大学理学部物理学科卒業，1990年同大大学院研究科博士前期課程修了，同年日本電信電話株式会社入社．現在，NTTメディアインテリジェンス研究所主幹研究員．機械翻訳，自然言語処理の研究に従事．情報処理学会，言語処理学会，各会員．}
+
+
+\bioauthor{黒橋　禎夫}{
+1994年京都大学大学院工学研究科電気工学第二専攻博士課程修了．博士（工学）．2006年4月より京都大学大学院情報学研究科教授．自然言語処理，知識情報処理の研究に従事．言語処理学会10周年記念論文賞等を受賞．
+}
+
+\end{biography}
+
+
+
+\biodate
+
+\end{document}
+
+

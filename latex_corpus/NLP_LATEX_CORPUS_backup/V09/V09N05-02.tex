@@ -1,0 +1,975 @@
+\documentstyle[epsf,jnlpbbl]{jnlp_j_b5}      
+
+\setcounter{page}{23}
+\setcounter{巻数}{9}
+\setcounter{号数}{5}
+\setcounter{年}{2002}
+\setcounter{月}{10}
+\受付{2002}{1}{18}
+\再受付{2002}{4}{11}
+\再々受付{2002}{5}{20}
+\採録{2002}{7}{17}
+
+\setcounter{secnumdepth}{2}
+
+\title{構文解析と融合した階層的句アライメント}
+\author{今村 賢治\affiref{ATR-SLT}}
+
+\headauthor{今村}
+\headtitle{構文解析と融合した階層的句アライメント}
+
+\affilabel{ATR-SLT}
+{ATR音声言語コミュニケーション研究所}
+{ATR Spoken Language Translation Research Laboratories}
+
+\jabstract{
+本稿では，機械翻訳知識の自動獲得を目的とした，2言語の対訳文の階層的句
+アライメントについて提案する．従来提案されてきた句アライメント方法は，
+いずれも構文解析結果を取得したのちに，部分木同士の対応をとるものであっ
+た．本稿で提案する方式は，構文解析器が持つ部分解析結果を句対応スコアと
+呼ぶ構造類似性評価尺度で評価し，前向きDP後ろ向きA*アルゴリズムを用いて
+最適な組み合わせを探索する．この方式を用いることにより，実験では従来手
+法に比べ2倍の同等句を得ることができ，そのときの精度の低下はほとんどな
+いことが観察された．\\
+\indent また，本提案方式は単語アライメントを用いる．この単語レベルの対
+応は，内容語のみでなく，機能語間対応を含めた方が句アライメント精度が向
+上する．その一般形として，本方式に適合した単語アライメントは，再現率重
+視のものが望ましいことを併せて示す．}
+
+\jkeywords{句アライメント，用例ベース機械翻訳，翻訳知識獲得，
+部分構文解析，単語アライメント精度}
+
+\etitle{Hierarchical Phrase Alignment \\ Harmonized with Parsing}
+\eauthor{Kenji Imamura \affiref{ATR-SLT}} 
+
+\eabstract{
+In this paper, we propose a hierarchical phrase alignment method that
+aims to acquire translation knowledge.  Previous methods utilize the
+correspondence of sub-trees between bilingual parsing trees after
+determining the parsing result.  The method described in this paper
+combines partial tree candidates, and selects the best sequence of
+partial trees.  Then, a structural similarity measure (called a
+`phrase score') is used for evaluation. A forward DP backward $A^{*}$
+search algorithm is applied in order to combine partial trees.  Using
+this method, about twice as many as equivalent phrases were extracted
+experimentally, and almost no deterioration was observed. \\
+\indent This method employs word alignment. The accuracy of the phrase
+alignment increases when we consider the word correspondences between
+not only content words but also functional words. In addition, we
+found that a word alignment method with a high recall rate is suitable
+for this method.}
+
+\ekeywords{Phrase Alignment, Example-Based Machine Translation,
+Translation Knowledge Acquisition, Partial Parsing, Word Alignment
+Accuracy}
+
+
+
+\newcommand{\smalltable}{}
+
+\newcounter{condctr}
+\newenvironment{conditionlist}{}{}
+
+\newcounter{casectr}
+\newcommand{\caselist}[1]{}
+
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+
+
+\section{はじめに}
+
+機械翻訳では，統計ベースの翻訳システムのようにコーパスを直接使用するも
+のを除き，変換規則などの翻訳知識は依然として人手による作成を必要として
+いる．これを自動化することは，翻訳知識作成コストの削減や，多様な分野へ
+の適応時の作業効率化などに有効である．
+
+本稿では，機械翻訳，特に対話翻訳用の知識自動獲得を目的とした，対訳文間
+の階層的句アライメントを提案する．ここで言う句アライメントとは，2言語
+の対訳文が存在するとき，その1言語の連続領域がもう1言語のどの連続領域に
+対応するか，自動的に求めることである．連続領域は単語にとどまらず，名詞
+句，動詞句などの句，関係節などの範囲に及ぶため，まとめて句アライメント
+と呼んでいる．ここでは対象言語として，英語と日本語について考える．
+
+たとえば，
+
+\begin{itemize}\parskip=0mm\itemindent=20pt
+\item[E:] {\em I have just arrived in New York.}
+\item[J:] {ニューヨークに着いたばかりです．}
+\end{itemize}
+
+\noindent
+という対訳文があった場合，ここから
+
+\begin{itemize}\itemindent=20pt\parskip=0mm
+\item {\em in New York} $\leftrightarrow$ {ニューヨークに}
+\item {\em arrived in New York} $\leftrightarrow$ {ニューヨークに着い}
+\item {\em have just arrived in New York} $\leftrightarrow$ 
+	 {ニューヨークに着いたばかりです}
+\end{itemize}
+
+\noindent
+などの対応部分を階層的に抽出することを目的とする．これを本稿では同等句
+と呼ぶ．
+
+同等句は2言語間の対応する表現を表しているため，用例ベースの翻訳システ
+ムの用例とすることができる．また，同等句同士は階層的関係を持つため，こ
+れをパターン化することにより，文をそのまま保持する場合に比べ，用例を圧
+縮することもできる．
+
+従来，このような句アライメント方法として，
+\shortciteA{Kaji:PhraseAlignment1992,Matsumoto:PhraseAlignment1993,Kitamura:PhraseAlignment1997j,Watanabe:PhraseAlignment2000,Meyers:PhraseAlignment1996}
+などが提案されてきた．これらに共通することは，
+
+\begin{enumerate}\labelwidth=25pt\itemsep=0mm
+\item 構文解析(句構造解析または依存構造解析)と，単語アライメントを使用する
+\item 構文解析器が最終的に出力した結果を元に句の対応を取る
+\item 単語同士の対応は，内容語を対象とする
+\end{enumerate}
+
+\noindent
+点である．しかし，構文解析器が出力した結果のみを使用すると，句アライメ
+ントの結果が構文解析器の精度に直接影響を受ける．特に，従来提案されてき
+た方式は，構文解析が失敗するような文に関して，対策が取られていない．す
+なわち，本稿で念頭においている話し言葉のような，崩れた文が多く現れるも
+のを対象とするには不適切であると考えられる．
+
+本稿では，構文解析と融合した階層的句アライメント方法を提案する．具体的
+には，構文解析失敗時においても部分解析結果を組み合わせることにより，部
+分的な句の対応を出力するよう，拡張する．また，内容語のみでなく，機能語
+の対応を取ることにより，句アライメント精度そのものの向上を目指す．
+
+以下，第\ref{sec-phrase-alignment}章では，句アライメントの基本手法につ
+いて述べ，第\ref{sec-parsing-for-pa}章では，構文解析との融合を行う．第
+\ref{sec-word-alignment-for-pa}章では，本提案方式に適合した単語アライ
+メントの機能について述べ，第\ref{sec-eval-alignment}章で提案方式と他の
+方式との比較などの評価を行う．なお，本稿は，
+\shortcite{Imamura:PhraseAlignment2001-2}を基に，加筆修正したものであ
+る．
+
+\section{階層的句アライメントの基本方式}
+\label{sec-phrase-alignment}
+
+対訳文，特に原言語を翻訳して対訳を作成した場合，別語族の言語であっても
+同じ種類の句に翻訳されることが多いと考えられる．たとえば，動詞句``{\em
+arrive in New York}''は，日本語も「ニューヨークに着く」という動詞句に
+翻訳される場合が多い．
+
+このような性質を踏まえ，我々は「対訳文の連続領域が同じ情報を持ち，かつ
+句の種類が同じであれば，それは同等な句と見なせる」と仮定する．これを処
+理可能な表現で置き換える必要があるため，ここでは，
+
+\begin{conditionlist}
+\item 「同じ情報を持つ」→「2文間で，対応づけられている単語に過不足がない」
+\label{cond-same-information}
+\item 「句の種類が同じ」→「構文カテゴリが同じ」
+\label{cond-same-category}
+\end{conditionlist}
+
+\noindent
+と解釈することとする．
+
+上記2条件を満たす句を抽出するには，以下の処理手順となる(図
+\ref{fig-proc})．
+
+\begin{figure}
+\begin{center}
+\epsfile{file=fig/fig-proc.eps,scale=0.812802}
+\caption{階層的句アライメントの処理フロー}\label{fig-proc}
+\end{center}
+\end{figure}
+
+\begin{enumerate}\labelwidth=25pt
+\item まず，日本語文，英語文ともに形態素解析，構文解析を行う．
+
+\item 次に，単語アライメントを行い，文間の単語レベルの対応をとる．ここ
+では，$W$個の単語対(これを単語リンクと呼び，$WL(\mbox{英語単語},\mbox
+{日本語単語})$と表現する)が抽出されたとする．単語アライメント方法は，
+特に統計ベースの方法が多数提案されているため
+\footnote{たとえば，
+\shortciteA{Melamed:WordAlignment2000,Sumita:WordAlignment2000}などを
+参照のこと．}，その方式については本稿では特に議論しない．
+
+\item 次に，単語リンクのうち，$i$個のリンク($1 < i \leq W$) を選択し，
+それらをすべて含み，それ以外をまったく含まない構文解析木のノードをすべ
+て取得する．\label{num-get-node}
+
+\item 入力文1のノードと入力文2のノードを比較し，構文カテゴリが同じであ
+る場合，それを同等な句と見なす．ただし，文または助動詞を含んだ動詞句が
+複数取得された場合は最大範囲を示すものを，それ以外の場合で同じ種類の句
+が複数取得された場合は最小範囲を示すものを取得する．
+\label{num-combination}
+
+\item 処理\ref{num-get-node}, \ref{num-combination}を，すべての単語リンク
+の組み合わせについて試験する．
+\end{enumerate}
+
+\paragraph{処理例(1)}
+
+たとえば，英語``{\em I have just arrived in New York.}''と，その日本語
+訳「{ニューヨークに着いたばかりです．}」があったとする．単語リンクが
+$WL(\mbox{\em New York}, \mbox{ニューヨーク})$, $WL(\mbox{\em
+arrive},\mbox{着く})$の2つあり，構文木が図\ref{fig-example1}のようであっ
+たとすると，以下のとおり句の対応が取られる．
+
+\begin{figure}
+\begin{center}
+\epsfile{file=fig/fig-ex1.eps,scale=0.858984}
+\caption{英語と日本語の句の対応例}
+(上段が英語，下段が日本語を，言語間の実線は単語リンクを表す．以下同様)
+\label{fig-example1}
+\end{center}
+\end{figure}
+
+\begin{enumerate}\labelwidth=25pt
+\item 葉に$WL(\mbox{\em New York}, \mbox{ニューヨーク})$のみを含む(つ
+まり，$WL(\mbox{\em arrive},\mbox{着く})$を含まない)英語構文木上のノー
+ドと，日本語構文木のノードを比較し，同じ種類のノードがある場合，それを
+同等句とする．この例では，{\tt NP(1)}同士，{\tt VMP(2)}同士のノードが
+それに該当する．
+\item 同様に，葉に$WL(\mbox{\em arrive},\mbox{着く})$のみを含む英語ノー
+ドと日本語ノードを比較し，同じ種類のノードを同等句とする．この例では，
+{\tt VP(3)}同士のノードがそれに該当する．
+\item 次に，$WL(\mbox{\em New York}, \mbox{ニューヨーク})$と
+$WL(\mbox{\em arrive},\mbox{着く})$の両方を含むノードを比較し，同じ種
+類のノードを同等句とする．この例では，{\tt VP(4)}同士，{\tt AUXVP(5)}
+同士，{\tt S(6)}同士が該当する．
+\end{enumerate}
+
+従って，最終的に表\ref{tbl-alignment-result}に示す6つの同等句が得られ
+る．
+
+\begin{table*}
+\begin{center}
+\caption{句アライメント結果例}\label{tbl-alignment-result}
+{\smalltable
+\begin{tabular}{c|ll}
+\hline\hline
+構文カテゴリ & 英語句 & 日本語句 \\
+\hline
+{\tt NP}    & {\em New York} & {ニューヨーク} \\
+{\tt VMP}   & {\em in New York} & {ニューヨークに} \\
+{\tt VP}    & {\em arrive} & {着く} \\
+{\tt VP}    & {\em arrive in New York} & {ニューヨークに着く} \\
+{\tt AUXVP} & {\em have just arrived in New York} 
+	    & {ニューヨークに着いたばかりです} \\
+{\tt S}     & {\em I have just arrived in New York} 
+	    & {ニューヨークに着いたばかりです} \\
+\hline\hline
+\end{tabular}
+}
+\end{center}
+\end{table*}
+
+本例は，2つの単語リンクが存在する場合であるが，3単語の場合はリンク1を
+含みリンク2，3を含まない句，リンク1，2を含みリンク3を含まない句，リン
+ク1，2，3をすべて含む句のように，組み合わせ的に句を取得する．これによ
+り，同等句が階層的に得られる．
+
+なお，英語と日本語では，当然，構文カテゴリは異なるが，今回は両者の構文
+カテゴリを言語共通と考えられる表\ref{tab-phrase-type}に示すような7種類
+に分類した．このような抽象化を行うことにより，異なる言語の構文カテゴリ
+の比較が可能となる．
+
+\begin{table}
+\begin{center}
+\caption{構文カテゴリの分類}\label{tab-phrase-type}
+{\smalltable
+\begin{tabular}{ccl}
+\hline\hline
+句の種類 & 記号 & \multicolumn{1}{c}{備考} \\
+\hline
+名詞句		& {\tt NP}	& \\
+動詞句		& {\tt VP}	& \\
+助動詞付動詞句	& {\tt AUXVP}	& 助動詞を含んだ動詞句 \\
+連用修飾句	& {\tt VMP}	& 用言を修飾する句． \\
+連体修飾句	& {\tt NMP}	& 体言を修飾する句． \\
+独立句		& {\tt INDP}	& 感動詞等\\
+文		& {\tt S}	& \\
+\hline
+その他		& 	& 言語依存の句．比較対象外 \\
+\hline\hline
+\end{tabular}
+}
+\end{center}
+\end{table}
+
+\paragraph{処理例(2)}
+
+言語が異なると，単語同士が１対１に対応できたとしても，品詞が異なること
+も多い．そのような句を構文カテゴリによる制約なしで対応づけると，不自然
+に短い単位となり，対訳として不適切になると考えられる．しかし，本稿で述
+べる方式では，句の種類が同じもののみを同等句として取得するため，同等句
+が不自然に短くならない．
+
+\begin{figure}
+\begin{center}
+\epsfile{file=fig/fig-ex2.eps,scale=0.91073}
+\caption{品詞が異なる場合の対応例}\label{fig-example2}
+\end{center}
+\end{figure}
+
+たとえば，英語``{\em Business class is fully booked.}''と日本語「{ビジ
+ネスクラスは予約で一杯です}」から同等句を抽出することを考える(図
+\ref{fig-example2})．単語アライメントで$WL(\mbox{{\em fully}/ADV},
+\mbox{一杯/名詞})$, $WL(\mbox{{\em book}/V}, \mbox{予約/名詞})$の単語
+リンクが得られたとしても，どちらか一方の単語リンクのみを含んで構文カテ
+ゴリが同じノードはない．しかし，両者を同時に含み，同じ構文カテゴリを持
+つノードとしては{\tt VP(2)}があるので，``{\em be fully booked}''と
+「{予約で一杯です}」が同等句として最初に抽出される．
+
+\paragraph{処理例(3)}
+
+意訳の例を図\ref{fig-example3}に示す．この例では，英語``{\em fly}''を
+日本語「{飛行機で行く}」と訳しているため，両者は単語アライメントで対応
+づけられていないにも関わらず，最終的な出力では英語``{\em fly to New
+York tomorrow}'' と日本語「{ニューヨークに明日飛行機で行く}」が対応づ
+けられている．つまり，間接的に``{\em fly}''と``{飛行機で行く}''が対応
+づけられる．このように，本方式では，単語アライメントで対応が取れないよ
+うな意味的な翻訳がされた句(言い換えると，単語の直訳でない句)もある程度
+対応づけることができる．
+
+\begin{figure}
+\begin{center}
+\epsfile{file=fig/fig-ex3.eps,scale=0.92316}
+\caption{意訳の場合の対応例}\label{fig-example3}
+\end{center}
+\end{figure}
+
+単語リンク不足のときの句アライメントについては，
+\ref{sec-wa-accuracy}で詳細を述べる．
+
+\newpage
+
+\section{句アライメントと構文解析の融合}
+\label{sec-parsing-for-pa}
+
+\ref{sec-phrase-alignment}章で述べた方法は，構文解析結果が一意に決まっ
+たと仮定している．しかし，構文解析結果を一意に決定した後に句アライメン
+ト処理を行うと，句アライメント結果が構文解析結果に直接影響される．たと
+えば，構文解析器が解析出来ない文は，句アライメント処理を行えない．また，
+誤った構文解析結果を元に句アライメント処理を行えば，句アライメント結果
+も誤る可能性が高い．
+
+構文解析エラーは大きく以下の2種類に分類することができる．
+
+\begin{itemize}\itemsep=0mm
+\item 曖昧性の問題 \\
+構文解析結果の候補が複数あり，それを選択ミスする場合．この場合，構文解
+析結果が誤ったものになる．
+
+\item 解析木作成失敗 \\
+文法(書き換え規則)が不足しており，文全体をカバーする解析木の作成に失敗
+する場合．この場合は通常，構文解析器からの出力がない．
+\end{itemize}
+
+このうち，曖昧性は単言語の構文解析では必ず発生する問題である．一方，解
+析木作成失敗は，稠密な文法を用意すれば解決可能である．しかし，対話翻訳
+をターゲットにする場合，文法的な崩れの多い話し言葉を扱わなければならな
+いという問題がある．また，機械翻訳のように複数の言語を扱う場合，言語に
+よってツール・コーパス等の整備状況が異なっているため，すべての言語にお
+いて失敗のない構文解析器を用意できる可能性は低い．もし，用意できない場
+合は文法を人手で作成するしかなく，解析木作成失敗は必ず起こりうる問題と
+なる．
+
+本提案方式では，以下の特徴および手法を利用して句アライメント処理と構文
+解析を融合させることにより，曖昧性の問題，解析木作成失敗の解決を図る．
+
+
+\subsection{言語間の構造の類似性を利用した曖昧性解消}
+\label{sec-disambiguation}
+
+個々の言語の構文解析で発生した曖昧性は，2言語を対応づけることにより，
+ある程度解消することができる．これは2言語間の構造の類似性を利用するも
+のである\cite{Kaji:PhraseAlignment1992,Matsumoto:PhraseAlignment1993}．
+
+たとえば，英語におけるPPアタッチメントの曖昧性は，対応する日本語の構造
+が一意に決まると解消することができる．図\ref{fig-pp}での`{\em for
+breakfast}' は，点線の構文木のように`{\em need}'と組み合わさってVPを形
+成することもできるし，実線の構文木のように`{\em room service}'と組み合
+わせてNPを形成することもできる．しかし，日本語の構造を解析すると，`{朝
+食}'は`{ルームサービス}'とともにNPを形成しているため，英語についても同
+様に，``{\em room service for breakfast}''で名詞句を構成していると考え
+るのが妥当である．
+
+\begin{figure}
+\begin{center}
+\epsfile{file=fig/fig-pp.eps,scale=0.893807}
+\caption{PPアタッチメントの曖昧性解消例}\label{fig-pp}
+\end{center}
+\end{figure}
+
+この現象は，言語によって曖昧性が発生しやすい条件が異なっているため，そ
+れら条件のANDを求めることにより，曖昧性を解消できる場合があることを示
+している．
+
+このように，2言語の構造が類似した時に高いスコアを出す評価関数を設定す
+ることにより，曖昧性を評価・解消することができる．今回は，英語，日本語
+の全ノード(非終端記号)について，対応づけを行い，その対応づけられたノー
+ド数と単語リンク数の和を評価値として，最大スコアを持つ構造を採用するこ
+ととした．これを本稿では，{\bf 句対応スコア}と呼ぶ．図\ref{fig-pp}では，
+実線の構造では{\tt (1)NMP}, {\tt (2)NP}, {\tt (3)VP}同士が同等句と判定
+されるが，点線の構造では，同じ範囲の同等句は{\tt VP(1)}のみである．し
+たがって，実線の構造の句対応スコアは2だけ大きくなり，こちらの構造が採
+用される．
+
+なお，今回は単語アライメントの結果は一意に決定しているが，もし，たとえ
+ば同じ単語が複数回出現するなど，単語アライメント結果自体に曖昧性がある
+場合も，句対応スコアが最大となる単語リンクの組み合わせを探索することに
+より，上記評価尺度である程度解消することができる．
+
+\subsection{部分解析結果の組み合わせによる解析失敗への対応}
+\label{sec-partial}
+
+本稿で述べる句アライメントは，構文解析器としてチャートパーザを用いてい
+る．このパーザは，文法(書き換え規則)が不足して，解析木の作成に失敗する
+場合，通常何も出力することはないが，パーサ内のアジェンダに部分解析結果
+を残している．つまり，部分的ではあるが，正しい句の候補がアジェンダ内に
+あるということである．これらを適切に組み合わせて用いることができれば，
+文法不足による解析失敗に対応できる．この方法は，特に文法的な崩れが多い
+話し言葉で有効である\cite{Takezawa:Parsing1996j}．組み合わせを行う際は，
+その部分木が適切かどうか検査する必要があるが，その評価基準に
+\ref{sec-disambiguation}節で述べた句対応スコアが利用できる．
+
+もちろん，解析が成功した場合(すなわち，文全体が1つの木で表現できた場合)
+は，その解析結果を優先しなければならないため，トータルの部分木数が少な
+い組み合わせを優先するよう，\ref{sec-disambiguation}節の評価尺度を修正
+した．最終的な評価尺度は以下のとおりとなる．
+
+\begin{enumerate}\labelwidth=25pt
+\item 2つの入力文の句を比較し，句対応スコアが最大の句を対応する候
+補として取り出す．
+\item 文全体について，句の対応ノード数の総和をとり，最大となる句の列を
+解析結果として採用する
+\item 同点の句列が複数存在する場合は，句の数が最小のものを解析結果とす
+る．
+\end{enumerate}
+
+しかし，すべての部分解析結果の組み合わせを試した場合，組み合わせ数は指
+数的に増大する．この問題を回避するため，今回，形態素解析で使われている
+2パスの探索手法である前向きDP後ろ向き$A^{*}$アルゴリズム
+\cite{Nageta:ForwardDPBackwardAStar1994}を使用した．
+
+\begin{figure*}
+\begin{center}
+\epsfile{file=fig/fig-search.eps,scale=0.893444}
+\caption{部分解析結果組み合わせ探索例}\label{fig-search}
+(三角は構文解析の部分結果，三角内の数字は句対応スコア，\\ 網掛けは最終的
+に探索された句を表す．)
+\end{center}
+\end{figure*}
+
+本探索手法を用いた部分解析結果組み合わせ法について説明する．(図
+\ref{fig-search}．説明上，片言語の句のみを示す)．なお，ここで各部分木
+の句対応スコアは予め算出されているものとする\footnote{現在のインプリメ
+ンテーションでは，2言語のすべての部分木同士について句対応スコアを算出
+し，その後に探索を行っている．したがって，句対応スコア算出には$\mbox
+{英語部分木数} * \mbox{日本語部分木数}$ に比例した時間がかかる．句対応
+スコアは，部分木の下位ノードの句対応スコアを再帰的に加算したものである
+ので，下位ノードから（ボトムアップに）算出し，重複ノードの再計算を避け
+ている．}．
+
+まず，片言語(ここでは英語とする)のすべての部分木をラティス構造に配置す
+る．前向き探索時には，動的計画法を用いて始点からエッジ$i (0 \leq i
+\leq \mbox{形態素数}N)$までの句対応スコアの最大値を算出する．これを便
+宜上見積スコアと呼ぶ．この時，どの経路を通過したかは記録しない．見積ス
+コアは，始点からエッジ$i$まで，このスコアで至る組み合わせが存在するこ
+とを示している．
+
+次に後ろ向き探索では，$A*$探索を用いて最適な組み合わせを探索する．この
+とき，$A*$アルゴリズムのヒューリスティック関数値として，見積スコアを用
+いる．見積スコアは最も精度のよいヒューリスティック関数値であるので，無
+駄な経路をほとんど展開することなく，最適経路を探索する．
+
+このように，本探索手法を用いると，ビーム探索のように枝刈りをする必要が
+なく，形態素数にほぼ比例した時間で最適な英語句の列を得ることができ，そ
+れに対応する日本語句の列も得られる．
+
+しかし，１つの英語句に対応する日本語句は複数の候補があるため，一部，日
+本語句同士が重なる場合がある．そのため，後ろ向き探索の経路展開時に日本
+語句列の範囲をチェックし，重なりがある経路を展開しないという処理が必要
+となる．その場合，展開中の経路が無効になる可能性があるが，$A*$探索は，
+展開中経路が無効となっても，次点の経路を展開するため，探索結果は，句対
+応スコアの総和が最大で，かつ日本語句の列に重なりがない最適解となる．
+
+
+\section{単語アライメントに要求される機能}
+\label{sec-word-alignment-for-pa}
+
+\subsection{機能語間，機能語--内容語対応}
+\label{sec-func-word}
+
+機能語は様相，法などを表しているため，文の表現のバラエティを表すことが
+多い．これを無視してむやみに句の対応をとると，意味的には問題がないが，
+表現上，対訳として不適切なものが同等句として抽出されることがある．特に，
+日本語では，時制などまでが機能語で表されるため，これを扱うことは重要で
+ある．
+
+たとえば，図\ref{fig-func-word}の例では，$WL(\mbox{\em after},\mbox{以
+降})$の対応がない場合，$WL(\mbox{\em three},\mbox{三時})$のみを使って，
+``{\em three}''と``{三時以降}''という{\tt NP(1)}を対応づけてしまう．し
+かし，$WL(\mbox{\em after},\mbox{以降})$がある場合，{\tt NP(1)}ノード
+は単語リンクに過不足があるため，対応づけられない．
+
+このように，機能語間，または機能語--内容語間対応を追加して，
+\ref{sec-phrase-alignment}章で述べた条件\ref{cond-same-information}の
+制約を強くすることにより，誤った同等句を抽出しにくくなり，精度を向上さ
+せることができる．
+
+\begin{figure}
+\begin{center}
+\epsfile{file=fig/fig-func.eps,scale=0.928378}
+\caption{機能語--内容語対応文の例}\label{fig-func-word}
+\end{center}
+\end{figure}
+
+
+\subsection{単語アライメントの精度と句アライメントの関係}
+\label{sec-wa-accuracy}
+
+現在のところ，単語アライメントの適合率，再現率共に100\%の方式は提案さ
+れていない．すると，本方式を実際に用いる場合は，単語アライメント誤り，
+または不足が含まれていると考えるのが妥当である．では，本方式にとっては，
+適合率と再現率のどちらが重要であるのか？
+
+単語アライメントの適合率が低下すると言うことは（再現率を100\%に保って
+いると仮定すると），不要な単語リンクが含まれているということである．
+\ref{sec-func-word}節でも述べたが，本方式は単語リンクが増加すると，条
+件\ref{cond-same-information}の制約が強くなり，抽出されるべき同等句が
+抽出されなくなる．しかし，これはあくまで制約が強くなっているため，誤っ
+た同等句の抽出は起こりにくい．
+
+一方，単語アライメントの再現率が低下した場合（言い換えると，本来あるべ
+き単語リンクが不足した場合）は，条件\ref{cond-same-information}の制約
+が緩くなる．そのため，\ref{sec-disambiguation}節で述べたPPアタッチメン
+トの曖昧性解消や，動詞の有効範囲に曖昧性が生じるため，誤った同等句を抽
+出しやすくなる．
+
+このように，本方式に適合する単語アライメントは，再現率を重視したもの，
+言い換えると，少々不要な単語リンクが含まれていても，必要な単語リンクが
+ほとんど含まれているものであることが望ましい．
+
+
+\section{実験・評価}
+\label{sec-eval-alignment}
+
+\subsection{実験条件}
+
+旅行会話に関する基本表現例文300文をランダムに取り出し，句アライメント
+実験を行った．この基本表現例文集は，話し言葉を意識して人間が作成したも
+のである．そのため，完全な話し言葉とはなっていないが，書き言葉に比べる
+と崩れた文体になっている．たとえば，``{\em You're very welcome, sir,
+please let me know if you have any problems, I'll be happy to help}''
+のように，感動詞や単文が接続詞・接続助詞なしで並んでいる文や，格助詞が
+抜けた文などが混じっている．そのため，準話し言葉コーパスとして本テスト
+セットを使用した．テストセットの1文あたりの平均形態素数は，英語8.95， 
+日本語8.81と，比較的短い．
+
+その他の実験条件は以下のとおりである．
+
+\begin{itemize}
+
+\item 形態素解析は，機械タグ付け後，人手で修正したものを使用した．
+
+\item 単語アライメントは，内容語に関しては人手で単語リンクを作成し，機
+能語に関しては予め作成した対訳辞書を用いて行った．
+
+\item 構文解析器は，基本的なボトムアップチャートパーサを用いた．使用し
+た書き換え規則は文脈自由文法で，英語286，日本語254規則である．用いた構
+文解析器の本テストセット上での解析精度を表\ref{tbl-parsing-accuracy}に
+示す．
+\footnote{
+ここでは，
+\shortciteA{Collins:StatisticalParsing1997,Sekine:ApplePie1995,Charniak:StatisticalParsing2000}
+等の指標を用いた．
+\begin{eqnarray*}
+\mbox{ラベル適合率} &
+ = & 
+ \frac{\mbox{構文解析結果の正しいノード数}}{\mbox{構文解析結果の総ノード数}} \\
+\\
+\mbox{ラベル再現率} &
+ = & 
+ \frac{\mbox{構文解析結果の正しいノード数}}{\mbox{正解構文木の総ノード数}} \\
+\\
+\mbox{交差括弧数} &
+ = &
+ 構成素（部分木）の境界が，構文解析結果と正解構文木の間で異なった数
+\end{eqnarray*}
+\vspace*{-10pt}
+}
+\footnote{文法を言語別に開発したが，結果的に解析出力数が英語・日本語ともに
+200文となった．}
+
+英語構文解析器の一つである，
+\shortciteA{Charniak:StatisticalParsing2000}
+\footnote{\tt ftp://ftp.cs.brown.edu/pub/nlparser/} の場合，40単語以下
+の文でラベル適合率90.1\%, ラベル再現率90.1\%と報告されており，それに比
+べると，本解析器の精度はラベル再現率が低い（すなわち，解析失敗が多い）．
+これは，前述の崩れた文を解析したためと，文法を人手で作成しているため，
+すべての言語現象をカバーできなかったためである．
+
+
+\item 句アライメント結果の第1候補について，抽出された句をランダムに300
+句選択し，その正しさを，文字列として評価者が判定した．評価者は，英語に
+堪能な日本語ネイティブ，日本語に堪能な英語ネイティブ各１名で，その平均
+を算出した．評価は，以下の3 段階で行った．
+  \begin{itemize}\itemsep=0mm
+  \item[A:] 正解．英語から日本語への翻訳，日本語から英語への翻訳どちら
+  から見ても可能な訳である．
+  \item[B:] 間違いではないが，文脈に依存するもの．この文に限った場合，
+  英語から日本語への翻訳，または日本語から英語への翻訳のどちらかが可能
+  な訳であるもの．
+  \item[C:] 不正解．英語から日本語への翻訳，日本語から英語への翻訳どち
+  らも誤り．
+  \end{itemize}
+\end{itemize}
+
+\begin{table*}
+\begin{center}
+\caption{実験に使用した構文解析器の単体性能}
+\label{tbl-parsing-accuracy}
+{\smalltable
+\begin{tabular}{ccc}
+\hline\hline
+                            & 英語       & 日本語     \\
+\hline
+文数                        & 300        & 300        \\
+解析出力数                  & 200(67\%)  & 200(67\%)  \\
+候補総数(1出力あたり)       & 836(4.18)  & 394(1.97)  \\
+ラベル適合率                & 90.5\%     & 93.1\%     \\
+ラベル再現率                & 50.8\%     & 52.6\%     \\
+1出力あたりの平均交差括弧数 & 0.487      & 0.447      \\
+交差括弧なし文数            & 144 (48\%) & 160 (53\%) \\
+\hline\hline
+\end{tabular}
+}
+\end{center}
+\end{table*}
+
+
+\subsection{句アライメント用構文解析の効果}
+
+\paragraph{各機能組み込み時の性能の差異}
+
+まず，以下の3方式で，句アライメントの性能を測定した結果を，表
+\ref{tbl-accuracy}に示す．同表中の句数は，評価者がそのランクと判定した
+同等句数を評価者毎にカウントしたもので，適合率は，評価対象同等句(300句
+*2名) のうちの該当ランクの同等句の割合を表す．
+
+\caselist{{\bf (提案方式)} 構文解析中に，アジェンダから候補を取り出し，
+句対応スコアの総和が最も高くなる組み合わせを探索した場合．}
+\label{case-part}
+
+\caselist{構文解析器が全体を解析できた文のみに対して，第1候補を選択し，
+句アライメントを行った場合．すなわち，曖昧性の問題，解析木作成失敗に対
+して，何も対処しない場合．}
+\label{case-one}
+
+\caselist{構文解析器が全体を解析できた文のみに対して，すべての候補の組
+み合わせで句アライメントを行い，句対応スコアが最も高い結果を選択した場
+合．すなわち，句対応スコアを用いて曖昧性解消を行った場合に相当する．
+Case\ref{case-one}と比較することにより，句対応スコアの効果を測ることが
+できる．また，Case\ref{case-part}と比較することにより，部分解析の効果
+を測ることができる．}
+\label{case-pscore}
+
+\begin{table*}
+\begin{center}
+\caption{各機能組み込み時の同等句抽出数，その精度比較}
+\label{tbl-accuracy}
+{\smalltable\footnotesize 
+\begin{tabular}{l|l|ccc|ccc}
+\hline\hline
+& & 文数 & 解析出力数 & 抽出同等句数  & \multicolumn{3}{|c}{同等句精度} \\
+\cline{6-8}
+& &        &            & (1出力あたり) & ランク & 句数 & 適合率 \\
+\hline
+提案方式 & Case\ref{case-part}
+    & 300 & 296 & 1,676 (5.66) & A   & 248 + 269 & 86.2\% \\
+&   &     &     &              & B   &  30 +   5 &  5.8\% \\
+&   &     &     &              & C   &  22 +  26 &  8.0\% \\
+\hline
+句アライメン & Case\ref{case-one}
+             & 300 & 176 & 726 (4.13) & A   & 249 + 270 & 86.5\% \\
+ト方法を変え & &     &     &            & B   &  30 +   8 &  6.3\% \\
+た場合       & &     &     &            & C   &  21 +  21 &  7.0\% \\
+\cline{2-8}
+& Case\ref{case-pscore}
+    & 300 & 177 & 822 (4.64) & A   & 264 + 267 & 88.5\% \\
+&   &     &     &            & B   &  18 +   3 &  3.5\% \\
+&   &     &     &            & C   &  18 +  30 &  8.0\% \\
+\hline
+単語アライメ & Case\ref{case-content}
+                 & 300 & 295 & 1,703 (5.77) & A   & 240 + 258 & 83.0\% \\
+ント結果を変 & &     &     &              & B   &  31 +   4 &  5.8\% \\
+化させた場合 & &     &     &              & C   &  29 +  36 & 10.8\% \\
+\cline{2-8}
+& Case\ref{case-func-precision}
+                & 300 & 276 & 1,018 (3.69) & A   & 245 + 266 & 85.2\% \\
+& WA適合率50\%  &     &     &              & B   &  17 +   0 &  2.8\% \\
+& WA再現率100\% &     &     &              & C   &  38 +  31 & 11.5\% \\
+\cline{2-8}
+& Case\ref{case-func-recall}
+                & 300 & 272 & 1,147 (4.22) & A   & 209 + 230 & 73.2\% \\
+& WA適合率100\% &     &     &              & B   &  21 +   4 &  4.2\% \\
+& WA再現率50\%  &     &     &              & C   &  70 +  66 & 22.7\% \\
+\hline
+\end{tabular}
+}
+\end{center}
+\end{table*}
+
+まず，Case\ref{case-part}について，抽出された同等句の精度(ランクAのみ)
+を見ると約86.2\%と，比較的高い精度で同等句を抽出している．
+
+Case\ref{case-one}とCase\ref{case-pscore}を比較すると，
+Case\ref{case-pscore}で抽出同等句数が増加している．句対応スコアは，構
+造が異なる候補がある場合，できる限り句対応が多い候補を選択するため，抽
+出同等句数が増加する．しかし，同等句の精度を見ると，Aランクでは若干向
+上した程度である．精度がほぼ同じ理由は，本方式は本質的に誤った抽出を行
+いにくく，Case\ref{case-one}における誤った構文解析木のノードが無視され
+たためと考えられる．
+
+また，Case\ref{case-one}・Case\ref{case-pscore}とCase\ref{case-part}の
+比較では，Case\ref{case-part}はほとんどすべての文に対して何らかの結果
+を出力している．そのため，抽出同等句数も約2倍と増加しているが，精度は
+Case\ref{case-one}と同程度である．したがって，句対応スコアは部分解析結
+果の組み合わせ処理においても，効果を表しているといえる．部分解析は，非
+文法的な文に対して特に有効であるため，話し言葉で効果を発揮する．
+
+\subsection{単語アライメント精度の影響}
+
+単語アライメント精度が，句アライメントにおよぼす影響を調べるため，単語
+リンクを変えて実験を行った．なお，句アライメント方法はすべて
+Case\ref{case-part}を使用している．結果を表\ref{tbl-accuracy}に示す．
+
+\caselist{単語リンクを内容語のみに限った場合．Case\ref{case-part}と比
+較することにより，機能語・内容語間対応の影響を測ることができる．}
+\label{case-content}
+
+\caselist{Case\ref{case-part}で用いた単語リンクを正解(適合率，再現率双
+方ともに100\%)と見なし，単語アライメントの適合率のみを50\%〜100\%に低
+下させた場合．つまり，不要な単語リンクが含まれている場合の影響を測るこ
+とができる．不要な単語リンクは，ランダムに単語対を選択し，正解単語リン
+クに含まれていないものを追加した．単語アライメント適合率(WA適合率)およ
+び再現率(WA 再現率)は以下の式で表す．}
+\label{case-func-precision}
+
+\vspace*{-10pt}
+\begin{eqnarray*}
+\mbox{WA適合率} & =  &
+ \frac{\mbox{正解単語リンク数}}
+      {\mbox{正解単語リンク数} + \mbox{不要な単語リンク数}} \\ \\
+\mbox{WA再現率} & = &
+ \frac{\mbox{正解単語リンク数} - \mbox{削除リンク数}}
+      {\mbox{正解単語リンク数}}
+\end{eqnarray*}
+\vspace*{3pt}
+
+\caselist{単語アライメントの適合率を固定にし，再現率のみを50\%〜100\%
+に低下させた場合．つまり，単語リンクが不足している場合の影響を測ること
+が出来る．削除リンクは，正解単語リンクからランダムに選択した．}
+\label{case-func-recall}
+
+
+\paragraph{機能語対応の効果}
+
+Case\ref{case-part}とCase\ref{case-content}の結果を比較すると，内容語
+の単語リンクに限った場合，抽出同等句数が若干増加するが，精度は若干低下
+する．念のため，Case\ref{case-part}とCase\ref{case-content}で異なった
+句アライメント結果が得られたもの321同等句から，Case\ref{case-part}のみ
+に現れた50句，Case\ref{case-content}のみに現れた50句を取り出し，日本語
+ネイティブ1名で再評価したところ，A評価となったものは，
+Case\ref{case-part}では36句(72\%)，Case\ref{case-content}では14句
+(28\%)と，明らかな相違が現れた．したがって，機能語対応を含めることによ
+り，句アライメント精度が向上することは確認された．
+
+\paragraph{単語アライメント精度の影響}
+
+Case\ref{case-func-precision}とCase\ref{case-func-recall}の抽出同等句
+数の変化を図\ref{fig-variable-word-accuracy}に示す．適合率を変化させた
+場合，再現率を変化させた場合のどちらも，単語アライメント精度が低下する
+と，同じように抽出同等句数が減少するが，WA適合率が低下した方が，抽出句
+数の低下が若干大きい．
+
+\begin{figure}
+\begin{center}
+\epsfile{file=fig/fig-prec-recall.eps,scale=0.629921}
+\caption{単語アライメント精度を変化させたときの抽出同等句数}
+\label{fig-variable-word-accuracy}
+\end{center}
+\end{figure}
+
+一方，表\ref{tbl-accuracy}を見ると，WA適合率を低下させても同等句の精度
+はほとんど変化がなく，WA再現率を低下させた場合は明らかに句アライメント
+精度も低下している．したがって，\ref{sec-wa-accuracy}節で述べたように，
+本提案方式は，単語アライメントの適合率より再現率の方が句アライメントの
+精度に影響をおよぼしやすいと言える．つまり，本方式に適合した単語アライ
+メントは，少々誤りを含んでいても，できるだけ多くの単語リンクを与える方
+が句アライメントの精度を向上させやすい．
+
+\subsection{同等句抽出例}
+
+本提案方式による同等句抽出例を表\ref{tbl-proposed-examples}に示す．
+
+\begin{table*}
+\begin{center}
+\caption{提案方式の句アライメント結果}
+\label{tbl-proposed-examples}
+{\smalltable 
+\begin{tabular}{c|c|ll}
+\multicolumn{4}{c}{\bf (A) 単文・感動詞の連続} \\
+\multicolumn{4}{l}{英語: All right, I understand, here is your passport and ticket.} \\
+\multicolumn{4}{l}{日本語: オーケー，わかりました，はい，あなたのパスポートと航空券です．} \\
+\hline\hline
+No. & 構文カテゴリ & 英語句 & 日本語句 \\
+\hline
+1 & {\tt S}     & {\em I understand} & {わかりました} \\
+2 & {\tt AUXVP} & {\em understand} & {わかりました} \\
+3 & {\tt VP}    & {\em understand} & {わかる} \\
+4 & {\tt S}     & {\em here is your passport and ticket}
+	    & {あなたのパスポートと航空券です} \\
+5 & {\tt AUXVP} & {\em is your passport and ticket} 
+	    & {あなたのパスポートと航空券です} \\
+6 & {\tt VP}    & {\em be your passport and ticket} 
+	    & {あなたのパスポートと航空券です} \\
+7 & {\tt NP}    & {\em your passport} & {あなたのパスポート} \\
+8 & {\tt NP}    & {\em ticket} & {航空券} \\
+\hline\hline
+\multicolumn{4}{c}{} \\
+\multicolumn{4}{c}{} \\
+\multicolumn{4}{c}{\bf (B) 格助詞欠落の文} \\
+\multicolumn{4}{l}{英語: Please retrieve my coat.} \\
+\multicolumn{4}{l}{日本語: 預けたコート，出してください} \\
+\hline\hline
+No. & 構文カテゴリ & 英語句 & 日本語句 \\
+\hline
+1 & {\tt S}     & {\em please retrieve} & {出してください} \\
+2 & {\tt VP}    & {\em retrieve} & {出す} \\
+3 & {\tt NP}    & {\em my coat} & {コート} \\
+\hline\hline
+\end{tabular}
+}
+\end{center}
+\end{table*}
+
+例(A)は，単文，感動詞が接続詞，接続助詞なしで連続しているため，英語・
+日本語ともに構文解析が失敗した例である．しかし，本方式を用いると，単文
+として対応づけられる部分については，その下位構造も含めて同等句として抽
+出される．なお，本来の英語構造は``[{\em your} [{\em passport and
+ticket}]]''となるべきところ，``[[{\em your passport}] {\em and} [{\em
+ticket}]]''と，並列句の解析が誤っているため，No.7および8の同等句が抽出
+されている．並列句は，日本語・英語ともに構造が曖昧な場合が多く，両者の
+構造を比較しても曖昧性が解消できないことが多い．
+
+例(B)は，日本語の格助詞が欠落した文である．この場合，日本語の構文解析
+だけが失敗するが，部分的な3つの同等句を抽出する．No.1の同等句が{\tt S}
+として抽出されるのは，日本語の構文解析木がそれ以上の大きな構造を作成で
+きないためである．しかし，「預けたコート」が呼び掛けの意図で用いられて
+いると解釈した場合，例(A)と同じように，``please retrieve''と``出してく
+ださい''で対応づけられていても誤りではない．このように，本方式を用いる
+と，部分的な同等句を出力することができる．
+
+
+\section{関連研究}
+
+２言語間の構造同士の対応を取ることにより，句レベルの対応を階層的に取得
+する方法としては，先行研究では以下のものが発表されている．
+
+まず，句構造を基本とする研究としては，
+\shortciteA{Kaji:PhraseAlignment1992}の方法がある．単語レベルの対応を
+基に，句構造のノード間の対応を取るもので，筆者の研究の基となったもので
+ある．しかし，構文カテゴリ制約を使用していないため，単語リンクの両端
+が異なる品詞を持つ場合，不当に短い単位で同等句を抽出する．
+
+依存構造を基本とする研究としては，
+\shortciteA{Matsumoto:PhraseAlignment1993,Kitamura:PhraseAlignment1997j,Yamamoto:PhraseAlignment2001j,Watanabe:PhraseAlignment2000,Meyers:PhraseAlignment1996}
+が挙げられる．依存構造を基にする場合，ノードそのものが最小単位の名詞句，
+動詞句，副詞句等を表しているため，構文カテゴリ情報を用いなくともある程
+度の句レベル対応を取ることができる．しかし，
+\shortciteA{Kaji:PhraseAlignment1992} の手法と同様の問題があると考えら
+れる．
+
+\shortciteA{Wu:SimultaneousGrammar1995}は，構文解析後に構造の対応を取
+るのではなく，予め２言語間で対応づけられた構文解析規則を用意しておき，
+２言語同時に解析を行うことにより，構文解析と句レベルの対応づけを同時に行う
+手法を提案している．この方法で予め用意する必要があるのは，１単語
+同士の対応規則(終端記号同士の対応)である．言い換えると，単語アライメン
+トのみを必要とする．しかし，単語同士の対応が十分つくような直訳文では機
+能するが，構文制約が弱いため，意訳等を含む一般的な対訳文，特に本稿で目
+指している話し言葉には向かないと考える．
+
+また，いずれの方法も，構文解析に失敗する文の救済策については述べられて
+いない．構文解析は，文法設計者が意図したドメインでの性能は高いが，別ド
+メインに移行した場合，精度が落ちるものが多い．本手法は，文法のカバレッ
+ジが低いパーザであっても，部分解析結果を組み合わせることにより同等句を
+抽出しているため，話し言葉以外でも同等句抽出数という点で有利である．
+
+単語アライメントの使用方法という観点で上記研究を俯瞰すると，
+\shortciteA{Kaji:PhraseAlignment1992,Watanabe:PhraseAlignment2000} 
+は，単語アライメントを決定的に行っている．一方，
+\shortciteA{Matsumoto:PhraseAlignment1993,Kitamura:PhraseAlignment1997j,Meyers:PhraseAlignment1996}は，単語類似度を導入し，
+構造比較時のスコアとしている．
+
+\shortciteA{Yamamoto:PhraseAlignment2001j}の研究は，単語アライメントを
+必要としないという点が特徴的である．これは，句レベルの対応候補を作成し，
+重み付きダイス係数という統計量を用いて，最良優先に対応を決定して行くも
+のである．我々の提案手法は，統計量をまったく用いていないので，これと類
+似の統計量を後処理的に導入することにより，同等句の精度はさらに向上でき
+るだろうと推測される．
+
+
+
+\section{まとめ}
+
+本稿では，構文構造の類似性を用いた曖昧性解消，部分解析結果の組み合わせ
+を用い，構文解析と融合した階層的句アライメント方法を提案し，その有効性
+を示した．
+
+特に提案方式では，比較的精度の低い構文解析器を用いたにも関わらず，構文
+解析を独立させた場合に比べ，実験では約2倍の同等句を抽出することができ
+た．そのときの適合率は86\%程度で，構文解析独立方式と比べても精度の低下
+はほとんどない．また，機能語対応を追加することにより，句アライメント精
+度が向上することを示した．
+
+本稿で提案した句アライメント方法は，単語アライメントの適合率より再現率
+が同等句の精度に影響をおよぼしやすいため，再現率重視の自動単語アライメ
+ント方法と組み合わせる方が，質のよい同等句を抽出することができる．
+
+今後は，本方式で抽出された同等句から翻訳知識を作成し，用例ベースの翻訳
+システムに適用する予定である．
+
+
+\acknowledgment
+
+本研究を進めるにあたって有意義なコメントを戴いた隅田英一郎主任研究員，
+白井諭前第三研究室長をはじめ，ATR音声言語コミュニケーション研究所第三
+研究室の皆様に感謝いたします．
+
+なお，本研究は通信・放送機構の研究委託「大規模コーパスベース音声対話翻
+訳技術の研究開発」により実施したものです．
+
+
+\bibliographystyle{jnlpbbl}
+\bibliography{368.bbl}
+
+
+\begin{biography}
+\biotitle{略歴}
+
+\bioauthor{今村 賢治}{
+1985年千葉大学工学部電気工学科卒業．同年日本電信電話株式会社入社．
+2000年より，ATR音声言語通信研究所主任研究員，現在に至る．
+主として自然言語処理の研究・開発に従事．情報処理学会，電子情報通信学会各会員．
+}
+
+\bioreceived{受付}
+\biorevised{再受付}
+\biorerevised{再々受付}
+\bioaccepted{採録}
+
+\end{biography}
+
+\end{document}

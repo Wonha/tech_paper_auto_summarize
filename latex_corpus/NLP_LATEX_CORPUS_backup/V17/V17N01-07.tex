@@ -1,0 +1,1106 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.2}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+
+\Volume{17}
+\Number{1}
+\Month{January}
+\Year{2010}
+
+\received{2009}{6}{8}
+\revised{2009}{10}{8}
+\accepted{2009}{10}{28}
+
+\setcounter{page}{141}
+
+\jtitle{名詞句の語彙統語パターンを用いた事態性名詞の項構造解析}
+\jauthor{小町　　守\affiref{NAIST}\and 飯田　　龍\affiref{TITech}\and 乾　健太郎\affiref{NAIST}\and 松本　裕治\affiref{NAIST}}
+\jabstract{
+形態素解析や構文解析など自然言語処理の要素技術は成熟しつつあり，
+意味解析・談話解析といった，より高次な言語処理の研究が盛んに
+なってきた．特に文の意味理解のためには「誰が」「何を」「誰に」といった
+要素（項）を同定することが重要である．
+動詞や形容詞を対象にした項構造解析のことを述語項構造解析と呼ぶが，
+文中の事態を表す表現は動詞や形容詞の他にも名詞も存在することが知られている．
+そこで，我々は日本語の名詞を対象とした項構造解析タスクを取り上げ，
+機械学習を用いた自動的な解析手法を提案する．
+日本語の事態性名詞には事態を指すか否か曖昧性のある名詞があるため，
+まず事態性の有無を判定する事態性判別タスクと項同定タスクの2つに分解し，
+それぞれ大規模なコーパスから抽出した語彙統語パターンを用いた手法と
+述語・事態性名詞間の項の共有現象に着目した手法を提案する．
+}
+\jkeywords{述語項構造解析，意味役割付与，事態性名詞，語彙統語パターン}
+
+\etitle{Argument Structure Analysis of Event-nouns Using Lexico-syntactic Patterns of Noun Phrases}
+\eauthor{Mamoru Komachi\affiref{NAIST}\and Ryu Iida\affiref{TITech}\and Kentaro Inui\affiref{NAIST}\and Yuji Matsumoto\affiref{NAIST}} 
+\eabstract{
+As fundamental natural language processing techniques like
+morphological analysis and parsing have become widely used,
+semantics and discourse analysis has gained increasing attention.
+Especially, it is essential to identify fundamental elements,
+or arguments, such as ``who'' did ``what'' to ``whom.''
+Predicate argument structure analysis deals with argument structure
+of verbs and adjectives. However, not only verbs and adjectives 
+but also nouns are known to have event-hood.
+We thus propose a machine-learning based method for automatic argument
+structure analysis of Japanese event-nouns.
+Since there are ambiguous event-nouns in terms of event-hood,
+we cast the task of argument structure analysis of event-nouns into
+two parts: event-hood determination and argument identification.
+We propose to use lexico-syntactic patterns mined from large
+corpora for the first sub-task and to exploit argument-sharing phenomenon
+between predicates and event-nouns for the second sub-task.
+}
+\ekeywords{Predicate Argument Structure Analysis, Semantic Role Labeling, Event-nouns, Lexico-syntactic Pattern}
+
+\headauthor{小町，飯田，乾，松本}
+\headtitle{名詞句の語彙統語パターンを用いた事態性名詞の項構造解析}
+
+\affilabel{NAIST}{奈良先端科学技術大学院大学}{Nara Institute of Science and Technology}
+\affilabel{TITech}{東京工業大学}{Tokyo Institute of Technology}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+\label{sec:introduction}
+
+形態素解析や構文解析など自然言語処理の要素技術は成熟しつつあり，
+言語理解のために意味解析・談話解析といった，より高次な言語処理の研究が盛んに
+なりつつある．
+特に文の意味理解のためには
+「誰が」「何を」「誰に」「どうした」
+といった要素を同定することが重要である．
+「誰が」「何を」「誰に」といった名詞は\textbf{項}と呼ばれ，
+「どうした」のような動詞を中心とした\textbf{述語}によって結びつけられる．
+動詞や形容詞といった述語を対象とした項構造解析は\textbf{述語項構造解析}
+と呼ばれ，
+FrameNet や PropBank といった述語項構造解析に対する資源の整備や
+\cite{gildea:2002:CL} による機械学習を用いた解析手法が登場し，
+近年盛んに研究されている．
+
+述語項構造解析に関する自然言語処理の評価型ワークショップ
+CoNLL 2004，2005 の開催に伴い，
+述語項構造解析研究はある程度の水準に達したが，
+深い言語理解をするためには，述語のみを対象とした事態性解析は十分でない．
+特に，文中の事態を指しうる表現としては，
+動詞や形容詞の他に名詞もあることが知られている\cite{grimshaw:1990}．
+たとえば「彼は上司の推薦で抜擢された」という文で，名詞「推薦」は
+「上司ガ彼ヲ推薦（する）」といった事態を指す．
+事態とは行為や状態，出来事を指し，
+述語項構造と同様の項構造を考えることができる．
+そこで，本稿では
+事態を指す用法で使われていて項を持つ名詞のクラスを\emph{事態性名詞}と呼び，
+事態を指す用法で使われているとき\emph{事態性}があると定義する．
+本研究は，事態性名詞における項構造を抽出することを目標にしている．
+
+事態性名詞の項構造解析とは，名詞に事態性があるとき項構造を決定し，
+項を同定する解析を指す．
+事態性とは文脈中で名詞がコト（事態\footnote{ここで事態性というのは名詞が
+特定の出来事を指している場合だけではなく，総称的に使う場合も区別せず解析の対
+象に含める．}）を指すかモノ（物体）を指すかという
+意味的な違いに対応する．
+事態性名詞の中には「レポート」のようにレポートする行為を指すのか
+レポートされた結果物を表すのかといった，文脈によって事態性の
+有無が変化する名詞がある．
+そこで，文脈に応じて事態性名詞に事態性があるか否か判別する処理を
+\emph{事態性判別}，
+項構造を決定して項を同定する処理のことを\emph{項同定}と呼ぶ．
+
+事態性名詞の項構造解析は，述語項構造解析と同様，文中の述語の項構造を決定し，
+項を同定する作業の延長と位置づけることができる．
+英語における動詞の名詞化や日本語におけるサ変名詞など，
+動詞と強いつながりを持つ名詞は数多くあり，
+述語項構造解析の研究成果を援用して解析を行うことが期待されている．
+NAIST テキストコーパス\cite{iida:2007:NL}によると，
+述語と名詞を含めた全事態中21.1\%が事態性名詞であり，
+述語項構造解析技術の次の発展方向として注目されている．
+事態性名詞の項構造解析は，情報抽出や自動要約，
+質問応答システム，言い換えや機械翻訳など，
+自然言語処理のさまざまな分野に応用できる要素技術の一つである．
+
+本研究の主な貢献は以下の2点である．
+
+
+\paragraph{(1) 事態性判別の問題設定：}
+事態性判別，つまり事態を指しているかどうか曖昧性を判別する問題を設定し，
+事態性に関して曖昧性のない事例を用いた事態性名詞の語彙統語パターンの
+マイニング手法を提案した．
+
+\paragraph{(2) 事態性名詞の項同定に有効な素性の提案：}
+事態性名詞の項構造と述語の項構造の関連性に着目し，
+2つの種類の素性を新たに提案した．
+特に動詞と格要素の共起が事態性名詞の項構造解析に有効かどうか検証し，
+項同定\footnote{
+	本論文では項同定の問題のうち，項構造決定の問題は扱わない．
+	以下，項同定は項構造が決定されたあとの項同定の問題を指す．}
+の正解率向上に役立つことを示した．
+動詞と格要素の共起を用いて項同定の正解率が向上したという報告は
+これまでにない．
+また，
+支援動詞構文のとき事態性名詞と述語が同じ項を共有する現象に着目し，
+項の対応をつけた辞書を作成して，事態性名詞の項同定に有効かどうか
+検証した．先行研究では明示的に支援動詞構文に関する資源を作成していないが，
+支援動詞辞書の整備が事態性名詞の項同定に有効であることを示した．
+
+本論文の構成は以下のようになっている．
+まず
+\ref{sec:relatedwork}節で事態性名詞の項構造解析の先行研究について紹介する．
+本研究では事態性名詞の項構造解析を
+(1) 事態性判別
+(2) 項同定
+の2つの処理に分けて解く．
+\ref{sec:method}節でこの問題を解決するための方針について議論し，
+\ref{sec:eventhood}節で事態性の曖昧性のない事例を用いた
+事態性名詞の語彙統語パターンのマイニング手法を提案する．
+\ref{sec:syntax}節で項同定のための
+動詞と格要素の共起の活用と支援動詞構文の利用について述べる．
+
+
+\section{関連研究}
+\label{sec:relatedwork}
+
+\cite{grimshaw:1990}は動詞と同様事態を指す名詞のことを
+\emph{event nominal} （事態名詞）と呼び，
+\emph{result nominal} （結果名詞）
+・\emph{simple event nominal}（単純事態名詞）
+・\emph{complex event nominal}（複雑事態名詞）
+の3つに分類した．
+結果名詞とは，「梅干」のように「梅を干してできたもの」という結果物を指す
+名詞であり，単純事態名詞とは「運動会」のように意味役割を持たない名詞である．
+「推薦」のように「誰が誰を誰に推薦した」という \emph{event structure}
+（事態構造）を持つ複雑事態名詞\footnote{
+	本稿で扱う事態性名詞はGrimshaw の複雑事態名詞に相当する．}
+だけが項（必須格）を持つ\footnote{
+	「報告」のように
+	結果名詞「報告書・報告物」としての語義と複雑事態名詞
+	「出張の報告をした」としての語義両方を持つものもある．
+	また「試験」のように文脈に応じて結果名詞・単純事態名詞・複雑事態名詞の
+	いずれも取りうる名詞もある．}．
+このように，事態を指しかつ項を持つ名詞の存在は古くから知られていた．
+近年この現象に対する自然言語処理的観点からの関心が高まり，
+複数の言語でコーパスが整備されるに至った．
+以下で，英語・中国語・日本語における事態性名詞の項構造解析の
+関連研究について述べる．
+
+
+\subsection{英語における事態性名詞の項構造解析}
+
+Macleod らは1997年から動詞の名詞化に注目し，高いカバー率の情報抽出を
+目的とした事態性名詞の辞書 NomLex の作成に着手した\cite{macleod:1997:RANLP}．
+NomLex は2001年に完成・公開され，NomBank プロジェクトに引き継がれる．
+NomBank は NomLex と同じく英語における動詞の名詞化に着目したコーパス
+\cite{meyers:2004:NAACL-HLT,meyers:2004:LREC}
+であり，
+Penn Treebank \cite{marcus:1993:CL}に対し
+PropBank ら \cite{palmer:2005:CL} の仕様に従って項構造が付与されている．
+Meyers らは2007年 Penn Treebank II に対するアノテーションを終了し，
+NomBank 1.0 を公開した．
+2008年と2009年の CoNLL 共通タスクでは，NomBank コーパスを用いた事態性
+名詞の項構造解析もタスクの一つとして行われた．
+
+NomBank を用いた事態性名詞の項構造解析は \cite{jiang:2006:EMNLP}や 
+\cite{liu:2007:ACL}がある．
+Jiang らは NomBank に対し，最大エントロピー法を用いた教師あり学習による
+項構造解析を行った．彼らは PropBank を用いた動詞に対する意味役割付与
+(Semantic role labeling) において有効性が確認されている素性に加え，
+名詞の語幹やクラスといった事態性名詞についての意味素性や，
+支援動詞構文を認識するための述語との位置関係といった統語素性，
+そして項構造を正しく認識するための項同士の依存関係に関する大域素性を用いた．
+Liu らは Jiang らの用いた素性をベースに半教師あり学習手法の Alternating
+Structure Optimization (ASO)~\cite{ando:2005:JMLR} を適用した．
+ASO は解くべき問題に関連する補助問題を作成することで
+経験リスク最小化を行う手法であり，彼らの研究では事態性名詞の項構造解析に
+有効なさまざまな補助問題が提案されている．
+
+自然言語処理の評価型ワークショップ CoNLL 2008, 2009 では，
+PropBank と NomBank
+を用いた述語と事態性名詞に対する項構造解析の共通タスクが行われた．
+CoNLL 2009には20チームが参加するなど，
+事態性名詞の項構造解析は活発に研究されている．
+
+
+
+\subsection{英語以外の言語における事態性名詞の項構造解析}
+
+英語以外の言語における事態性名詞の包括的な研究としては，Xue らによる
+Chinese Nombank~\cite{xue:2006:LREC}がある．
+これは英語以外における初めての大規模な事態性名詞のコーパスである．
+
+このコーパスを用いた解析として
+\cite{pradhan:2004:NAACL-HLT,xue:2006:HLT-NAACL}がある．
+日本語のサ変名詞と同様，
+中国語では動詞と動詞化された名詞は同じ表層形を持つため，
+動詞化された名詞は対応する動詞と共通の項構造を持つと仮定すると，
+動詞に関する資源を事態性名詞に流用することができる．
+\cite{xue:2006:HLT-NAACL} では，
+単純に動詞の事例を事態性名詞の事例に追加して実験したところ，
+同じ事態を指す表現であっても，動詞として使われる場合と名詞として
+使われる場合では語彙統語パターンが大きく違い，かえって性能が下がった，
+と報告している．
+我々は日本語を対象に，大量に自動獲得した動詞と格要素の共起を
+用いて事態性名詞の項同定を行い，大きく正解率を向上させることに成功した．
+また，事態性名詞に特徴的な語彙統語パターンを用いることでさらに
+性能を改善させた．
+
+一方，日本語においては\cite{kurohashi:2005}によって，京都テキスト
+コーパス第4.0版の一部，約5,000文に事態性名詞を含む名詞間の関係タグが付与された．
+\cite{sasano:2005:NLJ}は自動構築された
+名詞の格フレーム辞書の評価として事態性名詞の項同定を行った．
+彼らは事態性名詞のみについての結果を報告していないため，
+直接比較することはできないが，
+我々は事態性名詞の解析に焦点を当て，事態性判別の問題を解いた点，
+動詞と格要素の共起の情報を用いた点，
+および事態性名詞に特徴的な語彙統語パターン（支援動詞構文）を用いた点が異なる．
+
+
+
+\subsection{NAIST テキストコーパス}
+
+
+我々は事態性名詞の項構造解析の問題に対し，NAIST テキストコーパス~
+\cite{iida:2007:NL} を用いた教師あり学習を行った．
+このコーパスでは，文章中の各事態性名詞について事態性の有無を判別し，事
+態性がある場合には項構造（必須格となるガ格・ヲ格・ニ格）の情報が付加
+されている．たとえば図\ref{fig:naisttextcorpus}のような
+記事に対して，
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{17-1ia8f1.eps}
+\end{center}
+\caption{NAIST テキストコーパスの事態性名詞のアノテーション}
+\label{fig:naisttextcorpus}
+\end{figure}
+
+\begin{itemize}
+\item[] [ \textsc{rel}=管理（する），ガ=〈外界〉，ヲ=リスク ]
+\item[] [ \textsc{rel}=調査（する），ガ=ＢＩＳ，ヲ=実態 ]
+\end{itemize}
+のような情報が付与されている．
+項に関しては，「管理」のヲ格「リスク」や
+「調査」のガ格「ＢＩＳ」のように，項が文内に出現している場合はそれが
+形態素単位で指示される．
+また，「調査」のヲ格「実態」のように，文外に出現する項でも記事内で特定
+できる場合はその要素が指示される．さらに「管理」のガ格のように，必須格で，
+かつ文内にも記事内にも出現していない場合は特別な〈外界〉タグが付与されている．
+
+現在公開されている NAIST テキストコーパス1.4$\beta$~
+\footnote{http://cl.naist.jp/nldata/corpus/} は京都テキストコーパス3.0
+全体約4万文に対してタグ付与されており，京都テキストコーパス4.0と比較して
+大規模な学習を行うことができるという利点がある．
+
+\cite{taira:2008:EMNLP}は NAIST テキストコーパスを用いて
+構造学習を述語項構造解析および事態性名詞の項同定に適用した
+結果を報告しているが，彼らは事態性判別の問題を解いていない．また，
+比較的項同定が難しいガ格について報告せず，ヲ格とニ格に対する
+結果しか議論していない．
+
+
+\section{事態性名詞の項構造解析へのアプローチ}
+\label{sec:method}
+
+事態性名詞の項構造解析を述語項構造解析と比較すると，
+(1) 名詞の多義性の問題 (2) 解析対象の問題 (3) 格助詞の問題がある．
+
+1つ目の多義性の問題とは，事態性名詞の中には文脈によって事態を指す用法と
+指さない用法といずれも持つ名詞があるため，
+曖昧性を解消しなければならないという問題である．
+たとえば「私は公衆\underline{電話}で\fbox{電話}をすること
+がめっきり減った」という文\footnote{
+	以下事態性のない用例は下線，
+	事態性のある用例は四角で囲んで示す．}
+では，
+\underline{電話}はモノとしての電話であり，これ
+自体はなんらかの事態を指す用法ではないが，\fbox{電話}は「電話をする」という行
+為であり，「私ガ（誰か）ニ電話をする」という事態を指し，
+後者の場合のみ項が存在する．
+サ変名詞に限定すると，事態性のある
+場合は動詞としての用法を考えたときの項構造を基本的に受け継ぐ\footnote{
+	「動き」「薦め」などの和語動詞由来の事態性名詞も同様に扱うこと
+	ができる．また，「運動会」のように事態を指すが動詞と直接の結びつきがない
+	事態性名詞は今回扱わない．}
+ため，文脈中でのこれらの項を同定したい．
+
+
+2つ目の解析単位の問題とは，項の単位の問題である．
+日本語の述語項構造解析では主辞が項になるため，
+項候補として主辞のみを解析対象に加えればよいが，
+事態性名詞においては主辞以外も項になりうる．
+たとえば，「\underline{民間}\fbox{支援}が活性化する」では，
+事態性名詞\fbox{支援}の項のヲ格が同一文節内の主辞以外の
+形態素\underline{民間}を指しており，主辞のみを対象にするとこのような
+事例を解析することができない．
+
+\cite{iida:2007:NL} によると，述語は同一文節内に項が現れる
+ことはほとんどなく，特にヲ格とニ格においては8割以上係り受け関係にある
+文節の主辞が項になっている．一方，事態性名詞のヲ格とニ格はそれぞれ
+50.6\%，43.6\%が同一文節内に項を持つ．
+このことから，述語項構造解析で有効な統語的素性が事態性名詞の項構造
+解析で有効であるとは限らないことが示唆される．
+この問題への対策の一つとして，動詞と格要素の共起という意味的な情報を
+用いることが考えられる．
+
+
+3つ目の格助詞の問題とは，述語項構造解析では明示的に格助詞（ガ・ヲ・ニ）が出現した
+場合はその格助詞が項同定の強い手がかりになるのに対し，事態性名詞の項構造
+解析においては，ほとんどの場合項は格助詞によってマークされていない，
+という問題である．これは述語におけるゼロ照応解析と同様の問題であり，
+文の構造を利用したゼロ照応解析\cite{iida:2006:ACL}と同じく，
+項同定処理に文内の構造情報を用いることが有効であると考えられる．
+特に支援動詞構文のとき，事態性名詞と述語は項を共有するので，
+明示的な格助詞を伴う述語の項構造を解析に用いることができる．
+
+さて，事態性名詞の項構造解析をするに当たり，我々はまず (1) の問題に
+対応する事態性判別を行い，その後事態性のある事態性名詞に限って
+項構造解析を行うという手順で問題を解く．
+
+このようにモデルを分ける利点は，事態性判別は語義曖昧性解消の問題であり，
+項同定と別の素性を用いた解析が有効だと考えられ，モデルを分ける
+ことにより事態性判別に特徴的な統語素性を用いることができる点である\footnote{
+	述語項構造解析においては項同定と項識別とで有効な素性が大きく異なり，
+	場合によっては項同定に有効な素性が項識別ではノイズになりうる，
+	という指摘\cite{pradhan:2005:ML}もある．}．
+
+事態性判別は文中に出現する事態性名詞を事態性あり／なしの2クラスに分類す
+る問題なので，事態性に関する曖昧性のない事例を用いて教師なしのパターン
+マイニングを行うことができる．
+語義曖昧性解消タスクにおいては曖昧性のある単語周辺の単語の分布が
+有効な素性であることが知られており，
+大規模なコーパスから文脈素性を学習することが本タスクにおいても有効である
+ことが期待される．
+そこで，本論文ではこの方法に従って事態性
+判別のタスクと項同定のタスクを分けて扱う手法を提案する．
+
+
+
+\section{事態性判別}
+\label{sec:eventhood}
+
+事態性名詞には，「リスク管理」や「彼の決断」のように，
+事態性名詞と同一文節内や係り受け関係にある文節内に項が存在することが多く，
+こういった名詞の出現パターンを利用することによって事態性判別の精度が向
+上すると考えられる．
+
+そこで，名詞の出現パターンを捉えるための手段とし
+て BACT~\cite{kudo:2004:EMNLP}（実装は bact
+\footnote{http://chasen.org/\~{}taku/software/bact/}）
+を用いて事態性のある名詞と事態性のない名詞との出現パター
+ンを学習することを考えた．
+BACT は木構造の訓練事例を学習させることによってブースティングで訓練事例
+の判別に効果の高い重み付き部分木を順次選択するアルゴリズムであり，
+文の構造を木構造に変換して素性として入れることによって，
+訓練事例の判別に効果が高い構造をルールとして学習できる．
+
+
+\subsection{事態性名詞の語彙統語パターンの学習}
+
+事態性名詞の語彙統語パターンの獲得には，名詞の出現する前後3形態素，
+名詞の出現する文節および係り元の文節の形態素列を木構造にして分類器を
+作成した．
+事態性に関する曖昧性がない事例として，日本語語彙大系~\cite{ikehara:1997}
+にサ変動詞として登録されている用言のうち，一般名詞意味属性体系の
+「名詞-抽象-事-\{人間活動，事象\}」
+ノードの下にあり，かつそれ以外のノードの下にない2,253名詞を曖昧性のない
+事態性名詞として正例にした．
+ランダムに200個サンプリングして調べたところ，97\%がサ変名詞，
+残りの3\%が動詞由来の名詞で事態性名詞であった．
+また，
+一般名詞として登録されている名詞のうち「名詞-具体」ノードの下にあり，か
+つそれ以外のノードの下にない名詞と固有名詞合わせて194,098名詞を曖昧性
+のない非事態性名詞として負例にした．
+同じくランダムに200個サンプリングして調べたところ，
+16.5\%が一般名詞，73.5\%が固有名詞で非事態性名詞であった．
+たとえば「商品\fbox{取引}」の出現パターンは図 \ref{fig:pattern}
+のような木構造になり，正例として訓練事例に追加する．
+
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{17-1ia8f2.eps}
+\end{center}
+  \caption{「商品取引」のパターンの例}
+  \label{fig:pattern}
+\end{figure}
+\begin{table}[b]
+  \caption{事態性判別に有効な素性として獲得したパターンの例}
+  \label{tab:rules}
+\input{08table01.txt}
+\end{table}
+
+学習には新聞記事約1ヶ月分\cite{mainichi:2002}（正例：117,581事例，
+負例：282,419事例）を使用し，正例および負例を分類するに当たっての
+重みが高いルール6つを獲得した．獲得したルールは表\ref{tab:rules}に示した．
+重みの絶対値が大きければ大きいほど，事態性判別に効果が高いと考えられる．
+
+
+\subsection{実験}
+\label{subsec:eventhood}
+
+事態性の判別には語義曖昧性解消で最もよい性能を示している
+Support Vector Machines~\cite{vapnik:1998}
+（実装は TinySVM \footnote{http://www.chasen.org/\~{}taku/software/TinySVM}）
+を用い，文脈に応じた事態性名詞の事態性を学習した．
+多項式2次カーネルを使用し，その他のパラメータはデフォルト値を用いた．
+評価は精度・再現率・F値（精度と再現率の調和平均）で行い，
+10分割交差検定によって事態性の有無の判別性能を見た．
+評価事例にはNAISTテキストコーパスから新聞記事80記事（800文）を用いた．
+含まれる事態性名詞は1,237個（うち590個が事態性ありの事例）あった．
+ベースラインには各名詞に対してコーパス中で最も頻度が高い語義を正解とした
+モデルを用い，BACTによってマイニングした名詞の出現パターンを用いたモデル
+と比較した．使用した素性は表\ref{tab:eventhood:feature} にまとめた．
+
+\begin{table}[b]
+\caption{事態性判別に用いた素性}
+\label{tab:eventhood:feature}
+\input{08table02.txt}
+\end{table}
+\begin{table}[b]
+\caption{事態性判別実験結果}
+\label{tab:exp:eventhood}
+\input{08table03.txt}
+\end{table}
+
+教師なしでマイニングした語彙統語パターンの有効性を示すため，
+表\ref{tab:exp:eventhood}に事態性判別の実験結果を示した．
+提案手法はベースラインより再現率は劣るものの，精度を大幅に向上させ，
+F値で約5\%改善することができた．
+名詞の語彙統語パターンを用いない場合（表\ref{tab:eventhood:feature}の
+文節内素性と文節外素性のみを用いた場合），ベースラインより精度は上がる
+ものの再現率は大幅に低下し，文節内の品詞情報など局所的な文法知識が
+事態性名詞の判別に効果が高いことを示している．
+
+
+
+\subsection{エラー分析}
+
+事態性がある事例にも関わらず事態性がないと判別を誤った事例に次の
+ようなものがあった．
+\begin{itemize}
+\item 「野良黒山の会」のリーダー、木場将弘
+  さん方では、妻の和枝さんらが現地と\fbox{電話}のやり取りを続けた。
+\item 自民党の渡辺美智雄元副総理・外相は四日、宇都宮市で講演、七月の参
+  院選について「社会党と連合が独占している二十三選挙区でも自民党から候
+  補者を擁立すべきだ。連立政権は政権。選挙は選挙だ」と述べ、選
+  挙\fbox{協力}よりも独自候補擁立を優先すべきだとの考えを示した。
+\end{itemize}
+これらの事例はいずれも文内に項があるにも関わらず事態性判別を誤った
+事例であり，事態性判別に項同定の情報を用いていないために判別に失敗
+している．
+これらの事例に正解するためには，事態性判別と項同定を同時に最適化する
+必要がある．解決策として，\cite{iida:2006:ACL}
+の提案する述語のゼロ照応解析で用いられている探索先行分類モデルを適用し，
+まず最尤の項候補を求め項同定を先に行った上で事態性判別の一素性として用いる方法や，
+Markov Logic Network を用いて事態性判別と項同定を同時に行う
+\cite{meza-ruiz:2009:NAACL-HLT} といった方法が考えられるが，
+どのようにするべきかは今後の課題である．
+
+
+
+\section{事態性名詞の項同定に有効な素性の検討}
+\label{sec:syntax}
+
+\ref{sec:method}節で述べたように，事態性名詞の項同定は述語の項同定と
+異なり，述語項構造解析で有効であった文法的素性が必ずしも有効であるとは
+限らない．そこで，動詞と格要素の共起といった意味的素性を用いることを
+提案する．また，事態性名詞の項は述語の項と違い格助詞を伴わないという
+問題に対し，支援動詞構文において事態性名詞と述語が項を共有する現象に
+着目し，支援動詞辞書を作ることにより，項の対応関係を認識する手法について
+述べる．
+
+
+\subsection{動詞と格要素の共起の利用}
+
+事態性名詞のうち，対応する動詞がある名詞，たとえばサ変名詞（例：推薦）や
+動詞由来の名詞（例：動き）の項構造は動詞の項構造と類似しており，
+事態性名詞の項同定に動詞に関する知識が有効であろうと考えられる．
+
+述語においてはヲ格の84\%とニ格の88\%が係り受けの関係にある文節に項を持つが，
+事態性名詞においてはそれぞれヲ格の31\%，ニ格の22\%しか係り受け関係
+の文節に項が存在しない\cite{iida:2007:NL}．
+それに加え，述語では項は普通格助詞ヲやニを伴って出現するため，
+表層の格助詞が大きな手がかりとなるが，
+事態性名詞の項は明示的に格助詞を伴わない．
+
+この問題に対処するため，まずサ変名詞とそれに対応する動詞が意味的には
+共通の項を持つことを仮定し，動詞と格要素の共起情報を事態性名詞の項同定に用いる
+\footnote{動詞由来の名詞にもこの手法は拡張可能である．}
+．
+この手法の利点は，係り受け解析器を用いることで大規模なラベルなしデータから
+自動的に獲得した共起を獲得し，完全に教師なしに行うことができる点である．
+
+動詞と格要素の共起のモデル化は\cite{fujita:2004:IPSJ}の
+モデルに従った．
+このモデルは，名詞$n$が格助詞$c$を介して動詞$v$に係っているときの共起確率
+P($\langle v,c,n\rangle$) を推定するため，
+$\langle v,c,n\rangle$を$\langle v,c\rangle$と
+$n$の共起と見なす．
+しかしながら，一般に動詞と格要素の共起事例は非常に疎なので，
+pLSI\cite{hoffman:1999}を用いてスムージングを行う．
+\[
+    P(\langle v,c,n\rangle) = \sum_{z\in Z}P(\langle v,c\rangle|z)P(n|z)P(z)
+\]
+$Z$は共起に関する潜在的な意味クラスを指す確率変数で，確率分布を用いて単語行列
+を$|Z|$次元に圧縮していることに相当する．
+$P(\langle v,c\rangle|z),P(n|z),P(z)$ は EM アルゴリズムによって
+求められる．
+
+共起尺度としては自己相互情報量~\cite{hindle:1990:ACL}を用いる．
+\[
+    PMI(\langle v,c\rangle,n) = \log_2 \frac{P(\langle v,c,n\rangle)}
+                                        {P(\langle v,c\rangle)P(n)}
+\]
+
+共起尺度の利用に関しては，
+相対的な共起の強さを用いて項らしさを判定する．
+そこで，これらの共起尺度により計算されたスコアは，
+最尤候補に対する相対値として素性に取り込む．
+具体的には，項候補となる名詞句をペアに対し，
+それらの共起スコアの差（実数値，およびそれを離散化したもの）
+を素性として用いる．
+
+本論文では藤田らに倣い，新聞記事延べ19年分のコーパスから係り受け解析結果
+を抽出し，$|Z|=1000$としてモデルを作成した．
+
+事態性名詞と項の共起の分布を調べた予備実験において，固有名詞を中心に，
+動詞と格要素の共起モデル中に出現しなかった事例が全体の18\%あった．
+そこで，共起スコアを計算することができなかった名詞と，
+共起スコアが負であった名詞に関して，CaboCha の出力する固有表現ラベル
+および ChaSen で品詞が固有名詞であると判定された名詞に対しては，
+固有表現クラスで推定した共起スコアを用いてスムージングした
+\footnote{固有表現クラスによるスムージングは後述する項同定の予備実験で常に
+高い精度だったため，以降の実験ではスムージングを用いた結果のみ報告した．}
+．
+
+\subsection{支援動詞辞書の作成}
+
+支援動詞構文は述語と事態性名詞が項を共有する統語パターンであり，
+述語に係る名詞句の格助詞の情報を使うことによって性能を向上させることが
+できると考えられる．
+そこで，我々は事態性名詞と述語の間で項の対応がついた辞書
+（\textbf{支援動詞辞書}）を作成し，支援動詞構文の認識に用いた．
+事態性名詞の 21.7\% は支援動詞構文で使われており，
+述語項構造解析で有効な格助詞に関する情報を活用できると予想される．
+
+NomBank をコーパスとして用いた分析として，
+\cite{meyers:2004:ACL}は，多くの名詞化された動詞は
+支援動詞構文にあり，主動詞と項を共有することを指摘した
+\footnote{ここでは彼らの定義に従い，支援動詞とは最低2つの項
+NP$_1$ と XP$_2$ を取り，XP$_2$ が NP$_1$ の主辞の項となっている場合
+を指す．}．
+\cite{jiang:2006:EMNLP} も同じ現象に着目し，
+機械学習の素性として支援動詞構文を検出する素性を提案した．
+
+しかしながら，支援動詞構文となる述語は限られており，人手で書き尽くすことが
+できるため，我々は事態性名詞と述語の間で項を共有する
+ようなペアについて辞書を作成し，どのような項の対応関係になっているか，
+という情報を付与して用いることにした．
+
+たとえば，文「太郎が花子に電話をした」において，
+述語項構造は
+[ \textsc{rel}=\emph{する}（した），ガ=太郎，ヲ=電話，ニ=花子 ]
+であり，事態性名詞の項構造は
+[ \textsc{rel}=電話（する），ガ=太郎 ]
+である．
+この場合，述語「する」と事態性名詞「電話」は項「太郎」をそれぞれ
+ガ格で共有する．
+表\ref{tab:suru:template}はこの場合支援動詞辞書のどのエントリにマッチ
+しているのか示した．
+また，「彼が彼女に勉強を教える」という文では，
+述語「教える」は事態性名詞と項を共有しているが，述語のニ格「彼女」は
+事態性名詞ではガ格となり（「彼女」ガ「勉強（する）」），格の交替が起きる．
+表\ref{tab:oshieru:template}には格交替が起きる場合の項の対応を示した．
+
+\begin{table}[b]
+\hangcaption{支援動詞構文の頻度上位10件．S, N, E はそれぞれ
+    共有された項，共有されていない名詞句，事態性名詞を表す}
+\label{tab:svc}
+\input{08table04.txt}
+\end{table}
+
+NAIST テキストコーパスには異なり2,173個，延べ8,190個の支援動詞構文の事例が
+見られた．頻度上位10件の支援動詞構文を表 \ref{tab:svc} にまとめた．
+ここから分かるように，実際のコーパスに出現する支援動詞は，
+いわゆる機能動詞結合で用いられる機能動詞より広い概念である．
+たとえば，「太郎が電話を続ける」においては，「太郎が電話する」という
+事態が継続していることを示し，「続ける」は継続の意味を失っていない．
+このように，支援動詞構文にある事態性名詞と述語の示す事態の関係は，
+テンスやモダリティの付加などがあるが，このような動詞がいくつあり，
+どのような関係がありうるかは今後の研究課題である．
+
+\begin{table}[t]
+\hangcaption{「する」の支援動詞辞書項目と「太郎が花子に電話をする」の項対応．
+    Eには共通の事態性名詞が，Sには共有される項が入る．
+    このエントリはニ格の共有に関する情報は入っていない}
+    \label{tab:suru:template}
+\input{08table05.txt}
+\end{table}
+\begin{table}[t]
+\hangcaption{「教える」の支援動詞辞書項目と「彼が彼女に勉強を教える」の項対応．
+    Eには共通の事態性名詞が，Sには共有される項が入る．ニ格とガ格で格の交替
+    が起きている}
+    \label{tab:oshieru:template}
+\input{08table06.txt}
+\end{table}
+
+支援動詞辞書を作成するに当たって，Web 5億文コーパス~\cite{kawahara:2006:LREC}
+から事態性名詞が直接係っている述語とその項を200万事例抽出した
+\footnote{依存構造解析は KNP
+(http://nlp.kuee.kyoto-u.ac.jp/nl-resource/knp.html) による．}
+．
+そのうち，頻度上位2,000件（抽出された200万事例中，延べ80\%をカバー）
+を対象に，事態性名詞が述語と項を共有しているかどうかを判断した．
+具体的には，述語と事態性名詞のそれぞれの格（ガ・ヲ・ニ）について，
+事態性名詞の含まれる格と，
+共有している場合には共有している格の対応関係の情報を付与した．
+項対応の判断に関しては，Web コーパス中から取得した周辺文脈を補助的に用い，
+周辺文脈頻度上位5件中3件以上で成り立つ場合のみ対応関係を付与した．
+
+
+\subsection{実験}
+\label{subsec:exp:syntax}
+
+事態性名詞に特徴的な語彙統語パターンの情報を用いることで，
+項同定の性能が向上することを示す実験を行った．
+述語項構造解析のトーナメントモデル~\cite{iida:2005:TALIP}を事態性名詞の
+項構造解析に適応し，事態性名詞の項同定システムを作成した．
+トーナメントモデルに用いる三つ組は事態性名詞，正解の項，
+そして項候補である．
+各三つ組に対し，このシステムは訓練時どちらの候補が勝つか，
+そしてそれを特徴づける素性を学習する．
+テスト時には項の候補を順に試し，トーナメントで最後まで勝ち残った候補を
+システムの予測する項として提示する．
+
+今回ベースラインシステムと提案する3つのモデルを比較した．
+
+ベースラインシステムで用いた素性は表\ref{tab:cooc:features}に示した．
+使用した素性は 
+\cite{iida:2006:ACL} に準じ，事態性名詞で計算することのできない素性
+\footnote{事態性名詞にはヴォイスと助動詞は定めることができない．
+また，センタリング理論に基づいた素性は用いていない．
+EDR を用いた素性は予備実験により正解率が低下したので削除した．}
+は使用しなかった．使用した素性は表\ref{tab:cooc:features}にまとめた．
+
+\begin{table}[b]
+    \caption{項同定に用いた素性リスト}
+    \label{tab:cooc:features}
+\input{08table07.txt}
+\end{table}
+
+事態性名詞の項同定は形態素単位で行うため，文節内の位置の素性，同一文節内の他の
+形態素の品詞列の素性を追加した．また，\cite{muraki:1990}に掲載されている機
+能動詞128表現を用い，事態性名詞が機能動詞に係っているかどうかの素性と，機能動
+詞に係っている場合に機能動詞と項が係り関係にあるかどうかの素性を追加した．
+本論文で新しく導入された素性にはアスタリスクを付した．
+
+また，実験に用いたデータは NAIST テキストコーパスから新聞記事1日分（137記事，
+延べ847個の事態性名詞，97個の支援動詞構文）
+を訓練事例，それとは異なる1日分（150記事，延べ722個の事態性名詞，113個の
+支援動詞構文）を評価事例に用いた．
+実験に用いた機械学習器はSupport Vector Machines \cite{vapnik:1998} であり，
+実装は TinySVM\footnote{http://chasen.org/\~{}taku/Software/TinySVM/}，
+多項式2次カーネルでパラメータはデフォルト値を使用した．
+
+支援動詞辞書と共起モデルの有効性を示すため，
+各モデルについてそれぞれの格における正解率を求め，
+表 \ref{tab:argument} に示した．
+ガ・ヲ・ニ格を対象に，それぞれ文内に項を持つ事例のみを訓練・テストに用い，
+項同定の正解率で評価した．
+「$+$共起モデル」はベースラインモデルに加え，共起のスコアを実数値の素性として
+Support Vector Machines に適用したものであり，
+「$+$支援動詞辞書」はテスト事例で支援動詞辞書にマッチする項目がある場合，
+SVM によるトーナメントモデルを用いず，
+辞書に対応する述語の項をそのままシステムの出力とした
+\footnote{述語の項はコーパスに人手で付与された正解データを用いる．}
+ものである．
+
+共起モデルを用いた手法はどの格においてもベースラインより高い正解率を示した．
+また，支援動詞辞書を共起モデルと組み合わせたモデルはヲ格とニ格において
+ベースラインよりわずかながら高い正解率であった．
+
+\begin{table}[t]
+    \caption{事態性名詞の項同定タスクの正解率}
+    \label{tab:argument}
+\input{08table08.txt}
+\end{table}
+
+
+\subsection{議論}
+
+支援動詞辞書を用いてもっとも効果が高かったのはガ格であるが，
+これは項の共有があった格のうち 92\% はガ格であるためだと考えられる．
+テスト事例で支援動詞構文にあったもののうち，
+項と述語が係り受け関係にある事例は38事例であり，
+75事例（66\%）は省略解析の情報をタグ付きコーパスから取得できたことが
+精度向上に貢献していると考えられる．
+ここで示した精度は述語項構造が正しく解析できた場合の上限値であり，
+述語項構造を自動解析した場合は精度が低下することが考えられるが，
+実際に省略解析をどのように行い，どのような結果を得るかは解析に採用する
+解析モデルに依存する．
+
+一方，ヲ格とニ格において，支援動詞辞書を用いるとベースラインシステムより性能が
+悪くなった．
+ヲ格で支援動詞辞書の効果がなかった理由としては，
+ヲ格の 90\% が既に事態性名詞と同一文節内にあるか係り受け関係にある文節に
+存在し，明示的に項の交替関係をモデル化する必要がなかったということが
+推測される．
+また，支援動詞の項の共有情報を素性として用いた実験を行ったところ，
+ガ格とニ格ではベースラインと正解率は変わらず，ヲ格では正解率の低下が見られた．
+
+支援動詞辞書の効果が格によって異なっている原因を調べるため，
+支援動詞辞書のみのシステムの性能を求めた．
+Web コーパスから作成した支援動詞辞書のカバー率は，新聞記事分野で作成した
+事態タグつきコーパスに対して 49\% であった．
+支援動詞辞書のパターン対にマッチする事態性名詞に対し，
+支援動詞辞書のみを用いた項同定システムの性能を計ると精度は0.72，
+再現率は0.35であった．
+ヲ格とニ格に対してはこの精度はベースラインの正解率を下回っている．
+そのため，支援動詞辞書の情報を用いるとヲ格とニ格に関しては，
+正解率が低下する可能性があることが分かった．
+実際，表\ref{tab:argument} では，まさにヲ格とニ格では支援動詞辞書を使うことに
+よって正解率が低下している．
+この問題への対処法としては，ヲ格とニ格に対しては，
+精度の高い支援動詞構文のみ用いることが考えられる．
+どのようにして効率的に支援動詞辞書を構築するかは今後の課題である．
+
+提案手法の典型的な誤り事例は，局所的な項を適切に同定できないという誤りである．
+
+\begin{itemize}
+\item 太郎が次郎の連勝を止めた
+\end{itemize}
+
+この例では正しい項構造は
+[ \textsc{rel}=連勝，ガ=次郎 ]
+だが，システムは
+[ \textsc{rel}=連勝，ガ=太郎 ]
+を出力した．これはこの事例が「X を止める」という辞書項目にマッチし，
+同一名詞句内にある候補「次郎」を解析しなかったためである．
+この問題に対処するには，
+局所的な候補から順番に項を探し，
+ふさわしい候補が見つからなかった場合に探索範囲を広げていく，
+といった階層的なモデルを用いることが考えられる．
+
+
+\section{おわりに}
+
+本論文で，名詞句の語彙統語パターンを用いた事態性名詞の項構造解析について述べた．
+本論文では項構造解析のタスクを2つに分け，
+マイニングした語彙統語パターンを用いた事態性名詞の事態性判別手法を提案した．
+また，動詞と格要素の共起と事態性名詞に特徴的な語彙統語パターンが
+事態性名詞の項同定に有効であることを示した．
+
+提案手法では事態性判別は精度76.6\%，再現率79.6\%で行うことができる．
+また，項同定も文内の項ではガ格・ヲ格・ニ格それぞれ68.3\%・80.1\%・74.6\%
+の正解率で解析でき，ある程度実用的に項構造解析を行うことができた．
+まだ高速化・精度改善の余地はあるが，本研究をベースに情報抽出などの応用に
+用いる下地ができたと考えている．
+
+今後は形態素解析から固有表現抽出，係り受け解析までを含めて同時に最適化を
+行う手法の研究や，項の間の依存関係を考慮した項同定モデルの研究が課題である．
+
+
+\acknowledgment
+
+本研究の一部は科研費特定領域研究
+「代表性を有する大規模日本語書き言葉コーパスの構築」
+の助成を受けたものである．
+Web から取得した5億文データを使用させてくださった河原大輔氏に
+感謝する．また，新聞記事から抽出した動詞と格要素の共起モデルおよび
+自己相互情報量の計算プログラムを利用させてくださった藤田篤氏に
+お礼申し上げる．
+
+
+\bibliographystyle{jnlpbbl_1.4}
+
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Ando \BBA\ Zhang}{Ando \BBA\
+  Zhang}{2005}]{ando:2005:JMLR}
+Ando, R.~K.\BBACOMMA\ \BBA\ Zhang, T. \BBOP 2005\BBCP.
+\newblock \BBOQ {A Framework for Learning Predictive Structures from Multiple
+  Tasks and Unlabeled Data.}\BBCQ\
+\newblock {\Bem Journal of Machine Learning Research}, {\Bbf 6}, \mbox{\BPGS\
+  1817--1853}.
+
+\bibitem[\protect\BCAY{藤田\JBA 乾\JBA 松本}{藤田\Jetal
+  }{2004}]{fujita:2004:IPSJ}
+藤田篤\JBA 乾健太郎\JBA 松本裕治 \BBOP 2004\BBCP.
+\newblock \JBOQ 自動生成された言い換え文における不適格な動詞格構造の検出\JBCQ\
+\newblock \Jem{情報処理学会論文誌}, {\Bbf 45}  (4), \mbox{\BPGS\ 1176--1187}.
+
+
+\bibitem[\protect\BCAY{Gildea \BBA\ Jurafsky}{Gildea \BBA\
+  Jurafsky}{2002}]{gildea:2002:CL}
+Gildea, D.\BBACOMMA\ \BBA\ Jurafsky, D. \BBOP 2002\BBCP.
+\newblock \BBOQ {A}utomatic {L}abeling of {S}emantic {R}oles.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 28}  (3), \mbox{\BPGS\
+  245--288}.
+
+\bibitem[\protect\BCAY{Grimshaw}{Grimshaw}{1990}]{grimshaw:1990}
+Grimshaw, J. \BBOP 1990\BBCP.
+\newblock {\Bem {A}rgument {S}tructure}.
+\newblock MIT Press.
+
+\bibitem[\protect\BCAY{Hindle}{Hindle}{1990}]{hindle:1990:ACL}
+Hindle, D. \BBOP 1990\BBCP.
+\newblock \BBOQ {N}oun {C}lassification from {P}redicate {A}rgument
+  {A}tructures.\BBCQ\
+\newblock In {\Bem Proceedings of the 28th Annual Meeting of the ACL},
+  \mbox{\BPGS\ 268--275}.
+
+\bibitem[\protect\BCAY{Hoffman}{Hoffman}{1999}]{hoffman:1999}
+Hoffman, T. \BBOP 1999\BBCP.
+\newblock \BBOQ {P}robabilistic latent semantic indexing.\BBCQ\
+\newblock In {\Bem Proceedings of the 22nd Annual ACM Conference on Research
+  and Development in Information Retrieval}, \mbox{\BPGS\ 50--57}.
+
+\bibitem[\protect\BCAY{池原\JBA 宮崎\JBA 白井\JBA 横尾\JBA 中岩\JBA 小倉\JBA
+  大山\JBA 林}{池原\Jetal }{1997}]{ikehara:1997}
+池原悟\JBA 宮崎正弘\JBA 白井諭\JBA 横尾昭男\JBA 中岩浩巳\JBA 小倉健太郎\JBA
+  大山芳文\JBA 林良彦\JEDS\ \BBOP 1997\BBCP.
+\newblock \Jem{日本語語彙大系}.
+\newblock 岩波書店.
+
+\bibitem[\protect\BCAY{Iida, Inui, \BBA\ Matsumoto}{Iida
+  et~al.}{2005}]{iida:2005:TALIP}
+Iida, R., Inui, K., \BBA\ Matsumoto, Y. \BBOP 2005\BBCP.
+\newblock \BBOQ Anaphora resolution by antecedent identification followed by
+  anaphoricity determination.\BBCQ\
+\newblock {\Bem ACM Transactions on Asian Language Information Processing
+  (TALIP)}, {\Bbf 4}  (4), \mbox{\BPGS\ 417--434}.
+
+\bibitem[\protect\BCAY{Iida, Inui, \BBA\ Matsumoto}{Iida
+  et~al.}{2006}]{iida:2006:ACL}
+Iida, R., Inui, K., \BBA\ Matsumoto, Y. \BBOP 2006\BBCP.
+\newblock \BBOQ {E}xploiting {S}yntactic {P}atterns as {C}lues in
+  {Z}ero-{A}naphora {R}esolution.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on
+  Computational Linguistics and 44th Annual Meeting of the ACL (COLING-ACL)},
+  \mbox{\BPGS\ 625--632}.
+
+\bibitem[\protect\BCAY{飯田\JBA 小町\JBA 乾\JBA 松本}{飯田~\Jetal
+  }{2007}]{iida:2007:NL}
+飯田龍\JBA 小町守\JBA 乾健太郎\JBA 松本裕治 \BBOP 2007\BBCP.
+\newblock \JBOQ {NAIST} テキストコーパス:
+  述語項構造と共参照関係のアノテーション\JBCQ\
+\newblock \Jem{情報処理学会研究会報告（自然言語処理研究会）}, \mbox{\BPGS\
+  71--78}.
+\newblock NL-177-10.
+
+\bibitem[\protect\BCAY{Jiang \BBA\ Ng}{Jiang \BBA\ Ng}{2006}]{jiang:2006:EMNLP}
+Jiang, Z.~P.\BBACOMMA\ \BBA\ Ng, H.~T. \BBOP 2006\BBCP.
+\newblock \BBOQ {S}emantic {R}ole {L}abeling of {N}om{B}ank: {A} {M}aximum
+  {E}ntropy {A}pproach.\BBCQ\
+\newblock In {\Bem Proceedings of the Conference on Empirical Methods in
+  Natural Language Processing (EMNLP)}.
+
+\bibitem[\protect\BCAY{Kawahara \BBA\ Kurohashi}{Kawahara \BBA\
+  Kurohashi}{2006}]{kawahara:2006:LREC}
+Kawahara, D.\BBACOMMA\ \BBA\ Kurohashi, S. \BBOP 2006\BBCP.
+\newblock \BBOQ {C}ase {F}rame {C}ompilation from the {W}eb using
+  {H}igh-{P}erformance {C}omputing.\BBCQ\
+\newblock In {\Bem Proceedings of the fifth International Conference on
+  Language Resource and Evaluation (LREC)}, \mbox{\BPGS\ 1344--1347}.
+
+\bibitem[\protect\BCAY{国立国語研究所}{国立国語研究所}{2004}]{bgh:2004}
+国立国語研究所 \BBOP 2004\BBCP.
+\newblock \Jem{分類語彙表}.
+\newblock 大日本図書株式会社.
+
+\bibitem[\protect\BCAY{Kudo \BBA\ Matsumoto}{Kudo \BBA\
+  Matsumoto}{2004}]{kudo:2004:EMNLP}
+Kudo, T.\BBACOMMA\ \BBA\ Matsumoto, Y. \BBOP 2004\BBCP.
+\newblock \BBOQ {B}oosting {A}lgorithm for {C}lassification of
+  {S}emi-{S}tructured {T}ext.\BBCQ\
+\newblock In {\Bem Proceedings of the Conference on Empirical Methods in
+  Natural Language Processing (EMNLP)}, \mbox{\BPGS\ 301--308}.
+
+\bibitem[\protect\BCAY{黒橋}{黒橋}{2005}]{kurohashi:2005}
+黒橋禎夫 \BBOP 2005\BBCP.
+\newblock \Jem{京都テキストコーパス Version 4.0}.
+\newblock http://nlp.kuee.kyoto-u.ac.jp/nl-resource/corpus.html.
+
+\bibitem[\protect\BCAY{Liu \BBA\ Ng}{Liu \BBA\ Ng}{2007}]{liu:2007:ACL}
+Liu, C.\BBACOMMA\ \BBA\ Ng, H.~T. \BBOP 2007\BBCP.
+\newblock \BBOQ {Learning Predictive Structures for Semantic Role Labeling of
+  NomBank.}\BBCQ\
+\newblock In {\Bem Proceedings of the 46th Annual Meeting of the ACL}.
+
+\bibitem[\protect\BCAY{Macleod, Meyers, Grishman, Barret, \BBA\ Reeves}{Macleod
+  et~al.}{1997}]{macleod:1997:RANLP}
+Macleod, C., Meyers, A., Grishman, R., Barret, L., \BBA\ Reeves, R. \BBOP
+  1997\BBCP.
+\newblock \BBOQ {Designing a Dictionary of Derived Nominals.}\BBCQ\
+\newblock In {\Bem Proceedings of Recent Advances in Natural Language
+  Processing}.
+
+\bibitem[\protect\BCAY{毎日新聞社}{毎日新聞社}{2002}]{mainichi:2002}
+毎日新聞社 \BBOP 2002\BBCP.
+\newblock \Jem{毎日新聞}.
+\newblock 毎日新聞社.
+
+\bibitem[\protect\BCAY{Marcus, Santorini, \BBA\ Marcinkiewicz}{Marcus
+  et~al.}{1993}]{marcus:1993:CL}
+Marcus, M.~P., Santorini, B., \BBA\ Marcinkiewicz, M.~A. \BBOP 1993\BBCP.
+\newblock \BBOQ {B}uilding a {L}arge {A}nnotated {C}orpus of {E}nglish: {T}he
+  {P}enn {T}reebank.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 19}  (2), \mbox{\BPGS\
+  313--330}.
+
+\bibitem[\protect\BCAY{Meyers, Reeves, \BBA\ Macleod}{Meyers
+  et~al.}{2004a}]{meyers:2004:ACL}
+Meyers, A., Reeves, R., \BBA\ Macleod, C. \BBOP 2004a\BBCP.
+\newblock \BBOQ {NP}-{E}xternal {A}rguments: {A} {S}tudy of {A}rgument
+  {S}haring in {E}nglish.\BBCQ\
+\newblock In {\Bem Proceedings of the ACL 2004 Workshop on Multiword
+  Expressions: Integrating Processing}, \mbox{\BPGS\ 96--103}.
+
+\bibitem[\protect\BCAY{Meyers, Reeves, Macleod, Szekely, Zielinska, Young,
+  \BBA\ Grishman}{Meyers et~al.}{2004b}]{meyers:2004:LREC}
+Meyers, A., Reeves, R., Macleod, C., Szekely, R., Zielinska, V., Young, B.,
+  \BBA\ Grishman, R. \BBOP 2004b\BBCP.
+\newblock \BBOQ {A}nnotating {N}oun {A}rgument {S}tructure for
+  {N}om{B}ank.\BBCQ\
+\newblock In {\Bem Proceedings of the 4th International Conference on Language
+  Resources and Evaluation (LREC)}, \mbox{\BPGS\ 803--806}.
+
+\bibitem[\protect\BCAY{Meyers, Reeves, Macleod, Szekely, Zielinska, Young,
+  \BBA\ Grishman}{Meyers et~al.}{2004c}]{meyers:2004:NAACL-HLT}
+Meyers, A., Reeves, R., Macleod, C., Szekely, R., Zielinska, V., Young, B.,
+  \BBA\ Grishman, R. \BBOP 2004c\BBCP.
+\newblock \BBOQ {T}he {N}om{B}ank {P}roject: {A}n {I}nterim {R}eport.\BBCQ\
+\newblock In {\Bem Proceedings of the HLT/NAACL 2004 Workshop Frontiers in
+  Corpus Annotation}, \mbox{\BPGS\ 24--31}.
+
+\bibitem[\protect\BCAY{Meza-Ruiz \BBA\ Riedel}{Meza-Ruiz \BBA\
+  Riedel}{2009}]{meza-ruiz:2009:NAACL-HLT}
+Meza-Ruiz, I.\BBACOMMA\ \BBA\ Riedel, S. \BBOP 2009\BBCP.
+\newblock \BBOQ {Jointly Identifying Predicates, Arguments and Senses using
+  Markov Logic}.\BBCQ\
+\newblock In {\Bem Proceedings of Humal Language Technologies: The 2009 Annual
+  Conference on the North American Chapter of the Association for Computational
+  Linguistics (NAACL-HLT 2009)}, \mbox{\BPGS\ i155--163}.
+
+\bibitem[\protect\BCAY{村木}{村木}{1990}]{muraki:1990}
+村木新二郎 \BBOP 1990\BBCP.
+\newblock \Jem{日本語動詞の諸相}.
+\newblock ひつじ書房.
+
+\bibitem[\protect\BCAY{Palmer, Kingsbury, \BBA\ Gildea}{Palmer
+  et~al.}{2005}]{palmer:2005:CL}
+Palmer, M., Kingsbury, P., \BBA\ Gildea, D. \BBOP 2005\BBCP.
+\newblock \BBOQ {T}he {P}roposition {B}ank: {A}n {A}nnotated {C}orpus of
+  {S}emantic {R}oles.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 31}  (1), \mbox{\BPGS\
+  71--106}.
+
+\bibitem[\protect\BCAY{Pradhan, Hacioglu, Krugler, Ward, Martin, \BBA\
+  Jurafsky}{Pradhan et~al.}{2005}]{pradhan:2005:ML}
+Pradhan, S., Hacioglu, K., Krugler, V., Ward, W., Martin, J.~H., \BBA\
+  Jurafsky, D. \BBOP 2005\BBCP.
+\newblock \BBOQ {S}upport {V}ector {L}earning for {S}emantic {A}rgument
+  {C}lassification.\BBCQ\
+\newblock {\Bem Machine Learning}, {\Bbf 60}  (1-3), \mbox{\BPGS\ 11--39}.
+
+\bibitem[\protect\BCAY{Pradhan, Sun, Ward, Martin, \BBA\ Jurafsky}{Pradhan
+  et~al.}{2004}]{pradhan:2004:NAACL-HLT}
+Pradhan, S., Sun, H., Ward, W., Martin, J.~H., \BBA\ Jurafsky, D. \BBOP
+  2004\BBCP.
+\newblock \BBOQ {P}arsing {A}rguments of {N}ominalizations in {E}nglish and
+  {C}hinese.\BBCQ\
+\newblock In {\Bem Proceedings of the HLT/NAACL}.
+
+\bibitem[\protect\BCAY{笹野\JBA 河原\JBA 黒橋}{笹野\Jetal
+  }{2005}]{sasano:2005:NLJ}
+笹野遼平\JBA 河原大輔\JBA 黒橋禎夫 \BBOP 2005\BBCP.
+\newblock \JBOQ
+  名詞格フレーム辞書の自動構築とそれを用いた名詞句の関係解析\JBCQ\
+\newblock \Jem{自然言語処理}, {\Bbf 12}  (3), \mbox{\BPGS\ 129--144}.
+
+\bibitem[\protect\BCAY{Taira, Fujita, \BBA\ Nagata}{Taira
+  et~al.}{2008}]{taira:2008:EMNLP}
+Taira, H., Fujita, S., \BBA\ Nagata, M. \BBOP 2008\BBCP.
+\newblock \BBOQ {A Japanese Predicate Argument Structure Analysis using
+  Decision Lists}.\BBCQ\
+\newblock In {\Bem Proceedings of Conference on Empirical Methods in Natural
+  Language Processing (EMNLP 2008)}, \mbox{\BPGS\ 522--531}.
+
+\bibitem[\protect\BCAY{Vapnik}{Vapnik}{1998}]{vapnik:1998}
+Vapnik, V.~N. \BBOP 1998\BBCP.
+\newblock {\Bem {T}he {S}tatistical {L}earning {T}heory}.
+\newblock Springer.
+
+\bibitem[\protect\BCAY{Xue}{Xue}{2006a}]{xue:2006:LREC}
+Xue, N. \BBOP 2006a\BBCP.
+\newblock \BBOQ {A}nnotating the {P}redicate-{A}rgument {S}tructure of
+  {C}hinese {N}ominalizations.\BBCQ\
+\newblock In {\Bem Proceedings of the fifth International Conference on
+  Language Resource and Evaluation (LREC)}, \mbox{\BPGS\ 1382--1387}.
+
+\bibitem[\protect\BCAY{Xue}{Xue}{2006b}]{xue:2006:HLT-NAACL}
+Xue, N. \BBOP 2006b\BBCP.
+\newblock \BBOQ {S}emantic {R}ole {L}abeling of {N}ominalized {P}redicates in
+  {C}hinese.\BBCQ\
+\newblock In {\Bem Proceedings of the HLT-NAACL}, \mbox{\BPGS\ 431--438}.
+
+\end{thebibliography}
+
+
+
+
+\begin{biography}
+\bioauthor{小町　　守}{
+2005年東京大学教養学部基礎科学科科学史・科学哲学分科卒．
+2007年奈良先端科学技術大学院大学情報科学研究科博士前期課程修了．
+博士後期課程に進学．修士（工学）．
+2008年より日本学術振興会特別研究員(DC2)．
+大規模なコーパスを用いた意味解析に関心がある．
+言語処理学会第14回年次大会最優秀発表賞受賞．
+人工知能学会，情報処理学会，ACL各会員．
+}
+
+\bioauthor{飯田　　龍}{
+2007年奈良先端科学技術大学院大学情報科学研究科博士後期課程修了．博士（工学）．
+同年より奈良先端科学技術大学院大学情報科学研究科特任助教．
+2008年12月より東京工業大学大学院情報理工学研究科助教．現在に至る．
+自然言語処理の研究に従事．情報処理学会員．
+}
+
+\bioauthor{乾　健太郎}{
+1995年東京工業大学大学院情報理工学研究科博士課程修了．
+博士（工学）．
+同研究科助手．九州工業大学情報工学部助教授を経て，
+2002年より奈良先端科学技術大学院大学情報科学研究科助教授．
+現在同研究科准教授，情報通信研究機構有期研究員を兼任．
+自然言語処理の研究に従事．Computational Linguistics編集委員，
+情報処理学会，人工知能学会，ACL各会員．
+}
+\bioauthor{松本　裕治}{
+1977年京都大学工学部情報工学科卒．
+1979年同大学大学院工学研究科修士課程情報工学専攻修了．工学博士．
+同年電子技術総合研究所入所．
+1984〜85年英国インペリアルカレッジ客員研究員．
+1985〜87年（財）新世代コンピュータ技術開発機構に出向．
+京都大学助教授を経て，1993年より奈良先端科学技術大学院大学教授．現在に至る．
+専門は自然言語処理．人工知能学会，日本ソフトウェア科学会，
+情報処理学会，認知科学会，AAAI, ACL, ACM各会員．
+}
+\end{biography}
+
+
+
+
+\biodate
+
+
+
+\end{document}

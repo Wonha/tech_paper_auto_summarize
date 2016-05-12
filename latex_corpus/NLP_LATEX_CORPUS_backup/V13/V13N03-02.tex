@@ -1,0 +1,863 @@
+    \documentstyle[eclepsf,jnlpbbl]{jnlp_j_b5_2e}
+
+\newcommand{\bmath}[1]{}
+\newfont{\sbmath}{cmmib10 scaled 833}
+\newcommand{\bmathsmall}[1]{}
+\newcommand{\GenerateByDeletion}{}
+\newcommand{\GenerateByAddition}{}
+\newcommand{\SVMFourVSVs}{}
+\newtheorem{assumption}{}
+\newcommand{\undefv}{}
+
+\def\mojiatukai#1{}
+\title{サポートベクタマシンを使った文書分類における\\
+	仮想事例の利用}
+\etitle{Using Virtual Examples for Text Classification \\
+	with Support Vector Machines}
+    \authorC{{颯\kern4.18pt々\kern4.18pt野} 学\affiref{FujitsuLabs}
+\affiref{YahooJapan}}
+\affilabel{FujitsuLabs}{株式会社富士通研究所}{Fujitsu Laboratories Ltd.}
+\affilabel{YahooJapan}{現在，ヤフー株式会社}{Now at Yahoo Japan Corporation}
+\eauthor{Manabu Sassano\affiref{FujitsuLabs}
+\affiref{YahooJapan}}
+\headauthor{颯々野}
+\headtitle{サポートベクタマシンを使った文書分類における仮想事例の利用}
+\jabstract{
+本論文では，サポートベクタマシン (SVMs) を使った文書分類において
+仮想事例 (virtual examples) がどのように性能を改善するかを調べる．
+ある文書から少量の単語を追加したり削除したりしても，その文書が属するカ
+テゴリは変化しないとの仮定を置いて，文書分類のために仮想事例を作る方法
+を提案する．
+提案手法を Reuters-21758 テストセットコレクションで評価した．
+実験により，仮想事例はサポートベクタマシンを使った文書分類の性能
+向上に役立つことが確認できた．特に，学習事例が少量の場合にその効果は顕
+著であった．
+}
+\jkeywords{仮想事例，サポートベクタマシン，文書分類}
+\eabstract{
+We explore how virtual examples (artificially created examples)
+improve performance of
+text classification with Support Vector Machines (SVMs).
+We propose techniques to create virtual examples for text
+classification based on the assumption that the category of a document
+is unchanged even if a small number of words are added or deleted.
+We evaluate the proposed methods by Reuters-21758 test set collection.
+Experimental results show virtual examples improve the performance of
+text classification with SVMs, especially for small training sets. 
+}
+\ekeywords{virtual examples, support vector machines, text classification}
+
+\setcounter{page}{21}
+\setcounter{巻数}{13}
+\setcounter{号数}{3}
+\setcounter{年}{2006}
+\setcounter{月}{7}
+
+\受付{2005}{9}{30}
+\再受付{2005}{12}{24}
+\採録{2006}{1}{24}
+
+\setcounter{secnumdepth}{2}
+
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+
+
+
+\section{はじめに}
+自然言語処理において高い性能を得ようとするとき，コーパスを使った教師あ
+り学習 (supervised learning) は，今や標準的な手法である．
+しかしながら，教師あり学習の弱点は一定量以上のタグ付きコーパスが必要な
+ことである．
+仮によい教師あり学習の手法があったとしても，タグ付きコーパス無しでは高
+い性能は得られない．
+ここでの問題は，コーパスのタグ付けは労力がかかるものであり，非常に高く
+つくことである．
+この点を克服するためいくつかの手法が提案されている．
+最小限教師あり学習\footnote{
+``minimally-supervised learning'' をさす．
+全ての事例に対してラベルを与えるのではなく，極めて少量の事例に対してのみ
+ラベルを与える手法．例えば
+\cite{Yarowsky1995,Yarowsky2000} などがある．
+}
+や能動学習 (active learning) (例えば \cite{Thompson1999,Sassano2002})
+である．
+これらに共通する考え方は，貴重なラベル付き事例を最大限に活かそうという
+ことである．
+
+同じ考え方に沿う別の手法として，ラベル付き事例から生成された {\em 仮想
+事例} (virtual examples) を使う手法がある．
+この手法は，自然言語処理においてはあまり議論されていない．
+能動学習の観点から，Lewis と Gale \shortcite{Lewis1994} が文書分類での
+仮想事例について少し触れたことがある．
+しかしながら，彼らはそれ以上仮想事例の利用については踏み込まなかった．
+このとき考えられた利用方法は，分類器 (classifier) が自然言語で書かれた
+仮想的な文書例
+を作り，
+人間にラベル付けさせるものだったが，それは現実的ではないと考え
+られたからである．
+
+パターン認識の分野では，仮想事例はいくつかの種類について研究されている．
+SVMs とともに仮想事例を使う手法を最初に報告したのは，
+Sch\"{o}lkopf ら \shortcite{Schoelkopf1996} である．
+彼らは，手書き文字認識タスクにおいて精度が向上したことを示した 
+(第~\ref{sec:vsv} 節でも述べる)．
+このタスクでの次のような事前知識 (prior knowledge) に基づいて，
+ラベル付き事例から仮想事例を作り出した．その事前知識とは，
+ある画像を少しだけ修正した画像 
+(例えば，1 ピクセル右にシフトさせた画像) 
+であっても元の画像と同じラベルを持つということである．
+また，Niyogi らも事前知識を使って仮想事例を作り，
+それにより訓練事例の数を拡大する手法について議論している\cite{Niyogi1998}．
+
+我々の研究の大きな目的は，コーパスに基づく自然言語処理において，
+Sch\"{o}lkopf ら \shortcite{Schoelkopf1996} がパターン認識で良好な結果
+を報告している仮想事例の手法の効果
+を調べることである．
+コーパスに基づく自然言語処理での仮想事例の利用については，
+バイオ文献中の固有表現認識を対象にした研究 \cite{Yi2004} があるが，
+対象タスクも限られており，研究が十分に進んでいるとは言えない状況である．
+しかしながら，仮想事例を用いるアプローチを探求することは非常に重要であ
+る．なぜなら，ラベル付けのコストを削減することが期待できるからである．
+特に，我々は SVMs \cite{Vapnik1995}における仮想事例の利用に焦点をあてる．
+SVM は自然言語処理で最も成功している機械学習の手法の一つだからである．
+文書分類 \cite{Joachims1998,Dumais1998}，チャンキング \cite{Kudo2001}，
+係り受け解析 \cite{Kudo2002}などに適用されている．
+
+本研究では，文書分類タスクを自然言語処理における仮想事例の研究の最初の題材と
+して選んだ．
+理由は大きく二つある．
+一つには，機械学習を用いた文書分類を実際に適用しようとすると，ラベル付
+けのコストの削減は重要な課題になるからである．
+もう一つには，
+ラベル付き事例から仮想事例を作り出す方法として，単純だが効果的なものが
+考えられるからである (第~\ref{sec:vx} 節で詳細に述べる)．
+本論文では，仮想事例が SVM を使う文書分類の精度をどのように向上させるか，特に少量の学習事例を使った場合にどうなるかを示す．
+
+\section{サポートベクタマシン}
+本節では，サポートベクタマシン (SVMs) の理論的な枠組みを簡単に与える．
+訓練事例が以下のように与えられるとする:
+\begin{displaymath}
+(\bmath{x}_{1}, y_{1}), \ldots,
+(\bmath{x}_{i}, y_{i}), \ldots,
+(\mbox{\boldmath$x$}_{l}, y_{l}), 
+\mbox{\boldmath$x$}_{i} \in \mbox{\boldmath$R$}^{n}, y_{i} \in
+\{+1, -1\}.
+\end{displaymath}
+SVM の枠組みにおける決定関数 (decision function) $g$ は次のように定義
+される:
+\begin{eqnarray}
+g(\mbox{\boldmath$x$}) & = & {\rm sgn}(f(\mbox{\boldmath$x$})) \\
+f(\mbox{\boldmath$x$}) & = & \sum_{i = 1}^{l}
+y_{i}\alpha_{i}K(\mbox{\boldmath$x$}_{i}, \mbox{\boldmath$x$}) + b
+\label{eq:fx}
+\end{eqnarray}
+ここで $K$ はカーネル関数，$b \in \bmath{R}$ は閾値，$\alpha_{i}$ は重
+みである．
+さらに，重み $\alpha_{i}$ は次の制約も満たす:
+\begin{displaymath}
+\forall i: 0 \leq \alpha_{i} \leq C \ {\rm and} \ 
+ \sum_{i = 1}^{l}\alpha_{i}y_{i} = 0,
+\end{displaymath}
+ここで $C$ は誤分類のコストである．
+ゼロでない $\alpha_{i}$ を持つ事例 $\bmath{x}_{i}$ はサポートベクタと
+呼ばれる．
+線形 (linear) SVM では，カーネル関数 $K$ は次のように定義される:
+\begin{displaymath}
+K(\mbox{\boldmath$x$}_{i}, \mbox{\boldmath$x$}) = 
+\mbox{\boldmath$x$}_{i} \cdot \mbox{\boldmath$x$}.
+\end{displaymath}
+このとき，式~(\ref{eq:fx}) は次のように書き直すことができる:
+\begin{eqnarray}
+f(\bmath{x}) & = & \bmath{w}\cdot\bmath{x} + b 
+\end{eqnarray}
+ここで $\bmath{w} = \sum_{i = 1}^{l}y_{i}\alpha_{i}\bmath{x}_{i}$ であ
+る．
+SVM の学習とは，次の最適化問題を解いて $\alpha_{i}$ と $b$ を求めるこ
+とである．
+\begin{eqnarray*}
+\mbox{\rm maximize} & \displaystyle{ \sum_{i = 1}^{l}\alpha_{i} -
+\frac{1}{2} \sum_{i, j =
+1}^{l}\alpha_{i}\alpha_{j}y_{i}y_{j}K(\mbox{\boldmath$x$}_{i},\mbox{\boldmath$x$}_{j}) 
+} \\
+\mbox{\rm subject to} & \displaystyle{
+\forall i: 0 \leq \alpha_{i} \leq C \  {\rm and} \  \sum_{i =
+1}^{l}\alpha_{i}y_{i} = 0 }\label{alphacond}.
+\end{eqnarray*}
+この解は，最適超平面 (optimal hyperplane) を与える．この超平面は二つのクラス
+の決定境界 (decision boundary) である．
+図~\ref{fig:sv} に最適超平面とサポートベクタの例を示す．
+
+\begin{figure}
+\begin{center}
+\epsfile{file=sv-hp-2.eps,width=24em}
+\end{center}
+\caption{超平面 (太線) とサポートベクタ}\label{fig:sv}
+\end{figure}
+
+
+\section{仮想事例と仮想サポートベクタ}\label{sec:vsv}
+
+仮想事例は，ラベル付き事例から生成されるとする\footnote{
+ここではラベル付き事例からの生成のみ考える．
+ラベルが分からない事例からの生成は考えないとする．
+}．
+ターゲットとなるタスクの事前知識に基づいて，元になった事例のラベルと同じ
+ものを，仮想事例として生成された事例のラベルに設定する．
+
+
+例えば，手書き数字の認識では，上下左右の方向に1ピクセル移動させても事
+例に対するラベルは変化しないとの仮定を置いて，仮想事例を作ることができ
+る \cite{Schoelkopf1996,DeCoste2002}．
+
+特にサポートベクタから作られた仮想事例は，{\em 仮想サポートベクタ} 
+({\em virtual support vectors}) と呼ばれる．
+妥当な仮定に基づいて生成された仮想サポートベクタは，よりよい最適超平面
+を与えると期待される．
+仮想事例がターゲットとなるタスクにおける事例の自然なバリエーションを表
+現していると仮定すると，決定境界はより正確になるはずである．
+図~\ref{fig:vsv} は仮想サポートベクタの例を示している．
+仮想サポートベクタが与えられた図~\ref{fig:vsv} の例では，最適超平面
+が図~\ref{fig:sv} と異なっていることに注意されたい．
+
+\begin{figure}
+\begin{center}
+\epsfile{file=vsv-hp-4.eps,width=24em}
+\end{center}
+\caption{超平面と仮想サポートベクタ．図~\ref{fig:sv} に，サポートベクタ
+の仮想事例，\\
+つまり仮想サポートベクタが追加されている．}\label{fig:vsv}
+\end{figure}
+
+
+\section{文書分類のための仮想事例}\label{sec:vx}
+本節では，文書分類のための仮想事例の作り方の提案手法を述べる．
+まず，文書分類の事前知識から仮定を設定し，次にその仮定に基づく提案手法
+を述べる．
+
+ここでは，文書分類について次の仮定を置く:
+\begin{assumption}\label{assum1}
+ある文書に付けられているカテゴリは，たとえ少量の単語を追加あるいは削除
+しても変化しない．
+\end{assumption}
+この仮定は十分妥当であろう．
+文書分類の典型的な適用場面では，大抵の文書は，カテゴリを暗示する数個以上
+のキーワードと，一定量のカテゴリによらない単語を含んでいる．
+少量の単語の追加削除の影響は多くの場合に限定的だと考えられる．
+
+仮定~\ref{assum1} に従って，文書分類のための仮想事例を生成する方法を
+二つ提案する．
+第一の方法は，少量の単語を文書から削除する方法である．
+仮想事例のラベルは，その仮想事例の元となった事例のラベルと同じであると
+する．
+もう一つの方法は，少量の単語を文書に追加する方法である．
+仮想事例に追加される単語は，元となる文書と同じラベルを持つ文書群から
+選ぶ．
+仮定~\ref{assum1} に基づく仮想事例の作り方にはいろいろなものが考えられ
+るが，本研究では非常に簡単なものをまず提案し，その効果を検証したい．
+
+提案手法を述べる前に，本研究で用いた文書の表現方法 (text
+representation) について述べる．
+一つの文書は一つの単語ベクタ (word vector) で表現する．
+文書を単語に分割し，それらを小文字に統一，ストップワードを削除した．
+ストップワードのリストは freeWAIS-sf\footnote{
+http:\slash\slash ls6-www.informatik.uni-dortmund.de\slash ir\slash
+projects\slash freeWAIS-sf\slash} のものを用いた．
+ステミングは行なっていない．
+各単語をバイナリ素性として表現している．単語の頻度は利用していない．
+このとき，文書集合全体には $m$ 個の異なり単語 $w_{1}, w_{2}, \ldots,
+w_{m}$ があるとすると，一つの文書は単語のベクタとして表現できる．
+以下では，文書に存在する単語をコンマで区切って並べ，$[ \ ]$ で囲って単
+語ベクタを記述することにする．
+例えば，ある文書 $\bmath{x}$ が
+四つの単語 $w_{1}, w_{3}, w_{4}, w_{6}$ から構成されるとき，
+$\bmath{x} = [w_{1}, w_{3}, w_{4}, w_{6}]$ と書く．
+
+それでは，二つの提案手法 \GenerateByDeletion\ と \GenerateByAddition\ 
+を述べる．
+ある文書を表す単語ベクタ $\bmath{x}$ と，$\bmath{x}$ から生成された単
+語ベクタ $\bmath{x'}$ があるとする．
+アルゴリズム \GenerateByDeletion\ は次の通り:
+\begin{enumerate}
+\item $\bmath{x}$ を $\bmath{x'}$ にコピーする．
+\item $\bmath{x'}$ のそれぞれの単語 $w$ について，
+もし ${\rm rand}() \le t$ なら単語 $w$ を $\bmath{x'}$ から削除する．
+ここで ${\rm rand}()$ は $0$ から $1$ の乱数を生成する関数，
+$t$ はどの程度の素性を削除するかを決めるパラメータである．
+\end{enumerate}
+例を示す．表~\ref{tbl:sample} にあるような文書集合があるとする．
+\begin{table}
+\caption{文書集合の例}\label{tbl:sample}
+\begin{center}
+\begin{tabular}{c|lc} \hline\hline
+Document ID & 単語ベクタ (\bmathsmall{x}) & ラベル ($y$) \\ \hline
+1 & $[w_{1}, w_{2}, w_{3}, w_{4}, w_{5}]$ & $+1$ \\
+2 & $[w_{2}, w_{4}, w_{5}, w_{6}]$        & $+1$ \\
+3 & $[w_{2}, w_{3}, w_{5}, w_{6}, w_{7}]$ & $+1$ \\
+4 & $[w_{1}, w_{3}, w_{8}, w_{9}, w_{10}]$ & $-1$ \\
+5 & $[w_{1}, w_{8}, w_{10}, w_{11}]$       & $-1$ \\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+Document~1 からアルゴリズム \GenerateByDeletion\ で生成される仮想事例
+としては 
+$([w_{2}, w_{3}, w_{4}, w_{5}], +1)$ や $([w_{1}, w_{3}, w_{4}], +1)$，
+$([w_{1}, w_{2}, w_{4}, w_{5}], +1)$ などが考えられる．
+
+
+アルゴリズム \GenerateByAddition\ は次の通り:
+\begin{enumerate}
+\item 訓練事例の中から $\bmath{x}$ と同じラベルを持つ文書を集める．
+\item それら文書を表す単語ベクタを全てつなげて，単語の配列 $a$ 
+を作る．
+\item $\bmath{x}$ を $\bmath{x'}$ にコピーする．
+\item $\bmath{x}$ のそれぞれの単語 $w$ について，
+もし ${\rm rand}() \le t$ なら配列 $a$ からランダムに一つの単語を選び， 
+それを $\bmath{x'}$ に加える．
+\end{enumerate}
+例を示す．
+表~\ref{tbl:sample} の Document~2 からアルゴリズム 
+\GenerateByAddition\ を用いて仮想事例を作ろうとするとき，まず
+配列 $a = (w_{1},
+ w_{2}, w_{3}, w_{4}, w_{5}, w_{2}, w_{4}, w_{5}, w_{6}, w_{2}, w_{3},
+ w_{5}, w_{6}, w_{7})$ を作る．
+このとき，アルゴリズム \GenerateByAddition\ で作られる仮想事例として，
+$([w_{1}, w_{2}, w_{4}, w_{5}, w_{6}], +1)$ や $([w_{2}, w_{3}, w_{4},
+ w_{5}, w_{6}], +1)$，$([w_{2}, w_{4}, w_{5}, w_{6}, w_{7}], +1)$ などが
+考えられる．
+逆に，$([w_{2}, w_{4}, w_{5}, w_{6}, w_{10}], +1)$ のような事例は 
+Document~2 からは決して作られない．
+$+1$ のラベルを持つ文書には，$w_{10}$ は含まれていないからである．
+
+
+\section{評価実験と議論}\label{sec:exp}
+\subsection{対象データ}
+我々は Reuters-21578 データセット\footnote{
+David D. Lewis の web サイトから利用できる．URL: http:\slash\slash
+www.daviddlewis.com\slash
+resources\slash testcollections\slash reuters21578\slash
+} を提案手法の有効性の検証に使った．
+このデータセットには，訓練事例とテスト事例の分け方 (split) にいくつか
+のバリエーションがある．
+今回我々は ``ModApte'' と呼ばれる分け方を用いた．文書分類の文献で最も
+広く使われているものである．
+``ModApte'' では，訓練事例 9,603，テスト事例 3,299 と分けられている．
+Reuters-21578 には 100 以上のカテゴリが含まれているが，他の多くの文献と
+同様，我々も最も頻度が高い 10 カテゴリのみ利用した．
+表~\ref{tbl:numcat} に，その 10 カテゴリと，カテゴリごとの訓練事例数とテ
+スト事例数を示す．
+\begin{table}
+\caption{カテゴリごとの訓練事例数とテスト事例数} 
+\begin{center}
+\begin{tabular}{l|r|r} \hline\hline
+カテゴリ名 & 訓練事例 & テスト事例 \\ \hline
+earn & 2877 & 1087 \\
+acq & 1650 & 719 \\
+money-fx & 538 & 179 \\
+grain & 433 & 149 \\
+crude & 389 & 189 \\
+trade & 369 & 117 \\
+interest & 347 & 131 \\
+ship & 197 & 89 \\
+wheat & 212 & 71 \\
+corn & 181 & 56  \\ 
+\hline
+\end{tabular}
+\end{center}
+\label{tbl:numcat}
+\end{table}
+
+\subsection{性能評価尺度}
+本研究では，F値 (F-measure) \cite{vanRijsbergen1979,Lewis1994} を実験
+結果を評価する第一の尺度として用いる．
+F値は次のように定義される:
+\begin{eqnarray}
+{\rm F値} & = & \frac{(1 + \beta^{2})pq}{\beta^{2}p + q}
+\label{eq:f-measure}
+\end{eqnarray}
+ここで $p$ は適合率 (precision)，$q$ は再現率 (recall)，$\beta$ は適合
+率と再現率の相対的な重みを決めるをパラメータである．
+$p$ と $q$ は次のように定義される:
+\begin{eqnarray*}
+p & = & \frac{分類器の出力が +1 でかつ正しい事例の数}{分類器の出力が +1 であった事例の
+数} \\
+q & = & \frac{分類器の出力が +1 でかつ正しい事例の数}{ラベルが +1 である事例の
+数}
+\end{eqnarray*}
+式~(\ref{eq:f-measure}) では通常 $\beta = 1$ が用いられる．
+これは適合率と再現率に等しく重みを置くことを意味する．
+
+複数のカテゴリを持つデータセットに対して，分類器の性能を評価しようとす
+るとき，F値を計算する方法としては二つある．
+マクロ平均 (macro-averaging) とマイクロ平均 (micro-averaging) である
+\cite{Yang1999b}．
+前者はまずそれぞれのカテゴリに対してF値を計算し，平均する方法である．
+後者は全てのカテゴリ全体に対して適合率と再現率をまず計算し，それを使っ
+てF値を計算する方法である．
+
+\subsection{SVM の設定}
+実験には我々が作成した SVM のツールを用いた．
+線形 SVM を用い，誤分類のコスト $C$ は $0.016541$ に設定した．
+この値は $1 / {\rm avg}(\bmath{x}\cdot \bmath{x})$ により
+決めた．ここで $\bmath{x}$ は事例数 9603 の訓練事例に含まれる素性ベクタである．
+実験を単純にするため，$C$ の値は全ての実験において固定した．
+表~\ref{tbl:numcat} で示した 10 のカテゴリそれぞれに対して 2 値分類を行
+なう分類器を構築した．
+
+\subsection{実験結果と考察}
+まず，\GenerateByDeletion\ と \GenerateByAddition\ をそれぞれ独立に用
+いて仮想事例を作って実験を行なった．なお，このときサポートベクタに対し
+てのみ仮想事例を作った．
+全ての実験に対して，\GenerateByDeletion\ と \GenerateByAddition\ のい
+ずれに対しても，
+パラメータ $t$ は $0.05$\footnote{
+最初に，$t$ として $0.01, 0.05, 0.10$ の三つの値を
+試した．\GenerateByDeletion\ を使って，事例数 9,603 の訓練事例から仮想
+事例を作った．
+テスト事例に対して，$t = 0.05$ の場合に最も高いマイクロ平均 F値が得ら
+れた．
+同じ $t$ の値を，\GenerateByAddition\ の場合にも用いた．
+}とした．
+
+
+仮想事例を使った SVM を学習して得るための手順は次の通り:
+\begin{enumerate}
+\item (仮想事例を使わずに) SVM を訓練する．
+\item サポートベクタを抽出する．
+\item それらサポートベクタから仮想事例を生成する．
+\item 元々の訓練事例と仮想事例とを合わせて使って新たな SVM を訓練する．
+\end{enumerate}
+
+\begin{table}
+\caption{異なる手法間のマイクロ平均 F値の比較．``VSV'' は
+仮想サポートベクタ，``GenByDel'' は \\
+\GenerateByDeletion，``GenByAdd'' は \GenerateByAddition\ を意味する．
+}\label{tbl:pretest}
+\begin{center}
+\begin{tabular}{l|rrrrrrr} \hline\hline
+    & \multicolumn{7}{c}{訓練事例中の事例数} \\ \cline{2-8}
+手法 & 9603 & 4802 & 2401 & 1200 & 600 & 300 & 150 \\ \hline
+A. オリジナル SVM & 89.42 & 86.58 & 81.69 & 77.24 & 71.08 & 64.44 & 53.28 \\
+B. SVM + 1 VSV per SV (GenByDel) & 90.17 & 88.62 & 84.45 & 81.11 & 75.32 & 70.11 & 60.16 \\
+C. SVM + 1 VSV per SV (GenByAdd) & 90.00 & 88.51 & 84.48 & 81.14
+& 75.33 & 69.59 & 60.04 \\
+D. SVM + 2 VSVs per SV (Combined) & 90.27 & 89.33 & 86.27 & 83.59 & 77.44
+& 72.81 & 64.22 \\
+E. SVM + 4 VSVs per SV (Combined) & 90.45 & 89.69 & 87.12 & 84.97 & 79.16 & 73.25 & 65.05
+\\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+訓練事例のサイズを変えて，\GenerateByDeletion\ と \GenerateByAddition\ の
+二つの手法の性能を評価した．
+7つのサイズ (9603, 4802, 2401, 1200, 600, 300, 150) を用意した\footnote{
+事例数 4802 以下のセットを作る際，事例をランダムに選択したので，事例数
+が少ないセットにおいて頻度の小さいカテゴリでは，
+$+1$ のラベルを持つ事例が非常に少ないか
+まったく無い場合がある．
+}\<．
+この二つの手法を用いた場合のマイクロ平均 F値を表~\ref{tbl:pretest} に示す．
+表~\ref{tbl:pretest} の手法Bが \GenerateByDeletion{}，
+手法Cが \GenerateByAddition{}である．
+この表から両手法ともオリジナルのSVM (手法A) よりも性能が良いことが分かる．
+訓練事例の事例数が少ないほうが，性能の向上が大きい．
+事例数 9603 の訓練事例の場合，\GenerateByDeletion\ による F値向上は
+ 0.75 ($= 90.17 - 89.42$) であるが，一方，事例数 150 の訓練事例では，
+F値向上は 6.88 ($= 60.16 - 53.28$) となっている．
+これらの結果から，事例数が少ない訓練事例には，よりよい決定境界を与える
+のに十分なだけの事例のバリエーションが存在しておらず，それゆえ，事例数
+が少ない訓練事例では，仮想事例の効果が大きくなったと考えられる．
+上記結果より，\GenerateByDeletion\ と \GenerateByAddition\ の両手法が
+本タスクに対してはよい仮想事例を生成しており，それが精度向上につながった
+と結論付けてよいだろう．
+
+仮想事例を作り出す簡単な二つの方法 \GenerateByDeletion\ と
+\GenerateByAddition\ が効果的なことが分かったが，次にこれらを組み合わ
+せた方法についても調べた．
+1つのサポートベクタにつき，2つの仮想事例を作ることにする．
+つまり，\GenerateByDeletion\ で 1 事例を作り，\GenerateByAddition\ で
+もう 1 事例を作る．
+この組み合わせた手法を手法Dとし，そのマイクロ平均F値を
+表~\ref{tbl:pretest} に示す．
+この手法によるF値向上は，\GenerateByDeletion{}，
+\GenerateByAddition\ それぞれを単独で用いた場合よりも大きい．
+
+さらに，1つの事例から \GenerateByDeletion\ で2つ，\GenerateByAddition\ 
+で2つ事例を作り出す手法についても実験を行なった．
+つまり，1つのサポートベクタから4つの仮想事例を作る．
+この手法を手法Eとし，そのF値を表~\ref{tbl:pretest} に示す．
+1つのサポートベクタから4つの仮想事例を作り出す手法が最もよい結果を得た．
+
+
+\begin{figure}
+\begin{center}
+\epsfile{file=microf1-j02.eps,scale=0.95}
+\end{center}
+\caption{マイクロ平均 F値と訓練事例中の事例数}\label{fig:micro-f1}
+\end{figure}
+\begin{figure}
+\begin{center}
+\epsfile{file=macrof1-j02.eps,scale=0.95}
+\end{center}
+\caption{マクロ平均 F値と訓練事例中の事例数．事例数が少ないところで
+は，適合率が\\
+未定義となり，F値は計算することができなかった．}
+\label{fig:macro-f1}
+\end{figure}
+
+\begin{figure}
+\begin{center}
+\epsfile{file=error-j02.eps}
+\end{center}
+\caption{エラー率と訓練事例中の事例数}\label{fig:error}
+\end{figure}
+
+
+本節の以下の議論では，オリジナルの SVM と，1つのサポートベクタから生成
+された4つの仮想事例を使う SVM (以降 \SVMFourVSVs\ と記す) の実験結果の比較に焦点をあてる．
+オリジナル SVM と \SVMFourVSVs\ の学習曲線を図~\ref{fig:micro-f1}，
+図~\ref{fig:macro-f1} に示す．
+マイクロ平均 F値，マクロ平均 F値の両方で，\SVMFourVSVs\ がオリジナル 
+SVM より明らかに性能が良い．
+\SVMFourVSVs\ は，あるレベルの F値を得るのに，オリジナル SVM に比べて概
+ね半分以下の訓練事例数で済んでいる．
+例えば，オリジナル SVM では，マイクロ平均 F値 64.44 を得るのに 300 事
+例必要である (表~\ref{tbl:pretest} 参照)．一方，\SVMFourVSVs\ では 150 
+事例で 65.05 を得ている．
+F値の改善は，ただ再現率が大きく改善したせいで実現され，その裏でエラー
+率が上昇している可能性もある．
+これを確認するため，32990 のテスト (3299 のテストを10カテゴリそれぞれ
+について) に対してのエラー率の変化を
+図~\ref{fig:error} にプロットした．
+エラー率においても，\SVMFourVSVs\ がオリジナル SVM よりも優れている
+\footnote{
+我々は 有意水準 0.05 で ``p-test''~\cite{Yang1999} と呼ばれる検定を行
+なった．
+事例数 9603 の訓練事例では，エラー率の改善は統計的に有意とは言えなかっ
+たが，それ以外の全ての場合においては統計的有意となった．
+}．
+
+\begin{table}
+\caption{10カテゴリそれぞれに対するオリジナル SVM による F値．ハイフン `-' は
+F値が\\
+計算できなかったことを示す．分類器が常に $-1$ を返し，適合率が未定義となった
+ため．\\
+太字はオリジナル SVM が \SVMFourVSVs\ (表~\ref{tbl:vsv-each} 参照) より優れ
+ていることを示す．
+}\label{tbl:sv-each}
+\begin{center}
+\begin{tabular}{l|rrrrrrr} \hline\hline
+  & \multicolumn{7}{c}{訓練事例中の事例数} \\ \cline{2-8}
+カテゴリ名  & 9603 & 4802 & 2401 & 1200 & 600 & 300 & 150 \\ \hline
+earn & 98.06 & 97.49 & 97.40 & 96.39 & 95.94 & 94.85 & 93.73 \\
+acq & 91.94 & 89.87 & 84.43 & 84.01 & 78.17 & 63.10 & 12.03 \\
+money-fx & 64.90 & 61.69 & 56.03 & 51.69 & 17.91 & 01.11 & 05.38 \\
+grain & 86.96 & 81.68 & 75.20 & 59.63 & 41.27 & 06.49 & \undefv \\
+crude & 84.59 & 81.52 & 67.11 & 33.33 & 01.05 & \undefv & \undefv \\
+trade & 74.89 & 64.58 & 54.86 & 40.26 & 12.80 & 01.69 & \undefv \\
+interest & {\bf 63.89} & 60.29 & 50.27 & 35.15 & 08.57 & 05.88 & \undefv \\
+ship & 66.19 & 44.07 & 32.73 & 02.22 & \undefv & \undefv & \undefv \\
+wheat & {\bf 89.61} & 80.60 & 38.30 & 08.11 & \undefv & \undefv & \undefv \\
+corn & 84.62 & 62.79 & 10.17 & \undefv & \undefv & \undefv & \undefv \\ \hline
+マクロ平均 & 80.56 & 72.46 & 56.65 & \undefv & \undefv & \undefv &\undefv \\
+マイクロ平均 & 89.42 & 86.58 & 81.69 & 77.24 & 71.08 & 64.44 & 53.28
+\\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\begin{table}
+\caption{10カテゴリそれぞれに対する \SVMFourVSVs\ による F値．太字は 
+\SVMFourVSVs\ が\\
+オリジナル SVM より優れていることを示す (表~\ref{tbl:sv-each} 参照)．
+}\label{tbl:vsv-each}
+\begin{center}
+\begin{tabular}{l|rrrrrrr} \hline\hline
+  & \multicolumn{7}{c}{訓練事例中の事例数} \\ \cline{2-8}
+カテゴリ名  & 9603 & 4802 & 2401 & 1200 & 600 & 300 & 150 \\ \hline
+earn & {\bf 98.07} & {\bf 98.02} & {\bf 97.56} & {\bf 97.37} & {\bf 97.14} & {\bf 96.00} & {\bf 95.46} \\
+acq & {\bf 94.20} & {\bf 93.06} & {\bf 91.71} & {\bf 88.81} & {\bf 88.92} & {\bf 78.70} & {\bf 59.92} \\
+money-fx & {\bf 70.83} & {\bf 73.10} & {\bf 62.86} & {\bf 65.68} & {\bf 47.91} & {\bf 32.43} &{\bf 33.76} \\
+grain & {\bf 89.20} & {\bf 84.72} & {\bf 85.11} & {\bf 80.44} & {\bf 60.79} & {\bf 44.10} & {\bf 01.00} \\
+crude & {\bf 84.93} & {\bf 86.33} & {\bf 76.92} & {\bf 74.36} & {\bf 15.53} & {\bf 02.00} & \undefv \\
+trade & {\bf 75.83} & {\bf 73.21} & {\bf 62.31} & {\bf 43.53} & {\bf 37.58} & {\bf 18.32} & {\bf 01.65} \\
+interest & 62.73 & {\bf 63.16} & {\bf 65.77} & {\bf 63.35} & {\bf 59.11} & {\bf 37.50} & {\bf 11.92} \\
+ship & {\bf 73.68} & {\bf 67.14} & {\bf 50.79} & {\bf 30.48} & {\bf 06.45} & {\bf 02.22} & \undefv \\
+wheat & 87.42 & {\bf 82.61} & {\bf 87.94} & {\bf 68.91} & {\bf 10.67} & \undefv & \undefv \\
+corn & {\bf 87.50} & {\bf 84.11} & {\bf 46.75} & {\bf 68.09} & {\bf 03.45} & \undefv & \undefv \\ \hline
+マクロ平均 & {\bf 82.44} & {\bf 80.55} & {\bf 72.77} & {\bf 68.10} & {\bf 42.76} & \undefv & \undefv \\
+マイクロ平均 & {\bf 90.45} & {\bf 89.69} & {\bf 87.12} & {\bf 84.97} & {\bf 79.16} & {\bf 73.25} & {\bf 65.05}
+\\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+10カテゴリそれぞれに対する性能の変化を表~\ref{tbl:sv-each}，
+表~\ref{tbl:vsv-each} に示す．
+\SVMFourVSVs\ は殆どの場合
+でオリジナルSVMよりもよい．
+事例数 9603 での ``interest'' と ``wheat'' の場合のみ，
+\SVMFourVSVs\ が下回っているが，理由は不明である\footnote{
+仮想事例の効果は事例数が多いほど減少するという一般的な傾向があるので，
+文書の性質によっては，
+一定数以上の事例の場合に効果が出ないことは十分考えられる．
+ただ，何がその限界を決めているのかは現時点では不明である．
+}．
+頻度が小さい ``ship'' や ``wheat''，``corn'' といったカテゴリに対して，
+オリジナルSVMの性能は良くない．
+分類器が決して $+1$ を出力しなかった場合，つまり再現率ゼロの場合も多い．
+これは，ラベルとして $+1$ を持つ事例が非常に少ないバランスの悪い訓練事
+例のために，
+オリジナル SVM がよい超平面を見つけられなかったことを示している\footnote{
+SVMでバランスの悪い訓練事例に対処する方法として，誤分類のコスト $C$ を，
+$+1$ のラベルを持つ事例，$-1$ のラベルを持つ事例それぞれで別の値に設定
+する方法がある\cite{Morik1999}．
+}．
+これに対し，\SVMFourVSVs\ はそういうバランスの悪い訓練事例のような難しい場合でも
+よりよい結果を得ている．
+
+
+
+\section{関連研究との比較}
+自然言語処理においてSVMsを仮想事例とともに用いている研
+究として，Yi らの研究 \cite{Yi2004} がある．
+ここで彼らの研究との違いをまとめておく．違いは大きく
+二つある．
+対象タスクと，仮想事例の元となる事例の選び方である．彼らは
+固有表現認識を対象とし，全ての事例から仮想事例を作っている．一方，我々
+の研究では，文書分類を対象とし，サポートベクタとなる事例からのみ仮想事
+例を作っている．サポートベクタ以外から仮想事例を作っても精度向上にはあ
+まり影響せず\footnote{
+Sch\"{o}lkopf は，
+手書き数字の認識タスクにお
+いて，全ての事例から仮想事例を作った場合は精度が向上しなかったと報告し
+ている \cite[page 112]{Schoelkopf1997}．
+SVM では，サポートベクタ以外の事例は最適超平面の位置を決めるのに影響し
+ないので，サポートベクタ以外から仮想事例を作っても精度向上にあまり寄与
+しないのは納得できることである．
+}，
+また事例数増加による学習時間増加のデメリットがあるので，本研究ではサポー
+トベクタのみから仮想事例を作っている．
+なお，対象タスクが異なるので，仮想事例の作り方が異なるのは言うまでもない．
+彼らは，ある文中に現れた固有表現を，同じクラスを持つ別の固有表現で
+置き換えて新しい文を作り，これを仮想事例としている．
+
+
+\section{おわりに}
+我々は仮想事例が SVMs を使った文書分類においてどのように性能を改善する
+かについて調べた．
+文書分類において，ある文書のラベルは少量の単語を追加あるいは削除しても
+変化しないとの仮定を置いて，仮想事例を作り出す方法を提案した．
+実験結果によれば，我々の提案手法は SVMs を用いた文書分類の性能を向上さ
+せることが分かった．特に事例数の少ない場合に有効であった．
+提案手法が文書分類以外の自然言語処理タスクにすぐに適用可能というわけで
+はないが，今回，今まで自然言語処理の分野で十分に議論されていなかった仮想事例の
+利用について実験的に評価したことは意味があると言える．
+
+将来的には，仮想事例を，ラベル付き事例とラベルなし事例を使う手法 
+(\cite{Blum1998,Nigam1998,Joachims1999,Taira2001} など) と組み
+合わせることも興味深いだろう．
+この両者を組み合わせたアプローチは，少量のラベル付き事例しかない場合に対し
+て，さらによい結果が得られる可能性がある．
+別の興味深い将来の研究の方向性は，他の自然言語処理のタスク (品詞タグ付
+けや構文解析など) に対しても仮想事例を作る方法を開発すること
+であろう．
+自然言語処理のさまざまなタスクにおいても，事前知識をうまく使い，効果的な
+仮想事例を作る方法があると信じる．
+
+
+\bibliographystyle{jnlpbbl}
+
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Blum \BBA\ Mitchell}{Blum \BBA\
+  Mitchell}{1998}]{Blum1998}
+Blum, A.\BBACOMMA\ \BBA\ Mitchell, T. \BBOP 1998\BBCP.
+\newblock \BBOQ Combining Labeled and Unlabeled Data with Co-training\BBCQ\
+\newblock In {\Bem Proceedings of the Eleventh Annual Conference on
+  Computational Learning Theory}, \mbox{\BPGS\ 92--100}.
+
+\bibitem[\protect\BCAY{DeCoste \BBA\ Sch\"{o}lkopf}{DeCoste \BBA\
+  Sch\"{o}lkopf}{2002}]{DeCoste2002}
+DeCoste, D.\BBACOMMA\ \BBA\ Sch\"{o}lkopf, B. \BBOP 2002\BBCP.
+\newblock \BBOQ Training Invariant Support Vector Machines\BBCQ\
+\newblock {\Bem Machine Learning}, {\Bbf 46}, \mbox{\BPGS\ 161--190}.
+
+\bibitem[\protect\BCAY{Dumais, Platt, Heckerman, \BBA\ Sahami}{Dumais
+  et~al.}{1998}]{Dumais1998}
+Dumais, S., Platt, J., Heckerman, D., \BBA\ Sahami, M. \BBOP 1998\BBCP.
+\newblock \BBOQ Inductive Learning Algorithms and Representations for Text
+  Categorization\BBCQ\
+\newblock In {\Bem Proceedings of the Seventh International Conference on
+  Information and Knowledge Management}, \mbox{\BPGS\ 148--155}.
+
+\bibitem[\protect\BCAY{Joachims}{Joachims}{1998}]{Joachims1998}
+Joachims, T. \BBOP 1998\BBCP.
+\newblock \BBOQ Text Categorization with Support Vector Machines: Learning with
+  Many Relevant Features\BBCQ\
+\newblock In {\Bem Proceedings of the 10th European Conference on Machine
+  Learning}, \mbox{\BPGS\ 137--142}.
+
+\bibitem[\protect\BCAY{Joachims}{Joachims}{1999}]{Joachims1999}
+Joachims, T. \BBOP 1999\BBCP.
+\newblock \BBOQ Transductive Inference for Text Classification using Support
+  Vector Machines\BBCQ\
+\newblock In {\Bem Proceedings of the 16th International Conference on Machine
+  Learning}, \mbox{\BPGS\ 200--209}.
+
+\bibitem[\protect\BCAY{Kudo \BBA\ Matsumoto}{Kudo \BBA\
+  Matsumoto}{2001}]{Kudo2001}
+Kudo, T.\BBACOMMA\ \BBA\ Matsumoto, Y. \BBOP 2001\BBCP.
+\newblock \BBOQ Chunking with Support Vector Machines\BBCQ\
+\newblock In {\Bem Proceedings of the Second Meeting of the North American
+  Chapter of the Association for Computational Linguistics}, \mbox{\BPGS\
+  192--199}.
+
+\bibitem[\protect\BCAY{Kudo \BBA\ Matsumoto}{Kudo \BBA\
+  Matsumoto}{2002}]{Kudo2002}
+Kudo, T.\BBACOMMA\ \BBA\ Matsumoto, Y. \BBOP 2002\BBCP.
+\newblock \BBOQ Japanese Dependency Analysis using Cascaded Chunking\BBCQ\
+\newblock In {\Bem Proceedings of the Sixth Workshop on Computational Language
+  Learning}, \mbox{\BPGS\ 63--69}.
+
+\bibitem[\protect\BCAY{Lewis \BBA\ Gale}{Lewis \BBA\ Gale}{1994}]{Lewis1994}
+Lewis, D.~D.\BBACOMMA\ \BBA\ Gale, W.~A. \BBOP 1994\BBCP.
+\newblock \BBOQ A Sequential Algorithm for Training Text Classifiers\BBCQ\
+\newblock In {\Bem Proceedings of the Seventeenth Annual International
+  ACM-SIGIR Conference on Research and Development in Information Retrieval},
+  \mbox{\BPGS\ 3--12}.
+
+\bibitem[\protect\BCAY{Morik, Brockhausen, \BBA\ Joachims}{Morik
+  et~al.}{1999}]{Morik1999}
+Morik, K., Brockhausen, P., \BBA\ Joachims, T. \BBOP 1999\BBCP.
+\newblock \BBOQ Combining Statistical Learning with a Knowledge-Based Approach
+  -- A Case Study in Intensive Care Monitoring --\BBCQ\
+\newblock In {\Bem Proceedings of the Sixteenth International Conference on
+  Machine Learning}, \mbox{\BPGS\ 268--277}.
+
+\bibitem[\protect\BCAY{Nigam, McCallum, Thrun, \BBA\ Mitchell}{Nigam
+  et~al.}{1998}]{Nigam1998}
+Nigam, K., McCallum, A., Thrun, S., \BBA\ Mitchell, T. \BBOP 1998\BBCP.
+\newblock \BBOQ Learning to Classify Text from Labeled and Unlabeled
+  Documents\BBCQ\
+\newblock In {\Bem Proceedings of the Fifteenth National Conference on
+  Artificial Intelligence (AAAI-98)}, \mbox{\BPGS\ 792--799}.
+
+\bibitem[\protect\BCAY{Niyogi, Girosi, \BBA\ Poggio}{Niyogi
+  et~al.}{1998}]{Niyogi1998}
+Niyogi, P., Girosi, F., \BBA\ Poggio, T. \BBOP 1998\BBCP.
+\newblock \BBOQ Incorporating Prior Information in Machine Learning by Creating
+  Virtual Examples\BBCQ\
+\newblock In {\Bem Proceedings of the IEEE}, \lowercase{\BVOL}~86, \mbox{\BPGS\
+  2196--2209}.
+
+\bibitem[\protect\BCAY{Sassano}{Sassano}{2002}]{Sassano2002}
+Sassano, M. \BBOP 2002\BBCP.
+\newblock \BBOQ An Empirical Study of Active Learning with Support Vector
+  Machines for {Japanese} Word Segmentation\BBCQ\
+\newblock In {\Bem Proceedings of the 40th Annual Meeting of the Association
+  for Computational Linguistics}, \mbox{\BPGS\ 505--512}.
+
+\bibitem[\protect\BCAY{Sch\"{o}lkopf}{Sch\"{o}lkopf}{1997}]{Schoelkopf1997}
+Sch\"{o}lkopf, B. \BBOP 1997\BBCP.
+\newblock {\Bem Support Vector Learning}.
+\newblock R. Oldenbourg Verlag, M\"{u}nchen.
+\newblock http://www.kyb.tuebingen.mpg.de/\~{}bs.
+
+\bibitem[\protect\BCAY{Sch\"{o}lkopf, Burges, \BBA\ Vapnik}{Sch\"{o}lkopf
+  et~al.}{1996}]{Schoelkopf1996}
+Sch\"{o}lkopf, B., Burges, C., \BBA\ Vapnik, V. \BBOP 1996\BBCP.
+\newblock \BBOQ Incorporating Invariances in Support Vector Learning
+  Machines\BBCQ\
+\newblock In von~der Malsburg, C., von Seelen, W., Vorbr\"{u}ggen, J., \BBA\
+  Sendhoff, B.\BEDS, {\Bem Artificial Neural Networks -- ICANN'96, Springer
+  Lecture Notes in Computer Science, Vol. 1112}, \mbox{\BPGS\ 47--52}.
+
+\bibitem[\protect\BCAY{Taira \BBA\ Haruno}{Taira \BBA\
+  Haruno}{2001}]{Taira2001}
+Taira, H.\BBACOMMA\ \BBA\ Haruno, M. \BBOP 2001\BBCP.
+\newblock \BBOQ Text Categorization Using Transductive Boosting\BBCQ\
+\newblock In {\Bem Proceedings of the Twelfth European Conference on Machine
+  Learning}, \mbox{\BPGS\ 454--465}.
+
+\bibitem[\protect\BCAY{Thompson, Califf, \BBA\ Mooney}{Thompson
+  et~al.}{1999}]{Thompson1999}
+Thompson, C.~A., Califf, M.~L., \BBA\ Mooney, R.~J. \BBOP 1999\BBCP.
+\newblock \BBOQ Active Learning for Natural Language Parsing and Information
+  Extraction\BBCQ\
+\newblock In {\Bem Proceedings of the Sixteenth International Conference on
+  Machine Learning}, \mbox{\BPGS\ 406--414}.
+
+\bibitem[\protect\BCAY{van Rijsbergen}{van
+  Rijsbergen}{1979}]{vanRijsbergen1979}
+van Rijsbergen, C. \BBOP 1979\BBCP.
+\newblock {\Bem Information Retrieval\/} (2nd \BEd).
+\newblock Butterworths.
+
+\bibitem[\protect\BCAY{Vapnik}{Vapnik}{1995}]{Vapnik1995}
+Vapnik, V.~N. \BBOP 1995\BBCP.
+\newblock {\Bem The Nature of Statistical Learning Theory}.
+\newblock Springer-Verlag.
+
+\bibitem[\protect\BCAY{Yang}{Yang}{1999}]{Yang1999b}
+Yang, Y. \BBOP 1999\BBCP.
+\newblock \BBOQ An Evaluation of Statistical Approaches to Text
+  Categorization\BBCQ\
+\newblock {\Bem Journal of Information Retrieval}, {\Bbf 1}  (1/2),
+  \mbox{\BPGS\ 67--88}.
+
+\bibitem[\protect\BCAY{Yang \BBA\ Liu}{Yang \BBA\ Liu}{1999}]{Yang1999}
+Yang, Y.\BBACOMMA\ \BBA\ Liu, X. \BBOP 1999\BBCP.
+\newblock \BBOQ A Re-examination of Text Categorization Methods\BBCQ\
+\newblock In {\Bem Proceedings of SIGIR-99, 2nd ACM International Conference on
+  Research and Development in Information Retrieval}, \mbox{\BPGS\ 42--49}.
+
+\bibitem[\protect\BCAY{Yarowsky}{Yarowsky}{1995}]{Yarowsky1995}
+Yarowsky, D. \BBOP 1995\BBCP.
+\newblock \BBOQ Unsupervised Word Sense Disambiguation Rivaling Supervised
+  Methods\BBCQ\
+\newblock In {\Bem Proceedings of the 33rd Annual Meeting of the Association
+  for Computational Linguistics}, \mbox{\BPGS\ 189--196}.
+
+\bibitem[\protect\BCAY{Yarowsky \BBA\ Wicentowski}{Yarowsky \BBA\
+  Wicentowski}{2000}]{Yarowsky2000}
+Yarowsky, D.\BBACOMMA\ \BBA\ Wicentowski, R. \BBOP 2000\BBCP.
+\newblock \BBOQ Minimally Supervised Morphological Analysis by Multimodal
+  Alignment\BBCQ\
+\newblock In {\Bem Proceedings of the 38th Annual Meeting of the Association
+  for Computational Linguistics}, \mbox{\BPGS\ 207--216}.
+
+\bibitem[\protect\BCAY{Yi, Lee, \BBA\ Park}{Yi et~al.}{2004}]{Yi2004}
+Yi, E., Lee, G.~G., \BBA\ Park, S.-J. \BBOP 2004\BBCP.
+\newblock \BBOQ SVM-based Biological Named Entity Recognition using Minimum
+  Edit-Distance Feature Boosted by Virtual Examples\BBCQ\
+\newblock In {\Bem Proceedings of the First International Joint Conference on
+  Natural Language Processing}, \mbox{\BPGS\ 241--246}.
+
+\end{thebibliography}
+
+\begin{biography}
+\biotitle{略歴}
+\bioauthor{颯々野 学}{
+1991年京都大学工学部電気工学第二学科卒業．
+同年より富士通研究所研究員．
+1999年9月より1年間，
+米国ジョンズ・ホプキンス大学客員研究員．
+2006年3月よりヤフー株式会社勤務．
+自然言語処理の研究に従事．
+言語処理学会，情報処理学会，ACL各会員．
+}
+
+\bioreceived{受付}
+\biorevised{再受付}
+\bioaccepted{採録}
+
+\end{biography}
+
+
+
+
+\end{document}

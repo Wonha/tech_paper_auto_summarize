@@ -1,0 +1,1220 @@
+
+
+
+\documentstyle[epsf,nlpbbl]{jnlp_e_b5}
+
+
+
+
+
+
+\setcounter{page}{19}
+\setcounter{巻数}{8}
+\setcounter{号数}{2}
+\setcounter{年}{2001}
+\setcounter{月}{4}
+\受付{September}{20}{2000}
+\採録{January}{12}{2001}
+
+\setcounter{secnumdepth}{2}
+
+\title{}
+\author{}
+\jkeywords{}
+
+\etitle{Balancing up Efficiency and Accuracy in\vspace*{1.5mm}\\\hspace*{2cm}Translation Retrieval}
+
+\eauthor{Timothy Baldwin\affiref{TIT}   \and
+  Hozumi Tanaka\affiref{TIT}}
+  
+\headauthor{Baldwin,~T.~and~H.~Tanaka}
+\headtitle{Translation Retrieval}
+
+\affilabel{TIT}
+          {Tokyo Institute of Technology, Department of Computer Science}
+          {Tokyo Institute of Technology, Department of Computer Science}
+
+
+          \eabstract{ This research looks at the effects of segment
+            order and segmentation on translation retrieval performance
+            for an experimental Japanese-English translation memory
+            system. We implement a number of both bag-of-words and
+            segment order-sensitive string comparison methods, and test
+            each over character-based and word-based indexing.  The
+            translation retrieval performance of each system
+            configuration is evaluated empirically through the notion of
+            segment edit distance between the translation output and
+            model translation. Our results indicate that character-based
+            indexing is consistently superior to word-based indexing in
+            terms of raw accuracy, although segmentation does have an
+            accelerating effect on TM search times in combination with a
+            number of retrieval optimisation techniques. Segment
+            order-sensitive approaches are demonstrated to generally
+            outperform bag-of-words methods, with 3-operation edit
+            distance proving the most effective comparison method. We
+            additionally reproduced the same basic results over
+            alphabetised data as for lexically differentiated data
+            containing kanji characters.  }
+
+\ekeywords{translation memory, translation retrieval, segmentation,
+  segment order}
+
+
+
+\newcommand{\ul}{}
+
+
+
+
+
+
+
+
+\newcommand{\tabref}[1]{}
+\newcommand{\secref}[1]{}
+
+\newcommand{\gl}[1]{}
+\newcommand{\skstring}[2]{}
+
+
+\newcommand{\freq}{}
+\newcommand{\len}{}
+\newcommand{\Max}{}
+\newcommand{\tf}{}
+\newcommand{\idf}{}
+\newcommand{\sweight}{}
+\newcommand{\maxidf}{}
+\newcommand{\maxlen}{}
+\newcommand{\minlen}{}
+
+\newcommand{\seg}{}
+\newcommand{\maths}[1]{}
+\newcommand{\vsub}[1]{}
+\newcommand{\algnumb}[1]{}
+
+\newcommand{\dslash}{}
+
+\newenvironment{addframe}{}{}
+
+\newcommand{\mathit}[1]{}
+
+
+
+
+\hyphenation{re-ports}
+\hyphenation{text}
+
+
+
+
+
+
+\begin{document}                                                                                   
+
+\maketitle
+
+
+
+    
+    
+
+
+
+
+\section{Introduction}
+\label{sec:intro}
+
+Translation memories (TMs) are a well-established technology within the
+human and machine translation fraternities, due to the high translation
+precision they afford. Essentially, TMs are a list of
+{\bf translation records} (source language strings paired with a
+unique target language translation), which the TM system accesses in
+suggesting a list of target language {\bf translation candidates}
+which may be helpful to the translator in translating a given source
+language input.\footnote{See \citeB{Planas98} for a thorough review of
+  commercial TM systems.}
+
+Naturally, TM systems have no way of accessing the target language (L2)
+equivalent of the source language (L1) input, and hence the list of
+{\it target language} translation candidates is determined based on
+{\it source language} similarity between the current input and
+translation examples within the TM, with translation equivalent(s) of
+maximally similar L1 string(s) given as the translation candidate(s).
+This is based on the assumption that structural and semantic
+similarities between L2 translations will be reflected in
+the original L1 equivalents.
+  
+One reason for the popularity of TMs is the low operational burden they
+pose to the user, in that translation pairs are largely acquired
+automatically from observation of the incremental translation process,
+and translation candidates can be produced on demand almost
+instantaneously. To support this low overhead, TM systems must allow
+fast access into the potentially large-scale TM, but at the same time be
+able to predict translation similarity with high accuracy.  Here, there
+is clearly a trade-off between {\bf access/retrieval speed} and
+{\bf predictive accuracy} of the retrieval mechanism.
+Traditionally, research on TM retrieval methods has focused on speed,
+with little cross-evaluation of the accuracy of different methods.  We
+prefer to focus on accuracy, and present empirical data evidencing the
+relative predictive potential of different string comparison methods over
+different parameterisations.
+
+In this paper, we focus on comparison of different retrieval algorithms
+for non-segmenting languages, based around a TM system from Japanese to
+English.  Non-segmenting languages are those which do not involve
+delimiters (e.g.\ spaces) between words, and include Japanese, Chinese
+and Thai.  We are particularly interested in the part the orthogonal
+parameters of segmentation and segment order play in the speed/accuracy
+trade-off. That is, by doing away with segmentation in relying solely on
+character-level comparison ({\bf character-based indexing}), do we
+significantly degrade match performance, as compared to word-level
+comparison ({\bf word-based indexing})? Similarly, by ignoring
+segment order and treating each L1 string as a ``bag of words'', do we
+genuinely lose out over segment order-sensitive approaches?  The main
+objective of this research is thus to determine whether the
+computational overhead associated with more stringent approaches (i.e.\ 
+word-based indexing and segment order-sensitive approaches) is
+commensurate with the performance gains they offer.
+
+To preempt what follows, the major contributions of this research are:
+(a) empirical evaluation of different comparison methods over actual
+Japanese-English TM data, focusing on four orthogonal retrieval
+paradigms; (b) the finding that, over the target data, character-based
+indexing is consistently superior to word-based indexing in identifying
+the translation candidate most similar to the optimal translation for a
+given input; (c) verification of this result over fully alphabetised
+input, suggesting ramifications for glyph-based non-segmenting languages
+such as Thai; and (d) empirical verification of the supremacy of segment
+order-sensitive string comparison methods over boolean match methods.
+
+In the following sections we discuss the effects of segmentation and
+segment order (\secref{sec:seg}) and present a number of both bag-of-words
+and segment order-sensitive string comparison methods (\secref{sec:simmethods}),
+before going on to evaluate the different methods with character-based
+and word-based indexing (\secref{sec:eval}).  We then conclude the
+paper in \secref{sec:concl}.
+
+
+
+
+
+\section{Segmentation and segment order}
+\label{sec:seg}
+
+Using {\bf segmentation} to divide strings into component words or
+morphemes has the obvious advantage of clustering characters into
+semantic units, which in the case of ideogram-based languages such as
+Japanese (in the form of kanji characters) and Chinese, generally
+disambiguates character meaning. The kanji character `弁', for example,
+can be used to mean any of \gl{to discern/discriminate}, \gl{to
+  speak/argue} and \gl{a valve}, but word context easily resolves such
+ambiguity. In this sense, our intuition is that segmented strings should
+produce better results than non-segmented strings.
+
+Looking to past research on string comparison methods for TM systems, almost
+all systems involving Japanese as the source language rely on
+segmentation (e.g. \cite{Nakamura89,Sumita91,Kitamura96,Tanaka97}), with
+\citeB{Sato92} and \citeB{Sato94a} providing rare instances of
+character-based systems.
+
+By avoiding the need to segment text, we: (a) alleviate computational
+overhead; (b) avoid the need to commit ourselves to a particular
+analysis type in the case of ambiguity; (c) avoid the issue of how to
+deal with unknown words; (d) avoid the need for stemming/lemmatisation;
+and (e) to a large extent get around problems related to the
+normalisation of lexical alternation (see \citeB{Baldwin99c} for a
+discussion of problems related to lexical alternation in
+Japanese). Additionally, we can use the commonly ambiguous nature of
+individual kanji characters to our advantage, in modelling semantic
+similarity between related words with character overlap. With word-based 
+indexing, this would only be possible with the aid of a thesaurus.
+
+Similarly for {\bf segment order}, we would expect that translation
+records that preserve the segment (word) order observed in the input
+string would provide closer-matching translations than translation
+records containing those same segments in a different order. Naturally,
+enforcing preservation of segment order is going to place a significant
+burden on the matching mechanism, in that a number of different
+substring match schemata are inevitably going to be produced between any
+two strings, each of which must be considered on its own merits.
+
+To the authors' knowledge, there is no TM system operating from Japanese
+that does not rely on word/segment/character order to some degree.
+\citeB{Tanaka97} uses pivotal content words identified by the user to
+search through the TM and locate translation records which contain those
+same content words in the same order and preferably the same segment
+distance apart. \citeB{Nakamura89} similarly gives preference to
+translation records in which the content words contained in the original
+input occur in the same linear order, although there is the scope to
+back off to translation records which do not preserve the original word
+order. \citeB{Sumita91} take the opposite tack in iteratively
+filtering out NPs and adverbs to leave only functional words and
+matrix-level predicates, and find translation records which contain
+those same key words in the same ordering, preferably with the same
+segment types between them in the same numbers. \shortciteB{Nirenburg93}
+propose a segment order-sensitive method based on ``string composition
+discrepancy'', and incrementally relax the restriction on the quality of
+match required to include word lemmata, word synonyms and then word
+hypernyms, increasing the match penalty as they go.  \citeB{Sato94a}
+employ a more local model of {\it character} order in modelling
+similarity according to N-grams fashioned from the original string.
+
+The greatest advantage in ignoring word/segment order is computational,
+in that we significantly reduce the search space and require only a
+single overall comparison per string pair. Below, we analyse whether
+this gain in speed outweighs any losses in retrieval performance.
+
+
+
+
+
+
+\section{String comparison methods}
+\label{sec:simmethods}
+
+Due to our interest in the effects of both segment order and segmentation,
+we must have a selection of string comparison methods compatible with the
+various permutations of these two parameter types. We choose to look at
+a number of bag-of-words and segment order-sensitive methods which are
+compatible with both character-based and word-based indexing, and vary
+the input to model the effects of the two indexing paradigms. The
+particular bag-of-word approaches we target are the vector space model
+\cite[p 300]{Manning99} and ``token intersection'', a simple ratio-based
+similarity method. For segment order-sensitive approaches, we test
+3-operation and 4-operation edit distance and similarity, and also
+``weighted sequential correspondence''.
+
+All methods describe the degree of correspondence between two input
+strings $TM_i$ and $IN$,\footnote{Note that the ordering here is
+  arbitrary, and that all the similarity methods described herein are
+  commutative for the given implementations.} where we define $TM_i$ as
+an L1 string taken from the TM and $IN$ as the input string. For the
+edit distance methods, this correspondence takes the form of a distance,
+with more similar strings having smaller distances separating them and
+identical strings having an edit distance of 0. All other methods
+generate scaled similarities in the range $[0,1]$, with identical
+strings having similarity 1.
+
+One feature of all string comparison methods given here is that they have
+fine-grained discriminatory potential and are able to narrow down the
+final set of translation candidates to a handful of, and in most cases
+one, output. This was a deliberate design decision, and aimed at
+example-based machine translation applications, where human judgement
+cannot be relied upon to single out the most appropriate translation
+from multiple system outputs. In this, we set ourselves apart from the
+research of \citeB{Sumita91}, for example, who judge the system to
+have been successful if there are a total of 100 or less outputs, and a
+fair proportion of useful translations are contained within them. Note
+that it would be a relatively simple procedure to fan out the number of
+outputs to $n$ in our case, by taking the top $n$ ranking outputs.
+
+For all string comparison methods, we weight different Japanese segment types
+according to their expected impact on translation, in the form of
+the $\sweight$ function:
+
+\begin{addframe}
+  \begin{tabular}{c|c}
+    {\bf \it Segment type} & $\sweight$  \\
+    \hline
+    punctuation & 0 \\
+    other segments & 1
+  \end{tabular}
+\end{addframe}
+
+
+
+\subsection{String comparison methods used in this research}
+\label{sec:oursimmethods}
+
+
+
+\subsection*{Vector space model}
+
+Within our implementation of the vector space model (VSM), the segment content
+of each string is described as a vector, made up of a single dimension
+for each segment token occurring within $TM_i$ or $IN$.  The value of
+each vector component is given as the weighted frequency of that token
+according to its $\sweight$ value, such that any number of a given
+punctuation mark will produce a frequency of 0. The string similarity
+of $TM_i$ and $IN$ is then defined as the cosine of the angle between
+vectors $\vec{TM_i}$ and $\vec{IN}$, respectively, calculated as:
+
+\begin{equation}
+  \label{eq:vspace}
+  \cos(\vec{TM_i},\vec{IN}) =
+  \frac{\vec{TM_i}\cdot\vec{IN}}{|\vec{TM_i}||\vec{IN}|}
+\end{equation}
+where dot product and vector length coincide with the standard
+definitions.
+
+The strings $TM_i$ of maximal similarity to $IN$ are those which produce
+the maximum value for the vector cosine.
+
+Note that VSM considers only segment frequency and is insensitive to
+segment order.
+
+
+
+\subsection*{Token intersection}
+
+The token intersection of $TM_i$ and $IN$ is defined as the cumulative
+intersecting frequency of tokens appearing in each of the strings,
+normalised according to the combined segment lengths of $TM_i$ and $IN$.
+Normalisation is by way of Dice's coefficient:
+\begin{equation}
+  \textstyle
+  \label{eq:intersect}
+  \mathit{tint}(TM_i,IN) = 
+  \frac{\textstyle
+  2\times\sum_{t}\min\big(\freq_{TM_i}(t),\freq_{IN}(t)\big)}{\textstyle \len(TM_i)+\len(IN)}
+\end{equation}
+where each $t$ is a segment token occurring in either $TM_i$ or $IN$,
+$\freq_S(t)$ is defined as the $\sweight$-based frequency of token $t$
+occurring in string $S$, and $\len(S)$ is the segment length of string
+$S$, that is the $\sweight$-based count of segments contained in $S$.
+
+As for VSM, the string(s) $TM_i$ most similar to $IN$ are those which
+generate the maximum value for $\mathit{tint}(TM_i,IN)$, and segment
+order does not take any part in calculation.
+
+
+
+\subsection*{3- and 4-operation edit distance}
+
+The first of the segment order-sensitive methods is edit distance
+\cite{Wagner74,Planas99}. Essentially, the segment-based edit distance
+between strings $TM_i$ and $IN$ is the minimum number of primitive edit
+operations on segment units required to transform $TM_i$ into $IN$ (and
+vice versa). With 3-operation edit distance, we use the operations of
+{\it segment equality} (segment $s_i$ in string $S$ and segment $t_j$
+in string $T$ are identical), {\it segment deletion} (delete segment
+$s_i$ from string $S$) and {\it segment insertion} (insert segment
+$a$ into a given position in string $S$); with 4-operation edit
+distance, {\it segment substitution} (substitute segment $s_i$ in
+string $S$ for segment $a$) makes up the fourth operation type.  The
+cost associated with each operation over segments $s_i$ and $a$ is
+defined as:\footnote{Note that the costs for deletion and insertion must
+  be equal to maintain commutativity.}
+\begin{addframe}
+  \begin{tabular}{c|c}
+    {\bf \it Operation} & {\bf \it Cost}  \\
+    \hline
+    segment equality & 0\\
+    segment deletion & $\sweight(s_i)$\\
+    segment insertion & $\sweight(a)$\\
+    segment substitution & $\max(\sweight(s_i),\sweight(a))$
+  \end{tabular}
+\end{addframe}
+
+Dynamic programming (DP) techniques are used to determine the minimum
+edit distance between a given string pair, following the classic
+4-operation edit distance formulation of \citeB{Wagner74}. For 4-operation
+edit distance, the edit distance between strings $S=s_1 s_2 ...
+  s_m$ and $T=t_1 t_2 ... t_n$ is defined as $D_{4op}(S,T)$:
+
+  \begin{eqnarray}
+    D_{4op}(S,T) & = & d_4(m,n)\\
+    d_4(i,j) & = & \left\{
+      \begin{array}{l}
+        0 \hfill\mathit{if}\; i=0\wedge j=0\\
+        d_4(0,j-1) + \sweight(t_j) \hfill \mathit{if}\; i=0\wedge j\ne 0\\
+        d_4(i-1,0) + \sweight(s_i) \hfill\mathit{if}\; i\ne0\wedge j=0\\
+        \min\left(
+          \begin{array}{l}
+            d_4(i-1,j)+\sweight(s_i),\\
+            d_4(i,j-1)+\sweight(t_j),\\
+            d_4(i-1,j-1)+m_4(i,j)\\
+          \end{array}
+        \right)\hspace*{10mm}\hfill\mathit{otherwise}
+      \end{array}
+    \right.\\
+    m_4(i,j) & = & \left\{
+      \begin{array}{l}
+        0 \hfill\mathit{if}\;s_i=s_j\\
+        \max(\sweight(s_i),\sweight(t_j))\hspace*{21mm}\hfill\mathit{otherwise}
+      \end{array}
+    \right.
+  \end{eqnarray}
+
+We modify this slightly to determine 3-operation edit distance,
+formalised over $S$ and $T$ as:
+
+\begin{eqnarray}
+  D_{3op}(S,T) & = & d_3(m,n)\\
+  d_3(i,j) & = & \left\{
+    \begin{array}{l}
+      0 \hfill\mathit{if}\; i=0\wedge j=0\\
+      d_3(0,j-1) + \sweight(t_j) \hfill \mathit{if}\; i=0\wedge j\ne 0\\
+      d_3(i-1,0) + \sweight(s_i) \hfill\mathit{if}\; i\ne 0\wedge j=0\\
+      \min\left(
+        \begin{array}{l}
+          d_3(i-1,j)+\sweight(s_i),\\
+          d_3(i,j-1)+\sweight(t_j),\\
+          m_3(i,j)\\
+        \end{array}
+      \right)\hspace*{10mm}\hfill\mathit{otherwise}
+    \end{array}
+  \right.\\
+  m_3(i,j) & = & \left\{
+    \begin{array}{l}
+      d_3(i-1,j-1)\hspace*{43mm} \hfill\mathit{if}\;s_i=s_j\\
+      \infty\hfill\mathit{otherwise}
+    \end{array}
+  \right.
+\end{eqnarray}
+
+The reason that we distinguish between 3- and 4-operation edit distance
+is that the segment substitution operator is a compound operator,
+simultaneously involving a deletion and insertion operation. By
+maintaining segment deletion and insertion as separate operations, our
+intuition is that we should get a stronger sense of the true effort
+required to coerce an arbitrary string pair together, as a translator
+would have to do in adapting the final translation candidate to the
+needs of the original L1 input.
+
+
+\subsection*{3- and 4-operation edit similarity}
+
+Above, we suggested the use of 3- and 4-operation edit distance as is
+without normalisation. This is possible due to them both explicitly
+modelling the degree of segment {\it disparity} between a given
+string pair, and hence capturing the degree of dissimilarity of the
+strings, relative to the minimum edit distance of zero. All other
+methods targeted herein model string overlap, and must be normalised in
+order to weight off the actual degree of overlap against the maximum
+potential overlap, in the form of the segment lengths of the target
+strings. While such normalisation is not obligatory for edit distance,
+it is certainly possible to normalise edit distance values to edit
+similarity values, scaled to the range $[0,1]$ as for other methods, a
+possibility we look to here.
+ 
+The 3-operation edit distance between strings $S$ and $T$ can be
+translated into scaled 3-operation edit similarity by way of the
+following equation:
+\begin{equation}
+  \label{eqn:simple-edist-norm}
+  \mathit{sim}_{3op}(S,T) = 1- \frac{D_{3op}(S,T)}{\len(S) +
+    \len(T)}
+\end{equation}
+Note that 3-operation edit similarity computed in this fashion is
+identical to the ``sequential correspondence'' method of
+\citeB{Baldwin00b}, which determines the maximum sequential
+substring match between two strings.
+
+Similarly, 4-operation edit similarity is derived from 4-operation edit
+distance by:
+\begin{equation}
+  \label{eqn:classic-edist-norm}
+  \mathit{sim}_{4op}(S,T) = 1 -
+  \frac{D_{4op}(S,T)}{\max(\len(S),\len(T))}
+\end{equation}
+
+
+
+\subsection*{Weighted sequential correspondence}
+
+Weighted sequential correspondence---the last of the segment
+order-sensitive methods---takes into account not only the sequentiality
+but also the contiguity of match. This is achieved by associating an
+incremental weight with each matching segment, assessing the contiguity
+of left-neighbouring segments, similarly to the character-based matching
+method of \citeB{Sato92}. Namely, the $k$th segment of a matched
+substring is given the multiplicative weight $\min(\Max,k)$.
+
+
+\begin{eqnarray}
+  S_W(S,T) & = & s(m,n)\\
+  s(i,j) & = & \left\{
+    \begin{array}{l}
+      0 \hfill\mathit{if}\; i=0\vee j=0\\
+      \max\left(
+        \begin{array}{l}
+          s(i-1,j),\\
+          s(i,j-1),\\
+          s(i-1,j-1)+m_W(i,j)
+        \end{array}
+      \right)\hspace*{5mm}\hfill\mathit{otherwise}
+    \end{array}
+  \right.\\
+  m_W(i,j) & = & \left\{
+    \begin{array}{l}
+      cm(i,j)\times\sweight(i) \hspace*{30.5mm} \hfill\mathit{if}\;s_i=s_j\\
+      0\hfill\mathit{otherwise}
+    \end{array}
+  \right.\\
+  cm(i,j) & = & \left\{
+    \begin{array}{l}
+      0\hfill\mathit{if}\;i=0\vee j=0\vee s_i\ne t_j\\
+      \min(\Max,cm(i-1,j-1)+1)\hspace*{14mm} \hfill\mathit{otherwise}
+    \end{array}
+  \right.
+\end{eqnarray}
+
+This raw similarity is then normalised according to Dice's coefficient,
+similarly to token intersection:
+\begin{equation}
+  \textstyle
+  \label{eq:wsc}
+  \mathit{sim}_{\scriptscriptstyle W}(TM_i,IN) = 
+  \frac{\textstyle
+    2\times S_W(TM_i,IN)}{\textstyle \len_{\scriptscriptstyle W}(TM_i)+\len_{\scriptscriptstyle W}(IN)}
+\end{equation}
+where $len_{\scriptscriptstyle W}$ is defined for a string
+$S=s_1 s_2 ... s_m$ as:
+\begin{equation} \textstyle
+  \label{eq:wseqcorrlen}
+  len_{\scriptscriptstyle W}(S) = \sum_{j=1}^m \sweight(s_j)\times\min(\Max,j) 
+\end{equation}
+
+
+
+
+\subsection{Retrieval speed optimisation}
+\label{sec:speed}
+
+While this paper is mainly concerned with accuracy, we take a moment out
+here to discuss the potential to accelerate the proposed methods, to get a
+feel for their relative speeds in actual retrieval.
+
+First, an ``inverted file'' can be used to gain an insight into the
+optimal attainable match for a given string pair. An inverted file is
+simply a list of each segment type contained in the TM, and an index of
+those translation records containing that token (including a frequency
+count for each). By determining the token frequency for each segment
+type contained in the input, we can plug the data from the inverted file
+straight into the equations for the bag-of-words methods, and simply
+return the translation record(s) which produced the highest score. For
+the segment order-sensitive methods, on the other hand, the inverted
+file allows us to determine the optimal match achievable with each
+translation record, by assuming that overlapping segments occur in
+identical order in the two target strings. By then working through the
+translation records in descending order of optimal score, we can halt
+the search process once the optimal score for the top-ranking
+translation not yet processed, falls below the best score actually
+observed to that point. For both indexing paradigms, this method also
+allows us to completely rule out strings with no segment overlap with
+$IN$, greatly reducing the string search space.
+
+One further mechanism we can rely on with the segment order-sensitive
+methods, is to use the current top-ranking score in establishing upper
+and lower bounds on the segment length of strings which have the potential to
+better that score. For both edit distance methods, for example, we make
+the observation that for a current minimum edit distance of $\alpha$,
+the following inequality over $len(TM_i)$ must be satisfied for $TM_i$
+to have a chance of bettering $\alpha$:
+\begin{equation}
+  \label{eq:edist_bounds}
+  len(IN) - \alpha \le len(TM_i) \le len(IN) + \alpha
+\end{equation}
+
+Through these two methods, we were able to greatly speed up the string
+comparison process for word-based indexing and all methods other than
+weighted sequential correspondence (due to artificially high optimal
+match scores for translation records, under the assumption of full
+contiguity). The degree of reduction for character-based indexing was
+not as marked, due to the greater numbers of translation records sharing
+some character content with $IN$.
+
+
+
+
+
+\section{Evaluation}
+\label{sec:eval}
+
+
+\subsection{Evaluation specifications}
+\label{sec:evalspecs}
+
+Evaluation was partitioned off into character-based and word-based
+indexing for the various string comparison methods. For word-based indexing,
+segmentation was carried out with ChaSen v2.0b \shortcite{Matsumoto99}. No
+attempt was made to post-edit the segmented output, in interests of
+maintaining consistency in the data. Segmented and non-segmented strings
+were tested using a single program, with segment length set to a single
+character for non-segmented strings.
+
+As our dataset, we used 3043 unique translation records deriving from
+technical field reports on construction machinery manually translated
+from Japanese into English.\footnote{A superset of the dataset used by
+  \citeB{Baldwin00b}.} Translation records varied in size from
+single-word technical terms taken from a technical glossary, to
+multiple-sentence strings, at an average Japanese word length of 14.4
+and character length of 27.7, and average English word length of 13.3.
+All Japanese strings of length 6 characters or more (a total of 2512
+strings) were extracted from the dataset, leaving a residue glossary of
+technical terms (531 strings) as we would not expect to find useful
+matches in the TM. The retrieval accuracy over the 2502 full-length
+strings was then verified by 10-fold semi-stratified cross validation,
+including the glossary in the TM data on each iteration. By 10-fold
+semi-stratified cross-validation, we mean that the dataset was
+partitioned into 10 equally-sized subsets of roughly equivalent L1
+segment length distribution.  The TM system was then run over 10
+iterations, taking one partition as the held-out input set, and the
+remaining 9 partitions as the TM data on each iteration.
+
+Note that the test data was pre-partitioned into single technical terms,
+single sentences or sentence clusters, each constituting a single
+translation record. Partitions were taken as given in evaluation,
+whereas for real-world TM systems, the automation of this process
+comprises an important component of the overall system, preceding
+translation retrieval.  While acknowledging the importance of this step
+and its interaction with retrieval performance, we choose to sidestep it
+for the purposes of this paper, and leave it for future research.
+
+While the different methods are generally capable of focusing in on a
+small set of translation candidates for a given input, we enforce the
+constraint that a unique translation candidate (possibly the empty
+string -- see below) must be generated for each input, in order to avoid
+any bias to methods with high output fan-out.  This is done by breaking
+ties in translation potential, by randomly selecting one translation
+candidate from the set of outputs.
+
+In an effort to make evaluation as objective and empirical as possible,
+appropriateness of the final translation candidate proposed by the
+different methods was evaluated according to the 3-operation edit
+distance between the translation candidate and the unique model
+translation.  In this, we transferred the 3-operation edit distance method described
+above directly across to L2 (English), with segments as words and the
+following experimentally-validated $\sweight$ schema:
+\begin{addframe}
+  \begin{tabular}{c|c}
+    {\bf \it Segment type} & $\sweight$  \\
+    \hline
+    punctuation & 0 \\
+    stop words & 0.01 \\
+    other words & 1
+  \end{tabular}
+\end{addframe}
+Stop words are defined as those contained within the SMART
+\cite{Salton71} stop word list.\footnote{ftp:\dslash
+  ftp.cornell.cs.edu/pub/smart/english.stop} The (unique) system output
+was judged to be correct if it was optimally close to the model
+translation, i.e.\ that there was no other translation candidate closer
+to the model translation in terms of 3-operation edit distance; the
+average optimal 3-operation edit distance from the model translation was 3.72.
+
+We set the additional criterion that the different methods should be
+able to determine whether the top-ranking translation candidate is
+likely to be useful to the translator, and that no output should be
+given if the closest matching translation record was outside a certain
+range of ``translation usefulness''. In practice, this was set to the
+3-operation edit distance between the model translation and the empty
+string (i.e.\ the edit cost of creating the model translation from
+scratch). This cutoff point was realised for the different string
+comparison methods by thresholding over the respective scores. The
+different thresholds settled upon experimentally for all string
+comparison methods are given in brackets in the second column of
+\tabref{tab:results1}, with the threshold for edit distance methods
+dynamically set to the edit distance between the input and the empty
+string.
+
+We set ourselves apart from conventional research on TM retrieval
+performance in adopting this objective numerical evaluation method.
+Traditionally, retrieval performance has been gauged by the subjective
+usefulness of the closest matching element of the system output (as
+judged by a human), and described by way of a discrete set of
+translation quality descriptors (e.g.\ 
+\cite{Nakamura89,Sumita91,Sato92}). Perhaps the closest evaluation
+attempts to what we propose are those of \citeB{Planas99} in setting a
+mechanical cutoff for ``translation usability'' as the ability to
+generate the model translation from a given translation candidate by
+editing less than half the component words, and \citeB{Nirenburg93} in
+calculating the weighted number of key strokes required to convert the
+system output into an appropriate translation for the original input.
+The method of \citeB{Nirenburg93} is certainly more indicative of true
+L2 usefulness, but is dependent on the competence of the translator
+editing the TM system output, and not automated to the degree our method
+is.
+
+
+
+\begin{table*}[htbp]
+  \begin{center}
+    \small
+    \begin{tabular}{|c|c|cl|c|c|c|}
+      \cline{2-7}
+      \multicolumn{1}{c|}{} & & \multicolumn{2}{c|}{}
+      & {\bf \it Edit} & {\bf \it Ave.} & {\bf \it Ave.} \\
+      \multicolumn{1}{c|}{} & \raisebox{1.5ex}[0pt]{{\bf \it Method}} &
+      \multicolumn{2}{c|}{\raisebox{1.5ex}[0pt]{{\bf \it Accuracy}}}
+
+      & {\bf \it discrep.} & {\bf \it outputs} & {\bf \it time} \\
+      \hline
+      & Vector space model (0.5) & & 51.56 & 0.85 & 1.03 (0.97) & \ul{1.72} \\
+      & Token intersection (0.4) & & 51.44 & 0.75 & 1.07 (0.94) & 2.39 \\
+      \cline{2-7}
+      & 3-op edit distance ($\len(IN)$) & & \ul{58.19} & 0.50 & 1.36 (0.81) & 3.01 \\
+      \raisebox{1.5ex}[0pt]{{\sc Char-}} & 3-op edit similarity (0.4) & & 53.31 & 0.60 & 1.08 (0.95) & 11.49 \\
+      \raisebox{1.5ex}[0pt]{{\sc Based}} & 4-op edit distance ($\len(IN)$) & & 50.24 & 0.66 & 1.54 (0.79) & 20.02 \\
+      \raisebox{1.5ex}[0pt]{{\sc Indexing}} & 4-op edit similarity (0.3) & & 51.56 & 0.59 & 1.17 (0.90) & 30.83 \\
+      & Weighted seq.\ corr, $\Max=2$ (0.2) & & 55.67 & \ul{0.46} & 1.06 (0.95) & 64.02 \\
+      & Weighted seq.\ corr, $\Max=4$  (0.2) & & 53.48 & 0.66 & 1.06 (0.95) & 137.83 \\
+      \hline\hline
+      & Vector space model (0.5) & & 50.84 ($-$1.4\%) & 0.77 & 1.10 (0.93) & \ul{0.68} \\
+      & Token intersection (0.4) & & 51.40 ($-$0.1\%) & 0.71 & 1.17 (0.89) & 0.91 \\
+      \cline{2-7}
+      & 3-op edit distance ($\len(IN)$) & & \ul{54.67} ($-$6.0\%) & 0.56 & 1.78 (0.72) & 1.00 \\
+      \raisebox{1.5ex}[0pt]{{\sc Word-}} & 3-op edit similarity (0.4) & & 51.92 ($-$2.6\%) & 0.62 & 1.17 (0.89) & 1.80 \\
+      \raisebox{1.5ex}[0pt]{{\sc Based}} & 4-op edit distance ($\len(IN)$) & & 48.08 ($-$4.3\%) & 0.76 & 2.51 (0.66) & 3.39 \\
+      \raisebox{1.5ex}[0pt]{{\sc Indexing}} & 4-op edit similarity (0.3) & & 49.32 ($-$4.3\%) & 0.64 & 1.40 (0.84) & 4.45 \\
+      & Weighted seq. corr, $\Max=2$  (0.2) & & 52.44 ($-$5.8\%) & \ul{0.50} & 1.15 (0.91) & 12.85 \\
+      & Weighted seq. corr, $\Max=4$  (0.2) & & 50.08 ($-$6.4\%) & 0.65
+      & 1.13 (0.93) & 31.28 \\
+      \hline
+    \end{tabular}
+  \end{center}
+    \caption{Results for the different string comparison methods under 
+      character-based and\\ word-based indexing}
+    \label{tab:results1}
+\end{table*}
+
+
+
+\subsection{Results}
+\label{sec:results}
+
+The results for the different string comparison methods with
+character-based and word-based indexing are given in
+\tabref{tab:results1}, with the two bag-of-words approaches partitioned
+off from the five segment order-sensitive approaches for each indexing
+paradigm (weighted sequential correspondence was tested twice, with
+varying values of the variable cutoff $\Max$). ``Accuracy'' is an
+indication of the proportion of inputs for which an optimal translation
+was produced; character-based indexing accuracies in bold indicate a
+significant\footnote{As determined by the paired {\it t} test
+  ($p<0.05$).} advantage over the corresponding word-based indexing
+accuracy, and figures in brackets for word-based indexing indicate the
+relative performance gain over the corresponding character-based
+indexing configuration.  ``Edit discrep.''\ refers to the mean
+3-operation edit distance discrepancy between the translation candidate
+and optimal translation(s) in the case of the translation candidate
+being sub-optimal.  ``Ave.\ outputs'' describes the average number of
+translation candidates output by the system, with the figure in brackets
+being the proportion of inputs for which a unique translation candidate
+was produced; recall that a unique translation candidate is randomly
+selected for final evaluation purposes in the case of multiple outputs.
+``Ave.\ time'' describes the average time taken to determine the
+translation candidate(s) for a single output, relative to the time taken
+for word-based 3-operation edit distance retrieval; note that the
+figures for word-based indexing include the times for on-line
+segmentation of the input. The best result in each column for each of
+character- and word-based indexing, is underlined.
+
+Perhaps the most striking result is that character-based indexing
+produces a superior match accuracy to word-based indexing for {\it all}
+string comparison methods, although we must qualify this in saying that
+none of the gains were found to be statistically significant. While this
+finding is perhaps counterintuitive, it concurs with the results of
+\citeB{Baldwin00b} for an analogous TM system and also \citeB{Fujii93}
+for information retrieval.
+
+Looking to segment order, we see that 3-operation edit distance
+outperforms all other methods for both character- and word-based
+indexing, peaking at just over 58\% for character-based
+indexing.\footnote{All accuracies are well up on those quoted in
+  \citeB{Baldwin00b} due to the modified English $\sweight$ schema and
+  an enlarged dataset.} The relative performance of the remaining
+methods is variable, with the two bag-of-words methods being superior to
+or roughly equivalent to all segment order-sensitive methods other than
+3-operation edit distance for word-based indexing, but the relative gain
+for the segment order-based methods under character-based indexing tending
+to exceed that for the bag-of-words methods. It is thus difficult to
+draw any hard and fast conclusion as to the relative merits of segment
+order-based versus bag-of-words methods, other than to say that
+3-operation edit distance would appear to have a clear advantage over
+other methods.
+
+The figures for edit discrepancy in the case of non-optimal translation
+candidate(s) are equally interesting, and suggest that on the whole, the
+various methods err more conservatively for character-based than
+word-based indexing. The most robust method is weighted sequential
+correspondence ($\Max=2$), at an edit discrepancy of 0.46 and 0.50 for
+character-based and word-based indexing, respectively.
+
+All methods were able to produce just over one translation candidate on
+average, with all other than the edit distance methods returning a
+unique translation candidate around 90\% of the time or better.
+Theoretically, it should be possible to generate slightly higher
+accuracies for methods with higher numbers of outputs (most notably the
+edit distance methods) through more careful selection of the final
+translation candidate. Preliminary testing of the scope for improvement
+here, suggests that there is certainly a correlation between the average
+number of outputs and the potential for improvement in both raw accuracy
+and edit discrepancy, a point we leave for future research.
+
+Turning to speed, word-based indexing was found to be faster than
+character-based indexing across the board, for the simple reason that
+the number of character segments is always going to be greater than or
+equal to the number of word segments. The average segment lengths quoted
+above (27.7 characters vs.\ 14.4 words) indicate that we generally have
+twice as many characters as words in a given string. Additionally, the
+inverted file-based acceleration technique has a greater effect for
+word-based indexing than character-based indexing, accentuating any
+speed disparity. The exceptionally slow speeds for weighted sequential
+correspondence under character-based indexing and for higher values of
+$\Max$ in particular, are worrying. Indeed, despite the marginal lead of
+weighted sequential correspondence over other methods in terms of edit
+discrepancy, we suggest that its sluggish nature makes it inappropriate
+for on-line tasks, or that at best, any effort expended in speeding it
+up would be better invested in enhancing one of the other methods.
+
+One interesting point to come out of the presented figures is that
+3-operation edit distance is superior to 4-operation edit distance and
+similarity in all respects, and also that we lose out by normalising
+3-operation edit distance to a similarity. 
+
+In summary, segmentation degrades retrieval accuracy but enhances access
+speed. The best justification for segmentation thus comes in terms of
+acceleration when used in combination with the proposed retrieval
+optimisation techniques, and if we are solely interested in accuracy and
+edit discrepancy, then our method of choice is 3-operation edit distance
+operating under character-based indexing.
+
+
+\begin{table*}[htbp]
+  \begin{center}
+  \small
+    \begin{tabular}{|c|c|cl|c|c|c|}
+      \cline{2-7}
+      \multicolumn{1}{c|}{} & & \multicolumn{2}{c|}{}
+      & {\bf \it Edit} & {\bf \it Ave.} & {\bf \it Ave.} \\
+      \multicolumn{1}{c|}{} & \raisebox{1.5ex}[0pt]{{\bf \it
+          Method}} &
+      \multicolumn{2}{c|}{\raisebox{1.5ex}[0pt]{{\bf \it Accuracy}}}
+      & {\bf \it discrep.} & {\bf \it outputs} &
+      {\bf \it time} \\
+      \hline
+      & Vector space model (0.5) & & 48.22 & 1.22 & 1.03 (0.97) & \ul{3.28} \\
+      & Token intersection (0.4) & & 49.02 & 0.97 & 1.05 (0.95) & 4.53 \\
+      \cline{2-7}
+      & 3-op edit distance ($\len(IN)$) & & \ul{55.47} & \ul{0.53} & 1.35 (0.81) & 42.84 \\
+      \raisebox{1.5ex}[0pt]{\sc Char-} & 3-op edit similarity (0.4) & & 53.07 & 0.68 & 1.06 (0.95) & 86.62 \\
+      \raisebox{1.5ex}[0pt]{\sc Based} & 4-op edit distance ($\len(IN)$) & & 50.70 & 0.68 & 1.42 (0.81) & 98.60 \\
+      \raisebox{1.5ex}[0pt]{\sc Indexing} & 4-op edit similarity (0.3) & & 51.30 & 0.65 & 1.17 (0.90) & 139.32 \\
+      & Weighted seq.\ corr, $\Max=2$ (0.2) & & {\bf 55.35} & 0.62 & 1.05 (0.96) & 182.63 \\
+      & Weighted seq.\ corr, $\Max=4$ (0.2) & & 54.35 & 0.69 & 1.04 (0.97) & 218.93 \\
+      \hline\hline
+      & Vector space model (0.5) & & {\bf 52.54} ($+$9.0\%) & 0.80 & 1.10 (0.93) & \ul{0.63} \\
+      & Token intersection (0.4) & & {\bf 51.94} ($+$6.0\%) & 0.75 & 1.19 (0.89) & 0.84 \\
+      \cline{2-7}
+      & 3-op edit distance ($\len(IN)$) & & \ul{55.15} ($-$0.6\%) & \ul{0.57} & 1.85 (0.74) & 0.93 \\
+      \raisebox{1.5ex}[0pt]{\sc Word-} & 3-op edit similarity (0.4) & & 52.30 ($-$1.4\%) & 0.64 & 1.19 (0.89) & 1.65 \\
+      \raisebox{1.5ex}[0pt]{\sc Based} & 4-op edit distance ($\len(IN)$) & & 47.93 ($-$5.5\%) & 0.75 & 2.44 (0.67) & 2.98 \\
+      \raisebox{1.5ex}[0pt]{\sc Indexing} & 4-op edit similarity (0.3) & & 50.26 ($-$2.0\%) & 0.66 & 1.41 (0.84) & 3.93 \\
+      & Weighted seq.\ corr, $\Max=2$ (0.2) & & 52.26 ($-$5.6\%) & 0.65 & 1.17 (0.91) & 12.90 \\
+      & Weighted seq.\ corr, $\Max=4$ (0.2) & & 51.22 ($-$5.8\%) & 0.65 & 1.14 (0.92) & 27.41 \\
+      \hline
+    \end{tabular}
+  \end{center}
+    \caption{Results for the different string comparison methods over
+      alphabetised\\ (katakana-transcribed) data}
+    \label{tab:results2}
+\end{table*}
+
+
+
+
+
+\subsection{The impact of kanji on the results}
+\label{sec:kanji}
+
+An immediate explanation for character-based indexing's empirical edge
+over word-based indexing is the semantic smoothing effects of individual
+kanji characters, alluded to above (\secref{sec:seg}). To take an
+example, the single-segment nouns \skstring{操作}{s\=osa} and
+\skstring{作動}{sad\=o} are synonyms and both translated as
+``operation'' in the given domain, but would not match under word-based
+indexing.  Character-based indexing, on the other hand, would recognise
+the overlap in character content, and in the process pick up on the
+semantic correspondence between the two words.
+
+To test the effect of kanji characters (i.e.\ ideograms) on translation
+retrieval performance, we used ChaSen to convert all kanji and hiragana
+into katakana, generating an essentially alphabetic version of each
+string, analogous to the case of Thai. In one version of this
+alphabetised data, the original segmentation was retained, and in a
+second version, each string was segmented off into individual
+characters. We then ran the same methods over this modified input, using
+exactly the same technique as for the original experiment. The results
+are presented in \tabref{tab:results2}, with times calculated relative
+to 3-operation edit distance in the first experiment.
+
+Here, we find that for word-based indexing, most methods performed
+marginally better over the alphabetised data than over the original
+data preserving the full heterogeneity of hiragana, katakana and kanji.
+As for the original experiment, the segment order-sensitive methods
+perform better under character-based indexing than word-based indexing,
+to a level of statistical significance for weighted sequential
+correspondence ($\Max=2$). This trend was reversed for the bag-of-words
+methods, with both VSM and token intersection suffering a significant
+degradation in accuracy under character-based indexing. Once again,
+3-operation edit distance proved the clear victor on all fronts, with
+the only blemish being its running time under character-based indexing.
+
+One immediate conclusion which can be drawn from this is that, in the
+absence of segment sensitivity, segmentation is required in order to
+maintain performance levels under character-based indexing, when
+operating over homogeneous alphabetised data. Perhaps more importantly,
+that the same smoothing effect was observed for character-based indexing
+when operating over both lexically differentiated and alphabetised
+script, would tend to suggest that smoothing is not tied to kanji
+characters to the degree we had originally predicted. Having said this,
+returning to our ``operation'' synonym example from above, we notice
+that the overlap in kanji is reflected in overlap in pronunciation,
+which is retained in the katakana version. In this sense, the smoothing
+effect for katakana-based input can be said to draw on the same basic
+mechanism as for the original lexically differentiated data.
+
+It is possible to translate these results for Japanese across to other
+non-segmenting languages, notably Chinese and Thai. Due to its
+ideogrammatic founding, we would expect to get similar results to those
+for the first experiment with Chinese, that is segmentation would harm
+rather than aid translation retrieval accuracy and impinge only slightly 
+on retrieval speed for most methods. For Thai, we can apply the results
+from the second experiment in postulating that the main advantage in
+segmenting strings would be computational in pruning the search space.
+
+As an aside, it is important to pick up on the blowout in running times
+for character-based indexing in the second experiment, again suggesting
+that segmentation has a place in pruning the search space and reducing
+access times. The slowdown for the edit distance and similarity methods
+is particularly marked, and relates to the inverted file-based
+acceleration method failing to a large degree due to the homogeneity of
+the data. This does not occur for word-based indexing because
+segmentation produces segment differentiation. The relatively lesser
+degree of slowdown for weighted sequential correspondence when compared
+to the original experiment, is largely because the running time is
+bounded by the size of the TM; a large portion of the TM was searched
+over in the original experiment, such that the relative slowdown was
+buffered.
+
+
+\subsection{Miscellaneous reflections}
+\label{sec:misc}
+
+One way in which ChaSen could conceivably have affected retrieval
+performance is that technical terms tended to be over-segmented.
+Experimentally combining recognised technical terms into a single
+segment (particularly in the case of contiguous katakana segments in the
+manner of \citeB{Fujii93}), however, degraded rather than improved
+retrieval performance for both character-based and word-based indexing.
+As such, this side-effect of ChaSen would not appear to have impinged on
+retrieval accuracy. Additionally, over-segmentation was consistent on
+the whole, such that parts of the same whole could be matched together
+under word-based indexing as well as character-based
+indexing.
+
+One other plausible reason for the unexpected results is that the
+dataset could have been in some way inherently better suited to
+character-based indexing than word-based indexing, although the fact
+that the results were cross-validated would tend to rule out this
+possibility.
+
+Interestingly, weighted sequential correspondence consistently performed
+better with $\Max$ set to 2. This contradicts the finding of
+\citeB{Sato92} that a setting of 4 was optimal for character-based
+indexing.
+
+To return to the original question posed above of retrieval speed vs.\ 
+accuracy, the segment order-sensitive edit distance approach would seem
+to hold a genuine edge over the other methods in terms of accuracy and
+edit discrepancy, to an order that would suggest the extra computational
+overhead is warranted, in both accuracy and translation discrepancy. It
+must be said that the TM used in evaluation was too small to get a
+genuine feel for the computational overhead that would be experienced in
+a real-world TM system context of potentially millions rather than
+thousands of translation records.
+
+
+
+\section{Concluding remarks}
+\label{sec:concl}
+
+This research is concerned with the relative import of segment order and
+segmentation on translation retrieval performance for a TM system. We
+modelled the effects of segment order sensitivity vs.\ bag-of-words
+segment order insensitivity by implementing a total of seven string
+comparison methods: two bag-of-words approaches (the vector space model
+and ``token intersection'') and five segment order-sensitive approaches
+(3- and 4-operation edit distance and similarity, and ``weighted
+sequential correspondence''). Each of these methods was then tested
+under character-based and word-based indexing, to determine what effect
+segmentation would have on retrieval performance. Empirical evaluation
+based around the L2 3-operation edit distance of proposed translation
+candidates revealed that character-based indexing consistently produced
+greater accuracy than word-based indexing, and that the segment
+order-sensitive 3-operation edit distance method clearly outperformed
+all other methods under both indexing paradigms. We then went on to
+analyse the effect of kanji ideograms on the superiority of
+character-based indexing, and concluded that while individual kanji
+characters may have some smoothing effect, a fully alphabetised context
+produces the same basic result. One unexpected benefit of segmentation
+was the speed-up of TM search times when used in combination with a
+number of optimisation techniques.
+
+
+The main area in which we feel this research could be enhanced is to
+validate the findings of this paper in expanding evaluation to other
+domains and test sets, which we leave as an item for future research. We 
+also skirted around the issue of translation record partitioning, and
+wish to investigate how different partitioning methods perform against
+each other.
+
+
+\subsection*{Acknowledgements}
+
+Vital input into this research was received from Francis Bond (NTT) and
+Emmanuel Planas (NTT).
+
+\bibliographystyle{nlpbbl}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Baldwin \BBA\ Tanaka}{Baldwin \BBA\
+  Tanaka}{1999}]{Baldwin99c}
+Baldwin, T.\BBACOMMA\  \BBA\ Tanaka, H. \BBOP 1999\BBCP.
+\newblock \BBOQ The applications of unsupervised learning to {Japanese}
+  grapheme-phoneme alignment\BBCQ\
+\newblock In {\Bem Proc. of the ACL Workshop on Unsupervised Learning in
+  Natural Language Processing}, \BPGS\ 9--16.
+
+\bibitem[\protect\BCAY{Baldwin \BBA\ Tanaka}{Baldwin \BBA\
+  Tanaka}{2000}]{Baldwin00b}
+Baldwin, T.\BBACOMMA\  \BBA\ Tanaka, H. \BBOP 2000\BBCP.
+\newblock \BBOQ The Effects of Word Order and Segmentation on Translation
+  Retrieval Performance\BBCQ\
+\newblock In {\Bem Proc. of the 18th International Conference on Computational
+  Linguistics (COLING 2000)}, \BPGS\ 35--41.
+
+\bibitem[\protect\BCAY{Fujii \BBA\ Croft}{Fujii \BBA\ Croft}{1993}]{Fujii93}
+Fujii, H.\BBACOMMA\  \BBA\ Croft, W. \BBOP 1993\BBCP.
+\newblock \BBOQ A Comparison of Indexing Techniques for {Japanese} Text
+  Retrieval\BBCQ\
+\newblock In {\Bem Proc. of 16th International ACM-SIGIR Conference on Research
+  and Development in Information Retrieval (SIGIR'93)}, \BPGS\ 237--46.
+
+\bibitem[\protect\BCAY{Kitamura \BBA\ Yamamoto}{Kitamura \BBA\
+  Yamamoto}{1996}]{Kitamura96}
+Kitamura, E.\BBACOMMA\  \BBA\ Yamamoto, H. \BBOP 1996\BBCP.
+\newblock \BBOQ Translation Retrieval System Using Alignment Data from Parallel
+  Texts\BBCQ\
+\newblock In {\Bem Proc. of the 53rd Annual Meeting of the IPSJ},
+  \lowercase{\BVOL}~2, \BPGS\ 385--6.
+\newblock (In {Japanese}).
+
+\bibitem[\protect\BCAY{Manning \BBA\ Sch\"utze}{Manning \BBA\
+  Sch\"utze}{1999}]{Manning99}
+Manning, C.\BBACOMMA\  \BBA\ Sch\"utze, H. \BBOP 1999\BBCP.
+\newblock {\Bem Foundations of Statistical Natural Language Processing}.
+\newblock MIT Press.
+
+\bibitem[\protect\BCAY{Matsumoto, Kitauchi, Yamashita, \BBA\ Hirano}{Matsumoto
+  et~al.}{1999}]{Matsumoto99}
+Matsumoto, Y., Kitauchi, A., Yamashita, T., \BBA\ Hirano, Y. \BBOP 1999\BBCP.
+\newblock \BBOQ {\it Japanese Morphological Analysis System {ChaSen} Version
+  2.0 Manual}\BBCQ\
+\newblock \BTR\ NAIST-IS-TR99009, NAIST.
+
+\bibitem[\protect\BCAY{Nakamura}{Nakamura}{1989}]{Nakamura89}
+Nakamura, N. \BBOP 1989\BBCP.
+\newblock \BBOQ Translation Support by Retrieving Bilingual Texts\BBCQ\
+\newblock In {\Bem Proc. of the 38th Annual Meeting of the IPSJ},
+  \lowercase{\BVOL}~1, \BPGS\ 357--8.
+\newblock (In {Japanese}).
+
+\bibitem[\protect\BCAY{Nirenburg, Domashnev, \BBA\ Grannes}{Nirenburg
+  et~al.}{1993}]{Nirenburg93}
+Nirenburg, S., Domashnev, C., \BBA\ Grannes, D. \BBOP 1993\BBCP.
+\newblock \BBOQ Two Approaches to Matching in Example-Based Machine
+  Translation\BBCQ\
+\newblock In {\Bem Proc. of the 5th International Conference on Theoretical and
+  Methodological Issues in Machine Translation (TMI-93)}, \BPGS\ 47--57.
+
+\bibitem[\protect\BCAY{Planas}{Planas}{1998}]{Planas98}
+Planas, E. \BBOP 1998\BBCP.
+\newblock \BBOQ {\it A Case Study on Memory Based Machine Translation
+  Tools}\BBCQ\
+\newblock PhD Fellow Working Paper, United Nations University.
+
+\bibitem[\protect\BCAY{Planas \BBA\ Furuse}{Planas \BBA\
+  Furuse}{1999}]{Planas99}
+Planas, E.\BBACOMMA\  \BBA\ Furuse, O. \BBOP 1999\BBCP.
+\newblock \BBOQ Formalizing Translation Memories\BBCQ\
+\newblock In {\Bem Proc. of Machine Translation Summit VII}, \BPGS\ 331--9.
+
+\bibitem[\protect\BCAY{Salton}{Salton}{1971}]{Salton71}
+Salton, G. \BBOP 1971\BBCP.
+\newblock {\Bem The {SMART} Retrieval System: Experiments in Automatic Document
+  Processing}.
+\newblock Prentice-Hall.
+
+\bibitem[\protect\BCAY{Sato}{Sato}{1992}]{Sato92}
+Sato, S. \BBOP 1992\BBCP.
+\newblock \BBOQ {CTM}: An Example-Based Translation Aid System\BBCQ\
+\newblock In {\Bem Proc. of the 14th International Conference on Computational
+  Linguistics (COLING '92)}, \BPGS\ 1259--63.
+
+\bibitem[\protect\BCAY{Sato \BBA\ Kawase}{Sato \BBA\ Kawase}{1994}]{Sato94a}
+Sato, S.\BBACOMMA\  \BBA\ Kawase, T. \BBOP 1994\BBCP.
+\newblock \BBOQ {\it A High-Speed Best Match Retrieval Method for {Japanese}
+  Text}\BBCQ\
+\newblock \BTR\ IS-RR-94-9I, JAIST.
+
+\bibitem[\protect\BCAY{Sumita \BBA\ Tsutsumi}{Sumita \BBA\
+  Tsutsumi}{1991}]{Sumita91}
+Sumita, E.\BBACOMMA\  \BBA\ Tsutsumi, Y. \BBOP 1991\BBCP.
+\newblock \BBOQ A Practical Method of Retrieving Similar Examples for
+  Translation Aid\BBCQ\
+\newblock {\Bem Transactions of the IEICE}, {\Bem J74-D-II\/}(10), 1437--47.
+\newblock (In {Japanese}).
+
+\bibitem[\protect\BCAY{Tanaka}{Tanaka}{1997}]{Tanaka97}
+Tanaka, H. \BBOP 1997\BBCP.
+\newblock \BBOQ An Efficient Way of Gauging Similarity between Long {Japanese}
+  Expressions\BBCQ\
+\newblock In {\Bem Information Processing Society of Japan SIG Notes},
+  \lowercase{\BVOL}\ 97, no. 85, \BPGS\ 69--74.
+\newblock (In {Japanese}).
+
+\bibitem[\protect\BCAY{Wagner \BBA\ Fisher}{Wagner \BBA\
+  Fisher}{1974}]{Wagner74}
+Wagner, A.\BBACOMMA\  \BBA\ Fisher, M. \BBOP 1974\BBCP.
+\newblock \BBOQ The String-to-String Correction Problem\BBCQ\
+\newblock {\Bem Journal of the ACM}, {\Bem 21\/}(1), 168--73.
+
+\end{thebibliography}
+
+
+\begin{biography}
+
+\vspace*{1cm}
+
+\bioauthor{Timothy Baldwin} { Timothy Baldwin received his BSc in
+  computer science from the University of Melbourne in 1994, and his BA
+  in linguistics and Japanese also from the University of Melbourne in
+  1995. He completed an MEng in computer science at the Tokyo Institute
+  of Technology in 1998, and is currently working towards his PhD at
+  that same institution. His current research interests include machine
+  translation, computational lexical semantics, word sense
+  disambiguation, machine learning and computer-aided language learning.
+  }
+
+\bioauthor{Hozumi Tanaka} { Hozumi Tanaka received his BS in 1964 and MS
+  in 1966, both from the Tokyo Institute of Technology.  In 1966 he
+  joined the Electro Technical Laboratories, Tsukuba.  He received his
+  DEng in 1980 from the Tokyo Institute of Technology, and has been a
+  professor in the Department of Computer Science of that same
+  university since 1983. His main research background is in artificial
+  intelligence and natural language processing.  }
+
+
+\bioreceived{Received}
+\bioaccepted{Accepted}
+
+\end{biography}
+
+
+\end{document}
+
+
+

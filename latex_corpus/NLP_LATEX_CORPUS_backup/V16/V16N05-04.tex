@@ -1,0 +1,1128 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.2}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+
+\Volume{16}
+\Number{5}
+\Month{October}
+\Year{2009}
+
+\received{2009}{3}{25}
+\revised{2009}{6}{11}
+\accepted{2009}{7}{9}
+
+\setcounter{page}{79}
+
+    \usepackage{mymacro_rev}
+
+
+\jtitle{共起パターンの学習による事態間関係知識の獲得}
+\jauthor{阿部　修也\affiref{Author} \and 乾　健太郎\affiref{Author} \and 松本　裕治\affiref{Author}}
+\jabstract{
+  大規模コーパスから事態表現間の意味的関係の知識の獲得を目的として，実
+  体間関係獲得手法として提案されたEspressoを事態間関係に適用できるよう
+  に拡張した．この拡張は主に2つの点からなり，(1) 知識獲得のために事態表
+  現を定義し，(2) 事態間関係に適合するように共起パターンのテンプレート
+  を拡張した．日本語Webコーパスを用いて実験したところ，(a) 事態間関係獲
+  得に有用な共起パターンが多数存在し，パターンの学習が有効であることが
+  わかった．また行為—効果関係については5億文 Web コーパスから少なくと
+  も5,000種類の事態対を約 66\% の精度で獲得することができた．
+}
+\jkeywords{事態間関係，知識獲得，Espresso，共起パターン}
+
+\etitle{Acquiring Event Relation Knowledge by Learning Cooccurrence Patterns and Fertilizing Cooccurrence Samples}
+\eauthor{Shuya Abe\affiref{Author} \and Kentaro Inui\affiref{Author} \and Yuji Matsumoto\affiref{Author}} 
+\eabstract{
+  Aiming at acquiring semantic relations between events from a large
+  corpus, this paper proposes several extensions to a state-of-the-art
+  method originally designed for entity relation extraction. First,
+  expressions of events are defined to specify the class of the
+  acquisition task.  Second, the templates of co-occurrence patterns
+  are extended so that they can capture semantic relations between
+  event mentions. Experiments on a Japanese Web corpus show that (a)
+  there are indeed specific co-occurrence patterns useful for event
+  relation acquisition, and (b) For \textit{action-effect} relation,
+  at least five thousand relation instances are acquired from a
+  500M-sentence Web corpus with a precision of about 66\%.
+}
+\ekeywords{event relation, knowledge acquisition, Espresso, co-occurrence pattern}
+
+\headauthor{阿部，乾，松本}
+\headtitle{共起パターンの学習による事態間関係知識の獲得}
+
+\affilabel{Author}{奈良先端科学技術大学院大学 情報科学研究科}{Graduate School of Information Science, Nara Institute of Science and Technology}
+
+
+
+\begin{document}
+\maketitle
+
+\section{はじめに}
+\label{sec:introduction}
+
+テキスト中の含意関係や因果関係を理解することが，質問応答，情報抽出，複
+数文章要約などの自然言語処理の応用に役立つと知られている．これを実現す
+るためには，例えば，動詞「洗う」と動詞句「きれいになる」が，何かを洗う
+という行為の結果としてその何かがきれいになるという因果関係である，といっ
+たような知識が必要である．本論文では，事態と事態の間にある関係を大規模
+にかつ機械的に獲得するための手法について述べ，この手法を用いた実験結果
+を示す．
+
+因果関係，時間関係，含意関係等の事態間関係を機械的に獲得するための研究
+が既に存在す
+る
+~\cite[etc.]{Dekang-Lin,inui:DS03,chklovski,torisawa:NAACL,pekar:2006:HLT-NAACL06-Main,zanzotto:06}
+．これらの研究に共通する方法論は，特定の事態間関係を表現する語彙統語的
+なパターンを人手で作成し，このパターンと共起する事態対をテキストから抽
+出することで，特定の関係を満たす事態対を獲得するという方法である．な
+お，このように共起関係を利用するパターンを共起パターンと言うことにす
+る．例えば ``to Verb-X and then Verb-Y'' という時間的前後関係を表現する
+共起パターンを用いて，テキスト ``to marry and then divorce''から動詞
+``marry'' と動詞 ``divorce'' が時間的前後関係にあるという知識を獲得でき
+る~\cite{chklovski}．こうした手法では，大量の共起パターンを人手で作成す
+ることが困難であるため，多くの事態対と共起する傾向を持つような一般的な
+共起パターンを用意することで，少量の一般的な共起パターンを用いて特定の
+関係を満たす事態対を大量に獲得することが可能となる．しかし，このような
+一般的な共起パターンを用いて獲得した事態対には誤りが多いという傾向があ
+る．この問題に対処するために，一般的な共起パターンを利用して獲得した事
+態間関係に別の手法を適用して誤った事態間関係を取り除く手法があり，代表
+的なものとして発見的な統計情報を用いる手
+法~\cite{chklovski,torisawa:NAACL,zanzotto:06}と曖昧性の問題を解消する
+ために学習を行う方法~\cite{inui:DS03}がある．
+
+一方で，実体間関係を獲得する研
+究~\cite[etc.]{ravichandran:02,pantel2006}が共起パターンと獲得できる事
+例の性質を次のように報告している．
+\begin{itemize}
+\item 多くの事例と共起するパターン（一般的なパターン）を利用して実体間
+  関係知識を獲得すると精度が低い傾向がある．そのため，精度を向上させる
+  ためには誤った関係を除く別の手法が必要である．
+\item 逆に少数の事例のみと共起するパターン（特殊なパターン）を利用する
+  ことで高い精度で実体間関係を獲得することが可能になる．しかし，大量に
+  実体間関係知識を獲得するためには大量の共起パターンを用意する必要があ
+  る．
+\item 一般的な共起パターンと特殊な共起パターンを組み合わせて実体間関係
+  を獲得することで高い精度で大量の実体間関係知識を獲得できる可能性があ
+  る．
+\end{itemize}
+これを受けてPantelとPennacchiotti~\cite{pantel2006}は，実体間関係を表現
+する共起パターンと実体対をブートストラップ的に獲得する手法を開発した．
+しかし，これと同様の手法は事態間関係獲得でまだ試みられていないため，こ
+の手法を事態間関係獲得に適用した場合に実体間関係獲得のように良い成果を
+上げるのかという点が明かではない．
+
+これらの実体間関係獲得の研究成果を事態間関係獲得に応用するため
+に，PantelとPennacchiotti~\cite{pantel2006}のブートストラップ的実体間関
+係獲得手法を事態間関係獲得に適用させるように拡張し
+（\ref{ssec:argument_selection}〜\ref{ssec:pattern}節），拡張した手法が
+事態間関係獲得においても有効であるかを確認するために，日本語5億文Webコー
+パスから従来の手法と拡張した手法を用いて行為—結果関係にある事態間関係
+を獲得し，この結果を評価する（\ref{sec:experiment}節）．
+
+
+
+\section{事態間関係知識獲得の関連研究}
+\label{sec:related_work}
+
+\sec{introduction}でいくつか関連研究を取り上げたが，そこで紹介できなかっ
+た関連研究を本節で紹介する．
+
+初期の共起パターンを用いた事態間関係獲得の手法はChklovskiとPantel
+~\cite{chklovski}のVerbOceanである．この手法は人手で作成した\textit{to
+  Verb-X and then Verb-Y} のような少数の共起パターンを利用し
+て，\textit{strength}（例えば \textit{taint --
+  poison}）や \textit{happens-before}（例えば \textit{marry --
+  divorce}）のような6種類の事態間関係を獲得し，約29,000の述語対
+を65.6\%の精度で獲得した．
+
+多くの事例と共起するパターンを用いて獲得した事態間関係から誤りを除くた
+めに，Inui ら~\cite{inui:DS03} は因果関係を表わす接続表現「ため」と教師
+付き分類学習を用いて，80\%の再現率と95\%以上の精度で因果関係
+を4種類 \textit{cause}，\textit{precondition}，\textit{effect}，
+\textit{means} に分類した．
+
+他に，Torisawa~\cite{torisawa:NAACL}は接続パターン「Verb-X て Verb-Y」
+を用いて獲得した述語対と，それぞれの述語と格の間の共起情報を組み合せて
+時間的制約にある事態対を獲得した．ただし，この手法は時間的制約にある事
+態対以外の関係を獲得するために応用できるのかは明かではない．
+
+また，共起パターンを用いた~\cite{chklovski}手法を元に
+Zanzottoら~\cite{zanzotto:06}は名詞化した動詞を利用して含意関係にある事
+態対を獲得した．例えば，含意関係 \textit{X wins $\rightarrow$ X plays}
+を \textit{player wins} のようなパターンから獲得した\footnote{動詞
+  ``play'' を名詞化すると名詞 ``player'' となる．}．しかし，動詞を名詞
+化するには様々な変形パターンを考えることができるが，この実験では限定的
+な変形パターンのみを対象としている．
+
+
+\section{Espresso}
+\label{sec:espresso}
+
+本節ではPantelとPennacchiottiが実体間関係を獲得するために開発し
+たEspressoアルゴリズム~\cite{pantel2006} を紹介する．
+
+共起パターンを用いた実体間関係獲得手法のひとつであるEspressoは，特定の
+関係を満たす実体対とよく共起するパターンが存在するという共起パターンを
+用いた手法に共通する仮定を置いている．Espressoは，この仮説に加えて，共
+起パターンまたは実体対が特定の関係を表わす程度を信頼度という指標で表わ
+し，信頼度の高い共起パターンが支持する実体対の信頼度は高く，信頼度の高
+い事態対が支持する共起パターンの信頼度も高いという仮定を置い
+た\footnote{本稿において，「支持する」という言葉は「同時に出現する」と
+  同じ意味とする．例えば，「共起パターンが実体対を支持する」は「共起パ
+    ターンと実体対が同時に出現した」と同じ意味である．}．
+
+このとき，Espressoは人手で作成した信頼度の高い実体対を入力として，これ
+と共起する信頼度の高い共起パターンを獲得する．次に信頼度の高い共起パター
+ンを用いて，信頼度の高い実体対を獲得する．この操作をブートストラップ的
+に繰り返すことで，信頼度の高い実体対を大量に獲得する．
+
+
+\subsection{共起パターンの信頼度}
+\label{ssec:equation}
+
+獲得したい関係にある実体対\bracket{$x, y$}が与えられたとき，Espressoは
+$x$と$y$の両方が含まれた文をコーパスから探し出す．例えば，\textsl{is-a}関
+係の実体対\bracket{$\text{Italy},\text{country}$} が与えられたとき，Espressoは
+テキスト\textit{countries such as Italy}が含まれるような文を見つけ出
+し，共起パターン\textit{Y such as X}を獲得する．Espressoは共起パターン
+$p$の良さを測るために信頼度 $r_\pi(p)$ という尺度を用いる．共起パターン
+の信頼度$r_\pi(p)$は，共起パターン$p$を支持する実体対$i$の信頼度
+$r_\iota(i)$から求められる．共起パターン$p$を支持する実体対$i$の集合を
+$I$とする．
+\begin{eqnarray}
+  \label{eq:rpi}
+  r_\pi(p) = 
+  \frac{1}{|I|}
+  \sum_{i \in I}
+  \frac{\mathit{pmi}(i,p)}{\mathit{max}_{pmi}}
+  \times r_\iota(i)
+\end{eqnarray}
+$\mathit{pmi}(i,p)$は\eq{pmi}で定義される$i$と$p$のpointwise mutual
+information (PMI) であり，$i$と$p$の関連度を表現する．$max_{pmi}$ は，
+共起パターンと実体対が共起した場合全てのPMIの中で最大となるPMIである．
+\begin{eqnarray}
+  \label{eq:pmi}
+  \mathit{pmi}(x, y) = \log\frac{P(x,y)}{P(x)P(y)}
+\end{eqnarray}
+
+PMIは頻度が少ないときに不当に高い関連性を示すという問題が知られている．
+この問題を軽減するために，Espressoでは\eq{pmi}の代り
+に~\cite{pantel2004}で定義された\eq{pmi2}を用いる．
+\begin{eqnarray}
+  \label{eq:pmi2}
+  \mathit{pmi}(x, y) = \log\frac{P(x,y)}{P(x)P(y)} \times
+  \frac{C_{xy}}{C_{xy}+1} \times
+  \frac{min(\sum_{i=1}^{n}C_{x_i},\sum_{j=1}^{m}C_{y_j})}{min(\sum_{i=1}^{n}C_{x_i},\sum_{j=1}^{m}C_{y_j})
+  + 1}
+\end{eqnarray}
+$C_{xy}$は$x_i$と$y_j$が同時に出現した回数，$C_{x_i}$は個々の$x_i$の出
+現した回数，$C_{y_j}$は個々の$y_j$の出現した回数，$n$は$x$の異り数，$m$は
+$y$の異り数である．
+
+
+\subsection{実体対の信頼度}
+
+共起パターンの信頼度と同じように，実体対 $i$ の信頼度 $r_\iota(i)$ を次
+のように定義する．
+\begin{eqnarray}
+  \label{eq:rl}
+  r_\iota(i) = 
+    \frac{1}{|P|}
+    \sum_{p \in P}
+      \frac{\mathit{pmi}(i,p)}{\mathit{max}_{pmi}}
+      \times r_\pi(p)  
+\end{eqnarray}
+共起パターン$p$の信頼度$r_\pi(p)$は, 前述の \eq{rpi} で定義さ
+れ，$max_{pmi}$は先の定義と同じであり，実体対$i$を支持する共起パターン
+$p$の集合を$P$とする．共起パターンの信頼度 $r_\iota(i)$ と実体対の信頼
+度 $r_\pi(p)$ は再帰的に定義され，人手で与えたシード $i$ の信頼度を
+$r_\iota(i) = 1$ とする．なお，我々の拡張では，人手で与えた負例関係にあ
+る事態対の信頼度を $r_\iota(i) = -1$ とした．
+
+
+\section{事態間関係獲得}
+\label{sec:event_relation_acquisition}
+
+実体対関係を獲得するための手法であるEspressoを，我々は事態間関係を獲得
+できるように拡張した．この拡張はEspressoが獲得する対象である「実体対」
+を「事態対」に置き換えたものではあるが，実体と事態は特徴が異なるため，
+様々な変更を施した．本稿では事態間関係獲得に拡張したEspressoを拡張
+Espressoと言うことにする．本節では，拡張Espressoについて説明する．
+
+事態の表現について\ssec{event_representation}〜\ssec{argument_selection}で説明し，共起
+パターンの表現について\ssec{pattern}〜\ssec{volition}で説明し，その他の
+変更を\ssec{verbal_nouns}〜\ssec{eq_change}で説明する．
+
+\subsection{事態の表現}
+\label{ssec:event_representation}
+
+事態は述語項構造を用いて表現する．述語項構造を用いて表現することで，動
+詞句の名詞句化や連体節化，照応/省略などによって表層的な統語構造に生じる
+差異を吸収し，標準的な表現に統一することができる．例えば，「夏目漱石に
+よって発表され た『坊ちゃん』 」や「夏目漱石による『坊ちゃん』の発 表」
+は統語構造では異なるが，述語項構造では「夏目漱石ガ『坊ちゃん』ヲ発表す
+る」に統一される．
+
+また，テキスト中に出現した表記のままではなく，形態素の原形で事態を表現
+する．ただし事態が動詞として出現し，その後に，受け身（〜される），使役（〜
+させる），可能（〜られる），希望（〜したい）を表わす表現が続く場合はこ
+れらも事態の一部であるとみなす．例えば，テキスト中で「走る」という表記
+で出現した場合も「走った」と出現した場合も事態「走る」であるとみなし，
+表現「走りたかった」は事態「走りたい」であるとみなす．
+
+他に，テキスト中にサ変名詞とそれに後続する動詞「する」が表われ，これを
+事態とする場合はサ変名詞の原形と動詞「する」の組み合わせを事態の表現と
+する．例えば，テキスト中の「研究したかった」は事態「研究したい」とみな
+す．
+
+これとは別に，「ある」「なる」「する」のようなそれ自身が意味を持たない
+語句や非常に多義な語句からなる事態対の間には適切な事態間関係が成立し難
+い．そこで，このような語句は，単独では事態とみなさず，直前の格とその格
+要素を含めてひとつの事態とみなす．例えば，テキスト中の「焦げ目が付く」
+の「付く」は単独では事態とみなさないが，「焦げ目が付く」はひとつ事態で
+あるとみなす．
+
+さらに，直前の格がヲ格であり動詞が「する」の場合は，格を省略して格要素
+と「する」を組み合わせてひとつの事態とみなす．例えばテキスト中の「研究
+をする」はヲ格を省略して「研究する」という事態とみなす．
+
+実験では次の語句を単独では事態とみなさないようにした．
+
+\begin{quotation}
+「ある」
+「いく」
+「いる」
+「おこなう」
+「かる」
+「する」
+「ちる」
+「できる」
+「とめる」
+「なる」
+「みる」
+「やる」
+「付く」
+「伝える」
+「似る」
+「作る」
+「使う」
+「保つ」
+「入る」
+「入れる」
+「出す」
+「出る」
+「分かる」
+「加える」
+「取り戻す」
+「取る」
+「向ける」
+「含む」
+「呼ぶ」
+「因る」
+「増える」
+「変わる」
+「変化（する）」
+「寄る」
+「対処（する）」
+「居る」
+「建つ」
+「引く」
+「弱る」
+「影響（する）」
+「得る」
+「思う」
+「拡大（する）」
+「救う」
+「断つ」
+「書く」
+「止める」
+「残る」
+「決定（する）」
+「減る」
+「生じる」
+「知る」
+「立つ」
+「終る」
+「終わる」
+「終了」
+「経つ」
+「経る」
+「続ける」
+「縮小（する）」
+「考え」
+「考える」
+「聞く」
+「行う」
+「見える」
+「見せる」
+「見る」
+「見失う」
+「言う」
+「言える」
+「話す」
+「語る」
+「読む」
+「踏み切る」
+「込める」
+「通る」
+「進む」
+「進める」
+「進展（する）」
+「開始（する）」
+「関係（する）」
+\end{quotation}
+
+このリストは，「付く」のようにほとんど意味を持たないために単独では事態
+と見なせない語句と，「開始する」や「影響する」のように多義であるために
+事態対を構成したときに事態間に適切な関係を成立さえることが難しい語句か
+らなる．
+
+
+\subsection{格の選択}
+\label{ssec:argument_selection}
+
+事態間関係知識をテキストから獲得する際には事態をどの程度一般化するかと
+いう問題がある．実体間関係獲得にも同様の問題はあるが，固有名または1つの
+単語の間で関係が成り立つため，獲得した実体表現を適切に一般化するという
+問題は事態間関係知識獲得と比較して重要ではない．しかし，事態間関係獲得
+においてこの問題は重要であり，実体間関係知識獲得との大きな違いである．
+例を用いてこの問題を説明する．(A)は「肉を焼く」と「焦げ目が付く」が行為
+—効果関係であることを示唆している．
+\begin{itemize}
+\item[(A)] 焦げ目が付くくらい肉を焼く
+\end{itemize}
+このテキストから事態間関係知識を獲得する方法を考えるが，ここでは関係を
+決める方法には触れず，適切な事態対を獲得する方法だけを考慮する．最初に，
+入力文に形態素解析と係り受け解析を適用して動詞とその格を見付ける．ここ
+から，このテキストに含まれる事態は「付く」と「焼く」であることと，「付
+く」の格は「焦げ目が」で，「焼く」の格は「肉を」であることがわかる．こ
+の結果，事態対「焦げ目が付く::肉を焼く」を機械的に獲得することができる．
+この事態対は，人間であれば「肉を焼いたら焦げ目が付く」という行為—効果
+関係であると解釈することができるため，事態間関係になりうる正しい事態対
+である．また，「焼く」の格「肉を」を事態に含めない場合に獲得できる事態
+対は「焦げ目が付く::焼く」であり，この事態対も行為—効果関係と解釈する
+ことができるため正しい事態対である．しかし，動詞「付く」の格「焦げ目が」
+を事態に含めない場合に獲得できる事態対「付く::肉を焼く」と「付く::焼く」
+は行為—効果関係であると解釈することはできないため，事態間関係になりえ
+ない誤った事態対である．まとめると，事態対に含める格を変化させることで
+様々な事態対を獲得できるが，同時に誤った事態対を獲得する可能性が生じる
+ため，正しい事態対のみを選択することが必要である．
+
+この問題に対して我々は，事態対に格を含めるか含めないかという全ての可能
+性を考慮し，\ssec{event_representation} で述べた語句のリストと事態間関
+係獲得モデルの信頼度を用いて正しい事態対を選ぶ．例えば，テキス
+ト(A)から獲得できる事態対は(B)に示すように4種類あ
+る．
+\begin{itemize}
+\item[(B1)] 焦げ目が付く::肉を焼く
+\item[(B2)] 焦げ目が付く::焼く
+\item[(B3)] 付く::肉を焼く
+\item[(B4)] 付く::焼く
+\end{itemize}
+\ssec{event_representation}の語句のリストに事態「付く」が含まれているた
+め，事態「付く」を含む事態対「付く::肉を焼く」と「付く::焼く」を無効な
+事態対とみなすことができ，事態対「焦げ目が付く::肉を焼く」と「焦げ目が
+付く::焼く」を事態対候補とすることができる．仮に「付く」
+が\ssec{event_representation}の語句のリストに含まれていかったとしても，
+「焦げ目が付く::肉を焼く」と「焦げ目が付く::焼く」には高い信頼度が与え
+られ，「付く::肉を焼く」と「付く::焼く」には低い信頼度が与えられると期
+待できるため，最終的に信頼度の高い事態対のみを選ぶことで，適切な事態対
+を選ぶことができる．実験（\sec{experiment}）では計算コストの観
+点から事態の格の数を最大1個に制限した．例えば，事態「肉に焦げ目が付く」
+の可能性として「肉に付く」「焦げ目が付く」「付く」だけを考える（「肉に
+焦げ目が付く」は考えない）．
+
+
+\subsection{共起パターンの表現}
+\label{ssec:pattern}
+
+Espressoは実体間関係を獲得するために「$x$は歴史のある$y$」のような共起
+パターンを用いる．この共起パターンはis-a関係を表現しており，テキスト
+「イタリア\textbf{は歴史のある}国」から「イタリア」は「国」のis-a関係で
+あるという実体間関係知識を獲得する．また，Espressoで用いる共起パターン
+は実体を表現する語句の間にある単語列である．
+
+一方で，我々は事態間関係獲得における共起パターンを，事態を表現する語句
+の間の係り受け関係から成る単語列とした．この理由は，事態においては実体
+と比較して格を考慮することが重要であるという，実体と事態の性質の違いに
+基いている．我々は事態の格を考慮するために係り受け関係を用いる．このと
+き，係り受け関係で構成された事態の間に存在する共起パターンを認識するた
+めにも係り受けを用いることは自然であると考えられる．そのため，我々は係
+り受け関係に基づく共起パターンを用いることにする．
+
+事態間の関係を十分に表現しつつも事態対との共起が疎にならないような共起
+パターンを設計することが重要である．なぜならば，事態間の関係を十分に表
+現するために共起パターンに多くの情報を入れ過ぎると事態対との共起が疎と
+なり，逆に共起パターンから過度に情報を除くと共起パターンは事態間の関係
+を適切に表現しなくなるためである．ここから，共起パターンが含む最適な情
+報量を見付けることが重要な課題であることがわかるが，これは難しい問題で
+ある．この問題に対して，本研究において予備実験から共起パターンを獲得す
+るための規則を決定した．\ssec{pattern2}でこの規則について述べる．
+
+\subsection{事態対の周辺語句からなる共起パターン}
+\label{ssec:pattern2}
+
+本研究で用いる共起パターンは，事態対の間に存在する語句，事態の後方にあ
+る特定の語句，事態の品詞，事態が意志性を持つかという情報からなる．具体
+的には次の通りである．
+
+事態表現を含む文節（事態文節）対が係り受け関係の木において先祖と子
+  孫の関係にある場合のみ，次の規則で表わされる文字列から共起パター
+  ンを構成する．
+\begin{itemize}
+\item[規則ａ\hspace{-1zw}] 　前方の事態文節中で事態を表わす内容語より後方にある機能語列
+  の文字列
+\item[規則ｂ\hspace{-1zw}] 　係り受け関係の木において事態文節対の間に存在する文節中の単
+  語列からなる文字列
+\item[規則ｃ\hspace{-1zw}] 　後方の事態文節または係り先の文節中に次に示す表現が含まれて
+  いる場合，
+  \begin{itemize}
+  \item[規則c1] 文節中に否定表現「〜ない」「〜ません」「〜せず」「〜ぬ」
+    が含まれる場合は，文字列「ない」
+  \item[規則c2] 文節中に可能表現「〜できる」「〜出来る」「〜することが
+    できる」「〜することが出来る」「〜することが可能だ」が含まれる場合
+    は，文字列「できる」
+  \item[規則c3] 文節中に否定表現と可能表現の両方が含まれる場合は，文字
+    列「できない」
+  \end{itemize}
+\item[規則ｄ\hspace{-1zw}] 　事態の品詞を表わす文字列
+\item[規則ｅ\hspace{-1zw}] 　事態の意志性の有無を表わす文字列
+\end{itemize}
+
+共起パターンの例を示す．「／」は文節の区切りを表わす．
+
+(C)は，事態「リラックスする」を含む事態文節が事態「入る」を含む事態文節
+に係っており，事態文節が係り受け関係の木において先祖と子孫の関係にある
+という制約を満すため，この事例から事態対と共起パターンを獲得することが
+できる．このとき，前方の事態「リラックスする」を含む事態文節中で「リラッ
+クスする」よりも後方にある機能語「\textbf{ので}」を共起パターンに加える
+（規則a）．さらに，事態「リラックスする」と事態「入る」の品詞と意志性の
+有無も共起パターンに加える（規則d，規則e）．結果，共起パターンは
+「\bracket{動詞;意志性なし}ので
+\linebreak
+\bracket{動詞;意志性あり}」となる．
+\begin{itemize}
+\item[(C)] リラックスする\textbf{ので}／風呂に／入る
+\end{itemize}
+(D)は，事態「リラックスする」を含む事態文節が文節「\textbf{ために}」に
+係り，文節「\textbf{ために}」が事態「入る」を含む事態文節に係っており，
+事態文節が係り受け関係の制約を満すため，この事例から事態対と共起パター
+ンを獲得することができる．このとき，係り受け木において事態文節間に存在
+する文節「\textbf{ために}」の単語列を共起パターンに加える（規則b）．こ
+れに規則d，規則eを適用し，共起パターンは「\bracket{動詞;意志性なし}ため
+に\bracket{動詞;意志性あり}」となる．
+\begin{itemize}
+\item[(D)] リラックスする／\textbf{ために}／風呂に／入る
+\end{itemize}
+(E)は,事態「退職する」を含む事態文節が文節「\textbf{楽みに}」に係り，文
+節「\textbf{楽みに}」が事態「始める」を含む事態文節に係っており，事態文
+節が係り受け関係の制約を満すため，この事例から事態対と共起パターンを獲
+得することができる．このとき，規則aと規則bより単語列「\textbf{後の楽み
+  に}」を共起パターンに加え，これに規則d，規則eを適用し，共起パターンは
+「\bracket{名詞;意志性なし}後の楽みに\bracket{動詞;意志性あり}」とな
+る．
+\begin{itemize}
+\item[(E)] 退職\textbf{後の}／\textbf{楽みに}／PCを／始める
+\end{itemize}
+
+
+\subsection{共起パターンの表記の統一}
+\label{ssec:pattern3}
+
+前述した方法で獲得した共起パターンの表現を統一するための規則を説明する．
+なお，Espressoにおいても同様の操作を行っている．
+
+共起パターン中の機能表現の表記を揃えるために日本語機能語表現辞
+書~\cite{DBLP:conf/iccpol/MatsuyoshiSU06}を利用し，共起パターン中の日本
+語機能語表現辞書の機能表現レベル9の機能表現を対応する機能表現レベル3の
+機能表現に置き換える．これ以外に，「〜する」と「〜します」を同じ表現と
+みなすために機能表現「ます」を共起パターンから削除する．同様に「〜する」
+と「〜すると思う」を同じ表現とみなすために「と思う」を共起パターンから
+削除する．また，句読点や記号，接尾辞の「達」「等」も共起パターンから削
+除する．
+
+テキスト「\textbf{待つ}こと30分で彼が\textbf{来た}」から「待
+つ」と「来る」の関係を獲得する場合の共起パターンの文字列部分は「こと30分で」である．しかし，この共起パターン中の「30分」は「40分」でも
+「1時間」でもよく，「30分」の部分は時間を意味していればどのような文
+字列でも共起パターンが表現する関係は同じである．これらの共起パターンを
+同じものとみなすために共起パターン中の固有表現相当の文字列を，その固有
+表現の分類で置き換える．例えば，「30分」は時間を表わす固有表現ため，
+共起パターン「こと\textbf{30分}で」を「こと\textbf{固有表現—時間}で」
+と置き換える．
+
+実験ではCaboCha~\cite{cabocha}を用いて固有表現解析\footnote{CaboChaによ
+  る固有表現解析の結果はIREXの定義に基づいた次の9分類である．ARTIFACT,
+  DATE, LOCATION, MONEY, OPTIONAL, ORGANIZATION, PERCENT, PERSON,
+  TIME．}を実施し，この結果を用いて共起パターンの表記を統一した．ま
+た，Cabochaで固有表現であると見なされなかった語についても，固有表現であ
+る可能性が高い品詞を持つ語も固有表現であると見なした．実験で
+は，MeCab\footnote{http://mecab.sourceforge.net/}を用いて形態素解析を
+実施し，この結果を用いて共起パターンの表記を統一した\footnote{IPA品詞体
+  系において次の品詞を固有表現とみなした．名詞—接尾—人名，名詞—接尾—地
+  域，名詞—接尾—助数詞，名詞—数，名詞—固有名詞—一般，名詞—固有名詞—人名，
+  名詞—固有名詞—組織，名詞—固有名詞—地域．なお，CaboChaによる固有表現解
+  析の結果とは独立して扱った．}．
+
+
+\subsection{事態の意志性}
+\label{ssec:volition}
+
+Inuiら~\cite{inui:DS03}は意味推論のための事態間の因果関係について議論を
+行い，事態に関係する意志性を基本とする4種類の因果関係---Effect,
+Means, Precondition, Cause---を定義した．例えば，Effect関係は意志性の
+ある行為と意志性のない結果や状態や出来事や経験の間に成り立つ関係であ
+り，Cause関係は意志性のない状態や出来事や経験の間に成り立つ関係である．
+
+これを受けて，12,000以上の動詞に人手で意志性の有無を付与した辞書を構築
+し，これを実験に用いた．この辞書には，8,968の意志性のある動詞，3,597の
+意志性のない動詞，547の意志性の有無が曖昧な動詞が含まれている．「食べる」
+や「研究する」に「意志性あり」とし，「温まる」や「壊れる」を「意志性な
+し」とした．実験では意志性が曖昧な動詞については共起事例から除いた．ま
+た，この動詞の意志性辞書を利用するとき，辞書に記述されていない動詞で
+「される」が末尾にある事態を「意志性なし」とし，形容詞も「意志性なし」
+とした．
+
+
+\subsection{信頼度の式への変更点}
+\label{ssec:eq_change}
+
+予備実験の結果から，\eq{rpi}，\eq{rl}をそれぞれ\eq{rpi2}，\eq{rl2}に変
+更し，ブートストラップの各段階で信頼度を$-1$〜1の間に正規化するようにし
+た．
+\begin{gather}
+  \label{eq:rpi2}
+  r_\pi'(p) =
+  \sum_{i \in I}
+  \mathit{pmi}(i,p)
+  \times r_\iota'(i) \\
+  \label{eq:rl2}
+  r_\iota'(i) =
+  \sum_{p \in P}
+  \mathit{pmi}(i,p)
+  \times r_\pi'(p)
+\end{gather}
+
+この変更は次の2つの理由から成っている．
+
+\eq{rpi}から$|I|$で割る部分を，\eq{rl}から$|P|$で割る部分を削除した理由
+は，信頼度の高い共起パターンから支持された事態対の信頼度は高く，信頼度
+の高い事態対から支持された共起パターンの信頼度は高いという，Espressoの
+仮定を実現するためである．変更前の式である\eq{rpi}は$|I|$で割ることで，
+共起パターンを支持する事態対の信頼度とPMIをかけた値（PMI信頼度と呼ぶ）
+の平均を共起パターンの信頼度としている（同様に\eq{rl}は$|P|$で割ること
+で，事態対を支持する共起パターンのPMI信頼度の平均を事態対の信頼度として
+いる）．そのため，PMI信頼度の高い事態対（または共起パターン）とPMI信頼
+度の低い事態対（または共起パターン）から支持を受けた共起パターン（また
+は事態対）の信頼度は低くなりがちである．この傾向は，数多くの事態対（ま
+たは共起パターン）から支持される共起パターン（または事態対）においては
+顕著である．なぜならば，こういった共起パターン（または事態対）は，PMI信
+頼度の高い少数の事態対（または共起パターン）とPMI信頼度の低い多数の事態
+対（または共起パターン）から支持される傾向にあるためである．このような
+傾向を考慮し，PMI信頼度の平均ではなく，PMI信頼度を足し合わせた値を信頼
+度とする．
+
+\eq{rpi}と\eq{rl}から$\mathit{max}_{pmi}$で割る部分を削除した理由
+は，$\mathit{max}_{pmi}$で割ることは正規化を目的としていると考えられる
+が，この正規化では信頼度が$-1$〜1の範囲\footnote{シードの信頼度が1である
+  ことを考慮すると，信頼度は$-1$〜1であると考えられる．}におさまらないた
+めである．我々の変更では，$\mathit{max}_{pmi}$で割らない代りにブートス
+トラップの各段階において，信頼度の絶対値が最も大きな信頼度の絶対値で各
+信頼度を割ることで，全ての信頼度を$-1$〜1の間に正規化する．
+
+
+\subsection{事態含意名詞を用いた共起獲得}
+\label{ssec:verbal_nouns}
+
+
+ここまではEspressoを事態間関係獲得に適用させるために施した変更を説明し
+たが，ここでは事態含意名詞という事態表現を考慮した場合の事態間関係獲得
+に与える影響を述べる．
+
+述語または述語を含む句は典型的に事態を表現するため，過去の事態間関係獲
+得手法は述語と述語の共起を利用して事態間の関係を獲得した．しかし，述語
+だけが事態を表現するわけではなく，名詞が事態を含意する場合もある．本論
+文では事態を含意する名詞を事態含意名詞と呼ぶ．例えば，名詞「研究」は事
+態「研究する」を含意する事態含意名詞である．このように動詞「する」を付
+与することで動詞のように働く名詞はサ変名詞を呼ばれる．例えば，(F1)のよ
+うに動詞「する」を伴って動詞のように機能する場合がある．一方，(F2)のよ
+うに格助詞「を」を伴って名詞のように機能する場合がある．また，(F3)のよ
+うにサ変名詞は様々な接尾辞と共に名詞を構成する．
+
+\begin{itemize}
+\item[(F1)] 健が言語を研究する
+\item[(F2)] 健が言語の研究を止めた
+\item[(F3)]
+  \begin{itemize}
+  \item \textit{-者}：\textit{研究者}
+  \item \textit{-室}：\textit{研究室}
+  \item \textit{-後}：\textit{研究後}
+  \end{itemize}
+\end{itemize}
+
+このようなサ変名詞を用いることで，事態間関係と共起パターンの候補を大幅
+に増やすことができる（どの程度増えたかという情報は節\ssec{results}を参
+照）．また，サ変名詞「研究」と動詞「実験する」は(G1)のような文脈でしば
+しば共起するため，(G2)の共起パターンは「実験する」が「研究する」過程の
+一部で行われる行為であるという知識を獲得するための有力な証拠となる可能
+性がある．
+\begin{itemize}
+\item[(G1)] 研究室で実験する
+\item[(G2)] (Act-X) 室で (Act-Y)
+\end{itemize}
+他に，「(Act-X)中に (Act-Y)」という共起パターンも行為間の部分全体関
+係を表わし，「会議中に意見を述べる」や「会議中に話を聞く」から「会議す
+る」の部分関係が「意見を述べる」や「話を聞く」ことであるという知識を獲
+得することができる．さらに，「(Act-X) 後に (Act-Y)」という共起パター
+ンは行為間の前後関係を表わし，「会談後に会見を開いた」から「会談する」
+の後には「会見を開く」という知識を獲得することができる．
+
+このように事態含意名詞を利用することで事態間関係獲得手法を改善できる可
+能性もあるが，次のような欠点もある．それは，名詞として用いられるときの
+サ変名詞は，事態を表わしているのか実体を表わしているのか潜在的に曖昧で
+あるという問題に依る．例えば，サ変名詞「電話」は「電話で」というコンテ
+キストでは「電話をする」と事態を含意しているのか物体としての電話を表し
+ているのか曖昧である\footnote{「電話で連絡する」であれば「電話する」と
+  いう事態を含意している．一方で「電話が壊れる」であれば「電話」という
+  物体を意味している．}．そのため，テキストからサ変名詞を伴う共起事例を
+獲得するさいに，この曖昧性を解消して事態を含意するサ変名詞のみを共起事
+例として利用するべきであるが，この曖昧性解消は困難な問題であり，我々の
+事態間関係獲得という問題の範囲を超えている．そのため，実験では曖昧性を
+解消せずに全てのサ変名詞は事態を含意していると見なすことで，事態含意名
+詞の利用による影響を確認する\footnote{このサ変名詞が事態を表わしている
+  かの判定が事態間関係獲得の性能にどのような影響を与えるのかは興味深い
+  問題である．}．このように事態含意名詞の利用は利点と欠点があるため，事
+態含意名詞を用いることが事態間関係知識獲得にとって効果的であるとは言う
+ことができない．これを確認するために，実験によって事態含意名詞の効果を
+測る．
+
+実験ではIPA品詞体系で品詞「名詞—接尾」を接尾辞とみなし，係助詞，ガ格，
+ヲ格，ニ格を伴うサ変名詞は事態性が曖昧になりがちであるため，これらを事
+態含意名詞とはみなさないようにする．
+
+
+
+\section{実験}
+
+\subsection{実験条件}
+\label{sec:experiment}
+
+人手で作成した行為—効果関係を表す共起パターンを用いて事態間関係を獲得
+した場合と拡張Espressoを用いた場合を比較するために，それぞれの手法を用
+いて実験を行った．
+
+実験では，河原ら~\cite{kawahara2006}がWebから収集した約5億文の日本語コー
+パスを用いた．これに対してMeCabで形態素解析，CaboCha~\cite{cabocha}で係
+り受け解析を行い，~\sec{event_relation_acquisition}で述べた方法で事態
+対と共起パターンを抽出した．このとき，事態対と共起パターンの共起頻度が
+20回未満の事例，ガ格やヲ格の格要素が事態性名詞となる事例を除いた．
+
+我々は事態間の意味を推論するために事態間関係知識を獲得しているの
+で，Inuiら~\cite{inui:DS03}が意味推論のために定義した事態間の因果関係を
+用いる．本実験では4つの因果関係のうちEffectの関係を獲得する実験を行う．
+ここではEffect関係を行為—効果関係と呼び，「行為の結果事態がおうおうに
+して起こる．または行為をすることは事態を保つこと．」とその関係を定義し
+た．
+
+
+\subsection{結果}
+\label{ssec:results}
+
+行為—効果関係にある事態対を人手で少量作成し，これを正例シードとして拡
+張Espressoを用いて事態対を獲得する\footnote{このときは負例シードがない
+  ため，負例シードを用いないで拡張Espressoを利用する．}．ここで獲得した事
+態対を人手で見直し，行為—効果関係にある事態対を正例シードに，行為—効
+果関係にないシードを負例シードに追加し，再び拡張Espressoを用いて事態対
+を獲得する．ここで獲得した事態対を人手で見直しシードに追加して拡張
+Espressoを利用する，という操作を何度か試行し，正例971事態対と負例1,069事
+態対のシードを作成した．
+
+次に，これをシードとして拡張Espressoを用いて事態対を獲得した（このとき
+  事態含意名詞も利用する）．このとき共起パターンの獲得と事態対の獲得を
+20回繰り返した結果，共起パターン34,993個，事態対173,806個を得た．ここで獲
+得した共起パターンと共起した事態対の例を表\ref{tab:examples}に示
+す\footnote{表ではひとつの共起パターン毎に共起した事態対を示している
+  が，共起パターンが複数の事態対から支持されているように，事態対も複数
+  の共起パターンから支持されている．}．
+
+\begin{table}[tb]
+  \caption{共起パターンと事態対の例}
+  \label{tab:examples}
+\input{04table01.txt}
+\end{table}
+
+拡張Espressoと比較するために，行為—効果関係を表す接続表現「（〜し）た
+  ため」「（〜し）たから」「（〜し）て」を用いて事態対を獲得した．
+
+\subsection{評価}
+
+人手で作成した少数の共起パターンを用いて獲得した事態間関係の精度と拡張
+Espressoで獲得した事態間関係の精度を比較する．
+
+人手で作成した少数の共起パターンを用いて獲得した事態対をPMIの値の高い順
+に並べ，上位1〜500件，501〜1,500件，1,501〜3,500件，3,500〜7,500件からそれぞ
+れ100件ずつランダムに事態対をサンプリングした．同様に，拡張Espressoで獲
+得した事態対からシードに含まれている事態対を除き，これを信頼度の値の高
+い順に並べ，4つの区間からそれぞれ100件ずつランダムにサンプリングした．
+
+それぞれサンプリングした事態対が正しい関係にあるかを評価者2名で判断し
+た．このとき次の2つの条件を両方とも満たす事態対を正しい関係とした．
+\begin{description}
+\item [(a)] 事態対が行為—効果関係である．ただしこの関係は必然的である
+  必要はなく，しばしば関係が成立する場合も正解とする．
+\item [(b)] 事態対の間で最低でもひとつの格要素が共有されていれば正解と
+  する．
+\end{description}
+例えば「飲む→二日酔いになる」は行為—効果関係である．行為「飲む」の結
+果として必然的に状態「二日酔いになる」とはならないが，しばしば状態「二
+日酔いになる」という結果になるため条件(a)を満している．さらに，この場合
+は飲む人と二日酔いになる人が同じ人物であり，「$X$が飲む→$X$が二日酔い
+になる」（$X$には，「部長」や「太郎」など同じ語が入る）と解釈できるため
+条件(b)を満している．よって，条件(a)と(b)を満しているため「飲む→二日酔
+いになる」は行為—効果関係にある．
+
+条件(b)について補足する．\textit{XがVP$_1$→XがVP$_2$} （前件と後件の間
+でガ格の要素が等しい）場合と\textit{XをVP$_1$→XがVP$_2$}（前件のヲ格の
+要素と後件のガ格の要素が等しい）場合の両方とも正解とする．どの格の要素
+が共有しているのかを自動的に決定する手法の開発は将来の課題である．
+
+評価者2人が共に正しいと判断した事態対のみを正解とした．
+
+また，2人の評価結果の$\kappa$統計値は，人手で作成した共起パターンを用い
+た場合の結果では0.55，拡張Espressoを用いた結果では0.53であった．この値
+はどちらも「moderate」であると解釈できる．そのため，2人の評価結果は適度
+に一致しており，この精度は信頼できる．
+
+
+\subsection{拡張Espressoの精度}
+\label{ssec:experiment_main}
+
+\begin{figure}[t]
+\begin{center}
+  \includegraphics{16-4ia4f1.eps}
+\end{center}
+  \caption{共起パターンを用いた手法と拡張Espressoの比較}
+  \label{fig:baseline_vs_bootstrapping}
+\end{figure}
+
+\fig{baseline_vs_bootstrapping}は，人手で作成した少数の共起パターンを用
+いた場合と拡張Espressoを比較した結果であり，Espressoを拡張した手法の方
+が高い精度で事態間関係を獲得できている．ここから実体間関係知識の獲得で
+用いられた手法を事態間関係獲得に応用できるこ
+と，\sec{event_relation_acquisition}で述べた拡張方法が適切であったこと
+がわかる．
+
+信頼度の高い1〜500件の領域では高い精度で事態間関係を獲得しており，信頼
+度と精度の間に相関関係があり，信頼度という指標が事態間関係獲得に寄与し
+ているように解釈することができる．一方で，これより信頼度の低い領域では
+信頼度と精度の間に相関関係がないように見え
+る．\fig{change_of_reliability}は事態対を信頼度の高い順に並べたときの信
+頼度の分布を表しており，この図から例えば10番目に信頼度が高い事態対の信
+頼度と110番目の事態対の信頼度の値の差は大きな違いであるが，1,000番目
+と2,000番目の事態対の信頼度の値の差は小さいことがわかる．よって，信頼度
+の低い領域では信頼度と精度の間には相関関係があり，信頼度という指標が事
+態間関係獲得に寄与していることがわかる．
+
+\begin{figure}[p]
+\begin{center}
+  \includegraphics{16-4ia4f2.eps}
+\end{center}
+  \caption{獲得した事態対を信頼度順に並べたときの信頼度}
+  \label{fig:change_of_reliability}
+\end{figure}
+\begin{figure}[p]
+\begin{center}
+  \includegraphics{16-4ia4f3.eps}
+\end{center}
+  \caption{シードを半分だけ利用した場合の精度}
+  \label{fig:using_half_seed}
+\end{figure}
+
+
+\subsection{シードの数の影響}
+\label{seed_number}
+
+拡張Espressoにおいて，シードの数が事態間関係獲得の精度に与える影響を確
+認するために，行為—効果関係のシードを正例500事態対と負例500事態対にし
+て実験を行った．精度を\fig{using_half_seed}に示す\footnote{この評価は
+  1名で行った．そのため，\fig{using_half_seed}の「シードを全て利用」
+  も「シードを半分だけ利用」も1名で評価したときの精度である．}．この結
+果は全てのシードを用いた場合と比較して低い精度であり，信頼度が高い領域
+でも低い領域でも精度が低下している．ここから拡張Espressoは小さなシード
+集合で動くように設計されているが，その結果はシードの数に依存しているこ
+とがわかる．さらにシードを追加することでが精度向上の可能性があることが
+わかる．
+
+
+
+\subsection{事態性名詞を用いたときの効果}
+
+事態含意名詞が精度に与える効果を確認するために，事態含意名詞を用いた場
+合の精度と，そこから事態含意名詞の影響を除いた場合の精度を比較した．
+\fig{without_noun}は，\ssec{experiment_main}から事態含意名詞の影響を除
+いた結果である．この結果は，事態含意名詞の影響を除くために事態が事態含
+意名詞として出現したときの共起パターンの信頼度を0とみなし，事態対の信頼
+度を再計算し，再び信頼度の順番に並べ替えた結果である．事態含意名詞を用
+いた場合も事態含意名詞の影響を除いた場合もほぼ同じ精度であり，事態含意
+名詞の利用はほとんど精度に影響していないことがわかる．
+
+\begin{figure}[b]
+\begin{center}
+  \includegraphics{16-4ia4f4.eps}
+\end{center}
+  \caption{事態含意名詞を用いない場合の精度}
+  \label{fig:without_noun}
+\end{figure}
+
+また，本実験で獲得した全ての事態対は，述語対と共起可能なパターンから支
+持されていた．つまり，事態含意名詞と共起可能なパターンから支持されてい
+た事態対は，述語対と共起可能なパターンからも支持されていた．そのため，
+事態含意名詞を用いることで初めて獲得できるような事態対は出現しなかっ
+た\footnote{例えば，事態間関係「検索する::見つかる」は，事態含意名詞と
+  共起するパターン「〈名詞;意志性あり〉をして〈動詞;意志性
+      なし〉ない」や「〈名詞;意志性あり〉をすれば〈動詞;意
+      志性なし〉」と共起したが，動詞対と共起するパターン「〈動詞;意
+      志性あり〉ものの〈動詞;意志性なし〉ない」とも共起していた．}．
+
+
+\subsection{格の選択}
+
+\fig{strict_vs_lenient}は，(a)格を含めて正しい事態間関係を正解した場合
+の精度と，(b)誤った事態間関係であるが適切な格を追加することで正しい事態
+間関係になる事例も正解とした場合の精度を比較している．例えば，行為—効
+果の関係において\textit{Xが食べる}と\textit{Xが死ぬ}は誤りであるが，前
+件に「毒茸を」があれば正解であるため，この事例は(a)の基準では不正解であ
+るが，(b)の基準では正解とみなす．なお，ここまでの評価全て(a)の基準で行っている．
+
+\begin{figure}[b]
+\begin{center}
+  \includegraphics{16-4ia4f5.eps}
+\end{center}
+  \caption{格を考慮しない場合の精度}
+  \label{fig:strict_vs_lenient}
+\end{figure}
+
+我々はEspressoを拡張する際に単純な手法で格の選択という問題に対処したが，
+この結果から，このような単純な手法では適切に格を選択することが難しいこ
+とがわかった．他にこの結果から適切に格を選択することで最大26\%精度向上
+を期待することができるため，事態間関係獲得において格の選択という問題が
+重要であることがわかる．
+
+
+\section{結論と今後の課題}
+\label{sec:discussion}
+
+実体間関係を獲得するためにブートストラップ的に共起パターンを獲得する手
+法を拡張して事態間関係に適用した．事態間関係獲得にこの手法が適用できる
+という報告は過去になく，本実験の結果，この手法が事態間関係獲得にも有効
+であることがわかった．また，事態の格を選択するということが重要な問題で
+あることを明かにした．格の選択という問題は，実体間関係では重要ではない
+が事態間関係では重要な問題である．
+
+次に今後の課題を述べる．
+
+今回の実験では，前件と後件の間で任意の格の格要素が共有され，かつ任意の
+関係にある事態対を正解とした．しかし知識という視点からは前件と後件の間
+でどの格の格要素が共有されているのか明かになった方が利便性がある．例え
+ば，行為—効果関係「〈A氏〉が〈花瓶〉を投げる」と「〈花瓶〉が壊れる」の
+間では，前件のヲ格と後件のガ格の格要素が共有されており，正しい関係であ
+れば前件のガ格と後件のガ格は共有されていない．このようにどの格の格要素
+が共有されているかで事態間関係の正解／不正解が変化する場合があるため，
+今回の手法で獲得した知識では問題になる場合がある．そのため，我々は将来
+的には格要素がどの格で共有されているかを判断できるようにしたいと考えて
+いる．だが今回の手法では格要素がどの格で共有されているかを判断すること
+は難しい．なぜならば，「水を冷して飲む」とは言うが「水を冷して水を飲む」
+のようにはあまり言わないように，同一文内で共起する述語対の格はしばしば
+省略される傾向にあるため，同一文内で共起する述語対から関係を獲得してい
+る我々の手法では，どの格が省略されているのかをあてない限り，どの格が共
+有されているかを認識することは難しい．そのため，どの格が共有されていの
+かをあてるためには，格の省略をあてるか，別の手法を用いてどの格が共有さ
+れているのかを当てる必要がある．今後はこの問題に取り込みたい．
+
+今回の実験では，前件と後件の間で任意の格の格要素が共有され，かつ任意の
+関係にある事態対を正解とした．しかし知識という視点からは前件と後件の間
+でどの格の格要素が共有されているのか明かになった方が利便性がある．例え
+ば，行為—効果関係「〈A氏〉が〈花瓶〉を投げる」と「〈花瓶〉が壊れる」の
+間では，前件のヲ格と後件のガ格の格要素が共有されており，正しい関係であ
+れば前件のガ格と後件のガ格は共有されていない．このようにどの格の格要素
+が共有されているかで事態間関係の正解／不正解が変化する場合があるため，
+今回の手法で獲得した知識では問題になる場合がある．そのため，我々は将来
+的には格要素がどの格で共有されているかを判断できるようにしたいと考えて
+いる．しかし，「水を冷して飲む」とは言うが「水を冷して水を飲む」とはあ
+まり言わないように，同一文内で共起する述語対の格はしばしば省略される傾
+向にあるため，同一文内で共起する述語対から関係を獲得している我々の手法
+では共有されている格を認識することが難しい．そのため，共有されている格
+を認識するためには，前処理として格の省略を認識した後で我々の手法を用い
+るか，別の独立した手法を用いて共有されている項を認識する必要がある．今
+後はこの問題に取り込みたい．
+
+実験では5億文から事態間関係知識を獲得したが，事態対とそれと共起するパター
+ンの頻度が十分でないために正確な統計量を推定できないことがあった．今
+後，より多くの文から事態間関係知識を獲得することで精度が向上することを
+実験により確認したい．
+
+本手法は原理的には様々な事態間関係を扱うことができるが，今回の実験では
+行為—効果関係を満たす事態対を獲得できることのみを確認した．今後は，行
+為—効果関係以外の事態間関係獲得に本手法を利用できることを実験的に確認
+したい．
+
+本稿では，アプリケーションへの応用を目指して事態間関係知識を獲得し，こ
+の知識の精度を直接的に評価した．次に，アプリケーションへ知識を適用した
+場合の性能を測るためにタスクベースの評価を検討しているが，これに必要な
+日本語のベンチマークが未だ存在しない．今後は，ベンチマークの作成と，こ
+れを用いた評価を予定している．
+
+
+
+
+
+\acknowledgment
+「Web上の5億文の日本語テキスト」の使用許可を下さった情報通信研究機構
+の河原大輔氏と京都大学大学院の黒橋禎夫氏に感謝いたします．
+
+
+
+
+
+\bibliographystyle{jnlpbbl_1.4a}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Chklovski \BBA\ Pantel}{Chklovski \BBA\
+  Pantel}{2005}]{chklovski}
+Chklovski, T.\BBACOMMA\ \BBA\ Pantel, P. \BBOP 2005\BBCP.
+\newblock \BBOQ Global Path-based Refinement of Noisy Graphs Applied to Verb
+  Semantics.\BBCQ\
+\newblock In {\Bem Proceedings of Joint Conference on Natural Language
+  Processing (IJCNLP-05)}, \mbox{\BPGS\ 792--803}.
+
+\bibitem[\protect\BCAY{Inui, Inui, \BBA\ Matsumoto}{Inui
+  et~al.}{2003}]{inui:DS03}
+Inui, T., Inui, K., \BBA\ Matsumoto, Y. \BBOP 2003\BBCP.
+\newblock \BBOQ What kinds and amounts of causal knowledge can be acquired from
+  text by using connective markers as clues?\BBCQ\
+\newblock In {\Bem Proceedings of the 6th International Conference on Discovery
+  Science}, \mbox{\BPGS\ 180--193}.
+\newblock An extended version: Inui T., Inui K., and Matsumoto Y. (2005).
+  Acquiring causal knowledge from text using the connective marker tame. {\em
+  ACM Transactions on Asian Language Information Processing (TALIP)},
+  \textbf{4}(4), pp.~435--474.
+
+\bibitem[\protect\BCAY{Kawahara \BBA\ Kurohashi}{Kawahara \BBA\
+  Kurohashi}{2006}]{kawahara2006}
+Kawahara, D.\BBACOMMA\ \BBA\ Kurohashi, S. \BBOP 2006\BBCP.
+\newblock \BBOQ Case Frame Compilation from the Web using High-Performance
+  Computing.\BBCQ\
+\newblock In {\Bem Proceedings of the 5th International Conference on Language
+  Resources and Evaluation}.
+
+\bibitem[\protect\BCAY{Kudo \BBA\ Matsumoto}{Kudo \BBA\
+  Matsumoto}{2002}]{cabocha}
+Kudo, T.\BBACOMMA\ \BBA\ Matsumoto, Y. \BBOP 2002\BBCP.
+\newblock \BBOQ Japanese Dependency Analysis using Cascaded Chunking.\BBCQ\
+\newblock In {\Bem CoNLL 2002: Proceedings of the 6th Conference on Natural
+  Language Learning 2002 (COLING 2002 Post-Conference Workshops)}, \mbox{\BPGS\
+  63--69}.
+
+\bibitem[\protect\BCAY{Lin \BBA\ Pantel}{Lin \BBA\ Pantel}{2001}]{Dekang-Lin}
+Lin, D.\BBACOMMA\ \BBA\ Pantel, P. \BBOP 2001\BBCP.
+\newblock \BBOQ {DIRT}---Discovery of Inference Rules from Text.\BBCQ\
+\newblock In {\Bem Proceedings of ACM SIGKDD Conference on Knowledge Discovery
+  and Data Mining 2001}, \mbox{\BPGS\ 323--328}.
+
+\bibitem[\protect\BCAY{Matsuyoshi, Sato, \BBA\ Utsuro}{Matsuyoshi
+  et~al.}{2006}]{DBLP:conf/iccpol/MatsuyoshiSU06}
+Matsuyoshi, S., Sato, S., \BBA\ Utsuro, T. \BBOP 2006\BBCP.
+\newblock \BBOQ Compilation of a Dictionary of Japanese Functional Expressions
+  with Hierarchical Organization.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on Computer
+  Processing of Oriental Languages}, \mbox{\BPGS\ 395--402}.
+
+\bibitem[\protect\BCAY{Pantel \BBA\ Pennacchiotti}{Pantel \BBA\
+  Pennacchiotti}{2006}]{pantel2006}
+Pantel, P.\BBACOMMA\ \BBA\ Pennacchiotti, M. \BBOP 2006\BBCP.
+\newblock \BBOQ Espresso: Leveraging Generic Patterns for Automatically
+  Harvesting Semantic Relations.\BBCQ\
+\newblock In {\Bem the 21st International Conference on Computational
+  Linguistics and 44th Annual Meeting of the ACL}, \mbox{\BPGS\ 113--120}.
+
+\bibitem[\protect\BCAY{Pantel \BBA\ Ravichandran}{Pantel \BBA\
+  Ravichandran}{2004}]{pantel2004}
+Pantel, P.\BBACOMMA\ \BBA\ Ravichandran, D. \BBOP 2004\BBCP.
+\newblock \BBOQ Automatically Labeling Semantic Classes.\BBCQ\
+\newblock In {\Bem Proceedings of Human Language Technology / North American
+  chapter of the Association for Computational Linguistics}, \mbox{\BPGS\
+  321--328}.
+
+\bibitem[\protect\BCAY{Pekar}{Pekar}{2006}]{pekar:2006:HLT-NAACL06-Main}
+Pekar, V. \BBOP 2006\BBCP.
+\newblock \BBOQ Acquisition of Verb Entailment from Text.\BBCQ\
+\newblock In {\Bem Proceedings of the Human Language Technology Conference of
+  the NAACL, Main Conference}, \mbox{\BPGS\ 49--56}.
+
+\bibitem[\protect\BCAY{Ravichandran \BBA\ Hovy}{Ravichandran \BBA\
+  Hovy}{2002}]{ravichandran:02}
+Ravichandran, D.\BBACOMMA\ \BBA\ Hovy, E. \BBOP 2002\BBCP.
+\newblock \BBOQ Learning surface text patterns for a Question Answering
+  System.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on
+  Computational Linguistics and 40th Annual Meeting of the Association for
+  Computational Linguistics}, \mbox{\BPGS\ 41--47}.
+
+\bibitem[\protect\BCAY{Torisawa}{Torisawa}{2006}]{torisawa:NAACL}
+Torisawa, K. \BBOP 2006\BBCP.
+\newblock \BBOQ Acquiring Inference Rules with Temporal Constraints by Using
+  Japanese Coordinated Sentences and Noun-Verb Co-occurrences.\BBCQ\
+\newblock In {\Bem Proceedings of the Human Language Technology Conference of
+  the NAACL, Main Conference}, \mbox{\BPGS\ 57--64}.
+
+\bibitem[\protect\BCAY{Zanzotto, Pennacchiotti, \BBA\ Pazienza}{Zanzotto
+  et~al.}{2006}]{zanzotto:06}
+Zanzotto, F.~M., Pennacchiotti, M., \BBA\ Pazienza, M.~T. \BBOP 2006\BBCP.
+\newblock \BBOQ Discovering Asymmetric Entailment Relations between Verbs Using
+  Selectional Preferences.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on
+  Computational Linguistics and 44th Annual Meeting of the Association for
+  Computational Linguistics}, \mbox{\BPGS\ 849--856.}\ Sydney, Australia.
+  Association for Computational Linguistics.
+
+\end{thebibliography}
+
+\begin{biography}
+\bioauthor{阿部　修也}{
+2008年奈良先端科学技術大学院大学後期課程単位取得満期退学．
+同年，奈良先端科学技術大学院大学研究員，
+現在に至る．
+専門は自然言語処理．
+情報処理学会員． 
+
+}
+\bioauthor{乾　健太郎}{
+1995年東京工業大学大学院情報理工学研究科博士課程修了．工学博士．同研究科助手，九州工業大学情報工学部助教授を経て，2002年より奈良先端科学技術大学院大学情報科学研究科助教授．現在同研究科准教授，情報通信研究機構有期研究員を兼任．自然言語処理の研究に従事．情報処理学会，人工知能学会，ACL各会員，Computational Linguistics編集委員．
+}
+\bioauthor{松本　裕治}{
+1977年京都大学工学部情報工学科卒．
+1979年同大学大学院工学研究科修士課程情報工学専攻修了．
+工学博士．
+同年電子技術総合研究所入所．
+1984〜1985年英国インペリアルカレッジ客員研究員．
+1985〜1987年（財）新世代コンピュータ技術開発機構に出向．
+京都大学助教授を経て，1993年より奈良先端科学技術大学院大学教授，現在に至る．
+専門は自然言語処理．
+情報処理学会，
+人工知能学会，
+日本ソフトウェア科学会，
+認知科学会，
+AAAI, ACL, ACM各会員．
+}
+
+\end{biography}
+
+
+\biodate
+
+\end{document}

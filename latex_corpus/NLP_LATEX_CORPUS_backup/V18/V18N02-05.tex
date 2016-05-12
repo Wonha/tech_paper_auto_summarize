@@ -1,0 +1,613 @@
+    \documentclass[english]{jnlp_JS2.0}
+
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvips]{graphicx}
+\usepackage{hangcaption_jnlp}
+\usepackage{amsmath,amssymb}
+
+
+
+\Volume{18}
+\Number{2}
+\Month{June}
+\Year{2011}
+
+\received{2010}{10}{7}
+\revised{2011}{1}{11}
+\rerevised{2011}{1}{11}
+\accepted{2011}{2}{23}
+
+\setcounter{page}{153}
+
+
+\etitle{Active Learning with Subsequence Sampling Strategy\\for Sequence Labeling Tasks}
+\eauthor{Dittaya Wanvarie\affiref{inst1} \and Hiroya Takamura\affiref{inst2} \and Manabu Okumura\affiref{inst2}} 
+\eabstract{
+We propose an active learning framework for sequence labeling tasks. In each iteration, a set of subsequences are selected and manually labeled, while the other parts of sequences are left unannotated. The learning will stop automatically when the training data between consecutive iterations does not significantly change. We evaluate the proposed framework on chunking and named entity recognition data provided by CoNLL. Experimental results show that we succeed in obtaining the supervised $F_1$ only with 6.98\%, and 7.01\% of tokens being annotated, respectively.
+}
+\ekeywords{Active Learning, Sequence Labeling, Partial Annotation}
+
+\headauthor{Wanvarie et al.}
+\headtitle{AL with Subsequence Sampling Strategy for Sequence Labeling Tasks}
+
+\affilabel{inst1}{}{Department of Computational Intelligence and Systems Science, Tokyo Institute of Technology}
+\affilabel{inst2}{}{Precision and Intelligence Laboratory, Tokyo Institute of Technology}
+
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+
+Sequence labeling has many applications in natural language processing such as part-of-speech tagging, shallow parsing, semantic role labeling. Sequence labeling is a kind of the classification tasks. A classifier, or a tagger, will predict the output of each token in the given sequence. Sequence labeling is not trivial due to the dependency among the output labels in the sequence. The dependency also makes the annotation difficult, and is also the reason of high annotation cost.
+
+We can divide a sequence into smaller subsequences consisting of tokens, and label each subsequence. In many cases, labeling a subsequence is easier than labeling the whole sequence. For example, we can exploit the keyword link in Wikipedia text for word boundaries. \cite{Culotta2005} proposed an annotation style for information extraction (IE), which allows users to partially label the entity in the document. If we can train a tagger using partially labeled sequences instead of the fully labeled sequences, we can reduce the human annotation effort. 
+
+There are several approaches to train a tagger using partially labeled sequences. Suppose that we have a tagger, we can give labels to the unlabeled parts using the model prediction. However, the prediction is not as accurate as the manual annotation. Moreover, adding mis-labeled tokens to the training set usually decreases the accuracy of the tagger. Instead, we propose to automatically estimate the label of unlabeled tokens without explicitly labeling them. The taggers in early iterations are usually not accurate, and may incorrectly predict the output labels. These implicitly incorrectly labeled tokens may be corrected when the taggers become more accurate in later iterations.
+
+Active learning is another approach to reduce the annotation cost from the conventional passive learning by elaborately selecting the informative samples for training. The conventional active learning treats a sequence as a sample and search for the informative sequence. We argue that we are required to label some unnecessary tokens using this sequence sampling strategy. Since we propose to partially label a sequence, we propose a subsequence sampling strategy which is more efficient than the sequence sampling for our framework.
+
+The organization of the rest of paper is as follows. We start with the discussion on related work to the proposed framework in section \ref{Sec:RelatedWork}. Section \ref{Sec:CRFs} is devoted to the parameter estimation of CRFs. In section \ref{Sec:Proposed}, we describe our framework in detail. Section \ref{Sec:Experiments} contains the experiments, discussion and analysis of the result. Finally, we conclude our contribution and discuss the future work in section \ref{Sec:Conclusion}.
+
+
+
+\section{Related work}
+\label{Sec:RelatedWork}
+
+Several algorithms are proposed to solve the sequence labeling task such as Hidden Markov Models (HMMs) \cite{Rabiner89}, Conditional Random Fields (CRFs) \cite{LaffertyCRF}, Perceptron, Support Vector Machine (SVM) \cite{Kudo2001}, and ensemble approaches which combine the result of two or more approaches together \cite{Nguyen2007}. Each of the mentioned algorithms is primarily proposed as a supervised learning algorithm, whose performance relies on a large amount of labeled data. The cost of data labeling is the main disadvantage of supervised learning, especially in the task such as sequence labeling whose data labeling is very expensive.
+
+Semi-supervised learning is a learning paradigm which can benefit from both the highly-accurate-but-costly labeled data, and noisy-but-cheap unlabeled data. On one hand, we can boost the accuracy of the supervised system using additional large amount of unlabeled data \cite{Ando2005,Suzuki2008}. On the other hand, we can reduce the annotation cost of a new corpus by labeling only a small part of the corpus, while maintaining the comparable accuracy to the supervised approaches which requires full annotation \cite{Culotta2005}.
+
+There are several approaches in the semi-supervised learning paradigm. Self-training and transductive SVM \cite{TransductiveSVM} are examples of semi-supervised learning which assume that the unlabeled data has the same structure as the labeled data. Hence, we can propagate the knowledge from the labeled set to the unlabeled set. Self-taught learning \cite{Raina2007} starts learning the general concept from unlabeled data, and refine the concept to the specific task using labeled data. \cite{Suzuki2008} separated the model parameters for labeled and unlabeled data, and estimate both types of parameters simultaneously. \cite{Dasgupta2009} proposed to label only ambiguous samples and automatically label easy samples. 
+
+Using partially labeled data is another kind of semi-supervised learning approaches. Partially labeled data is obtained easier than fully labeled data in many situations. We can train a classifier on partially labeled sequences by predicting the labels of unlabeled tokens \cite{Tomanek2009}, propagating the label information from labeled to unlabeled tokens \cite{Culotta2005}, or implicitly estimating the labels in the training process \cite{Bellare2007,Tsuboi2008}. Another approach is to simplify the training into the point-wise learning, by neglecting the dependencies among output labels \cite{Neubig2010}.
+
+Apart from the semi-supervised learning, active learning paradigm is proposed to reduce the annotation cost from the passive learning by elaborately selecting highly informative samples for the training. \cite{Settles2008} have compared several active learning strategies for fully supervised sequence labeling tasks . Active learning is also used in combination with semi-supervised learning methods in order to reduce the annotation cost \cite{Tomanek2009,Dasgupta2009}.
+
+
+\section{Conditional random fields (CRFs)}
+\label{Sec:CRFs}
+
+
+\subsection{Conventional conditional random fields}
+\label{Sec:ConventionalCRFs}
+
+The objective of the sequence labeling task is to find an output label sequence $\mathbf{y} \in \mathbf{Y} : (y_1,...,y_T)$ of the given input sequence $\mathbf{x} \in \mathbf{X} : (x_1,...,x_T)$. $\mathbf{X}$ and $\mathbf{Y}$ is the set of all possible input and the corresponding output sequences, respectively. $T$ is the length of the sequence. We employ the conditional random fields
+(Lafferty et al. 2001)
+ to model the probability of $\mathbf{y}$, given $\mathbf{x}$ by
+\begin{equation}
+	P_{\mathbf{\theta}}(\mathbf{y|x}) = \frac {e^{\mathbf{\theta \cdot \Phi (x,y)}}} {Z_{\mathbf{\theta, x, Y}}}\ . \label{Eq:ProbCRFs}
+\end{equation}
+
+We have discussed that an output label, $y$, depends on both the input and the output tokens. Hence, our feature function $\Phi\mathbf{(x,y)}:\mathbf{X \times Y}$ is a mapping from both input and output to a real value. Suppose that we have $d$ features, and $\mathbf{\Phi}=(\Phi_1,...,\Phi_d)$ is our feature vector. $\mathbf{\theta}$ is the model parameters, or the weight vector, estimated in the training process. Finally, $Z_{\mathbf{\theta, x, Y}}$ is the normalizing factor defined by
+\[
+	Z_\mathbf{\theta,x,Y} = \sum_{\mathbf{y \in Y}} e^{\mathbf{\theta \cdot \Phi (x,y)}}\ .
+\]
+
+Let $\alpha_j$ be the probability of the prefix sequence to position $j$, called the forward probability:
+\begin{align*}
+	\alpha_j(y') & = \sum_{y''} \left( \alpha_{j-1}(y'') p_t(y'',y') p_s(y') \right)\ , \\
+	\alpha_1(y') & = p_s(y')\ .
+\end{align*}
+
+Let $\beta_j$ be the probability of the suffix sequence from position $j$, called the backward probability:
+\begin{align*}
+	\beta_j(y') & = \sum_{y''} \left( p_t(y',y'') p_s(y'') \beta_{j+1}(y'') \right)\ , \\
+	\beta_T(y') & = 1\ .
+\end{align*}
+
+$p_t(y',y'')$ is the transition probability from label $y'$ to label $y''$. $p_s(y')$ is the output probability of label $y'$. After calculating all $\alpha_j, \beta_j$, we can efficiently compute $Z_{\mathbf{\theta,x,Y}}$ by
+\[
+	Z_\mathbf{\theta,x,Y} = \sum_{y'\in Y_1} {\alpha_1(y') \cdot \beta_1(y')}\ ,
+\]
+where $Y_1$ is all possible labels of $y_1$.
+
+In order to estimate $\mathbf{\theta}$, we will maximize the following log likelihood function:
+\begin{equation}
+	LL(\mathbf{\theta}) = \sum_{n=1}^N ln(P_{\mathbf{\theta}}(\mathbf{y}^{(n)}|\mathbf{x}^{(n)}))\ . \label{Eq:LLCRFs}
+\end{equation}
+$N$ is the number of sequences in the training set. $\mathbf{x}^{(n)}$ and $\mathbf{y}^{(n)}$ are the $n^{\text{th}}$ input sequence and the Viterbi output sequence of $\mathbf{x}^{(n)}$, respectively. We can apply standard optimization techniques such as L-BFGS \cite{L-BFGS} or SGD \cite{Vishwanathan2006} to the objective function in (\ref{Eq:LLCRFs}).
+
+
+\subsection{Conditional random fields for partially labeled sequences}
+
+The conventional method described in section \ref{Sec:ConventionalCRFs} requires the whole sequence to be labeled in order to compute the sequence probability using (\ref{Eq:ProbCRFs}). We need to re-define the sequence probability if the sequence is only partially labeled. Given a partially or ambiguously labeled sequence $\mathbf{L}$, let $\mathbf{Y_L}$ be the set of all possible output sequences consistent with $\mathbf{L}$. 
+\pagebreak
+We follow (Bellare and McCallum 2007; Tsuboi et al. 2008)
+to estimate the probability of $\mathbf{Y_L}$ given $\mathbf{x}$ by
+\begin{equation}
+	P_{\mathbf{\theta}}(\mathbf{Y_L|x}) = \sum_{\mathbf{y \in Y_L}} P_{\mathbf{\theta}} (\mathbf{y|x})\ . \label{Eq:ProbPartialCRFs}
+\end{equation}
+
+Using (\ref{Eq:ProbPartialCRFs}), the log likelihood in (\ref{Eq:LLCRFs}) is modified to
+\begin{align}
+LL(\mathbf{\theta}) & = \sum_{n=1}^{N} \ln P_{\mathbf{\theta}} (\mathbf{Y}_{\mathbf{L}^{(n)}}|\mathbf{x}^{(n)}) \notag \\
+	& = \sum_{n=1}^{N} \left(\ln \frac {\sum_{\mathbf{y} \in \mathbf{Y}_{\mathbf{L}^{(n)}}} e^{\mathbf{\theta \cdot \Phi(x^{(n)},y)}}}
+		{\sum_{\mathbf{y \in Y}} e^{\mathbf{\theta \cdot \Phi}(\mathbf{x}^{(n)},\mathbf{y})}}\right) \notag \\
+	& = \sum_{n=1}^{N} \left(\ln \sum_{\mathbf{y} \in \mathbf{Y}_{\mathbf{L}^{(n)}}} (e^{\mathbf{\theta \cdot \Phi (x^{(n)},y)}}) - \ln \sum_{\mathbf{y \in Y}} (e^{\mathbf{\theta \cdot \Phi (x^{(n)},y)}})\right) \notag \\
+	& = \sum_{n=1}^{N} (\ln Z_{\mathbf{\theta}, \mathbf{x}^{(n)}, \mathbf{Y}_{\mathbf{L}^{(n)}}} - \ln Z_{\mathbf{\theta}, \mathbf{x}^{(n)}, \mathbf{Y}})\ . \label{Eq:LLPartialCRFs}
+\end{align}
+
+$\mathbf{Y_L}^{(n)}$ is the set of all possible output sequences of $\mathbf{x}^{(n)}$. $Z_{\mathbf{\theta}, \mathbf{x}^{(n)}, \mathbf{Y}_{\mathbf{L}^{(n)}}}$ can be computed by the same algorithm used for $Z_{\mathbf{\theta,x,Y}}$. We then apply the standard optimization techniques to (\ref{Eq:LLPartialCRFs}) as done to (\ref{Eq:LLCRFs}).
+
+
+
+\section{Proposed framework}
+\label{Sec:Proposed}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{18-2ia5f1.eps}
+\end{center}
+	\caption{Active learning framework}
+	\label{Fig:ProposedFramework}
+\end{figure}
+
+Our active learning framework is shown in Fig.~\ref{Fig:ProposedFramework}. 
+\pagebreak
+The framework consists of 2 main parts, the query strategy and the stopping criteria. We denote our framework as partially labeling with token sampling (\textit{[Proposed]}).
+
+
+
+\subsection{Query strategy}
+
+The key of active learning is the query strategy which should select good samples for training. Firstly, we will define the sample and its informativeness. We have discussed in the introduction that we can partially label a sequence. Since a token is the smallest subsequence unit, we will treat each token as our sample. Then, we will search for informative tokens, in contrast to the conventional active learning which treats the whole sequence as a sample and search for informative sequences.
+
+In each iteration, a tagger can predict the output of each token with different confidence level. We define the prediction confidence of each token by its marginal probability:
+\begin{equation}
+	P_{\mathbf{\theta}}(y_j=y'|\mathbf{x}) = \frac{\alpha_j(y'|\mathbf{x}) \cdot \beta_j(y'|\mathbf{x})}{Z_{\mathbf{\theta}}(\mathbf{x,Y})}\ ,
+	\label{Eq:TokenScore}
+\end{equation}
+where $\alpha$ and $\beta$ are the forward and backward probabilities defined in section \ref{Sec:CRFs}. Since a sequence can have several possible output sequences, the marginal probability of a token depends on the choice of the output sequence. In order to compare the prediction confidence of tokens between sequences, we choose the prediction confidence based on the most likely output sequences defined by the Viterbi sequence:
+\begin{equation}
+	\mathbf{\hat{y}} = \arg\max_{\mathbf{y}} P(\mathbf{y|x})\ .
+	\label{Eq:SentenceScore}
+\end{equation}
+
+When the prediction confidence of a token is less than the predefined threshold, it indicates that the token may contain crucial information which is not previously known to the tagger. Hence, we define such a token to be \textit{informative}, and ask a human annotator to label the token. In each iteration, we search for $q$ tokens which are the most informative, and update their labels with human annotation. Although we search for tokens, we provide the informative tokens with their context, i.e. the whole sequences, to a human annotator since context is necessary for the labeling. A sequence may be selected several times. Such a sequence will have several labeled tokens.
+
+We train the tagger in each iteration using CRFs defined in section \ref{Sec:CRFs}. The training set contains both fully labeled, partially labeled, and unlabeled sequences. However, our CRFs parameter estimation cannot benefit from the unlabeled sequences. On the contrary, adding unlabeled sequences will slow the optimization process. Hence, we just train the tagger using the fully and partially labeled sequences.
+
+
+\subsection{Stopping criteria}
+
+Since we search for informative tokens, we can stop the learning if we cannot find more informative tokens in the training set. However, adding few new labeled tokens to the training set does not help improving the $F_1$ but just wasting the training time of the tagger.
+
+In the query process, we use the tagger to predict the output of all tokens in the whole training set. Let the predicted output of the whole training set at iteration $t$ be $S_t$. If there are few differences between the predicted labels of the consecutive iterations (i.e. $S_t$ and $S_{t+1}$), we can stop the learning. We measure the difference of predicted sets using Kappa statistics \cite{Bloodgood2009}. From our experiment, standard $\kappa$ threshold at 0.99 makes the learning stop so early that the system cannot achieve high $F_1$. In this paper, we regard the datasets as similar when $\kappa(S_t,S_{t+1}) > 0.9999$. However, the difference of the predicted training sets may be small if the query size is small. We also add the condition that the number of informative tokens must be less than the query size in order to stop the learning.
+
+
+
+\section{Experiments and results}
+\label{Sec:Experiments}
+
+\subsection{Data}
+
+\begin{table}[b]
+	\caption{Data statistics.}
+	\label{Table:Data}
+\input{05table01.txt}
+\end{table}
+
+We conducted experiments on chunking task using CoNLL-2000 dataset \cite{CoNLL2000}, and named entity recognition task using CoNLL-2003 dataset \cite{CoNLL2003}. We summarize the statistics of each dataset in Table \ref{Table:Data}.
+
+Both tasks are formulated as a sequence labeling task. A token in a sequence refers to a word, while the sequence itself refers to a sentence. The label of each token is either \textit{B}egin-Chunk, \textit{I}nside-Chunk or \textit{O}utside chunk, e.g. \textit{B}-NP is the beginning token of an NP chunk. For the named entity recognition task, a chunk is a named entity chunk, e.g. PERSON, ORGANIZATION.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{18-2ia5f2.eps}
+\end{center}
+\caption{Sequence labeling model}
+\label{Fig:SequenceLabeling}
+\vspace{1\baselineskip}
+\end{figure}
+\begin{table}[b]
+\caption{Feature set.}
+\label{Table:Features}
+\input{05table02.txt}
+\end{table}
+
+We analyzed the result using CoNLL-2000 chunking dataset but simplified the task to noun phrase (NP) chunking. For the NP chunking task, we have 3 types of label, \textit{B}-NP, \textit{I}-NP, and \textit{O}. Fig.~\ref{Fig:SequenceLabeling} shows an example of NP chunking formulated as a sequence labeling task.
+
+The feature templates for each data set are shown in Table \ref{Table:Features}. Each template is shown in a bracket. $w_i$ and $lw_i$ are the word and its lowercase at position $i$ in a sentence. $p_i$ is the part-of-speech (POS) of $w_i$, which is provided in the dataset. $c_i$ is a chunk type, e.g. NP chunk. $wtp$ is the word type described in Table \ref{Table:WordType}. $pw[c]_i$ and $sw[c]_i$ are $c$-character prefix and suffix of word $w_i$, e.g. 3-character prefix of the word \textit{American} is \textit{Ame}. $y_i$ is an output label of $w_i$. 
+
+\begin{table}[t]
+	\caption{Word types and examples.}
+	\label{Table:WordType}
+\input{05table03.txt}
+\end{table}
+
+
+
+\subsection{Evalution}
+
+Our goal is to achieve the supervised $F_1$ at the smallest annotation cost. $F_1$ is calculated using CoNLL evaluation \cite{CoNLL2000}. We claim that we achieve the supervised $F_1$ if the predicted output is not significantly different from the supervised prediction in McNemar test \cite{McNemarTest}. We measure the annotation cost in 2 aspects; the number of manually labeled tokens, and the time required in the whole training (excluding the human annotation)\footnote{We conducted all experiments on 3.00~GHz Xeon E5450 server using 4 cpus. Our CRFs tagger was implemented in C.}.
+
+
+\subsection{Initial set}
+\label{InitialQuery}
+
+The conventional active learning usually validates the result among several random initial sets since the training is sensitive to the initial set. We compared the initial set of short sequences, long sequences and random sequences in Fig.~\ref{Fig:InitSet}. Each initial set consists of 50 sequences. The confidence threshold is set to 0.99. All tokens with the prediction confidence less than the threshold are informative. The top 500 informative tokens are selected and manually labeled in each iteration of active learning. The result in Fig.~\ref{Fig:InitSet} shows that the initial set with long sequences clearly converges with fewer labeled tokens than the other sets, while requires similar training time. We discuss that long sequences contain more information than short sequences. The model trained on these long sequences is more accurate and more reliable than the model trained on short sequences. Although a long and complex sequence may require long annotation time, the heuristic is applied only in the initial step. The sampling in the other steps is according to the query strategy of active learning, and the whole number of labeled tokens of using long initial set is less than when using the other initial sets. Hence, we will use 50 longest sequences as our initial set in all of the following experiments. Note that there may be more sophisticated models which are more efficient than the heuristic tested in this work. We leave the task to find the best initial set to future work.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{18-2ia5f3.eps}
+\end{center}
+\caption{$F_1$ of each initial set and the annotation cost}
+\label{Fig:InitSet}
+\end{figure}
+
+
+\subsection{Baseline systems}
+
+In this section, we will compare several iterative and non-iterative baselines.
+
+\textbf{[Sup]:} The first baseline is a simple supervised system trained on the whole training set. The $F_1$ of \textit{[Sup]} is the upper-bound of all systems.
+
+\textbf{[Pointwise]:} \cite{Neubig2010} proposed a point-wise training framework in the domain adaptation task, which neglects the dependencies among the output labels. Since we will compare each method on a single domain, we train a point-wise system in supervised manner. Specifically, we use all features in Table \ref{Table:Features} except the transition feature. The supervised point-wise system is the upper bound accuracy of a point-wise active learning system.
+
+\textbf{[Partial]:} The last non-iterative baseline is the system trained on partially labeled data. We calculate the confidence score of each unlabeled tokens using the model trained on the initial set. All tokens with confidence less than $\delta$ are manually labeled. The other tokens are left unlabeled.
+
+The comparison between non-iterative baselines is shown in the first half of Table \ref{Table:Baselines}. Neither \textit{[Pointwise]} nor \textit{[Partial]} achieves the supervised $F_1$. Although the training of \textit{[Pointwise]} is fast, the $F_1$ of the system is competitive but still significantly worse than the supervised upper bound. The low $F_1$ achievement of \textit{[Pointwise]} indicates that the dependencies between output labels are important. Since the upper bound $F_1$ of the supervised point-wise system is not high, we will not apply the iterative training to point-wise features. \textit{[Partial]} achieves higher $F_1$ than \textit{[Pointwise]} even though it requires less number of labeled tokens, but its best $F_1$ is still significantly lower than the supervised upper bound.
+
+\begin{table}[t]
+\hangcaption{Comparison between baseline systems on NP chunking task. Boldface $F_1$ indicates that the prediction is not statistically significantly different from the supervised prediction.}
+	\label{Table:Baselines}
+\input{05table04.txt}
+\end{table}
+
+The following experiment is the comparison among the iterative baselines. All iterative systems sample 500 sequences with low Viterbi score (defined in (\ref{Eq:SentenceScore})) in each iteration. These iterative baselines are sequence-based sampling in contrast to the token-based sampling of the proposed framework. The token in each sampled sequence is informative if its score (defined in (\ref{Eq:TokenScore})) is less than the confidence threshold, $\delta$. We set $\delta$ to 0.99.
+
+\textbf{[FuSAL]:} The first iterative baseline is a fully supervised active learning system, whose all training tokens are manually labeled. \textit{[FuSAL]} becomes almost exactly the same as \textit{[Sup]} after we label the whole training set. The only difference between \textit{[FuSAL]} and \textit{[Sup]} is the sentence ordering in the training set.
+
+\textbf{[Bootstrap]:} Bootstrapping is a semi-supervised learning approach. Only tokens in the initial set are manually labeled. The other tokens are either labeled by the model prediction if their prediction confidence is high, or left unlabeled otherwise.
+
+\textbf{[Tomanek09]:} The second semi-supervised active learning baseline is the system proposed in  \cite{Tomanek2009}. In each sampled sentence, the low confidence tokens are manually labeled, while the high confidence tokens are automatically labeled by the model prediction.
+
+\textbf{[Wanvarie10]:} The last semi-supervised active learning baseline is proposed in \cite{DittayaNLKEN}. The system is similar to \textit{[Tomanek09]} except that the high confidence tokens are left unlabeled instead of being labeled by the model prediction. They implicitly estimate those labels in the training set using the method described in (Tsuboi et al. 2008).
+
+Figure \ref{Fig:Baselines} shows the learning curve of each training strategy. Note that the $F_1$ of \textit{[Sup]} does not vary since we train the tagger once with the whole training set. We just draw a straight $F_1$ line of \textit{[Sup]} for reference. Similarly, the number of manually labeled tokens of \textit{[Bootstrap]} is also fixed to the number of tokens in the initial set. However, the $F_1$ of \textit{[Bootstrap]} varies since we gradually add tokens to the training set. We draw a straight line of final $F_1$ of \textit{[Bootstrap]} vs. number of labeled tokens.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{18-2ia5f4.eps}
+\end{center}
+\caption{Comparison among baseline systems}
+\label{Fig:Baselines}
+\end{figure}
+
+The bottom line of the bootstrapping system (\textit{[Bootstrap]}) indicates that we can learn little new information from unlabeled tokens. Hence, the $F_1$ of \textit{[Bootstrap]} is far worse than the other baselines.
+
+Among the three learning curves in the middle of the graph on the left of Fig.~\ref{Fig:Baselines}, the bottom curve of \textit{[FuSAL]} has the slowest learning rate. The $F_1$ of \textit{[FuSAL]} gradually increased and reached the supervised level when approximately 150~k of tokens are labeled. Due to the limited space, we cut the learning curve to the first 15~k labeled tokens. The other two curves represent learning rate of \textit{[Tomanek09]} and \textit{[Wanvarie10]}. Although \textit{[Tomanek09]} achieves much higher $F_1$ than \textit{[Bootstrap]} with 4\% additional labeled tokens, its best $F_1$ is still far worse than the supervised $F_1$. On the other hand, \textit{[Wanvarie10]} achieves slightly higher $F_1$ than \textit{[Tomanek09]} when similar number of labeled tokens are available, and finally achieves the supervised $F_1$ after more tokens are labeled. Since \textit{[Wanvarie10]} did not explicitly label high confidence tokens as done in \textit{[Tomanek09]}, the prediction errors in early iterations are recovered when the tagger becomes more precise in later iterations.  As a result, \textit{[Wanvarie10]} achieves higher $F_1$ than \textit{[Tomanek09]}. The error recovery is also the reason that the $F_1$ of active sampling is superior to the $F_1$ of the batch sampling, since the batch sampling relies on the accuracy of the initial model which is usually poor.
+
+The graph on the right of Fig.~\ref{Fig:Baselines} shows the training time of each baseline. The training with few labeled tokens tends to require less training time. We will discuss on the training time later in section \ref{Cost}.
+
+Finally, we compare the achievement of active and batch sampling baselines in Table \ref{Table:Baselines}. In the terms of manually labeled tokens, active sampling methods clearly require few labeled tokens and achieve higher $F_1$. Since the model becomes more certain in late iterations, we need to label few new tokens but still achieve high $F_1$. However, the iterative methods have a drawback in the training time since we have to re-estimate the model parameters in every iteration.
+
+Due to the limited space, we select only \textit{[Sup]} and \textit{[Wanvarie10]} to compare with the proposed method (\textit{[Proposed]}) in the rest of the experiments.
+
+
+\subsection{Effect of the query size}
+\label{QuerySize}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{18-2ia5f5.eps}
+\end{center}
+\caption{Query size and the annotation cost}
+\label{Fig:QuerySize}
+\end{figure}
+
+We can save the annotation cost in terms of labeled tokens by selecting only few highly informative tokens in each iteration. However, a certain number of tokens are necessary to achieve the certain level of $F_1$. If the query size is small, we have to do several iterations to obtain sufficient number of labeled tokens, and we have to spend more time on the training of the taggers. Since the CRFs training is the most time consuming process in the framework, it is not practical to re-train the taggers several times. The query size setting controls the trade-off between the number of manually labeled tokens and the time required in the training. We compare the query size settings varied from 50, 500, to 1000 sequences per iteration. The confidence threshold is set to 0.99. The result is shown in Fig.~\ref{Fig:QuerySize}.
+
+The large query size setting clearly reduces the whole training time, but slightly requires more labeled tokens. Note that we did not count the actual time spent by the annotator. Large query setting usually requires more time for an annotator to label the queried set. Nevertheless, we believe that labeling a single token will not take long time. We set the query size to 500 tokens per iteration in all of the following experiments. In other words, at most 500 sequences are presented to the annotator at each iteration.
+
+
+\subsection{Effect of the confidence threshold}
+\label{Sec:Threshold}
+
+With high confidence threshold settings, the model becomes more reliable with the trade-off of the human annotation cost. From the result in Fig.~\ref{Fig:Threshold}, the system with low threshold, $\delta=0.60$, requires few manually labeled tokens but stops early before achieving the supervised $F_1$. We argue that the number of labeled tokens is insufficient, and the model trained on this training set produces many errors. In contrast, with the high threshold, $\delta=0.90$ and $0.99$, the systems require more labeled tokens than the system with low threshold setting, but achieve the supervised $F_1$ level.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{18-2ia5f6.eps}
+\end{center}
+\caption{Effect of threshold setting}
+\label{Fig:Threshold}
+\end{figure}
+
+
+
+\subsection{$F_1$ and the annotation cost}
+\label{Cost}
+
+We compare the annotation cost and $F_1$ of the proposed framework and the baselines in Fig.~\ref{Fig:Comparison} and Table \ref{Table:Comparison}. With $\delta=0.99$, \textit{[Proposed]} requires slightly fewer numbers of manually labeled tokens than \textit{[Wanvarie10]}, but achieves the supervised $F_1$. With smaller threshold, $\delta=0.90$, \textit{[Proposed]} requires much less number of manually tokens, and still achieves the supervised $F_1$. Although the achieved $F_1$ of the three systems are not the same, the difference is not statistically significant. \textit{[Proposed]} with $\delta=0.90$ requires comparable computational time to \textit{[FuSAL]}, but requires much less labeled tokens in order to achieve the supervised $F_1$.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{18-2ia5f7.eps}
+\end{center}
+\caption{Comparison between \textit{Proposed} and baseline systems}
+\label{Fig:Comparison}
+\vspace{1\baselineskip}
+\end{figure}
+\begin{table}[t]
+\hangcaption{Comparison between \textit{[Proposed]} and baseline systems on NP chunking task. Boldface $F_1$ indicates that the prediction is not statistically significantly different from the supervised prediction.}
+	\label{Table:Comparison}
+\input{05table05.txt}
+\end{table}
+
+The training time of a single iteration depends on two factors; the data size and the complexity of label distribution. The data size is the number of tokens in the training set, both labeled and unlabeled tokens. The data size does matter since the optimization of CRFs will verify the current parameter settings on each sample in the dataset. Hence, a large training set requires more training time than a small training set. With the same data size, the training set with complex label distribution tends to require more time than the simple training set. The complexity of the distribution depends on the number of manually labeled tokens. Therefore, the training set with fully labeled sequences requires more training time than the partially labeled training set.
+
+In \textit{[Proposed]}, we have to label some sequences more than once, i.e. labeling more than a token in the sequence. With $\delta=0.90$, 51.75\% of the training sequences are informative. Among the informative sequences, 61.57\% of sequences have only a single labeled token. The other sequences are uninformative, and never be selected. We conclude that our strategy can efficiently select informative tokens to reduce the annotation cost, while maintaining the supervised $F_1$.
+
+
+\subsection{Result on chunking and named entity recognition}
+
+Finally, we conducted experiments on the chunking and the named entity recognition tasks. Fig.~\ref{Fig:CoNLL2000} and Fig.~\ref{Fig:CoNLL2003} show that the proposed algorithm consistently outperforms all baselines in both datasets. The $F_1$ of the proposed framework also reaches the supervised $F_1$ with less manually labeled tokens. Although the final $F_1$ of \textit{[Proposed]} with threshold at 0.99 is slightly higher than the $F_1$ of the same method with threshold at 0.90, the prediction results from both systems are not statistically significantly different from the supervised $F_1$.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{18-2ia5f8.eps}
+\end{center}
+\caption{Result on CoNLL chunking task}
+\label{Fig:CoNLL2000}
+\end{figure}
+\begin{figure}[b]
+\begin{center}
+\includegraphics{18-2ia5f9.eps}
+\end{center}
+\caption{Result on CoNLL Named Entity Recognition task}
+\label{Fig:CoNLL2003}
+\end{figure}
+
+Table \ref{Table:CoNLL} summarizes the annotation cost and $F_1$ achievement of the proposed framework and the baseline systems. We can reduce the annotation cost in terms of labeled tokens to only 6.98\% in CoNLL chunking, and 7.01\% in CoNLL named entity recognition task. Similar to the result on NP chunking task, not all of the sequences are informative, and half of these informative sequences have only a single labeled token. The result confirms our intuition that we do not need to label the whole sequences. However, the proposed framework needs twice more training time than \textit{[FuSAL]} systems. In contrast to the result in NP chunking task, chunking and named entity recognition tasks have much more types of labels, which makes the label distribution complex. Thus, both tasks require more computational time than NP chunking.
+
+\begin{table}[t]
+\hangcaption{Comparison between \textit{[Proposed]} and baseline systems on CoNLL2000 and CoNLL2003 datasets. Boldface $F_1$ indicates that the prediction is not statistically significantly different from the supervised prediction.}
+	\label{Table:CoNLL}
+\input{05table06.txt}
+\end{table}
+
+
+\section{Conclusion and future work}
+\label{Sec:Conclusion}
+
+We have proposed a semi-supervised active learning framework which requires less manually labeled tokens to achieve the supervised $F_1$. The key of our framework is the token sampling and labeling which can both reduce the annotation cost and recover the prediction errors from previous iterations.
+
+Since the actual annotation cost of all tokens may not be equal, we can directly incorporate a more realistic cost model such as \cite{Tomanek2010}, which can represent the actual human annotation time, to our query strategy. Our framework is not limited to the sequence labeling task. We are planning to extend our work to a general structured prediction task. Moreover, we can also employ other learning algorithms apart from the CRFs tagger. However, we need to re-define the prediction confidence.
+
+\acknowledgment
+
+We thank participants in the NLP special interest group of IPSJ for valuable comments. The first author is supported by the Higher Educational Strategic Scholarships for Frontier Research Network, Thailand.
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Ando \BBA\ Zhang}{Ando \BBA\ Zhang}{2005}]{Ando2005}
+Ando, R.~K.\BBACOMMA\ \BBA\ Zhang, T. \BBOP 2005\BBCP.
+\newblock \BBOQ A High-Performance Semi-Supervised Learning Method for Text
+  Chunking.\BBCQ\
+\newblock In {\Bem ACL '05: Proceedings of the 43rd Annual Meeting on
+  Association for Computational Linguistics}, \mbox{\BPGS\ 1--9}, Morristown,
+  NJ, USA. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Bellare \BBA\ McCallum}{Bellare \BBA\
+  McCallum}{2007}]{Bellare2007}
+Bellare, K.\BBACOMMA\ \BBA\ McCallum, A. \BBOP 2007\BBCP.
+\newblock \BBOQ Learning Extractors from Unlabeled Text Using Relevant
+  Databases.\BBCQ\
+\newblock In {\Bem Sixth International Workshop on Information Integration on
+  the Web}.
+
+\bibitem[\protect\BCAY{Bloodgood \BBA\ Vijay-Shanker}{Bloodgood \BBA\
+  Vijay-Shanker}{2009}]{Bloodgood2009}
+Bloodgood, M.\BBACOMMA\ \BBA\ Vijay-Shanker, K. \BBOP 2009\BBCP.
+\newblock \BBOQ A Method for Stopping Active Learning Based on Stabilizing
+  Predictions and the Need for User-Adjustable Stopping.\BBCQ\
+\newblock In {\Bem CoNLL '09: Proceedings of the Thirteenth Conference on
+  Computational Natural Language Learning}, \mbox{\BPGS\ 39--47}, Morristown,
+  NJ, USA. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Culotta \BBA\ McCallum}{Culotta \BBA\
+  McCallum}{2005}]{Culotta2005}
+Culotta, A.\BBACOMMA\ \BBA\ McCallum, A. \BBOP 2005\BBCP.
+\newblock \BBOQ Reducing Labeling Effort for Structured Prediction Tasks.\BBCQ\
+\newblock In {\Bem AAAI'05: Proceedings of the 20th national conference on
+  Artificial intelligence}, \mbox{\BPGS\ 746--751}. AAAI Press.
+
+\bibitem[\protect\BCAY{Dasgupta \BBA\ Ng}{Dasgupta \BBA\
+  Ng}{2009}]{Dasgupta2009}
+Dasgupta, S.\BBACOMMA\ \BBA\ Ng, V. \BBOP 2009\BBCP.
+\newblock \BBOQ Mine the Easy, Classify the Hard: a Semi-Supervised Approach to
+  Automatic Sentiment Classification.\BBCQ\
+\newblock In {\Bem ACL-IJCNLP '09: Proceedings of the Joint Conference of the
+  47th Annual Meeting of the ACL and the 4th International Joint Conference on
+  Natural Language Processing of the AFNLP: Volume 2}, \mbox{\BPGS\ 701--709},
+  Morristown, NJ, USA. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Gillick \BBA\ Cox}{Gillick \BBA\
+  Cox}{1989}]{McNemarTest}
+Gillick, L.\BBACOMMA\ \BBA\ Cox, S. \BBOP 1989\BBCP.
+\newblock \BBOQ Some Statistical Issues in the Comparison of Speech Recognition
+  Algorithms.\BBCQ\
+\newblock In {\Bem International Conference on Acoustics, Speech, and Signal
+  Processing (ICASSP), 1989}, \mbox{\BPGS\ 532--535, vol.~1}.
+
+\bibitem[\protect\BCAY{Joachims}{Joachims}{1999}]{TransductiveSVM}
+Joachims, T. \BBOP 1999\BBCP.
+\newblock \BBOQ Transductive Inference for Text Classification using Support
+  Vector Machines.\BBCQ\
+\newblock In {\Bem ICML '99: Proceedings of the Sixteenth International
+  Conference on Machine Learning}, \mbox{\BPGS\ 200--209}, San Francisco, CA,
+  USA. Morgan Kaufmann Publishers Inc.
+
+\bibitem[\protect\BCAY{Kudo \BBA\ Matsumoto}{Kudo \BBA\
+  Matsumoto}{2001}]{Kudo2001}
+Kudo, T.\BBACOMMA\ \BBA\ Matsumoto, Y. \BBOP 2001\BBCP.
+\newblock \BBOQ Chunking with Support Vector Machines.\BBCQ\
+\newblock In {\Bem NAACL '01: Second meeting of the North American Chapter of
+  the Association for Computational Linguistics on Language technologies 2001},
+  \mbox{\BPGS\ 1--8}, Morristown, NJ, USA. Association for Computational
+  Linguistics.
+
+\bibitem[\protect\BCAY{Lafferty et~al.}{Lafferty et~al. }{2001}]{LaffertyCRF}
+Lafferty, J.~D. et~al. \BBOP 2001\BBCP.
+\newblock \BBOQ Conditional Random Fields: Probabilistic Models for Segmenting
+  and Labeling Sequence Data.\BBCQ\
+\newblock In {\Bem ICML '01: Proceedings of the Eighteenth International
+  Conference on Machine Learning}, \mbox{\BPGS\ 282--289}, San Francisco, CA,
+  USA. Morgan Kaufmann Publishers Inc.
+
+\bibitem[\protect\BCAY{Liu \BBA\ Nocedal}{Liu \BBA\ Nocedal}{1989}]{L-BFGS}
+Liu, D.~C.\BBACOMMA\ \BBA\ Nocedal, J. \BBOP 1989\BBCP.
+\newblock \BBOQ On the limited memory BFGS method for large scale
+  optimization.\BBCQ\
+\newblock {\Bem Math. Program.}, {\Bbf 45}  (3), \mbox{\BPGS\ 503--528}.
+
+\bibitem[\protect\BCAY{Neubig \BBA\ Mori}{Neubig \BBA\ Mori}{2010}]{Neubig2010}
+Neubig, G.\BBACOMMA\ \BBA\ Mori, S. \BBOP 2010\BBCP.
+\newblock \BBOQ Word-based Partial Annotation for Efficient Corpus
+  Construction.\BBCQ\
+\newblock In Calzolari, N., Choukri, K., Maegaard, B., Mariani, J., Odijk, J.,
+  Piperidis, S., Rosner, M., \BBA\ Tapias, D.\BEDS, {\Bem Proceedings of the
+  Seventh conference on International Language Resources and Evaluation
+  (LREC'10)}, Valletta, Malta. European Language Resources Association (ELRA).
+
+\bibitem[\protect\BCAY{Nguyen \BBA\ Guo}{Nguyen \BBA\ Guo}{2007}]{Nguyen2007}
+Nguyen, N.\BBACOMMA\ \BBA\ Guo, Y. \BBOP 2007\BBCP.
+\newblock \BBOQ Comparisons of Sequence Labeling Algorithms and
+  Extensions.\BBCQ\
+\newblock In {\Bem ICML '07: Proceedings of the 24th international conference
+  on Machine learning}, \mbox{\BPGS\ 681--688}, New York, NY, USA. ACM.
+
+\bibitem[\protect\BCAY{Rabiner}{Rabiner}{1989}]{Rabiner89}
+Rabiner, L.~R. \BBOP 1989\BBCP.
+\newblock \BBOQ A Tutorial on Hidden Markov Models and Selected Applications in
+  Speech Recognition.\BBCQ\
+\newblock In {\Bem Proceedings of the IEEE}, \mbox{\BPGS\ 257--286}.
+
+\bibitem[\protect\BCAY{Raina et~al.}{Raina et~al. }{2007}]{Raina2007}
+Raina, R. et~al. \BBOP 2007\BBCP.
+\newblock \BBOQ Self-Taught Learning: Transfer Learning from Unlabeled
+  Data.\BBCQ\
+\newblock In {\Bem ICML '07: Proceedings of the 24th international conference
+  on Machine learning}, \mbox{\BPGS\ 759--766}, New York, NY, USA. ACM.
+
+\bibitem[\protect\BCAY{Settles \BBA\ Craven}{Settles \BBA\
+  Craven}{2008}]{Settles2008}
+Settles, B.\BBACOMMA\ \BBA\ Craven, M. \BBOP 2008\BBCP.
+\newblock \BBOQ An Analysis of Active Learning Strategies for Sequence Labeling
+  Tasks.\BBCQ\
+\newblock In {\Bem EMNLP '08: Proceedings of the Conference on Empirical
+  Methods in Natural Language Processing}, \mbox{\BPGS\ 1070--1079},
+  Morristown, NJ, USA. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Suzuki \BBA\ Isozaki}{Suzuki \BBA\
+  Isozaki}{2008}]{Suzuki2008}
+Suzuki, J.\BBACOMMA\ \BBA\ Isozaki, H. \BBOP 2008\BBCP.
+\newblock \BBOQ Semi-Supervised Sequential Labeling and Segmentation Using
+  Giga-Word Scale Unlabeled Data.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-08: HLT}, \mbox{\BPGS\ 665--673},
+  Columbus, Ohio. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Tjong Kim~Sang \BBA\ Buchholz}{Tjong Kim~Sang \BBA\
+  Buchholz}{2000}]{CoNLL2000}
+Tjong Kim~Sang, E.~F.\BBACOMMA\ \BBA\ Buchholz, S. \BBOP 2000\BBCP.
+\newblock \BBOQ Introduction to the CoNLL-2000 Shared Task: Chunking.\BBCQ\
+\newblock In {\Bem Proceedings of the 2nd workshop on Learning language in
+  logic and the 4th conference on Computational natural language learning},
+  \mbox{\BPGS\ 127--132}, Morristown, NJ, USA. Association for Computational
+  Linguistics.
+
+\bibitem[\protect\BCAY{Tjong Kim~Sang \BBA\ De~Meulder}{Tjong Kim~Sang \BBA\
+  De~Meulder}{2003}]{CoNLL2003}
+Tjong Kim~Sang, E.~F.\BBACOMMA\ \BBA\ De~Meulder, F. \BBOP 2003\BBCP.
+\newblock \BBOQ Introduction to the CoNLL-2003 Shared Task:
+  Language-Independent Named Entity Recognition.\BBCQ\
+\newblock In Daelemans, W.\BBACOMMA\ \BBA\ Osborne, M.\BEDS, {\Bem Proceedings
+  of CoNLL-2003}, \mbox{\BPGS\ 142--147}. Edmonton, Canada.
+
+\bibitem[\protect\BCAY{Tomanek et~al.}{Tomanek et~al. }{2010}]{Tomanek2010}
+Tomanek, K. et~al. \BBOP 2010\BBCP.
+\newblock \BBOQ A Cognitive Cost Model of Annotations Based on Eye-Tracking
+  Data.\BBCQ\
+\newblock In {\Bem Proceedings of the 48th Annual Meeting of the Association
+  for Computational Linguistics}, \mbox{\BPGS\ 1158--1167}, Uppsala, Sweden.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Tomanek \BBA\ Hahn}{Tomanek \BBA\
+  Hahn}{2009}]{Tomanek2009}
+Tomanek, K.\BBACOMMA\ \BBA\ Hahn, U. \BBOP 2009\BBCP.
+\newblock \BBOQ Semi-Supervised Active Learning for Sequence Labeling.\BBCQ\
+\newblock In {\Bem Proceedings of the Joint Conference of the 47th Annual
+  Meeting of the ACL and the 4th International Joint Conference on Natural
+  Language Processing of the AFNLP}, \mbox{\BPGS\ 1039--1047}, Suntec,
+  Singapore. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Tsuboi et~al.}{Tsuboi et~al. }{2008}]{Tsuboi2008}
+Tsuboi, Y. et~al. \BBOP 2008\BBCP.
+\newblock \BBOQ Training Conditional Random Fields using Incomplete
+  Annotations.\BBCQ\
+\newblock In {\Bem Proceedings of the 22nd International Conference on
+  Computational Linguistics---Volume 1}, COLING '08, \mbox{\BPGS\ 897--904},
+  Morristown, NJ, USA. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Vishwanathan et~al.}{Vishwanathan et~al.
+  }{2006}]{Vishwanathan2006}
+Vishwanathan, S. V.~N. et~al. \BBOP 2006\BBCP.
+\newblock \BBOQ Accelerated Training of Conditional Random Fields with
+  Stochastic Gradient Methods.\BBCQ\
+\newblock In {\Bem ICML '06: Proceedings of the 23rd International Conference
+  on Machine Learning}, \mbox{\BPGS\ 969--976}, New York, NY, USA. ACM.
+
+\bibitem[\protect\BCAY{Wanvarie et~al.}{Wanvarie et~al. }{2010}]{DittayaNLKEN}
+Wanvarie, D. et~al. \BBOP 2010\BBCP.
+\newblock \BBOQ Active Learning with Partially Annotated Sequence.\BBCQ\
+\newblock \BTR, Special Interest Group of Natural Language Processing,
+  Information Processing of Japan.
+
+\end{thebibliography}
+
+\begin{biography}
+\bioauthor[:]{Dittaya Wanvarie}{
+received the B. Eng from Chulalongkorn University,
+Thailand in 2005. Currently, she is a Ph.D. candidate at
+Tokyo Institute of Technology. Her research interests
+include morphological analysis, syntactic analysis, and machine learning.}
+
+\bioauthor[:]{Hiroya Takamura}{
+was born in 1974. He received B.E. and M.E. from the
+University of Tokyo in 1997 and 2000 respectively (in 1999 he was a
+research student at
+ Technische Universitaet von Wien). He received Dr. Eng. from Nara
+Institute of Science and Technology in 2003. He was an assistant
+professor at Tokyo Institute of Technology from 2003 to 2010. He is
+currently an associate professor at Tokyo Institute of Technology. His
+current research interest is computational linguistics. He is a member
+of the Information Processing Society of Japan and the Association for
+Computational Linguistics.}
+
+\bioauthor[:]{Manabu Okumura}{
+was born in 1962. He received B. E., M. E. and Dr. Eng.
+from Tokyo Institute of Technology in 1984, 1986 and 1989
+respectively. He was an assistant at the Department of Computer
+Science, Tokyo Institute of Technology from 1989 to 1992, and an
+associate professor at the School of Information Science, Japan
+Advanced Institute of Science and Technology from 1992 to 2000. He was
+also a visiting associate professor at the Department of Computer
+Science, University of Toronto from 1997 to 1998. He is
+currently a professor at Precision and Intelligence
+Laboratory, Tokyo Institute of Technology. His current research
+interests include natural language processing, especially automatic
+text summarization, computer assisted language learning, and text data
+mining. He is a member of the Information Processing Society of Japan,
+the Japanese Society for Artificial Intelligence, the American
+Association for Artificial Intelligence, the Association for
+Computational Linguistics, and the Japanese Cognitive Science
+Society.}
+\end{biography}
+
+\biodate
+
+
+\end{document}

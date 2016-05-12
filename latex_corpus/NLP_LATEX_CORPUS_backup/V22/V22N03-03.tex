@@ -1,0 +1,1068 @@
+    \documentclass[japanese]{jnlp_1.4}
+
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+
+\usepackage{amsmath}
+
+
+\Volume{22}
+\Number{3}
+\Month{September}
+\Year{2015}
+
+\received{2015}{1}{6}
+\revised{2015}{3}{27}
+\accepted{2015}{5}{19}
+
+\setcounter{page}{197}
+
+\jtitle{入れ子依存木の刈り込みによる単一文書要約手法}
+\jauthor{菊池　悠太\affiref{titech} \and 平尾　　努\affiref{ntt} \and 高村　大也\affiref{titech} \and 奥村　　学\affiref{titech} \and 永田　昌明\affiref{ntt}}
+\jabstract{
+近年の抽出型要約の多くの手法は，原文書の情報を網羅し，かつ与えられる要約長の制約
+に柔軟に対応すべく，文抽出と文圧縮を併用した組み合わせ最適化問題として要約を定式
+化している．
+つまり，文書から文という文法的な単位を維持するよう単語を抽出することで要約を生成
+している．
+従来の手法は非文の生成を避けるため，構文木における単語間の関係を利用して文を圧縮
+しているものの，文書における大域的な文と文の間の関係，つまり談話構造には着目して
+こなかった．しかし，談話構造を考慮することは要約の一貫性を保つ上で非常に重要で
+あり，文書の重要箇所の同定にも役立つ．
+我々は，文書を文間の依存関係，単語間の依存関係をあらわした入れ子依存木とみなし，
+単語重要度の和が最大となるように木を刈り込むことで要約を生成する手法を提案する．
+実験の結果，提案手法が要約精度を有意に向上させたことが確認できた．
+}
+
+\jkeywords{文書要約，単一文書要約，修辞構造理論}
+
+\etitle{Summarizing a Document by Trimming a Nested Tree Structure}
+\eauthor{Yuta Kikuchi\affiref{titech} \and Tsutomu Hirao\affiref{ntt} \and Hiroya Takamura\affiref{titech} \and Manabu Okumura\affiref{titech} \and Masaaki Nagata\affiref{ntt}}
+\eabstract{
+Many methods of text summarization that have recently been proposed combine
+sentence selection and sentence compression. Although the dependency between
+words has been used in most of these methods, the dependency between sentences,
+i.e., the rhetorical structure, has not been exploited in such joint methods. We
+use both the dependency between words and the dependency between sentences by
+constructing a nested tree, in which nodes in a document tree representing the
+dependency between sentences were replaced by a sentence tree representing the
+dependency between words. We formulate a summarization task as a combinatorial
+optimization problem, in which the nested tree is trimmed without losing
+important content in the source document. The results from an empirical
+evaluation revealed that our method based on the trimming of the nested tree
+significantly improved the performance of text summarization.
+}
+\ekeywords{Text Summarization, Single Document Summarization, Rhetorical Structure Theory}
+
+\headauthor{菊池，平尾，高村，奥村，永田}
+\headtitle{入れ子依存木の刈り込みによる単一文書要約手法}
+
+
+\affilabel{titech}{東京工業大学}{Tokyo Institute of Technology}
+\affilabel{ntt}{日本電信電話株式会社 NTTコミュニケーション科学基礎研究所}{NTT Communication Science Laboratories, Nippon Telegraph and Telephone Corporation}
+
+
+
+\begin{document}
+\maketitle
+
+\section{はじめに}
+
+抽出型要約は現在の文書要約研究において最も広く用いられるアプローチである．このア
+プローチは，文書をある言語単位（文，節，単語など）の集合とみなし，その部分集合を
+選択することで要約文書を生成する．
+要約システムに必要とされる側面はいくつかあるが，特に重要なのが，一貫性(coherence)
+\cite{hobbs85,mann:88}
+と情報の網羅性が高い要約を生成することと，要約長に対し柔軟に対応できることである．
+
+一貫性の高い要約とは，原文書の談話構造（あるいは論理構造）を保持した要約を指す．
+要約が原文書の談話構造を保持していない場合，原文書の意図と異なる解釈を誘発す
+る文書が生成されてしまうおそれがある．
+すなわち，原文書と似た談話構造を持つように要約文書を生成することは，要約を生成す
+るために重要な要素である\footnote{原文書は常に一貫性を持った文書で
+あることを仮定している．}．
+要約文書において談話構造を考慮するために
+修辞構造理論(Rhetorical Structure Theory; RST)
+\cite{mann:88}が利用可能である．
+RSTは文書の大域的な談話構造を木として表現するため，
+RSTの木構造を損なわぬように原文書中の抽出単位を選択することで，原文書の談話構造
+を保持した要約文書が生成できる\cite{marcu:98,daume:02,hirao:13}．
+従来のRSTを抽出型要約に組み込む従来の手法の問題点は，その抽出粒度にある．
+RSTで扱う文書中の最小単位はElementary Discourse Unit (EDU)と呼ばれ，おおよそ節に
+対応するテキストスパンである．
+従来手法は，抽出の単位をEDUとして要約の生成を行ってきたが
+，それが要約において必ずしも最適な単位であると
+は限らない\footnote{これについては\ref{sec:unit}節で考察する．}．
+また，本節で後に説明するように，それなりの長さを持ったテキストスパンを抽出単位と
+する場合，要約長に対する柔軟性の面でも問題が生じる．
+
+
+
+情報の網羅性は，文書要約の目的そのものでもある非常に重要な要素である．
+要約文書は原文書の内容を簡潔にまとめている必要があり，原文書の重要な内容を網羅し
+ていることが要求される．
+近年，抽出型要約において，原文書から重要な抽出単位の部分集合を選択する問題を
+整数計画問題(Integer Linear Programming; ILP)
+として定式化するアプローチが盛んに研究されている．
+抽出された部分集合が原文書の情報をなるべく被覆するような目的関数を設定し，最適化
+問題として解くことで，原文書の情報を網羅した要約文書の生成が可能となる．
+実際にこれらの手法は要約文書の情報の網羅性の指標となる自動評価手法であるROUGE
+(Recall-Oriented Understudy for Gisting Evaluation)\cite{lin:04}
+値の向上に大いに貢献してきた\cite{mcdonald:07,filatova:04,takamura:09}．
+RSTを要約に組み込む研究の多くはRSTで定義される修辞構造の構造木をそのまま利用した
+ものが多かった\cite{marcu:98,daume:02}が，
+Hiraoら\cite{hirao:13}は，RSTの談話構造木をそのまま用いることの問題点を指摘し，
+EDUの依存構造木(DEP-DT)
+に変換し，依存構造木の刈り込みにより要約を生成する木制約付きナップサック問題
+\cite{johnson:83}として要約を定式化した．
+
+ILPの導入によって，高い網羅性を持った要約の生成が可能となった一方で，要約手法が
+持つ要約長に対する柔軟性は，情報の網羅性と密接な関係をもつようになった．
+文書要約では，要約文書が満たすべき上限の長さを指定することが一般的である．
+抽出型要約においてよく用いられる抽出単位は文であり，
+生成された要約の文法性が保証されるという利点がある．
+しかし，高い圧縮率，すなわち原文書の長さと比較して非常に短い長さの要約文書が求め
+られている場合，文を抽出単位とすると十分な量の情報を要約文書に含めることが出来ず
+，情報の網羅性が低くなってしまうという問題
+\footnote{これは上述の通り，RSTに基づくEDUを抽出単位とした手法も同様である．EDU
+は文よりは細かいとはいえ，固定された抽出単位としてはかなり粗いテキストスパンであ
+る．}
+があった．
+この問題に対し，文抽出と文圧縮を組み合わせるアプローチが存在する．
+文圧縮とは，主に単語や句の削除により，対象となる文からより短い文を抽出する手法で
+ある．
+近年，こうした文圧縮技術と文抽出技術を逐次適用するのではなく，
+それらを同時に行うアプローチ（以降これらを同時モデルとよぶ）が盛んに研究されており，
+高い情報の網羅性と要約長への柔軟性を持った要約文書の生成が可能となっ
+ている．
+
+本研究の目的は，文書の談話構造に基づく，情報の網羅性と要約長への高い柔軟性を持っ
+た要約手法を開発することである．
+これまで，文書要約に談話構造を加える試みと，文抽出と文圧縮の同時モデルは，ど
+ちらも文書要約において重要な要素であるにもかかわらず，独立に研究されてきた．
+その大きな要因の一つは，両者の扱う抽出粒度の違いである．
+前者はEDUであり，後者の抽出粒度は文（圧縮され短くなった文も含む）である．
+抽出単位を文やEDUというそれなりの長さのテキストスパンにすると，ある要約長制約に対し，
+選択可能なテキストスパンの組合せは自ずと限られ，情報の網羅性を向上させることが困難
+な場合がある．
+我々は，文間の依存関係に基づく木構造と単語間の依存関係に基づく木構造が入れ子とな
+った{\bf 入れ子依存木}を提案し，その木構造に基いて要約を生成することでこの問題に取り組
+む．
+
+提案手法について，図\ref{fig:nested_tree}に示す例で説明する．
+本研究で提案する入れ子依存木は，
+文書を文間の依存関係で表した{\bf 文間依存木}で表現する．
+文間依存木のノードは文であり，文同士の依存関係をノード間のエッジとして表現する．
+各文内では，文が単語間の依存関係に基づいた{\bf 単語間依存木}で表現されている．
+単語間依存木のノードは単語であり，単語同士の依存関係をノード間のエッジとして表現
+する．
+このように，文間依存木の各ノードを単語間依存木とすることで，入れ子依存木を構築する．
+そして，この入れ子依存木を刈り込む，つまり単語の削除による要約生成をILPとして定
+式化する．
+生成された要約は，文間依存木という観点では必ず文の根付き部分木となっており，その部分木内
+の各文内，すなわち単語間依存木の観点では単語の部分木となっている．
+ここで，文間依存木からは必ず木全体の根ノードを含んだ根付き部分木が抽出されている
+のに対し，単語間依存木はそうでないものも存在することに注意されたい．
+従来，文圧縮を文書要約に組み込む研究では，単語間依存木の場合も必ず根付き部分木が選
+択されていたが，限られた長さで重要な情報のみを要約に含めることを考えると，
+単語の根付き部分木という制約が情報の網羅性の向上の妨げとなる可能性がある．
+そこで提案手法では，根付きに限らない任意の部分木を抽出するために，部分木の親を文
+中の任意の単語に設定できるよう拡張を加えた．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{22-3ia3f1.eps}
+\end{center}
+\hangcaption{提案手法の概要．原文書は二種類の依存木に基づく入れ子依存木として表現される．提案手法は，文間依存木からは根付き部分木，その各ノードは単語間依存木の部分木となっているように単語を選択することで要約を生成する．}
+\label{fig:nested_tree}
+\end{figure}
+
+提案手法をRST Discourse Treebank \cite{carlson:01}における要約システムの評価セッ
+トで従来の同時モデルや木制約付きナップサック問題による要約手法と比較評価したとこ
+ろ，文書要約の自動評価指標であるROUGEにおいて最高精度が得られることを確認した．
+
+
+
+
+
+\section{関連研究}
+
+現在の抽出型要約の主流である文抽出，文圧縮の同時モデルでは，与えられた文書（群）から
+，文を単語間依存木として表現し，その根付き部分木を刈り込む，すなわち単語を削除す
+ることで要約を生成する．
+また，これをILPとして定式化する研究が盛んに行われている
+\cite{almeida:13,liu:13,morita:13,gillick:09}． 
+しかし，文から抽出する単語列を単語依存木の根付き部分木に限ると高圧縮な要約設定に
+おいて情報の網羅性が低下するおそれがある
+\footnote{ただし，単一の文に対し明示的に圧縮率が与えられる文圧縮タスクだけに限れ
+ば，文に複数の根を与える手法も存在する\shortcite{filippova:08}．}．
+さらに，これらの同時モデルでは文書が持つ談話構造を考慮しないため，情報の網羅性が高く
+自動評価指標のROUGEにおいて高い値を得ることができるが，一貫性に欠けた要約が生成
+されてしまうという欠点がある．
+
+また，同時モデルにおける文圧縮の手段として，
+文を依存構造木ではなく句構造木として表現し，その部分木を抽出する手法も提案されて
+いる\cite{li:14,lu:13,kirkpatrick:11}．
+句構造木は連続した単語列の文法的な役割を階層構造として表現した木であるため，この
+木を刈り込む際には連続した単語列（句）を同時に削除することが多くなる．
+よって，依存構造木を用いた刈り込みと比較すると要約長に柔軟な刈り込みが難しい．
+
+
+一方，一貫性をもった要約を生成する手法として RSTを利用した手法が提案されている．
+Daum{\'e} III and Marcu
+は，RSTを利用したNoisy-channelモデルに
+基づく文書圧縮手法を提案した\cite{daume:02}．
+彼らの手法は一貫性を持った要約の生成が可能であるが，情報の網羅性という観点で最
+適解が得られるとは限らない．
+また適切な確率を計算するために大量のコーパスを必要とする上に，
+計算量の問題で長い文書に適用できないという欠点があった．
+Marcuは，RSTの構造を利用してEDUの順位を決定し，ランキング上位のEDUを要約として抽
+出した\cite{marcu:98}．
+Uz\^{e}daらは，Marcuの手法を含む合計6つの手法を組み合わせる手法を提案し，
+オリジナルの手法との比較評価を行った\cite{uzeda:10}.
+\ref{sec:rouge}節では彼らの報告にある数値も参考値として載せている．
+
+Marcuらの手法を含むEDUのランキングに基づく手法は，十分な情報の網羅性が保証されな
+いという欠点がある．
+Hiraoらはこれを解決するため，EDUの依存木を構築し，その依存関係に基づいてEDUを選
+択する問題を木制約付きナプサック問題として定式化した\cite{hirao:13}．
+これらの手法はRSTにおけるテキストの最小単位であるEDUをそのまま抽出単位としていた
+が，EDUが文書要約においても適切な抽出単位であるかについては，要約長に対する柔軟
+性の面で疑問が残る．
+EDUは文よりも短いとはいえそれなりの長さを持ったテキストスパンである．そ
+のため，要約に含める情報の組み合わせの自由度は比較的低く，かつEDUのようなテキス
+トスパンを対象とした構文解析器がないため，文圧縮のような技術が適用できない．
+これに関しては\ref{sec:unit}節で評価実験結果をふまえて考察を行う．
+Hiraoらの手法は提案手法に最も強く関連している．
+両者の違いは，Hiraoらの手法がEDUをノードとする依存木からEDUを選択する要約手法で
+あることに対し，提案手法は文間の依存関係と単語間の依存関係が入れ子構造を成す木から
+単語を選択する要約手法であるという点である．
+
+また，文重要度の決定に貢献する特徴を調べた文献\cite{louis:10}でも，RSTの有効性が示されている．
+
+これまで，文書の（大域的な）談話構造を利用した要約手法について紹介したが，隣接し
+た文同士のつながりを評価し，文の局所的な並びを最適にすることに取り組む研究も存在する
+\cite{nishikawa:10,christensen:13}．
+これらの方法では，修辞構造解析器を必要としないため，
+論理構造が明確でなく自動解析の精度が期待できない文書においては有効である．
+一方で，文書の大域的な談話構造を考慮した要約生成はできない可能性がある．
+
+
+
+\section{入れ子依存木の刈り込みによる要約文書生成}
+
+本研究の目的は，要約文書の一貫性と情報の網羅性が高く，かつ要約長に柔軟な要約手法
+を提案することである．
+要約としての一貫性と要約長への柔軟性を獲得するために文書を入れ子依存木として表現し，入
+れ子依存木から要約文書を生成する問題を整数計画問題として定式化することで高い情報
+の網羅性を持った要約生成を行う．
+本節では，入れ子依存木の構築についての詳細と，ILPでの定式化について説明する．
+
+
+\subsection{修辞構造理論}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-3ia3f2.eps}
+\end{center}
+\hangcaption{RSTによる文書の表現．$\mathrm{EDU}_\text{1--10}$は具体的なテキストになっており，おおよそ節に相当する．隣り合ったテキストスパンは再帰的に修辞関係により関連付けられており，最終的に文書全体で木構造を構成する．NとSはそれぞれ核と衛星に対応し，間に書かれたラベルがそれらの間の修辞関係である．}
+\label{fig:rstdt}
+\end{figure}
+
+修辞構造理論(Rhetorical Structure Theory; RST)\cite{mann:88}は，
+文書の談話構造を表現するために提案された理論である．
+文書をEDUに分割し，連続したEDU同士（あるいは，複数のEDUをつなぎあわせたテキスト
+スパン）を修辞関係で関連付けることで，談話構造木を構築する．
+構築される木は，終端ノードがEDU，非終端ノードが子ノード間の修辞関係をラベルに持
+つ木構造
+で表現される．
+図\ref{fig:rstdt}に，談話構造木の例を示す．
+図において二つの非終端ノードの間に書かれているラベルがそのノード間の修辞関係である．
+具体的には例示，補足，背景などの関係により，テキストスパン同士がどのような関係に
+あるかを表現する．
+今回用いたコーパスでは合計で89種類の修辞関係が存在した．
+また，修辞関係と共に各テキストスパンには核(Nuclear)か衛星(Satellite)のいずれかの
+ラベルが付与される．核はその修辞関係において中心的な役割を担い，衛星は補助的な役
+割を持つ．
+例えば補足という修辞関係では，補足される方のテキストスパンが核であり，その内容を
+具体的に補足したテキストスパンが衛星となる．
+図においては，各非終端ノードのNとSがそれぞれ核と衛星を表している．
+なお，図\ref{fig:rstdt}の$\ast$のように，複数の核からなる多核(multinucleus)という
+性質を持った修辞関係も存在する．
+
+
+
+\subsection{入れ子依存木の構築}
+\label{sec:build_tree}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-3ia3f3.eps}
+\end{center}
+\hangcaption{依存構造に変換された文書の修辞構造．(1) HiraoらによるEDU間の依存関係を表したDEP-DTであり，図\ref{fig:rstdt}の木構造を変換したもの．なお，multinucleusの関係を持つテキストスパンを成す$\text{EDU}_4$と$\text{EDU}_5$はそれぞれ独立に一つ上の核である$\text{EDU}_3$に依存している．(2)本研究で用いる文間依存木．HiraoらのDEP-DTを変換したもの．}
+\label{fig:deptrees}
+\end{figure}
+
+Hiraoら\cite{hirao:13}はRSTの木構造を変換することで依存構造に基づくDEP-DTを構築した．
+DEP-DTは，EDU間の依存関係を直接表現しており，この依存木を刈り込むことで
+一貫性を保った要約が生成できる．
+図\ref{fig:deptrees}に，図\ref{fig:rstdt}の木構造から変換されたDEP-DTと本研
+究で用いる文間依存木を示す．
+Hiraoらの用いたDEP-DTは，EDUをノードとするものであったが，
+本研究では文間の関係をとらえた同時モデルのため，これを文をノードとした依存木へと
+変換する．
+具体的には，同じ文に属するEDU集合をまとめ，文内の親となっているEDUの依存先を，そ
+の文の依存先として採用する．
+依存先のEDUは他の文に属しているため，この変換規則により，文間の依存関係を持った
+木構造（文間依存木）を取得することができる．
+次に文間依存木の各ノードとなる文に対し依存構造解析を行い，単語間の依存構造（単語間依存木
+）を獲得する．
+以上の処理により，文書が文の係り受け木，各文内では単語の係り受け木に
+より構成された{\bf 入れ子依存木}を構築する．
+本研究では，この入れ子依存木から不要な単語を刈り込むことで要約文書を生成する．
+
+
+\subsection{整数計画問題による定式化}
+\label{sec:ilp}
+
+入れ子依存木からの単語の削除による要約文書の生成は，整数計画問題として定式化でき
+る．
+具体的には，ある目的関数のもと，文間依存木の根付き部分木，根付き部分木中の各文は
+単語間依存木の（任意の）部分木となるように単語を選択することで要約を生成する．
+提案手法は次の整数計画問題で定式化できる．
+
+\begin{eqnarray}
+  \text{max.} & \displaystyle \sum_{i}^n \sum_{j}^{m_i} w_{ij} z_{ij} \nonumber \\
+  \text{s.t.}
+  & \sum_{i}^n \sum_{j}^{m_i} z_{ij} \leq L                         ;& \label{st_length}\\
+  & x_{i}             \geq z_{ij}                    ;& \forall i,j \label{st_word_in}\\
+  & x_{\text{parent}(i)}  \geq x_i                ;& \forall i   \label{st_sent_dep}\\
+  & z_{\text{parent}(i,j)} + r_{ij} \geq z_{ij}  ;& \forall i,j \label{st_word_dep}\\
+  & r_{ij} + z_{\text{parent}(i,j)} \leq 1           ;& \forall i,j \label{st_r_is_top}\\
+  & \sum_{j=0}^{m_i} r_{ij}   =  x_i                 ;& \forall i \label{st_one_root}\\
+  & r_{ij}            \leq  z_{ij}                   ;& \forall i,j \label{st_r_with_z} \\
+  & \sum_{j \notin R_c(i)} r_{ij} = 0                ;& \forall i \label{st_only_rc}\\
+  & r_{i \text{root}(i)}     =  z_{i \text{root}(i)} ;& \forall i \label{st_prs_root} \\
+  
+  & \sum_{j=0}^{m_i} z_{ij} \geq \text{min}(\theta, m_i) x_i ;& \forall i   \label{st_s_has_w}\\
+  & \sum_{j \in \text{sub}(i)} z_{ij} \geq  x_i ;& \forall i \label{st_has_sub}\\
+  & \sum_{j \in \text{obj}(i)} z_{ij} \geq  x_i ;& \forall i \label{st_has_obj}\\
+  & x_i     \in \{0,1\}                         ;& \forall i \\
+  & z_{ij}  \in \{0,1\}                         ;& \forall i,j \\
+  & r_i     \in \{0,1\}                         ;& \forall i 
+\label{fig:model}
+\end{eqnarray}
+
+
+$n$は対象とする原文書に含まれる文数であり，$m_i$は文$i$の単語数である．
+$w_{ij}$は単語$ij$（$i$番目の文における$j$番目の単語）の重みである．
+$x_i$は，文$i$を要約に含めるときに1となる決定変数であり，$z_{ij}$は，単語$ij$を
+要約に含めるときに1となる決定変数である．
+目的関数は，要約に含まれた単語の重みの総和であり，この関数を最大にするように単語
+を選択する．
+
+式(\ref{st_length})は，要約として選択される単語数が$L$以下であることを保証するた
+めの制約式である．
+式(\ref{st_word_in})は要約に含まれていない文中の単語を要約に含めてしまうことを防
+ぐための制約式である．
+式(\ref{st_sent_dep})は文間依存木から文を選択する時に，その木構造を保つこ
+とを保証する．
+これは文間依存木からは必ず根を含む根付き部分木が選択されることを意味する．
+$parent(i)$は，文間依存木において文$i$の親となる文のインデックスを返す関数である
+．
+
+式(\ref{st_word_dep})から式(\ref{st_prs_root})には決定変数$r_{ij}$が含まれてい
+る．
+$r_{ij}$は，単語$ij$を根とした部分木を要約文書に含める場合に1となる．
+式(\ref{st_word_dep})は，単語間依存木から単語を選ぶ場合，その木構造を保つこと
+を保証する．
+ただし，単語間依存木の根以外の単語${ij}$を根として部分木を抽出する場合は，その単語${ij}$に
+は必ず親となる単語$parent(i,j)$が存在する．その状況では$z_{ij}$が1のまま
+$z_{parent(i,j)}$を0にすることが許容されなければならず，それを可能とするのが左辺
+第二項の$r_{ij}$である．
+なお，$parent(i,j)$は，文$i$に対応する単語間依存木において，単語$ij$の親となる単語
+のインデックスを返す関数である．
+ただし，このままでは，$z_{parent(i,j)}$と$r_{ij}$のどちらも1である場合も許容
+されてしまうため，2つの変数が同時に1となることを制限するための制約式
+(\ref{st_r_is_top})を追加する．
+同様に，このままでは$r_{ij}$のみが1となっている場合も許容されてしまう．$r_{ij}$
+が1である場合はその単語$ij$は必ず要約に含まれなければならないため，制約式
+(\ref{st_r_with_z})を追加することで対処する．
+本研究では文$i$が要約に含まれる場合($x_i$ = 1)は，そこから抽出される部分木は高々
+一つであるとしている．
+そこで，式(\ref{st_one_root})により，一つの文から複数の部分木（の根）が生じること
+を制限している．
+また，文$i$における単語間依存木の根に相当する単語($\text{root}(i)$)に関して
+は，根付き部分木を抽出する場合，すなわち$r_{\text{root}(i)}$が1であるときのみ要
+約に含めることを保証する必要があり，そのため制約式(\ref{st_prs_root})を追加して
+いる．
+
+冒頭で述べた通り，本研究では単語間依存木から部分木を抽出する際は，根となり得るのは
+文中の動詞と，単語間依存木全体の根となる単語に限っている．
+そこで，それ以外の単語が根となることを防ぐことを保証するため，制約式
+(\ref{st_only_rc})を追加する．
+ここで，$R_c(i)$は文$i$中で根の候補となる単語，すなわち動詞のインデックス集合を返す
+関数である．
+式(\ref{st_s_has_w})は，文（に対応する単語間依存木の部分木）を要約に含めるための最
+低の単語数を規定するための制約式である．
+これは，単語の削除により木を刈り込むという手法の性質上，極端に短く刈ってしま
+うと非文になる可能性が高くなることを防ぐ目的がある．
+また，要約を最適化問題としてモデル化しているので，目的関数を最大化するために要約
+長の限界まで単語を選択しようとして，刈り込みを無制限に許容すると，極端な例では1単語か
+らなる部分木を選択してしまうため，それを防ぐための制約である．
+式(\ref{st_has_sub})は，部分木を抽出する際は必ず一つ以上の主語を含むことを保証する
+制約である．
+同様に式(\ref{st_has_obj})は，目的語を一つ以上含むことを保証する制約である．
+ここで，$sub(i)$と$obj(i)$は，それぞれ文$i$中の単語のうち係り受けラベルが主語，
+目的語である単語のインデックス集合を返す関数である．
+
+提案手法の文圧縮が単語間依存木の刈り込みに基づいている以上，その操作により非文が生成されてし
+まう可能性がある．
+ここで，非文となる部分木の生成を避けるための二種類の追加的な制約を導入する．
+一つ目の制約式は単語対に対するものである：
+\begin{equation}
+  z_{ik} = z_{il}．  \label{st_equal}
+\end{equation}
+
+式(\ref{st_equal})は．単語$ik$と単語$il$は必ず同時に要約に含まれることを保証する
+．これは，片方だけを要約に含めてしまう場合に非文となってしまうような組に対して定
+義される．具体的には，係り受けタグがPMOD
+\footnote{前置詞とその子の単語の間の関係．}
+, VC
+\footnote{過去分詞形や現在進行形など，動詞が連続する時のそれらの動詞間の関係．}
+である単語とその親の単語，否定詞とそ
+の親の単語，係り受けタグがSUBあるいはOBJである単語とその親となっている動詞，形容
+詞の比較級(JJR)あるいは最上級(JJS)とその親の単語，冠詞とその親の単語，``to''と
+その親の単語である．
+二つ目の制約式は単語列に対するものである：
+\begin{equation}
+  \sum_{k \in s(i,j)} z_{ik} = |s(i,j)| z_{ij}.  \label{st_span}
+\end{equation}
+
+式(\ref{st_span})は単語の集合に対し，集合中のいずれかの単語を要約に含めるとき，
+集合中の他の全ての単語も要約に含めることを保証する制約である．具体的には，固有名
+詞列（品詞タグがPRP\%, WP\%あるいはPOSのいずれかである単語列）や，所有格とその係
+り先の単語，その間に含まれる全ての単語列である．
+ここで，$s(i,j)$は，単語$ij$と，例に上げた関係にある単語インデックスの集合を返す関数である．
+\vspace{-0.3\Cvs}
+
+
+
+\section{評価実験}
+
+\vspace{-0.5\Cvs}
+\subsection{実験設定}
+
+提案手法の有効性を示すために評価実験を行った．実験にはRST Discourse Treebank
+(RST-DTB) \cite{carlson:01}に含まれる要約評価用のテストセットを用いた．RST-DTBは
+Penn Treebankコーパスの一部の文書（Wall Street Journalから収集された385記事）か
+らなるコーパスであり，RSTに基づく木構造が人手で付与されている．さらにその内30
+記事について，人手で作成された要約文書（参照要約）が存在しており，それらの文書を
+評価用テストセットとした．
+実験に用いたすべての文書は，Penn Tokenizerによりトークンに区切った．
+要約システムの入力となる要約長は，参照要約の有するトークン数とした．
+テストセットに含まれる30記事の参照要約には，
+平均して原文書の25\%程度の長さの{\bf long}要約と，
+平均して原文書の10\%程度の長さの{\bf short}要約の二種類が存在する．
+本実験では両方のテストセットについて先行研究との比較を行う．
+評価尺度としてはROUGE
+(Recall-Oriented Understudy for Gisting Evaluation)\cite{lin:04}
+を用いる
+\footnote{評価スクリプト実行時のオプションは，ROUGE-1では``-a -m -s -n 1 -x''，
+ROUGE-2では``-a -m -s -n 2 -x''である．また，stopwordを含めた評価では``-s''を削除す
+る．}．
+
+抽出粒度の妥当性について検証するため，比較手法としてEDUを単位とし
+た木制約付きナップサック問題による要約手法\cite{hirao:13}と，文を単位とする木制
+約付きナップサック問題による要約手法を用意した．
+また，単一文書要約において強力なベースラインとなるLEAD法との比較も行った．LEAD法は，
+要約長に達するまで文書の冒頭から抽出単位を選択していくことで要約文書を生成する手
+法である．本稿ではEDUを抽出単位とするLEAD$_\text{EDU}$と，文を抽出単位とする
+LEAD$_\text{snt}$との比較を行う．
+さらに，提案手法において文（単語間依存木）から部分木を抽出する際に根付き部分木に制限す
+る手法（{\bf 根付き部分木抽出}）も用意し，任意の部分木を抽出対象とする提案手法
+（{\bf 任意部分木抽出}）との
+比較を行った．
+
+
+
+本実験に用いたすべての文間依存木は，RST-DTBで人手付与されたRST構造を利用しており
+談話構造解析器は利用していない．考察において，談話構造解析器を用いた追加実験を行
+い，精度の変化について考察する．
+また，単語依存木はSuzukiらの提案した依存構造解析手法\cite{suzuki:09}を用いて構築
+した．
+
+なお，本実験では，単語の重要度$w_{ij}$として以下を用いた：
+\begin{equation}
+ w_{ij} = \frac{log( 1 + tf_{ij})}{depth(i)^2}．
+\end{equation}
+$tf_{ij}$は文書における単語$w_{ij}$の単語頻度であり，
+$depth(i)$は，文書の文間依存木における文$x_i$の根からの深さである．
+また，制約(\ref{st_s_has_w})における$\theta$は8とした．
+
+
+\subsection{結果と考察}
+
+\subsubsection{ROUGEによる比較}
+\label{sec:rouge}
+
+表\ref{tab:results}に，各手法によるROUGE-1,2値を示す．
+まず，short要約，long要約セット双方において，提案手法である任意部分木抽出と根付
+き部分木抽出の間にROUGE値の顕著な差はみられなかった．これについては\ref{sec:subtree}節
+において，両手法が抽出した実際の部分木を例に定性的な考察を行う．
+以下では，任意部分木を提案手法とし，他の手法との比較を行う．
+
+また，表\ref{tab:results}の下3行はUz\^{e}daらによる比較実験の結果から一部の数値を引
+用している
+\footnote{\protect 具体的には\cite{uzeda:10}で報告されている結果のうち，
+本実験に最も条件が似ているもの（Table IIの最左のカラム）の数値を引用している．
+}．
+ここで，Marcu$_\text{ours}$ (0.432)とMarcu et al. (0.440)は，
+どちらも\cite{marcu:98}の手法による結果を示している．前者は我々による再実装の数
+値であり，後者は\cite{uzeda:10}において報告されていた数値である．
+数値が異なるのはトークナイゼーションなどの前処理の違いによるものであると考えられ
+るが，Uz\^{e}daらの文献に前処理の詳細がないため，完全な比較とはならないことに注意さ
+れたい．とはいえ，両者の数値に大きな差異はないことから，ほぼ同じ実験条件での数値
+であると判断した．
+
+\begin{table}[t]
+\caption{各手法によるshort要約セットおよびlong要約セットにおけるROUGE-1,2値}
+\label{tab:results}
+\input{03table01.txt}
+\end{table}
+
+まず，short要約セットのstopwordを除去した条件（最も左のカラム）において，提案手法
+の評価値はホルム法による多重比較の結果，他の全ての手法を有意に上回っていることを
+確認した．
+個別の手法と比較すると，文選択手法すなわち文圧縮を一切行わない手法と比較すると，
+提案手法が大幅に上回っている事がわかる．これは，文をそのまま抽出する場合は，今回
+の要約設定（平均圧縮率が約10\%）では十分に情報を網羅できないことを示している．
+次に，EDU選択手法と比較しても提案手法が上回っている．
+EDU選択は文選択を有意に上回っていることから，文よりも細かいEDUを抽出粒度とするこ
+とで，要約文書の情報の網羅性を高めることができている．
+しかし，EDUという予め決められた長さのテキストスパンを抽出する手法よりも，部分
+木という可変長のテキストスパンを抽出できる提案手法の方がROUGE値は上回っており，そ
+の有効性がわかる．
+LEAD法は，報道記事の単一文書要約問題において非常に強力なベースラインである．
+これは，報道記事ではしばしば記事の冒頭でその記事全体の小さなまとめが書かれる傾向
+にあるためである．
+今回の実験では抽出単位の異なる二種類のLEAD法を用いたが，いずれも低い数値となった．
+これは要約対象となっている文書が，単純な報道記事ではなく，エッセイや社説によっ
+て構成されているためであり，冒頭に重要なまとめが記載されているわけではないことが
+原因である．
+
+一方，long要約セットでは，提案手法とEDU選択手法との間に顕著な差は見られなかった．
+これは，25\%という圧縮率が比較的緩く，いずれの手法，抽出単位でもあ
+る程度の情報が網羅できるために大きな差が生まれなかったためである．
+ただし，文を抽出単位とした手法（文選択およびLEAD$_{snt}$）のROUGEスコアは低いことか
+ら，情報網羅性の向上のためには，文よりも小さいテキストスパンを抽出することが重要であるとわかる．
+
+以上の結果から，提案手法のような要約長に柔軟な要約手法は，
+short要約セットのように比較的圧縮率の高い設定において有効であることがわかる．
+
+
+\subsubsection{修辞構造の自動解析による精度の変化}
+
+表\ref{tab:results}の実験結果は，人手で与えられたRSTに基づく修辞構造を用いていた．
+提案手法を任意の文書に適用する場合，文書の修辞構造を自動で解析する解析器が必須で
+ある．しかし，修辞構造の自動解析は難しいタスクの一つであり，人手で付与された談話
+構造を使用したときと比較して精度が劣化してしまうおそれがある．
+そこで本節では，既存の修辞構造解析器を用いて自動で解析した修辞構造を利用した場合
+の精度の変化を調べる．
+今回の実験では自動解析器として，サポートベクターマシンに基づく高い精度を持った解
+析器であるHILDA \cite{duverle09,hilda}を用いた．
+表\ref{tab:results_auto}に実験結果を示す．$_\text{HILDA}$と付いている行が，
+自動解析に基づく依存木を使用した場合の結果である．
+結果から，いずれの手法も人手で作成された修辞構造を用いたものよりROUGE値が劣化して
+いることがわかる．
+short要約セットの場合は，提案手法の方が劣化が大きい．
+これは，提案手法がEDU単位の依存構造を文単位に変更しているためである．
+HILDAを始めとする自動解析器は，ボトムアップに修辞構造木を組み上げていくため，それを用いて得た修辞構造木を談話依存構造へと変換すると，距離が近いEDU間の依存関係は比較的高い精度で予測で
+きるが，遠い依存関係の予測精度は低い．このため，遠距離の依存関係である文間の依存
+関係の同定に失敗し，提案手法のROUGEが大きく劣化したと考える．
+実際，依存先の正解率
+~\footnote{ここで正解率とは，自動解析による談話構造木とgold standardの談話構造木
+を\protect \ref{sec:build_tree}節の手順で依存木に変換した場合の両者の一致率であ
+る．}
+を計算すると，EDU単位で0.590，文単位で0.324となった．
+しかしながら，short要約セットにおいては，減少幅は大きいものの依然として提案手法
+の精度が，今回比較したどの手法の数値よりも高いことから，提案手法の有効性がわかる．
+
+\begin{table}[b]
+\caption{修辞構造を自動解析した場合の精度の変化}
+\label{tab:results_auto}
+\input{03table02.txt}
+\vspace{-1\Cvs}
+\end{table}
+
+long要約セットにおいては，EDU選択手法のROUGE値の減少はほとんど見られなかった．
+\ref{sec:rouge}節で述べた通り，long要約セットは低い圧縮率であるため比較的
+多くの情報を要約に含めることができる．
+文単位の依存関係においても，正解率自体は低くとも選択できる文数が増えるため，
+short要約セットよりもROUGE値の劣化が抑えられている．
+すなわち，short要約セットのように圧縮率の厳しい設定では，より高い精度で抽出単位
+の依存先を推定する必要がある．
+
+\subsubsection{単一文書要約における重要箇所同定}
+
+前節で，提案手法の有効性をROUGE値によって確認した．
+本節では，談話構造，すなわち文間依存木の情報が文書中の重要箇所同定に有効かという
+点について考察を行う．
+現在，文書要約において主流な問題設定は，同じトピックについて書かれた文書の集合か
+らひとつの要約文書を生成する，複数文書要約である．
+冒頭で説明した文抽出と文圧縮を組み合わせる手法も全て複数文書要約に取り組んでいる
+のに対して，今回我々が行った実験は，一つの文書に対し一つの要約文書を生成する単一文
+書要約問題である．
+単一文書要約は複数文書要約と比較して，要約文書に含めるべき文書の重要部分の同定が
+難しい．
+なぜならば複数文書要約では文書集合全体として重要な話題は文書横断的に出現するため
+，その性質を利用できる
+\footnote{その分，複数文書要約においてはいかに冗長な情報を要約に含めないかという
+点が重要となる．}
+が，単一の文書においてそのような情報は利用できないためである．
+
+対象とする文書が報道記事である場合は，冒頭部分に記事全体の要約が書かれやすいとい
+う強力な基準があるが，そうでない場合に重要な部分を同定することは困難である
+\footnote{ただし，報道記事であれば必ず記事冒頭に記事全体の要約が存在しているとは
+限らないことも分かっており，単純に記事冒頭を機械的に抽出しても必ずしも重要箇所が
+得られるとは限らない\cite{yang:14}．}．
+今回我々が用いた単一文書要約の評価セットは，報道記事ではなく社説やエッセイの
+ような文書で構成されているため重要部分の同定が難しい．
+これは表\ref{tab:results}におけるLEAD手法のROUGE値からも確認できる．
+
+\begin{table}[b]
+\caption{ RSTに基づく文間依存木を利用しない場合の結果の変化}
+\label{tab:results_single}
+\input{03table03.txt}
+\end{table}
+
+文間依存木の情報が文書の重要箇所同定に与える影響について検証するため，
+提案手法（自動解析含む）の単語重要度から$depth^2$を取り除いたもの，すなわち単語の重要度が単
+にその文書における出現頻度で決まる場合と，文間依存木の情報を一切用いない従来の同
+時モデルについても同様に実験を行い比較した．
+表\ref{tab:results_single}に，それぞれの結果を示す．
+提案手法の単語重要度から文間依存木の情報（依存木の根からの深さ）を除いた場合に十
+分なROUGEスコアが得られないことから，文書の談話構造が単一文書要約における重要箇
+所の同定に寄与していることがわかる．
+なお，同時モデルと異なり，木構造の制約という形で文間依存木の情報は用いていることに注意
+されたい．
+同時モデルの結果を見ると，文抽出と文圧縮の同時最適化のみでは，本評価セットで有効
+に機能しないことがわかる．
+重要文の同定・抽出が困難であるならば，複数文書要約において盛んに取り組まれている文
+抽出と文圧縮の同時最適化を適用することも困難となり，要約長に柔軟な要約文書の生成
+も困難となる．
+本研究の結果は単一文書における重要部分の同定に対するひとつの手がかりとして，文書
+の談話構造が有効である可能性を示唆しているといえる．
+
+
+\subsubsection{異なる部分木抽出手法の定性評価}
+\label{sec:subtree}
+
+ここまで，ROUGEの観点から評価実験の結果についての考察を進めてきた．
+本節では，単語間依存木からその部分木を抽出する方法として，
+任意の部分木を抽出することの有用性を，例を示して考察する．
+図\ref{fig:sents}に，任意部分木抽出手法と根付き部分木抽出手法が共通して要約文書
+に含めた文と，そこから抽出した部分木に対応する二つの文を示す．
+なお，これはshort要約セットにおける例である．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-3ia3f4.eps}
+\end{center}
+\caption{二つの手法が共通して要約に選択した文と，それぞれが抽出した部分木の例}
+\label{fig:sents}
+\end{figure}
+
+ここで，$\{\cdot\}$ は依存構造解析器が単語間依存木の根であると出力した語であり，
+$[\cdot]$ は要約システムが部分木の根として選んだ語である．
+任意部分木抽出においては，例に示したいずれの文も解析器の根以外の単語を根として部分木
+を抽出している．
+例に見るように，目的節やthat節の内容の方が重要な情報を持つことが多いため，その部
+分のみを抽出することは，限られた長さで重要な情報のみ要約に含める上で有用であり，
+今回の実験ではこうした事例が少なかったこともありROUGE スコアで大きな差がでなか
+ったが，
+特に圧縮率の高い設定
+\footnote{すなわち，原文書そのものの長さに対し非常に短い要約を生成する必要がある
+ような設定．}
+では有効であろう．
+
+
+\subsubsection{抽出粒度と要約文書の文数の関係}
+\label{sec:unit}
+
+EDUはRSTにおける談話構造の基本単位であるが，抽出型要約の抽出単位として適切とは限らない．
+図\ref{fig:edus}に，ある文\footnote{この文はwsj\_1128より選択した．}とその文を構成するEDUの例を示す．
+図のように，EDUはおおよそ節に対応する文よりも細かな単位である．
+
+抽出単位が文よりも細かいEDUであることは，EDU抽出は，文圧縮を逐次適用した要約手法
+として考えることができる．
+つまり，EDU抽出による要約は多くの文を事前に圧縮しつつ抽出していることに相当す
+る．
+このように文よりも小さな断片を組み合わせて要約を生成すると，文を組み合わせる場合
+よりも長さ制約をちょうど満たすように要約を生成することができる可能性が高い．よっ
+て，ROUGE値も上昇する傾向にある．しかし，EDUは文よりも短いため，たとえ一貫性があろ
+うともそれを読んだ読者が違和感を覚えてしまうだろう．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-3ia3f5.eps}
+\end{center}
+\caption{本データセットにおける文の一例．5行全体で一つの文であり，各行が一つのEDUに対応している．}
+\label{fig:edus}
+\end{figure}
+
+抽出型要約において，
+文書中の多くの文から細かな断片を集めることで情報の断片化された要約の生成につなが
+っているかどうかのは，要約文書に含まれる抽出単位集合の元となる文の数が，その一つの指標となる．
+言い換えると，生成された要約を構成する文の数が，参照要約すなわち人間によって生成
+された要約に近い方が，自然で読みやすい要約になっていると考えられる．
+そこで本節では各手法が生成した要約文書に含まれる原文書の文数を比較した．
+比較に用いた手法は提案手法である任意部分木抽出の他に，文選択とEDU選択である．
+文選択は原文書中の文の数，EDU選択は原文書中のEDUに対応する文の数，部分木選択は，
+部分木に対応する文の数である．
+なお，参照要約は人間が自由に生成した要約であるため，必ずしも原文書の文とは対応し
+ていないことに注意されたい．
+
+short要約セットにおいて各選択手法が選択した文について箱ひげ図を図\ref{fig:boxes_short}に示す．
+各々の箱の上辺と下辺は，それぞれその手法が選択した文数の第一四分位点，第三四分位点を表
+しており，箱の中の線は中央値を表している．
+箱の上下に伸びる線（ひげ）の先は，それぞれ最大値，最小値を表し，ひげよりも外側に見られ
+る$+$印は，外れ値である．
+
+図を見ると，EDU選択手法が最も多くの文を用いて要約を生成していることがわかる．
+一方で文選択手法は，比較手法の中では最も参照要約の文に近いが，
+\ref{sec:rouge}節で示した通り情報の網羅性という点で十分な要約を作成できない．
+部分木抽出は文選択とEDU選択の間で，両者のように実際に抽出されるテキストスパンの
+長さを固定せずに要約システムが柔軟に各文から抽出する部分木を選択することができる
+．
+それにより情報の網羅性と要約としての自然さを両立出来ている．
+なお，部分木抽出手法の平均文数は4.73であり，中央値は4文であった．
+これに対し，EDU選択の平均文数は5.77で中央値は5文であった．
+これは提案手法の方が有意\footnote{ウィルコクソンの符号順位検定($p < 0.05$)．}
+に少ない文を用いて要約を生成していることを示している．
+自動解析を利用した場合も同様の傾向であるため詳細は割愛する．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-3ia3f6.eps}
+\end{center}
+\hangcaption{short要約セットにおいて各手法が使用した原文書の文の数．(HILDA)と付いているものは自動解析による修辞関係を利用している．}
+\label{fig:boxes_short}
+\end{figure}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-3ia3f7.eps}
+\end{center}
+\caption{long要約セットにおいて各手法が使用した原文書の文の数}
+\label{fig:boxes_long}
+\end{figure}
+
+同様に，long要約セットについて図\ref{fig:boxes_long}に示す．
+圧縮率が低くなった場合も全体の傾向としてはshort要約セットとの大きな差異はない．
+全体的にばらつき（箱の縦の長さ）が大きくなっているが，これは参照要約自体の長さの
+ばらつきがshort要約セットよりも大きいことが原因である．
+
+
+\section{まとめ}
+
+本研究では，単語間の依存構造解析に基づく単語間依存木と，RSTに基づく文間依存木から
+入れ子依存木を構築し，そこから要約文書に含める単語を選択する要約生成問題をILPと
+して定式化した．
+提案手法はEDUの依存木の刈り込み手法に比べ，過剰に文を区切ることなくROUGEを向上させ
+ることが確認できた．
+また，単語の依存木からその部分木を抽出する方法として，構文解析器が出力した根にこ
+だわらない任意部分木抽出手法について，その有用性を定性的に分析した．
+さらに，人手で作成された修辞構造以外に，修辞構造解析器で推定された修辞構造も
+用いて，その精度への影響を確かめた．
+
+提案手法の抱える課題は，任意の文書に対して適用する際に修辞構造の自動解析を利用し
+ており，その精度の与える影響が大きいという点である．
+今回はEDU単位の修辞構造解析結果を文単位の依存関係に変換して利用したが，
+はじめからEDU単位の依存関係を獲得する研究\cite{yoshida14}も存在する．
+これらを踏まえ，今後はより良い文間依存木の獲得方法を検討していく．
+
+
+
+今回はRSTから得られる情報のうち文間の依存関係のみに着目したが，
+各文内におけるEDU間の関係や修辞構造のラベルを考慮して文圧縮や文抽出を行うことが
+可能であり，今後取り組むべき課題として興味深い．
+
+
+
+今後は，他のコーパスの文書や，複数文書要約においても提案手法を適用することを考え
+ている．
+
+
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Almeida \BBA\ Martins}{Almeida \BBA\
+  Martins}{2013}]{almeida:13}
+Almeida, M.\BBACOMMA\ \BBA\ Martins, A. \BBOP 2013\BBCP.
+\newblock \BBOQ Fast and Robust Compressive Summarization with Dual
+  Decomposition and Multi-Task Learning.\BBCQ\
+\newblock In {\Bem Proceedings of the 52nd Annual Meeting of the Association
+  for Computational Linguistics (ACL)}, \mbox{\BPGS\ 196--206}.
+
+\bibitem[\protect\BCAY{Berg-Kirkpatrick, Gillick, \BBA\ Klein}{Berg-Kirkpatrick
+  et~al.}{2011}]{kirkpatrick:11}
+Berg-Kirkpatrick, T., Gillick, D., \BBA\ Klein, D. \BBOP 2011\BBCP.
+\newblock \BBOQ Jointly Learning to Extract and Compress.\BBCQ\
+\newblock In {\Bem Proceedings of the 52nd Annual Meeting of the Association
+  for Computational Linguistics (ACL)}, \mbox{\BPGS\ 481--490}, Portland,
+  Oregon, USA.
+
+\bibitem[\protect\BCAY{Carlson, Marcu, \BBA\ Okurowski}{Carlson
+  et~al.}{2001}]{carlson:01}
+Carlson, L., Marcu, D., \BBA\ Okurowski, M.~E. \BBOP 2001\BBCP.
+\newblock \BBOQ Building a Discourse-tagged Corpus in the Framework of
+  Rhetorical Structure Theory.\BBCQ\
+\newblock In {\Bem Proceedings of the 2nd Annual SIGdial Meeting on Discourse
+  and Dialogue (SIGDIAL)}, \mbox{\BPGS\ 1--10}.
+
+\bibitem[\protect\BCAY{Christensen, Mausam, Soderland, \BBA\
+  Etzioni}{Christensen et~al.}{2013}]{christensen:13}
+Christensen, J., Mausam, Soderland, S., \BBA\ Etzioni, O. \BBOP 2013\BBCP.
+\newblock \BBOQ Towards Coherent Multi-Document Summarization.\BBCQ\
+\newblock In {\Bem NAACL:HLT}, \mbox{\BPGS\ 1163--1173}.
+
+\bibitem[\protect\BCAY{Daum{\'e}{\ }III \BBA\ Marcu}{Daum{\'e}{\ }III \BBA\
+  Marcu}{2002}]{daume:02}
+Daum{\'e}{\ }III, H.\BBACOMMA\ \BBA\ Marcu, D. \BBOP 2002\BBCP.
+\newblock \BBOQ A Noisy-Channel Model for Document Compression.\BBCQ\
+\newblock In {\Bem Proceedings of 40th Annual Meeting of the Association for
+  Computational Linguistics (ACL)}, \mbox{\BPGS\ 449--456}, Philadelphia,
+  Pennsylvania, USA. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{duVerle \BBA\ Prendinger}{duVerle \BBA\
+  Prendinger}{2009}]{duverle09}
+duVerle, D.\BBACOMMA\ \BBA\ Prendinger, H. \BBOP 2009\BBCP.
+\newblock \BBOQ A Novel Discourse Parser Based on Support Vector Machine
+  Classification.\BBCQ\
+\newblock In {\Bem Proceedings of the Joint Conference of the 47th Annual
+  Meeting of the ACL and the 4th International Joint Conference on Natural
+  Language Processing of the AFNLP}, \mbox{\BPGS\ 665--673}, Suntec, Singapore.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Filatova \BBA\ Hatzivassiloglou}{Filatova \BBA\
+  Hatzivassiloglou}{2004}]{filatova:04}
+Filatova, E.\BBACOMMA\ \BBA\ Hatzivassiloglou, V. \BBOP 2004\BBCP.
+\newblock \BBOQ A Formal Model for Information Selection in Multi-Sentence Text
+  Extraction.\BBCQ\
+\newblock In {\Bem Proceedings of the 20th International Conference on
+  Computational Linguistics (COLING)}, \mbox{\BPGS\ 397--403}.
+
+\bibitem[\protect\BCAY{Filippova \BBA\ Strube}{Filippova \BBA\
+  Strube}{2008}]{filippova:08}
+Filippova, K.\BBACOMMA\ \BBA\ Strube, M. \BBOP 2008\BBCP.
+\newblock \BBOQ Dependency Tree Based Sentence Compression.\BBCQ\
+\newblock In {\Bem Proceedings of the 2nd International Natural Language
+  Generation Conference (INLG)}, \mbox{\BPGS\ 25--32}.
+
+\bibitem[\protect\BCAY{Gillick \BBA\ Favre}{Gillick \BBA\
+  Favre}{2009}]{gillick:09}
+Gillick, D.\BBACOMMA\ \BBA\ Favre, B. \BBOP 2009\BBCP.
+\newblock \BBOQ A Scalable Global Model for Summarization.\BBCQ\
+\newblock In {\Bem Proceedings of the NAACL HLT Workshop on Integer Linear
+  Programming for Natural Language Processing (ILP)}, \mbox{\BPGS\ 10--18}.
+
+\bibitem[\protect\BCAY{Hernault, Prendinger, duVerle, \BBA\ Ishizuka}{Hernault
+  et~al.}{2010}]{hilda}
+Hernault, H., Prendinger, H., duVerle, D.~A., \BBA\ Ishizuka, M. \BBOP
+  2010\BBCP.
+\newblock \BBOQ HILDA: A \mbox{Discourse} Parser Using Support Vector Machine
+  Classification.\BBCQ\
+\newblock {\Bem Dialogue and Discourse}, {\Bbf 1}  (3), \mbox{\BPGS\ 1--33}.
+
+\bibitem[\protect\BCAY{Hirao, Yoshida, Nishino, Yasuda, \BBA\ Nagata}{Hirao
+  et~al.}{2013}]{hirao:13}
+Hirao, T., Yoshida, Y., Nishino, M., Yasuda, N., \BBA\ Nagata, M. \BBOP
+  2013\BBCP.
+\newblock \BBOQ Single-Document Summarization as a Tree Knapsack Problem.\BBCQ\
+\newblock In {\Bem Proceedings of the 2013 Conference on Empirical Methods in
+  Natural Language Processing (EMNLP)}, \mbox{\BPGS\ 1515--1520}.
+
+\bibitem[\protect\BCAY{Hobbs}{Hobbs}{1985}]{hobbs85}
+Hobbs, J.~R. \BBOP 1985\BBCP.
+\newblock {\Bem On the Coherence and Structure of Discourse}.
+\newblock CSLI.
+
+\bibitem[\protect\BCAY{Johnson \BBA\ Niemi}{Johnson \BBA\
+  Niemi}{1983}]{johnson:83}
+Johnson, D.~S.\BBACOMMA\ \BBA\ Niemi, K.~A. \BBOP 1983\BBCP.
+\newblock \BBOQ On Knapsacks, Partitions, and a New Dynamic Programming
+  Technique for Trees.\BBCQ\
+\newblock {\Bem Mathmatics of Operations Research}, {\Bbf 8}  (1), \mbox{\BPGS\
+  1--14}.
+
+\bibitem[\protect\BCAY{Li, Liu, Liu, Zhao, \BBA\ Weng}{Li et~al.}{2014}]{li:14}
+Li, C., Liu, Y., Liu, F., Zhao, L., \BBA\ Weng, F. \BBOP 2014\BBCP.
+\newblock \BBOQ Improving Multi-documents Summarization by Sentence Compression
+  based on Expanded Constituent Parse Trees.\BBCQ\
+\newblock In {\Bem Proceedings of the 2014 Conference on Empirical Methods in
+  Natural Language Processing (EMNLP)}, \mbox{\BPGS\ 691--701}, Doha, Qatar.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Lin}{Lin}{2004}]{lin:04}
+Lin, C.-Y. \BBOP 2004\BBCP.
+\newblock \BBOQ ROUGE: A Package for Automatic Evaluation of summaries.\BBCQ\
+\newblock In {\Bem Proceedings of the ACL Workshop on Text Summarization
+  Branches Out}, \mbox{\BPGS\ 74--81}.
+
+\bibitem[\protect\BCAY{Louis, Joshi, \BBA\ Nenkova}{Louis
+  et~al.}{2010}]{louis:10}
+Louis, A., Joshi, A., \BBA\ Nenkova, A. \BBOP 2010\BBCP.
+\newblock \BBOQ Discourse Indicators for Content Selection in
+  Summarization.\BBCQ\
+\newblock In {\Bem Proceedings of the SIGDIAL 2010 Conference}, \mbox{\BPGS\
+  147--156}, Tokyo, Japan. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Mann \BBA\ Thompson}{Mann \BBA\
+  Thompson}{1988}]{mann:88}
+Mann, W.~C.\BBACOMMA\ \BBA\ Thompson, S.~A. \BBOP 1988\BBCP.
+\newblock \BBOQ Rhetorical Structure Theory: Toward a Functional Theory of Text
+  Organization.\BBCQ\
+\newblock {\Bem Text}, {\Bbf 8}  (3), \mbox{\BPGS\ 243--281}.
+
+\bibitem[\protect\BCAY{Marcu}{Marcu}{1998}]{marcu:98}
+Marcu, D. \BBOP 1998\BBCP.
+\newblock \BBOQ Improving Summarization Through Rhetorical Parsing
+  Tuning.\BBCQ\
+\newblock In {\Bem Proceedings of the 6th Workshop on Very Large Corpora},
+  \mbox{\BPGS\ 206--215}.
+
+\bibitem[\protect\BCAY{McDonald}{McDonald}{2007}]{mcdonald:07}
+McDonald, R. \BBOP 2007\BBCP.
+\newblock \BBOQ A Study of Global Inference Algorithms in Multi-document
+  Summarization.\BBCQ\
+\newblock In {\Bem Proceedings of the 29th European Conference on Information
+  Retrieval (ECIR)}, \mbox{\BPGS\ 557--564}.
+
+\bibitem[\protect\BCAY{Morita, Sasano, Takamura, \BBA\ Okumura}{Morita
+  et~al.}{2013}]{morita:13}
+Morita, H., Sasano, R., Takamura, H., \BBA\ Okumura, M. \BBOP 2013\BBCP.
+\newblock \BBOQ Subtree Extractive Summarization via Submodular
+  Maximization.\BBCQ\
+\newblock In {\Bem Proceedings of the 52nd Annual Meeting of the Association
+  for Computational Linguistics (ACL)}, \mbox{\BPGS\ 1023--1032}.
+
+\bibitem[\protect\BCAY{Nishikawa, Hasegawa, Matsuo, \BBA\ Kikui}{Nishikawa
+  et~al.}{2010}]{nishikawa:10}
+Nishikawa, H., Hasegawa, T., Matsuo, Y., \BBA\ Kikui, G. \BBOP 2010\BBCP.
+\newblock \BBOQ Opinion Summarization with Integer Linear Programming
+  Formulation for Sentence Extraction and Ordering.\BBCQ\
+\newblock In {\Bem Proceedings of the 23rd International Conference on
+  Computational Linguistics (COLING)}, \mbox{\BPGS\ 910--918}.
+
+\bibitem[\protect\BCAY{Qian \BBA\ Liu}{Qian \BBA\ Liu}{2013}]{liu:13}
+Qian, X.\BBACOMMA\ \BBA\ Liu, Y. \BBOP 2013\BBCP.
+\newblock \BBOQ Fast Joint Compression and Summarization via Graph Cuts.\BBCQ\
+\newblock In {\Bem Proceedings of the 2013 Conference on Empirical Methods in
+  Natural Language Processing (EMNLP)}, \mbox{\BPGS\ 1492--1502}.
+
+\bibitem[\protect\BCAY{Suzuki, Isozaki, Carreras, \BBA\ Collins}{Suzuki
+  et~al.}{2009}]{suzuki:09}
+Suzuki, J., Isozaki, H., Carreras, X., \BBA\ Collins, M. \BBOP 2009\BBCP.
+\newblock \BBOQ An Empirical Study of Semi-supervised Structured Conditional
+  Models for Dependency Parsing.\BBCQ\
+\newblock In {\Bem Proceedings of the 2009 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 551--560}, Singapore. Association
+  for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Takamura \BBA\ Okumura}{Takamura \BBA\
+  Okumura}{2009}]{takamura:09}
+Takamura, H.\BBACOMMA\ \BBA\ Okumura, M. \BBOP 2009\BBCP.
+\newblock \BBOQ Text Summarization Model based on the Budgeted Median
+  Problem.\BBCQ\
+\newblock In {\Bem Proceedings of the 18th ACM Conference on Information and
+  Knowledge Management (CIKM)}, \mbox{\BPGS\ 1589--1592}.
+
+\bibitem[\protect\BCAY{Uz{\^{e}}da, Pardo, \BBA\ Nunes}{Uz{\^{e}}da
+  et~al.}{2010}]{uzeda:10}
+Uz{\^{e}}da, V.~R., Pardo, T. A.~S., \BBA\ Nunes, M. D. G.~V. \BBOP 2010\BBCP.
+\newblock \BBOQ A Comprehensive Comparative Evaluation of RST-based
+  Summarization Methods.\BBCQ\
+\newblock {\Bem ACM Transactions of Speech and Language Processing}, {\Bbf 6}
+  (4), \mbox{\BPGS\ 4:1--4:20}.
+
+\bibitem[\protect\BCAY{Wang, Raghavan, Castelli, Florian, \BBA\ Cardie}{Wang
+  et~al.}{2013}]{lu:13}
+Wang, L., Raghavan, H., Castelli, V., Florian, R., \BBA\ Cardie, C. \BBOP
+  2013\BBCP.
+\newblock \BBOQ A Sentence Compression Based Framework to Query-Focused
+  Multi-Document Summarization.\BBCQ\
+\newblock In {\Bem Proceedings of the 51st Annual Meeting of the Association
+  for Computational Linguistics (Volume 1: Long Papers)}, \mbox{\BPGS\
+  1384--1394}. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Yang \BBA\ Nenkova}{Yang \BBA\ Nenkova}{2014}]{yang:14}
+Yang, Y.\BBACOMMA\ \BBA\ Nenkova, A. \BBOP 2014\BBCP.
+\newblock \BBOQ Detecting Information-Dense Texts in Multiple News
+  Domains.\BBCQ\
+\newblock In {\Bem Proceedings of the 28th {AAAI} Conference on Artificial
+  Intelligence, July 27--31, 2014, Qu{\'{e}}bec City, Qu{\'{e}}bec, Canada},
+  \mbox{\BPGS\ 1650--1656}.
+
+\bibitem[\protect\BCAY{Yoshida, Suzuki, Hirao, \BBA\ Nagata}{Yoshida
+  et~al.}{2014}]{yoshida14}
+Yoshida, Y., Suzuki, J., Hirao, T., \BBA\ Nagata, M. \BBOP 2014\BBCP.
+\newblock \BBOQ Dependency-based Discourse Parser for Single-Document
+  Summarization.\BBCQ\
+\newblock In {\Bem Proceedings of the 2014 Conference on Empirical Methods in
+  Natural Language Processing (EMNLP)}, \mbox{\BPGS\ 1834--1839}, Doha, Qatar.
+  Association for Computational Linguistics.
+
+\end{thebibliography}
+
+\begin{biography}
+\bioauthor{菊池　悠太}{
+2011年木更津工業高等専門学校専攻科制御・情報システム工学専攻修了．2013
+年東京工業大学総合理工学研究科博士前期課程修了．同年，同大学博士後
+期課程に進学．
+}
+
+\bioauthor{平尾　　努}{
+1995年関西大学工学部電気工学科卒業．1997年奈良先端科学技術大学院大学情
+報科学研究科博士前期課程修了．同年株式会社 NTT データ入社．2000年より
+NTT コミュニケーション科学基礎研究所に所属．博士（工学）．自然言語処理の
+研究に従事．言語処理学会，情報処理学会，ACL各会員．
+}
+
+\bioauthor{高村　大也}{
+1997年東京大学工学部計数工学科卒業．2000年同大大学院工学系研究科計数工学専攻修了
+（1999年はオーストリアウィーン工科大学にて研究）．2003年奈良先端科学技術大学院大学
+情報科学研究科博士課程修了．博士（工学）．2003年から2010年まで東京工業大学精密工
+学研究所助教．2006年にはイリノイ大学にて客員研究員．2010年より同准教授．計算言語
+学，自然言語処理を専門とし，特に機械学習の応用に興味を持つ．
+}
+
+\bioauthor{奥村　　学}{
+1962年生．1984年東京工業大学工学部情報工学科卒業．1989年同大学院博士課
+程修了．同年，東京工業大学工学部情報工学科助手．1992年北陸先端科学技術
+大学院大学情報科学研究科助教授，2000年東京工業大学精密工学研究所助教授，
+2009年同教授，現在に至る．工学博士．自然言語処理，知的情報提示技術，語
+学学習支援，テキスト評価分析，テキストマイニングに関する研究に従事．
+情報処理学会，電子情報通信学会，人工知能学会，
+AAAI，ACL, 認知科学会，計量国語学会各会員．
+}
+
+\bioauthor{永田　昌明}{
+1987年京都大学大学院工学研究科修士課程修了．
+同年，日本電信電話株式会社入社．現在，コミュニケーション科学研究所主
+幹研究員（上席特別研究員）．工学博士．統計的自然言語処理の研究に従事．電
+子情報通信学会，情報処理学会，人工知能学会，言語処理学会，ACL各会員．
+}
+
+\end{biography}
+
+
+\biodate
+
+
+
+\end{document}

@@ -1,0 +1,705 @@
+
+
+
+\documentstyle[macros,theapa]{jnlp_e_b5_old}
+
+\setcounter{page}{59}
+\setcounter{巻数}{2}
+\setcounter{号数}{2}
+
+\受付{September}{26}{1994}
+\再受付{December}{22}{1994}
+\採録{January}{13}{1995}
+
+\setcounter{secnumdepth}{2}
+
+\title{}
+\author{}
+\jkeywords{}
+
+\etitle{Integration of Morphological and Syntactic Analysis\\
+  based on LR Parsing Algorithm}
+
+\eauthor{Tanaka Hozumi\affiref{TIT} \and
+  Tokunaga Takenobu\affiref{TIT} \and
+  Aizawa Michio\affiref{Canon}}
+
+\headauthor{Tanaka,~H.~et~al.}
+\headtitle{Integration of Morphological and Syntactic Analysis}
+
+\affilabel{TIT}
+          {Department of Computer Science, Tokyo Institute of Technology}
+          {Department of Computer Science, Tokyo Institute of Technology}
+\affilabel{Canon}
+          {Media Technology Laboratory, Canon Inc.}
+          {Media Technology Laboratory, Canon Inc.}
+
+\eabstract{
+Morphological analysis of Japanese is very different from that of
+English, because no spaces are placed between words. This is also the
+case in many Asian languages such as Korean, Chinese, Thai and so
+forth. In the Indo-European family, some languages such as German have
+the same phenomena in forming complex noun phrases. Processing such
+languages requires the identification of the word boundaries in the
+first place. This process is often called {\em segmentation\/}.
+Segmentation is a very important process, since the wrong segmentation
+causes fatal errors in the later stages such as syntactic, semantic
+and contextual analysis. However, correct segmentation is not always
+possible only with morphological information. Syntactic, semantic and
+contextual information are also necessary to resolve the ambiguities
+in segmentation.  This paper proposes a method to integrate the
+morphological and syntactic analysis based on LR parsing algorithm. An
+LR table derived from grammar rules is modified on the basis of
+connectabilities between two adjacent words. The modified LR table
+reflects both the morphological and syntactic constraints.  Using the
+LR table and the generalized LR parsing algorithm, efficient
+morphological and syntactic analysis is available.
+}
+
+\ekeywords{Generalized LR parsing, Morphological analysis, Syntactic analysis}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+\label{sec:introduction}
+
+\hspace{-0.2mm}Morphological \hspace{-0.2mm}analysis \hspace{-0.2mm}of \hspace{-0.2mm}Japanese \hspace{-0.2mm}is \hspace{-0.2mm}very \hspace{-0.2mm}different \hspace{-0.2mm}from \hspace{-0.2mm}that \hspace{-0.2mm}of
+\hspace{-0.2mm}English, \hspace{-0.2mm}because \hspace{-0.2mm}no \hspace{-0.2mm}spaces\\ are \hspace{-0.2mm}placed \hspace{-0.2mm}between \hspace{-0.2mm}words. \hspace{-0.2mm}This \hspace{-0.2mm}is \hspace{-0.2mm}also \hspace{-0.2mm}the
+\hspace{-0.2mm}case \hspace{-0.2mm}in \hspace{-0.2mm}many \hspace{-0.2mm}Asian \hspace{-0.2mm}languages \hspace{-0.2mm}such \hspace{-0.2mm}as \hspace{-0.2mm}Korean, \hspace{-0.2mm}Chi- nese, Thai and so
+forth. In the Indo-European family, some languages such as German have
+the same phenomena in forming complex noun phrases. Processing such
+languages requires the identification of the word boundaries in the
+first place. This process is often called {\em segmentation\/}.
+Segmentation is one of the most important tasks of morphological
+analysis for these languages, since the wrong segmentation causes
+fatal errors in the later stages such as syntactic, semantic and
+contextual analysis. However, correct segmentation is not always
+possible only with morphological information. Syntactic, semantic and
+contextual information are also necessary to resolve the ambiguities
+in segmentation.
+
+Over the past decades a number of studies have been made on the
+morphological and syntactic analysis of Japanese. From the viewpoint
+of two kinds of integration, description of constraints and
+processing, they would be classified into the following three
+approaches. The relation of these approaches is illustrated in
+Figure~\ref{fig:map}.
+
+\begin{center}
+  \input{fig:map}
+  \figcap{Relation of approaches}{fig:map}
+\end{center}
+
+\begin{description}
+\item[Cascade:]Separate the morphological and syntactic analysis and
+  execute them in a cascade manner. The morphological and syntactic
+  constraints are represented separately.
+
+\item[Interleave:]Separate the morphological and syntactic analysis
+  and execute them interleavingly. The morphological and syntactic
+  constraints are represented separately.
+
+\item[Single Framework:]Represent both the morphological and
+  syntactic constraints in a single framework such as context free
+  grammars (CFGs) and make no distinction between the two analysis.
+\end{description}
+
+Representing the morphological and syntactic constraints separately
+as in the first two approaches, Cascade and Interleave, makes
+maintaining and extending the constraints easier. This is an advantage
+of these approaches. Many natural language processing systems have
+used these two approaches. For example, Mine et~al. proposed a method
+to represent the morphological constraints in regular grammar and the
+syntactic constraints in CFG, and interleave the morphological and
+syntactic analysis~\cite{mine:91:a}. Most other systems use a
+connection matrix instead of regular
+grammar~\cite{miyazaki:84:a,sugimura:88:b}. The main drawbacks of
+these approaches would be summarized as follows:
+\begin{itemize}
+    \item It may require two different algorithms for each analysis.
+    \item It must retain all ambiguities from the morphological analysis
+    until the syntactic analysis begins. This wastes memory space and
+    computing time.
+\end{itemize}
+
+On the other hand, from a viewpoint of processing, it is preferable to
+integrate the morphological and syntactic analysis into a single
+framework, since some syntactic constraints are useful for
+morphological analysis and vice versa. The last approach fulfills this
+requirement. There have been several attempts to develop CFG that
+covers both the morphological and syntactic
+constraints~\cite{kita:92:a,sano:92:a}. However, it is empirically
+difficult to describe both constraints by using only CFG. In order to
+have CFG rules include morphological constraints, nonterminal symbols
+have to bear the morphological attributes which are used for checking
+connectabilities between morphemes. In other words, nonterminals
+should be more precisely subcategorized. This increases the number of
+nonterminals and thus that of grammar rules.
+
+\begin{center}
+    \input{fig:cfg}
+    \figcap{Connectability check by CFG}{fig:cfg}
+\end{center}
+
+Using augmented context free grammar (ACFG) instead of CFG may remedy
+this problem. However, this may cause the delay of connectability
+checking. For example, in Figure~\ref{fig:cfg}, in order to check the
+connectability between adjacent words, $w_{i}$ and $w_{i+1}$, the
+morphological attributes of each word should be propagated up to their
+mother nodes B and C, and the check is delayed until the application
+of the rule A $\to$ B C. 
+
+By using connection matrices for morphological analysis as in the
+Cascade/Interleave approaches, connectability checks between adjacent
+words is performed very easily. Therefore, it is desirable to
+represent the morphological and syntactic constraints separately as in
+Cascade/Interleave, \hspace{0.5mm}and \hspace{0.25mm}to \hspace{0.25mm}integrate \hspace{0.25mm}the \hspace{0.25mm}execution \hspace{0.25mm}of \hspace{0.25mm}both \hspace{0.4mm}analysis
+\hspace{0.25mm}into \hspace{0.3mm}a \hspace{0.25mm}single \hspace{0.25mm}process as \hspace{0.25mm}in \\Single Framework. Our method has captured
+these advantages by representing the mor- phological constraints in
+connection matrices and the syntactic constraints in CFGs, then
+compiling both constraints into an LR table~\cite{aho:86:a}. The
+already existing efficient LR parsing algorithms would be used with
+minor modifications, enabling us to utilize both the morphological and
+syntactic constraints at the same time. Our approach, called MSLR
+(Morpho-Syntactic LR), locates at the right bottom of the map in
+Figure~\ref{fig:map}, which is the most preferable position.
+
+
+In the next section, we first give a brief introduction to Japanese
+morphological analysis using an example sentence. In
+section~\ref{sec:LR-table}, we describe the method of generating an LR
+table from a connection matrix and CFG rules, then in
+section~\ref{sec:algorithm} we explain the parsing algorithm. Our
+algorithm is principally the same as Tomita's generalized LR parsing
+algorithm~\cite{tomita:86:a}. The only difference is that the input is
+not a sequence of preterminals, but a sequence of characters.
+
+\section{Morphological analysis of Japanese}
+
+A simple Japanese sentence consists of a sequence of postpositional
+phrases (PPs) followed by a predicate. The PP consists of a noun
+phrase (NP) followed by a postposition which indicates the case role
+of the NP. The predicate consists of a verb or an adjective,
+optionally followed by a sequence of auxiliary verbs~\cite{morioka:87:a}).
+
+We illustrate the Japanese morphological analysis with an example
+sentence ``かおるにあいます (meet Kaoru).'' We use a simple Japanese
+dictionary shown in Figure~\ref{fig:dict}, and a connection matrix
+shown in Figure~\ref{fig:matrix} which gives us the connectabilities
+between adjacent morphological categories (mcat). For example in
+Figure~\ref{fig:matrix}, the symbol ``{\tt o}'' at the intersection of
+row~2 ($p_1$) and column~3 ($vs_k$) indicates that the morphological
+category $vs_k$ can immediately follow the morphological category
+$p_1$.
+
+\begin{center}
+  \def\arraystretch{}
+  \input{fig:dict}
+  \figcap{An example of Japanese dictionary}{fig:dict}
+\end{center}
+
+\begin{center}
+  \def\arraystretch{}
+  \input{fig:matrix}
+  \figcap{An example of a connection matrix}{fig:matrix}
+\end{center}
+    
+Using only the dictionary, we would obtain the following twelve
+candidates of segmentation for the sentence ``かおるにあいます．''
+\begin{center}
+  \def\arraystretch{}
+  \input{fig:result}
+\end{center}
+By \hspace{-0.2mm}also \hspace{-0.2mm}referring \hspace{-0.2mm}to \hspace{-0.2mm}the \hspace{-0.2mm}connection \hspace{-0.2mm}matrix, \hspace{-0.2mm}we \hspace{-0.2mm}would \hspace{-0.2mm}be \hspace{-0.2mm}able \hspace{-0.2mm}to \hspace{-0.2mm}filter
+\hspace{-0.2mm}out \hspace{-0.2mm}illegal \hspace{-0.2mm}segmentations. From the examples above, we find (1)--(4)
+violate the connectability between ``かお ($n_1$)'' and ``る 
+($ve_r^3$)'', and that (5)--(8) violate the connectability between ``
+る ($ve_r^3$)'' and ``に ($p_1$).''  Also (9) and (11) violate the
+connectability between ``い ($ve_k^{2i}$)'' and ``ます ($ax_1$)'', and
+(11) violates the connectability between ``あ ($vs_w$)'' and ``い 
+($ve_k^{2i}$).'' Thus by eliminating the illegal candidates we obtain
+the morphologically correct candidate, (12). A long input sentence
+generally gives ambiguities which need to be resolved in later stages
+using syntactic, semantic and contextual information.
+
+\section{Generating LR table}
+\label{sec:LR-table}
+
+Connection matrices and CFG rules have been used for morphological
+analysis and syntactic analysis respectively by most Japanese
+processing systems. Because CFG rules were mainly used for syntactic
+analysis and connection matrices for morphological analysis, they have
+been developed independently of each other. 
+
+In this section, we propose a method to integrate morphological and
+syntactic constraints in the framework of LR parsing algorithm, and
+thus capturing the advantages of Cascade/Interleave and Single
+Framework described in section~\ref{sec:introduction}.
+
+In order to combine connection matrices and CFG rules, the first step
+we have to take is to extend the CFG rules by relating the syntactic
+categories in the CFG rules with the morphological categories in a
+connection matrix. This is realized by adding CFG rules called
+morphological rules each of which is a unit production rule with a
+syntactic category in the LHS and a morphological category in the RHS.
+
+\begin{center}
+  \def\arraystretch{}
+  \input{fig:srules}
+  \figcap{An example of CFG for Japanese}{fig:srules}
+\end{center}
+
+\begin{center}
+  \def\arraystretch{}
+  \input{fig:mrules}
+  \figcap{A morphological rules derived from the dictionary
+    in Figure~\ref{fig:dict}}{fig:mrules}
+\end{center}
+
+Let us take an exmaple CFG rules shown in Figure~\ref{fig:srules}.
+From the dictionary shown in Figure~\ref{fig:dict}, we would extract a
+set of new CFG rules as shown in Figure~\ref{fig:mrules}, which are
+simply added to the CFG rules in Figure~\ref{fig:srules} to get an
+extended set of CFG rules.
+
+We would generate an LR table as shown in Figure~\ref{fig:LR-table} from
+the extended CFG rules (1) through (21) from Figure~\ref{fig:srules}
+and \ref{fig:mrules}.  Note that the extended CFG rules do not include
+any information about connectability represented in the connection
+matrix in Figure~\ref{fig:matrix}. For example, rules (4), (10) and
+(14) allow the structure ``{\tt [v [vs $vs_r$],[ve [$ve_w^2$]]]}''
+which violates the connectability between $vs_r$ and $ve_w^2$ with
+respect to Figure~\ref{fig:matrix}.
+
+\begin{center}
+  \def\arraystretch{}
+  \input{fig:LRtable}
+  \figcap{LR table generated from rules (1)--(21)}{fig:LR-table}
+\end{center}
+
+The second step is to introduce the constraints on connectability into
+the LR table by deleting illegal reduce actions. This is carried out
+by modifying the LR table with the procedure shown in
+Figure~\ref{fig:modify}.
+
+\begin{center}
+    \input{fig:modify}
+    \figcap{A procedure to modify an LR table}{fig:modify}
+\end{center}
+
+Deleting reduce actions by applying the above procedure prohibits the
+application of morphological rules which violates the connectability
+between two adjacent words, namely the current scanned word and its
+lookahead word. Note that given an LR table and a connection matrix,
+this procedure can be performed automatically without human
+intervention.
+
+It is possible to incorporate this procedure into the LR table
+generation process, however, it is better to keep them separate.
+Since this procedure is applicable to any type of LR table, separating
+this process from LR table generation enables us to use the already
+existing LR table generation program.
+
+For example, in Figure~\ref{fig:LR-table}, the reduce action {\tt r8}
+in state~7 and column $ve_r^3$ is deleted, since the connection
+between $vs_k$, the RHS of rule (8), and $ve_r^3$, the lookahead
+symbol, is prohibited with respect to the connection matrix in
+Figure~\ref{fig:matrix}. Similarly, reduce action {\tt r8} in state~7
+and column $ve_w^2$ will be deleted and so forth. The reduce actions
+which should be deleted is enclosed in Figure~\ref{fig:LR-table}.  The
+overview of generating a modified LR table is shown in
+Figure~\ref{fig:overview}.
+
+Generally speaking, the size of the LR table is on the exponential
+order of the number of rules in the grammar. Introducing the
+morphological rules into the syntactic rules can cause an increase in
+the number of states in the LR table, thereby exponentially increasing
+the size of the overall LR table in the worst case. In our method, the
+increase of the number of states is equal to that of the morphological
+rules introduced. Suppose we add a morphological rule $X \to x$ to the
+grammar. Only the items in the form of $[A \to \alpha \cdot X \beta]$
+would produce a single new item $[X \to \cdot x]$ from which only a
+single new state $\{[X \to x \cdot]\}$ would be created. Thus the
+increase of the number of the states is equal to that of the
+morphological rules introduced, and the size of the LR table will not
+grow exponentially.
+
+\begin{center}
+  \unitlength=1mm
+  \input{fig:overview}
+  \figcap{Outline of generating a modified LR table}{fig:overview}
+\end{center}
+
+\section{Algorithm}
+\label{sec:algorithm}
+
+The LR parsing algorithm with the modified LR table is principally the
+same as Tomita's generalized LR parsing algorithm. The only difference
+is that Tomita's algorithm assumes a sequence of preterminals as an
+input, while our algorithm assumes a sequence of characters. Thus the
+dictionary reference process needs to be slightly modified.
+Figure~\ref{fig:parse} illustrates the outline of our parsing
+algorithm.
+
+In Figure~\ref{fig:parse} the stage number (CS) indicates how many
+characters have been processed. The procedure begins at stage 0 and
+ends at stage N, the character length of an input sentence. In stage
+0, the stack is initialized and only the node with state 0 exists
+(step (1)). In the outer-most loop (2)--(14), each stack top in the
+current stage is selected and processed.  In step (4), the dictionary
+is consulted and look-ahead symbols are obtained. An important
+point here is that look-ahead symbols may have different
+character lengths.  A new node is introduced by a shift action at step
+(8) and is placed into a stage which is ahead of the current stage by
+the length of the look-ahead word.
+
+\begin{center}
+    \input{fig:parse}
+    \figcap{Outline of the parsing algorithm}{fig:parse}
+\end{center}
+
+\section{A worked example}
+
+The \hspace{0.3mm}following \hspace{0.3mm}example \hspace{0.3mm}well \hspace{0.3mm}illustrates \hspace{0.3mm}the \hspace{0.3mm}algorithm \hspace{0.3mm}in
+\hspace{0.3mm}Figure~\ref{fig:parse}. \hspace{0.3mm}The \hspace{0.3mm}input \hspace{0.3mm}sentence \hspace{0.3mm}is ``かおるにあいます\$ ''
+(meet Kaoru).  We assign position numbers between adjacent characters.
+\begin{center}
+    \begin{tabular}{l*{19}{c@{}}}
+        Input:& &     か&&  お&& る&& に&& あ&& い&& ま&& す&& ＄\\
+        Position:& 0&& 1&& 2&&  3&&  4&& 5&& 6&&  7&&  8&& 9\\
+    \end{tabular}
+\end{center}
+
+In the following trace, the numbers in circles denote state numbers,
+and the numbers in squares denote the subtree number. The symbols
+enclosed by curly brackets denote a look ahead symbol followed by
+the next applicable action, separated by a slash (/). The stage
+numbers are shown below the stacks.
+
+\fboxsep=0.5mm
+\leftline{\bf Stage: 0}
+\begin{quote}
+  \begin{tabular}{ll}
+    Dictionary reference:\\
+    {[$n_1$, ``かお'']}&  at 0--2\\
+    {[$vs_r$, ``かお'']}& at 0--2\\
+    {[$n_1$,  ``かおる'']}& at 0--3\\
+  \end{tabular}
+\end{quote}
+We find three look ahead symbols, $n_1$, $vs_r$, and $n_1$ by
+consulting the dictionary in Figure~\ref{fig:dict}. A shift actions is
+applied for each of them according to the LR table in
+Figure~\ref{fig:LR-table}.
+\begin{quote}
+    \small
+    \input{fig:trace1}
+\end{quote}
+After the shift actions, three new nodes are created at stage~2 or
+stage~3 depending on the length of look ahead words. At the same time
+subtrees \fbox{\tt 1}--\fbox{\tt 3} are constructed. The current stage
+is updated from 0 to 2, since there is no node in stage~1. The look
+ahead symbols are unknown at this moment.
+\begin{quote}
+    \small
+    \input{fig:trace2}~
+    \begin{tabular}[b]{l@{~:~}l}
+      \fbox{\tt 1}& [$n_1$, ``かお'']\\
+      \fbox{\tt 2}& [$vs_r$, ``かお'']\\
+      \fbox{\tt 3}& [$n_1$, ``かおる'']\\
+    \end{tabular}
+\end{quote}
+
+\leftline{\bf Stage: 2}
+\begin{quote}
+  \begin{tabular}{ll}
+    Dictionary reference:\\
+    {[$ve_r^3$, ``る'']}&  at 2--3\\
+  \end{tabular}
+\end{quote}
+Dictionary reference gives one look ahead symbol from position~2. 
+Since the current stage number is 2, only the first two stack tops are
+concerned at this stage. No action is taken of the first stack,
+because the LR table has no action in the entry for state~6 and a look
+ahead symbol $ve_r^3$. As the result, the first stack is
+rejected. The reduce action ({\tt r10}) is taken for the second stack.
+\begin{quote}
+    \small
+    \input{fig:trace3}
+\end{quote}
+After {\tt r10}, a shift action ({\tt s23}) is carried out for the
+first stack.
+\begin{quote}
+  \small
+  \input{fig:trace4}~
+  \begin{tabular}[b]{l@{~:~}l}
+    \fbox{\tt 4}& [{\tt vs}, \fbox{\tt 2} ]\\
+  \end{tabular}
+\end{quote}
+After {\tt s23}, we would proceed to stage~3.
+\begin{quote}
+  \small
+  \input{fig:trace5}~
+  \begin{tabular}[b]{l@{~:~}l}
+    \fbox{\tt 5}& [$ve_r^3$, ``る'']\\
+  \end{tabular}
+\end{quote}
+
+\leftline{\bf Stage: 3}
+\begin{quote}
+  \begin{tabular}{ll}
+    Dictionary reference:\\
+    {[$p_1$, ``に'']}&  at 3--4\\
+  \end{tabular}
+\end{quote}
+We obtain symbol $p_1$ by consulting the dictionary. Because the
+first stack can take no more action, it is rejected. The reduce action
+({\tt r6}) is then applied to the second stack.
+\begin{quote}
+    \small
+    \input{fig:trace6}
+\end{quote}
+The shift action ({\tt s25}) is applied to the following stack.
+\begin{quote}
+    \small
+    \input{fig:trace7}~
+    \begin{tabular}{l@{ : }l}
+      \fbox{\tt 6}& [{\tt n}, \fbox{\tt 3} ]\\
+    \end{tabular}
+\end{quote}
+After the shift action ({\tt s25}), new nodes are created in stage~4.
+\begin{quote}
+    \small
+    \input{fig:trace8}~
+    \begin{tabular}{l@{ : }l}
+      \fbox{\tt 7}& [$p_1$, ``に'']\\
+    \end{tabular}
+\end{quote}
+
+\leftline{\bf Stage: 4}
+\begin{quote}
+  \begin{tabular}{ll}
+    Dictionary reference:\\
+    {[$vs_k$, ``あ'']}& at 4--5\\
+    {[$vs_w$, ``あ'']}& at 4--5\\
+  \end{tabular}
+\end{quote}
+Dictionary reference provides two look ahead symbols for the next
+word.
+\begin{quote}
+    \small
+    \input{fig:trace9}
+\end{quote}
+After the two reduce actions ({\tt r7}), we get two nodes with the
+same state~24, and they would be merged. This is possible because
+these two reduce actions give the same structure as well. If the
+structures are different, we would not able to merge the stacks. We
+would see such an example later at stage~5.
+\begin{quote}
+  \small
+  \input{fig:trace10}~
+  \begin{tabular}[b]{l@{ : }l}
+    \fbox{\tt 8}& [{\tt p}, \fbox{\tt7} ]\\
+  \end{tabular}
+\end{quote}
+
+The process in stage 4 continues as follows.
+\begin{quote}
+  \small
+  \input{fig:trace11}~
+  \begin{tabular}[b]{l@{ : }l}
+    \fbox{\tt 9}& {[pp, \fbox{\tt 6}, \fbox{\tt 8} ]}\\
+  \end{tabular}
+\end{quote}
+\begin{quote}
+    \small
+    \input{fig:trace12}~
+    \begin{tabular}[b]{l@{ : }l}
+      \fbox{\tt 10}& [$vs_k$, ``あ'']\\
+      \fbox{\tt 11}& [$vs_w$, ``あ'']\\
+    \end{tabular}
+\end{quote}
+
+\clearpage
+\leftline{\bf Stage: 5}
+\begin{quote}
+  \begin{tabular}{ll}
+    Dictionary reference:\\
+    {[$ve_k^{2i}$, ``い'']}& at 5--6\\
+    {[$ve_w^2$, ``い'']}& at 5--6\\
+  \end{tabular}
+\end{quote}
+We have two look ahead symbols for each stack top.  The reduce
+actions ({\tt r8} and {\tt r9}) are performed.
+\begin{quote}
+    \small
+    \input{fig:trace13}
+\end{quote}
+\begin{quote}
+    \small
+    \input{fig:trace14}~
+    \begin{tabular}[b]{l@{ : }l}
+      \fbox{\tt 12}& [{\tt vs}, \fbox{\tt 10} ]\\
+      \fbox{\tt 13}& [{\tt vs}, \fbox{\tt 11} ]\\
+    \end{tabular}
+\end{quote}
+Note that we are not able to merge the stack tops even with the same
+state~4 since the structure of \fbox{\tt 12} and \fbox{\tt 13} are
+different. If two stack tops are merged here and then different
+shift actions ({\tt s16} and {\tt s18}) are carried out, we might
+have invalid combinations of structure such as (\fbox{\tt 12},
+\fbox{\tt 15}) and (\fbox{\tt 13}, \fbox{\tt 14}).
+\begin{quote}
+    \small
+    \input{fig:trace15}~
+    \begin{tabular}[b]{l@{ : }l}
+      \fbox{\tt 14}& [$ve_k^{2i}$, ``い'']\\
+      \fbox{\tt 15}& [$ve_w^2$, ``い'']\\
+    \end{tabular}
+\end{quote}
+After the shift actions ({\tt s16} and {\tt s18}), we proceed to stage~6.
+
+\leftline{\bf Stage: 6}
+\begin{quote}
+  \begin{tabular}{ll}
+    Dictionary reference:\\
+    {[$ax_1$, ``ます'']}& at 6--8\\
+  \end{tabular}
+\end{quote}
+The process in stage~6 proceeds as follows.
+\begin{quote}
+    \small
+    \input{fig:trace16}
+\end{quote}
+\begin{quote}
+    \small
+    \input{fig:trace17}~
+    \begin{tabular}[b]{l@{~:~}l}
+      \fbox{\tt 16}& [{\tt ve}, \fbox{\tt 15} ]\\
+    \end{tabular}
+\end{quote}
+\begin{quote}
+    \small
+    \input{fig:trace18}~
+    \begin{tabular}[b]{l@{~:~}l}
+      \fbox{\tt 17}& [{\tt v}, \fbox{\tt 12}, \fbox{\tt 16} ]\\
+    \end{tabular}
+\end{quote}
+\begin{quote}
+    \small
+    \input{fig:trace19}~
+    \begin{tabular}[b]{l@{~:~}l}
+      \fbox{\tt 18}& [$ax_1$, ``ます'']\\
+    \end{tabular}
+\end{quote}
+
+\leftline{\bf Stage: 8}
+\begin{quote}
+  \begin{tabular}{ll}
+    Dictionary reference:\\
+    ``\$''& at 8--9\\
+  \end{tabular}
+\end{quote}
+\begin{quote}
+    \small
+    \input{fig:trace20}
+\end{quote}
+\begin{quote}
+    \small
+    \input{fig:trace21}~
+    \begin{tabular}[b]{l@{~:~}l}
+      \fbox{\tt 19}& [{\tt ax}, \fbox{\tt 18}]\\
+    \end{tabular}
+\end{quote}
+\begin{quote}
+    \small
+    \input{fig:trace22}~
+    \begin{tabular}[b]{l@{~:~}l}
+      \fbox{\tt 20}& [{\tt s}, \fbox{\tt 17}, \fbox{\tt 19} ]\\
+    \end{tabular}
+\end{quote}
+The input sentence is automatically segmented and accepted, giving a
+final parse result 21 as shown in Figure~\ref{fig:tree}.
+\begin{quote}
+    \small
+    \input{fig:trace23}~
+    \begin{tabular}[b]{l@{~:~}l}
+      \fbox{\tt 21}& [{\tt s}, \fbox{\tt 9}, \fbox{\tt 20} ]\\
+    \end{tabular}
+\end{quote}
+    
+\begin{center}
+  \unitlength=0.7mm
+  \input{fig:tree}
+  \figcap{An analysis of ``かおるにあいます''}{fig:tree}
+\end{center}
+
+\section{Conclusion}
+
+We have proposed a method representing the morphological constraints
+in connection matrices and the syntactic constraints in CFGs, then
+compiling both constraints into an LR table. The compiled LR table
+enables us to make use of the already existing, efficient generalized
+LR parsing algorithms through which integration of both morphological
+and syntactic analysis is obtained.
+
+Advantages of our approach would be summarized as follows:
+\begin{itemize}
+    \item Morphological and syntactic constraints are represented
+    separately, and it makes easier to maintain and extend them.
+
+    \item The morphological and syntactic constraints are compiled into a
+    uniform representation, an LR table. We can use the already
+    existing efficient algorithms for generalized LR parsing for the
+    analysis. 
+
+    \item Both the morphological and syntactic constraints can be used
+        at the same time during the analysis. 
+\end{itemize}
+
+We have implemented our method using the EDR dictionary with 300,000
+words~\cite{edr:93:a} from which 437 morphological rules are derived. 
+This means only 437 new states are introduced to LR table and this
+does not cause an explosion in the size of the LR table.  The method
+proposed in this paper is also applicable to integrate phonological
+and syntactic analysis. The detail is described
+elsewhere~\cite{tanaka:94:e}.
+
+
+\bibliography{nlp-str,ref,LR}
+\bibliographystyle{theapa}
+
+\begin{biography}
+
+\biotitle{}
+
+\bioauthor{Tanaka Hozumi} {He is a professor of Department of Computer
+  Science, Tokyo Institute of Technology. He received the B.S. degree
+  in 1964 and the M.S. degree in 1966 from Tokyo Institute of
+  Technology. In 1966 he joined in the Electro Technical Laboratories,
+  Tsukuba. He received the Dr. Eng. degree in 1980. He joined in Tokyo
+  Institute of Technology in 1983. He has been engaged in artificial
+  intelligence and natural language processing research.  }
+
+\bioauthor{Tokunaga Takenobu} {He is an associate professor of
+  Department of Computer Science, Tokyo Institute of Technology. He
+  received the B.S.  degree in 1983 from Tokyo Institute of
+  Technology, the M.S. and the Dr. Eng. degrees from Tokyo Institute
+  of Technology in 1985 and 1991, respectively. His current interests
+  are natural language processing, information retrieval.}
+
+\bioauthor{Aizawa Michio}{He is a researcher at Media Technology
+  Laboratory, Canon Inc.  He received the B.S. degree in 1991 from
+  Tokyo Institute of Technology, the M.S. degrees from Tokyo
+  Institute of Technology in 1993. His current interest is natural
+  language processing. }
+
+\bioreceived{Received}
+\biorevised{Revised}
+\bioaccepted{Accepted}
+
+\end{biography}
+
+\end{document}
+

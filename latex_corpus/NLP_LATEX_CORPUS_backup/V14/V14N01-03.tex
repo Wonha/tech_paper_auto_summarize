@@ -1,0 +1,1738 @@
+    \documentclass[japanese]{jnlp_1.2b}
+
+\usepackage[dvips]{graphicx}
+\setlength{\unitlength}{1pt}
+\newlength{\VerbSbace}\settowidth{\VerbSbace}{{\small\ }}
+
+
+
+
+\Volume{14}
+\Number{1}
+\Month{Jan.}
+\Year{2007}
+\received{2006}{3}{15}
+\revised{2006}{9}{22}
+\accepted{2006}{10}{10}
+
+\setcounter{page}{43}
+
+\jtitle{日本語フレームネットに基づく意味役割推定}
+\jauthor{肥塚　真輔\affiref{GRAD} \and 岡本　紘幸\affiref{GRAD} 
+	\and 斎藤　博昭\affiref{GRAD} \and 小原　京子\affiref{GRAD}}
+\jabstract{
+本稿では，日本語フレームネットを背景に，述語項構造における項の意味役割を
+推定する統計モデルの定義，および獲得手法を提案する．
+本モデルの目的は，表層格では区別できない意味の区別である．
+本モデルは文と述語から述語項構造を同定して意味役割を付与すべき項を抽出し，
+それらに適切な意味役割を付与する．
+評価実験の結果，尤度が閾値を超える意味役割のみを付与する条件の下，意味役
+割を付与すべき項がわかっている文に対して精度77％，再現率68％，また，意味
+役割を付与すべき項がわかっていない文に対して精度63％，再現率43％で意味役
+割推定を実現し，本手法の有効性を示した．
+また，同一の表層格をもつ項に対して，複数の異なる意味役割の付与を実現した．
+}
+\jkeywords{意味役割推定，最大エントロピー法，サポートベクタマシン}
+
+\etitle{Semantic Role Labeling based on Japanese FrameNet}
+\eauthor{Shinsuke Hizuka\affiref{GRAD} \and Hiroyuki
+	Okamoto\affiref{GRAD} \and Hiroaki Saito\affiref{GRAD} 
+	\and \\Kyoko Hirose Ohara\affiref{GRAD}} 
+\eabstract{
+This paper proposes a stochastic model for semantic role labeling based
+on Japanese FrameNet and suggests a method to acquire it by machine
+learning.
+The model distinguishes semantic roles which cannot be separated by
+surface cases.
+The model receives a sentence and its predicate, identifies its
+predicate argument structure, then identifies the arguments to be
+labeled, and finally labels them with adequate semantic roles.
+The system based on the model achieved 77\% precision and 68\% recall in
+identifying the semantic roles of the pre-segmented arguments under the
+condition that the system labels the role whose certainty is more than
+the threshold.
+For more difficult tasks of identifying the arguments which should be
+labeled and their roles, the system attained 63\% precision and 43\%
+recall under the same condition.
+The system also achieved to label different semantic roles to the
+arguments whose surface cases are identical.
+}
+\ekeywords{Semantic role labeling, Maximum entropy method, Support
+vector machine}
+
+\headauthor{肥塚，岡本，斎藤，小原}
+\headtitle{日本語フレームネットに基づく意味役割推定}
+
+\affilabel{GRAD}{
+	慶應義塾大学大学院 理工学研究科}{
+	Graduate School of Science and Technology, Keio University}
+
+
+
+\begin{document}
+\maketitle
+
+
+
+\newcommand{\underlines}[1]{}
+\newcommand{\role}[4]{}
+\newcommand{\target}[3]{}
+\newcommand{\norole}[2]{}
+\newcommand{\roleb}[3]{}
+\newcommand{\rolebX}[4]{}
+\newcommand{\targetb}[3]{}
+\newcommand{\noroleb}[2]{}
+\newcommand{\argmax}[1]{}
+
+
+
+
+\section{はじめに}
+
+コンピュータに自然言語の意味を理解させるためには，文の述語とその項の意味
+的な関係を表現する必要がある．
+竹内は，述語と項の深層関係を表現する手法としての語彙概念構造に着目，これ
+に基づく辞書を提案している\cite{takeuchi04,takeuchi05}．
+語彙概念構造は述語と項の深層関係を抽象化するため，言い換えの分野で有効
+性が示されている\cite{furuhata04}．
+河原らは，用言とその直前の格要素の組を単位とした用例ベースの辞書，格フレー
+ム辞書を提案し，それに基づく格解析モデルを提案している\cite[など]
+{kawahara05_1,kawahara05}．
+照応や省略の解析に格フレーム辞書の有効性が示されている\cite[など]
+{sasano04,kawahara04,kawahara03}．
+
+格フレーム辞書は表層格を表現・区別し，語彙概念構造は表層格および深層関係
+を抽象化するものであり，表層格で区別できない述語と項の意味関係を個々の項
+について詳細に表現することはできない．
+これに対し，述語と項との詳細な意味関係を典型的場面についての構造化された
+知識である意味フレームに即して表現した体系として，日本語フレームネットが
+提案されている\cite[など]{ohara05}．
+日本語フレームネットは英語語彙情報資源
+FrameNet\footnote{http://framenet.icsi.berkeley.edu}と同様にフレーム意味
+論\cite{fillmore82}に基づく日本語語彙情報資源で，意味フレーム別に，その
+意味要素である詳細な意味役割を定義し，その意味フレームに関与する述語項構
+造の述語となる語彙項目をリストアップしている．
+格フレーム辞書，語彙概念構造辞書および日本語フレームネットによる，述語
+「払う」に対する記述を図\ref{fig:resource_comparison}に示す．
+
+\begin{figure}[p]
+  \setlength{\tabcolsep}{1.3mm}
+  \begin{tabular}{llllllllllll}
+   \hline\hline
+   \vspace*{-2mm}& & & & & & & & & & &\\
+   \multicolumn{12}{l}{\normalsize {\bf 格フレーム辞書}$^{*1}$}\\
+   &\multicolumn{11}{l}{払う:動1}\\
+   &&\multicolumn{2}{r}{＊$\langle$ガ格$\rangle$}&\multicolumn{8}{l}{私:
+   393, 人: 246, 者: 215, 俺: 168, 自分: 158, 僕: 101, あなた: 38,
+   $\langle$数量$\rangle$人: 37, ...}\\
+   &&\multicolumn{2}{r}{＊$\langle$ヲ格$\rangle$}&\multicolumn{8}{l}{金:
+   18570, 料: 7522, 料金: 4101, 税金: 2872, $\langle$数量$\rangle$円:
+   2726, 費: 1643, 税: 1340, ...}\\
+   &&\multicolumn{2}{r}{＊$\langle$ニ格
+   $\rangle$}&\multicolumn{8}{l}{$\langle$補文$\rangle$: 336, 人: 250, 者:
+   233, 会社: 211, 業者: 127, 店: 95, ＮＴＴ: 72, 屋: 68, ...}\\
+   &&\multicolumn{2}{r}{＊$\langle$デ格$\rangle$}&\multicolumn{8}{l}{レジ:
+   106, $\langle$時間$\rangle$: 75, 受付: 74, 入り口: 63, 税金: 63,
+   $\langle$補文$\rangle$: 56, コンビニ: 55, ...}\\
+   &&\multicolumn{2}{r}{＊$\langle$無格
+   $\rangle$}&\multicolumn{8}{l}{$\langle$数量$\rangle$円: 2739, $\langle$数
+   量$\rangle$ドル: 371, $\langle$数量$\rangle$回: 363, $\langle$数量
+   $\rangle$元: 102, $\langle$数量$\rangle$人: 96, ...}\\
+   &&\multicolumn{2}{r}{$\langle$時間
+   $\rangle$}&\multicolumn{8}{l}{$\langle$時間$\rangle$: 677}\\
+   &&\multicolumn{2}{r}{$\langle$ノ格
+   $\rangle$}&\multicolumn{8}{l}{$\langle$数量$\rangle$円: 963, $\langle$時
+   間$\rangle$: 499, $\langle$数量$\rangle$: 260,$\langle$数量$\rangle$ドル:
+   164, $\langle$数量$\rangle$倍: 153, ...}\\
+   &\multicolumn{11}{l}{払う:動2}\\
+   &&\multicolumn{10}{l}{$\vdots$}\\
+   \vspace*{-2mm}& & & & & & & & & & & \\ 
+\hline
+   \vspace*{-2mm}& & & & & & & & & & & \\
+   \multicolumn{12}{l}{\normalsize {\bf 語彙概念構造}$^{*2 *3}$}\\
+       &\multicolumn{3}{l}{払う}&\multicolumn{8}{l}{[[~]x CONTROL [BECOME [[~]y BE AT [FILLED]z]]]}\\
+   \vspace*{-2mm}& & & & & & & & & & & \\ 
+\hline
+   \vspace*{-2mm}& & & & & & & & & & & \\
+   \multicolumn{12}{l}{\normalsize {\bf 日本語フレームネット}$^{*4
+   *5}$}\\
+   &\multicolumn{11}{l}{払う.v}\\
+   &&\multicolumn{2}{l}{Frame:}&\multicolumn{8}{l}{Commerce\_pay}\\
+   &&\multicolumn{2}{l}{Definition:}&\multicolumn{8}{l}{IPAL: 相手に受け
+   取る権利のある金を渡す．}\\
+   &&\multicolumn{10}{l}{Frame Elements:}\\\cline{4-11}
+   &&&\multicolumn{2}{l}{Frame Element}&\multicolumn{6}{l}{Realizations}&\\\cline{4-11}
+   &&&\multicolumn{2}{l}{\it Buyer}&DNI.--.--&INC.--.--&INI.--.--&NP.Ext.--&NP.Ext.ガ&&\\
+   &&&\multicolumn{2}{l}{\it Circumstances}&NP.Dep.デ&&&&&&\\
+   &&&\multicolumn{2}{l}{\it Goods}&NP.Obj.ヲ&&&&&&\\
+   &&&\multicolumn{2}{l}{\it Means}&NP.Dep.デ&&&&&&\\
+   &&&\multicolumn{2}{l}{\it Money}&NP.Obj.ヲ&DNI.--.--&NP.Obj.ハ&NP.Dep.--&NP.Obj.--&NP.Obj.モ&\\
+   &&&\multicolumn{2}{l}{\it Place}&NP.Dep.ニ&NP.Dep.デ&NP.Dep.ハ&&&&\\
+   &&&\multicolumn{2}{l}{\it Rate}&AVP.Dep.--&&&&&&\\
+   &&&\multicolumn{2}{l}{\it Reason}&AVP.Dep.--&Sfin.Dep.--&NP.Dep.カラ&&&&\\
+   &&&\multicolumn{2}{l}{\it Seller}&DNI.--.--&NP.Dep.ヘ&INI.--.--&NP.Ext.ハ&&&\\
+   &&&\multicolumn{2}{l}{\it Time}&NP.Dep.ニ&NP.Dep.モ&&&&&\\
+   \cline{4-11}
+   &&&&&&&&&&&\\
+\hline\hline
+   \multicolumn{12}{r}{
+   \begin{minipage}[t]{0.8\textwidth}
+    \footnotesize 
+    \begin{itemize}
+     \item[\hspace*{3mm}*1] \texttt{http://reed.kuee.kyoto-u.ac.jp/cf-search/}
+			    で検索した結果の一部を引用した．
+     \item[\hspace*{3mm}*2] \texttt{http://cl.it.okayama-u.ac.jp/rsc/lcs/}
+			    から引用した．
+     \item[\hspace*{3mm}*3] この例では，\texttt{x，y，z}は表
+			    層ではそれぞれ「が」「を」「に」格，深層では
+			    それぞれAgent，Theme，Goal に対応している．
+     \item[\hspace*{3mm}*4] ここに示した日本語フレームネットデータは2006
+			    年8月現在のものである．
+      \item[\hspace*{3mm}*5] 表において，``Frame Element''（フレーム要素）
+			    はいわゆる深層格に当たる．
+    \end{itemize}
+   \end{minipage}}\\
+  \end{tabular}
+    \vspace{4pt}
+  \caption{格フレーム辞書，語彙概念構造および日本語フレームネットにおけ
+  る述語「払う」の記述}
+  \label{fig:resource_comparison}
+\end{figure}
+
+FrameNetは機械翻訳や語義曖昧性解消の分野で有効と考えられており，将来の適
+用に向けて，FrameNet意味役割を自動推定するタスクのコンテストも開催されて
+いる\footnote{http://www.lsi.upc.edu/$\tilde{~}$srlconll/home.htmlならび
+にhttp://www.senseval.org/}\cite{litkowski04}．
+FrameNetに基づく意味役割自動推定は，述語の各項に対し，詳細な意味役割に相当する，フレーム意味論における「フレーム要素(Frame Element)」を付与する試みである．
+この研究はGildeaらの提案に端を発する\cite{gildea02}．
+Gildeaらは，条件付き確率モデルを用いた意味役割推定に加え，確率モデルの学習
+に必要な訓練事例の自動生成手法も提案した．
+Gildeaらの提案は，形式意味論の枠組みに沿って述語と項の意味的な関係を表現
+するPropBank \cite[など]{kingsbury02}を背景とした意味役割推定手法において
+も参照され，その改良として，確率モデルの獲得手法に最大エントロピー (ME)
+法\cite{berger96}やサポートベクタマシン (SVM)\cite{vapnik99}を用いた意
+味役割推定が複数提案された\cite[など]{kwon04,pradhan04,bejan04}．
+また，文中のどの部分が項であるかを同定するため，形態素の品詞や句の文法機
+能を用いて項を抽象化し，頻出するものを項とする手法も提案された
+\cite{baldewein04}．
+
+
+日本語フレームネットではFrameNetの枠組や方法論をふまえ，日英の比較対照を
+考慮した日本語語義記述が実践されているが，日本語フレームネットを用いた，
+日本語を対象とした意味役割の自動推定に関する研究は行われていない．
+そこで本稿では，日本語フレームネットに基づき，述語項構造における項の意味
+役割を推定するモデルを提案する．
+日本語フレームネットは現在作成中であり，現時点では語彙資源の規模が非常に
+小さい\footnote{2006年8月現在，FrameNet の注釈付き事例数約150,000に対し，
+日本語フレームネットの注釈付き事例数は1,756．}．
+そのため，日本語の意味役割推定にはある程度規模の大きい英語FrameNetを対象
+とした既存の手法をそのまま適用できず，小規模の語彙資源でも十分な精度で推
+定可能な手法を新たに考える必要がある．
+
+本稿では以上を踏まえ，日本語フレームネットの注釈付き事例に基づく機械学習
+を用いて，意味役割を推定するモデルの獲得手法を提案する．
+意味役割推定モデルは，文と述語から述語項構造を同定，意味役割を付与すべき
+項を抽出し，それらに適切な意味役割を付与するという3つのタスクを担う．
+モデルの獲得には最大エントロピー法ならびにサポートベクタマシンを用い，項
+候補の獲得には構文情報を利用する．
+同時に，モデルの学習に必要な訓練事例の自動生成も行う．
+
+
+
+
+\section{モデルの定義}\label{sec:models_def_proposal}
+
+本稿で提案する意味役割推定モデルは，与えられた文と述語に対して取り得る全
+ての意味役割注釈パタン\footnote{文中のどの部分が述語の項に当たるか，また
+それぞれの項がどの意味役割を持つのか，の2点に対する1つの可能性を意味役割
+注釈パタンと呼ぶ．}についての尤度を計算し，尤度が最も高い注釈パタンを出
+力するモデルである．
+すなわち，入力文$T$と述語$t$が与えられた時の意味役割注釈パタン$L$の確率
+$P(L|t,T)$を最大にする意味役割注釈パタン$L_{best}$が最終的な出力となる．
+
+\begin{eqnarray}
+ \label{eqn:rolelabeling0_proposal}
+  L_{best} & = & \argmax{L} \: P(L|t,T)
+\end{eqnarray}
+
+注釈パタン$L$はフレーム$f$，項候補集合$S$，項候補-意味役割対応関係$C$に
+より一意に決定されるため，式(\ref{eqn:rolelabeling0_proposal})右辺
+$P(L|t,T)$を以下のように定義した．
+\begin{eqnarray}
+  P(L|t,T) & \approx & P(C,S,f|t,T) \nonumber\\\vspace*{-2mm}
+ \label{eqn:rolelabeling1_proposal}
+           & = & P(C|S,f,t,T) \times P(S|f,t,T) \times P(f|t,T)
+\end{eqnarray}
+本稿では式(\ref{eqn:rolelabeling1_proposal})右辺を第1項からそれぞれ，対
+応付けモデル，項候補獲得モデル，フレーム選択モデルと呼ぶ\footnote{対応付
+けモデルはKwonらの手法\cite{kwon04}における Semantic Role Tagging に対応
+し，項候補獲得モデルはSentence SegmentationおよびArgument Identification
+に対応する．}．
+図\ref{fig:flow}に，これらのモデルの概要を示す．
+
+図\ref{fig:flow}中の各モデルについては以下で詳説する．ただし，項候補獲得モデル中の項候補同定モデル，および対応付けモデル中の自項独立/他項依存意味役割同定モデルの詳細は\ref{sec:outline_proposal}節で述べる．
+
+
+\begin{figure}[t]
+ \begin{center}
+      \includegraphics[width=0.55\textwidth]{overview2.eps}
+  \caption{意味役割推定の流れ}
+  \label{fig:flow}
+ \end{center}
+\end{figure}
+
+
+
+\subsection{フレーム選択モデル}
+
+フレーム選択モデルは与えられた文と述語から，項に付けられる注釈となるべき
+意味役割が定義された意味フレームを獲得するモデルである．
+我々はフレーム選択モデルを，$t$が$f$の見出し語に含まれる場合に$1$を，そ
+れ以外で$0$を返す関数$R(f,t)$を用い，以下のように定義した．
+\begin{eqnarray}
+ \label{eqn:frameselection0_proposal}
+  P(f|t,T) & \approx & R(f,t)
+\end{eqnarray}
+フレーム選択モデルの例を図\ref{fig:frameselection}に示す．
+
+\begin{figure}[t]
+ \begin{center}
+  {\small
+  \setlength{\tabcolsep}{0mm}
+  \renewcommand{\arraystretch}{}
+  \begin{tabular}{ccccc}
+   \multicolumn{2}{r}{\noroleb{バッグ内の $\;\;$ 現金は}{40mm}} &
+   \multicolumn{1}{l}{\targetb{盗ま}{れて}{18mm} \noroleb{いたが，}{18mm}} &
+   \multicolumn{2}{l}{\noroleb{願書は}{15mm} \noroleb{無事．}{15mm}} \\
+   
+   \multicolumn{5}{c}{$\downarrow$}\\
+   \hline
+   
+   \multicolumn{5}{|c|}{{\bf フレーム選択モデル}}\\
+   \hline
+   
+   \multicolumn{5}{c}{$\downarrow$}\\
+   \multicolumn{5}{l}{{\bf Theftフレーム} $R_{f} \leftarrow
+   \{r_{0}=Goods, r_{1}=Perpetrator, r_{2}=Source, r_{3}=Victim, ...\}$}
+   \\[1mm]
+  \end{tabular}}
+  \caption{フレーム選択モデル}
+  \label{fig:frameselection}
+ \end{center}
+\end{figure}
+
+
+\subsection{項候補獲得モデル}
+
+項候補獲得モデルは与えられた文と述語およびフレームから，意味役割を注釈付
+けする項（断片）を獲得するモデルである．
+項候補の獲得手法を以下に示す．
+\vspace{6pt} 
+\begin{enumerate}
+ \item $T$を構文解析し，$t$と直接係り受け関係にある部分木の集合$S'''$を
+       得る．
+       \label{enum:foo_parse}
+ \item $S'''$の各要素$s'''_{i}$について，形態素ならびに文節の単位で前後
+       に短縮伸長し，項候補の候補（断片候補）$s''_{ij}$を生成，断片候補
+       集合$S''_{i}$を得る（断片候補生成）．
+ \item $S''_{i}$の各要素$s''_{ij}$に関し，$P(s''_{ij}|f,t,T)$が$\lambda$
+       を越える要素を$s'_{ij}$として集め，断片候補集合$S'_{i}$を得る．
+       尤度$P(s''_{ij}|f,t,T)$は項候補同定モデル
+       （\ref{sec:proposal_argument}節）により得られる．
+       \label{enum:foo_cand_proposal}
+ \item $S'_{i}$の各要素$s'_{ij}$について，(\ref{enum:foo_cand_proposal})
+       の尤度$P(s''_{ij}|f,t,T) = P(s'_{ij}|f,t,T)$が最大となる$s'_{ij}$
+       を$s_{i}$とし，項候補集合$S$を得る．
+\end{enumerate}
+以上より，我々は項候補獲得モデルを以下のように定義した．
+\begin{equation}
+ \label{eqn:candidating0_proposal}
+  \{ S'_{i} \; | \; s'_{ij} \in S'_{i},
+  s'_{ij} = \left\{
+	     \begin{array}{ll}
+	      s''_{ij} & if \;\;\; P(s''_{ij}|f,t,T) > \lambda \\
+	      nil      & otherwise \\
+	     \end{array}
+	    \right\}
+  , s''_{ij} \in S''_{i} \}
+\end{equation}
+\begin{equation}
+ \label{eqn:candidating1_proposal}
+  \{ S \; | \; s_{i} \in S, s_{i} = \argmax{s'_{ij}}{P(s'_{ij}|f,t,T)},
+  s'_{ij} \in S'_{i} \}
+\end{equation}
+\begin{eqnarray}
+ \label{eqn:candidating2_proposal}
+  P(S|f,t,T) & \approx & \prod_{s_{i} \in S}{P(s_{i}|f,t,T)}
+\end{eqnarray}
+項候補獲得モデルの例を図\ref{fig:candidating}に示す．
+
+\begin{figure}[t]
+ \begin{center}
+  {\small
+  \setlength{\tabcolsep}{0mm}
+  \renewcommand{\arraystretch}{}
+  \begin{tabular}{cccccc}
+   \multicolumn{2}{r}{\noroleb{バッグ内の $\;\;$ 現金は}{40mm}} &
+   \multicolumn{1}{l}{\targetb{盗ま}{れて}{18mm} \noroleb{いたが，}{18mm}} &
+   \multicolumn{3}{l}{\noroleb{願書は}{15mm} \noroleb{無事．}{15mm}} \\
+   \multicolumn{6}{l}{{\bf Theftフレーム} $R_{f} \leftarrow
+   \{r_{0}=Goods, r_{1}=Perpetrator, r_{2}=Source, r_{3}=Victim, ...\}$}
+   \\[-1mm]
+   \multicolumn{6}{c}{$\downarrow$}\\
+   \hline
+   \multicolumn{6}{|c|}{{\bf 項候補獲得モデル}}\\
+   \multicolumn{1}{|l}{(1) $\;$}&\multicolumn{5}{l|}{$S'''
+   \leftarrow\{s'''_{0}=バッグ内の現金は, s'''_{1}=無事\}$}\\
+   \cline{2-5}
+   \multicolumn{1}{|l}{(2) $\;$}&\multicolumn{4}{|c|}{\bf 断片候補生成}
+   &\multicolumn{1}{l|}{$\;$}\\\cline{2-5}
+   \multicolumn{1}{|l}{}&\multicolumn{4}{l}{$S''_{0} \leftarrow
+   \{s''_{00}=バッグ内の現金は, s''_{01}=内の現金は, s''_{02}=の現金は,
+   s''_{03}=現金は\}$}&\multicolumn{1}{l|}{$\;$}\\
+   \multicolumn{1}{|l}{}&\multicolumn{4}{l}{$S''_{1} \leftarrow
+   \{s''_{10}=無事\}$}&\multicolumn{1}{l|}{$\;$}\\ \cline{2-5}
+   \multicolumn{1}{|l}{(3) $\;$}&\multicolumn{4}{|c|}{\bf 項候補同定モデル}
+   &\multicolumn{1}{l|}{$\;$}\\
+   \multicolumn{1}{|l}{}&\multicolumn{4}{|l|}{$P(s''_{00}|f,t,T)=0.576,
+   P(s''_{01}|f,t,T)=0.171,
+   P(s''_{02}|f,t,T)=0.231,$}&\multicolumn{1}{l|}{$\;$}\\
+   \multicolumn{1}{|l}{}&\multicolumn{4}{|l|}{$P(s''_{03}|f,t,T)=0.210,
+   P(s''_{10}|f,t,T)=0.361$}&\multicolumn{1}{l|}{$\;$}\\\cline{2-5}
+   \multicolumn{1}{|l}{}&\multicolumn{5}{l|}{$S'_{0} \leftarrow
+   \{s''_{00}=バッグ内の現金は\}, S'_{1} \leftarrow \{\}$}\\
+   \multicolumn{1}{|l}{(4) $\;$}&\multicolumn{5}{l|}{$S \leftarrow
+   \{s_{0}=バッグ内の現金は\}$}\\\hline
+   \multicolumn{6}{c}{$\downarrow$}\\[-1mm]
+   \multicolumn{2}{r}{\roleb{バッグ内の $\;\;$ 現金は}{項候補}{40mm}} &
+   \multicolumn{1}{l}{\targetb{盗ま}{れて}{18mm} \noroleb{いたが，}{18mm}} &
+   \multicolumn{2}{l}{\noroleb{願書は}{15mm} \noroleb{無事．}{15mm}} \\
+  \end{tabular}}
+\vspace{4pt}
+  \caption{項候補獲得モデル}
+  \label{fig:candidating}
+ \end{center}
+\end{figure}
+
+我々は，述語項構造における項が文節を基本に構成された語句であると仮定し，
+構文解析結果に基づいた項候補獲得手法を提案する．
+一方，河原らの格フレーム辞書構築の取り組みは，項の意味が表層格で抽象化さ
+れて表現されることを根拠とする\cite[など]{kawahara05_1,kawahara05}．
+また，Baldeweinらは構文情報を用いた項の抽象化手法を提案している
+\cite{baldewein04}．
+我々の仮定はそれらと同様，項が構文情報によって抽象化できることを前提とし
+ている．
+
+
+
+\subsubsection*{断片候補生成}
+
+本稿で提案した項候補獲得手法では，項候補となるための要件を過不足なく満た
+す最適な断片候補を獲得するため，述語と直接係り受け関係にある文節から複数
+の断片候補を生成し，それらを確率モデルを用いて順位付けする．
+断片候補生成手法は以下の通りである．
+
+\begin{enumerate}
+ \item 述語と直接係り受け関係にある文節を獲得する
+       \label{enum:extend_rule1_proposal}
+ \item 獲得した文節から，それが1つ以上の内容語を含むという前提の下，以下
+       に適合する形態素の列を獲得する\label{enum:extend_rule2_proposal}
+       \begin{description}
+	\item[係り文節] その文節に係る全ての文節に含まれる形態素の列
+	\item[受け文節] その文節の先頭から連続する名詞形態素の列
+       \end{description}
+ \item 獲得した各形態素列に対して，それが1つ以上の内容語を含むという前提
+       の下，以下の各ル−ルに基づいて断片候補を生成する
+       \label{enum:extend_rule3_proposal}
+       \begin{description}
+	\item[係り形態素列] $\;$\\\vspace*{-6mm}
+	\begin{itemize}
+	 \item 文節数を減らさない範囲で先頭から形態素を1つずつ短縮
+	 \item 先頭から文節を1つずつ短縮
+	 \item 末尾文節の範囲で先頭から形態素を1つずつ短縮
+	\end{itemize}
+	\item[受け形態素列] $\;$\\\vspace*{-6mm}
+        \begin{itemize}
+	 \item 文節数を減らさない範囲で末尾から形態素を1つずつ短縮
+	 \item 末尾品詞が「助詞-連体化\footnote{「学生の質問」の「の」な
+	       ど，先行する品詞を後続体言の修飾語に変化させる機能を持つ
+	       助詞．}」の場合に文節数を最大1増加させる範囲で末尾に形態
+	       素を1つずつ伸長（ただし，最初に伸長した形態素が名詞の場合
+	       は後続形態素を名詞に限定）
+	\end{itemize}
+       \end{description}
+\end{enumerate}
+
+
+
+
+\subsection{対応付けモデル}
+
+対応付けモデルは，与えられた文，述語，フレームならびに項候補から，項候補
+と意味役割の対応付けを行うモデルである．
+項と意味役割の対応付け手法は以下の通りである．
+
+\begin{enumerate}
+ \item 項候補集合$S$の各要素$s_{i}$について，$f$に定義された意味役割
+       $r_{k} \in R_{f}$ （$R_{f}$は$f$に定義された意味役割の集合）が対応
+       付けられる確率$P(r_{k}|s_{i},S,f,t,T)$を算出する．
+       $P(r_{k}|s_{i},S,f,t,T)$は自項独立意味役割同定モデル
+       （\ref{sec:proposal_srt_indep}節）により得られる．
+       \label{enum:foo_corr_proposal}
+ \item $S$の各要素$s_{i}$について，(\ref{enum:foo_corr_proposal})の尤度
+       $P(r_{k}|s_{i},S,f,t,T)$を$P(c'_{ik}|S,f,t,T)$とし，$i$について重
+       複のないように$c'_{ik}$を集めたものを項候補-意味役割対応関係$C'$
+       とする．
+       \label{enum:bar_corr_proposal}
+ \item $C'$の各要素$c'_{ik}$について，(\ref{enum:bar_corr_proposal})の尤
+       度$P(c'_{ik}|S,f,t,T)$の積が最大となる意味役割対応付け$C'_{best}$
+       を得る．
+ \item $S$の各要素$s_{i}$について，$C'_{best}$を考慮した上で意味役割
+       $r_{k}$が対応付けられる確率\linebreak
+	$P(r_{k}|s_{i},C'_{best},S,f,t,T)$を算
+       出する．
+       $P(r_{k}|s_{i},C'_{best},S,f,t,T)$は他項依存意味役割同定モデル
+       （\ref{sec:proposal_srt_dep}節）により得られる．
+       \label{enum:buz_corr_proposal}
+ \item $S$の各要素$s_{i}$について，(\ref{enum:buz_corr_proposal})の尤度
+       $P(r_{k}|s_{i},C'_{best},S,f,t,T)$を$P(c_{ik}|C'_{best},S,f,t,T)$
+       とし，$i$について重複のないように$c_{ik}$を集めたものを$C$とする．
+\end{enumerate}
+以上より，我々は対応付けモデルを以下のように定義した．
+\begin{eqnarray}
+ \label{eqn:corresponding0_proposal}
+ P(C'|S,f,t,T) & = & \prod_{s_i \in S}{P(c'_{ik}|S, f, t, T)}
+ \nonumber \\
+               & = & \prod_{s_i \in S}{P(r_{k}|s_{i}, S, f, t, T)} \\
+ \label{eqn:corresponding1_proposal}
+  C'_{best}    & = & \argmax{C'}{P(C'|S,f,t,T)} \\
+ \label{eqn:corresponding2_proposal}
+ P(C|S,f,t,T)  & = & \prod_{s_i \in S}{P(c_{ik}|C'_{best}, S, f, t, T)}
+ \nonumber \\
+               & = & \prod_{s_i \in S}{P(r_{k}|s_{i}, C'_{best}, S, f,
+		t, T)}
+\end{eqnarray}
+対応付けモデルの例を図\ref{fig:corresponding}に示す．
+
+\begin{figure}[t]
+ \begin{center}
+  {\small
+  \setlength{\tabcolsep}{0mm}
+  \renewcommand{\arraystretch}{}
+  \begin{tabular}{cccccc}
+   \multicolumn{2}{r}{\roleb{バッグ内の $\;\;$ 現金は}{項候補}{40mm}} &
+   \multicolumn{1}{l}{\targetb{盗ま}{れて}{18mm} \noroleb{いたが，}{18mm}} &
+   \multicolumn{3}{l}{\noroleb{願書は}{15mm} \noroleb{無事．}{15mm}} \\
+   \multicolumn{6}{l}{{\bf Theftフレーム} $R_{f} \leftarrow
+   \{r_{0}=Goods, r_{1}=Perpetrator, r_{2}=Source, r_{3}=Victim, ...\}$}
+   \\[-1mm]
+   \multicolumn{6}{c}{$\downarrow$}\\
+   \hline
+   \multicolumn{6}{|c|}{{\bf 対応付けモデル}}\\
+   \multicolumn{1}{|l}{(1) $\;$}&\multicolumn{5}{l|}{$S \leftarrow
+   \{s_{0}=バッグ内の現金は\}$}\\\cline{2-5}
+   \multicolumn{1}{|l}{}&\multicolumn{4}{|c|}{\bf 自項独立意味役割同定モデル}
+   &\multicolumn{1}{l|}{$\;$}\\
+   \multicolumn{1}{|l}{}&\multicolumn{4}{|l|}{$P(r_{0}|s_{0},S,f,t,T)=0.590,
+   P(r_{1}|s_{0},S,f,t,T)=0.361,$}&\multicolumn{1}{l|}{$\;$}\\
+   \multicolumn{1}{|l}{}&\multicolumn{4}{|l|}{$P(r_{2}|s_{0},S,f,t,T)=0.257,
+   P(r_{3}|s_{0},S,f,t,T)=0.254,
+   ...$}&\multicolumn{1}{l|}{$\;$}\\\cline{2-5}
+   \multicolumn{1}{|l}{(2) $\;$}&\multicolumn{5}{l|}{$C' \leftarrow
+   \{c'_{00}\}, C' \leftarrow \{c'_{01}\}, C' \leftarrow \{c'_{02}\}, C'
+   \leftarrow \{c'_{03}\}$}\\
+   \multicolumn{1}{|l}{(3) $\;$}&\multicolumn{5}{l|}{$C'_{best}
+   \leftarrow \{c'_{00}\}$}\\
+   \multicolumn{1}{|l}{(4) $\;$}&\multicolumn{5}{l|}{$S \leftarrow
+   \{s_{0}=バッグ内の現金は\}$}\\\cline{2-5}
+   \multicolumn{1}{|l}{}&\multicolumn{4}{|c|}{\bf 他項依存意味役割同定モデル}
+   &\multicolumn{1}{l|}{$\;$}\\
+   \multicolumn{1}{|l}{}&\multicolumn{4}{|l|}{$P(r_{0}|s_{0},C'_{best},S,f,t,T)=0.650,
+   P(r_{1}|s_{0},C'_{best},S,f,t,T)=0.344,$}&\multicolumn{1}{l|}{$\;$}\\
+   \multicolumn{1}{|l}{}&\multicolumn{4}{|l|}{$P(r_{2}|s_{0},C'_{best},S,f,t,T)=0.231,
+   P(r_{3}|s_{0},C'_{best},S,f,t,T)=0.254,
+   ...$\hspace*{18mm}}&\multicolumn{1}{l|}{$\;$}\\\cline{2-5}
+   \multicolumn{1}{|l}{(5) $\;$}&\multicolumn{5}{l|}{$C \leftarrow
+   \{c_{00}\}, C \leftarrow \{c_{01}\}, C \leftarrow \{c_{02}\}, C
+   \leftarrow \{c_{03}\}$}\\
+   \hline
+   \multicolumn{6}{c}{$\downarrow$}\\[-1mm]
+   \multicolumn{2}{r}{\roleb{バッグ内の $\;\;$ 現金は}{Goods}{40mm}} &
+   \multicolumn{1}{l}{\targetb{盗ま}{れて}{18mm} \noroleb{いたが，}{18mm}} &
+   \multicolumn{2}{l}{\noroleb{願書は}{15mm} \noroleb{無事．}{15mm}} \\
+  \end{tabular}}
+\vspace{8pt}
+  \caption{対応付けモデル}
+  \label{fig:corresponding}
+ \end{center}
+\end{figure}
+
+\section{モデルの獲得}\label{sec:outline_proposal}
+次に，\ref{sec:models_def_proposal}節で定義した意味役割推定モデルを構築
+する手法について述べる．
+本稿で提案する手法は，大きく6つのステップで構成されている．
+
+\begin{enumerate}
+ \item 日本語フレームネットから，意味フレーム定義，意味役割定義，品詞定
+       義，見出し語，ならびに意味役割注釈付き事例を抽出する．
+       \label{enum:domain2instance_proposal}
+
+ \item フレーム意味論に反しない2つの仮定の下，抽出した事例から新しい事例
+       を作成する．\label{enum:boost_proposal}
+       以下の仮定は，いかなる事例に適用しても言語的に不自然にならないも
+       のとして設定したもので，我々はこれらの仮定を妥当なものと考える．
+       \begin{itemize}
+	\item 述語に直接係る主語句（ガ格を末尾に持つ文節の全部分木）を削
+	      除しても，他の項の意味役割は変化しない．
+	      \label{enum:boost_assume0_proposal}
+	\item 文の主辞となる述語の項は削除しても，他の全ての項の意味役割
+	      が変化しない解釈が可能．
+	      \label{enum:boost_assume1_proposal}
+       \end{itemize}
+
+
+ \item 事例から確率モデルを学習する．
+
+ \item 意味役割推定モデルに基づくシステムを構築する．
+       \label{enum:system_proposal}
+ \item 日本語フレームネットに定義された見出し語が述語の文をコーパスから
+       抽出する．\label{enum:subcorpus_proposal}
+ \item 抽出した文の項の意味役割を推定する．\label{enum:label_proposal}
+\end{enumerate}
+
+
+
+本手法では，\ref{sec:models_def_proposal}節で定義した意味役割推定モデル
+のうち，以下の3つのモデルを機械学習により獲得する．
+\begin{itemize}
+ \item {\bf 項候補同定モデル}（式(\ref{eqn:candidating0_proposal})条件
+       $P(s''_{ij}|f,t,T)$):\\
+       項候補獲得モデルにおいて断片候補が項候補となるかどうかを判定する．
+ \item {\bf 自項独立意味役割同定モデル}（式
+       (\ref{eqn:corresponding0_proposal})右辺
+       $P(r_{k}|s_{i},S,f,t,T)$):\\
+       対応付けモデルにおいて，ある項候補にある意味役割が割り当てられる
+       かを，他項の意味役割を考慮せずに判定する．
+ \item {\bf 他項依存意味役割同定モデル}（式
+       (\ref{eqn:corresponding2_proposal})右辺
+       $P(r_{k}|s_{i},C'_{best},S,f,t,T)$):\\
+       対応付けモデルにおいて，ある項候補にある意味役割が割り当てられる
+       かを，他項の意味役割を考慮した上で判定する．
+\end{itemize}
+
+我々は機械学習に，最大エントロピー法とサポートベクタマシンを用いた．
+最大エントロピー法の実装にはツール
+maxent\footnote{http://www2.nict.go.jp/jt/a132/members/mutiyama/software.html}を用い，サポートベクタマシンの実装にはTinySVM\footnote{http://cl.aist-nara.ac.jp/$\tilde{~}$taku-ku/software/TinySVM/}を用いた．
+サポートベクタマシンの出力は，シグモイド関数に代入することで確率値とみな
+した\cite{pradhan04}．
+なお，構文解析器にはCaboCha \cite{kudo02_cabocha}を用いた．
+以下に，各モデルの詳細を述べる．
+
+
+\subsection{項候補同定モデル}
+\label{sec:proposal_argument}
+
+項候補同定モデルは，断片候補$s''_{ij}$が断片すなわち項候補となるかを判定
+するモデルであり，項候補獲得モデルに定義されている．
+項候補同定モデルが定義された式(\ref{eqn:candidating0_proposal})には，断
+片候補が項候補となるための閾値$\lambda$が定義されており，最大エントロピー
+法およびサポートベクタマシンの出力に対する正当性から，今回はそれを$0.5$
+とした\footnote{精度を再現率よりも重視する場合はこれを$0.5$より大きい値
+に，逆の場合は$0.5$より小さい値に設定すればよい．}．
+学習に必要な正事例には日本語フレームネットから抽出した注釈付き事例を用い，
+負事例は抽出した事例と正事例を基に以下の2通りの方法を用いて準備した．
+
+
+
+\begin{description}
+ \setlength{\itemindent}{-6mm}
+ \item[正解項候補の短縮伸長] $\;$\\
+		       はじめに，正事例の正解項候補に対して
+		       \ref{sec:models_def_proposal}節・項候補獲得モデル・
+		       断片候補生成手法
+		       (\ref{enum:extend_rule3_proposal})を適用した．
+		       その結果得られた断片候補を不正解項候補とした．
+
+ \item[非対象述語項の抽出と短縮伸長] $\;$\\
+		       まず，抽出事例で述語に指定されていない全ての動詞
+		       に対して，\ref{sec:models_def_proposal}節・項候補
+		       獲得モデル・断片候補生成手法
+		       (\ref{enum:extend_rule1_proposal})〜
+		       (\ref{enum:extend_rule3_proposal})を適用した．
+		       その結果得られた断片候補のうち，指定述語に対して
+		       同様の手順を適用して得られた断片候補および正事例
+		       に含まれる正解項候補と範囲が重複しない断片候補を
+		       不正解項候補とした．
+\end{description}
+また，学習には以下の素性を用いた\footnote{学習事例の数に依存するが，おお
+よそ1500〜3000個の素性値が得られる．}．
+
+
+\begin{description}
+ \setlength{\itemindent}{-6mm}
+ \item[対象述語の素性] $\;$\\
+		       対象述語の原形や活用形と，機能語を構成する各形態
+		       素の原形や品詞を用いた．
+
+ \item[対象断片候補の素性] $\;$\\
+		       固有表現，未知語，対象述語からの文節を単位とした
+		       相対距離，機能語列とそれを構成する各形態素の品詞
+		       を用いた．
+		       また，NTT 日本語語彙大系
+		       \footnote{http://www.kecl.ntt.co.jp/icl/mth/resources/GoiTaikei}
+		       から検索した主辞の概念クラスも用いた．
+		       加えて，断片候補の直前に連接する形態素の原形と品
+		       詞も利用した．
+\end{description}
+
+
+
+\subsection{自項独立意味役割同定モデル}
+\label{sec:proposal_srt_indep}
+
+自項独立意味役割推定モデルは，ある項候補にある意味役割が注釈付けられるか
+を判定するモデルであり，対応付けモデルに定義されている．
+対応付けモデルの定義式(\ref{eqn:corresponding0_proposal})
+(\ref{eqn:corresponding1_proposal})より明らかなように，本モデルは複数の
+意味役割候補から一つを選択する多値分類タスクと考えることができる．
+我々は機械学習に最大エントロピー法とサポートベクタマシンを用いたが，この
+うちサポートベクタマシンでは，多値分類にone vs. rest法を用いた．
+学習の素性には，項候補同定モデルの学習に用いた素性に加え，以下を利用した
+\footnote{学習事例の数に依存するが，おおよそ1500〜3000個の素性値が得られ
+る．}．
+
+\begin{description}
+ \setlength{\itemindent}{-6mm}
+ \item[対象項候補の素性] $\;$\\
+		       項候補同定モデルの学習のために対象断片候補から抽
+		       出した素性のうち，直前の形態素に関するものを除い
+		       た全ての素性を利用した．
+		       加えて，項候補同定モデルが対象項候補に対して出力
+		       した値と，項候補を単位とした対象述語からの相対距
+		       離も併せて利用した．
+ \item[非対象項候補の素性] $\;$\\
+		       項候補同定モデルが非対象項候補に対して出力した値
+		       を用いた．
+\end{description}
+
+
+
+
+\subsection{他項依存意味役割同定モデル}
+\label{sec:proposal_srt_dep}
+
+
+他項依存意味役割同定モデルは，他項に注釈付けられた意味役割を考慮した上で，
+項候補にある意味役割が注釈付けされるかを判定するモデルであり，対応付けモ
+デルに定義されている．
+対応付けモデルの定義式(\ref{eqn:corresponding2_proposal})ならびに意味役
+割推定モデルの定義式(\ref{eqn:rolelabeling1_proposal})より明らかなように，
+本モデルも複数の意味役割候補から一つを選択する多値分類タスクと見なすこと
+ができ，自項独立意味役割同定モデル同様，サポートベクタマシンではone
+vs. rest法を適用した．
+学習の素性には，自項独立意味役割同定モデルの学習に用いた素性に加え，以下
+を利用した\footnote{学習事例の数に依存するが，おおよそ1500〜3000個の素性
+値が得られる．}．
+
+\begin{description}
+ \setlength{\itemindent}{-6mm}
+ \item[対象項候補の素性] $\;$\\
+		       自項独立意味役割同定モデルの出力が最も大きかった
+		       意味役割とその値を利用した．
+ \item[非対象項候補の素性] $\;$\\
+		       自項独立意味役割同定モデルが各非対象項候補に対し
+		       て出力した値が最も大きかった意味役割とその値，お
+		       よびその意味役割と機能語の組み合わせ，その意味役
+		       割と項候補を単位とする対象述語からの相対距離との
+		       組み合わせを利用した．
+\end{description}
+
+
+
+
+\section{評価}\label{sec:metrix_experiment}
+
+定義した意味役割推定モデルの有効性を確認するために，獲得したモデルを用い
+て意味役割推定を行った．
+評価に際し，モデルへの入出力にそれぞれ3通りの条件を設定した．
+入力条件とその目的は以下の通りである．
+
+\begin{enumerate}
+ \item 文と述語 $\rightarrow$ システム全体を評価
+       \label{enum:metrix0_experiment}
+ \item 文と述語，正しい断片候補（項候補の候補） $\rightarrow$ 項候補獲得
+       モデルを評価
+       \label{enum:metrix1_experiment}
+ \item 文と述語，正しい項候補 $\rightarrow$ 対応付けモデルを評価
+       \label{enum:metrix2_experiment}
+\end{enumerate}
+また，出力条件は以下の通りである．
+
+\begin{enumerate}
+ \item 獲得した断片集合$S$についての正誤判定を行う．
+       \label{enum:metrix3_experiment}
+ \item 獲得した項候補-意味役割対応関係$C$についての正誤判定を行う．
+       \label{enum:metrix4_experiment}
+ \item 獲得した$c_{ik}$のうちで，尤度$P(c_{k}|C'_{best},S,f,t,T)$が$0.5$
+       を越えるものを出力し正誤判定を行う．
+       \label{enum:metrix5_experiment}
+\end{enumerate}
+
+出力条件(\ref{enum:metrix5_experiment})は，出力条件
+(\ref{enum:metrix4_experiment})において出力される意味役割注釈パタンのう
+ち，この注釈パタンに含まれるものの意味役割が付与される確率が低い項候補に
+ついては「項でない」とみなして出力することを意味する\footnote{これは我々
+が機械学習に利用したサポートベクタマシンの特徴を考慮した評価であり，最大
+エントロピー法を用いた場合もこれに準ずるとした．}．
+
+我々は，以上の9通りの組合せ（入力3条件$\times$出力3条件）について，機械学
+習に用いた最大エントロピー法を用いた場合とサポートベクタマシンを用いた場
+合の2通りで，交差検定法により評価した\footnote{実験では，毎日新聞1992〜2002年版の記事に人手で注釈付けを行ったものを事例として用いた．図\ref{fig:syn_analyze_discussion0}〜\ref{fig:candidating_discussion3}に示した例はその一部である．}．
+評価実験の対象フレームを表\ref{tbl:domain_experiment}に，実験時に設定した各種パラメータを表\ref{tbl:param_experiment}に示す．
+また，評価実験の結果を表
+\ref{tbl:result_all_experiment_me},\ref{tbl:result_all_experiment_svm}に
+示す．
+
+\begin{table}[t]
+\setlength{\baselineskip}{13pt}
+ \begin{center}
+  \caption{対象意味フレーム}
+  \label{tbl:domain_experiment}
+  \begin{tabular}{rl}
+   \hline
+   意味フレーム & {\bf Arriving} \\
+   意味役割 & {\it Goal, Theme, Cotheme, Depictive, Goal\_conditions,
+   Manner, Means,}\\
+            & {\it Mode\_of\_transportation, Path, Source, Time} \\
+   見出し語 & 至る，入る \\
+   注釈付き事例 & 107文 \\
+   \hline
+   意味フレーム & {\bf Commerce\_pay} \\
+   意味役割 & {\it Buyer, Goods, Money, Rate, Seller, Manner, Means,
+   Place, Purpose, Reason,}\\
+            & {\it Time, Unit} \\
+   見出し語 & 払う，支払う \\
+   注釈付き事例 & 55文 \\
+   \hline
+   意味フレーム & {\bf Departing} \\
+   意味役割 & {\it Source, Theme, Area, Cotheme, Depictive, Distance,
+   Frequency, Goal, Journey,}\\
+            & {\it Manner, Means, Mode\_of\_transportation, Path,
+   Purpose, Reason, Speed, Time} \\
+   見出し語 & 去る，抜ける \\
+   注釈付き事例 & 111文 \\
+   \hline
+   意味フレーム & {\bf Risk} \\
+   意味役割 & {\it Action, Agent, Asset, Bad\_outcome, Chance, Gain,
+   Purpose, Reason, Situation} \\
+   見出し語 & 賭ける \\
+   注釈付き事例 & 60文 \\
+   \hline
+   意味フレーム & {\bf Theft} \\
+   意味役割 & {\it Goods, Perpetrator, Source, Victim, Event, Frequency,
+   Instrument, Manner, Means,}\\
+            & {\it Place, Purpose, Reason,} \\
+   見出し語 & 奪う，盗む，くすねる \\
+   注釈付き事例 & 65文 \\
+   \hline
+   意味フレーム & {\bf Traversing} \\
+   意味役割 & {\it Area, Direction, End\_points, Goal, Path,
+   Path\_shape, Source, Theme,}\\
+            & {\it Circumstances, Consecutive, Containing\_event,
+   Coordinated\_event, Cotheme,}\\
+            & {\it Degree, Depictive, Distance, Duration, Explanation,
+   Frequency, Manner, Means,}\\
+            & {\it Place, Purpose, Re\_encoding, Reciprocation, Result,
+   Speed, Time, Vehicle} \\
+   見出し語 & 渡る \\
+   注釈付き事例 & 92文 \\
+   \hline
+  \end{tabular}
+ \end{center}
+\end{table}
+
+\begin{table}[t]
+ \begin{center}
+  \caption{実験で使用したパラメータ}
+  \label{tbl:param_experiment}
+  \begin{tabular}{lll}
+   \hline
+   交差検定法 & & 5サブセット \\
+   \hline
+   最大エントロピー法 & 終了条件 & 0.0001 \\
+   & スムージング係数 & 1.0 \\
+   & パラメータ推定アルゴリズム & gaussian \\
+   \hline
+   サポートベクタマシン & カーネル & 2次多項式 \\
+   & ペナルティ項 & 0.01 \\
+   \hline
+  \end{tabular}
+    \par\vspace{20pt}
+  \caption{結果(ME)}
+  \label{tbl:result_all_experiment_me}
+  \setlength{\tabcolsep}{1.5mm}
+  \begin{tabular}{c|ccc|ccc|ccc}
+   \hline
+   & \multicolumn{3}{|c|}{入力条件(\ref{enum:metrix0_experiment})}
+   & \multicolumn{3}{|c|}{入力条件(\ref{enum:metrix1_experiment})}
+   & \multicolumn{3}{|c}{入力条件(\ref{enum:metrix2_experiment})} \\
+   & 精度 & 再現率 & F値
+   & 精度 & 再現率（正解率） & F値
+   & 精度 & 再現率（正解率） & F値 \\
+   \hline
+   出力条件(\ref{enum:metrix3_experiment}) & 0.73 & 0.61 & 0.66  &  &
+   (0.78) &  &  &  & \\
+   出力条件(\ref{enum:metrix4_experiment}) & 0.52 & 0.43 & 0.47  & 0.72
+   & 0.56 & 0.63  &  & (0.72) & \\
+   出力条件(\ref{enum:metrix5_experiment}) & 0.63 & 0.43 & 0.51  & 0.78
+   & 0.54 & 0.64  & 0.77 & 0.68 & 0.73 \\
+   \hline
+  \end{tabular}
+    \par\vspace{20pt}
+  \caption{結果(SVM)}
+  \label{tbl:result_all_experiment_svm}
+  \setlength{\tabcolsep}{1.5mm}
+  \begin{tabular}{c|ccc|ccc|ccc}
+   \hline
+   & \multicolumn{3}{|c|}{入力条件(\ref{enum:metrix0_experiment})}
+   & \multicolumn{3}{|c|}{入力条件(\ref{enum:metrix1_experiment})}
+   & \multicolumn{3}{|c}{入力条件(\ref{enum:metrix2_experiment})} \\
+   & 精度 & 再現率 & F値
+   & 精度 & 再現率（正解率） & F値
+   & 精度 & 再現率（正解率） & F値 \\
+   \hline
+   出力条件(\ref{enum:metrix3_experiment}) & 0.73 & 0.58 & 0.64  &  &
+   (0.74) &  &  &  & \\
+   出力条件(\ref{enum:metrix4_experiment}) & 0.51 & 0.40 & 0.45  & 0.70
+   & 0.52 & 0.60  &  & (0.68) & \\
+   出力条件(\ref{enum:metrix5_experiment}) & 0.65 & 0.38 & 0.48  & 0.78
+   & 0.49 & 0.60  & 0.76 & 0.63 & 0.69 \\
+   \hline
+  \end{tabular}
+ \end{center}
+\end{table}
+\begin{figure}[t]
+ \begin{center}
+  \setlength{\tabcolsep}{1.4mm}
+  \begin{tabular}{|lllll|}
+   \hline
+   \norole{93年に}{15mm} & \roleb{単身で}{Depictive}{20mm} &
+   \norole{天津市に}{15mm} & \targetb{渡り}{}{15mm} & \\
+   &&&& \vspace{-4mm}\\
+   & \roleb{強制連行やさまざまな事情で}{Explanation}{52mm} &
+   \norole{朝鮮半島から}{22mm} & \targetb{渡っ}{て}{15mm} &
+   \norole{きた}{20mm} \\
+   &&&& \vspace{-4mm}\\
+   \norole{横断歩道を}{20mm} & \roleb{自転車で}{Means}{20mm} &
+   \targetb{渡っ}{て}{20mm} & \norole{いた}{15mm} & \\[4mm]
+   \hline
+  \end{tabular}
+ \end{center}
+ \vspace{8pt}
+\caption{同一意味フレーム({\bf Traversing})・同一表層格（デ）での意味
+ 役割の区別}
+ \label{fig:samecase_differentrole_discussion}
+    \par\vspace{20pt}
+ \begin{center}
+  \setlength{\tabcolsep}{1.4mm}
+  \begin{tabular}{|p{6mm}llllp{5mm}|}
+   \hline
+   $\;$ & & \norole{新聞記事によると，}{32mm} & \roleb{車は}{Goods}{20mm}
+   & \targetb{盗ん}{だ}{15mm} \norole{らしい}{15mm} &$\;$\\
+   & & \norole{新聞記事によると，}{32mm} & \roleb{彼は}{Perpetrator}{20mm} 
+	& \targetb{盗ん}{だ}{15mm} \norole{らしい}{15mm} & \\
+   & \norole{新聞記事によると，}{32mm} & \roleb{彼は}{Perpetrator}{20mm} &
+   \roleb{車は}{Goods}{20mm} & \targetb{盗ん}{だ}{15mm} \norole{らしい}
+   {15mm} &\\[4mm]
+   \hline
+  \end{tabular}
+ \end{center}
+\vspace{8pt}
+ \caption{同一意味フレーム({\bf Theft})・同一表層格（ハ）での意味役割
+ の区別}
+ \label{fig:samecase_differentrole_discussion1}
+\end{figure}
+
+評価実験の結果，本手法は(1)意味役割が付与されるべき項が分かっている文に対し
+て精度77％，再現率68％，(2)意味役割が付与されるべき項がわかっていない文に対
+して精度63％，再現率43％の意味役割推定を実現した．
+計490文という少ない注釈付き事例を用いて，大規模な学習事例を用いた英語の
+意味役割手法に迫る精度\footnote{英語を対象とした意味役割推定手法では約
+50,000文の注釈付き事例を用いており，Gildea らの手法では(1)で精度82％，
+(2)で精度65％，再現率61％ という結果が得られている\cite{gildea02}．
+また，Kwon らの手法による結果は(2)で精度66％，再現率57％である
+\cite{kwon04}．}を得ることができており，本手法の有効性を示した．
+
+また本手法は，図\ref{fig:samecase_differentrole_discussion}〜
+\ref{fig:samecase_differentrole_discussion3}のような，表層格では区別でき
+ない意味の区別を実現した．
+なお，図\ref{fig:samecase_differentrole_discussion1}〜
+\ref{fig:samecase_differentrole_discussion3}は，同一の表層格を持つ項に対
+する本手法の意味役割推定を評価するために用意した入力に対する結果である．
+\clearpage
+
+
+\begin{figure}[t]
+ \begin{center}
+  \setlength{\tabcolsep}{1.4mm}
+  \begin{tabular}{|p{17mm}llllp{16mm}|}
+   \hline
+   $\;$ & & \roleb{彼が}{Theme}{20mm} & \roleb{部屋に}{Goal}{20mm}
+   & \targetb{入る}{}{15mm} \norole{予定です}{15mm} &$\;$\\
+   & \roleb{彼が}{Theme}{20mm} & \roleb{正午に}{Time}{20mm}
+   & \roleb{部屋に}{Goal}{20mm} & \targetb{入る}{}{15mm}
+   \norole{予定です}{15mm} &\\[4mm]
+   \hline
+  \end{tabular}
+ \end{center}
+\vspace{8pt}
+ \caption{同一意味フレーム({\bf Arriving})・同一表層格（ニ）での意味役割
+ の区別}
+ \label{fig:samecase_differentrole_discussion2}
+    \par\vspace{20pt}
+ \begin{center}
+  \setlength{\tabcolsep}{1.4mm}
+  \begin{tabular}{|p{5mm}llllp{4mm}|}
+   \hline
+   $\;$ & & \rolebX{チャンスをつかもうと}{Purpose}{40mm}{，}
+   & \roleb{アメリカに}{Goal}{20mm} & \targetb{渡っ}{た}{15mm} &$\;$\\
+   & \rolebX{チャンスをつかもうと}{Purpose}{40mm}{，}
+   & \roleb{海を}{Path}{20mm} & \roleb{西に}{Direction}{20mm} &
+   \targetb{渡っ}{た}{15mm} &\\[4mm]
+   \hline
+  \end{tabular}
+ \end{center}
+\vspace{8pt}
+ \caption{同一意味フレーム({\bf Traversing})・同一表層格（ニ）での意味役割
+ の区別}
+ \label{fig:samecase_differentrole_discussion3}
+\end{figure}
+
+\subsection*{項候補獲得モデル}
+
+\ref{sec:models_def_proposal}節で述べたように，項候補獲得モデルでは，日
+本語における深層的意味の保持単位が文節にあるとし，構文解析結果に基づいて
+項候補の獲得を試みた．
+結果，精度73％，再現率61％の性能で項候補の獲得に成功した．
+また本モデルは，構文解析誤りなどの理由から，述語と直接係り受け関係をもつ
+部分木が必ずしも項候補とならないことを考慮し，部分木が示す断片候補を短縮
+および伸長することで新たな断片候補を生成，それらの断片候補群から最適な断
+片候補を項候補とすることを戦略とした．
+結果，図\ref{fig:syn_analyze_discussion0}のような構文解析結果を得た文に
+ついて，図\ref{fig:candidating_discussion0}に示した項候補の獲得を実現し
+た．
+
+\begin{figure}[b]
+\framebox(420,70)[c]{\parbox{90pt}{
+	\hfill 菊地さん\texttt{-D}\hspace*{18.49986pt}\\
+	\hfill ，14回目の\texttt{-D}\hspace*{12.33324pt}\\
+	\hfill 優勝を\texttt{-D}\hspace*{6.16662pt}\\
+	\hfill 賭けて\texttt{-D}\\
+	\hfill 決勝戦進出である．
+}}
+ \caption{項候補獲得モデル検証:構文解析結果}
+ \label{fig:syn_analyze_discussion0}
+    \par\vspace{20pt}
+\framebox(420,28)[c]{
+\rolebX{菊地さん}{項候補}{20mm}{，} \roleb{14回目の優勝を}{項候補}{32mm}
+	\targetb{賭け}{て}{15mm} \norole{決勝戦進出である．}{30mm}
+}
+ \caption{項候補獲得モデル検証:正解項候補}
+ \label{fig:candidating_discussion0}
+\end{figure}
+
+一方，本稿で提案した意味役割推定モデル全体の性能，特に再現率は，本項候補
+獲得モデルの性能に上限を狭められている．
+そのため，項候補獲得モデルの改良により，全体の性能が向上すると考えられる．
+以下では，項候補獲得モデルにおける失敗の原因と改善可能性を考察する．
+
+
+
+
+\subsubsection*{断片候補生成}
+
+断片候補生成手法の性能は，表\ref{tbl:result_all_experiment_me}の入力条件
+(\ref{enum:metrix0_experiment})(\ref{enum:metrix1_experiment})における出
+力条件(\ref{enum:metrix3_experiment})の再現率（正解率）を比較することで
+推測できる．
+具体的には，入力条件(\ref{enum:metrix1_experiment})の正解率に対する入力
+条件(\ref{enum:metrix0_experiment})の再現率の低下が，断片候補生成手法に
+起因した性能低下を表していると考えることができる．
+
+
+\ref{sec:models_def_proposal}節で述べたように，本稿で提案する断片候補生
+成手法では，構文解析の結果から，述語文節と直接係り受け関係にある部分木を
+断片候補生成の基とし（以後，ベース断片候補と呼ぶ），それらを伸縮すること
+で断片候補を生成する．
+そのため，断片候補生成手法における性能は，以下の原因で低下する．
+
+\begin{enumerate}
+ \item 構文解析結果が述語と項の意味的な関係を反映していない場合
+       \label{enum:cand_foo_discussion}
+ \item 述語と直接係り受け関係にある部分木が項でない場合
+       \label{enum:cand_bar_discussion}
+\end{enumerate}
+これらの原因に起因する誤りは，表\ref{tbl:cand_discussion}に示す割合で現
+れた．
+表\ref{tbl:cand_discussion}は原因(\ref{enum:cand_foo_discussion})ならび
+に(\ref{enum:cand_bar_discussion})の発生率を文単位で算出したものである．
+表\ref{tbl:cand_discussion}からも明らかなように，65％の文では構文解析結
+果に基づく断片生成が適切であった．
+しかしながら同時に，本断片候補生成手法が意味役割推定全体の性能の上限に影
+響していることも明らかとなった．
+
+
+
+
+\begin{table}[b]
+ \begin{center}
+  \caption{断片候補生成検証:誤り発生率}
+  \label{tbl:cand_discussion}
+  \begin{tabular}{lrrrr}
+   \hline
+   意味フレーム &
+   原因(\ref{enum:cand_foo_discussion}) &
+   原因(\ref{enum:cand_bar_discussion}) & 
+   原因(\ref{enum:cand_foo_discussion}) \&
+   (\ref{enum:cand_bar_discussion}) &
+   （正解）\\
+   \hline
+   {\bf Arriving} & 0.21 & 0.08 & 0.05 & (0.66) \\
+   {\bf Commerce\_pay} & 0.27 & 0.05 & 0.02 & (0.65) \\
+   {\bf Departing} & 0.24 & 0.02 & 0.05 & (0.68) \\
+   {\bf Risk} & 0.10 & 0.23 & 0.02 & (0.65) \\
+   {\bf Theft} & 0.23 & 0.03 & 0.19 & (0.55) \\
+   {\bf Traversing} & 0.18 & 0.08 & 0.10 & (0.64) \\
+   \hline
+   総合 & 0.21 & 0.08 & 0.07 & (0.65) \\
+   \hline
+  \end{tabular}
+ \end{center}
+\end{table}
+
+
+原因(\ref{enum:cand_foo_discussion})による誤りの一つは，構文解析そのもの
+の誤りに起因する．
+本稿が提案する断片候補生成手法は，単一のベース断片候補を切断して複数の断
+片候補を生成することがない．
+そのため，構文解析（文節区切りの同定）が誤った例では，適切な断片候補が生
+成されなかった．
+
+原因(\ref{enum:cand_foo_discussion})に起因する誤りには，意味の曖昧性のた
+め，構文解析結果が構文的には正しくても，意味的には誤ってしまったものもあ
+る．
+図\ref{fig:syn_analyze_discussion3}に示した文の構文解析では，``錨がぶつ
+かるゴンという音がした直後，{\kern-0.5zw}''が``なった''に係っている．
+一方，日本語フレームネットにおいては，この従属節は図
+\ref{fig:candidating_discussion3}のように対象述語「入っ（て）」の項候補と
+されている．
+すなわち，``錨がぶつかるゴンという音がした直後，{\kern-0.5zw}''は``入っ（て）''に係って
+いるとされている．
+このように，意味を考慮しない構文解析では，文に意味的な曖昧性があり複数の
+係り先が考えられる場合に，係り受け関係の解析を誤ることがある．
+この場合，本稿が提案する断片候補生成手法では適切なベース断片を生成するこ
+とができず，結果として項候補の獲得に失敗した．
+
+
+\begin{figure}[t]
+\framebox(420,168)[c]{\parbox{135pt}{
+	\hfil 錨が\texttt{-D~~~~~~~~~~~~~~~~~~~~}\\
+	\hfil ぶつかる\texttt{-D~~~~~~~~~~~~~~~~~~}\\
+	\hfil ゴンという\texttt{-D~~~~~~~~~~~~~~~~}\\
+	\hfil 音が\texttt{-D~~~~~~~~~~~~~~}\\
+	\hfil した\texttt{-D~~~~~~~~~~~~}\\
+	\hfil 直後，\texttt{-----------D}\\
+	\hfil 窓から\texttt{---D~~~~~|}\\
+	\hfil 高波が\texttt{-D~~~~~|}\\
+	\hfil 入ってきて，\texttt{-----D}\\
+	\hfil 頭から\texttt{-D~|}\\
+	\hfil ずぶぬれに\texttt{-D}\\
+	\hfil なった．
+}}
+ \caption{断片候補生成検証:構文解析結果}
+ \label{fig:syn_analyze_discussion3}
+    \par\vspace{20pt}
+\framebox(420,47)[c]{\parbox{340pt}{
+\rolebX{錨がぶつかるゴンという音がした直後}{項候補}{65mm}{，}
+\roleb{窓から}{項候補}{16mm}
+\roleb{高波が}{項候補}{16mm}
+\targetb{入っ}{てきて}{54pt} \\[0.5\baselineskip]
+\hfill \norole{頭からずぶぬれになった．}{108pt}
+}}
+ \caption{断片候補生成検証:正解項候補}
+ \label{fig:candidating_discussion3}
+\end{figure}
+
+
+次に，原因(\ref{enum:cand_bar_discussion})に起因する誤りについて述べる．
+この誤りの代表は，複文における代名詞の省略もしくはゼロ代名詞に起因するも
+のである．
+特に，対象述語が後文に属する場合，その項は省略される傾向がある．
+このような例においては，省略解析や照応解析を行わない本断片候補生成手法で
+は，適切な断片候補を獲得できなかった．
+
+
+
+
+原因(\ref{enum:cand_bar_discussion})に起因する別の誤りには，並列の扱いに
+起因するものも存在した．
+本稿で提案する断片候補生成手法は文節の同格を考慮せず，かつ，ベース断片候
+補が伸長されても別のベース断片候補と重複することはない．
+そのため，対象述語に係っている同格の複数文節を，単一の断片候補として適切
+に扱うことができなかった．
+
+
+以上より，本断片候補生成手法は，構文解析そのものを改良することにより性能
+が向上すると考えられる一方，構文解析結果に基づいて断片を生成する戦略その
+ものを再考することで，性能が向上する可能性があることが分かった．
+加えて，省略解析\cite{sasano04}や，文節の並列の考慮などにより，性能が向
+上する余地があることも明らかとなった．
+
+
+\subsubsection*{項候補同定モデル}
+表\ref{tbl:result_all_experiment_me}の入力条件
+(\ref{enum:metrix1_experiment})・出力条件(\ref{enum:metrix3_experiment})
+の正解率78％は，\ref{sec:models_def_proposal}節で詳述した項候補同定
+モデル単独の性能を示している．
+本手法において項候補同定モデルの性能に寄与する部分は，学習事例準備法，特
+に負事例の準備法と，学習に用いる素性の選択である．
+
+項候補同定失敗の原因を素性空間で考えると，本来正解であるべき部分空間に負
+事例が配置されていることが推測される．
+これはつまり，負事例の準備法に問題があることを示す．
+\ref{sec:models_def_proposal}節・学習事例準備で述べた負事例の準備は，
+正解項候補の短縮伸長と，非対象述語項の抽出と短縮伸長の2通りの組み合わせ
+で行われているが，これはそれぞれ，以下の2通りの不正解項候補を排除するた
+めに設定したものである．
+
+\begin{itemize}
+ \item 「の機会を」などの切り分けが不適切な断片
+ \item 対象述語の項ではない断片
+\end{itemize}
+このことから，項候補同定モデルが不正解とすべき事例で誤った素性の組み合わ
+せを学習し，結果的に負事例が正解空間にはみ出す形になったと考えられる．
+例えば，上述の不正解項候補において，素性値$A \cap B$が前者の組み合わせに，
+素性値$A \cap C$が後者の組み合わせに該当し，素性値$B \cap C$は双方におい
+て正解項候補に特有であるとする．
+しかしながら，本稿で提案した項候補同定モデルは上述の2通りの不正解項候
+補を同時に学習するため，同モデルが推定する素性値$B \cap C$の不正解らしさ
+が大きくなったと推測する．
+つまり，上述の2つの目的に対処する唯一のモデルを学習するのではなく，それ
+ぞれの目的に特化した2つのモデルを学習し，意味役割推定に利用する必要があ
+ると考える．
+
+
+
+
+次に，項候補同定モデルの学習に用いた素性の有効性を検証する．
+素性の有効性は，特定の素性値を除いた残りの素性値でモデルを再学習し，その
+結果得られたモデルの性能の劣化度を利用するのが一般的である．
+しかしながら，多くの素性値から学習したモデルの再学習にはコストがかかる．
+また，本手法のように多くのモデルを単一の手法で学習する場合には，有効な素
+性値をモデル別に検証するのではなく，どのようなモデルにも有効な素性値を多
+く含む素性の検証を行うことが重要と考えられる．
+そこで本稿では，素性の寄与度という新たな評価尺度を導入する．
+寄与度の算出方法を図\ref{fig:contalgo}に示す．
+図\ref{fig:contalgo}の算出法から明らかなように，寄与度は特定の素性値の有
+効性ではなく，複数の素性値からなる素性の有効性を表す．
+寄与度とは，その素性がどの程度汎用的に有効であるかを表したものであり，寄
+与度$0.3$とはすなわち，その素性の特定の素性値が全体の30％のモデルで有
+効であることを示している．
+加えて，特定のモデルにのみ有効な素性も同様に重要であることから，寄与度は
+数値そのものの比較と同時に，寄与度が$0.0$か否かも評価の対象となる．
+
+
+\begin{figure}[t]
+ \begin{center}
+  \begin{tabular}{rl}
+   1. & モデルの集合を$\{M| m_{i} \in M\}$とする．\\
+   2. & $m_{i}$の学習事例に出現した全ての素性値の集合を$\{\Phi_{i}|
+   \phi_{ij} \in \Phi_{i}\}$とする．\\
+   3. & $\phi_{ij}$のみを素性値に持つ事例の尤度$P_{ij}$を獲得する．\\
+   4. & 素性値を持たない事例の尤度$P'_{i}$を獲得する．\\
+   5. & $m_{i}$における$\phi_{ij}$の寄与度として，$P'_{i}$と$P_{ij}$の差
+   の絶対値$D_{ij}$を獲得する．\\
+   6. & $D_{ij}$の最大値を$D'_{i}$としたとき，$D'_{i} \times 0.5 \leq
+   D_{ij}$を満たす$\phi_{ij}$が$m_{i}$において有効で\\
+      & あるとし，その集合$\Upsilon_{i}$を獲得する．\\
+   7. & $m_{i}$における素性$\psi_{k} \in \Psi$の寄与度$I_{ik}$を，
+   $\psi_{k}$の素性値が$\Upsilon_{i}$に含まれる場合に$1.0$，\\
+      & そうでない場合に$0.0$とする．\\
+   8. & $I_{ik}$の平均値$I_{k} = (\sum_{i}{I_{ik}}) / |M|$を，全モデルに
+   横断的な$\psi_{k}$の寄与度$I_{k}$とする．\\
+  \end{tabular}
+ \end{center}
+ \caption{寄与度算出法}
+ \label{fig:contalgo}
+\end{figure}
+
+
+表\ref{tbl:fenil_feature_discussion}は，サポートベクタマシンを用いて獲得
+した項候補同定モデルにおける各素性の寄与度である．
+表\ref{tbl:fenil_feature_discussion}より，項候補同定モデルでは，項の直前
+形態素の情報の寄与が強いことが明らかとなった．
+このことは，項候補同定モデルが不適切に切り分けられた断片の排除に特に有効
+に働いていることを示すものである．
+また，項候補同定モデルでは，述語と項の位置関係の寄与度が大きいことが明ら
+かとなった．
+この素性は，対象の断片が述語の前にあるか後ろにあるかのみを反映するもので
+あり，本来であれば述語項構造の判定に大きな影響は与えないと考えられる．\\
+そこで，述語と断片の位置関係をより詳細に表す素性，例えば構文解析結果に基
+づく述語・断片間の経路情報などを代替素性として利用することが，性能向上に
+つながると考えられる．
+
+\begin{table}[t]
+ \begin{center}
+  \caption{項候補同定モデル素性寄与度（上位5素性 / 全44素性）}
+  \label{tbl:fenil_feature_discussion}
+  \begin{tabular}{lr}
+   \hline
+   素性 & 寄与度 \\
+   \hline
+   項の直前の形態素が内容語でない場合の表層文字列 & 1.00 \\
+   述語項間文節位置 & 0.83 \\
+   項の直前の形態素の品詞 & 0.70 \\
+   項の先頭形態素の品詞 & 0.13 \\
+   項の直後の形態素の品詞 & 0.03 \\
+   \hline
+  \end{tabular}
+ \end{center}
+\end{table}
+
+
+
+
+なお，ここで議論した表\ref{tbl:result_all_experiment_me}の入力条件
+(\ref{enum:metrix1_experiment})・出力条件(\ref{enum:metrix3_experiment})
+の正解率78％は「正解を正解と判定する割合」であり，「不正解を不正解と判定
+する割合」（以後これを偽陽性率と呼ぶ）は含まないため，正確にはこの数字だ
+けで項候補同定モデルの評価をすることはできない．
+例えば，正解率が100％に近付くように負事例準備法を調節することで入力条件
+(\ref{enum:metrix1_experiment})における正解項候補の欠落が少なくなること
+から，対応付け部における性能の上限が上がり，全体の性能が向上して見えると
+考えられる．
+しかし，同時に，意味役割推定モデル全体の評価となる入力条件
+(\ref{enum:metrix0_experiment})での出力条件
+(\ref{enum:metrix3_experiment})において偽陽性率が低くなることが予測され，
+結果的に誤った項候補が選択されると考えられる．
+
+
+
+
+\subsection*{対応付けモデル}
+
+\ref{sec:models_def_proposal}節で述べたように，対応付けモデルは，与えら
+れた文，述語，フレームおよび項候補から，項候補と意味役割の対応付けを行う
+モデルである．
+結果，正解率72％の性能で，また，尤度が0.5以上のもののみを選択した場合は
+精度77％，再現率68％で意味役割の対応付けに成功した．
+なお，尤度が0.5以上のもののみを選択することによる再現率の低下は最大エン
+トロピー法で2ポイント，SVMで3ポイントに留まっており\footnote{表
+\ref{tbl:result_all_experiment_me}ならびに表
+\ref{tbl:result_all_experiment_svm}の入力条件
+(\ref{enum:metrix1_experiment})における出力条件
+(\ref{enum:metrix4_experiment})と(\ref{enum:metrix5_experiment})との比較
+による．}，精度はそれぞれ6ポイントおよび8ポイント上昇した．機械学習の特
+徴を考慮することで，より正確な対応付けが可能となった．
+
+
+表\ref{tbl:result_all_experiment_me}の入力条件
+(\ref{enum:metrix2_experiment})・出力条件(\ref{enum:metrix4_experiment})
+の正解率72％は，
+\ref{sec:models_def_proposal}節で述べた自項独立意味役割同定モデルと他項
+依存意味役割同定モデルの組み合わせの性能を示している．
+本手法において，これらのモデルの性能に寄与する部分は，学習に用いる素性の
+選択である．
+
+\newcounter{tablea}
+\addtocounter{table}{1}
+\setcounter{tablea}{\thetable}
+\newcounter{tableb}
+\addtocounter{table}{1}
+\setcounter{tableb}{\thetable}
+
+
+表{\thetablea}は，サポートベクタマシンを用いて獲得した自項独立意味役割同
+定モデルの出力に関し，寄与が大きいと考えられる素性を示したものである．
+また，表{\thetableb}は，同じくサポートベクタマシンを用いて獲得した他項依
+存意味役割同定モデルの出力の寄与度を示したものである．
+表中の数値は図\ref{fig:contalgo}で述べた手法により算出した．
+
+
+\begin{table}[b]
+ \begin{center}
+  \begin{tabular}{p{50mm}r}
+   \multicolumn{2}{l}{\parbox[b]{10mm}
+   {\bf 表$\ $\thetablea}自項独立
+   意味役割同定モデル素性寄与度} \\
+   \multicolumn{2}{l}{\parbox[b]{10mm}{$\;$}（上位10素性 / 全38素性）} \\
+   \hline
+   素性 & 寄与度 \\
+   \hline
+   項の機能文字列 & 0.78 \\
+   項の機能語の表層文字列 & 0.77 \\
+   項の末尾付属語の表層文字列 & 0.77 \\
+   項の機能語の品詞 & 0.40 \\
+   項の主辞形態素の品詞 & 0.39 \\
+   項の末尾付属語の品詞 & 0.38 \\
+   述語項間文節位置 & 0.32 \\
+   項の主辞形態素の概念クラスの集合 & 0.29 \\
+   述語項間項位置 & 0.26 \\
+   述語文節の機能文字列 & 0.25 \\
+   \hline
+  \end{tabular}
+  \begin{tabular}{p{50mm}r}
+   \multicolumn{2}{l}{\parbox[b]{10mm}
+   {\bf 表$\ $\thetableb}他項依存意味役割同
+   定モデル素性寄与度} \\
+   \multicolumn{2}{l}{\parbox[b]{10mm}{$\;$}（上位10素性 / 全44素性）} \\
+   \hline
+   素性 & 寄与度 \\
+   \hline
+   自項の意味役割 & 0.97 \\
+   項の機能文字列 & 0.36 \\
+   項の機能語の表層文字列 & 0.36 \\
+   項の末尾付属語の表層文字列 & 0.34 \\
+   項の機能語の品詞 & 0.14 \\
+   項の末尾付属語の品詞 & 0.13 \\
+   他項の項候補同定モデルの値 & 0.13 \\
+   述語項間文節位置 & 0.13 \\
+   他項の機能文字列 & 0.13 \\
+   項の主辞形態素の品詞 & 0.12 \\
+   \hline
+  \end{tabular} 
+ \end{center}
+\end{table} 
+
+
+表{\thetablea}から，自項独立意味役割同定モデルでは，項の機能語だけでなく，
+項の主辞形態素の概念クラスが大きく寄与していることが明らかとなった．
+このことは，本稿が提案した対応付けモデルが，項の機能語すなわち表層格では
+区別できない深層的意味に基づいて意味役割を同定していることを示すものであ
+る．
+自項独立意味役割同定モデルでは，また，述語文節の機能語の寄与度が強いこと
+が明らかとなった．
+これは，態の変化による意味役割の変化を学習できたことを示唆している．
+
+一方，表{\thetableb}より，他項依存意味役割同定モデルでは，自項独立意味役
+割同定モデルによって推定した意味役割に加え，他項の情報が強く寄与している
+ことが明らかとなった．
+これは，本研究で提案した対応付けモデルに他項依存意味役割同定モデルを定義
+したことの有効性を示唆するものである．
+また，自項独立意味役割同定モデルと同様に，項の機能語や項の主辞の概念クラ
+ス（0.11: 11位），述語文節（0.09: 13位）の寄与度も大きいことが分かった．
+
+
+
+\subsection*{事例自動作成}
+
+次に，\ref{sec:outline_proposal}節・ステップ(\ref{enum:boost_proposal})
+で述べた事例自動作成について考察する．
+作成した事例の数を表\ref{tbl:boost_result_discussion}に示す．
+また，ステップ(\ref{enum:boost_proposal})を実行せずに意味役割推定モデル
+を獲得，意味役割推定システムを構築した場合の評価実験の結果を表
+\ref{tbl:result_allnb_experiment_me},
+\ref{tbl:result_allnb_experiment_svm}に示す．
+
+
+
+\begin{table}[b]
+ \begin{center}
+  \caption{事例自動作成結果}
+  \label{tbl:boost_result_discussion}
+  \begin{tabular}{lrrr}
+   \hline
+   意味フレーム & 抽出事例数 & 作成事例数 & 作成率 \\
+   \hline
+   {\bf Arriving}   & 107 & 58  & 0.54 \\
+   {\bf Commerce\_pay} & 55 & 32 & 0.58 \\
+   {\bf Departing}  & 111 & 142 & 1.28 \\
+   {\bf Risk} & 60  & 24  & 0.40 \\
+   {\bf Theft}      & 65 & 25 & 0.38 \\
+   {\bf Traversing} & 92  & 124 & 1.35 \\
+   \hline
+   総合 & 490 & 405 & 0.83 \\
+   \hline
+  \end{tabular}
+ \end{center}
+\end{table}
+\begin{table}[b]
+ \begin{center}
+  \caption{結果（ME:ステップ(\ref{enum:boost_proposal})なし）}
+  \label{tbl:result_allnb_experiment_me}
+  \setlength{\tabcolsep}{1.5mm}
+  \begin{tabular}{c|ccc|ccc|ccc}
+   \hline
+   & \multicolumn{3}{|c|}{入力条件(\ref{enum:metrix0_experiment})}
+   & \multicolumn{3}{|c|}{入力条件(\ref{enum:metrix1_experiment})}
+   & \multicolumn{3}{|c}{入力条件(\ref{enum:metrix2_experiment})} \\
+   & 精度 & 再現率 & F値
+   & 精度 & 再現率（正解率） & F値
+   & 精度 & 再現率（正解率） & F値 \\
+   \hline
+   出力条件(\ref{enum:metrix3_experiment}) & 0.71 & 0.62 & 0.66  &  &
+   (0.80) &  &  &  & \\
+   出力条件(\ref{enum:metrix4_experiment})& 0.50 & 0.44 & 0.47 & 0.71 &
+   0.57 & 0.63  &  & (0.71) & \\
+   出力条件(\ref{enum:metrix5_experiment}) & 0.62 & 0.41 & 0.50  & 0.79
+   & 0.54 & 0.64  & 0.79 & 0.67 & 0.72 \\
+   \hline
+  \end{tabular}
+ \end{center}
+\end{table}
+\begin{table}[b]
+ \begin{center}
+  \caption{結果（SVM:ステップ(\ref{enum:boost_proposal})なし）}
+  \label{tbl:result_allnb_experiment_svm}
+  \setlength{\tabcolsep}{1.5mm}
+  \begin{tabular}{c|ccc|ccc|ccc}
+   \hline
+   & \multicolumn{3}{|c|}{入力条件(\ref{enum:metrix0_experiment})}
+   & \multicolumn{3}{|c|}{入力条件(\ref{enum:metrix1_experiment})}
+   & \multicolumn{3}{|c}{入力条件(\ref{enum:metrix2_experiment})} \\
+   & 精度 & 再現率 & F値
+   & 精度 & 再現率（正解率） & F値
+   & 精度 & 再現率（正解率） & F値 \\
+   \hline
+   出力条件(\ref{enum:metrix3_experiment}) & 0.71 & 0.59 & 0.64  &  &
+   (0.77) &  &  &  & \\
+   出力条件(\ref{enum:metrix4_experiment}) & 0.50 & 0.41 & 0.45  & 0.70
+   & 0.54 & 0.61  &  & (0.69) & \\
+   出力条件(\ref{enum:metrix5_experiment}) & 0.67 & 0.37 & 0.48  & 0.80
+   & 0.49 & 0.61  & 0.80 & 0.62 & 0.70 \\
+   \hline
+  \end{tabular}
+ \end{center}
+\end{table}
+
+表\ref{tbl:result_all_experiment_me},
+\ref{tbl:result_all_experiment_svm}
+と表\ref{tbl:result_allnb_experiment_me},
+\ref{tbl:result_allnb_experiment_svm}の比較から，ステップ
+(\ref{enum:boost_proposal})における事例自動生成が項候補獲得部・項候補同
+定モデルの偽陽性率の向上に貢献していることが明らかとなった．
+すなわち，ステップ(\ref{enum:boost_proposal})で自動生成された事例が，項
+候補同定モデルの学習事例，特に負事例の網羅性を向上させ，性能の良いモデル
+の学習に繋がったと考えられる．
+このことからも，ステップ(\ref{enum:boost_proposal})における事例自動生成の
+有効性が明らかとなった．
+
+
+
+
+
+\subsection*{機械学習法}
+
+我々は，機械学習に最大エントロピー法とサポートベクタマシンの2つを用い，
+それぞれを用いて意味役割推定モデルを獲得した．
+結果，意味役割を付与すべき項が分かっていない文に対して，最大エントロピー
+法を用いた場合は精度63％，再現率43％で意味役割付与を実現，サポートベクタ
+マシンを用いた場合は精度65％，再現率38％で意味役割付与を実現した．
+
+それらの数値を比較した結果として，本論文では，そこに有意な差は見られなかっ
+たと結論する．
+というのも，最大エントロピー法，サポートベクタマシンの双方にチューニング
+可能なパラメータが多いほか，素性選択，学習事例準備など，多くのステップで
+最適解を求める余地が残っていると考えるためである．
+
+一方，評価実験結果および事例自動生成検証結果を考察すると，最大エントロピー
+法に比べサポートベクタマシンは精度に焦点化しており，特に項候補同定モデル
+において偽陽性率に関して優れていることが見てとれる．
+言い換えれば，サポートベクタマシンは最大エントロピー法と比して，同モデル
+学習のために準備した負事例の特徴量をよく反映したと考えることができる．
+我々は，最大エントロピー法とサポートベクタマシンの双方に，同一の負事例準
+備法を適用して項候補同定モデルを学習した．
+しかしながら以上を考慮すると，採用する機械学習法に応じて負事例の準備の方
+法を変化させる必要があり，また，モデルの目的に応じて，最適な機械学習法を
+選択することが必要になると考える．
+
+
+
+\section{おわりに}\label{sec:conc}
+
+本稿では，日本語フレームネットを背景とし，項の意味役割を推定する統計モデ
+ルの定義，ならびに獲得手法を提案した．
+結果，提案した意味役割推定モデルの尤度が0.5を超えるもののみを付与する条
+件の下，意味役割が付与されるべき項が分かっていない文に対して精度63％，再
+現率43％の意味役割推定を，意味役割が付与されるべき項が分かっている文に対
+して精度77％，再現率68％の意味役割推定を実現し，本手法の有効性を示した．
+また，日本語フレームネットを背景としたことにより，表層格では区別できない
+意味の区別を実現した．
+今後は，語義曖昧性解消問題や機械翻訳の要素技術として本稿の提案手法を適用
+すると共に，現在進行中の日本語フレームネットの新たな事例について，再度本
+手法の検証を行っていく予定である．
+
+
+
+
+
+
+
+\nocite{mainichi:_cd}
+\bibliographystyle{jnlpbbl_1.1}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Baldewein, Erk, Pado, \BBA\ Prescher}{Baldewein
+  et~al.}{2004}]{baldewein04}
+Baldewein, U., Erk, K., Pado, S., \BBA\ Prescher, D. \BBOP 2004\BBCP.
+\newblock \BBOQ Semantic Role Labelling With Chunk Sequences\BBCQ\
+\newblock In {\Bem Proceedings of the CoNLL'04 shared task}.
+
+\bibitem[\protect\BCAY{Bejan, Moschitti, Mor{\u a}rescu, Nicolae, \BBA\
+  Harabagiu}{Bejan et~al.}{2004}]{bejan04}
+Bejan, C.~A., Moschitti, A., Mor{\u a}rescu, P., Nicolae, G., \BBA\ Harabagiu,
+  S. \BBOP 2004\BBCP.
+\newblock \BBOQ Semantic Parsing Based on FrameNet\BBCQ\
+\newblock In {\Bem SENSEVAL-3, Third International Workshop on the Evaluation
+  of Systems for the Semantic Analysis of Text / ACL'04}, \mbox{\BPGS\ 73--76}.
+
+\bibitem[\protect\BCAY{Berger, {Della Pietra}, \BBA\ {Della Pietra}}{Berger
+  et~al.}{1996}]{berger96}
+Berger, A.~L., {Della Pietra}, S.~A., \BBA\ {Della Pietra}, V.~J. \BBOP
+  1996\BBCP.
+\newblock \BBOQ A Maximum Entropy Approach to Natural Language Processing\BBCQ\
+\newblock {\Bem Computational Linguistics}.
+
+\bibitem[\protect\BCAY{Fillmore}{Fillmore}{1982}]{fillmore82}
+Fillmore, C.~J. \BBOP 1982\BBCP.
+\newblock \BBOQ Frame semantics\BBCQ\
+\newblock In {\Bem Linguistics in the Morning Calm}, \mbox{\BPGS\ 111--137}.
+
+\bibitem[\protect\BCAY{降幡\JBA 藤田\JBA 乾\JBA 松本\JBA 竹内}{降幡\Jetal
+  }{2004}]{furuhata04}
+降幡建太郎\JBA 藤田篤\JBA 乾健太郎\JBA 松本裕治\JBA 竹内孔一 \BBOP 2004\BBCP.
+\newblock \JBOQ 語彙概念構造を用いた機能動詞結合の言い換え\JBCQ\
+\newblock \Jem{言語処理学会 第10回年次大会 発表論文集}, \mbox{\BPGS\ 504--507}.
+
+\bibitem[\protect\BCAY{Gildea \BBA\ Jurafsky}{Gildea \BBA\
+  Jurafsky}{2002}]{gildea02}
+Gildea, D.\BBACOMMA\ \BBA\ Jurafsky, D. \BBOP 2002\BBCP.
+\newblock \BBOQ Automatic Labeling of Semantic Roles\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 28}  (3), \mbox{\BPGS\
+  245--288}.
+
+\bibitem[\protect\BCAY{河原\JBA 黒橋}{河原\JBA 黒橋}{2003}]{kawahara03}
+河原大輔\JBA 黒橋禎夫 \BBOP 2003\BBCP.
+\newblock \JBOQ 自動構築した格フレーム辞書に基づく省略解析の大規模評価\JBCQ\
+\newblock \Jem{言語処理学会 第9回年次大会 発表論文集}, \mbox{\BPGS\ 589--592}.
+
+\bibitem[\protect\BCAY{河原\JBA 黒橋}{河原\JBA 黒橋}{2004}]{kawahara04}
+河原大輔\JBA 黒橋禎夫 \BBOP 2004\BBCP.
+\newblock \JBOQ
+  自動構築した格フレーム辞書と先行詞の位置選好順序を用いた省略解析\JBCQ\
+\newblock \Jem{自然言語処理}, {\Bbf 11}  (3), \mbox{\BPGS\ 3--19}.
+
+\bibitem[\protect\BCAY{河原\JBA 黒橋}{河原\JBA 黒橋}{2005a}]{kawahara05_1}
+河原大輔\JBA 黒橋禎夫 \BBOP 2005a\BBCP.
+\newblock \JBOQ 格フレーム辞書の漸次的自動構築\JBCQ\
+\newblock \Jem{自然言語処理}, {\Bbf 12}  (2), \mbox{\BPGS\ 109--131}.
+
+\bibitem[\protect\BCAY{河原\JBA 黒橋}{河原\JBA 黒橋}{2005b}]{kawahara05}
+河原大輔\JBA 黒橋禎夫 \BBOP 2005b\BBCP.
+\newblock \JBOQ 大規模格フレームに基づく構文・格解析の統合的確率モデル\JBCQ\
+\newblock \Jem{言語処理学会 第11回年次大会 発表論文集}, \mbox{\BPGS\ 923--926}.
+
+\bibitem[\protect\BCAY{Kingsbury \BBA\ Palmer}{Kingsbury \BBA\
+  Palmer}{2002}]{kingsbury02}
+Kingsbury, P.\BBACOMMA\ \BBA\ Palmer, M. \BBOP 2002\BBCP.
+\newblock \BBOQ From Treebank to PropBank\BBCQ\
+\newblock In {\Bem Proceedings of LREC'02}.
+
+\bibitem[\protect\BCAY{工藤\JBA 松本}{工藤\JBA 松本}{2002}]{kudo02_cabocha}
+工藤拓\JBA 松本裕治 \BBOP 2002\BBCP.
+\newblock \JBOQ チャンキングの段階適用による日本語係り受け解析\JBCQ\
+\newblock \Jem{情報処理学会}, {\Bbf 43}  (6), \mbox{\BPGS\ 1834--1842}.
+
+\bibitem[\protect\BCAY{Kwon, Fleischman, \BBA\ Hovy}{Kwon
+  et~al.}{2004}]{kwon04}
+Kwon, N., Fleischman, M., \BBA\ Hovy, E. \BBOP 2004\BBCP.
+\newblock \BBOQ FrameNet-based Semantic Parsing using Maximum Entropy
+  Models\BBCQ\
+\newblock In {\Bem Proceedings of COLING'04}, \mbox{\BPGS\ 1233--1239}.
+
+\bibitem[\protect\BCAY{Litkowski}{Litkowski}{2004}]{litkowski04}
+Litkowski, K.~C. \BBOP 2004\BBCP.
+\newblock \BBOQ SENSEVAL-3 Task Automatic Labeling of Semantic Roles\BBCQ\
+\newblock In {\Bem SENSEVAL-3, Third International Workshop on the Evaluation
+  of Systems for the Semantic Analysis of Text / ACL'04}, \mbox{\BPGS\
+  111--137}.
+
+\bibitem[\protect\BCAY{毎日新聞社}{毎日新聞社}{}]{mainichi:_cd}
+毎日新聞社.
+\newblock \JBOQ CD-毎日新聞(データ集)\JBCQ\
+\newblock 1992--2002年版.
+
+\bibitem[\protect\BCAY{小原\JBA 大堀\JBA 鈴木\JBA 藤井\JBA 斎藤\JBA
+  石崎}{小原\Jetal }{2005}]{ohara05}
+小原京子\JBA 大堀壽夫\JBA 鈴木亮子\JBA 藤井聖子\JBA 斎藤博昭\JBA 石崎俊 \BBOP
+  2005\BBCP.
+\newblock \JBOQ 日本語フレームネット：意味タグ付きコーパスの試み\JBCQ\
+\newblock \Jem{言語処理学会 第11回年次大会 発表論文集}, \mbox{\BPGS\
+  1225--1228}.
+
+\bibitem[\protect\BCAY{Pradhan, Ward, Hacioglu, Martin, \BBA\ Jurafsky}{Pradhan
+  et~al.}{2004}]{pradhan04}
+Pradhan, S., Ward, W., Hacioglu, K., Martin, J.~H., \BBA\ Jurafsky, D. \BBOP
+  2004\BBCP.
+\newblock \BBOQ Shallow Semantic Parsing using Support Vector Machines\BBCQ\
+\newblock In {\Bem Proceedings of HLT/NAACL'04}.
+
+\bibitem[\protect\BCAY{Sasano, Kawahara, \BBA\ Kurohashi}{Sasano
+  et~al.}{2004}]{sasano04}
+Sasano, R., Kawahara, D., \BBA\ Kurohashi, S. \BBOP 2004\BBCP.
+\newblock \BBOQ Automatic Construction of Nominal Case Frames and its
+  Application to Indirect Anaphora Resolution\BBCQ\
+\newblock In {\Bem Proceedings of COLING'04}, \mbox{\BPGS\ 1201--1207}.
+
+\bibitem[\protect\BCAY{竹内}{竹内}{2004}]{takeuchi04}
+竹内孔一 \BBOP 2004\BBCP.
+\newblock \JBOQ 語彙概念構造による動詞辞書の作成\JBCQ\
+\newblock \Jem{言語処理学会 第10回年次大会 発表論文集}, \mbox{\BPGS\ 576--579}.
+
+\bibitem[\protect\BCAY{竹内\JBA 乾\JBA 藤田\JBA 竹内\JBA 阿部}{竹内\Jetal
+  }{2005}]{takeuchi05}
+竹内孔一\JBA 乾健太郎\JBA 藤田篤\JBA 竹内奈央\JBA 阿部修也 \BBOP 2005\BBCP.
+\newblock \JBOQ 分類の根拠を明示した動詞語彙概念構造辞書の構築\JBCQ\
+\newblock \Jem{情報処理学会研究報告:自然言語処理}, {\Bbf 169}  (9),
+  \mbox{\BPGS\ 123--130}.
+
+\bibitem[\protect\BCAY{Vapnik}{Vapnik}{1999}]{vapnik99}
+Vapnik, V.~N. \BBOP 1999\BBCP.
+\newblock {\Bem The Nature of Statistical Learning Theory\/} (2nd \BEd).
+\newblock Springer.
+
+\end{thebibliography}
+
+\begin{biography}
+\bioauthor{肥塚　真輔}{
+慶應義塾大学理工学部情報工学科卒業．
+現在，証券会社にてプログラム開発等の業務に従事．工学修士．}
+
+\bioauthor{岡本　紘幸}{
+慶應義塾大学理工学部情報工学科卒業．
+現在，同大学理工学研究科後期博士課程在学中．
+自然言語処理の研究に従事．
+言語処理学会，情報処理学会各学生会員．}
+
+\bioauthor{斎藤　博昭 （正会員）}{
+慶應義塾大学工学部数理工学科卒業．
+現在，同大理工学部情報工学科助教授．工学博士．
+自然言語処理，音声言語理解などに興味を持つ．
+情報処理学会，言語処理学会，日本音響学会，電子情報通信学会，ACL各会員．}
+\bioauthor{小原　京子}{
+カリフォルニア大学バークレー校言語学科博士課程修了．
+現在，慶應義塾大学理工学部助教授，International Computer Science
+Instituteならびにカリフォルニア大学バークレー校言語学科客員研究員．
+Ph.D.（言語学）．
+認知言語学，コーパス言語学の研究に従事．
+Linguistic Society of America (LSA)，ACL，International Cognitive
+ Linguistics Association (ICLA)，International Pragmatics Association
+ (IPrA)，日本英語学会，日本言語学会，日本認知言語学会，日本認知科学会各
+ 会員．}
+
+\end{biography}
+
+
+\biodate
+
+\end{document}

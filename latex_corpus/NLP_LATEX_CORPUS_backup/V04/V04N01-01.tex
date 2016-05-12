@@ -1,0 +1,973 @@
+
+\documentstyle[epsf,jnlpbbl]{jnlp_j_b5_nodagger}
+
+\newcommand{\SBJ}{}
+\newcommand{\SYN}{}
+\newcommand{\SEM}{}
+\newcommand{\COR}{}
+\newcommand{\FEATS}[4]{}
+\newcommand{\ELEM}[6]{}
+
+\newenvironment{LIST}{}{}
+
+\newcounter{textcounter}
+\newenvironment{TEXT}{}{}
+
+\newcounter{depredcounter}
+\setcounter{depredcounter}{-1}
+\newenvironment{DEPRED}{}{}
+
+\newenvironment{DEPEX}{}{}
+
+\setcounter{page}{3}
+\setcounter{巻数}{4}
+\setcounter{号数}{1}
+\setcounter{年}{1997}
+\setcounter{月}{1}
+\受付{1995}{3}{20}
+\再受付{1996}{4}{1}
+\採録{1996}{7}{18}
+
+\setcounter{secnumdepth}{2}
+
+\title{Text-Wide Grammarに基づくテキスト解析}
+\author{吉見 毅彦 \and Jiri Jelinek \and 西田 収 \and 田村 直之 \and 村上 温夫}
+
+\headauthor{吉見 毅彦・Jiri Jelinek・西田 収・田村 直之・村上 温夫}
+\headtitle{Text-Wide Grammarに基づくテキスト解析}
+
+\affilabel{SHARP/KOBE}{吉見 毅彦, Takehiko Yoshimi, シャープ(株) 情報商品開発研究所 / 神戸大学 大学院自然科学研究科}{Information Systems Product Development Laboratories, SHARP Corp. / Graduate School of Science and Technology Kobe University}
+\affilabel{EXSHARP}{Jiri Jelinek, 元 シャープ(株) 情報商品開発研究所}{Formerly, Information Systems Product Development Laboratories, SHARP Corp.}
+\affilabel{SHARP}{西田 収, Osamu Nishida, シャープ(株) 情報商品開発研究所}{Information Systems Product Development Laboratories, SHARP Corp.}
+\affilabel{KOBE}{田村 直之, Naoyuki Tamura, 神戸大学 大学院自然科学研究科}{Graduate School of Science and Technology, Kobe University}
+\affilabel{KONAN}{村上 温夫, Haruo Murakami,甲南大学 理学部経営理学科}{Department of Information Systems and Management Science, Faculty of Science, Konan University}
+
+\jabstract{\vspace*{-1mm}テキストの可能な解釈の中から最良の解釈を効率良く選び出せる
+機械翻訳システムを実現するために，最良解釈を定義する制約(拘束的条件)と
+選好(優先的条件)をText-Wide Grammar (TWG)として記述し，圧縮共有森
+(packed shared forest)上での遅延評価による優先度計算機構によってTWGを
+解釈実行する．
+TWGは，形態素，構文構造，意味的親和性，照応関係に関する制約と選好を備
+えたテキスト文法である．
+照応関係に関する制約は，陳述縮約に関する規範を主な拠り所としている．
+TWGによれば，テキストの最良解釈は，形態素に関する選好による評価点が最
+も高く，構文構造，意味的親和性，照応関係に関する選好による各評価点の重
+み付き総和が最も高い解釈である．
+処理機構は，意味解析と照応解析を，構文解析系から受け取った圧縮共有森上
+で行なう．
+その際，最良解釈を求めるために必要な処理だけを行ない，それ以外の処理の
+実行は必要が生じるまで保留することによって無駄な処理を避ける．
+保留した処理を必要に応じて再開することによって，最良解釈以外の解釈も選
+び出せる．}
+
+\jkeywords{\vspace*{-2mm}機械翻訳，テキストの一貫性，照応解析，選好}
+
+\etitle{Text Analysis based on Text-Wide Grammar}
+\eauthor{Takehiko Yoshimi\hspace*{-0.4em}\and Jiri Jelinek\hspace*{-0.4em}\and Osamu Nishida\hspace*{-0.4em}\and Naoyuki Tamura\hspace*{-0.4em}\and Haruo Murakami}
+
+\eabstract{\vspace*{-1.5mm}For the purpose of creating a machine translation system
+capable of efficiently selecting the best interpretation of a text from
+all the possible interpretations, we have formulated a Text-Wide Grammar
+as a set of constraints and preferences defining the optimum
+interpretation.
+This TWG is interpreted and executed by means of lazy evaluation of
+preference on a packed shared forest. 
+TWG is a grammar of text, defining constraints and priorities on
+morphological and syntactic structures, semantics and collocations as
+well as correferentiality. 
+Constraints on correferentiality are formulated on the basis of the
+paradigm of depredication (otherwise known as theme-packing).
+From all the interpretations of a text which share the optimum score
+for morphological well-formedness, the optimum interpretation of the
+text is selected as the one with the highest weighted aggregate of the
+separately obtained scores for syntactic goodness,
+semantic-collocational goodness and correferential density.
+The processing system carries out semantic-collocational and
+correferential analysis on the packed shared forest received from
+syntactic analysis.
+At that stage, only the processing immediately required for
+identifying the optimum interpretation is actually carried out,
+avoiding all other processing by suspending it until it is required. 
+Other interpretations are obtainable by restarting the suspended
+processing.}
+
+\ekeywords{Machine Translation, Text Coherence, Correferentiality
+Analysis, Prioritisation}
+
+\begin{document}
+\maketitle
+
+\section{はじめに}
+
+テキストの解釈を一意に決定することは，依然として，自然言語処理において
+最も難しい課題である．
+テキストの対象分野を限定しない場合，解釈の受理/棄却の基準を記述した拘
+束的条件すなわち制約だけで解釈を一意に絞り込むことは容易ではない
+\cite{Tsujii86,Nagao92}．
+このため，解釈の良さの比較基準を記述した優先的条件すなわち選好によって，
+受理された解釈に優劣を付け，評価点が最も高い解釈から順に選び出そうとす
+るアプローチが取られることが多く，実際，その有効性が報告されている
+\cite{Fass83,Schubert84,Petitpierre87,Hobbs90}．
+本稿では，日英機械翻訳システムにおいてテキストの最良解釈を定義するため
+の制約と選好を備えたテキスト文法Text-Wide Grammar
+(TWG)\cite{Jelinek93}について，照応関係に関する制約と選好に焦点をあて
+て説明し，さらに，TWGに基づいて意味解析と照応解析を効率良く行なう機構
+について述べる．
+
+テキスト解析に必要な知識の中でも，特に，照応関係に関する制約と選好は，
+最良解釈の選択に大きく影響を及ぼす． 
+照応関係は，日英機械翻訳システムでは，日本語で明示することは希であるが，
+英語では明示しなければならない言語形式上の必須情報を得るための重要な手
+がかりとなる．
+例えば，ゼロ照応詞
+\footnote{ここでは，日本語で明示する必要はないが英語では明示する必要の
+ある照応詞をゼロ照応詞と呼ぶ．}
+や名詞句の人称，性，数，意味素性，定/不定性の決定は，それらが関与する
+照応関係を明らかにし，人称，性，数，意味素性の情報を伝播することによっ
+て行なえる．
+このようなことから，照応関係に関する種々の制約や選好がこれまでに提案
+されている\cite{Yoshimoto86,Fujisawa93,Murata93,Nakaiwa93}．
+また，テキスト解析で用いる選好には，照応関係に関する選好の他に，構文構
+造や意味的親和性に関する選好などがあるが，各選好をどのように組み合わせ
+るかが重要な課題となる．
+ある選好による最良解釈と他の選好による最良解釈が相容れるとは限らないか
+らである．
+
+TWGは，形態素，構文構造，意味的親和性，照応関係に関する制約と選好によっ
+て，テキストの可能な解釈を定義し，それらに優劣を付ける．
+照応関係に関する選好による評価では，テキストを構成する構造体
+\footnote{構造体とは，テキストであるか，構造体の直接構成要素である
+\cite{Jelinek65}．} 
+がより多く照応関係に関与する解釈を優先する(\ref{sec:twg:corref}節，
+\ref{sec:twg:eval}節)．
+ある構造体が他の構造体を指せるかどうかは，主に，陳述縮約に関する規範
+\cite{Jelinek65,Jelinek66}に基づいて決めることができる．
+陳述縮約に関する規範は，完全形(full form)
+\footnote{書き手が記述しようとしている事柄についての知識を読み手が全く
+持っていないと書き手が判断したときに用いる構造体．}
+がゼロ形に縮約される過程を11段階に分類し，指す構造体の陳述縮約度と指さ
+れる構造体の陳述縮約度の間で成り立つ制約を記述したものである．
+TWGでは，構文構造，意味的親和性，照応関係に関する選好による各評価点の
+重み付き総和が最も高い解釈をテキストの最良解釈とする
+(\ref{sec:twg:balance}節)．
+TWGで定義されている形態素に関する選好の精度は十分高く，この選好による
+最良解釈からテキストの最良解釈が生成される可能性が高い
+\footnote{2000文について，形態素に関する選好による最良解釈が人間による
+解釈と一致するかどうかを調べたところ，94.7\%において一致していた．}
+ので，この選好と他の選好との相互作用は考慮しない．
+
+選好によるテキスト解析手法でのもう一つの課題は，最良解釈を効率良く選び
+出せる処理機構を実現することである．
+テキストの可能な解釈の数は，テキストが長くなるにつれ，組み合せ的に増え
+る．
+解釈数の組み合せ的な増大に対処するためには，解釈を個別に表現するのでは
+なく，まとめて表現しなければならない．
+また，解釈をいったんすべて求めた後その中から最良解釈を選ぶのではなく，
+解析の途中過程で競合する解釈の評価点を比較しながら，最終的に最良解釈に
+なりそうな候補だけを優先的に探索し，そうでない候補の探索はできるだけ行
+なわないようにしなければならない．
+
+本稿の処理機構は，テキストの構文構造のすべての曖昧さをまとめて表現した
+圧縮共有森(packed shared forest)\cite{Tomita85}上で，遅延評価による意味
+解析と照応解析を行なう(\ref{sec:lazy}節)．
+圧縮共有森上で処理を行なうことによって，部分的解釈の再利用が可能となり
+重複処理を避けることができる．
+遅延評価によって，総合評価点が最も高い解釈を求めるために必要な処理だけ
+の実行，それ以外の処理の保留が可能となり，不必要な処理を避けることがで
+きる．
+統合共有森はAND/ORグラフと等価とみなせるので，本稿では説明の便宜上，圧
+縮共有森をAND/ORグラフと呼ぶ．
+
+\section{Text-Wide Grammar}
+\label{sec:twg}
+
+\subsection{照応関係に関する制約の定式化}
+\label{sec:twg:corref}
+
+テキストの適格性は，主に，テキストを構成する構造体の間で成り立つ照応関
+係によって生じる．\hspace{-0.3mm}ある構造体$X$\hspace{-0.1mm}で触れた事象に，\hspace{-0.3mm}他の構造体$Y$\hspace{-0.1mm}が再び言及している($Y$\hspace{-0.1mm}が\hspace{-0.1mm}$X$\hspace{-0.1mm}を指している)とき，これら二つの構造体は次の三つの制約を満たす．
+\begin{LIST}
+\item[\bf 構文構造に関する制約] $X$はある構文構造上で$Y$の前方に現れる．
+\item[\bf 意味に関する制約] $X$の意味と$Y$の意味は矛盾しない．
+\item[\bf 陳述縮約に関する制約] $Y$は$X$を縮約した言語形式である． 
+\end{LIST}
+テキストがこれらの制約に従っている限り，通常，テキストの読み手は縮約形
+(depredicated form)
+\footnote{読み手に既知であると書き手が判断した情報を明示しない構造体．}
+から完全形を復元することができるので，そのテキストは適格であるとみなせる．
+
+次のテキストを例として，各制約について詳しく検討する．
+\begin{TEXT}
+\text ソ連の国家非常事態委員会は19日，ゴルバチョフ大統領を解任したと発
+表した．
+大統領の解任が西側の対ソ政策に重大な影響を及ぼすことは必至である．
+政府は，臨時の閣議を開き，この事態への対応を協議している．
+また，$\phi_{\SBJ}$為替相場へ及ぼす影響も懸念されている．
+\label{TEXT:gorb_wellform}
+\end{TEXT}
+このテキストでは，文「ソ連の国家非常事態委員会が19日ゴルバチョフ大統領
+を解任した」と名詞句「大統領の解任」，指示連体詞「この」，ゼロ照応詞
+「$\phi_{\SBJ}$」の間に成り立つ照応関係によって，四つの文が結び付いて
+いる．
+以降の説明では，構造体$X$と$Y$はAND/ORグラフ上の節点$X$と$Y$にそれぞれ
+対応するものとする．
+
+\subsubsection{構文構造に関する制約}
+\label{sec:twg:corref:syn}
+
+節点$Y$\hspace*{-0.1mm}が\hspace*{-0.1mm}$X$\hspace*{-0.1mm}を指せるための構文構造に関する制約として， \hspace*{-0.5mm}$X$\hspace*{-0.1mm}と\hspace*{-0.1mm}$Y$\hspace*{-0.1mm}が同じ構文構造に属し，そ\\の構文構造上で$X$が$Y$\hspace*{-0.1mm}より左側(前方)に位置し，\hspace*{-0.5mm}$X$と$Y$\hspace*{-0.1mm}の間の言語心理的距離はある一定の範\\囲を越えてはならないという制
+約をおく
+\footnote{後方照応\cite{Hirst81}と，構文構造が異なる解釈間での照応関係
+(例えば，punning)は，ここでは扱わない．
+また，$X$と$Y$がある一定の距離以上離れていると$Y$は$X$を指せなくなる
+と考えられるが，現在のところ距離の具体的な制約は設けていない．}．
+$X$が$Y$より左側に位置するかどうかは，AND/ORグラフ上での$X$の右位置を
+$R_X$，\hspace*{-0.3mm}$Y$\hspace*{-0.1mm}の左位置を$L_Y$\hspace*{-0.1mm}とする
+\footnote{AND/ORグラフ上のある節点$X$が，構文解析への入力である終端節
+点列において左から数えて第$(L+1)$番目の終端節点から第$R$番目の終端節点
+を覆うとき，節点$X$の左位置を$L$，右位置を$R$とする．}
+とき，\hspace*{-0.3mm}$R_X \le L_Y$が満たされるかどう\\かで判定する．
+AND/ORグラフにおける節点の先祖/子孫関係は文脈自由文法形式の構文解析規
+則で定義される構文範疇間の支配関係に対応するので，$R_X \le L_Y$が満た
+されることから，$X$\\は$Y$の先祖でも子孫でもないということが導ける．
+$X$と$Y$が同じ構文構造に属することを制約としているのは，テキストの構文
+構造を，木として個別に表しているのではなく，AND/ORグ\\ラフとしてまとめて表
+しているため，グラフ上の任意の二つの節点が一つの木に属するとは限らない
+からである．
+
+構文構造に関する制約として，さらに次の制約をおく．
+$X$がある用言の主語であり$Y$がその\\用言の目的語である場合，あるいは，
+$X$がある用言の目的語であり$Y$がその用言の主語である\\場合，少なくとも
+$X$と$Y$のいずれか一方は再帰名詞でなければならない．
+この制約は，例えば\\文「大統領を$\phi_{\SBJ}$解任する．」において，
+ゼロ照応詞「$\phi_{\SBJ}$」が「大統領」を指すことを禁止す\\るためのもの
+である．
+
+\subsubsection{意味に関する制約}
+\label{sec:twg:corref:sem}
+
+節点$X$\hspace*{-0.1mm}と$Y$\hspace*{-0.1mm}が満たすべき意味に関する制約として，\hspace*{-0.3mm}$X$の人称，\hspace*{-0.1mm}性，\hspace*{-0.1mm}数が$Y$\hspace*{-0.1mm}
+の人称，性，数に\\それぞれ一致し，$X$の意味素性と$Y$の意味素性が上位下位
+関係になければならないという制約\\をおく．
+節点の意味を表現するデータ構造として，人称，性，数，意味素性を素性とす
+る素性構\\造を用い，$X$と$Y$の素性構造が単一化できるとき，意味に関する制
+約が満たされるものとする．\\
+人称(per)は1st，2nd，3rdを区別し，性(gen)はm，f，nを，数(num)はsg，pl
+を，それぞれ区別する．
+意味素性(sem)は上位下位関係を記述した意味体系上の範疇であり，A(animal)，
+AC(action)，F(food)，H(human)などの区別を設ける．
+
+AND/ORグラフ上の終端節点の素性構造は，辞書に記述しておく．
+他方，非終端節点の素性構造は，終端節点の素性構造を合成して求めなければ
+ならないが，これは今後の課題である．
+しかし，非終端節点は，通常，それの主要部(head)である終端節点の素性構造
+を特化した素性構造を持つと考えてよい
+\footnote{等位構造の場合や主要部の意味を限定部が否定する場合などは，こ
+の限りではない．}．
+特に，非終端節点に子節点が一つしかない場合，非終端節点の素性構造は，
+その子節点の素性構造に一致する．
+例えば，動詞「解任した」は，\FEATS{3rd}{n}{sg}{AC}という素性構造を持つ．
+このとき，「解任した」を主要部とする文「ソ連の国家非常事態委員会が
+19日ゴルバチョフ大統領を解任した」全体が持つ素性構造は，
+\FEATS{3rd}{n}{sg}{AC+$\alpha$}と表せる．
+\hspace{-0.3mm}ここで，\hspace*{-0.3mm}複合意味素性AC+$\alpha$は，\hspace*{-0.3mm}原子意味素性ACに何らかの意味
+$\alpha$が加わったAC\\の下位範疇を意味する．
+
+原子意味素性$A$が原子意味素性$B$の下位範疇であるとき，複合意味素性
+$A+\alpha$は$B$の下位\\範疇であると定める．
+また，$A$が複合意味素性$B+\beta$の下位範疇であるかどうかと，$A+\alpha$
+が\\$B+\beta$の下位範疇であるかどうかは不明であると定める．
+二つの節点$X$と$Y$の意味素性間の上\\位下位関係が不明である場合も，\hspace*{-0.3mm}$X$と
+$Y$は素性構造に関する制約を満たすとみなす．
+\hspace*{-0.3mm}ただし，\hspace*{-0.3mm}上\\位下位関係にあることが明確にわかっている場合と不明の場合とで
+は，評価点が異なる(\ref{sec:twg:eval}節)．
+
+\subsubsection{陳述縮約に関する制約}
+\label{sec:twg:corref:cor}
+
+先行文脈で触れた事象に再び言及する場合には先行陳述の縮約形を用いるとい
+う制約は，「テキストの読み手が先行文脈から復元できる情報を略さずにその
+まま反復すると，そのテキストは冗長で理解困難になる」という観察に基づく．
+仮に，テキスト\ref{TEXT:gorb_wellform}に現れる文「ソ連の国家非常事態委
+員会が19日ゴルバチョフ大統領を解任した」を全く縮約せずに，そのまま繰り
+返したとする．
+\begin{TEXT}
+\text ソ連の国家非常事態委員会は19日，ゴルバチョフ大統領を解任したと発
+表した．
+ソ連の国家非常事態委員会が19日ゴルバチョフ大統領を解任したことが西側の
+対ソ政策に重大な影響を及ぼすことは必至である． 
+政府は，臨時の閣議を開き，ソ連の国家非常事態委員会が19日ゴルバチョフ大
+統領を解任したという事態への対応を協議している．
+また，ソ連の国家非常事態委員会が19日ゴルバチョフ大統領を解任したことが
+為替相場へ及ぼす影響も懸念されている．\label{TEXT:gorb_illform}
+\end{TEXT}
+
+テキスト\ref{TEXT:gorb_wellform}が適格であるのに対しテキスト
+\ref{TEXT:gorb_illform}はそうではないことから，陳述縮約は，テキストを
+構成する場合に従うべき規範であるといえる．
+テキスト\ref{TEXT:gorb_wellform}では，文「ソ連の国家非常事態委員会が19
+日ゴルバチョフ大統領を解任した」が，まず名詞句「大統領の解任」に縮約さ
+れ，次に指示連体詞「この」に，そして最後にゼロ照応詞「$\phi_{\SBJ}$」
+に縮約されている．
+完全形からゼロ形への陳述縮約が最も緩やかに進む場合，その過程は次の11段
+階から成る．
+この11段階の分類は，日英翻訳を目的とした分類であり，日本語，英語それぞ
+れにおける縮約過程\cite{Jelinek65,Jelinek66}を合成したものである．
+\begin{DEPRED}
+\depred テキスト．
+一つ以上の文から成る構造体．
+\depred 文．
+\vspace{-0.1mm}
+\begin{DEPEX}
+\depexample \underline{国家非常事態委員会はゴルバチョフ大統領を解任す
+るだろう．}
+
+{\it The National Emergency Committee will dismiss President
+Gorbachov.}
+\end{DEPEX}
+\depred 直接話法．文の部分に成りうる構造体．
+\vspace{-0.1mm}
+\begin{DEPEX}
+\depexample 委員の一人は「\underline{委員会は大統領を解任するだろう．}」
+と述べた．
+
+A member of the Committee said: ``{\it The Committee will dismiss the
+President.}''
+\end{DEPEX}
+\depred 間接話法．
+日本語において，この陳述縮約度の構造体内で普通体/丁寧体が区別されるこ
+とは希である．
+英語においては，構造体内での時制の区別が時制の一致に支配されるようにな
+り，この陳述縮約度の構造体からは元の完全文の時制が何であったかが分から
+なくなることもある．
+
+\vspace{-0.1mm}
+\begin{DEPEX}
+\depexample \underline{委員会が大統領を解任するだろう}と報じられた．
+
+It was reported that {\it the Committee would dismiss the President}. 
+\end{DEPEX}
+\depred
+日本語では初めて，英語ではさらに，構造体内での時制の区別が制限されるよ
+うになる．
+日本語においては，主語でない主題(theme)は希にしか構造体内で表現され
+なくなる．
+両言語において，任意格は，情報伝達に必須である場合にのみ表現されるよ
+うになる．
+\vspace{-0.1mm}
+\begin{DEPEX}
+\depexample \underline{委員会が大統領を解任する}前に，大統領は懸命の政
+治工作を行なった．
+
+Before {\it the Committee dismissed him}, the President made some
+courageous political moves.
+\end{DEPEX}
+\depred この陳述縮約度の構造体内では時制の区別が不可能になる．
+文法上いずれの格要素も表現可能であるが，実際には希にしか表現されなく
+なる．
+\vspace{-0.1mm}
+\begin{DEPEX}
+\depexample \underline{委員会が大統領を解任すれ}ば，為替相場へ大きな影
+響が出るだろう．
+
+If {\it the Committee dismissed the President}, it would have grave
+repercussions on the exchange rates.
+\end{DEPEX}
+\depred 構造体内でなされる文法上の区別は極めて少数となる．
+完全文で表現可能であった格要素のうち，いくつかは形式上表現できなくなる．
+\begin{DEPEX}
+\depexample \underline{大統領を解任する}と同時に，委員会は新大統領選び
+にも乗り出した．
+
+As well as {\it dismissing the President}, the Committee embarked upon
+choosing his replacement.
+\end{DEPEX}
+\depred 名詞，連体詞，副詞内で表現されるのと同程度の区別だけになる．
+構造体内での主題/解題(rheme)の区別の痕跡は，ほとんどなくなる．
+肯定/否定を区別することは文法上可能であるが，実際には希である．
+日英両言語において名詞句は名詞句を指せるが，英語では，通常，先行文脈中
+に現れた名詞句をそのまま反復することは文体上の理由から希であり，別の名
+詞句に言い換えることが多いのに対し，日本語では既出の名詞句をそのまま繰
+り返すことが多い．
+\begin{DEPEX}
+\depexample \underline{委員会による大統領解任}は為替相場へ大きな影響を
+及ぼすだろう．
+
+{\it The dismissal of the President by the Committee} will have grave
+repercussions on the exchange rates.
+\end{DEPEX}
+\depred 両言語において照応詞で表現される．
+構造体内での文法上の区別はすべてなくなる．
+\begin{DEPEX}
+\depexample \underline{これ}は為替相場へ大きな影響を及ぼすだろう．
+
+{\it This} will have grave repercussions on the exchange rates.
+\end{DEPEX}
+\depred 日本語で表現する必要はないが英語では表現する必要のある照応詞．
+\begin{DEPEX}
+\depexample \underline{$\phi_{\SBJ}$}為替相場へ大きな影響を及ぼすだろ
+う．
+
+{\it It} will have grave repercussions on the exchange rates.
+\end{DEPEX}
+\depred 両言語においてテキスト中では表現されないが，そのテキストの理解に
+不可欠なすべての世界知識と状況に関する知識．
+現在のところ扱っていない．
+\end{DEPRED}
+
+以上の分類に基づき，\hspace*{-0.3mm}陳述縮約に関する制約として，\hspace*{-0.3mm}指される節点$X$と指す
+節点$Y$の陳述縮\\約度の間で，表\ref{tab:depredlevel}に示す関係が成り立た
+なければならないという制約をおく．
+表\ref{tab:depredlevel}は，例えば，節点$X$の陳述縮約度が9であるとき，
+節点$Y$の陳述縮約度は8か9でなければならないことを\\表している．
+AND/ORグラフ上の終端節点の陳述縮約度は辞書に，また，非終端節点の陳述縮
+約度は構文解析規則に記述しておく．
+\begin{table}[htbp]
+\caption{陳述縮約度に関する制約}
+\label{tab:depredlevel}
+\begin{center}
+\begin{tabular}{|c|r|} \hline
+節点$X$の陳述縮約度 & \multicolumn{1}{|c|}{節点$Y$の陳述縮約度} \\
+\hline\hline
+0 & 1, 2, 3, 4, 5, 6, 7, 8, 9 \\
+1 &    2, 3, 4, 5, 6, 7, 8, 9 \\
+2 &       3, 4, 5, 6, 7, 8, 9 \\
+3 &          4, 5, 6, 7, 8, 9 \\
+4 &             5, 6, 7, 8, 9 \\
+5 &                6, 7, 8, 9 \\
+6 &                   7, 8, 9 \\
+7 &                   7, 8, 9 \\
+8 &                      8, 9 \\
+9 &                      8, 9 \\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\subsection{照応関係に関する選好による解釈の評価}
+\label{sec:twg:eval}
+
+節点$X$と$Y$が，\hspace*{-0.2mm}構文構造，\hspace*{-0.2mm}意味，\hspace*{-0.2mm}陳述縮約に関する制約をすべて満たし
+ているとき，\hspace*{-0.2mm}$Y$は$X$\\を指すことができる．
+$Y$が$X$を指しているとき，二つの節点を，$Y$から$X$へ向かうリンクで結\\ぶ．
+リンクには，次の選好によって照応関係の評価点を与える．
+\begin{enumerate}
+\item $X$と$Y$の意味素性の間に上位下位関係にあるかどうかが不明である場
+合，評価点は0\\点とする．
+\item $X$と$Y$の意味素性の間に上位下位関係にあることが明確にわかってお
+り，かつ，$X$と\\$Y$の陳述縮約度が共に7以下である場合，評価点は1点とする．
+\item $X$と$Y$の意味素性の間に上位下位関係にあることが明確にわかってお
+り，かつ，$X$ま\\たは$Y$の陳述縮約度が8以上である場合，評価点は2点とする．
+\end{enumerate}
+
+テキストのある解釈の照応関係に関する選好による評価点は，その解釈を構
+成するリンクの評価点の和とし，その値が最も高い解釈を照応関係に関する選
+好による最良解釈とする．
+
+\subsection{解釈の総合評価}
+\label{sec:twg:balance}
+
+テキストの解釈は，照応関係に関する選好による評価の他に，構文構造に関す
+る選好と意味的親和性に関する選好による評価を受ける．
+これら三つの選好による各評価を組み合わせた総合的な評価は，次式を用いて
+行なう．
+\begin{equation}
+S = W_{\SYN} \times S_{\SYN} + W_{\SEM} \times S_{\SEM} + W_{\COR}
+\times S_{\COR}
+\label{eq:balance}
+\end{equation}
+ここで，$S_{\SYN}$，$S_{\SEM}$，$S_{\COR}$は，それぞれ，構文構造，意味
+的親和性，照応関係に関する選好に\\よる評価点であり，
+$W_{\SYN}$，$W_{\SEM}$，$W_{\COR}$は各評価点についての相対的重要度であ
+る．
+
+各選好による解釈の評価の間には相互に依存関係があり，それらが相容れない
+場合もある．
+すなわち，AND/ORグラフからある構文構造を選ぶと，意味的親和性に関する選
+好と照応関係に関する選好による評価の対象を，その構文構造に属する節点に
+限定したことになるが，最良の構文構造に属する節点から素性構造の最良の単
+一化結果を得るとは限らない．
+また，意味的親和性に関する選好による素性構造の単一化結果と照応関係に関
+する選好による素性構造の単一化結果とは，必ずしも相容れない．
+例えば，ある用言が[sbj:[sem:H]]
+\footnote{ある素性が可能な素性値のすべてをとる場合，その素性と素性値を
+省略する．
+ここでは，per，gen，numを省略した．}
+という格構造を持ち，その用言の主語である節点$X$が
+\FEATS{3rd}{\{m,f,n\}}{sg}{\{A,H\}}という素性構造を持つとする．
+さらに，\FEATS{3rd}{n}{\{sg,pl\}}{A}という素性構造を持ち，$X$との間で
+構文構造に関する制約と陳述縮約度に関する制約を満たす節点$Y$が存在する
+とする．
+このとき，$X$が$Y$と照応関係にないと解釈すると，$X$の素性構造は\\用言が
+要求する素性構造と単一化できるが，$X$が$Y$と照応関係にあると解釈すると，
+$X$と$Y$の\\素性構造を単一化した結果，$X$の素性構造は
+\FEATS{3rd}{n}{sg}{A}となるので用言からの要求を満たさなくなる．
+
+各選好による最良解釈が相容れない場合，どの選好による解釈を優先させるか
+は，主に総合評価式(\ref{eq:balance})における相対的重要度
+$W_{\SYN}$，$W_{\SEM}$，$W_{\COR}$に依存する．
+これらは経験的に決定する．
+
+\section{意味・照応解析機構}
+\label{sec:lazy}
+
+TWGに基づく意味解析と照応解析を実現するために，AND/ORグラフ上での遅延
+評価による優先度計算機構\cite{Tamura91,Sugiyama94}を応用する．
+図\ref{fig:andorstream}に示すように，
+AND/ORグラフの枝をストリームに対応させて，解釈をストリーム要素として表
+し(\ref{sec:lazy:streamelem}節)，
+節点で行なうストリーム操作として意味解析と照応解析を実現する
+(\ref{sec:lazy:gen}節)．
+ストリーム操作は遅延評価(要求駆動)によって制御する．
+処理の概要は次のようになる．
+まず，解釈を求めるための要求を根節点から終端節点へ向けて送る．
+要求が終端節点に到達すると，そこで初期ストリーム要素を生成し，総合評価
+点の降順に親節点へ送る．
+非終端節点では，子節点から来たストリーム要素に対して操作を行ない，その
+結果を総合評価点の降順に親節点へ送る．
+そして，根節点で得るストリームの第一要素を，AND/ORグラフ全体で総合評価
+点が最も高い解釈とみなす．
+\begin{figure}[htbp]
+\begin{center}
+\epsfile{file=andorstream.eps,width=0.45\textwidth}
+\end{center}
+\caption{AND/ORグラフとストリームの対応}
+\label{fig:andorstream}
+\end{figure}
+
+意味・照応解析系への入力であるAND/ORグラフには，ゼロ照応詞が補ってある
+ものとする． 
+ただし，この段階では，どの格要素を補う必要があるかがわかっているだけで
+ある．
+補った格要素を具体的にどの照応詞として英訳するかは，意味・照応解析によっ
+て決まる．
+関係節として英訳しなければならない従属節に格要素を補う場合，その従属節
+を支配する主名詞が従属節内でどの格要素になるかを判定した後，すなわち適
+切な関係詞を選択した後でないと，従属節にどの格要素を補うかは決めること
+はできない．
+
+\subsection{解釈の表現}
+\label{sec:lazy:streamelem}
+
+ストリームの要素は，
+\ELEM{S_{\SYN}}{S_{\SEM}}{S_{\COR}}{D_{\SYN}}{D_{\SEM}}{D_{\COR}}とい
+う形式をした評価点と解釈の対である．
+解釈は，構文構造記述$D_{\SYN}$，意味的親和性記述$D_{\SEM}$，照応関係記
+述$D_{\COR}$から成る．
+総合評価点は，各記述の評価点$S_{\SYN}$，$S_{\SEM}$，$S_{\COR}$から，\\総
+合評価式(\ref{eq:balance})によって求める．
+AND/ORグラフ上の節点$X$で得るストリームの第$i$要素が，$X$で得うる全解
+釈のうち総合評価点が第$i$番目に高いと処理機構が判断した解釈を表す．
+
+構文構造の記述には，OR子供リスト(OR child list)\cite{Tamura91}を用いる．
+OR子供リストは，AND/ORグラフ上の各OR節点の子節点全体の部分集合を，OR節
+点の辞書式順序に従って並べたリストである．
+OR子供リストによって，AND/ORグラフの中から特定の構文構造を選び出すこと
+ができる．
+例えば，次の二つの文から成るテキスト\ref{TEXT:pig}から得るAND/ORグラフ
+\footnote{節点`4.sent'〜`7.sent'に対応する翻訳は，次の通りである．
+\newcounter{myctr1}
+\begin{list}{}{\parsep -3pt \itemsep 0pt \topsep -15pt
+\usecounter{myctr1}\addtocounter{myctr1}{3}
+\renewcommand{\makelabel}{}}
+\item He has strong likes and dislikes. 
+\item As for him, $\phi_{\SBJ}$ \{have/has\} strong likes and dislikes.
+\item As for him, likes and dislikes have strong one .
+\item As for him, likes and dislikes are strong.
+\end{list}
+}
+(図\ref{fig:andor})において，実線の構文構造はOR子供リスト[4.sent,
+8.sent]で表せる．
+\begin{TEXT}
+\text 彼は好き嫌いが激しい．豚は食べる．\label{TEXT:pig}
+\end{TEXT}
+このOR子供リストは，OR節点`2.sentence'で子節点`4.sent'を選び，OR節点
+`3.sentence'で子節点`8.sent'を選ぶこと，すなわち，`25.彼'を第一文の主
+語(`11.sbj')，`26.好き嫌い'を目的語(`13.sobj')と解釈し，`29.豚'を第二
+文の目的語(`19.obj')と解釈することを意味する．
+OR子供リストは，意味・照応解析を行なう前に，AND/ORグラフ上の各節点に与
+えておく．
+節点$X$に与えたOR子供リストは，$X$を含む構文構造を表す．
+すなわち，$X$より
+下位の構造についての局所的情報だけでなく，上位の構造についての大局的な
+情報も表せる．
+\begin{figure}[htbp]
+\begin{center}
+\epsfile{file=andor.eps,width=\textwidth}
+\end{center}
+\caption{テキスト\protect\ref{TEXT:pig}のAND/ORグラフ}
+\label{fig:andor}
+\end{figure}
+
+照応関係記述は，AND/ORグラフ上の節点間の照応関係を表す有向グラフの集合
+である．
+以降，この有向グラフを照応関係グラフと呼ぶ．
+ある照応関係グラフに属する節点は，意味に関する制約
+を満たし，どの二つの節点も互いに単一化可能
+な素性構造を持つ． 
+各節点の素性構造を単一化した結果が，照応関係グラフの素性構造となる．
+ある照応関係グラフに属する二つの節点$X$と$Y$が，構文構造に関する制約
+と陳述縮約度に関する制約
+を満たしているとき，二つ\\の節点を$Y$から$X$
+へのリンクで結ぶ．
+一般に，照応関係グラフは次の形式で表せる．
+\[
+\left[
+\begin{array}{l}
+  素性構造 \\
+  \left[
+  \begin{array}{l}
+    \left[\ X_{1,1},\,X_{1,1}を指す節点の集合\ \right] \\
+    \multicolumn{1}{c}{\vdots} \\
+    \left[\ X_{1,p_1},\,X_{1,p_1}を指す節点の集合\ \right]
+  \end{array}
+  \right] \\
+  \multicolumn{1}{c}{\vdots} \\
+  \left[
+  \begin{array}{l}
+    \left[\ X_{n,1},\,X_{n,1}を指す節点の集合\ \right] \\
+    \multicolumn{1}{c}{\vdots} \\
+    \left[\ X_{n,p_n},\,X_{1,p_n}を指す節点の集合\ \right]
+  \end{array}
+  \right]
+\end{array}
+\right]
+\]
+ここで，節点$X_{i,j+1}$は節点$X_{i,j}$の主要部である．
+以降，$X_{i,p_1}$--$X_{i,p_2}$--$\,\cdots\,$--$X_{i,p_i}$を主要部連鎖と\\呼
+ぶ．
+例えば，図\ref{fig:andor}のAND/ORグラフの根節点で得るストリームの第一
+要素(図\ref{fig:bestelem})の照応関係記述は，二つの照応関係グラフから成
+る．
+第一の照応関係グラフは，第二文に補った主語である主要部連鎖
+`22.defsbj'--`30.$\phi$'が，第一文の主語である主要部連鎖
+`11.sbj'--`25.彼'を指しており，素性構造の単一化によって，これら二つの主要
+部連鎖の素性構造を\FEATS{3rd}{m}{sg}{H}に特定できたことを意味する．
+\begin{figure}[htbp]
+\begin{center}
+\epsfile{file=bestelem.eps,width=0.8\textwidth}
+\end{center}
+\caption{テキスト\protect\ref{TEXT:pig}の最良解釈}
+\label{fig:bestelem}
+\end{figure}
+
+意味的親和性記述は，AND/ORグラフ上の節点間の意味的な親和性に関する選好
+を表す．
+意味的親和性に関する選好は，選択制限などから得る．
+用言とその格要素間の意味的親和性は，格要素が属する照応関係グラフの素性
+構造と用言の格構造に記述してある素性構造とが単一化できるかどうかによっ
+て表せる．
+単一化できる場合，その単一化結果が，格要素の属する照応関係グラフの素性
+構造となる．
+図\ref{fig:bestelem}のストリーム要素の意味的親和性記述は，`31.食べる'
+の目的語が持つべき素性構造[sem:F]と主要部連鎖`19.obj'--`29.豚'が属する
+照応関係グラフの素性構造が単一化でき，主語が持つべき素性構造
+[sem:\{A,H\}]と主要部連鎖`22.defsbj'--`30.$\phi$'が属する照応関係グラ
+フの素性構造が単一化できたことを意味する．
+
+\subsection{解釈の生成}
+\label{sec:lazy:gen}
+
+AND/ORグラフ上の各節点では，その種類に応じて次の三種類の処理を行なう．
+\begin{enumerate}
+\item 終端節点では，辞書情報などに基づいて初期ストリームを，その要素が
+総合評価点の降順に並ぶように生成し親節点に送る． 
+\item OR節点では，子節点から来るストリームを併合し，総合評価点が最も高
+い要素から順に親節点へ送る．
+\item AND節点では，子節点から来るストリーム要素に対し，構文構造を決定
+する処理と節点の素性値を決定する処理
+を行ない，総合評価
+点が最も高いと処理機構が判断した要素から順に親節点へ送る．
+素性値を決定する処理では，意味的親和性に関する選好と照応関係に関する
+制約と選好を組み合わせて用いる．
+\end{enumerate}
+
+\subsubsection{構文構造の選択}
+\label{sec:lazy:gen:syn}
+
+AND/ORグラフの中から特定の構文構造を選ぶには，OR子供リストの連言を求
+めればよい． \hspace*{-0.5mm}節点$Z$\hspace*{-0.1mm}が子節点$X_1,\,X_2,\,\cdots,\,X_n$\hspace*{-0.1mm}を持つとき，
+\hspace*{-0.3mm}$Z,\,X_1,\,X_2,\,\cdots,\,X_n$\hspace*{-0.1mm}それぞれのOR子供リス\\トの連言が$Z$
+での構文構造記述となる．
+連言が空になれば，それはいかなる構文構造も表せない．
+構文構造に関する選好による評価点は，構文解析によって各節点に与えておく．
+
+\subsubsection{意味的親和性による素性値の選択}
+\label{sec:lazy:gen:sem}
+
+用言とその格要素の間の意味的親和性の照合は，用言節点からのストリームと
+格要素節点からのストリームが初めて出会う節点で行なう．
+上位下位関係を記述した意味体系を参照して，用言の格構造に記述してある選
+択制限と格要素の素性構造とを照合し，その結果に応じて評価点を与える．
+
+選択制限に違反する解釈も必要に応じて生成する．
+否定文や比喩などは選択制限に違反してもよいからである．
+また，照応関係に関する選好との相互作用があるからである．
+例えば，意味素性Hと上位下位関係にある主要部連鎖を主語に要求する用言で
+ある終端節点からは，まず
+\ELEM{S_{\SYN}}{10}{S_{\COR}}{D_{\SYN}}{\mbox{[[sbj:[sem:H]]]}}{D_{\COR}}
+というストリーム要素が来る．
+さらに，第二要素として
+\ELEM{S_{\SYN}}{-4}{S_{\COR}}{D_{\SYN}}{\mbox{[[sbj:[sem:not(H)]]]}}{D_{\COR}}
+が来る．
+この用言の主語が属する照応関係グラフの素性構造と第一要素の意味的親和性
+記述との照合によって，選択制限を満たす場合の解釈を生成する．
+素性構造と意味的親和性記述が単一化可能であれば，評価点10点を与える．
+第二要素を用いた処理によって，選択制限に違反する場合の解釈を生成する．
+
+\subsubsection{照応関係による素性値の選択}
+\label{sec:lazy:gen:cor}
+
+節点$Z$で，その子節点から来るストリーム要素の照応関係記述を結合して，
+新たな照応関係記述を得る問題は，一種の結婚問題とみなせる．
+$Z$の一方の子節点から来る照応関係記述
+$\{\,G_1,\,G_2,\,\cdots,\,G_g\,\}$を男性の集合とし，他方の子節点から来
+る照応関係記述$\{\,L_1,\,L_2,\,\cdots,\,L_l\,\}$を女性の集合とする．
+照応関係グラフ$G_j\,(j = 1,\,2,\,\cdots,\,g)$と$L_k\,(k =
+1,\,2,\,\cdots,\,l)$が単一化可能な素性構造を持つとき，男性$G_j$と女性
+$L_k$が知合いであるということにし，各男性は何人かの女性と知合いである
+とする．
+互いに知合いの男女は結婚することができる．
+ただし，重婚は認めない．
+結婚した$G_j$と$L_k$が新たな一つの照応関係グラフ$GL$となる．
+
+照応関係グラフ$G_j$と$L_k$の持つ素性構造を単一化して得る素性構造を，
+$GL$の素性構造とす\\る．
+$G_j$に属する節点$X$と$L_k$に属する節点$Y$が構文構造に関する制約と陳述
+縮約度に関する制\\約を満たし
+ているとき，\hspace*{-0.2mm}$Y$から$X$へ向かうリンクで結ぶ．
+\hspace*{-0.3mm}$GL$の評価点は，\hspace*{-0.2mm}$G_j$の評価点と$L_k$の\\評価点の和に，$G_j$に属する節点
+と$L_k$に属する節点を結ぶ各リンクの評価点(\ref{sec:twg:eval}節)を加えた
+値\\である．
+
+各男女は，知合いの異性と必ず結婚しなければならないというわけではなく，
+独身であってもよい． 
+節点$Z$では独身であるほうが，将来($Z$より上位の節点で)，より良い(評価
+点が高くな\\る)異性を見つけることができるかもしれないからである．
+また，意味的親和性に関する選好との相互作用があるからである． 
+
+節点$Z$の各子節点から来る照応関係記述を結合して得た照応関係記述に$Z$を
+加えたものを，最終的に$Z$での照応関係記述とする．
+$Z$で得た照応関係記述を構成する照応関係グラフのいずれかは，$Z$の主要部
+である主要部連鎖を含んでいる．
+この主要部連鎖に$Z$を加え，この主要部連鎖を含む照応関係グラフの素性構
+造と$Z$の素性構造を単一化する．
+ここで$Z$を照応関係記述に加えることによって，AND/ORグラフ上の非終端節
+点も以降の照応解析の対象となる．
+
+図\ref{fig:andor}のAND/ORグラフ上の根節点`1.text'で照応関係記述を求め
+る処理は，次のようになる．
+二つの子節点`2.sentence'と`3.sentence'からは，図\ref{fig:cor}の照応関
+係記述が来る．
+これら二つの照応関係記述において，単一化可能な素性構造を持つのは，主要
+部連鎖`11.sbj'--`25.彼'を含む照応関係グラフと主要部連鎖
+`22.defsbj'--`30.$\phi$'を含む照応関係グラフである．
+これら二つの照応関係グラフを結合すれば，図\ref{fig:bestelem}のストリー
+ム要素の照応関係記述を得る．
+なお，図\ref{fig:bestelem}では，主要部連鎖を一つしか含まず，意味的親和
+性記述との関連がない照応関係グラフは，簡単のため省略した．
+二つの照応関係グラフを結合しなければ，主要部連鎖`11.sbj'--`25.彼'と
+主要部連鎖`22.defsbj'--`30.$\phi$'が照応関係にないとする解釈を得る．
+\begin{figure}[htbp]
+\begin{center}
+\epsfile{file=cor.eps,width=0.95\textwidth}
+\end{center}
+\caption{テキスト\protect\ref{TEXT:pig}のAND/ORグラフの根節点に到達す
+る照応関係記述}
+\label{fig:cor}
+\end{figure}
+
+\vspace*{-0.3mm}
+\subsection{解釈生成の保留}
+\label{sec:lazy:suspend}
+\vspace*{-0.2mm}
+
+テキスト全体での最良解釈は，テキストの断片に対する最良解釈を単純に合成
+したものとは限らない．
+ある断片に対する解釈としてはあまり良くない解釈が，テキスト全体として見
+ると最も相応しくなることもある．
+このため，全体で最良解釈を得るためには，最悪の場合，断片に対する可能
+な解釈をすべて生成しなければならない．
+しかし，人間は，テキストのある断片に膨大な解釈の可能性がある場合でも，
+それらを同時にすべて保持するのではなく，局所的に評価点が高い少数の解釈
+だけを念頭において，それ以降へ読み進む\cite{Tsujii88}．
+このような人間の言語処理を部分的にではあるが模倣する
+\footnote{本稿の処理機構は入力テキスト全体に対する構文解析が完了した
+後に起動されるため，形態素解析から照応解析までを統合的に実行すると考え
+られる人間の言語処理を完全に模倣するものではない．}
+ために，評価点の低い解釈の生成は必要になるまで行なわないようにする．
+
+AND節点にその親節点から，解釈を生成するよう要求が来ると，まず，AND節点
+で得る解釈の総合評価点を推定する．
+次に，解釈を一つを生成し，その総合評価点が推定値より低くなければ，その
+解釈を親節点に送り，残りの解釈の生成は保留する．
+もし総合評価点が推定値より低ければ，推定値よりも低くない総合評価点を持
+つ要素が現れるまで，次の解釈の生成，その次の解釈の生成と続ける．
+保留した処理は，次の解釈を求める要求が親節点から来たときに再開する．
+
+OR節点にその親節点から，解釈を生成するよう要求が来ると，OR節点の各子節
+点で得る解釈の総合評価点を推定し，それらのうち推定値が最大となる子節点
+での処理を優先的に行なう．
+
+\section{実験}
+\label{sec:experiment}
+
+本テキスト解析手法をSun SPARCstation IPX上でSICStus Prolog2.1を用いて実
+装し，小規模の実験を行なった．
+遅延評価は，SICStus Prolog 2.1の{\tt block}宣言を用いて実現した．
+
+今回の実験では，解釈の総合評価式(\ref{eq:balance})における相対的重要度
+$W_{\SYN}$，$W_{\SEM}$，$W_{\COR}$を，訓練用テキストの分析結果に基づい
+て，それぞれ21，3，1とした．
+また，解釈の総合評価点の推定は，次式を用いて行なった．
+\[ E = W_{\SYN} \times S_{\SYN} + W_{\SEM} \times E_{\SEM} + h \times
+W_{\COR} \times E_{\COR} \]
+$E_{\SEM}$は，照応関係に関する選好との相互作用を考えないときの意味的親
+和性に関する選好による評価点の推定値である．
+$E_{\COR}$は，意味的親和性に関する選好との相互作用を考えないときの照応
+関係に関する選好による評価点の推定値であり，次のような方法で求めた．
+実際に照応解析\\を行なう場合，AND/ORグラフ上のすべての節点が処理の対象と
+なるが，$E_{\COR}$を求める場合は終端節点だけを対象とした．
+また，実際に照応解析を行なう場合，二つの照応関係グラフ$G_j$と$L_k$を結
+合して得た新たな照応関係グラフ$GL$の素性構造は$G_j$\hspace*{-0.1mm}と\hspace*{-0.1mm}$L_k$の素性構造の
+連言である\\が，推定を行なう場合は$G_j$と$L_k$の素性構造の選言を$GL$の素
+性構造とした．
+$h$は0.4とした．
+
+訓練用テキストとは異なる五つのテキスト(表\ref{tab:text})を対象として，
+部分的解釈の再利用と解釈生成の保留を行なう本手法と，いずれも行なわない
+全解探索法，それぞれの処理時間(SICStus Prologのruntime)とメモリ使用量
+(global stack)を測定した．
+その結果を，全解探索法に対する本手法の性能比と共に，表\ref{tab:result}
+に示す．
+表\ref{tab:result}からわかるように，処理時間は，いずれのテキストでも本
+手法の方が全解探索法より短く，テキストの可能な解釈の数が増えるにつれ，
+両手法の差は広がる．
+メモリ使用量は，可能な解釈の数が比較的少ないテキストc.では全解探索法の
+ほうが少ないが，それ以外では本手法のほうが少なく，可能な解釈の数が増え
+るにつれ，両手法の差は広がる．
+\begin{table}[htbp]
+\caption{実験に用いたテキスト}
+\label{tab:text}
+\begin{center}
+\begin{tabular}{r|p{0.8\textwidth}} \hline
+&\multicolumn{1}{|c}{テキスト}\\\hline\hline
+a.&彼は好き嫌いが激しい．豚は食べる．\\
+b.&トナー工場が生産を開始しました．八月にはフル稼働体制に移ります．\\
+c.&明日は梅雨前線が次第に北上する．このため，東日本では雨が降るだろう．\\
+d.&携帯電話の市場が開放されました．今後，誰でも自由に販売することがで
+きます．\\
+e.&学生によるボランティア活動が始まりました．学校近くの駅前広場を毎朝
+清掃します．\\\hline
+\end{tabular}
+\end{center}
+\end{table}
+\begin{table}[htbp]
+\caption{処理時間とメモリ使用量}
+\label{tab:result}
+\begin{center}
+\begin{tabular}{|r|r|r|r|r|r|r|r|} \hline
+&&\multicolumn{3}{c@{}|}{runtime (msec.)}
+&\multicolumn{3}{c@{}|}{global stack (bytes)} \\\cline{3-8}
+\multicolumn{1}{|c|}{\raisebox{1.5ex}[0pt]{番号}}&
+\multicolumn{1}{|c|}{\raisebox{1.5ex}[0pt]{解釈総数}}&
+\multicolumn{1}{|c|}{全解探索}&\multicolumn{1}{|c|}{本手法}
+&\multicolumn{1}{|c|}{性能比}&
+\multicolumn{1}{|c|}{全解探索}&\multicolumn{1}{|c|}{本手法}
+&\multicolumn{1}{|c|}{性能比}\\\hline\hline
+a.&1584&63539 &2170&0.03&1689916&358452&0.21\\
+b.&740 &10550 &379 &0.04&1770456&104104&0.06\\
+c.&32  &1450  &590 &0.41&  67792&121932&1.80\\
+d.&8720&247210&2900&0.01&6373792&326404&0.05\\
+e.&240 &5379  &699 &0.13& 423016&189280&0.45\\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+AND/ORグラフの根節点で得たストリームの第一要素がTWGによって定義される
+最良解釈に一致しているかどうかを調べたところ，テキストb.では第一要素は
+総合評価点が第6番目に高い解釈になっていたが，それ以外のテキストでは第
+一要素がTWGによる最良解釈であった．
+
+次に，TWGによる最良解釈が人間による最良解釈に一致するかどうかを調べた
+ところ，テキストb.以外では一致していた．
+テキストb.の人間による最良解釈では「トナー工場」と第二文のゼロ照応詞
+「$\phi_{\SBJ}$」との間に照応関係が成り立つだろうが，TWGによる最良解釈
+では「生産」と「フル稼働体制」と「$\phi_{\SBJ}$」との間に照応関係が成
+り立っていた．
+実験に用いた意味素性の分類が91分類と粗く，「生産」と「フル稼働体制」の
+素性構造が単一化できることが原因である．
+
+\section{おわりに}
+\label{sec:conclusion}
+
+本稿では，構文構造，意味的親和性，照応関係に関する選好を組み合わせてテ
+キストの可能な解釈を総合的に評価し，最良解釈を定義する文法TWGと，TWGを
+効率良く解釈実行するために，部分的解釈の再利用と解釈生成の保留を行なう
+処理機構について述べ，実験を通じて本テキスト解析手法の有効性を確認した．
+実験結果によれば，テキストの可能な解釈の数が増えるにつれ，本手法と全解
+探索法の性能差が広がることが明らかになった．
+本手法の有効性は，実験に用いたテキストよりも複雑で，可能な解釈の数もよ
+り多い現実の標準的なテキストの解析において，より顕著になろう．
+
+テキストの構造体の間で照応関係が成り立つかどうかをより正確に判定するた
+めには，より詳細な意味体系を用いることと，意味合成の枠組みを実現するこ
+とが必要である．
+より詳細な意味体系を用いれば，テキストの構造体がAND/ORグラフ上の終端節
+点に対応する場合に，照応関係をより正確に判定できるようになる．
+非終端節点の素性構造を終端節点の素性構造から求める意味合成の枠組みが実
+現できれば，構造体が非終端節点に対応する場合に，より正確な判定が可能と
+なる．
+これまでに提案されている，式の連言結合と式に含まれる項の単一化に基づく
+意味合成の手法\cite{Kato91}などを本テキスト解析手法で利用できないかを
+検討し，意味合成の枠組みを実現することが今後の課題である．
+
+\acknowledgment
+第一稿に対し，有益な助言を下さった査読者の方に感謝いたします．
+
+\bibliographystyle{jnlpbbl}
+\bibliography{twin}
+
+\begin{biography}
+\biotitle{略歴}
+\bioauthor{吉見 毅彦}{1987年電気通信大学大学院計算機科学専攻修士課程修了．
+現在，シャープ(株)情報商品開発研究所にて機械翻訳システムの研究開発に従事．
+在職のまま，1996年より神戸大学大学院自然科学研究科博士課程在学中．}
+\bioauthor{Jiri Jelinek}{チェコのプラハのUniversita Karlova卒業(言語学・英
+語学・日本語学)．1959年以来，日英機械翻訳実験中．
+英国Sheffield大学日本研究所専任講師を1995年退職．
+1992年より1996年までシャープ専任研究員．}
+\bioauthor{西田 収}{1984年大阪教育大学教育学部中学校課程数学科卒業，同年よ
+り神戸大学工学部応用数学科の教務補佐員として勤務．
+1987年シャープ（株）に入社．
+現在は，同社の情報商品開発研究所に所属．
+主に，機械翻訳の研究に従事．
+情報処理学会会員．}
+\bioauthor{田村 直之}{1985年神戸大学大学院自然科学研究科システム科学専攻
+博士課程修了．
+学術博士．
+同年，日本アイ・ビー・エム(株)に入社し東京基礎研究所に勤務．
+1988年神戸大学工学部システム工学科助手．
+講師を経て，現在同大学大学院自然科学研究科助教授．
+論理型プログラミング言語，線形論理などに興味を持つ．
+著書に「Prologプログラミング入門」(オーム社，共著)．
+情報処理学会，日本ソフトウェア科学会，システム制御情報学会，ACM，IEEE
+各会員．}
+\bioauthor{村上 温夫}{1952年大阪大学理学部数学科卒業．
+神戸大学理学部助手，講師，教養部助教授を経て，1968年より工学部教授．
+この間，University of Kansas客員助教授，University of New South Wales
+客員教授，Nanyang University客員教授を併任．
+1992年より甲南大学理学部教授．
+神戸大学名誉教授．
+理学博士(東京大学)．
+関数解析，偏微分方程式，人工知能，数学教育などに興味を持つ．
+著書に``Mathematical Education for Engineering Students''(Cambridge
+University Press)など．
+日本数学会，日本数学教育学会，情報処理学会，教育工学会，AMS各会員．}
+
+\bioreceived{受付}
+\biorevised{再受付}
+\bioaccepted{採録}
+
+\end{biography}
+
+\end{document}

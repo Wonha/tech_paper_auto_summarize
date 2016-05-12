@@ -1,0 +1,1150 @@
+    \documentclass[japanese]{jnlp_1.2}
+    \usepackage[dvips]{graphicx}
+\usepackage{alltt}
+\usepackage{longtable}
+
+\def\rel#1{}
+\def\mrel#1{}
+\def\izyo{}
+\def\oneof{}
+\def\extrel{}
+\def\mextrel{}
+
+\Volume{14}
+\Number{1}
+\Month{Jan.}
+\Year{2007}
+\received{2005}{6}{15}
+\revised{2006}{8}{8}
+\accepted{2006}{9}{11}
+
+\setcounter{page}{87}
+
+\jtitle{知覚的群化を利用した参照表現の生成}
+\jauthor{船越孝太郎\affiref{CS} \and 渡辺　聖\affiref{CS} \and 徳永　健伸\affiref{CS}}
+\jabstract{
+参照表現とは，特定の物体を他の物体と混同することなく識別する言語表現で
+ある．参照表現の生成に関する従来の研究では，対象物体固有の属性と異な
+る2つの物体間の関係を扱ってきた．しかし外見的特徴の差異が少なく他の物体
+との関係が対象物体の特定に用を成さない場合，従来の手法では対象物体を特
+定する自然な参照表現を生成することはできない．
+この問題に対して我々は知覚的群化を利用した参照表現の生成手法を
+提案しているが，この手法が扱える状況は強く限定されている．本論文では，
+我々が提案した手法を拡張し，より一般的な状況に対応できる参照
+表現の生成手法を提案する．18人の被験者に対する心理実験をおこない，本論文の提
+案手法を実装したシステムが適切な参照表現を生成できることを確認した．
+}
+\jkeywords{参照表現，空間記述，知覚的群化，言語生成}
+
+\etitle{Generating Referring Expressions Using \\Perceptual Grouping}
+\eauthor{Kotaro Funakoshi\affiref{CS} 
+	\and Satoru Watanabe\affiref{CS} 
+	\and Takenobu Tokunaga\affiref{CS}} 
+\eabstract{
+Referring expressions are the linguistic representations that
+identify the referent among objects. Past work
+of generating referring expressions mainly utilized attributes of
+objects and binary relations between objects. However, such an
+approach does not work well when there is no distinctive attribute
+among objects.
+To overcome this limitation, we proposed a
+generation method using perceptual grouping of objects.
+However, this method can deal with very limited situations. This paper
+proposes an extended method using perceptual grouping that can deal with 
+more general situations.
+The psychological experiments with 18 subjects showed that the
+extented method could effectively generate proper referring
+expressions.
+}
+\ekeywords{Referring Expression, Spatial Description, Perceptual Grouping, Language Generation}
+
+\headauthor{船越，渡辺，徳永}
+\headtitle{知覚的群化を利用した参照表現の生成}
+
+\affilabel{CS}{東京工業大学大学院情報理工学研究科計算工学専攻}{
+	Department of Computer Science,
+	Graduate School of Information Science and Engineering,
+	Tokyo Institute of Technology}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}\label{sec:Introduction}
+
+
+参照表現の生成は自然言語処理の重要なタスクの1つであり~\cite{BD2003}，多
+くの研究者により様々な手法が提案されてき
+た~\cite{DA1985,RD1991,RD1992,RD1995,EK2002,EK2003}．
+
+参照表現生成に関する従来の研究は，主に対象物体固有の属性
+と他の物体との関係
+を扱ってきた．ただし，他の物体との関係は2項関係のみである．そのため従来
+の手法では，指示すべき物体とその他の物体との間に外見的特徴の差異が少な
+く，他の物体との2項関係も弁別の用を成さない状況において，適切な参照表現
+を生成することができない．ここで適切な参照表現とは，自然で過度な冗長性
+のない表現のことを言う．
+
+\begin{figure}[b]
+  \begin{center}
+    \includegraphics{14-1ia5f1.eps}
+  \end{center}
+  \caption{従来手法で表現生成が困難な例}\label{fig:Problem}
+\end{figure}
+
+例として，図~\ref{fig:Problem}において対象物体$c$を人物$P$に示すことを考
+える．対象物体$c$は，外見からは物体$a$や物体$b$から区別することができな
+い．そこで次の方策として，対象物体$c$とテーブルとの間の関係を用いること
+が考えられる（例えば，「テーブルの右の玉」）．しかし，物体$a$も物体$b$
+もテーブルの右にあるため，この状況においては「$X$の右の$Y$」という関係
+に弁別能力はない．テーブルの代わりに物体$a$や物体$b$を参照物として使う
+ことも意味がない．なぜなら物体$a$および物体$b$は物体$c$が一意に特定でき
+ないのと同じ理由によって一意に特定することができないからである．このよ
+うに，物体の属性と2項関係のみを用いる従来の手法では参照表現の生成に失敗
+する．手法によっては「玉の前の玉の前の玉」のような論理的には誤りでない
+表現を生成できるが，適切な参照表現ではない．このような状況は今まで注目
+されてこなかったが，物体配置の様な状況（例えば\cite{TH2004}）では頻繁に
+起こりうる．この場合，「一番手前の玉」という表現が自然かつ簡潔であると考
+えられる．このような参照表現を生成するためには，話し手は知覚的に特徴の
+ある物体群を認識し，群に含まれる物体の間の$n$項関係を用いる必要がある．
+
+この問題に対し，我々は知覚的群化~\cite{KT1994}を用いて物体群を認識し，
+物体群の間の関係を用いて参照表現を生成する手法を提案した~\cite{KF2006}．
+知覚的群化(perceptual grouping)とは外見的に類似した物体や相互に近接した
+物体を1つの群として認識することである．我々の提案した手法によって物体
+の$n$項関係を利用した参照表現の生成が可能となったが，この手法の想定する
+状況は同形同色同大の物体を複数配置した2次元空間という非常に限られたもの
+であったため，一般的な状況には対応できなかった．
+
+本論文では，我々が提案した手法を拡張し，従来より利用されてきた色，形，
+大きさ等の属性や2項関係も利用できる，知覚的群化に基づく参照表現の生成手
+法を提案する．\cite{KF2006}では，知覚的群化を利用して参照表現を生成する
+ために，参照表現と参照する空間の状況とを結びつけるSOG (Sequence of
+Groups)という中間表現形式を提案した．本論文では，SOGを包含関係以外の関
+係や物体の属性も表現できるように拡張する．そして拡張したSOGを用いた生成
+手法を提案し，大学生18人に対する心理実験によって実装システムが生成した
+参照表現を評価する．
+
+本論文の構成は以下の通りである．まず\ref{sec:SOG}節では\cite{KF2006}で
+提案したSOGについて説明し，その拡張を行なう．\ref{sec:Generation}節では拡
+張したSOGを用いて知覚的群化に基づく参照表現生成手法を提案する．そして提
+案手法の評価と考察を\ref{sec:EvalAndDiscussion}節に示す．最後
+に\ref{sec:Conclusion}節で本論文の結論と今後の課題を述べる．
+
+
+\section{SOG}\label{sec:SOG}
+
+我々は，参照する空間の状況と対象物体を特定する参照表現との間の中間表現
+として，SOG (Sequence Of Groups)を提案した~\cite{KF2006}．これは，物体
+全体の群$G_{0}$から始まり対象物体のみを含む物体群$G_{n}$に至る物体群の
+列を表現したものである．日本語では，物体全体からより小さな物体群へ参照
+範囲を絞り込みながら対象物体を特定する．SOGはこの絞り込みの過程を抽象化
+したものである．SOG中の物体群の順序は主要部後置型である日本語における群
+の表現順序に対応する．
+
+\cite{KF2006}で想定している状況は同形同色同大の物体を複数配置した2次元
+空間であったため，物体群の間の関係は空間的関係のみであった．したがって
+群間の関係を明示する必要はなく，SOGは以下のように定式化されている．
+\[
+  \mbox{SOG}: [G_{0}\ G_1\ \dots\ G_{n}]
+\]
+ここで$G_x$は物体群であり，$G_0$は物体全体の群，$G_n$は対象物体のみを含
+む群である．また群間の関係は空間的な絞り込みの関係（内部参照関係）のみ
+を利用している．
+
+本論文では色，形，大きさ等の属性情報も利用した参照表現の生成を
+目的とするため物体群の間の関係が多様化する．そこで我々はSOGの群間に関係
+を挿入する．
+拡張したSOGは以下のように定式化できる．
+\[
+ \mbox{SOG}: [G_{0}\ R_{0}\ G_1\ R_1\ \dots\ G_{i}\ R_{i}\ \dots\ R_{n-1}\ G_{n}]
+\]
+ここで，$R_x$は群間の関係を示している．以後，断りなしにSOGという場合は，
+この拡張したSOGを指す．
+
+
+\subsection{群間の関係}
+
+$R_{i}$は群$G_{i}$と群$G_{i+1}$を結ぶ関係を表す．関係には内部参照関係と
+外部参照関係の2種類がある．
+
+\begin{itemize}
+\item{内部参照関係}\\
+  群$G_{i}$から$G_{i+1}$への絞り込みの関係であり，$G_{i}\supset
+  G_{i+1}$となる．内部参照関係は，絞り込みに利用する
+  素性の種類に応じて下位範疇に細分類できる．これらの下位範疇を以下の記号で表す．\\
+
+\begin{tabular}{cl}
+  \rel{type}&: 物体のタイプ\\
+  \rel{space}&: 位置関係\\
+  \rel{shape}&: 物体の形\\
+  \rel{color}&: 物体の色\\
+  \rel{size}&: 物体の大きさ
+\end{tabular}\\
+
+\item{外部参照関係}\\
+  $G_{i}\cap G_{i+1}=\phi$となり，この関係は空間的な関係に限られる．外
+  部参照関係は記号{\extrel}によって表す．
+\end{itemize}
+\bigskip
+
+以上より，$R_{i}$は以下のように定式化できる．
+\[
+  R_{i}\in \{\mrel{space},\mrel{type},\mrel{shape},\mrel{color},\mrel{size},\mextrel\}
+\]
+
+図~\ref{fig:GenSample}に示す状況で，物体$b4$を指示する参照表現とその参照表
+現に対応するSOGの例を示す．全体群は$\{all\}$と略記する．下線は言語表現
+と群・関係の間の対応関係を表す．
+
+\begin{center}
+  \begin{tabular}{ll}
+  参照表現:&「\underline{手前の}$_{(1)}$\underline{机の}$_{(2)}$\underline{上の}$_{(3)}$\underline{黒い}$_{(4)}$\underline{玉}$_{(5)}$」\\
+  SOG: &[$\{all\}\ \mrel{type}\ \{t1,t2,t3\}\  \underline{\mrel{space}}_{(1)}\ 
+  \underline{\{t2\}}_{(2)}\  \underline{\mextrel}_{(3)}\  \{b3,b4\}\ 
+  \underline{\mrel{color}}_{(4)}\  \underline{\{b4\}}_{(5)}$]\\
+  \end{tabular}
+\end{center}
+
+
+\begin{figure}[hbtp]
+  \begin{center}
+    \includegraphics{14-1ia5f2.eps}
+    \caption{参照表現を生成する状況の例}
+    \label{fig:GenSample}
+  \end{center}
+\end{figure}
+
+
+
+\section{参照表現の生成}\label{sec:Generation}
+
+本論文が提案する参照表現の生成アルゴリズムは以下の4ステップから成る．
+\begin{quote}
+\begin{description}
+\item[Step~1] 知覚的群化
+\item[Step~2] SOGの生成
+\item[Step~3] 言語表現の付与
+\item[Step~4] 順位付け
+\end{description}
+\end{quote}
+以降，これらのステップをそれぞれ説明する．また，例として
+図~\ref{fig:GenSample}中の状況を利用する．
+提案手法は，物体の重なりを許すことで「〜の上の〜」という位置関係にも対応する．
+
+\subsection*{Step~1: 知覚的群化}
+
+知覚的群化は以下の5つの素性に対して行う．
+\begin{quote}
+\begin{enumerate}
+\item 物体のタイプ
+\item 物体の形
+\item 物体の色
+\item 物体の大きさ
+\item 物体の位置
+\end{enumerate}
+\end{quote}
+
+ただし，「(5) 物体の位置」に関しては以下の2種類の知覚的群化を行なう．
+\begin{quote}
+  \begin{itemize}
+  \item[(5.1)] 物体間の近接性：近接した物体を群化する．
+  \item[(5.2)] 閉包：他の物体または特定の領域に囲まれている物体を群化する．\\
+    \hskip3em 図~\ref{fig:GenSample}の例の場合，それぞれの机の上に乗っている玉を群
+    化する．
+  \end{itemize}
+\end{quote}
+
+物体間の近接性 (5.1) については，\cite{KT1994}の手法を用いて知覚的群化
+を行なう．同手法は色や大きさや形などの近接性以外の素性にも素性毎の「距
+離」を定義することによって適用可能であるが，本論文ではこれらの素性につ
+いては物体毎に予め定めたカテゴリに分類した．タイプには「机，植木，
+玉」，形には「四角，丸」，色には「赤，青，緑，黒」，大きさには「大，中，
+小」のカテゴリを用意し，Step~3で付与する言語表現もカテゴリ毎に用意した．
+
+知覚的群化に際しては「(1) 物体のタイプ」を特に重要視する．なぜなら，人は
+一般的に異なるタイプの物体を同一の物体群として捕らえることは少なく，ま
+た「タイプ」という素性はその物体を最も単純に表現できるものだからである．
+そこで本手法では，まず物体のタイプを利用した群化を行ない，それぞれのタ
+イプの物体群に対して(2)〜(5)の素性を利用した群化を行なう．
+
+Th\'{o}rissonは下の3通りの素性の組み合わせを知覚的群化の異なる方略として認めている．
+\begin{itemize}
+\item 形と近接性
+\item 色と近接性
+\item 大きさと近接性
+\end{itemize}
+つまり，Th\'{o}rissonの知覚的群化の手法では，形，色，大きさが類似しているだけでなく，
+各物体が相互に近接している場合のみそれらを群化する．しかし，視覚情報か
+ら物体の群化を行なうだけの場合，この方略は有効だが，物体群を利用し
+て参照表現を生成しようとする場合（例えば図~\ref{fig:GenSample}の状況で
+「青い2つの玉のうち」の様に青い2つの玉を群化した表現を生成したい場合），距離の離れた物体同
+士を色や形，大きさ等の素性から1つの物体群として扱うことが必要となる．
+よって本手法では，素性ごとに単独で知覚的群化を行なう．
+
+生成した各物体群には，知覚的群化の際に利用した素性に応じてラベルを付与する．
+このラベルは，次のステップのSOG生成において使用する．本手法が
+対象とする状況では，
+\{\textit{type, shape, color, size, space}\}の5つのラベルを定義する．ま
+た特別な群として，全体群と各物体単体の群も生成する．単体群に対して
+は\textit{space}ラベルを与える．全体群にはラベルは必要ない．
+下の例が示すように，一つの群は複数のラベルを持ちうる．
+
+図~\ref{fig:GenSample}の状況に対して知覚的群化を行なった結果生成される物体群を以下に示す．
+\bigskip
+
+\begin{quote}
+  \renewcommand{\arraystretch}{}
+  \begin{tabular}{lll}
+    \hline
+    素性 & ラベル & 認識された群\\ 
+    \hline
+    {\bf 全体群} & なし & $\{t1,t2,t3,p1,b1,b2,b3,b4,b5\}$\\
+    {\bf 単体群} &\textit{space}& $\{t1\},\{t2\},\{t3\},\{p1\},\{b1\},\{b2\},\{b3\},\{b4\},\{b5\}$\\
+    {\bf タイプ} &\textit{type}& $\{t1,t2,t3\},\{p1\},\{b1,b2,b3,b4,b5\}$\\
+    {\bf 形} &\textit{shape}& $\{t1,t2\},\{t3\}$\\
+    {\bf 色} &\textit{color}& $\{b1,b2\},\{b3\},\{b4,b5\}$\\
+    {\bf 大きさ} &\textit{size}& $\{b1,b3,b4\},\{b2,b5\}$\\
+    {\bf 近接性} &\textit{space}& $\{t2,t3\},\{b1,b3,b4,b5\},\{b3,b4,b5\}$\\
+    {\bf 閉包} &\textit{space}& $\{b1\},\{b3,b4\}$\\
+    \hline
+  \end{tabular}
+\end{quote}
+
+
+\subsection*{Step~2: SOGの生成}\label{subsec:MakeSOG}
+
+Step~1で生成した群をもとに，SOGを生成する．SOG生成は，自然言語生成のい
+わゆるコンテント・プランニングの段階に相当する．生成アルゴリズムを
+図~\ref{fig:makeSOG}〜図~\ref{fig:search}に示す．
+
+図~\ref{fig:makeSOG}に定義した3つの変
+数，\texttt{Target}，\texttt{AllGroups}，\texttt{SOGList}は大域変数であ
+る．\texttt{Target}は参照表現によって指示する対象
+物，\texttt{AllGroups}はStep~1で生成されたすべての群の集
+合，\texttt{SOGList}は生成されたSOGのリストであ
+る．\texttt{Target}と\texttt{AllGroups}が与えられると，関
+数\texttt{makeSOG}はすべての可能なSOGを深さ優先で生成
+し，\texttt{SOGList}に追加する．
+
+
+\paragraph{makeSOG（図~\ref{fig:makeSOG}）}
+　\texttt{makeSOG}は最初にSOGの第1要素として全体群を追加する．次に空間内
+に存在する物体のタイプの中から対象物体より顕現性が高いか等しいタイプを
+選択し，SOGを拡張する．顕現性の高い物体を優先的に手がかりとして使うこと
+により，聞き手の理解が容易になると期待できる．ここでは，大きさに着目し
+て，机，植木，ボールの順に顕現性が高いと仮定する．これを繰り返し，選択
+する物体のタイプがなくなったら終了する．
+
+\paragraph{search（図~\ref{fig:search}）}
+　この関数は生成途中のSOGを引数とする．SOGの最後の要素を
+\texttt{LastGroup}とし，以下の場合に分けて処理を行なう．
+\begin{enumerate}
+\item \texttt{LastGroup}が対象物体のみからなる単体群の場合（05--06行）\\
+  この場合SOGは完成しているので，\texttt{SOGList}にSOGを追加して終了．
+\item \texttt{LastGroup}が対象物体以外の単体群からなる場合（08--14行）\\
+  この場合は，\texttt{LastGroup}の単体群と外部参照関係によって関係付け
+  られる対象物体を含む群を探し，この群によってSOGを拡張する．まず，対象
+  物体を含み，\texttt{LastGroup}に含まれる物体（参照物体）から適切な位置
+  関係にある物体群を探し\texttt{GroupList}に代入する．適切な位置関係と
+  は，以下の条件(a)，(b)，(c)を満たすものである．ここで実装上の効率化の
+  ため，条件(a)に該当する方向を記録しておく．
+  \begin{enumerate}
+  \item 対象物体を含む群の全要素が参照物体から「奥，右奥，右，右手前，
+    手前，左手前，左，左奥，上」\footnote{参照物体の重心を原点とし，空間内
+      の人物が向いている方向を「奥」の方向として方向を8等分し，この順に
+      方向を割り当てる．}のいずれかの表現で表せる同一の方向にある．
+  \item (a)と同一の方向で，なおかつ対象物体を含む群のいずれの要素よりも参照物
+    体から近い位置に対象物体と同じタイプの他の物体が存在しない．
+  \item 対象物体を含む群はいずれかのタイプの全体群ではない．
+  \end{enumerate}
+  次に外部参照関係{\extrel}と\texttt{GroupList}の
+  中のそれぞれの物体群を追加したSOGを生成し，関
+  数\texttt{search}（図~\ref{fig:search}）を再帰的に呼び出
+  す．\texttt{GroupList}中の物体群を全て適用したら終了．
+\item \texttt{LastGroup}が対象物体を含む複数の物体を含む場合（17--26行）\\
+  この場合は，新しい素性（内部参照関係）を使って\texttt{LastGroup}をさらに絞り込む．
+  \texttt{AllGroups}中の各物体群と\texttt{LastGroup}との積集合を
+  とった群\texttt{NewG}を生成し，付与されているラベルもコピーす
+  る．\texttt{NewG}が対象物体を含むならば，その時点
+  のSOGと\texttt{NewG}を引数として関
+  数\texttt{extend}（図~\ref{fig:extend}）を呼び出す．ただ
+  し，\texttt{NewG}が重複しないように\texttt{GroupList}を利用してチェッ
+  クする．\texttt{AllGroups}中の物体群を全て適用したら終了．
+\item \texttt{LastGroup}が対象物体以外の複数の物体を含む場合（28--32行）\\
+  この場合は，当面の目標として対象物体以外の単体群を作る．
+  \texttt{AllGroups}の中から，\texttt{LastGroup}に包含される物体
+  群\texttt{Group}を選択し，それぞれの\texttt{Group}に対してその時点
+  のSOGと\texttt{Group}を引数として関
+  数\texttt{extend}（図~\ref{fig:extend}）を呼び出
+  す．\texttt{LastGroup}に包含される物体
+  群\texttt{Group}を全て適用したら終了．
+\end{enumerate}
+
+\paragraph{extend（図~\ref{fig:extend}）}
+　この関数は生成途中のSOG (\texttt{SOG})と次に追加する
+群 (\texttt{Group})を引数とする．\texttt{Group}に付与されているラベルの
+リストを\texttt{LabelList}に取り出す（ただし\textit{type}ラベルは除外
+する）．それぞれのラベルから\texttt{SOG}の末尾の物体群
+と\texttt{Group}を結ぶ関係，および\texttt{Group}を\texttt{SOG}のコ
+ピー\texttt{SOGcopy}に追加する．そして関
+数\texttt{search}（図~\ref{fig:search}）を\texttt{SOGcopy}に対して呼び出す．
+
+図~\ref{fig:GenSample}の状況において対象物体を$b1$としたときに生成される
+SOGを以下に示す．全体群は$\{all\}$と略記する．
+\begin{enumerate}
+\item $[\{all\}\ \mrel{type}\ \{t1,t2,t3\}\ \mrel{space}\ \{t1\}\ \mextrel\ \{b1\}]$
+\item $[\{all\}\ \mrel{type}\ \{t1,t2,t3\}\ \mrel{shape}\ \{t1,t2\}\ \mrel{space}\ \{t1\}\ \mextrel\ \{b1\}]$
+\item $[\{all\}\ \mrel{type}\ \{b1,b2,b3,b4,b5\}\ \mrel{space}\ \{b1\}]$
+\item $[\{all\}\ \mrel{type}\ \{b1,b2,b3,b4,b5\}\ \mrel{color}\ \{b1,b2\}\ \mrel{space}\ \{b1\}]$
+\item $[\{all\}\ \mrel{type}\ \{b1,b2,b3,b4,b5\}\ \mrel{color}\ \{b1,b2\}\ \mrel{size}\ \{b1\}]$
+\item $[\{all\}\ \mrel{type}\ \{b1,b2,b3,b4,b5\}\ \mrel{size}\ \{b1,b4,b3\}\ \mrel{space}\ \{b1\}]$
+\item $[\{all\}\ \mrel{type}\ \{b1,b2,b3,b4,b5\}\ \mrel{size}\ \{b1,b4,b3\}\ \mrel{color}\ \{b1\}]$
+\item $[\{all\}\ \mrel{type}\ \{b1,b2,b3,b4,b5\}\ \mrel{space}\ \{b1,b3,b4,b5\}\ \mrel{space}\ \{b1\}]$
+\item $[\{all\}\ \mrel{type}\ \{b1,b2,b3,b4,b5\}\ \mrel{space}\ \{b1,b3,b4,b5\}\ \mrel{color}\ \{b1\}]$
+\item $[\{all\}\ \mrel{type}\ \{b1,b2,b3,b4,b5\}\ \mrel{space}\ \{b1,b3,b4,b5\}\ \mrel{size}\ \{b1,b4,b3\}\ \mrel{space}\ \{b1\}]$
+\item $[\{all\}\ \mrel{type}\ \{b1,b2,b3,b4,b5\}\ \mrel{space}\ \{b3,b4,b5,b1\}\ \mrel{size}\ \{b1,b4,b3\}\ \mrel{color}\ \{b1\}]$
+\end{enumerate}
+
+\begin{center}
+\begin{figure}[t]
+    {\small \setlength{\baselineskip}{13pt}
+\begin{alltt}
+Target      # 対象物体
+AllGroups   # 知覚的群化によって生成された全ての群のリスト
+SOGList     # SOGのリスト
+
+01:makeSOG()
+02:  SOG = [ ];                                 # 物体群と関係を要素とするリスト
+03:  All = getAll();                            # 物体の全体群を得る
+04:  add(All, SOG);                             # SOGに追加
+05:  TypeList = getAllTypes(All);               # 物体のタイプの集合を得る
+06:  TypeOfTarget = getType(Target);            # 対象物体のタイプを得る
+07:  TargetSaliency = saliency(TypeOfTarget);   # 対象物体のタイプの顕現性
+08:  for each Type in TypeList do               # Type\oneof\{Table, Plant, Ball\}
+09:    if saliency(Type){\izyo}TargetSaliency then   # 顕現性を比較（Table>Plant>Ballを仮定）
+10:      Group = get(AllGroups, Type);          # そのタイプの全体群を得る
+11:      SOGcopy = copy(SOG);                   # SOGのコピーを作る
+12:      add(\rel{\mathtt{type}}, SOGcopy);                     # typeの関係を末尾に追加
+13:      add(Group, SOGcopy);                   # Groupを末尾に追加
+14:      search(SOGcopy);
+15:    end if
+16:  end for
+17:return
+\end{alltt}
+}
+\caption{makeSOG}
+\label{fig:makeSOG}
+\end{figure}
+
+\begin{figure}[t]
+    {\small \setlength{\baselineskip}{13pt}
+\begin{alltt}
+01:search(SOG)
+02:  LastGroup = getLastElement(SOG);      # SOGの最後に位置する物体群を得る
+03:  Card = getCardinality(LastGroup);     # 物体群の要素数を得る
+04:  if Card == 1 then
+05:    if containsTarget(LastGroup) then   # 群が対象物体を含んでいるかを調べる
+06:      add(SOG, SOGList);
+07:    else
+08:      GroupList = searchTargetGroups(LastGroup);
+           # LastGroupから適切な位置にあり，対象物体を含んでいる物体群の集合を得る
+09:      for each Group in GroupList do
+10:        SOGcopy = copy(SOG);
+11:        add(\extrel, SOGcopy);
+12:        add(Group, SOGcopy);
+13:        search(SOGcopy);
+14:      end for
+15:    end if
+16:  elsif containsTarget(LastGroup) then
+17:    Checked = [ ];
+18:    for each Group in AllGroups do
+19:      NewG = Intersect(Group, LastGrouop);  # 交差をとった群を生成
+20:      Labels = getLabels(Group);
+21:      setLabels(Labels, NewG);              # ラベルをGroupからNewGへコピー
+22:      if containsTarget(NewG) \& !contains(Checked, NewG) then
+23:        add(NewG, Checked);
+24:        extend(SOG, Group);
+25:      end if
+26:    end for
+27:  else
+28:    for each Group of AllGroups do
+29:      if contains(LastGroup, Group) then
+30:        extend(SOG, Group);
+31:      end if
+32:    end for
+33:  end if
+34:return
+\end{alltt}
+}
+\caption{search}
+\label{fig:search}
+\end{figure}
+
+\begin{figure}[t]
+    {\small \setlength{\baselineskip}{13pt}
+\begin{alltt}
+01:extend(SOG, Group)
+02:  LabelList = getLabels(Group);     # Groupに付与されている属性ラベルのリストを得る
+03:  for each Label in LabelList do    # Label\oneof\{space, shape, color, size\}
+04:    SOGcopy = copy(SOG);            # SOGのコピーを作る
+05:    add(\rel{\mathtt{Label}}, SOGcopy);              # 関係を末尾に追加
+06:    add(Group, SOGcopy);            # Groupを末尾に追加
+07:    search(SOGcopy);
+08:  end for
+09:return
+\end{alltt}
+}
+\caption{extend}
+\label{fig:extend}
+\end{figure}
+
+\end{center}
+
+
+\subsection*{Step~3: 言語表現の付与}\label{subsec:MakeExp}
+
+SOGの各要素に表現を付与することで，参照表現を生成する．表現の付与には以
+下の規則を用いる．規則1は物体群の表現を，規則2は群間の関係の表現を生成
+する規則である．それぞれの規則の中では，各下位規則は表記順に優先度が高
+いものとする．
+
+\paragraph{［規則1］：物体群に対する表現付与}
+\begin{description}
+\item[規則1.1] \textbf{全体群($\{all\}$)は言語化しない}\\
+  \cite{KF2006}で述べられているとおり，全体群が明示的に言語化されること
+  がまれであるという被験者実験の結果を参考にした．
+\item[規則1.2] \textbf{各単体群には「タイプ名」もしくは「タイプ名＋『の』」を付与}\\
+  単体群がSOGの最後の要素でない場合は，外部参照関係 (\extrel)が
+  後続するため「の」を付与する．規則2.1によりタイプの絞り込みは言語化せず，
+  単体群に対して「タイプ名」を付与することで必要な情報を言語化する．
+\item[規則1.3] \textbf{各タイプの全体群は言語化しない}\\
+  理由は規則1.1に同じ．
+\item[規則1.4] \textbf{
+後続が内部参照関
+    係$\mrel{space}$の場合，「個数＋タイプ名＋『のうち』」を付与，そ
+    の他の関係が後続する場合は言語化しない}\\
+  後続する関係が空間的な関係($\mrel{space}$
+)以外の場合，
+  その関係は名詞（タイプ名）の前の関係の列として言語化できる．例
+  えば，「大きい玉のうちの赤い玉」は「大きい赤い玉」と表現できる．
+外部参照関係については，単体群以外には後続しないので規則1.2で全て処理される．
+\end{description}
+
+\paragraph{［規則2］：群間の関係に対する表現付与}
+\begin{description}
+\item[規則2.1] \textbf{タイプの関係(\rel{type})は言語化しない}\\
+  規則1.2を参照．
+\item[規則2.2] \textbf{各関係に関係を示す表現を付与}\\
+\rel{shape},\rel{color},\rel{size}にはそれぞれの属性の値の表現を付与する．
+\extrel,\rel{space}に対する表現の付与は以下の場合分けに従って行なう．
+ここで，$|G_i|$は$G_i$の要素数を表す．
+
+\paragraph{内部参照関係($G_i\ \mrel{space}\ G_{i+1}$)}
+\begin{itemize}
+\item $|G_i|=2$のとき\\
+  絞り込みの前後で要素数は必ず少なくなるため，$|G_{i+1}|=1$である．各物
+  体の座標から，4つの表現「［右/左/手前/奥］の」のいずれかを付与する．
+\item $|G_i|\geq 3$かつ$|G_{i+1}|=1$のとき\\
+  各物体の座標を参考にし，以下の表現の妥当性をこの順に調べ，妥当な表現を付与する．
+  \begin{itemize}
+  \item[(1)]「一番［手前/奥/右/左/右手前/左手前/右奥/左奥］の」
+  \item[(2)]「真ん中の」
+  \item[(3)]「［左/右/手前/奥］から$j$番目の」
+  \end{itemize}
+\item $|G_{i+1}|\geq 2$のとき\\
+  各物体群の座標を参考にし，「［右/左/手前/奥/真ん中/右手前/左
+  手前/右奥/左奥］の」の中から妥当な表現を付与する．
+\end{itemize}
+
+\paragraph{外部参照関係($G_i \mextrel\ G_{i+1}$)}
+\begin{itemize}
+\item \texttt{search}の性質からこの場合は$|G_{i}|=1$となる．ここで
+  はStep~2のSOG生成のときに記録した方向に対応する表現（「［奥/右奥/右/右
+  手前/手前/左手前/左/左奥/上］の」）を付与する．
+\end{itemize}
+\end{description}
+
+図~\ref{fig:GenSample}の状況においてStep~2で生成したSOGに表現
+を付与すると以下のようになる．
+\begin{enumerate}\itemsep=0.8ex
+\item $[\{all\}\ \mrel{type}\ \{t1,t2,t3\}\ \underline{\mrel{space}}_{(1)}\ \underline{\{t1\}}_{(2)}\ \underline{\mextrel}_{(3)}\ \underline{\{b1\}}_{(4)}]$\\ 
+「\underline{一番左の}$_{(1)}$\ \underline{机の}$_{(2)}$\ \underline{上の}$_{(3)}$\ \underline{玉}$_{(4)}$」
+\item $[\{all\}\ \mrel{type}\ \{t1,t2,t3\}\ \underline{\mrel{shape}}_{(1)}\ \underline{\{t1,t2\}}_{(2)}\ \underline{\mrel{space}}_{(3)}\ \underline{\{t1\}}_{(4)}\ \underline{\mextrel}_{(5)}\ \underline{\{b1\}}_{(6)}]$\\ 
+「\underline{丸い}$_{(1)}$\  \underline{2つの机のうち}$_{(2)}$\ \underline{左の}$_{(3)}$\ \underline{机の}$_{(4)}$\ \underline{上の}$_{(5)}$\ \underline{玉}$_{(6)}$」
+\item $[\{all\}\ \mrel{type}\ \{b1,b2,b3,b4,b5\}\ \underline{\mrel{space}}_{(1)}\ \underline{\{b1\}}_{(2)}]$\\ 
+「\underline{一番左の}$_{(1)}$\ \underline{玉}$_{(2)}$」
+\item $[\{all\}\ \mrel{type}\ \{b1,b2,b3,b4,b5\}\ \underline{\mrel{color}}_{(1)}\ \underline{\{b1,b2\}}_{(2)}\ \underline{\mrel{space}}_{(3)}\ \underline{\{b1\}}_{(4)}]$\\
+「\underline{青い}$_{(1)}$\ \underline{2つの玉のうち}$_{(2)}$\ \underline{左の}$_{(3)}$\ \underline{玉}$_{(4)}$」
+\item
+  $[\{all\}\ \mrel{type}\ \{b1,b2,b3,b4,b5\}\ \underline{\mrel{color}}_{(1)}\ \{b1,b2\}\ \underline{\mrel{size}}_{(2)}\ \underline{\{b1\}}_{(3)}]$\\ 
+「\underline{青い}$_{(1)}$\ \underline{小さい}$_{(2)}$\ \underline{玉}$_{(3)}$」
+\item $[\{all\}\ \mrel{type}\ \{b1,b2,b3,b4,b5\}\ \underline{\mrel{size}}_{(1)}\ \underline{\{b1,b3,b4\}}_{(2)}\ \underline{\mrel{space}}_{(3)}\ \underline{\{b1\}}_{(4)}]$\\ 
+「\underline{小さい}$_{(1)}$\ \underline{3つの玉のうち}$_{(2)}$\ \underline{一番左の}$_{(3)}$\ \underline{玉}$_{(4)}$」
+\item
+  $[\{all\}\ \mrel{type}\ \{b1,b2,b3,b4,b5\}\ \underline{\mrel{size}}_{(1)}\ \{b1,b3,b4\}\ \underline{\mrel{color}}_{(2)}\ \underline{\{b1\}}_{(3)}]$\\ 
+「\underline{小さい}$_{(1)}$\ \underline{青い}$_{(2)}$\ \underline{玉}$_{(3)}$」
+\item $[\{all\}\ \mrel{type}\ \{b1,b2,b3,b4,b5\}\ \underline{\mrel{space}}_{(1)}\ \underline{\{b1,b3,b4,b5\}}_{(2)}\ \underline{\mrel{space}}_{(3)}\ \underline{\{b1\}}_{(4)}]$\\ 
+「\underline{左の}$_{(1)}$\ \underline{4つの玉のうち}$_{(2)}$\ \underline{一番左の}$_{(3)}$\ \underline{玉}$_{(4)}$」
+\item
+  $[\{all\}\ \mrel{type}\ \{b1,b2,b3,b4,b5\}\ \underline{\mrel{space}}_{(1)}\ \{b1,b3,b4,b5\}\ \underline{\mrel{color}}_{(2)}\ \underline{\{b1\}}_{(3)}]$\\ 
+「\underline{左の}$_{(1)}$\ \underline{青い}$_{(2)}$\ \underline{玉}$_{(3)}$」
+\item $[\{all\}\ \mrel{type}\ \{b1,b2,b3,b4,b5\}\ \underline{\mrel{space}}_{(1)}\ \{b1,b3,b4,b5\}\ \underline{\mrel{size}}_{(2)}\ \underline{\{b1,b3,b4\}}_{(3)}\ \underline{\mrel{space}}_{(4)}\ \underline{\{b1\}}_{(5)}]$\\ 
+「\underline{左の}$_{(1)}$\ \underline{小さい}$_{(2)}$\ \underline{3つの玉のうち}$_{(3)}$\ \underline{一番左の}$_{(4)}$\ \underline{玉}$_{(5)}$」
+\item
+  $[\{all\}\ \mrel{type}\ \{b1,b2,b3,b4,b5\}\ \underline{\mrel{space}}_{(1)}\ \{b1,b3,b4,b5\}\ \underline{\mrel{size}}_{(2)}\ \{b1,b3,b4\}\ \underline{\mrel{color}}_{(3)}\ \underline{\{b1\}}_{(4)}]$\\
+  「\underline{左の}$_{(1)}$\ \underline{小さい}$_{(2)}$\ \underline{青い}$_{(3)}$\ \underline{玉}$_{(4)}$」
+\end{enumerate}
+
+
+\subsection*{Step~4: 順位付け}\label{subsec:SetScore}
+
+出力表現を決定するために，表現中で使用された関係と表現の長さを考慮して，
+各表現にスコアを与える．
+
+最初にSOG内の各関係に対して$[0,1]$の範囲でコストを与える．関係のコスト
+は以下のように決定する．これらのコストは\cite{RD1995}で述べられている素
+性の優先順位に従う．
+
+\vspace{5mm}
+\begin{center}
+  \begin{tabular}{l@{ : }p{0.7\hsize}}
+    \hline
+    \rel{type} &（無視）\\
+    \rel{shape}& 0.2 \\
+    \rel{color}& 0.4 \\
+    \rel{size} & 「大きい」: 0.6, 「小さい」: 0.8, 「中くらいの」: 1.0 \\
+    \rel{space}, \extrel & 
+    コスト関数を\cite{TTS2005}で提案されたポテンシャル関数に従って定義した．
+    ただし，関係「〜の上にある〜」のコストは0とする．\\
+    \hline
+  \end{tabular}
+\end{center}
+\vspace{5mm}
+
+次に，関係のコスト $\mathit{cost\_rel}$ を各関係のコストの平均値として
+求める．そして表現長のコスト $\mathit{cost\_len}$ を以下の式で求める．
+表現長は文字数で測る．
+\begin{displaymath}
+  \mathit{cost\_len} = \frac{\mathrm{length(expression)}}
+  {\max_i \mathrm{length(expression_{\mathit{i}})}}
+\end{displaymath}
+
+コスト $\mathit{cost\_rel}$ 及び $\mathit{cost\_len}$ を用い，表現のス
+コア$\mathit{score}$を以下のように定める．
+\begin{displaymath}
+\mathit{score}=\frac{1}{\alpha \times \mathit{cost\_rel} +
+  (1-\alpha) \times \mathit{cost\_len}}
+\end{displaymath}
+$\alpha$の値は，次節の実験では0.5に固定した．
+
+
+図~\ref{fig:GenSample}の状況において生成した表現にコストを付与し，スコア
+の高い順に示す．各行の表現の右の数値はその表現のスコア ($\mathit{score}$, 
+$\alpha=0.5$)，括弧内の数値は左から関係のコ
+スト($\mathit{cost\_rel}$)，表現長のコスト($\mathit{cost\_len}$)で
+ある．
+\begin{flushleft}
+  \begin{tabular}{rll}
+    1.&「一番左の玉」&  3.66 (0.251, 0.294)\\
+    2.&「左の青い玉」&  2.62 (0.468, 0.294)\\
+    3.&「一番左の机の上の玉」&  2.44 (0.289, 0.529)\\
+    4.&「青い2つの玉のうち左の玉」&  2.20 (0.204, 0.706)\\
+    5.&「青い小さい玉」&  2.10 (0.600, 0.353)\\
+    6.&「小さい青い玉」&  2.10 (0.600, 0.353)\\
+    7.&「左の小さい青い玉」&  1.90 (0.578, 0.471)\\
+    8.&「丸い2つの机のうち左の机の上の玉」&  1.67 (0.259, 0.941)\\
+    9.&「左の4つの玉のうち一番左の玉」&  1.64 (0.393, 0.824)\\
+    10.&「小さい3つの玉のうち一番左の玉」&  1.42 (0.526, 0.882)\\
+    11.&「左の小さい3つの玉のうち一番左の玉」&  1.31 (0.529, 1.000)\\
+  \end{tabular}
+\end{flushleft}
+
+
+
+\section{評価と考察}\label{sec:EvalAndDiscussion}
+
+提案手法を評価するため，上記のアルゴリズムをJavaで実装し，大学生18人を
+対象に心理実験を行なった．
+
+\subsection{実験}
+
+実装システムが生成した参照表現を評価する被験者実験を実験1と実験2に分け
+て行なった．被験者は実験1の後に実験2を行なったが，それらの関連について
+は被験者には知らせていない．
+
+実験に使用した20布置と，各布置に対して実装システムが生成した上位5つの参
+照表現を付録に示す．布置は物体の個数も位置もランダムに決定したもので，
+対象物体もランダムに選んだ．ただし布置は，参照表現が5つ以上生成され，か
+つ対象物体と同じタイプの物体が2つ以上存在するものに限定した．これは「机」
+のような1単語の表現では対象物体を特定できないようにするためである．
+
+\paragraph{実験1}
+　この実験は，システムによって生成した参照表現を人間が解釈した時に，どの
+程度正確に対象物体を同定できるかを評価するために行なった．被験者に，布
+置とその布置中の対象物体1つに対して生成した参照表現のうち最もスコアが高
+かったものを示し，その参照表現が指し示す物体を選ばせた．
+図~\ref{fig:Eval1}は実験に使用した視覚刺激の例である．
+
+\begin{figure}[t]
+  \begin{center}
+    \includegraphics{14-1ia5f6.eps}
+    \caption{実験1に使用した視覚刺激の例}
+    \label{fig:Eval1}
+  \end{center}
+\end{figure}
+
+\paragraph{実験2}
+　この実験はシステムに実装したスコア付けがどの程度人間の直感に合致して
+いるかを評価するために行なった．対象物体を明示した布置の画像と，その
+布置中の対象物体1つに対して生成した参照表現をスコアが高い順に5つ被験者
+に示し，その中で被験者が最もよいと思う表現を選ばせた．判断基準は明確に
+設定せず各自の判断に任せた．図~\ref{fig:Eval2}は実験に使用した視覚刺激
+の例である．布置は課題1と同じもの20種を使用した．被験者に示した5つの参
+照表現は実験1で評価した参照表現も含む．
+
+\begin{figure}[t]
+  \begin{center}
+    \includegraphics{14-1ia5f7.eps}
+    \caption{実験2に使用した視覚刺激の例}
+    \label{fig:Eval2}
+  \end{center}
+\end{figure}
+
+
+\subsection{結果}
+
+表~\ref{tab:Result1}に実験1の結果を示す．対象物体特定の正解率は全体
+で95.0\%であった．このことから，実装システムが生成した参照表現は高い対
+象物体特定能力をもつと言える．他の布置に比べ，布置20（付録参照）は正解率
+が低いが，これは位置の計算を直交座標系に準じて行なったためと考えられる．
+布置20中の対象物体に対して実装システムは，対象物体が垂直方向において人
+物$P$ に最も近いため，「一番手前の玉」という表現を生成している．この表
+現に対してほとんどの被験者は図中の一番右側の玉を選択した．このことから
+「一番手前」という表現では，人物$P$と物体間のユークリッド距離が最も重要
+な要素となっていると考えられる．
+
+\begin{table}[b]
+  \centering
+  \caption{実験結果: 正解率}
+  \label{tab:Result1}
+  \vspace{1mm}
+  \begin{tabular}{c|cccccccccc|c}
+   \cline{1-11}
+   布置 & 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 & 10 \\
+   正解率  & 0.89 & 1 & 1 & 1 & 1 & 1 & 1 & 0.94 & 1 & 1 \\
+   \hline
+   \hline
+   布置 & 11 & 12 & 13 & 14 & 15 & 16 & 17 & 18 & 19 & 20 & 平均  \\
+   正解率  & 1 & 0.94 & 1 & 1 & 1 & 1 & 1 & 1 & 1 & 0.17 & 0.95  \\
+   \hline
+  \end{tabular}
+    \vspace{10pt}
+  \centering
+  \caption{実験結果: 得票率}
+  \label{tab:Result2}
+  \vspace{1mm}
+  \begin{tabular}{c|ccccc|c}
+   \hline
+   表現No.  & 1 & 2 & 3 & 4 & 5 & 計 \\ \hline
+   度数  & 134 & 125 & 59 & 22 & 20 & 360 \\
+   得票率   & 0.37 & 0.35 & 0.16 & 0.06 & 0.06 & 1 \\
+   \hline
+  \end{tabular}
+\end{table}
+
+
+表~\ref{tab:Result2}に実験2の結果を示す．表現No.1〜5の順にスコアが高かっ
+た参照表現を表している．上位2位の参照表現の得票率が全体の72\%を占めてい
+ることから，本論文で提案した参照表現に対する順位付けの手法が有効である
+といえる．
+
+
+\subsection{生成能力の限界}
+提案手法で生成可能な参照表現には原理的な限界がある．その代表的な3つを以
+下に示す．
+
+\paragraph{並列表現}
+　SOGは直列的に焦点を遷移していくため，例えば「机の前で，木の左の玉」とい
+う様な並列的に他の物体を参照する表現は生成できない．また「〜と〜の間の」
+という関係を利用する表現も生成できない．この様な並列表現を生成するため
+にはSOGの更なる拡張が必要となる．
+
+\paragraph{多重に他の物体を参照する表現}
+　例えば「四角い机の左の木の奥にある玉」という表現では「机→木→玉」とい
+う順に3タイプの物体を参照するが，提案手法では対象物体と異なるタイプの物
+体を2つ以上参照するこのような表現は生成できない．しかしこの制限は，参照
+表現の簡潔さの観点から意図的に設けたものであり，Step~2のSOG生成を拡張す
+れば多重に他の物体を参照する表現は生成できる．
+
+\paragraph{複数の他の物体を参照する表現}
+　外部参照関係における焦点の遷移には，単体から群への遷移のみを定義してい
+る．そのため提案手法では，例えば図~\ref{fig:GenSample}の状況において物体$b1$に対して，
+\begin{center}
+  \begin{tabular}{ll}
+    参照表現:& 「丸い机の上の青い玉」\\
+    SOG:&  $[\{all\}\ \mrel{type}\ \{t1,t2,t3\}\ \mrel{shape}\ 
+    \underline{\{t1,t2\}\ \mextrel}\ \{b1,b3,b4\}\ \mrel{color}\ \{b1\}]$\\
+  \end{tabular}
+\end{center}
+の様に，SOG中で複数の机 (\{$t1, t2$\})を外部参照する表現を生成できない．
+これを解決するためには，SOG生成手法と表現付与の規則を工夫する必要があり，
+今後の課題である．
+
+
+\subsection{その他の課題}
+
+\paragraph{位置計算}
+　現在のシステムでは，妥当な位置表現を選択するために，直交座標系を8方向に
+分割して位置を計算するという単純な手法を使っている．適切な位置表現
+を付与するための座標系や参照枠・視点の選択方法について，今後心理実験な
+どをもとに解明する必要がある．
+
+\paragraph{簡潔性と曖昧性}
+　SOGへの表現付与の規則1.4は，物体群の言語化を省略することで表現の簡潔さ
+と自然さを得ることを目的としている．例えば「黒い3つの玉のうち小さい玉」
+という表現は規則1.4より「黒い小さい玉」という簡潔で人間がより自然と感じ
+る表現となる．しかし，「丸い2つの机のうち右の机」という表現は，一般的に
+「丸い右の机」とした方が自然であるが，この場合「2つの机のうち」という部
+分表現が表す物体群の後には「右の」という部分表現が表す群間の空間的内部
+参照関係\rel{space}が続くため規則1.4による省略は行なわれない．この例か
+ら規則1.4が一見不十分だと感じるかもしれないが，空間的内部参照関係の前の
+物体群を省略してしまうと対象物体特定に曖昧性を生じる場合がある．例えば
+図~\ref{fig:Problem2}の布置で，物体$b7$を指し示す「青い3つの玉のうち左
+から2番目の玉」という表現を省略して「青い左から2番目の玉」とすると，
+「青い玉」で「左から2番目の玉」である物体$b3$ との間に曖昧性が生じる．
+このように，対象物体を特定する情報を適切に言語化する方法にも，さらに改
+良の余地がある．
+
+\begin{figure}[htbp]
+  \begin{center}
+    \includegraphics{14-1ia5f8.eps}
+    \caption{表現を省略できない布置の例}
+    \label{fig:Problem2}
+  \end{center}
+\end{figure}
+
+\paragraph{人間が生成する表現との比較}
+　提案手法のスコア付けの手法はIncremental Algorithm~\cite{RD1995}を参考に
+人手で作成したものである．実験2の結果からスコアの高いものがよりよい表現
+として選ばれていることより，提案手法のスコア付けの手法が有効であるとい
+える．しかしながら，この結果は，実装システムが生成した参照表現が人間の
+生成する参照表現にどこまで近づけたかを示すものではない．人間が生成する
+参照表現との比較は今後の課題である．
+
+
+\section{まとめ}\label{sec:Conclusion}
+
+本論文では知覚的群化を利用した参照表現の生成手法を提案した．参照表
+現と参照される空間の状況との間の中間表現であるSOG~\cite{KF2006}を拡張し，
+空間的包含関係でない位置関係や物体の属性も扱えるようにした．
+
+提案手法を実装したシステムが生成した参照表現の対象物体特定の精度は
+95\%であった．またスコア付けによる参照表現の順位付けは被験者による高い評価を
+得た．提案手法の生成能力には制限があり，ある種の表現は原理的に生成でき
+ない．しかし，提案手法は対象を特定する表現を生成する十分な能力を備えてい
+る．
+
+
+
+
+\appendix
+
+\section*{付録：実験に用いた布置と生成された参照表現}\label{App:A}
+
+\ref{sec:EvalAndDiscussion}~節で使用した布置と生成された参照表現をスコ
+アの高い順に以下に示す．机の形や玉の色，物体の個数はランダムに決定した．
+物体の個数は以下の範囲に制限した．
+\begin{itemize}
+\item 机 :  0 〜 3 個
+\item 木 :  0 〜 2 個
+\item 玉 :  3 〜 9 個
+\end{itemize}
+対象物体もランダムに選択し，図中ではXを付けて，破線で囲んである．
+
+
+\def\arrangement#1#2{}
+
+\def\arraystretch{}
+\begin{longtable}{lcl}
+  \arrangement{1}{
+    \begin{enumerate}
+    \item 左奥の青い玉
+    \item 左から2番目の玉
+    \item 青い3つの玉のうち一番左の玉
+    \item 左奥の小さい玉
+    \item 青い大きい2つの玉のうち左の玉
+    \end{enumerate}}\\
+  \arrangement{2}{
+    \begin{enumerate}
+    \item 一番奥の玉
+    \item 緑の玉
+    \item 小さい緑の玉
+    \item 木の左の玉
+    \item 小さい2つの玉のうち奥の玉
+    \end{enumerate}}\\
+  \arrangement{3}{
+    \begin{enumerate}
+    \item 左の木の右の玉
+    \item 一番手前の玉
+    \item 左の赤い玉
+    \item 左の木の右奥の赤い玉
+    \item 左の小さい玉
+    \end{enumerate}}\\
+  \arrangement{4}{
+    \begin{enumerate}
+    \item 左の赤い玉
+    \item 赤い玉
+    \item 木の左の赤い玉
+    \item 木の左の玉
+    \item 左の2つの玉のうち奥の玉
+    \end{enumerate}}\\
+  \arrangement{5}{
+    \begin{enumerate}
+    \item 青い玉
+    \item 奥の青い玉
+    \item 丸い机の奥の玉
+    \item 丸い机の左奥の青い玉
+    \item 右の机の奥の玉
+    \end{enumerate}}\\
+  \arrangement{6}{
+    \begin{enumerate}
+    \item 一番手前の玉
+    \item 青い玉
+    \item 左の机の左の玉
+    \item 大きい青い玉
+    \item 大きい青い玉
+    \end{enumerate}}\\
+  \arrangement{7}{
+    \begin{enumerate}
+    \item 一番左奥の玉
+    \item 赤い大きい玉
+    \item 赤い2つの玉のうち奥の玉
+    \item 左の赤い大きい玉
+    \item 左の赤い2つの玉のうち奥の玉
+    \end{enumerate}}\\
+  \arrangement{8}{
+    \begin{enumerate}
+    \item 右の緑の玉
+    \item 真ん中の緑の玉
+    \item 緑の大きい玉
+    \item 大きい緑の玉
+    \item 緑の2つの玉のうち右の玉
+    \end{enumerate}}\\
+  \arrangement{9}{
+    \begin{enumerate}
+    \item 真ん中の机
+    \item 丸い大きい机
+    \item 大きい丸い机
+    \item 丸い2つの机のうち右の机
+    \item 大きい2つの机のうち左の机
+    \end{enumerate}}\\
+  \arrangement{10}{
+    \begin{enumerate}
+    \item 青い玉
+    \item 手前の青い玉
+    \item 左の青い玉
+    \item 木の右の青い玉
+    \item 木の右の青い玉
+    \end{enumerate}}\\
+  \arrangement{11}{
+    \begin{enumerate}
+    \item 右の木の右の玉
+    \item 一番手前の玉
+    \item 右の青い小さい玉
+    \item 右の小さい青い玉
+    \item 青い小さい玉
+    \end{enumerate}}\\
+  \arrangement{12}{
+    \begin{enumerate}
+    \item 左の机の右の玉
+    \item 四角い机の右の玉
+    \item 右から3番目の玉
+    \item 小さい机の右の玉
+    \item 緑の3つの玉のうち一番右手前の\\玉
+    \end{enumerate}}\\
+  \arrangement{13}{
+    \begin{enumerate}
+    \item 一番右の玉
+    \item 一番右の机の右の玉
+    \item 木の左の玉
+    \item 黒い3つの玉のうち一番右の玉
+    \item 丸い2つの机のうち右の机の右の\\玉
+    \end{enumerate}}\\
+  \arrangement{14}{
+    \begin{enumerate}
+    \item 机の右の緑の玉
+    \item 緑の玉
+    \item 右の緑の玉
+    \item 右の緑の玉
+    \item 大きい緑の玉
+    \end{enumerate}}\\
+  \arrangement{15}{
+    \begin{enumerate}
+    \item 机の上の玉
+    \item 赤い玉
+    \item 手前の赤い玉
+    \item 真ん中の玉
+    \item 真ん中の赤い玉
+    \end{enumerate}}\\
+  \arrangement{16}{
+    \begin{enumerate}
+    \item 左の玉
+    \item 丸い机の上の玉
+    \item 緑の玉
+    \item 左の丸い机の上の玉
+    \item 一番左奥の机の上の玉
+    \end{enumerate}}\\
+  \arrangement{17}{
+    \begin{enumerate}
+    \item 右の赤い玉
+    \item 赤い玉
+    \item 一番奥の玉
+    \item 右の木の右の赤い玉
+    \item 右の木の右の玉
+    \end{enumerate}}\\
+  \arrangement{18}{
+    \begin{enumerate}
+    \item 机の奥の玉
+    \item 一番右奥の玉
+    \item 緑の大きい玉
+    \item 大きい緑の玉
+    \item 緑の2つの玉のうち右の玉
+    \end{enumerate}}\\
+  \arrangement{19}{
+    \begin{enumerate}
+    \item 真ん中の青い玉
+    \item 左の机の右の玉
+    \item 四角い机の右の玉
+    \item 左の机の右手前の青い玉
+    \item 木の手前の青い玉
+    \end{enumerate}}\\
+  \arrangement{20}{
+    \begin{enumerate}
+    \item 一番手前の玉
+    \item 赤い2つの玉のうち手前の玉
+    \item 左の3つの玉のうち一番手前の玉
+    \item 左の赤い2つの玉のうち手前の玉
+    \item 左の机の左手前の3つの玉のうち\\一番手前の玉
+    \end{enumerate}}\\
+\end{longtable}
+
+
+
+
+
+
+
+
+
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Appelt}{Appelt}{1985}]{DA1985}
+Appelt, D.~E. \BBOP 1985\BBCP.
+\newblock \BBOQ Planning {English} Referring Expressions\BBCQ\
+\newblock {\Bem Artificial Intelligence}, {\Bbf 26}, \mbox{\BPGS\ 1--33}.
+
+\bibitem[\protect\BCAY{Byron}{Byron}{2003}]{BD2003}
+Byron, D.~K. \BBOP 2003\BBCP.
+\newblock \BBOQ Understanding Referring Expressions in Situated Language: Some
+  Challenges for Real-World Agents\BBCQ\
+\newblock In {\Bem the First International Workshop on Language Understanding
+  and Agents for the Real World}.
+
+\bibitem[\protect\BCAY{Dale}{Dale}{1992}]{RD1992}
+Dale, R. \BBOP 1992\BBCP.
+\newblock \BBOQ Generating Referring Expressions: Constructing Descriptions in
+  a Domain of Objects and Processes\BBCQ\
+\newblock MIT Press, Cambridge.
+
+\bibitem[\protect\BCAY{Dale \BBA\ Haddock}{Dale \BBA\ Haddock}{1991}]{RD1991}
+Dale, R.\BBACOMMA\ \BBA\ Haddock, N. \BBOP 1991\BBCP.
+\newblock \BBOQ Generating referring expressions involving relations\BBCQ\
+\newblock In {\Bem Proceedings of the Fifth Conference of the European Chapter
+  of the Association for Computational Linguistics(EACL'91)}, \mbox{\BPGS\
+  161--166}.
+
+\bibitem[\protect\BCAY{Dale \BBA\ Reiter}{Dale \BBA\ Reiter}{1995}]{RD1995}
+Dale, R.\BBACOMMA\ \BBA\ Reiter, E. \BBOP 1995\BBCP.
+\newblock \BBOQ Computational interpretations of the Gricean maxims in the
+  generation of referring expressions\BBCQ\
+\newblock {\Bem Cognitive Science}, {\Bbf 19}  (2), \mbox{\BPGS\ 233--263}.
+
+\bibitem[\protect\BCAY{Krahmer \BBA\ Theune}{Krahmer \BBA\
+  Theune}{2002}]{EK2002}
+Krahmer, E.\BBACOMMA\ \BBA\ Theune, M. \BBOP 2002\BBCP.
+\newblock \BBOQ Efficient context-sensitive generation of descriptions\BBCQ\
+\newblock In Kees van Deemter and Rodger Kibble, editors, Information Sharing:
+  Givenness and Newness in Language Processing. CSLI Publications, Stanford,
+  California.
+
+\bibitem[\protect\BCAY{Krahmer, van Erk, \BBA\ Verleg}{Krahmer
+  et~al.}{2003}]{EK2003}
+Krahmer, E., van Erk, S., \BBA\ Verleg, A. \BBOP 2003\BBCP.
+\newblock \BBOQ Graph-Based Generation of Referring Expressions\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 29}  (1), \mbox{\BPGS\
+  53--72}.
+
+\bibitem[\protect\BCAY{Tanaka, Tokunaga, \BBA\ Shinyama}{Tanaka
+  et~al.}{2004}]{TH2004}
+Tanaka, H., Tokunaga, T., \BBA\ Shinyama, Y. \BBOP 2004\BBCP.
+\newblock \BBOQ Animated Agents Capable of Understanding Natural Language and
+  Performing Actions\BBCQ\
+\newblock In Prendinger, H.\BBACOMMA\ \BBA\ Ishizuka, M.\BEDS, {\Bem Life-Like
+  Characters}, \mbox{\BPGS\ 429--444}. Springer.
+
+\bibitem[\protect\BCAY{Th\'{o}risson}{Th\'{o}risson}{1994}]{KT1994}
+Th\'{o}risson, K.~R. \BBOP 1994\BBCP.
+\newblock \BBOQ Simulated Perceptual Grouping: An Application to Human-Computer
+  Interaction\BBCQ\
+\newblock In {\Bem Proceedings of the Sixteenth Annual Conference of the
+  Cognitive Science Society}, \mbox{\BPGS\ 876--881}.
+
+\bibitem[\protect\BCAY{Tokunaga, Koyama, \BBA\ Saito}{Tokunaga
+  et~al.}{2005}]{TTS2005}
+Tokunaga, T., Koyama, T., \BBA\ Saito, S. \BBOP 2005\BBCP.
+\newblock \BBOQ Meaning of {Japanese} spatial nouns\BBCQ\
+\newblock In {\Bem Proceedings of the Second {ACL-SIGSEM} Workshop on the
+  Linguistic Dimentions of Prepositions and their Use in Computational
+  Linguistics: Formalisms and Applications}, \mbox{\BPGS\ 93--100}.
+
+\bibitem[\protect\BCAY{船越\JBA 渡辺\JBA 栗山\JBA 徳永}{船越\Jetal
+  }{2006}]{KF2006}
+船越孝太郎\JBA 渡辺聖\JBA 栗山直子\JBA 徳永健伸 \BBOP 2006\BBCP.
+\newblock \JBOQ 知覚的群化に基づく参照表現の生成\JBCQ\
+\newblock \Jem{自然言語処理}, {\Bbf 13}  (2), \mbox{\BPGS\ 79--97}.
+
+\end{thebibliography}
+
+\begin{biography}
+\bioauthor{船越孝太郎}{
+2002年東京工業大学大学院情報理工学研究科修士課程修了．
+2005年同大学院同研究科博士課程修了．同年同大学院同研究科特別研究員．
+2006年（株）ホンダ・リサーチ・インスティチュート・ジャパン入社．
+博士（工学）．自然言語理解，音声対話に関する研究に従事．
+言語処理学会，情報処理学会，人工知能学会，IEEE，AAAI，ISCA各会員．
+}
+\bioauthor{渡辺　　聖}{
+2006年東京工業大学大学院情報理工学研究科修士課程修了．
+同年（株）日立製作所入社．公共システム事業部にて自治体システムの開発に従事．
+}
+
+\bioauthor{徳永　健伸}{
+1983年東京工業大学工学部情報工学科卒業．
+1985年同大学院理工学研究科修士課程修了．
+同年（株）三菱総合研究所入社． 
+1986年東京工業大学大学院博士課程入学．
+現在，同大学大学院情報理工学研究科助教授．
+博士（工学）．自然言語処理，計算言語学，情報検索などの研究に従事．
+情報処理学会，人工知能学会，言語処理学会，計量国語学会，
+Association for Computational Linguistics，ACM SIGIR各会員．
+}
+\end{biography}
+
+
+\biodate
+
+
+\end{document}

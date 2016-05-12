@@ -1,0 +1,3347 @@
+    \documentclass[english]{jnlp_1.4_rep}
+
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\usepackage{amsmath}
+
+\usepackage{theorem} 
+\theorembodyfont{\normalfont}
+\theoremstyle{break}
+\newtheorem{theorem}{}[] 
+\theoremstyle{plain}
+\newtheorem{lemma}{}[] 
+\newtheorem{syoumei}{}
+\renewcommand{\thesyoumei}{}
+\newcommand{\proof}[1]{}
+\theoremstyle{plain} 
+\newtheorem{definition}{}
+
+
+\Volume{21}
+\Number{4}
+\Month{September}
+\Year{2014}
+
+\received{2005}{10}{31}
+\accepted{2006}{2}{4}
+
+\setcounter{page}{733}
+
+\etitle{Preference Dependency Grammar and its Packed Shared Data Structure ``Dependency Forest''\footnotetext{\llap{*~}This article has been partially revised for better understanding of overseas readers.}}
+\eauthor{Hideki Hirakawa\affiref{TOSHIBA}} 
+\eabstract{
+Preference dependency grammar (PDG) is a framework for integrating
+morphological, syntactic, and semantic analyses. PDG provides packed
+shared data structures that can efficiently encompass all possible
+interpretations at each level of sentence analyses with preference
+scores. Using the structure, PDG can calculate a globally optimized
+interpretation for the target sentence. This paper first gives an
+overview of the PDG framework by describing the base model of PDG,
+which is a sentence analysis model, called a ``multi-level packed
+shared data connection model.'' Then this paper describes packed
+shared data structures, e.g., headed parse forests and dependency
+forests, adopted in PDG. Finally, the completeness and soundness of
+the mapping between the parse forest and the dependency forest are
+revealed.
+}
+\ekeywords{Sentence analysis, Phrase structure, Dependency structure, Packed shared data structure}
+
+\headauthor{Hirakawa}
+\headtitle{PDG and its Packed Shared Data Structure ``Dependency Forest''}
+
+\affilabel{TOSHIBA}{}{Toshiba Corporation}
+
+\Reprint[T]{Vol.~13, No.~3, pp.~37--90}
+
+\begin{document}
+
+\maketitle
+
+\vspace{2pt}
+\section{Introduction}
+
+Natural language processing systems have very complicated and
+hard-to-formalize design 
+\linebreak
+issues because they have to treat some
+specific features of natural languages, such as variety and 
+\linebreak
+ambiguity,
+regularity and exceptionality, extensiveness and size, and time
+variance. A natural language analysis (NLA) system has to manage these
+features properly, according to the requirement level specified by its
+application. One of the most important challenges in the design of NLA
+systems is the treatment of varieties and ambiguities in natural
+languages; i.e., how to find the correct interpretation of a sentence
+from among the myriad of ambiguities at the analysis
+levels of morphology, syntax, semantics, discourse, and pragmatics.
+
+More precisely, an NLA system computes structures for a sentence by
+generating a set of its possible interpretations (application of
+interpretation generation knowledge), rejecting impossible
+interpretations (application of constraint knowledge), and obtaining
+the preference order of possible interpretations (application of
+preference knowledge). 
+\pagebreak
+Figure \ref{fig:NLAnalysisModel} shows this
+sentence analysis model.\footnote{Constraint knowledge can be defined
+  as a type of preference knowledge that does not provide any
+  possibility. However, the application of constraint knowledge
+  implies pruning in the computation, which is in clear contrast with
+  the application of preference knowledge.} A set of interpretations
+of a sentence exists in the interpretation space prescribed by the
+interpretation description scheme. Each interpretation is either
+correct (◎), plausible (○), or implausible (×) with respect
+to the real-world situation. The interpretation generation knowledge
+generates a set of possible interpretations, constraint knowledge
+filters out any impossible interpretation, and preference knowledge
+provides the ordering of interpretations in the interpretation
+space. The output of an NLA system is the optimum interpretation
+extracted from among the remaining interpretations, according to the
+order of preference. All three knowledge types exist at each level of
+sentence analysis, i.e., morphology, syntax, semantics, etc. The
+comprehensive ability of an NLA system is determined by the total of
+all knowledge at each language analysis level. Preference knowledge
+sometimes gives different suggestions for a sentence interpretation at
+different levels \cite{Hirakawa89}．Such inconsistencies must be
+resolved appropriately in order to construct an accurate NLA system.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{21-4ia6f1.eps}
+\end{center}
+\caption{Natural language analysis system model}
+\label{fig:NLAnalysisModel}
+\vspace{-0.7\Cvs}
+\end{figure}
+
+Interpretation generation knowledge and constraint knowledge
+define the sentence coverage, i.e., a set of acceptable sentences in
+an NLA system. Therefore, these knowledge types correspond to a grammar in
+linguistics from the Chomskyan viewpoint. Many computational grammar
+frameworks have been proposed and studied, in which a variety of linguistic
+knowledge has been incorporated. Grammar frameworks are based on
+interpretation description formalisms that prescribe interpretation
+spaces such as phrase structure, dependency structure, semantic graph
+structure, and logical formula.
+
+In addition, considerable research on preference knowledge, such as
+preference semantics \cite{Wilks75}, has been conducted in
+linguistics. Preference knowledge has been widely adopted in NLA
+systems through the use of a statistical method adapted from speech
+technology. As statistical methods extend their application scope from
+the N-gram model (word sequence) to context-free and
+dependency grammar, more NLA systems can benefit from the
+statistical power obtained using large-scale corpora.
+
+For example, statistical models are introduced to
+phrase-structure-based grammar frameworks such as CFG and lexical
+functional grammar (LFG) \cite{Kaplan89,Riezler02}，head-driven
+phrase structure grammar (HPSG) \cite{Pollard94,Tsuruoka04},
+combinatory categorical grammar (CCG)
+\cite{Steedman00,Clark03},\footnote{Some systems produce deep
+  structures as an output. The classification here is based on the
+  interpretation structure during the parsing.} and to
+dependency-structure-based grammar frameworks such as probabilistic
+dependency grammar \cite{Lee97}, kakari-uke analysis
+\cite{Shudo80,Ozeki94,Hirakawa01,Kudo05_e,Kawahara05_e}, 
+constraint dependency grammar (CDG) \cite{Maruyama90,Wang04}, and link grammar
+\cite{Sleator91,Lafferty92}.\footnote{Link grammar is not considered as
+an instance of dependency grammar by its creators, and it departs from
+the traditional view of dependency by using undirected links; however,
+the representations used in link grammar parsing are similar to the
+dependency representations in that they consist of words linked by
+binary relations \cite{nivre2005dga}.}
+
+From the viewpoint of integrating multilevel knowledge, grammar
+frameworks are classified as either single-space or multi-space
+models. Simple CFG and simple dependency grammar are typical examples
+of a single-space framework without preference knowledge treatment,
+based on phrase structure and dependency structure schemes,
+respectively. DCG \cite{Pereira80} and BUP \cite{Matsumoto83} have
+developed a mechanism to extend the CFG framework to incorporate
+arbitrary extra conditions using Prolog codes, which, for example, can
+be used for introducing semantic constraints. This is a type of
+integration of multilevel constraint knowledge in the single-space
+model. CDG is a single-space grammar framework based on the dependency
+scheme with unary or binary constraints. These constraints are used
+for incorporating multilevel constraint knowledge \cite{Maruyama90}.
+On the other hand, LFG has at least two types of description schemes
+(or data structures), i.e., c-structure (phrase structure) and
+f-structure (functional structure).\footnote{Kaplan identified an idea
+  to extend the LFG configuration to include more structures such as
+  semantic and anaphoric structures.} The functional scheme provides
+the constraints on the functional structures \cite{Kaplan89}.  PCFG
+\cite{jelinek92} is an example of a single-space model with preference
+knowledge. A certain number of statistical CFG-based parsers
+incorporate statistical models that integrate the phrase structure
+information and the phrase head and dependency information; the
+integration of this information was proved to be effective in
+improving parse accuracy
+\cite{Carroll92,Eisner96b,Collins99,Charniak00,Bikel04}. Probabilistic
+CDG \cite{Wang04} is an example of a single-space model based on the
+dependency structure scheme. Preference dependency grammar (PDG)
+adopts a multi-space approach and integrates multilevel knowledge
+based on the packed shared data structures in multiple interpretation
+spaces, as described below.
+
+After providing PDG's basic sentence analysis model and overview,
+this paper describes methods for obtaining two main packed shared data
+structures of PDG, i.e., the ``headed phrase structure forest'' and
+the ``dependency forest,'' and then gives proof of the completeness and
+soundness of the dependency forest. This paper also provides an
+experiment for analyzing prototypical ambiguous sentences, and
+discusses the mapping relations between the phrase structure tree(s),
+and the dependency tree(s), as well as the treatment of non-projective
+dependency structures in PDG.
+
+
+\section{Overview of PDG and Packed Shared Data Structure}
+
+\subsection{Multilevel Packed Shared Data Connection Model}
+
+PDG is a framework for the morphological, syntactic, and semantic
+analysis of natural language sentences, and is mainly designed for
+manipulating ambiguities in sentence interpretations \cite{Hirakawa07}. The targeted
+issues are as follows:
+
+\begin{itemize}
+\item[(a)] suppression of combinatorial explosion
+\item[(b)] proper treatment of generation, preference, and constraint knowledge
+\item[(c)] modularity and integration of multilevel knowledge 
+\end{itemize}
+
+\begin{figure}[b]
+\vspace{-0.7\Cvs}
+ \begin{center}
+\includegraphics{21-4ia6f2.eps}
+ \end{center}
+\caption{Multilevel packed shared data connection model}
+\label{fig:MultilevelPSDataConnectionModel}
+\end{figure}
+
+\noindent
+PDG adopts the ``multilevel packed shared data connection
+\pagebreak
+(MPDC) model'' shown in Figure \ref{fig:MultilevelPSDataConnectionModel}
+to achieve these targets. Each analysis level encompasses all possible
+sentence interpretations of its interpretation space on packed
+shared data structure. The input sentence side is called the lower
+level and the output side is called the upper level. Each
+interpretation at each level has a link called the ``interpretation
+linkage'' with its counterparts in the lower and, possibly, the upper
+levels (represented by the dotted line labeled ``correspondence''). In
+the MPCD model, the interpretations at the lower level involve the
+corresponding interpretations at the upper level. The input sentence
+involves all interpretations at all levels.  Each interpretation of a
+sentence in some interpretation space should have an interpretation
+linkage to its counterpart in the lower adjacent level of the
+interpretation space; however, the inverse is not necessarily
+true. For example, there can be a morphological interpretation of a
+sentence having no corresponding syntactic interpretations, but there
+cannot be a syntactic interpretation of a sentence having no
+corresponding morphological interpretations. Each level has its
+generation, preference, and constraint knowledge. The generation
+knowledge generates all possible interpretations from a set of its
+lower-level interpretations ($\longmapsto$ arrow in
+Figure \ref{fig:MultilevelPSDataConnectionModel}). This is called
+externalization. The constraint knowledge restricts or rejects
+interpretations in the interpretation space. The preference knowledge
+gives the order of preference of the interpretations in the
+interpretation space.
+
+PDG aims to achieve the following effects by adopting this model.
+
+\begin{itemize}
+\item[(a)] Utilizing multiple types of linguistic data structures, such as phrase and dependency 
+\linebreak
+structures, to treat morphological, syntactic, and semantic knowledge with high module independence.
+\item[(b)] Utilizing packed shared data structures encompassing all ambiguities at each level of sentence analysis to suppress the combinatorial explosion without pruning.
+\item[(c)] Interpretation linkage from the input sentence to the
+uppermost level interpretations provides a basis for the integration
+of multilevel preference knowledge (preference scores).
+\item[(d)] Incorporating an optimum tree search method for a packed shared dependency structure with arc co-{\nobreak}occurrence constraints to compute the most plausible interpretation (dependency tree) of a sentence.
+\end{itemize}
+
+\noindent
+Interpretations not rejected by the constraint knowledge
+are called well-formed interpretations of the sentence. The optimum
+well-formed interpretation is defined in each interpretation space,
+and is computed by the optimum solution procedure on the basis of
+preference and constraint knowledge. As described above, the
+application determines the requirement level for the NLA system. For
+example, machine translation systems between languages in the same
+family may require phrase structure output, whereas those between
+languages in different families may require dependency structure
+output. The interpretation linkage can be used to search the optimum
+interpretation, based on upper-level information and not current-level
+information. This can be done by tracing back the linkage from the
+optimum interpretation at the upper level to the corresponding
+interpretation at the current level. For example, the tagger based on
+the optimum semantic analysis result is constructed naturally.
+
+
+\subsection{Implementation Model of the Preference Dependency Grammar}
+\label{sec:OverviewPDG}
+
+Figure \ref{fig:PDGAnalysisModel} shows an overview of the implementation
+model of PDG. PDG has three basic linguistic levels, i.e., morphology,
+syntax, and semantics with the syntax level further divided into two
+levels. In total, PDG has four levels of interpretation space,
+description scheme, and packed shared data structure. Four packed
+shared data structures, the ``WPP trellis,''\footnote{Word pos pair
+ (WPP) is a pair of a word and a part of speech (POS). The word
+  ``time'' has WPPs such as ``time/n'' and ``time/v.''} ``headed
+phrase structure forest,'' ``functional dependency forest,'' and
+``semantic dependency forest'' encompass sets of sentence
+interpretations, i.e., WPP sequences, phrase structure trees,
+functional dependency trees, and semantic dependency trees,
+respectively.  In this paper, the headed phrase structure forest/tree
+and the functional dependency forest/tree are also called the phrase
+structure forest/tree and the dependency forest/tree,
+respectively. The processes for obtaining these data structures are
+called morphological analysis, syntactic analysis, dependency forest
+generation, and semantic expansion, respectively.
+
+\begin{figure}[b]
+\includegraphics{21-4ia6f3.eps}
+\caption{PDG implementation model}
+\label{fig:PDGAnalysisModel}
+\vspace*{-0.3\Cvs}
+\end{figure}
+
+\begin{figure}[t]
+ \begin{center}
+\includegraphics{21-4ia6f4.eps}
+ \end{center}
+\caption{Packed shared data structures in PDG}
+\label{fig:PDGPackedSharedDataStructures}
+\end{figure}
+
+Figure \ref{fig:PDGPackedSharedDataStructures} briefly explains the data
+structures and examples of preference and constraint knowledge at
+each level.  WPP trellis is a packed shared data structure
+encompassing all WPP sequences for a sentence. Morphological
+interpretations for a sentence are represented by \mbox{sequences} (or
+strings) of WPP nodes, which represent the adjacency relations between
+words.  The headed phrase structure forest encompasses a set of phrase
+structure trees that represent the sub-categorization (or adjacency)
+relations of phrases. Syntactic preference knowledge (e.g., phrase
+frequency) and constraint knowledge (e.g., number agreements) are
+described on top of the phrase structure.\footnote{Constraints such as
+number agreements can be described as constraints at another
+level or can be described in more than one level in parallel. This is
+a design issue in actual grammar development. In general, constraint
+knowledge should be described at the lowest level possible, because it
+will improve the system efficiency by suppressing the generation of
+useless interpretations.} The functional dependency structure is
+another data structure at the syntax level of PDG. A functional
+dependency tree consists of WPP nodes and arcs labeled with functional
+dependency relations, such as subject and object. A set of functional
+dependency trees representing the syntactic interpretations of a
+sentence is represented by a functional dependency forest. The
+dependency forest is a packed shared data structure that utilizes a
+dependency graph with a framework for describing the preference and
+constraint information for the arcs in the graph. Semantic
+interpretations for a sentence are represented by semantic dependency
+trees that consist of word POS concept triple (WPCT) nodes and arcs
+labeled with semantic dependency relations. A semantic dependency
+forest is used to represent a set of semantic dependency trees that
+show the semantic interpretations of a sentence. In the PDG model,
+preference scores provided by preference knowledge at each level are
+integrated into the preference scores in the uppermost level data
+structure through the interpretation linkage from the input sentence
+to the uppermost level interpretations. The most plausible
+interpretation (dependency tree) of a sentence is calculated by an
+optimum tree search method \cite{Hirakawa05d_e}. Currently, an
+experimental syntactic analysis version of the PDG system has been
+implemented \cite{Hirakawa07}. This paper focuses on the syntactic
+level data structures in the PDG model.
+
+As described above, a characteristic feature of PDG is the integrated
+use of phrase and dependency structures as the intermediate syntactic
+data structures, which provides the advantage of a multilevel
+construction framework. For example, CDG, which adopts a single-level
+packed shared data model based on the dependency structure, generates
+all possible dependency relations for all word pairs in a sentence and
+applies constraints to obtain a set of well-formed interpretations for
+a sentence. This is called eliminative parsing. This method has a
+superior feature in that it does not eliminate possible
+interpretations, but has a demerit in terms of efficiency in that it
+produces many useless hypotheses. Harper et al. proposed techniques
+for improving CDG, including the interpretation generation method
+\cite{Harper99}. However, PDG produces the dependency forest
+encompassing all possible dependency trees, which have their
+counterparts in the phrase structure forest, for a sentence. This
+indicates that generation and constraint knowledge at the phrase
+structure forest level, i.e., knowledge based on phrase structure
+representation,\footnote{Extended CFG is used in PDG.} can suppress
+interpretations at the dependency forest level. Furthermore, as
+described in Section \ref{sec:NonProjectivity}, using the description
+capability of the phrase structure enables us to incorporate the
+controlled non-projectivity in the dependency forest
+\cite{Hirakawa06b_e,Hirakawa07}. This indicates that the description
+capability of the dependency forest (dependency formalism) is enhanced
+using phrase structure formalism.
+
+
+\subsection{Prerequisites for Packed Shared Data Structures}
+\label{sec:PrerequisitesForPackedSharedDataStructure}
+
+The following are prerequisites for the data structure at each level of the MPDC model.
+
+\begin{itemize}
+\item[(a)] no combinatorial explosion
+\item[(b)] a set of proportionate interpretations
+\item[(c)] proper basis for knowledge description
+\item[(d)] existence of interpretation linkages between the lower- and upper-level data structures
+\end{itemize}
+
+\noindent
+(a) is a key issue with regard to constructing practical
+NLA systems. Enumerative treatment of interpretations leads to lack of
+time and space, or degrades the analytical capability due to
+overpruning. (b) implies that the packed shared data structure at each
+level encompasses all possible solutions correctly, i.e., it assures
+no pruning of existing interpretations and no generation of
+nonexistent interpretations originating from the packed shared data
+structures. If this requirement is assured, it is beneficial for an
+NLA system to be capable of introducing possible pruning (application
+of constraint knowledge) in the early stage of sentence analysis from
+the viewpoint of system performance. (c) is a prerequisite for the
+efficient and precise knowledge development an NLA system. The
+interpretation description scheme at each level should be an essential
+basis for generation, constraint, and preference knowledge
+\cite{Hirakawa02_e}.
+
+
+\subsection{Traditional Methods for Packed Shared Data Structures}
+
+\subsubsection{WPP Trellis and Packed Shared Phrase Structure Forest}
+
+PDG utilizes WPP trellis as the basis for the morphological analysis
+level. WPP trellis is a packed shared data structure encompassing all
+WPP sequences for a sentence. The packed shared phrase structure
+forest, or simply, phrase structure forest, is a well-known packed
+shared data structure for encompassing all phrase structure trees
+\cite{Tomita87}. WPP trellis and packed shared phrase structure forest
+satisfy the interpretation linkage condition of the MPDC model because
+each phrase structure tree in the packed shared phrase structure
+forest corresponds to a WPP sequence in WPP trellis.
+
+
+\subsubsection{Semantic Dependency Graph}
+\label{sec:SemDdpGrp}
+
+The ``semantic dependency graph'' (SDG) is a dependency graph
+representing ambiguities in word dependencies (structural ambiguities)
+and their semantic relations (semantic ambiguities)
+\cite{Hirakawa02_e}. SDG is generated from a kakari-uke structure
+produced by an ATN parser by expanding kakari-uke relations (dependency
+relations) to semantic dependency relations. The SDG method lacks
+in terms of generality in that it cannot handle backward dependency
+and multiple WPPs because it depends on some linguistic features
+peculiar to Japanese. PDG employs a dependency forest instead of an
+SDC.
+
+
+\subsubsection{Syntactic Graph}
+
+Seo proposed the ``syntactic graph,'' which encompasses all dependency
+trees corresponding to phrase structure trees in the phrase structure
+forest for a sentence \cite{Seo89,Rim90}. The syntactic graph is a
+promising candidate for a packed shared data structure in PDG, but
+cannot be adopted as it is due to its difficulty in satisfying
+prerequisite (d) in Section
+\ref{sec:PrerequisitesForPackedSharedDataStructure}.
+
+The syntactic graph is a directed graph that consists of nodes
+representing WPPs and labeled arcs representing the syntactic
+relations between nodes. It defines a set of dependency trees
+(interpretations) for a sentence in combination with the ``exclusion
+matrix,'' which represents exclusive co-occurrence relations between
+arcs. The syntactic graph is a set of Triples, containing arc name and
+two nodes (containing WPP, surface position,
+etc.). Figure \ref{fig:KoubunGraph} shows the syntactic graph and
+exclusion matrix of the sentence ``Time flies like an arrow.'' The
+numbers in arcs are arc-IDs. Multiple arcs targeting one node
+represent modification ambiguities,\footnote{The direction of
+  dependency arc obeys the convention of the Japanese kakari-uke
+  grammar (dependency grammar). The dependent node of an arc is the
+  node located at the source of the arc. This is contrary to the
+  convention in the syntactic graph, but not substantially
+  different.} and S corresponds to the starting symbol.
+
+\begin{figure}[b]
+ \begin{center}
+\includegraphics{21-4ia6f5.eps}
+ \end{center}
+\caption{Syntactic graph and exclusion matrix for the example sentence}
+\label{fig:KoubunGraph}
+\end{figure}
+
+The exclusion matrix is one whose rows and columns are a set of
+arcs in the syntactic graph that prescribes the co-occurrence relation
+between arcs. Setting ``1'' at position (i, j) of the exclusion
+matrix indicates that the i-th and j-th arcs must not co-occur in any
+dependency tree (interpretation) obtained from the syntactic graph.
+
+The syntactic graph and exclusion matrix are generated from a kind
+of packed shared phrase structure forest. PDG adopts the same data
+structure, called a headed phrase structure forest, described in Section
+\ref{sec:datastructure}. In the rest of this paper, phrase structure
+forest means headed phrase structure forest. The traditional phrase
+structure forest (packed shared phrase structure forest) is called a
+headless phrase structure forest.
+
+Seo discussed the completeness and soundness of the correspondence
+between the phrase structure forest and the syntactic
+graph \cite{Seo89}. The completeness is satisfied if each phrase
+structure tree in each phrase structure forest has its counterpart(s)
+in a syntactic graph. The soundness is satisfied if each dependency
+tree in each syntactic graph has its counterpart(s) in a phrase
+structure forest. The completeness of a syntactic graph is shown in
+\cite{Seo89}, but the soundness is not assured. All exclusion matrix
+cells are initially set to 1 (this means no two triples
+co-occur). Then, the cells for all triple pairs in the dependency
+tree generated from phrase structure trees are set to 0. Since the
+exclusion matrix prescribes the co-occurrence relations for all
+dependency trees in the dependency graph,\footnote{The constraint in
+  the exclusion matrix is, in a sense, global.} the allowance of a
+co-occurrence of two triples (set 1 to the cell for two triples) is
+safe if and only if the restriction of these two triples is not
+necessary for all other interpretations (dependency trees). Appendix~A
+shows an example in which the syntactic graph cannot satisfy the
+soundness.
+
+
+\section{Packed Shared Data Structures in PDG}
+\label{sec:datastructure}
+
+PDG adopts a phrase structure forest and dependency forest for
+the packed shared data structures for phrase structure and dependency
+structure representations, respectively.
+
+
+\subsection{Headed Phrase Structure Forest}
+
+The headed phrase structure forest is a type of packed shared parse forest,
+and consists of edges corresponding to rewriting rules in CFG. The
+sub-trees, which satisfy the following conditions, are packed and
+shared. Sub-trees have
+\begin{itemize}
+\item[(a)] the same nonterminal symbol (category) 
+\item[(b)] the same coverage (phrase boundary)
+\item[(c)] the same phrase head\footnote{Phrase head is a WPP in PDG.} (head constituent)
+\end{itemize}
+
+\noindent
+Conditions (a) and (b) constitute the headless phrase
+structure forest \cite{Schiehlen96}. The phrase structure trees in the
+headed phrase structure forest have mapping to the phrase structure
+trees in the headless phrase structure forest. An example of the edges
+and the phrase structure forest in PDG, along with the parsing
+algorithm, is shown in Section \ref{sec:construction}.
+
+
+\subsection{Dependency Forest}
+
+The dependency forest (DF) consists of a ``dependency graph'' (DG) and
+a ``co-occurrence matrix'' (CM, C-Matrix), and is expressed as $\mathrm{DF}=\langle\text{DG,CM}\rangle$.
+
+
+\subsubsection{Dependency Graph and Co-occurrence Matrix}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-4ia6f6.eps}
+ \end{center}
+\caption{Initial dependency forest for the example sentence}
+\label{fig:IDF}
+\end{figure}
+
+Figure \ref{fig:IDF} shows a DG for the example sentence ``Time flies
+like an arrow.'' The DG consists of nodes and directed arcs,
+representing WPPs and the dependency relation between nodes,
+respectively. An arc has its ID and preference score,\footnote{
+  Preference score represents the plausibility of the arc and is used
+  for the computation of the optimum interpretation.} which are hidden
+in the figure. The dependency graph has one special node, called the
+``top node'' (or sometimes called ``root node,'' for convenience),
+which is the root of all dependency trees in the DG. In practice, a DG
+is represented by a set of ``dependency pieces.'' A dependency piece
+consists of one arc and its ``dependent (or modifier) node'' and
+``governor (or modificand) node.'' Since the dependency piece and the
+arc have a one-to-one correspondence, a dependency piece is referred
+to as an arc in this paper. The number of arcs in a DG is called
+the ``size of the dependency forest.'' A ``dependency tree'' is a subset
+of the DG that forms a tree. Dependency trees represent
+interpretations of sentences or phrases at dependency relation level.
+
+A CM is a matrix whose rows and columns are a set of arcs in a DG that
+prescribes the co-occurrence relation between arcs. Only when CM(i, j)
+is ○, $arc_i$ and $arc_j$ are co-occurable in one dependency
+tree. The co-occurrence relation is symmetric, and CM is a symmetric
+matrix.
+
+
+\subsubsection{Well-formed Dependency Tree}
+
+The ``well-formed dependency tree'' is a dependency tree DT in the DF
+that satisfies the following conditions, called the ``well-formed
+dependency tree constraint.''
+
+\begin{definition} \label{def:WellFormedDepTree} [Well-formed dependency tree]
+
+\noindent
+well-formed dependency tree constraint
+\begin{itemize}
+\item[(a)] Each input word has a corresponding node in the DT ({\bf coverage constraint}).
+\item[(b)] No two nodes in the DT occupy the same input position ({\bf single role constraint}).
+\item[(c)] Each arc pair in the DT has a co-occurrence relation in the CM ({\bf arc co-occurrence constraint}).
+\end{itemize}
+\end{definition}
+
+\noindent
+(a) and (b) are collectively referred to as the
+``covering constraint.'' A dependency tree satisfying the covering
+constraint is called a ``well-covered dependency tree.'' A dependency
+tree satisfying (c) is called a ``well-co-occurred dependency tree.''
+A set of well-formed dependency trees is the set of possible
+interpretations for an input sentence. The DF in Figure \ref{fig:IDF} has
+four well-formed dependency trees. In PDG, a set of one WPP node is
+considered to be a special case of a dependency tree with no arcs, which
+satisfies the well-formed dependency tree constraint.
+
+
+\subsubsection{Initial Dependency Forest and Reduced Dependency Forest}
+
+There can be more than one different-sized DF encompassing the
+equivalent set of dependency trees with respect to the degree of arc
+sharing. PDG treats the ``initial dependency forest'' and the
+``reduced dependency forest,'' which is obtained from the initial
+dependency forest. The initial dependency forest consists of the
+``initial dependency graph'' and the ``initial C-matrix.'' The reduced
+dependency forest is simply called a dependency forest in this
+paper. The dependency graph of the initial dependency forest in
+Figure \ref{fig:IDF} is different from the syntactic graph in
+Figure~\ref{fig:KoubunGraph}, in terms of the number of arcs between
+``fly/n'' and ``time/v.''
+
+
+\clearpage
+\section{Generation of the Phrase Structure Forest and the Initial \\\hspace{19pt}Dependency Forest}
+\label{sec:construction}
+
+PDG generates a dependency forest from an input sentence through four
+processes, i.e., 
+\linebreak
+morphological analysis, syntactic analysis, phrase
+structure/dependency forest generation, and dependency forest
+reduction. The explanation of the morphological analysis process is
+beyond the scope of this study.
+
+
+\subsection{Grammar Rules}
+\label{sec:bunpoukisoku}
+
+Grammar rules in PDG are extended CFG rules, which define possible
+phrase structures and mapping from the phrase structures to the
+corresponding dependency structures. Grammar rules are written in the
+following format.
+
+y/$Y \rightarrow$ x$_1$/$X_1$, $\ldots$ , x$_n$/$X_n$ : [arc($arcname_1$, $X_i$, $X_j$), $\ldots$ , arc($arcname_{n-1}$, $X_k$, $X_l$)] \\
+\quad (0$<i$, $j$, $k$, $l{\leq}n$)
+
+e.g., vp/$V \rightarrow$ v$/V$, np$/NP$, pp$/PP$ : [arc(obj, $NP$, $V$), arc(vpp, $PP$, $V$)]
+
+\noindent
+A grammar rule consists of two parts separated by ``:'',
+the rewriting rule part and the dependency structure part. The left
+side of the rewriting rule ``y/$Y$'' and constituent ``x$_i$/$X_i$''
+mean ``syntactic category/variable.'' $Y$ is a head constituent,
+called the ``phrase head,'' and is the same as one of the variables
+``$X_1 {\ldots} X_n$'' in the ``rule body.'' The dependency structure
+part is a set of arcs in the form ``arc(arcname, variable1,
+variable2).''\footnote{The dependency structure is a set of arcs, but
+is represented by a list format using [ ]. In this paper, sets are
+sometimes represented by [ ] in program codes.} A variable is bound
+to a WPP node, which is a phrase head of a constituent in the
+rewriting rule. In the example above, the dependency structure shows where
+dependents $NP$ and $PP$ are connected to the governor phrase head $V$
+by means of the obj arc and the vpp arc, respectively. The dependency
+structure part constitutes a partial dependency tree, which satisfies
+the following ``partial dependency structure conditions.''
+
+\begin{definition} \label{def:DSCondition}[Partial dependency structure condition]
+
+\begin{itemize}
+\item[(a)] A partial dependency structure constitutes a tree structure whose top node is a phrase head of the head constituent $Y$. Phrase heads of non-head constituents are the dependents of phrase heads of other constituents.
+\item[(b)] The phrase heads of the constituents in the rule body have one-to-one correspondence with variables in the partial dependency structure.
+\end{itemize}
+\end{definition}
+
+Figure \ref{fig:ExampleGrammar} shows the grammar rules and lexicons for
+analyzing the example sentence: ``Time flies like an arrow.'' Rule (R0),
+whose rule head and rule body are ``root'' (predefined special symbol)
+and ``s''(starting symbol) as rule body, is a special rule for creating
+a ``root edge'' of the phrase structure forest and a ``top node''
+[root]-x of the dependency forest.\footnote{This rule is introduced for
+  convenience in the treatment of data structures.}
+
+\begin{figure}[t]
+ \begin{center}
+\includegraphics{21-4ia6f7.eps}
+ \end{center}
+\caption{Grammar and lexicon for the example sentence}
+\label{fig:ExampleGrammar}
+\end{figure}
+
+
+\subsection{Parsing Algorithm}
+\label{sec:ParsingAlgorithm}
+
+The syntactic analysis of PDG is implemented by extending the
+bottom-up chart-parsing algorithm to generate a dependency structure.
+
+
+\subsubsection{The Structure of Edge}
+\label{sec:EdgeConstruction}
+
+An ordinal chart parser utilizes edges composed of five elements
+$\langle\text{FP, TP, C, FCS, RCS}\rangle$, i.e., the from-position (FP), the
+to-position (TP), the category (C), the found constituent sequence
+(FCS), and the remaining constituent sequence (RCS). The head of the
+grammar rule corresponds to C. The body of the grammar rule
+corresponds to both FCS and RCS and is partitioned by a dot (・),
+which shows the boundary of FCS and RCS, as shown in the following edge
+written in diagrammatic form.
+
+$\langle \text{0, 1, s} \rightarrow \text{np ・ vp pp} \rangle$
+
+\noindent
+This edge is generated from the grammar rule ``s
+$\rightarrow$ np vp pp'' and has elements FP=0, TP=1, C=s, FCS=[np], and
+RCS=[vp, pp]. The result of the dictionary look-up for an input word is
+an inactive edge whose category is the POS of the word, and whose found
+constituent sequence is a word list, as follows:
+
+$\langle \text{0, 1, n} \rightarrow \text{[time]・} \rangle$
+
+\noindent
+The parsing algorithm of PDG has two extensions, i.e., the treatment for the dependency
+structure part in a grammar rule and the construction of the packed
+shared data structure. The edge for PDG parsing has two additional
+elements, i.e., the phrase head (PH) and the dependency structure (DS),
+as follows:
+
+Standard edge: $\langle \text{0, 1, s} \rightarrow \text{np ・ vp pp}\rangle $
+
+PDG edge: $\langle \text{0, 1, s/PH} \rightarrow \text{np/n1 ・ vp/PH pp/PP : DS} \rangle $
+
+\noindent
+As described in Section \ref{sec:bunpoukisoku}, PH and DS
+represent a phrase head (node) and dependency structure (a set of
+arcs), respectively. The symbol n1 shows a node (WPP) that is the head
+of the np phrase. PDG utilizes another data structure called ``packed
+edge,'' which is obtained by packing inactive edges into one. The
+packed edge has the list of FCS and of DS, instead of the FCS
+and the DS in the PDG edge. The PDG edge with FSC and DS is called
+``single edge,'' in contrast to packed edge. The packed edge is
+equivalent to a set of single edges. The following shows the relation
+between single edge and packed edge, diagrammatically.
+
+Single edge: $\langle \text{0, 5, s/n2} \rightarrow \text{np/n1 vp/n2 pp/n3・: DS1}\rangle $
+
+$\phantom{\text{Single edge: }}\langle \text{0, 5, s/n2} \rightarrow \text{np/n1 vp/n2 ・: DS2} \rangle $
+
+Packed edge: $\langle \text{0, 5, s/n2} \rightarrow \text{[[np/n1 vp/n2 pp/n3], [np/n1 vp/n2]] ・: [DS1, DS2]}\rangle $
+
+\noindent
+n1 to n3 are nodes (WPPs) and n2 is a phrase head. [np/n1
+  vp/n2 pp/n3] and [np/n1 vp/n2] are constituent sequences with their
+phrase head (nodes). DS1 and DS2 are dependency structures (partial
+dependency trees). For convenience, a packed edge is represented in
+the form ``E,'' ``$\langle \mathrm{E} \ldots \rangle$,'' or ``edge E,'' and a single
+edge is represented as ``e,'' ``$\langle \mathrm{e} \ldots \rangle$,'' or ``edge e.''
+When it is not ambiguous, ``edge'' is used for representing ``packed
+edge'' or ``single edge.'' Inactive edges are represented by adding
+``*'' at the top of the edge symbol. Edges *E and *e are an inactive packed
+edge and an inactive single edge, respectively.
+
+The syntactic parsing of PDG described below utilizes packed
+edges. Figure \ref{fig:ArcStructure} shows the formal constitution of a
+packed edge. A packed edge consists of eight elements. FCSL and DSL
+are lists (or sequences) with the same length. The pair
+(FCS$_i$, DS$_i$) obtained by extracting the i-th elements of FCSL and
+DSL is called the ``CSDS pair.'' The CSDS pair corresponds to the single edge
+described above.
+
+The edges E1 to *E3 in Figure \ref{fig:ArcStructure} show the growth of
+the edge generated from a grammar rule for a noun phrase. Edge *E3 is
+the inactive edge showing the interpretation that the input words ``an
+arrow'' constitute a noun phrase, and its dependency structure is
+\{arc(det-14, [an]-det-3, [arrow]-n-4)\}.  The complex expression
+[arrow]-n-4 consists of three parts: the first part indicates a node
+for the word ``arrow'', the second pos ``n'', and the third word
+position 4. Edge *E4 is an edge with more than one
+interpretation. Each of the two elements in FCSL and DSL have
+correspondence and constitute two CSDS pairs, i.e., ([103, 169]
+\{obj-25\})\footnote{The obj-25 is the abbreviation of arc(obj-25,
+  [flies]-n-1, [time]-v-0).} and ([103, 119, 165] \{obj-4,
+vpp-20\}). Edge @E5 is an example of an edge generated from
+a dictionary look-up operation, called ``lexical edge.'' The data
+structure of a lexical edge is a set of one node corresponding to the
+consulted word. The lexical edge is explicitly represented by adding
+``@.''
+
+\begin{figure}[t]
+ \begin{center}
+\includegraphics{21-4ia6f8.eps}
+ \end{center}
+\caption{Structure of edge}
+\label{fig:ArcStructure}
+\end{figure}
+
+
+\subsubsection{Parsing Algorithm}
+
+Figure \ref{fig:ChartAlgotithm} shows the parsing algorithm of PDG, which
+is basically a standard, bottom-up, chart-parsing algorithm using an
+agenda \cite{Winograd83}. This algorithm inputs words from left to
+right, one by one, adds lexical edges generated from the input words
+to the agenda (Figure \ref{fig:ChartAlgotithm} (a), (b)), and combines
+the edges in the agenda with inactive edges in the chart or in the
+grammar rules until the agenda becomes empty
+(Figure \ref{fig:ChartAlgotithm} (e), (f)). Packed edges are generated by
+checking whether each edge in the agenda is mergeable ((c), (j)), and
+then merging it to the existing edge if possible. A detailed
+explanation of the algorithm is omitted. The following part explains
+the construction of the data structure, which is peculiar to PDG
+parsing.
+
+\begin{figure}[t]
+ \begin{center}
+\includegraphics{21-4ia6f9.eps}
+ \end{center}
+\caption{PDG bottom-up chart parsing algorithm}
+\label{fig:ChartAlgotithm}
+\vspace{-0.5\Cvs}
+\end{figure}
+
+The PDG parser creates dependency structures in parallel with edge
+generation. This is done by binding variables in the dependency
+structures in an edge. Variable binding is performed by $bind\_var$,
+which binds the phrase head (node) of the inactive edge to the
+variable in the first constituent of the remaining constituent
+sequence of the edge, when a new edge is created, either from a
+grammar rule (Figure \ref{fig:ChartAlgotithm} (g)) or an active edge in
+the agenda (Figure \ref{fig:ChartAlgotithm} (h)). If this binding
+generates an arc whose dependent and governor are bound, $add\_arcid$
+generates a unique arc-ID and is attached to the arc
+(Figure \ref{fig:ChartAlgotithm} (i)). The arc with a bound dependent and
+governor is called a ``fixed arc.'' Edge *E3 in
+Figure \ref{fig:ArcStructure} is generated by binding the variable \$2 in
+E2 to the node [arrow]-n-4.
+
+Edges are associated through edge-IDs. The lower edge can be traced
+from the upper edge. Edge *E3 (edge\#160) in
+Figure \ref{fig:ArcStructure} is an edge generated from the grammar rule
+``np $\rightarrow$ det n.'' The edges in the constituent sequence
+[153, 156] in edge\#160, i.e., edge\#153 and edge\#156, have the
+phrase category ``det'' and ``n,'' respectively. Edge\#153 and
+edge\#156 are called reachable from edge\#160. This ``reachable''
+relation is associative. Edges with more than one CSDS pair, like *E4
+in Figure \ref{fig:ArcStructure}, are generated by
+$merge\_csds$(Figure \ref{fig:ChartAlgotithm} (d)). Since only inactive
+edges are merged, no active edge has more than one CSDS pair in this
+algorithm. If the whole sentence is parsed successfully, the chart has
+one inactive edge with phrase head [root]-x covering the whole
+sentence. This edge is called ``root edge,'' and is described as
+*E$_{root}$.
+
+
+\subsection{Generation of Phrase Structure Forest and Initial Dependency \mbox{Forest}}
+\label{sec:PFandDFseisei}
+
+\begin{figure}[b]
+ \begin{center}
+\includegraphics{21-4ia6f10.eps}
+ \end{center}
+\caption{Algorithm for computing phrase structure forest and initial dependency forest}
+\label{fig:HPF_IDF_Algorithm}
+\end{figure}
+
+When parsing is finished, the chart has active and inactive edges. The
+phrase structure forest for an inactive edge *E, hpf(*E), is defined as a
+set of edges reachable from edge *E. The phrase structure forest PF is
+defined as hpf(*E$_\mathit{root}$). PF is a subset of the inactive edges in
+the chart, because there are inactive edges that are unreachable from
+*E$_\mathit{root}$. The initial dependency graph IDG is a set of arcs in the
+dependency structures of the edges in
+PF. Figure \ref{fig:HPF_IDF_Algorithm} shows the algorithm to compute PF,
+IDG, and the initial C-Matrix (ICM) from
+*E$_\mathit{root}$. Figure \ref{fig:PDGParseForest} shows PF for the example
+sentence computed by the algorithm using the grammar in
+Figure \ref{fig:ExampleGrammar}. All RCSLs of the edges in PF are [~], and
+are not shown in Figure \ref{fig:PDGParseForest}. The number of edges in the
+phrase structure forest is called the ``size of the phrase structure forest.'' The size of the
+headed phrase structure forest is more than or equal to that of the headless
+phrase structure forest, because the edge merge condition of the headed phrase structure
+forest (Figure \ref{fig:ChartAlgotithm} (j)) is more strict compared with
+that of the headless phrase structure forest.
+
+\begin{figure}[b]
+ \begin{center}
+\includegraphics{21-4ia6f11.eps}
+ \end{center}
+\caption{Phrase structure forest for ``time flies like an arrow''}
+\label{fig:PDGParseForest}
+\end{figure}
+
+The algorithm in Figure \ref{fig:HPF_IDF_Algorithm} traverses the chart
+by using three mutually recursive functions, \textit{try\_edge}, \textit{try\_FCSL}, and
+\textit{try\_CS} which compute PF, IDG, and ICM for their arguments, i.e., the
+packed edge, the constituent sequence list, and the constituent,
+respectively. \textit{try\_edge} calls \textit{try\_FCSL}
+(Figure \ref{fig:HPF_IDF_Algorithm} (d)), \textit{try\_FCSL} calls \textit{try\_CS}
+(Figure \ref{fig:HPF_IDF_Algorithm} (h)), and \textit{try\_CS} calls \textit{try\_edge}
+\linebreak
+(Figure~\ref{fig:HPF_IDF_Algorithm} (j)). The arc in the arc sets
+returned from \textit{try\_edge(E)}, \textit{try\_FCSL(FCSL)}, and \textit{try\_CS(CS)} are called
+the arc governed by $E$, \textit{FCSL}, and \textit{CS}, respectively.
+
+The algorithm starts from Figure \ref{fig:HPF_IDF_Algorithm} (a) by
+calling \textit{try\_edge}(*E$_\mathit{root}$). \textit{try\_edge} judges whether the
+argument is already computed at (b). If it has already been computed,
+\textit{try\_edge} simply returns the set of arcs recorded in \textit{TER}. The
+registration of a set of arcs is performed in (g) when a new result is
+obtained. At (c) and (e), new edges are added to \textit{PF}. As shown at
+(f), the arcs governed by edge E are the union of the DSL in E and
+those governed by FCSL.
+
+\textit{try\_FCSL} processes a set of CSDS pairs, and \textit{try\_CS} processes one CSDS
+pair in it. As shown at (i), the set of arcs governed by FCSL is the
+union of the arcs governed by the CSs in the FCSL. As shown at (k),
+the set of arcs governed by CS is the union of the arcs governed by
+the packed edges in the CS.
+
+Figure \ref{fig:TryEdgeFunctionExecution} shows the execution process of
+E\#170 in Figure \ref{fig:PDGParseForest}. The (c\#) shows a function
+call and (r\#) shows the return value, i.e., the set of arcs of the
+function, and (c1) to (c4) correspond to the function calls (j), (d),
+and (h) in Figure \ref{fig:HPF_IDF_Algorithm}, respectively. The (c4)
+returns \{\} at (r4) because E\#103 is a lexical edge. The function
+call (c4) returns result (r4). Then, the second CSDS pair ([103, 119,
+  165], \{obj-4, vpp-20\}) is processed by function call (c5). The
+second time execution for ``\textit{try\_edge}(E\#103)'' occurs at
+(c6). This time, the execution result stored in \textit{TER} at
+Figure \ref{fig:HPF_IDF_Algorithm} (b) is searched and returned. Finally,
+the set of arcs at (r1) is obtained.
+
+\begin{figure}[b]
+\vspace{-0.5\Cvs}
+ \begin{center}
+\includegraphics{21-4ia6f12.eps}
+ \end{center}
+\caption{Example of algorithm execution}
+\label{fig:TryEdgeFunctionExecution}
+\end{figure}
+
+The generation of the CM is performed on the basis of the following C-Matrix
+setting conditions, which work to allow co-occurrence between all arcs
+in the set of edges constituting a phrase structure tree in the phrase
+structure forest.
+
+\begin{definition} \label{def:CoocCondition} [C-Matrix setting conditions] 
+
+The ``C-Matrix setting condition'' is any of the following three conditions:
+
+\noindent
+(CM1) The arcs in the same DS co-occur with each other.\\
+(CM2) Given a CSDS pair (CS, DS), the arcs in the DS co-occur with those governed by the CS.\\
+(CM3) The arcs governed by one CS co-occur with one another.
+
+\end{definition}
+
+\noindent
+(CM1) to (CM3) correspond to the CM processing (1) to (3)
+in Figure \ref{fig:HPF_IDF_Algorithm}. In processing E\#170,
+\textit{set\_CM}(\{obj-4, vpp-20\}, \{obj-4, vpp-20\}) (\textit{set\_CM} is
+defined in Figure \ref{fig:HPF_IDF_Algorithm}) is executed at the CM
+processing (1) because the arcs in the second CSDS pair ([103, 119,
+  165], \{obj-4, vpp-20\}) satisfy the co-occurrence setting condition
+(CM1). At CM processing (2), $A\_CS$ has been set to the set of arcs
+shown at (r5) in Figure \ref{fig:TryEdgeFunctionExecution} and
+\textit{set\_CM}(\{obj-4, vpp-20\}, \{pre-15, det-14\}) is executed, due to
+(CM2). In processing \textit{try\_CS}([103, 119, 165]), the CM processing
+(3) set CM from among the arcs governed by E\#103, E\#119, and E\#165,
+due to (CM3). The outputs PF and IDF are shown in
+Figure \ref{fig:PDGParseForest} and \ref{fig:IDF},
+respectively. E\#181, E\#176, and E\#174 have the same category ``s''
+and the same coverage (from 0 to 5), but are not shared because their
+phrase heads are different.
+
+
+\subsection{Generation of the Reduced Dependency Forest}
+
+The two arcs obj4 and obj25 in the IDF in Figure \ref{fig:IDF} have the
+same structure except for their arc-IDs. IDFs may contain arcs of this
+kind, called ``equivalent arcs,'' which are sometimes generated, from
+one grammar rule and sometimes from different grammar rules. For
+example, obj4 and obj25 are generated from the constituent sequence
+``vp np'' in (R9) and (R10) in Figure~\ref{fig:ExampleGrammar}. In fact,
+(R9) and (R10) differ in terms of the existence of the prepositional
+phrase, but the interpretation of the ``obj'' relations in (R9) and
+(R10) is considered to be the same.\footnote{(R9) and (R10) are merged
+into one grammar rule vp/V$\rightarrow$ v/V, np/\textit{NP},
+｛pp/\textit{PP}｝:[arc(obj, \textit{NP}, V),arc(vpp, \textit{PP}, V)] if the description
+schema \{\} for optional elements is introduced. This grammar rule
+does not generate the equivalent arcs for obj relation.}
+
+Here, some definitions are given for treating equivalent arcs. The
+``generalized arc'' is an arc with arc-ID `?'. Arcs with number IDs
+are called IDed arcs. The generalized arc for an IDed arc is obtained
+by simply replacing the arc-ID in the IDed arc with `?'. A dependency
+tree consisting of generalized arcs is called a ``generalized
+dependency tree.'' A dependency tree consisting of IDed arcs is called
+an ``IDed dependency tree.'' The generalized arc for an IDed arc X is
+written as ?X. The generalized tree for an IDed tree DT is written as
+?DT. Two dependency trees that have the same generalized tree are
+called ``equivalent.''
+
+The reduced dependency forest is obtained by reducing the initial
+dependency forest. The reduction of the dependency forest is an
+operation in that more than one equivalent arc is merged into another arc
+without increasing the number of generalized dependency trees in
+the dependency forests. The reduced dependency has a smaller size,
+compared with the original dependency forest before the merge
+operation.
+
+
+\subsubsection{Merge Operation for Equivalent Arcs}
+
+The merge operation for the equivalent arcs $X$, $Y$ (written in
+equiv($X$, $Y$)) is defined as follows:
+
+\begin{definition}\label{def:ArcMrgOpe}[Arc merge operation]
+
+\begin{itemize}
+\item[(1)] Compute a new dependency graph DG' by removing $Y$ from DG. (DG'=DG$-\{Y\}$)
+\item[(2)] Generate a new C-Matrix CM' from CM by applying $set\_CM(X, I)$ for arc $I$($I \in \mathrm{DG}$, $I \neq X$, $I \neq Y$, CM($Y$, $I$)=○)
+\end{itemize}
+\end{definition}
+
+\begin{figure}[b]
+ \begin{center}
+\includegraphics{21-4ia6f13.eps}
+ \end{center}
+\caption{Merge operation for the equivalent arc pair (X, Y)}
+\label{fig:ArcMerge}
+\end{figure}
+
+The merge operation generates a new dependency forest $\langle \text{DG', CM'}\rangle$. 
+Figure \ref{fig:ArcMerge} shows a diagrammatic example of a merge
+operation. In the following sections, changes in various values are
+discussed; for example, the number of generalized dependency trees in
+the dependency forest before and after the merge operation. To make
+this distinction, the expression ``wrt $\langle \text{DG, CM}\rangle $'' or ``wrt DF''
+(wrt: with respect to) is used. For example, the set of arcs that
+co-occurs with an arc A is defined as co(A). Then, ``co($A$) wrt
+$\langle \text{DG, CM}\rangle$'' and ``co($A$) wrt $\langle \text{DG', CM'}\rangle$'' represent the set of
+arcs before and after the merge operation. ``co($A$) wrt $\langle \text{DG, CM}\rangle 
+= \mathrm{co}(A)$ wrt $\langle \text{DG', CM'}\rangle$'' means the set of arcs is not changed by
+the merge operation. In order to simplify the description, ``wrt
+$\langle \text{DG, CM}\rangle$'' is not shown in default. Merging all equivalent arcs
+in CM\footnote{This is equivalent to sharing all equivalent arcs
+  during the parsing process} makes the structure equivalent to a
+syntactic graph. This operation possibly impairs the soundness of the
+data structure.
+
+
+\subsubsection{Merge Condition for Equivalent Arcs}
+
+From the definition, the condition of the dependency forest reduction is to preserve the soundness, i.e., no new generalized dependency tree (interpretation) increase by the merge operation.
+
+\noindent
+\textbf{[Merge Condition for Equivalent Arcs]}
+\begin{quote}
+When the dependency forest DF' is generated from DF by
+merging arc Y with X in the dependency graph of DF, following is the condition for
+forest reduction: 
+
+``a set of generalized dependency trees in DF = a set of generalized
+dependency trees in DF'.''
+\end{quote}
+
+\noindent
+This condition is verifiable by searching a new
+generalized dependency tree in DF'. The condition for the existence of
+a generalized dependency tree not in DF but in DF' is called an
+``increase condition for generalized dependency trees'' (ICG) in this
+paper. The merge condition is represented as ``ICG is not
+satisfied.''
+
+A dependency forest is a set of IDed arcs, and prescribes the set of
+IDed dependency trees and that of generalized dependency trees. The
+condition for the existence of an IDed dependency tree not in DF but
+in DF' (this kind of tree is called a ``new'' dependency tree) is
+called an ``increase condition for IDed dependency trees''
+(ICI). Obviously, if no IDed dependency tree increases by the merge
+operation, no generalized dependency tree increases. Moreover, even if
+there exist new IDed dependency trees in DF', no generalized
+dependency trees increase when the generalized dependency trees of the
+new IDed dependency trees are equivalent to those in DF. This indicates
+that ICI is a necessary condition for ICG. In the following, ICI is
+discussed first, and then ICG is verified to obtain a detailed merge
+condition for equivalent arcs.
+
+
+\subsubsection{Increase Condition for IDed Dependency Trees}
+\label{subsec:IDDTZoukaJuoken}
+
+Increase of a new IDed dependency tree is caused by allowing a new
+co-occurrence relation between arcs caused by a merge of equivalent
+arcs. The allowance of the co-occurrence relation in CM, i.e., the
+change from CM(U, V)${\neq}$○ to CM(U, V)$=$○ for arcs U, V, is
+called an ``allowance of the arc pair (U, V).'' The following lemma is
+established.
+
+\begin{lemma}[The allowance of arc pair and the increase of dependency trees]
+\label{lem:ArcPairAndNewTree}
+If a 
+\linebreak
+new well-formed dependency tree increases by the allowance of the arc pair (U, V), the dependency tree includes U and V.
+
+\proof{This lemma is obvious because well-formed dependency trees in DG', which include neither U nor V, exist in DG.\\
+}
+\end{lemma}
+
+\noindent
+Here, uniq and diff are the sets of arcs defined for the
+equivalent arcs X and Y, as follows:
+
+uniq(X, Y)=\{$I$ ${\mid}$ CM(X, $I$)=○, CM(Y, $I$)${\neq}$○, $I{\in}$DG\}
+
+diff(X, Y)=\{$(I, J) \mid I \in$ uniq(X, Y), $J \in$ uniq(Y, X)\}
+
+\noindent
+For arcs X, Y in Figure \ref{fig:ArcMerge},
+uniq(X, Y)=\{j, n\}, uniq(Y, X)=\{k\}, and diff(X, Y)=\{(j, k), (n, k)\}. The
+following lemma is established.
+
+\begin{lemma} [Arcs in a new well-formed dependency tree]
+\label{lem:ArcsInNewTree}
+In the case that a well-formed dependency tree is generated by the
+merge of equivalent arcs X, Y, the new tree includes at least two
+arcs A, B, such that (A, B) ${\in}$ diff(X, Y).
+
+\proof{
+Let DF and DF' be the dependency forests before and after the merge of
+X and Y. Assume that a new dependency tree DT$_x$ is obtained by the
+allowance of the arc pair (X, B$_i$) caused by the merge of X and Y.
+X and B$_i$ are included in DT$_x$, according to Lemma
+\ref{lem:ArcPairAndNewTree}. Here, let
+R$=$DT$_x-$\{X, B$_i$\}. CM(X, U)$=$○ wrt DF', CM(B$_i$, U)=○ wrt DF'
+for U${\in}$R, because DT$_x$ is a well-formed dependency tree.
+
+Assuming that there is no arc U such that CM(Y, U)${\neq}$○ wrt DF
+(i.e., CM(Y, U)$=$○ wrt DF, U${\in}$R), DT$_y$=\{Y, B$_i$\}+R is a
+well-formed dependency tree in DF. DT$_x$ is not a new generalized
+dependency tree because DT$_x$ and DT$_y$ differ only in equivalent
+arc X and Y, i.e., DT$_x$ and DT$_y$ are equivalent. Therefore, DT$_x$
+must include at least one U$_i$, such that CM(Y, U$_i$)${\neq}$○ wrt
+DF is a new generalized dependency tree. This lemma is established
+because (B$_i$, U$_i$)${\in}$diff(X, Y).   }
+\end{lemma}
+
+\noindent
+The following theorem is derived from Lemma \ref{lem:ArcsInNewTree}.
+
+\begin{theorem}[The increase condition for IDed dependency tree]
+\label{the:IDedDepTreeIncreaseCond}
+Let arc pair (A, B)${\in}$diff(X, Y) for equivalent arcs X, Y in DG of
+the dependency forest $\langle \text{DG, CM}\rangle$. The IDed dependency trees
+increase if and only if $\langle \text{DG', CM'}\rangle$ obtained by the merge of Y to
+X has an IDed dependency tree NDT that includes \{X, A, B\}.
+
+\proof{This theorem is proved by showing that a new well-formed IDed
+  dependency tree includes \{X, A, B\} and a well-formed IDed
+  dependency tree that includes \{X, A, B\} is a new well-formed IDed
+  dependency tree. Assuming that NDT is a new IDed dependency tree
+  existing in $\langle \text{DG', CM'}\rangle$, there exists at least one arc pair
+  (A$_i$, B$_i$)${\in}$diff(X, Y), A$_i \in$NDT,
+  B$_i\in$NDT. On the other hand, X${\in}$NDT is true, due to Lemma
+  \ref{lem:ArcPairAndNewTree}. Therefore, a new well-formed IDed
+  dependency tree includes \{X, A, B\}. Moreover, no IDed well-formed
+  dependency trees exist in $\langle \text{DG, CM}\rangle$ because (A, B)${\in}$diff(X,
+  Y). Therefore, an IDed well-formed dependency tree that includes
+  \{X, A, B\} is a new well-formed IDed dependency tree.
+
+}
+\end{theorem}
+
+\noindent
+Some functions and notations are introduced for discussion on the increase condition of dependency trees.
+
+\vspace{0.5\Cvs}
+\noindent
+\fbox{
+\begin{minipage}{405pt}
+\hangafter=1\hangindent=2.5zw\noindent
+same\_position($U$, $V$): The positions of dependent nodes of $U$ and $V$ are the same.
+\par
+\hangafter=1\hangindent=2.5zw\noindent
+dts($S$) wrt $\langle\mathit{DG}, \mathit{CM}\rangle$ : a set of IDed well-formed dependency trees that consist of arcs in arc set $S{\subset}DG$ and satisfy the arc co-occurrence constraint
+\par
+\hangafter=1\hangindent=2.5zw\noindent
+co($U$) wrt $\langle\mathit{DG}, \mathit{CM}\rangle$ : a set of arcs that co-occur with arc U including U, i.e., \{$X$ ${\mid}$ $X$=$U$ or CM($X$, $U$)=○, $X{\in}DG$\}
+\par
+\hangafter=1\hangindent=2.5zw\noindent
+dts\_with\_arcs($A_1$, $A_2$, ${\ldots}$ , $A_n$) wrt $\langle\mathit{DG}, \mathit{CM}\rangle$ : a set of well-formed dependency trees in $\langle\mathit{DG}, \mathit{CM}\rangle$ that include arcs $A_1$, $A_2$, ${\ldots}$ , $A_n$, i.e., dts(co($A_1$)${\cup} {\cdots} {\cup}$co($A_n$)) wrt $\langle\mathit{DG}, \mathit{CM}\rangle$
+\par
+\end{minipage}}
+\vspace{0.5\Cvs}
+
+\noindent
+ICI with respect to the arc pair (A, B) ${\in}$ diff(X, Y),
+equiv(X, Y) can be checked by searching the existence of a well-formed
+dependency tree including \{X, A, B\} in $\langle\text{DG', CM'}\rangle$, according to
+Theorem \ref{the:IDedDepTreeIncreaseCond}. To make this search process
+more efficient, the following three cases with respect to arcs X, A, and
+B are considered.
+
+\begin{itemize}
+\item[(RC1)] Any of same\_position(A, B), same\_position(X, A), or same\_position(X, B) is true
+\item[(RC2)] CM(A, B)${\neq}$○ is true
+\item[(RC3)] except for (RC1) and (RC2)
+\end{itemize}
+
+\noindent
+In cases (RC1) and (RC2), no well-formed dependency trees that
+include \{X, A, B\} exist in $\langle\text{DG', CM'}\rangle$ because of the existence of
+the single role constraint and the co-occurrence constraint,
+respectively. In the case of (RC3), the existence of a well-formed
+dependency tree that includes \{X, A, B\}, i.e., dts\_with\_arcs(X, A, B)
+wrt $\langle\text{DG', CM'}\rangle$=\{\}, should be checked for ICI.
+
+
+\subsubsection{Increase Condition for Generalized Dependency Trees}
+
+As described above, ICI is a necessary condition for ICG. Therefore, ICG is defined as follows:
+
+\noindent
+\textbf{[The increase condition for generalized dependency tree]}
+
+\begin{quote}
+Let DF' be a dependency forest generated from dependency forest DF by
+merging arc Y to X, where X and Y are equivalent arcs, and let
+DT$_{new}$ be the set of IDed dependency trees not in DF but in
+DF'. There exists at least one IDed dependency tree DT 
+${\in}$
+DT$_{new}$, such that the generalized dependency tree ?DT is not
+included in DF.
+\end{quote}
+
+\noindent
+The merge condition for equivalent arcs is the negation of ICG for the arcs.
+
+
+\subsubsection{Dependency Forest Reduction Algorithm}
+
+\begin{figure}[b]
+ \begin{center}
+\includegraphics{21-4ia6f14.eps}
+ \end{center}
+\caption{Algorithm for reduction of dependency forest}
+\label{fig:DFReductionAlgorithm}
+\end{figure}
+
+Figure \ref{fig:DFReductionAlgorithm} shows the dependency forest
+reduction algorithm for $\langle\text{DG, CM}\rangle$, based on the merge condition for
+equivalent arcs (i.e., the condition for forest reduction) described
+in the previous section. In this algorithm, CM is represented as a set
+of co-occurable arc pairs. Arcs X and Y are co-occurable if $\langle\text{X,Y}\rangle \in \mathrm{CM}$.
+
+Figure \ref{fig:DFReductionAlgorithm} (a) selects a pair of equivalent
+arcs X, Y in DG, and the part from (b) to (h) checks if a new
+generalized dependency tree is generated in the dependency forest when
+arc pair (A, B) is allowed. If all arc pairs in \textit{diff}(X, Y) fail to
+generate any new generalized dependency tree, the forest reduction is
+performed at (i).
+
+The availability of the allowance of (A, B) is determined by checking
+ICG after checking ICI. At Figure \ref{fig:DFReductionAlgorithm} (b), the
+conditions (RC1) and (RC2) in Section \ref{subsec:IDDTZoukaJuoken} are
+checked. If either of the conditions is satisfied, the processing
+proceeds to the next arc pair in \textit{diff}(X, Y) because the allowance
+of (A, B) generates no new IDed dependency trees. If not, the
+processing proceeds to the check of ICI. At (c), $\langle\text{DG', CM'}\rangle$ is
+generated by merging Y to X. Since the existence check of a new IDed
+tree is basically performed by tree search for $\langle\text{DG', CM'}\rangle$, the
+reduction of search space improves the efficiency. Based on Theorem
+\ref{the:IDedDepTreeIncreaseCond}, the search space is reduced from
+DG' to $DG\_XAB$(=$co(X){\cap}co(A){\cap}co(B)$) at (d). Then,
+\textit{search\_dt} at (e) searches a new IDed dependency tree for
+DG\_XAB. If no dependency tree is obtained, the allowance of (A, B)
+satisfies the merge condition for equivalent arcs.  If a dependency
+tree DT is obtained, DT is an IDed dependency tree that includes \{X,
+A, B\}. \textit{new\_generalized\_dt}(DT, CM, DG) at (f) checks whether the
+generalized dependency tree ?DT is new by searching ?DT for $\langle\text{DG,CM}\rangle$. 
+The detailed explanation of \textit{new\_generalized\_dt} is omitted
+here, but it realizes the search for the generalized dependency tree
+by limiting the arc set DG\_X so that it has only the equivalent arcs
+of the arcs in DT by \textit{add\_equiv\_arcs} at (q). When ?DT is a new
+generalized dependency tree, the merging of X and Y is not
+available. Processing for arcs X and Y is terminated by (g) and (h),
+and proceeds to the check of the next equivalent arc pair. If ?DT is
+not new, the merging of X and Y, i.e., the forest reduction, is
+performed at (i). Furthermore, when ?DT is proved to be not new at
+(f), the search of other dependency trees for DG\_XAB is performed at
+(e). \textit{search\_dt} searches a dependency tree that satisfies the
+co-occurrence condition in depth-first manner with respect to input
+position P. \textit{search\_dt} selects one arc from the arc set
+\textit{arcs\_at}(DG, P) that is a set of arcs with position
+P. \textit{search\_dt} searches all possible dependency trees by selecting
+another arc at (k) when there are no solutions for arcs, from $P+1$ to
+the end position at (m).
+
+
+\subsubsection{Execution Example of the Dependency Forest Reduction Algorithm}
+
+This section explains the execution process of the algorithm in
+Figure \ref{fig:DFReductionAlgorithm} for the example sentence ``Tokyo
+taxi driver call center'' in Appendix~A. The
+reduced dependency forest for this example has equivalent
+arcs. Figure \ref{fig:IDFandRDFexample} (a) shows the initial dependency
+forest for the example sentence. It has four sets of equivalent arcs,
+(1, 2), (5, 7), (13, 15), (25, 26, 27), which are surrounded with double
+lines.
+
+\begin{figure}[t]
+ \begin{center}
+\includegraphics{21-4ia6f15.eps}
+ \end{center}
+\caption{Initial dependency forest and its reduction}
+\label{fig:IDFandRDFexample}
+\end{figure}
+
+The forest reduction is performed along with the algorithm in
+Figure \ref{fig:DFReductionAlgorithm}. The first equivalent arc pair (1,
+2) is selected to set $X=1$, $Y=2$. \textit{diff}($X$, $Y$) is computed as
+\{(5, 14), (5, 15), (5, 27), ${\ldots}$ \} by combining the elements
+in $\mathit{uniq}(X, Y)=\{5, 24, 25\}$ and $\mathit{uniq}(Y, X)=\{14, 15, 27\}$. The
+first arc pair (5, 14) is skipped by the condition check for (RC1) at
+Figure \ref{fig:DFReductionAlgorithm} (b) because $\mathit{same\_position}(5,
+14)$ is true. The second arc pair (5, 15) is tried. (5, 15) does not
+match the conditions at (b), so CM' and DG' are generated at
+(c). $\mathrm{CM'}=\mathrm{CM}+\{\langle\text{1, 14}\rangle$, $\langle\text{1, 15}\rangle$, $\langle\text{1, 27}\rangle\}$, as shown in
+Figure \ref{fig:IDFandRDFexample} (b). Then, $DG\_XAB$ is computed at
+(d). $X=1$, $A=5$, and $B=15$ result in
+$\mathit{DG\_XAB}=\mathrm{co}(1) \cap \mathrm{co}(5) \cap \mathrm{co}(15)$ wrt $\langle\text{DG', CM'}\rangle=\{\text{1,
+28}\}$. The allowance of (5, 15) generates no new dependency trees
+because the search of the dependency tree for $DG\_XAB$ by
+$search\_dt$ at (e) fails. The processing proceeds to the check of the
+next arc pair (5, 27). Similarly, all arc pairs in \textit{diff}(1, 2) are
+assured to generate no new dependency trees, and then DG' and CM' are
+set to DG and CM at (i), respectively.
+
+Figure \ref{fig:IDFandRDFexample} (c) shows the reduced dependency forest
+finally obtained by the algorithm. It has three equivalent arcs 25, 16,
+and 27. The processing of the algorithm for this dependency forest is
+described. Let $X=25$, $Y=26$. Then,
+$\textit{uniq}(X, Y)=\{1, 24\}$, $\textit{uniq}(Y, X)=\{6, 13\}$, $\mathit{diff}(X, Y)=\{(1, 6), (1, 13), (24, 6), (24, 23)\}$. The
+arc pair (1, 6) is skipped by the condition check for (RC1). The arc
+pair (1, 13) is not skipped by the condition check for (RC1) and
+(RC2). Then, \textit{DG\_XAB} is computed at
+Figure \ref{fig:DFReductionAlgorithm} (d). $X=25$, $A=1$, and $B=13$ result
+in $\mathit{DG\_XAB}=\mathrm{co}(25) \cap \mathrm{co}(1) \cap \mathrm{co}(13)$ wrt $\langle\text{DG', CM'}\rangle
+=\{\text{25, 1, 13, 5, 28}\}$. A new IDed dependency tree \{25, 1, 13, 5, 28\} is
+obtained by \textit{search\_dt} at (e) for \textit{DG\_XAB}.\footnote{This tree
+corresponds to the tree in Figure 26 (d).} Then, \textit{new\_generalized\_dt} at
+(f) is called, and \textit{add\_equiv\_arcs} at (q) computes a set of arcs
+\textit{DG\_X}, where the equivalent arcs of the arcs in DT are added. In the
+case of Figure \ref{fig:IDFandRDFexample} (c), arc 25 has equivalent arcs
+26 and 27. Addition of these arcs results in
+$\mathit{DG\_X}=\{\text{25, 26, 27, 1, 13, 5, 28}\}$. \textit{search\_dt} at
+Figure \ref{fig:DFReductionAlgorithm} (r) tries to get a dependency tree
+for \textit{DG\_X}, but fails because all equivalent arcs 25, 26, and 27 have
+inconsistent arcs in $DG\_X$, i.e., $\langle 25, 13\rangle$, $\langle 26, 1\rangle$, and
+$\langle\text{27, 5}\rangle$ are not in CM. As a result, \textit{new\_generalized\_dt} at (f)
+becomes true, that is, an increase of the generalized dependency tree
+occurs. Therefore, the merging of $X=25$ and $Y=26$ is not
+performed. The dependency forest in Figure \ref{fig:IDFandRDFexample} (c)
+includes the dependency trees in Figure \ref{fig:SynGraphBadExample} (a)
+to (c), and retains the soundness.
+
+The above algorithm does not assure generation of one reduced
+dependency forest. The output dependency forest may vary by the
+application order of the merge operations for equivalent arcs. There
+exist different dependency forests containing the same three
+generalized dependency trees for the above example. The algorithm in
+Figure \ref{fig:DFReductionAlgorithm} does not assure that it generates
+the minimum dependency forest. In fact, there exists a dependency
+forest smaller than that in Figure \ref{fig:IDFandRDFexample}
+(c). Moreover, there is room for improving the computational amount in
+the above algorithm. The construction of the smallest reduced
+dependency forest and improvement in algorithm performance are future
+tasks.\footnote{PDG allows arbitrary mapping between the constituent
+sequences and the partial dependency trees defined in grammar
+rules. Therefore, any dependency structure can be assigned for any
+constituent sequence, provided that they satisfy the partial
+dependency structure condition. This feature suggests that, not only
+the optimization techniques in the general algorithm, but also the
+techniques based on the structural analysis of the grammar rules are
+effective.}
+
+
+\subsection{Correspondence between Phrase Structure Forest and Dependency Forest}
+\label{sec:MappingBetweenPTAndDT}
+
+Appendix~B shows that the initial dependency forest satisfies the
+completeness and soundness with respect to the phrase structure
+forest. Since the reduced dependency forest has the same set of
+generalized dependency trees as the initial dependency forest, the
+soundness and completeness between the (reduced) dependency forest and
+the phrase structure forest are assured. The correspondences between
+the phrase structure trees (phrase structure trees) in the phrase
+structure forest and the dependency trees in the dependency forest are
+not necessarily simple one-to-one relations. One phrase structure tree
+may correspond to more than one dependency tree, whereas more than one
+phrase structure tree may correspond to one dependency
+tree. Considering the variety (one meaning can be expressed by more
+than one expression) and ambiguity (one expression expresses more than
+one meaning) encoded in natural languages, these
+multiple correspondences may be natural. The correspondences between
+phrase structure trees and dependency trees are discussed in the next
+section by referring to the experiments for sentence analysis using a
+PDG prototype system.
+
+
+\section{Experiment for Analysis of Example Sentences}
+
+One of the design targets of PDG is the suppression of the
+combinatorial explosion caused by a variety of ambiguities using
+packed shared data structures. This section describes the experiment
+for analyzing typical ambiguous sentences, which contain various kinds
+of ambiguities, using PDG grammar rules. This section also discusses
+the relation between the phrase structure forest and the dependency
+forest, and the generation of non-projective dependency trees on the
+basis of real analysis examples. The performance of the algorithm is
+an important factor from a practical viewpoint. The algorithms for
+parsing, generation of phrase structure forest, and initial dependency
+forest and dependency forest reduction described in this paper are
+implemented for verifying the PDG analysis. The practical
+implementation and its evaluation are subjects for future work. The
+following experiment utilizes a prototype PDG system, implemented in
+Prolog.
+
+
+\subsection{PDG Grammar Rules for Example Sentences}
+
+Figure \ref{fig:GrammarForExamples} shows PDG grammar rules used for
+analyzing the example sentences containing various prototypical
+ambiguities. The POSs in the grammar rules are determiner(det),
+n(noun), be-verb(be), present particle of verb (ving), verb (v),
+preposition (pre), adverb (adv), and relational phrase (relp). The
+grammar rules are not for linguistic analysis, but for experiments with
+respect to the PDG framework and algorithms. The grammar rules include
+the following types of ambiguities.
+
+\hangafter=1\hangindent=1em
+\noindent
+PP attachment: Two kinds of attachment ambiguities in R6 (noun attachment) and R10, R17 (verb attachment) 
+
+\hangafter=1\hangindent=1em
+\noindent
+Coordination scope:]R11 (and) and R12 (or) are coordination noun phrase rules
+
+\hangafter=1\hangindent=1em
+\noindent
+Be-verb interpretation: Two structural ambiguities caused by be-verb interpretations, i.e., R15 (present progressive) and R16 (copula)
+
+\hangafter=1\hangindent=1em
+\noindent
+Interpretation of the present progressive form of verb: the following three ambiguities of the present progressive form of verb are described
+
+\begin{itemize}
+\item[(a)] adjective usage where the modified noun occupies the subject role (R7)
+\item[(b)] adjective usage where the modified noun occupies the object role (R8)
+\item[(c)] gerund usage (R9, R10)
+\end{itemize}
+
+\begin{figure}[t]
+ \begin{center}
+\includegraphics{21-4ia6f16.eps}
+ \end{center}
+\caption{Grammar for the example sentences}
+\label{fig:GrammarForExamples}
+\end{figure}
+
+\noindent
+R8 and R9 are similar since both rules prescribe the
+relation between a noun and verb as an object. However, they have different
+interpretations in the phrase head and generate different structures
+of dependency trees. The grammar contains declarative form (R1) and
+imperative sentence form (R2) to produce structural ambiguities in
+combination with POS ambiguities of words for sentences like ``Time
+flies like an arrow.'' (R19) is a rule for generating a non-projective
+dependency structure.
+
+
+\subsection{Analysis of Prototypical Ambiguous Sentences}
+
+The example for an ambiguous sentence with POS ambiguities has
+already been shown in the previous sections in detail. The examples in
+the following sections show prototypical syntactic ambiguities, i.e.,
+PP attachment ambiguity, coordination scope ambiguity, and ambiguities
+in structural interpretations.
+
+
+\subsubsection{PP attachment Ambiguity}
+\label{sec:PP-attachment}
+
+Figure \ref{fig:DFForISawSec4} shows the dependency forest for the
+sentence ``I saw a girl with a telescope in the forest,'' which has PP
+attachment ambiguities. Each arc in the dependency graph has an arc
+name attached by arc-ID and preference score.\footnote{Preference
+  scores show the degree of preference of arcs
+  \cite{Hirakawa06b_e,Hirakawa07}. The preference score is not used in
+  this paper.} The table in Figure \ref{fig:DFForISawSec4} shows the
+POS and position information of each node. This sentence has no POS
+ambiguities, but has PP attachment ambiguities for prepositions
+``with'' (two ambiguities: \textit{npp}13, \textit{vpp}14) and ``in'' (three
+ambiguities: \textit{npp}23, \textit{npp}25, \textit{vpp}26). CM in
+Figure \ref{fig:DFForISawSec4} inhibits some of the combinations of these
+ambiguous arcs. \textit{npp}13 and \textit{vpp}14 (or \textit{npp}23, \textit{npp}25, and \textit{vpp}26)
+have no co-occurrence relation because they have the same position
+(the single role constraint). The co-occurrence between $vpp14$ and
+\textit{npp}25 is also inhibited. If this co-occurrence constraint does not
+exist, the dependency forest has six interpretations caused by two PP
+attachment ambiguities ($2*3=6$). CM(14, 25)${\neq}$ ○, which
+corresponds to the projectivity constraint, excludes a non-projective
+dependency tree from a set of well-formed dependency trees in the
+dependency forest. This dependency forest has five well-formed
+dependency trees, which are possible interpretations for the example
+sentence.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-4ia6f17.eps}
+\end{center}
+\caption{DF for the example sentence including PP attachments}
+\label{fig:DFForISawSec4}
+\end{figure}
+
+The sizes of the phrase structure forest, the initial dependency
+forest, and the reduced dependency forest for this example are 25, 18,
+and 13, respectively. The phrase structure forest contains five phrase
+structure trees\footnote{In judging the equivalence of the phrase
+  structure trees, phase heads (head nodes) are taken into
+  consideration.} corresponding to the five interpretations of the
+sentence. The initial dependency forest and the reduced dependency
+forest have five IDed dependency trees, which correspond to the five
+generalized dependency trees. \textit{obj}5, \textit{npp}13, \textit{vpp}14, and \textit{pre}11
+have 2, 1, 1, and 1 equivalent arcs in the initial dependency forest,
+respectively. For example, \textit{obj}5 and its equivalent arcs are
+generated from the edges, shown below in diagrammatic form, originated
+in the grammar rule (R14).
+
+$\langle\text{1, 4, vp/([saw]-v-1)} \rightarrow \text{v(ID:109) np(ID:126) ・, \{arc(obj-5, [girl]-n-3, [saw]-v-1)\}}\rangle$
+
+$\langle\text{1, 7, vp/([saw]-v-1)} \rightarrow \text{v(ID:109) np(ID:163) ・, \{arc(obj-15, [girl]-n-3, [saw]-v-1)\}}\rangle$
+
+$\langle\text{1, 10, vp/([saw]-v-1)} \rightarrow \text{v(ID:109) np(ID:203) ・, \{arc(obj-28, [girl]-n-3, [saw]-v-1)\}}\rangle$
+
+\noindent
+The first edge has coverage from 1 to 4 (``saw a girl''),
+phrase head [saw]-v-1, constituent sequence v(ID:109)\footnote{The
+  packed edge whose category is v and edge-ID is 109.} np(ID:126), and
+the obj arc with arc-ID 5. The above equivalent arcs are generated
+from the combination with edges np(ID:126), np(ID:163), and np(ID:203),
+which correspond to noun phrases with different coverage. The reduced
+dependency forest has no equivalent arcs because all equivalent arcs
+in the initial dependency forest are merged.
+
+
+\subsubsection{Coordination Scope Ambiguity}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-4ia6f18.eps}
+\end{center}
+\caption{DF for the example sentence, including conjunctions}
+\label{fig:DFForEarthAndMoonSec4}
+\end{figure}
+
+Figure \ref{fig:DFForEarthAndMoonSec4} shows the dependency forest for
+the sentence ``Earth and Moon or Jupiter and Ganymede,'' which has
+coordination scope ambiguities. ``Earth'' and ``Moon'' have two and
+three outgoing arcs, respectively, corresponding to coordination scope
+ambiguities. CM(22, 12)${\neq}$ ○, which corresponds to the
+projectivity constraint, excludes a non-projective dependency tree
+from a set of well-formed dependency trees in the dependency
+forest. This dependency forest has five well-formed dependency trees,
+which are possible interpretations for the example sentence.
+
+The sizes of the phrase structure forest, the initial dependency
+forest, and the reduced dependency forest for this example are 18, 17,
+and 10, respectively. The phrase structure forest contains five phrase
+structure trees corresponding to the five interpretations of the
+sentence. The initial dependency forest and the reduced dependency
+forest have five IDed dependency trees, which correspond to the five
+generalized dependency trees. \textit{or}22, \textit{or}9, \textit{cnj}6, \textit{and}18, and \textit{cnj}14
+have 1, 1, 1, 2, and 2 equivalent arcs in the initial dependency
+forest, respectively. The reduced dependency forest has no equivalent
+arcs because all equivalent arcs in the initial dependency forest are
+merged. The coordination scope ambiguity is similar to the
+PP attachment ambiguity in the previous section, but is different from
+the PP attachment ambiguity because it has the modification scope
+problem described below.
+
+
+\subsubsection{Ambiguity in Structural Interpretation}
+\label{sec:AmbiguityInStructuralInterpertation}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-4ia6f19.eps}
+\end{center}
+\caption{DF for the example sentence, including structural ambiguities}
+\label{fig:DFForMyHobbyIsSec4}
+\end{figure}
+
+Figure \ref{fig:DFForMyHobbyIsSec4} shows the dependency forest for the
+sentence ``My hobby is watching birds with a telescope,'' which has
+ambiguities such as the interpretation of be-verb (present progressive
+form or copula), the interpretation of ``watching birds''
+(\textit{adjs}3, \textit{adjo}4, \textit{obj}5), and PP attachment
+(\textit{npp}21, \textit{vpp}22, \textit{npp}24, \textit{vpp}25). This sentence has 10
+interpretations.
+
+The sizes of the phrase structure forest, the initial dependency
+forest, and the reduced dependency forest for this example are 23, 24,
+and 16, respectively. The phrase structure forest contains eight
+phrase structure trees, corresponding to 10 interpretations of the
+sentence. The initial dependency forest and the reduced dependency
+forest have 10 IDed dependency trees, which correspond to the 10
+generalized dependency trees. \textit{dsc}9, \textit{dsc}8, \textit{obj}5, \textit{npp}21, and
+\textit{vpp}22 have 2, 2, 5, 2, and 2 equivalent arcs in the initial
+dependency forest, respectively. In contrast to the example in Section
+\ref{sec:PP-attachment}, the equivalent arcs are generated from more
+than one grammar rule. For example, the equivalent arcs of \textit{obj}5 are
+generated from the edges, shown below, originated in grammar rules
+(R9), (R10), and (R15)
+
+(R9) ⇒ $\langle \text{3, 5, np/([watching]-ving-3)} \rightarrow \text{ving(ID:121) np(ID:130)・, }$
+
+\quad $\text{\{arc(obj-5, [birds]-n-4, [watching]-ving-3)\}}\rangle$
+
+(R10) ⇒ $\langle \text{3, 7, np/([watching]-ving-3)} \rightarrow \text{ving(ID:121) np(ID:130) pp(ID:176)・, }$
+
+\quad $\text{\{arc(obj-6, [birds]-n-4, [watching]-ving-3), arc(vpp-22, [with]-pre-5, [watching]-ving-3)\}}\rangle$
+
+(R15) ⇒ $\langle\text{2, 5, vp/([watching]-ving-3) $\rightarrow$ be(ID:117) ving(ID:121) np(ID:130)・, }$
+
+\quad $\text{\{arc(prg-2, [is]-be-2, [watching]-ving-3), arc(obj-7, [birds]-n-4, [watching]-ving-3)\}}\rangle$
+
+\noindent
+The reduced dependency forest has no equivalent arcs. In
+this example, the number of phrase structure trees in the phrase
+structure forest is smaller than that of generalized dependency trees
+in the dependency forest. One phrase structure tree corresponds to
+more than one dependency tree. The following section discusses the
+correspondence between phrase structure trees and dependency trees.
+
+
+\subsection{1 to N / N to 1 Correspondences between Phrase Structure Trees and Dependency Trees}
+
+The correspondence between a phrase structure tree and a dependency
+tree is assured in PDG, but sometimes, one phrase structure tree has
+more than one corresponding dependency tree, and more than one phrase
+structure tree has one corresponding dependency tree.
+
+
+\subsubsection{1 to N Correspondence from Phrase Structure Tree to Dependency Trees}
+
+When one phrase structure has more than one interpretation, one phrase
+structure tree may correspond to more than one dependency tree. For
+example, when ``watching birds'' is assigned to one phrasal structure
+where the verb in present particle form modifies the noun, two
+dependency structures, ``$\text{watching} \xrightarrow{\mathrm{subj}} \text{birds}$'' 
+and ``$\text{watching} \xrightarrow{\mathrm{obj}} \text{birds}$,'' are
+assigned to the phrasal structure. This happens when there exist more
+than one grammar rule having the same rewriting rule but different
+dependency structure parts. This is the case for (R7) and (R8) in
+Figure \ref{fig:GrammarForExamples}, which are arbitrary rules,
+introduced for verifying the dependency forest. Two kinds of
+ambiguities in 1 to N mapping from phrase structure trees to
+dependency trees are considered, i.e., the ambiguities in functional
+relation and semantic relation. The former means the ambiguities in
+functional assignments (subject, object, etc.) for phrase
+structures. The functional structures and phrase structures have close
+relation, and the difference in functional structures can be reflected
+by the difference in phrase structure.\footnote{For example, the
+  category in the rewriting rule is segmented into more detailed
+  categories, reflecting the difference in functional
+  assignments. This segmentation works to remove ambiguous mapping
+  from one phrase structure to more than one functional
+  structure.} Therefore, it seems to be unusual for more than one
+functional structure to be assigned to one rewriting rule. In
+contrast, the assignment of more than one semantic structure seems to
+be quite a general phenomenon. However, introduction of 1 to N mapping
+(from phrase structure to dependency structures) into grammar rules
+may cause problems in terms of system performance and grammar rule
+maintenance. In general, sentence analysis approaches, which treat
+syntactic analysis and semantic analysis independently, are widely
+proposed and utilized. PDG introduces a semantic analysis level
+utilizing an SDG, which represents lexical concepts and semantic
+relations between them. The framework itself, for mapping one phrase
+structure tree to more than one dependency tree, is independent of the
+linguistic discussion here. Rules with mappings to semantic structures
+can be utilized properly with respect to the requirements from the
+design and development of the grammar.
+
+The example in Section \ref{sec:AmbiguityInStructuralInterpertation}
+(Figure \ref{fig:DFForMyHobbyIsSec4}) contains a phrase structure tree
+that corresponds to two dependency structures generated from (R7) and
+(R8). Figure \ref{fig:MapFromOnePTToTwoDTs} shows this phrase structure
+tree and dependency trees.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-4ia6f20.eps}
+\end{center}
+\caption{Mapping from one phrase structure tree to two dependency trees}
+\label{fig:MapFromOnePTToTwoDTs}
+\end{figure}
+
+
+\subsubsection{N to 1 Correspondence from Phrase Structure Trees to One Dependency Tree}
+
+Spurious ambiguity \cite{Noro02_e} is an example of N to 1 mapping
+from phrase structures to dependency structure. A real ambiguity is
+one where the difference in syntactic structures represents the
+difference in semantic interpretations. Spurious ambiguity is one
+where the difference in syntactic structures does not represent the
+difference in semantic interpretations, or is an ambiguity caused by
+linguistically illegal syntactic structures, generated by incomplete
+grammar rules. Spurious ambiguity is an important issue in grammar
+development from corpora \cite{Noro05_e}. Although it is not CFG, CCG
+has many spurious ambiguities because of the flexibility of rule
+application. A method for obtaining one normal form tree is proposed
+\cite{Eisner96b}, which ensures that one phrase structure tree
+among the phrase structure trees in one semantic class is obtained
+on the basis of the definition that phrase structure trees having the
+same set of leaf CCG category have the same meaning. In PDG, phrase
+structure trees corresponding to the same generalized dependency tree
+(interpretation of a sentence) can be classified into one semantic
+class.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-4ia6f21.eps}
+\end{center}
+\hangcaption{DF containing the mapping from N phrase structure trees to 1 dependency tree (spurious ambiguity)}
+\label{fig:DFContainingNtoOneMapping}
+\end{figure}
+
+Figure \ref{fig:DFContainingNtoOneMapping} shows the dependency forest
+for the example ``She curiously saw a cat in the forest'' using the
+example grammar having a spurious ambiguity. There is only one
+co-occurrence constraint between \textit{npp}17 and \textit{vpp}18 that corresponds
+to the single role constraint. The dependency forest has two
+dependency trees, which have different governors for the part ``in the
+forest.'' The phrase structure forest has three phrase structure
+trees. The initial dependency forest has three IDed dependency trees
+and two generalized dependency trees and the reduced dependency forest
+has two IDed dependency trees and two generalized dependency
+trees. The spurious ambiguities are generated from the difference in
+rule application order of (R17) and (R18) for attaching a modification
+phrase to a verb phrase. Figure \ref{fig:SuriousNtoOneMapping} shows the
+phrase structure trees and the dependency tree.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-4ia6f22.eps}
+\end{center}
+\caption{Example of mapping from N phrase structure trees to 1 dependency tree (spurious ambiguity)}
+\label{fig:SuriousNtoOneMapping}
+\end{figure}
+
+Obviously, the method of identifying the semantic class based on the
+dependency tree does not capture all semantic aspects in natural
+languages. For example, the subtle semantic difference
+\cite{Eisner96b}\footnote{For example, ``softly knock twice'' has two
+  equivalent semantic interpretations softly(twice(knock)) and
+  twice(softly(knock)), whereas ``intentionally knock twice'' has two
+  different semantic interpretations intentionally(twice(knock)) and
+  twice(intentionally(knock)).} and the ambiguities in
+number/quantifier scope\footnote{The model theoretic ambiguities as
+  observed in, ``Three men bought ten cups,'' cannot be distinguished by
+  standard phrase structure and dependency structure representations.}
+have to be considered in discussing the equivalent semantic class. The
+treatment of differences in semantic interpretation requires further
+study. Mel'cuk discussed some linguistic structures where an ordinary
+dependency structure fails to express the interpretations of a
+sentence \cite{Melcuk88}. These structures are classified into two
+categories: the structures, which cannot be treated by phrase
+structure properly, and the others. The former includes the model
+theoretic interpretation of a sentence. The latter is observed when a
+dependency structure has a head word that has dependents located at
+the right- and left-hand sides of the headword. In this case, the
+dependency structure has ambiguities in modification scope, i.e., the
+right-hand modifier modifies only the headword or the phrase including
+the left-hand modifier. This problem is called the ``modification scope
+problem'' in this paper.
+
+Figure \ref{fig:DFContainingNtoOneMappingRealAmbiguity} shows the
+dependency forest for ``Earth and Jupiter in Solar System.'' This
+sentence has two interpretations, i.e., the prepositional phrase
+modifies only the headword ``Jupiter'' or the phrase ``Earth and
+Jupiter.'' The phrase structure forest has two phrase structure trees
+corresponding to these two interpretations. On the other hand, the
+initial dependency forest has two IDed dependency trees and one
+generalized dependency tree, and the reduced dependency forest has one
+IDed dependency tree corresponding to one generalized dependency
+tree. The two phrase structure trees and one dependency tree are shown
+in Figure \ref{fig:RealNtoOneMapping}.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-4ia6f23.eps}
+\end{center}
+\caption{DF containing the mapping from N phrase structure trees to 1 dependency tree (real ambiguity)}
+\label{fig:DFContainingNtoOneMappingRealAmbiguity}
+\end{figure}
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{21-4ia6f24.eps}
+\end{center}
+\caption{Example of mapping from N phrase structure trees to 1 dependency tree (real ambiguity)}
+\label{fig:RealNtoOneMapping}
+\end{figure}
+
+Mel'cuk proposes introducing a concept called Grouping into the
+dependency structure framework to solve the modification scope problem
+\cite{Melcuk88}. Grouping is theoretically equivalent to phrase, in
+the sense that it specifies the word coverage information. However,
+grouping information is not attached to every part of the structure,
+but to some specific structures including the ``conjoined structure''
+and ``operator word,'' such as ``not'' and ``only.'' The grammar
+framework for a machine translation system \cite{Amano89} incorporates
+a mechanism similar to the grouping.\footnote{A special node called a
+  ``scoping node'' is introduced to specify the scope of a dependency
+  modification as required.} In this grammar development for a
+real-world application, the scope nodes are used only for conjoined
+structures.\footnote{This is the case for an English-to-Japanese
+  system. The requirement level may differ, according to the language
+  pairs. For example, translation between languages in the same family
+  may not require a grouping mechanism because the modification scope
+  ambiguities are avoided by bypassing, i.e., an ambiguous source
+  language structure is mapped to the corresponding target language
+  structure without disambiguation.}  This experience suggests the
+limitation of the application scope of grouping proposed by Mel'cuk is
+reasonable.  Moreover, the treatment of the modification scope
+ambiguity differs from language to language. According to
+\cite{Melcuk88}, some modification scope ambiguities are
+distinguishable by lexical or syntactic marking in Russian. Japanese
+does not inherently have the modification scope problem because it has
+the basic grammatical constraint that modifiers should be located at
+the left-hand side of their modificand. In the PDG framework,
+equivalent arcs represent the difference of modification scope, as
+shown in the previous section. Therefore, the modification scope
+problem may be avoided by introducing grouping into the treatment of
+equivalent arcs. This is a future task.
+
+
+\subsection{Generation of Non-projective Dependency Tree}
+\label{sec:NonProjectivity}
+
+The projectivity constraint\footnote{The projectivity condition
+  consists of two conditions, i.e., ``no cross dependency exits'' and
+  ``no dependency covers the top node.'' The second condition is
+  unnecessary when a special top node is introduced at the top or end
+  of a sentence.} is a basic constraint adopted by many dependency
+analysis systems, and these parsers are called projective
+parsers. Projective parsers fail to analyze sentences with
+non-projective structures. Almost all sentences in many languages are
+projective, but some types of non-projective sentences exist
+\cite{Melcuk88}. For example, ``John saw a dog yesterday which was a
+Yorkshire Terrier'' in English and ``私は本を東京に買いに昨日行きまし
+た。'' (I went to Tokyo to buy a book yesterday) in Japanese have
+projective dependency structures. McDonald reported that the
+non-projective parser outperformed the projective parser in overall
+accuracy for the analysis of Czech, which has a high degree of word
+order freedom compared with English \cite{McDonald05}. However, the
+simple introduction of non-projective interpretation may deteriorate
+the accuracy of the parsers for other languages. This seems to be the
+reason why the majority of dependency parsers adopt the projectivity
+constraint.
+
+As described in Section \ref{sec:bunpoukisoku}, the mapping between
+the constituent sequence (the body of grammar rule) and the partial
+dependency tree (the dependency structure of the grammar rule) is
+defined in the grammar rule in PDG. This framework, in combination
+with the description ability of the C-Matrix, enables a controlled
+non-projectivity instead of all-or-nothing
+non-projectivity. Controlled non-projectivity means that the
+non-projective structures are defined by some rules, which prescribe
+the well-formedness conditions. The (R19) in
+Figure \ref{fig:GrammarForExamples} is a grammar rule for a phrase
+pattern where an adverb is inserted before a relative clause and
+produces a well-formed non-projective dependency
+structure. Figure \ref{fig:Non-projectiveDT} shows the dependency tree
+for ``She saw the cat curiously which was Persian,''\footnote{This is
+  an artificial example only for showing the rule applicability.}
+obtained by the example PDG grammar. The dependency forest has one
+non-projective dependency tree.
+
+\begin{figure}[b]
+ \begin{center}
+\includegraphics{21-4ia6f25.eps}
+ \end{center}
+\caption{Example of non-projective dependency tree generation}
+\label{fig:Non-projectiveDT}
+\end{figure}
+
+
+\section{Concluding Remarks}
+
+This paper describes the MPDC model, which is the basic analysis model
+adopted by PDG, and explains two packed shared data structures of PDG,
+i.e., the phrase structure forest and the dependency forest. The
+completeness and soundness of the correspondence between the phrase
+structure forest and the dependency forest are assured. This means
+that the sentence interpretations represented in a packed shared phrase
+structure and the sentence interpretations represented in a packed
+shared dependency structure have linkages. This paper also describes
+the experimental results for analyzing some typical ambiguous
+sentences using an example PDG grammar.
+
+The current implementation of the PDG system focuses on a feasibility
+study of the PDG framework. The practical PDG system and its
+performance evaluation are future tasks. Extension of the PDG grammar
+formalism (such as the introduction of optional element specification
+and feature conditions) and improvement in performance by efficient
+codes and optimizing methods based on grammar analysis, should be
+studied to realize a practical system.
+
+\acknowledgment
+
+I would like to thank Associate Professor Ko Sakai from the School of
+Institute of Mathematics, University of Tsukuba, for his suggestions
+on the proof of the completeness and soundness of the dependency
+forest. I appreciate the comments from the referees of my related
+papers submitted to the Transaction of Information Processing Society
+of Japan and the Journal of Natural Language Processing.
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Amano, Hirakawa, Nogami, \BBA\ Kumano}{Amano
+  et~al.}{1989}]{Amano89}
+Amano, S., Hirakawa, H., Nogami, H., \BBA\ Kumano, A. \BBOP 1989\BBCP.
+\newblock \BBOQ The Toshiba Machine Translation System.\BBCQ\
+\newblock {\Bem Future Computing Systems}, {\Bbf 2}  (3), \mbox{\BPGS\ 15--23}.
+
+\bibitem[\protect\BCAY{Bikel}{Bikel}{2004}]{Bikel04}
+Bikel, D.~M. \BBOP 2004\BBCP.
+\newblock \BBOQ Intricacies of Collins' Parsing Model.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 30(4)}, \mbox{\BPGS\
+  479--511}.
+
+\bibitem[\protect\BCAY{Carroll \BBA\ Charniak}{Carroll \BBA\
+  Charniak}{1992}]{Carroll92}
+Carroll, G.\BBACOMMA\ \BBA\ Charniak, E. \BBOP 1992\BBCP.
+\newblock \BBOQ Two Experiments on Learning Probablistic Dependency Grammars
+  form Corpora.\BBCQ\
+\newblock Technical report, Department of Computer Science, Brown University.
+
+\bibitem[\protect\BCAY{Charniak}{Charniak}{2000}]{Charniak00}
+Charniak, E. \BBOP 2000\BBCP.
+\newblock \BBOQ A Maximum-Entropy-Inspired Parser.\BBCQ\
+\newblock In {\Bem Proceedings of the 1st Conference of the North American
+  Chapter of the Association for Computational Linguistics}, \mbox{\BPGS\
+  132--139}.
+
+\bibitem[\protect\BCAY{Clark \BBA\ Curran}{Clark \BBA\ Curran}{2003}]{Clark03}
+Clark, S.\BBACOMMA\ \BBA\ Curran, J.~R. \BBOP 2003\BBCP.
+\newblock \BBOQ Log-Linear Models for Wide-Coverage CCG Parsing.\BBCQ\
+\newblock In {\Bem Proceedings of the SIGDAT Conference on Empirical Methods in
+  Natural Language Processing (EMNLP '03)}, \mbox{\BPGS\ 97--104}.
+
+\bibitem[\protect\BCAY{Collins}{Collins}{1999}]{Collins99}
+Collins, M. \BBOP 1999\BBCP.
+\newblock {\Bem Head-Driven Statistical Models for Natural Language Parsing}.
+\newblock Ph.D.\ thesis, University of Pennsylvania.
+
+\bibitem[\protect\BCAY{Eisner}{Eisner}{1996}]{Eisner96b}
+Eisner, J. \BBOP 1996\BBCP.
+\newblock \BBOQ Efficient Normal Form Parsing for Combinatory Categorial
+  Grammar.\BBCQ\
+\newblock In {\Bem Proceedings of the 34th Annual Meeting of the ACL},
+  \mbox{\BPGS\ 79--86}.
+
+\bibitem[\protect\BCAY{Harper, Hockema, \BBA\ White}{Harper
+  et~al.}{1999}]{Harper99}
+Harper, M.~P., Hockema, S.~A., \BBA\ White, C.~M. \BBOP 1999\BBCP.
+\newblock \BBOQ Enhanced Constraint Dependency Grammar Parsers.\BBCQ\
+\newblock In {\Bem Proceedings of the IASTED International Conference on
+  Artificial Intelligence and Soft Computing}.
+
+\bibitem[\protect\BCAY{Hirakawa}{Hirakawa}{2001}]{Hirakawa01}
+Hirakawa, H. \BBOP 2001\BBCP.
+\newblock \BBOQ Semantic Dependency Analysis Method for Japanese Based on
+  Optimum Tree Search Algorithm.\BBCQ\
+\newblock In {\Bem Proceedings of the PACLING2001}, \mbox{\BPGS\ 117--126}.
+
+\bibitem[\protect\BCAY{Hirakawa}{Hirakawa}{2002}]{Hirakawa02_e}
+Hirakawa, H. \BBOP 2002\BBCP.
+\newblock \BBOQ Semantic Dependency Analysis Method for Japanese Based on
+  Optimum Tree Search Algorithm (in Japanese).\BBCQ\
+\newblock {\Bem IPSJ Journal}, {\Bbf 43}  (3), \mbox{\BPGS\ 696--707}.
+
+\bibitem[\protect\BCAY{Hirakawa}{Hirakawa}{2005}]{Hirakawa05d_e}
+Hirakawa, H. \BBOP 2005\BBCP.
+\newblock \BBOQ Graph Branch Algotithm: An Optimum Tree Search Method for
+  Scored Dependency Graph with Arc Co-occurrence Constraints (in
+  Japanese).\BBCQ\
+\newblock In {\Bem Natural Language Processing NL-169-16,IPSJ}, \mbox{\BPGS\
+  101--108}.
+
+\bibitem[\protect\BCAY{Hirakawa}{Hirakawa}{2006}]{Hirakawa06b_e}
+Hirakawa, H. \BBOP 2006\BBCP.
+\newblock \BBOQ {Graph Branch Algorithm: An Optimum Tree Search Method for
+  Scored Dependency Graph with Arc Co-occurrence Constraints (in
+  Japanese)}.\BBCQ\
+\newblock {\Bem Journal of Natural Language Processing}, {\Bbf 13}  (4),
+  \mbox{\BPGS\ 3--32}.
+
+\bibitem[\protect\BCAY{Hirakawa}{Hirakawa}{2007}]{Hirakawa07}
+Hirakawa, H. \BBOP 2007\BBCP.
+\newblock {\Bem Preference Dependency Grammar (PDG): Sentence Analysis Method
+  based on Integrated Multilevel Preference and Constraint}.
+\newblock Ph.D.\ thesis, University of Tokyo.
+
+\bibitem[\protect\BCAY{Hirakawa \BBA\ Amano}{Hirakawa \BBA\
+  Amano}{1989}]{Hirakawa89}
+Hirakawa, H.\BBACOMMA\ \BBA\ Amano, S. \BBOP 1989\BBCP.
+\newblock \BBOQ Japanese Sentence Analysis using Syntactic/Semantic Preference
+  (in Japanese).\BBCQ\
+\newblock In {\Bem Proceedings of the 3rd National Conference of JSAI},
+  \mbox{\BPGS\ 363--366}.
+
+\bibitem[\protect\BCAY{Jelinek, Lafferty, \BBA\ Mercer}{Jelinek
+  et~al.}{1992}]{jelinek92}
+Jelinek, F., Lafferty, J., \BBA\ Mercer, R. \BBOP 1992\BBCP.
+\newblock {\Bem {Speech Recognition and Understanding: Recent Advances, Trends,
+  and Applications, Series F: Computer and Systems Sciences, Volume 75}}, \BCH\
+  {Basic Methods of Probabilistic Context-free Grammars}, \mbox{\BPGS\
+  1689--1690}.
+\newblock Springer Verlag, New York.
+
+\bibitem[\protect\BCAY{Kaplan}{Kaplan}{1989}]{Kaplan89}
+Kaplan, R. \BBOP 1989\BBCP.
+\newblock \BBOQ The Formal Architecture of Lexical-Functional Grammar.\BBCQ\
+\newblock {\Bem Journal of Information Science and Engineering}, {\Bbf 5},
+  \mbox{\BPGS\ 305--322}.
+
+\bibitem[\protect\BCAY{Kawahara \BBA\ Kurohashi}{Kawahara \BBA\
+  Kurohashi}{2005}]{Kawahara05_e}
+Kawahara, D.\BBACOMMA\ \BBA\ Kurohashi, S. \BBOP 2005\BBCP.
+\newblock 大規模格フレームに基づく構文・格解析の統合的確率モデル (in
+  Japanese).\
+\newblock In {\Bem Proceeding of the 11th Annual Meeting of the Association for
+  Natural Language Processing}, \mbox{\BPGS\ 923--926}.
+
+\bibitem[\protect\BCAY{Kudo \BBA\ Matsumoto}{Kudo \BBA\
+  Matsumoto}{2005}]{Kudo05_e}
+Kudo, T.\BBACOMMA\ \BBA\ Matsumoto, Y. \BBOP 2005\BBCP.
+\newblock \BBOQ Japanese Dependency Parsing Using Relative Preference of
+  Dependency (in Japanese).\BBCQ\
+\newblock {\Bem IPSJ Journal}, {\Bbf 46}  (4), \mbox{\BPGS\ 1082--1092}.
+
+\bibitem[\protect\BCAY{Lafferty, Sleator, \BBA\ Temperley}{Lafferty
+  et~al.}{1992}]{Lafferty92}
+Lafferty, J., Sleator, D., \BBA\ Temperley, D. \BBOP 1992\BBCP.
+\newblock \BBOQ Grammatical Trigrams: a Probabilistic Model of Link
+  Grammar.\BBCQ\
+\newblock In {\Bem Probabilistic Approaches to Natural Language}.
+
+\bibitem[\protect\BCAY{Lee \BBA\ Choi}{Lee \BBA\ Choi}{1997}]{Lee97}
+Lee, S.\BBACOMMA\ \BBA\ Choi, K.~S. \BBOP 1997\BBCP.
+\newblock \BBOQ Reestimation and Best-First Parsing Algorithm for Probablistic
+  Dependency Grammars.\BBCQ\
+\newblock In {\Bem Proceedings of the Fifth Workshop on Very Large Corpora},
+  \mbox{\BPGS\ 41--55}.
+
+\bibitem[\protect\BCAY{Maruyama}{Maruyama}{1990}]{Maruyama90}
+Maruyama, H. \BBOP 1990\BBCP.
+\newblock \BBOQ Constraint Dependency Grammar and its Weak Generative
+  Capacity.\BBCQ\ Computer Software.
+
+\bibitem[\protect\BCAY{Matsumoto, Tanaka, Hirakawa, Miyoshi, \BBA\
+  Yasukawa}{Matsumoto et~al.}{1983}]{Matsumoto83}
+Matsumoto, Y., Tanaka, H., Hirakawa, H., Miyoshi, H., \BBA\ Yasukawa, H. \BBOP
+  1983\BBCP.
+\newblock \BBOQ BUP: A Bottom-Up Parser Embedded in Prolog.\BBCQ\
+\newblock {\Bem New Generation Computing}, {\Bbf 1}  (2), \mbox{\BPGS\
+  145--158}.
+
+\bibitem[\protect\BCAY{McDonald, Crammer, \BBA\ Pereira}{McDonald
+  et~al.}{2005}]{McDonald05}
+McDonald, R., Crammer, K., \BBA\ Pereira, F. \BBOP 2005\BBCP.
+\newblock \BBOQ Spanning Tree Methods for Discriminative Training of Dependency
+  Parsers.\BBCQ\
+\newblock Technical report, UPenn CIS.
+
+\bibitem[\protect\BCAY{Mel'cuk}{Mel'cuk}{1988}]{Melcuk88}
+Mel'cuk, I. \BBOP 1988\BBCP.
+\newblock {\Bem {Dependency Syntax: Theory and Practice}}.
+\newblock State University of New York Press, Albany, New York.
+
+\bibitem[\protect\BCAY{Nivre}{Nivre}{2005}]{nivre2005dga}
+Nivre, J. \BBOP 2005\BBCP.
+\newblock \BBOQ {Dependency Grammar and Dependency Parsing}.\BBCQ\
+\newblock \BTR, MSI report 05133, Vaxjo University: School of Mathematics and
+  Systems Engineering.
+
+\bibitem[\protect\BCAY{Noro, Hashimoto, Tokunaga, \BBA\ Tanaka}{Noro
+  et~al.}{2005}]{Noro05_e}
+Noro, T., Hashimoto, T., Tokunaga, T., \BBA\ Tanaka, H. \BBOP 2005\BBCP.
+\newblock \BBOQ Building a Large-Scale Japanese Grammar (in Japanese).\BBCQ\
+\newblock {\Bem Journal of Natural Language Processing}, {\Bbf 12}  (1),
+  \mbox{\BPGS\ 3--32}.
+
+\bibitem[\protect\BCAY{Noro, Okazaki, Tokunaga, \BBA\ Tanaka}{Noro
+  et~al.}{2002}]{Noro02_e}
+Noro, T., Okazaki, A., Tokunaga, T., \BBA\ Tanaka, H. \BBOP 2002\BBCP.
+\newblock 大規模日本語文法構築に関する一考察 (in Japanese).\
+\newblock In {\Bem Proceeding of the Eighth Annual Meeting of the Association
+  for Natural Language Processing}, \mbox{\BPGS\ 387--390}.
+
+\bibitem[\protect\BCAY{Ozeki}{Ozeki}{1994}]{Ozeki94}
+Ozeki, K. \BBOP 1994\BBCP.
+\newblock \BBOQ Dependency Structure Analysis as Combinatorial
+  Optimization.\BBCQ\
+\newblock {\Bem Information Sciences}, {\Bbf 78(1-2)}, \mbox{\BPGS\ 77--99}.
+
+\bibitem[\protect\BCAY{Pereira \BBA\ Warren}{Pereira \BBA\
+  Warren}{1980}]{Pereira80}
+Pereira, F.\BBACOMMA\ \BBA\ Warren, D. \BBOP 1980\BBCP.
+\newblock \BBOQ Definite Clause Grammars for Language Analysis---A Survey of
+  the Formalism and a Comparison with Augmented Transition Networks.\BBCQ\
+\newblock {\Bem Artificial Intelligence}, {\Bbf 13}  (3), \mbox{\BPGS\
+  231--278}.
+
+\bibitem[\protect\BCAY{Pollard \BBA\ Sag}{Pollard \BBA\ Sag}{1994}]{Pollard94}
+Pollard, C.\BBACOMMA\ \BBA\ Sag, I.~A. \BBOP 1994\BBCP.
+\newblock {\Bem Head-Driven Phrase Structure Grammar}.
+\newblock University of Chicago Press, Chicago.
+
+\bibitem[\protect\BCAY{Riezler, King, Kaplan, Crouch, Maxwell~III, \BBA\
+  Johnson}{Riezler et~al.}{2002}]{Riezler02}
+Riezler, S., King, T.~H., Kaplan, R.~M., Crouch, R., Maxwell~III, J.~T., \BBA\
+  Johnson, M. \BBOP 2002\BBCP.
+\newblock \BBOQ Parsing the Wall Street Journal using a Lexical-Functional
+  Grammar and Discriminative Estimation Techniques.\BBCQ\
+\newblock In {\Bem Proceedings of the 40th Annual Meeting of the ACL (ACL-02)},
+  \mbox{\BPGS\ 271--278}.
+
+\bibitem[\protect\BCAY{Rim, Seo, \BBA\ Simmons}{Rim et~al.}{1990}]{Rim90}
+Rim, H.~C., Seo, J., \BBA\ Simmons, R.~F. \BBOP 1990\BBCP.
+\newblock \BBOQ Transforming Syntactic Graphs into Semantic Graphs.\BBCQ\
+\newblock Technical report, Artificial Intelligence Lab, Texas at Austin.
+
+\bibitem[\protect\BCAY{Schiehlen}{Schiehlen}{1996}]{Schiehlen96}
+Schiehlen, M. \BBOP 1996\BBCP.
+\newblock \BBOQ Semantic Construction from Parse Forests.\BBCQ\
+\newblock In {\Bem Proceedings of COLING'96}, \mbox{\BPGS\ 907--912}.
+
+\bibitem[\protect\BCAY{Seo \BBA\ Simmons}{Seo \BBA\ Simmons}{1989}]{Seo89}
+Seo, J.\BBACOMMA\ \BBA\ Simmons, R.~F. \BBOP 1989\BBCP.
+\newblock \BBOQ A Syntactic Graphs: A Representation for the Union of All
+  Ambiguous Parse Trees.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 15}, \mbox{\BPGS\ 19--32}.
+
+\bibitem[\protect\BCAY{Shudo, Narahara, \BBA\ Yoshida}{Shudo
+  et~al.}{1980}]{Shudo80}
+Shudo, K., Narahara, T., \BBA\ Yoshida, S. \BBOP 1980\BBCP.
+\newblock \BBOQ Morphological Aspects of Japanese Language Processing.\BBCQ\
+\newblock In {\Bem Proceedings of COLING'80}, \mbox{\BPGS\ 1--8}.
+
+\bibitem[\protect\BCAY{Sleator \BBA\ Temperley}{Sleator \BBA\
+  Temperley}{1991}]{Sleator91}
+Sleator, D.\BBACOMMA\ \BBA\ Temperley, D. \BBOP 1991\BBCP.
+\newblock \BBOQ Parsing English with a Link Grammar.\BBCQ\
+\newblock Technical report, Department of Computer Science, Carnegie Mellon
+  University.
+
+\bibitem[\protect\BCAY{Steedman}{Steedman}{2000}]{Steedman00}
+Steedman, M. \BBOP 2000\BBCP.
+\newblock {\Bem The Syntactic Process}.
+\newblock The MIT Press, Cambridge, MA.
+
+\bibitem[\protect\BCAY{Tomita}{Tomita}{1987}]{Tomita87}
+Tomita, M. \BBOP 1987\BBCP.
+\newblock \BBOQ An Efficient Augmented-Context-Free Parsing Algorithm.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 13}  (1-2), \mbox{\BPGS\
+  31--46}.
+
+\bibitem[\protect\BCAY{Tsuruoka, Miyao, \BBA\ Tsujii}{Tsuruoka
+  et~al.}{2004}]{Tsuruoka04}
+Tsuruoka, Y., Miyao, Y., \BBA\ Tsujii, J. \BBOP 2004\BBCP.
+\newblock \BBOQ Towards Efficient Probabilistic HPSG Parsing: Integrating
+  Semantic and Syntactic Preference to Guide the Parsing.\BBCQ\
+\newblock In {\Bem IJCNLP-04 Workshop: Beyond Shallow Analyses---Formalisms and
+  Statistical Modeling for Deep Analyses}.
+
+\bibitem[\protect\BCAY{Wang \BBA\ Harper}{Wang \BBA\ Harper}{2004}]{Wang04}
+Wang, W.\BBACOMMA\ \BBA\ Harper, M.~P. \BBOP 2004\BBCP.
+\newblock \BBOQ A Statistical Constraint Dependency Grammar (CDG) Parser.\BBCQ\
+\newblock In {\Bem Workshop on Incremental Parsing: Bringing Engineering and
+  Cognition Together (ACL)}, \mbox{\BPGS\ 42--49}.
+
+\bibitem[\protect\BCAY{Wilks}{Wilks}{1975}]{Wilks75}
+Wilks, Y.~A. \BBOP 1975\BBCP.
+\newblock \BBOQ An Intelligent Analyzer and Under-stander of English.\BBCQ\
+\newblock {\Bem Communications of the A.C.M.}, {\Bbf 18}, \mbox{\BPGS\
+  264--274}.
+
+\bibitem[\protect\BCAY{Winograd}{Winograd}{1983}]{Winograd83}
+Winograd, T. \BBOP 1983\BBCP.
+\newblock {\Bem Language as a Cognitive Process: Volume 1 Syntax}.
+\newblock Addison-Wesley Publishing.
+
+\end{thebibliography}
+
+
+\clearpage
+
+\appendix
+
+\section{Problem in the Syntactic Graph}
+
+Consider the parsing of ``Tokyo taxi driver call center'' using the
+following grammar rules and lexicons.
+
+\noindent
+\texttt{[Grammar Rules]}
+\begin{tabbing} 
+\hspace{1em}\=\texttt{np3/Nd}~\= $\rightarrow$~\=\texttt{n/Na,n/Nb,n/Nc,n/Nd}\quad\=\texttt{:}~\=\texttt{[arc(nc,Na,Nb),arc(nj,Nb,Nd),arc(nc,Nc,Nd)]}\kill
+\>\texttt{np/NP}\>$\rightarrow$\>{\tt npc/NP} \>{\tt :}\>{\tt []}\\
+\>{\tt npc/Nb}\>$\rightarrow$\>{\tt np1/NP1,n/Na,n/Nb}\>{\tt :}\>{\tt [arc(nj,NP1,Nb),arc(nc,Na,Nb)]}\\
+\>{\tt npc/Na}\>$\rightarrow$\>{\tt np2/NP2,n/Na}\>{\tt :}\>{\tt [arc(nc,NP2,Na)]}\\
+\>{\tt npc/Na}\>$\rightarrow$\>{\tt np3/NP3,n/Na}\>{\tt :}\>{\tt [arc(nc,NP3,Na)]}\\
+\>{\tt np1/Nc}\>$\rightarrow$\>{\tt n/Na,n/Nb,n/Nc}\>{\tt :}\>{\tt [arc(nc,Na,Nb),arc(nc,Nb,Nc)]}\\
+\>{\tt np2/Nd}\>$\rightarrow$\>{\tt n/Na,n/Nb,n/Nc,n/Nd}\>{\tt :}\>{\tt [arc(nj,Na,Nc),arc(nc,Nb,Nc),arc(nc,Nc,Nd)]}\\
+\>{\tt np3/Nd}\>$\rightarrow$\>{\tt n/Na,n/Nb,n/Nc,n/Nd}\>{\tt :}\>{\tt [arc(nc,Na,Nb),arc(nj,Nb,Nd),arc(nc,Nc,Nd)]}
+\end{tabbing} 
+\texttt{[Lexicon]}\\
+\hspace{1em}{\tt word(n,[Tokyo]). word(n,[taxi]). word(n,[driver]).}\\
+\hspace{1em}{\tt word(n,[call]). word(n,[center]).}
+
+\begin{figure}[b]
+ \begin{center}
+\includegraphics{21-4ia6f26.eps}
+ \end{center}
+\caption{Problem in the syntactic graph/exclusion matrix}
+\label{fig:SynGraphBadExample}
+\end{figure}
+
+This example sentence has three well-formed dependency trees shown in
+Figure \ref{fig:SynGraphBadExample} (a), (b), and (c). The boxes np1, np2,
+and np3 in the dependency trees are given only for showing the
+correspondences between the phrase structures and dependency structures.
+
+Since nc-1 and nc-2 in (a), nc-2 and nc-3 in (b), and nc-3 and nc-1 in
+(c) have co-occurrence relations, respectively, the values of the
+exclusion matrix for these three pairs are 0 (`` '' in the
+figure). This allows the existence of dependency tree (d), which
+has no corresponding phrase structure tree in the phrase structure
+forest in the syntactic graph/exclusion matrix. Therefore, the
+syntactic graph violates the soundness condition.
+
+
+\section{Proof of the Completeness and Soundness of the Dependency Forest}
+
+The phrase structure forest PF and the dependency forest
+$\mathrm{DF}=\langle \mathrm{DG}, \mathrm{CM}\rangle$ is assumed in the following proof. Before showing the
+proof, some relations between the phrase structure forest and the
+dependency forest generated from the algorithms explained in Section
+\ref{sec:ParsingAlgorithm}, and some lemmas required for the proof, are
+described.
+
+
+\subsection*{[Packed Edge and Single Edge]}
+
+The phrase structure forest is a set of packed edges. As described in
+Section \ref{sec:EdgeConstruction}, a packed edge is equivalent to a
+set of single edges. In this proof, packed edges are treated as a set
+of single edges. The following packed edge is shown in
+Figure \ref{fig:ArcStructure}.
+
+Packed edge: $\langle\text{ID, FP, TP, C, PH, FCSL, RCS, DSL}\rangle$ \\
+\hspace{7em}where FCSL=[CS$_1$, ${\ldots}$ , CS$_n$], DSL=[DS$_1$, ${\ldots}$ , DS$_n$]
+
+\noindent
+is equal to the following set of single edges.
+
+*e$_1$: $\langle\text{ID-1, FP, TP, C, PH, (CS$_1$ DS$_1$), RCS}\rangle$
+
+　　　　　　$\vdots$
+
+*e$_n$: $\langle\text{ID-$n$, FP, TP, C, PH, (CS$_n$ DS$_n$), RCS}\rangle$
+
+\noindent
+For example, *E4 in Figure \ref{fig:ArcStructure} is a set
+of arcs *e$_1$, *e$_2$\footnote{The partial dependency tree is
+  represented in \{\} because it is a set of arcs.}
+
+Single edge *e$_1$: $\langle$170-1, 0, 5, vp, [time]-v-0, [103, 169], [],
+ \{arc(obj-25, [flies]-n-1, [time]-v-0)\}$\rangle$
+
+Single edge *e$_2$: $\langle$170-2, 0, 5, vp, [time]-v-0, [103, 119, 165], [],\\
+\space{8em}\{arc(obj-4, [flies]-n-1, [time]-v-0), arc(vpp-20, [like]-pre-2, [time]-v-0)\}$\rangle$
+
+\noindent
+Each edge is identified in the phrase structure forest by
+the packed edge-ID and the position in the CSDS pair of the packed
+edge. For example, *e$_1$ is identified by 170-1. The lexical edge is
+treated as a set consisting of a single lexical edge. @E5 in
+Figure \ref{fig:ArcStructure} is equal to the set {@e$_3$}.
+
+Single edge @e$_3$: $\langle$156-1, 4, 5, n, [arrow]-n-4, [lex([arrow]-n)], \{[[arrow]-n-4]\}$\rangle$
+
+\noindent
+Various elements included in a packed edge and a single
+edge have correspondences with one another. The following shows the
+definitions of terms and relations.
+
+\vspace{0.5\Cvs}
+\noindent\fbox{
+\begin{minipage}{405pt}
+\setlength{\parindent}{0pt}
+Edge and its elements
+
+\quad \textbf{cs($X$)}: The constituent sequence of single edge $X$.
+
+\qquad For example, cs(*e$_1$) =[103, 169] where 103 and 169 are packed edge-IDs.
+
+\hangafter=1\hangindent=2em
+\quad \textbf{ds($X$)}: The dependency structure DS of single edge $X$ or the node of single lexical \linebreak edge $X$.
+
+\qquad For example, ds(*e$_1$)=\{arc(obj-25, [flies]-n-1, [time]-v-0)\}, ds(@e$_3$)=\{[arrow]-n-4\}
+
+\quad \textbf{Arcs in the dependency forest and edge}: The arcs in a single edge $X$ mean $a{\in}$ds($X$). 
+
+{\addtolength{\leftskip}{2em}
+An arc in a packed edge Y means $a{\in}$ds($X$), $X{\in}Y$. An arc in the phrase structure forest means $a{\in}$ds($X$), $X{\in}Y$, $Y{\in}$PF. 
+\par}
+
+Relations between arcs and nodes
+
+\quad \textbf{gov($X$)}: The governor node of arc $X$. 
+
+\qquad For example, gov(arc(obj-25, [flies]-n-1, [time]-v-0)) = [time]-v-0
+
+\quad \textbf{dep($X$)}: The dependent node of arc $X$.
+
+\qquad For example, dep(arc(obj-25, [flies]-n-1, [time]-v-0) = [flies]-n-1
+
+\noindent\hangafter=1\hangindent=2em
+\quad \textbf{top\_node($X$)}: The top node of dependency tree $X$ (the node that is not a dependent of any arcs in $X$).
+
+Relations between arcs $X$, $Y$ in dependency tree DT
+
+\quad \textbf{sib($X$, $Y$)}: gov($X$)=gov($Y$). $X$ and $Y$ are called sibling arcs.
+
+\noindent\hangafter=1\hangindent=2em
+\quad \textbf{$X \xrightarrow[{\rm DT}]{1} Y$}: dep($X$)=gov($Y$). $X$ is a parent of $Y$ and $Y$ is a child of $X$. This relation is called a parent relation.
+
+\noindent\hangafter=1\hangindent=2em
+\quad \textbf{$X \xrightarrow[{\rm DT}]{+} Y$}: There is a parent relation chain from $X$ to $Y$. $X$ is an ancestor arc of $Y$ and $Y$ is a descendant arc of $X$.
+
+\noindent\hangafter=1\hangindent=2em
+\quad \textbf{$X \xrightarrow[{\rm DT}]{*} Y$}: $X=Y$ or $X{\xrightarrow[{\rm DT}]{+}}Y$
+
+\end{minipage}
+}
+
+
+\subsection*{[Edges and Phrase Structure Trees in the Phrase Structure Forest]}
+
+The phrase structure forest PF is a directed acyclic graph consisting
+of packed edges, where the root is the root edge *E$_{root}$ and the
+leaves are lexical edges. The ``path in PF'' is defined as follows:
+
+\clearpage
+\begin{definition}\label{def:PathInPF}[Path in the phrase structure forest]
+
+A path in the phrase structure forest is a sequence consisting of
+packed edges and single edges obtained by tracing a packed edge and a
+single edge one after another by selecting one single edge from a
+packed edge (a set of single edges) and selecting one packed edge from
+the constituent sequence (a sequence of packed edges) of a single
+edge.
+\end{definition}
+
+\noindent
+Now, let *E$_0$, *E$_1$, *E$_2$ ${\cdots}$ in the phrase structure forest as follows:
+
+*E$_0=$\{*e$_1$, *e$_2$\}, *E$_1=$\{*e$_3$\}, *E$_2=$\{*e$_4$, *e$_5$\}, *E$_3=$\{*e$_6$, *e$_7$\} ${\ldots}$
+
+cs(*e$_1$)=[*E$_1$, *E$_2$], cs(*e$_2$)=[*E$_3$], cs(*e$_3$)=[*E$_4$, *E$_5$] ${\ldots}$
+
+\noindent
+The following are examples of paths.
+
+[*E$_0$, *e$_1$, *E$_2$, *e$_5$], [*E$_0$, *e$_1$, *E$_2$], [*e$_1$, *E$_1$, *e$_3$, *E$_5$], [*e$_1$, *E$_1$, *e$_3$]
+
+\noindent
+The following shows the definitions of terms and relations used in the latter part.
+
+\vspace{0.5\Cvs}
+\noindent
+\fbox{
+\begin{minipage}{405pt}
+\noindent
+Terms and relations related to the phrase structure forest
+
+\hangafter=1\hangindent=2em
+\quad $X \xrightarrow[\mathrm{PF}]{+} Y$: There is a path [$X, {\ldots}, Y$] from a packed or single edge $X$ to a packed or single edge $Y$. $X$ is an ancestor of $Y$.
+
+\hangafter=1\hangindent=2em
+\quad $X \xrightarrow[\mathrm{PF}]{*} Y$: $X=Y$ or $X \xrightarrow[\mathrm{PF}]{+} Y$ is true for single or packed edges $X$ and $Y$. $Y$ is called ``reachable'' from $X$.
+
+\hangafter=1\hangindent=2em
+\quad $X \swarrow_{[PF]}\searrow Y$: $X \neq Y$, $\neg (X \xrightarrow[\mathrm{PF}]{*}Y)$, $\neg (Y \xrightarrow[\mathrm{PF}]{*}X)$ are true for single or packed edges $X$ and $Y$, and there exists at least one single or packed edge $Z$ in the phrase structure forest PF such that $Z \xrightarrow[\mathrm{PF}]{*}X$ and $Z \xrightarrow[\mathrm{PF}]{*}Y$.
+
+\hangafter=1\hangindent=2em
+\quad Arcs governed by an edge: Arc $X$ is governed by packed edge *E if $X \in$ds(*e), *E$ \xrightarrow[\mathrm{PF}]{*}$*e is true.
+
+\end{minipage}
+}
+\vspace{0.5\Cvs}
+
+\noindent
+From the definition of the phrase structure forest, there
+exists a path from the root packed edge *E$_\mathrm{root}$ to every single or
+packed edge in the phrase structure forest. Using the definition
+above, the C-Matrix setting conditions in Section
+\ref{sec:PFandDFseisei} are defined as follows:
+
+\begin{definition}\label{def:CMSetCond}[The C-Matrix setting conditions] 
+
+Arcs $X$, $Y$ are co-occurable if any of the following conditions is satisfied.
+\begin{itemize}
+\item[(C1)] There exists a single edge *e, such that $X$, $Y{\in}$ds(*e), *e${\in}$*E, *E${\in}$PF
+\item[(C2)] There exist *e$_x$ and *e$_y$, such that $X{\in}$ds(*e$_x$), $Y{\in}$ds(*e$_y$), *e$_x \xrightarrow[{\rm PF}]{+}$*e$_y$ or *e$_y \xrightarrow[{\rm PF}]{+}$*e$_x$.
+\item[(C3)] There exist *e$_x$ and *e$_y$, such that $X{\in}$ds(*e$_x$), $Y{\in}$ds(*e$_y$), *e$_x \swarrow_{[PF]} \searrow$*e$_y$.
+\end{itemize}
+\end{definition}
+
+\noindent
+A phrase structure tree is defined as follows:
+
+\clearpage
+\begin{definition}\label{def:ParseTree}[Phrase structure tree] 
+
+A phrase structure tree for a packed edge *E is a set of single arcs obtained by a recursive procedure get\_tree(*E) defined in Figure \ref{fig:get_parse_tree}.
+\end{definition}
+
+\begin{figure}[t]
+ \begin{center}
+\includegraphics{21-4ia6f27.eps}
+ \end{center}
+\caption{Algorithm for obtaining a phrase structure tree}
+\label{fig:get_parse_tree}
+\end{figure}
+
+In the figure, select(RPE) selects one arbitrary arc included in a
+packed edge RPE. If SE is a lexical edge, lexical\_edge(SE) is true. A
+phrase structure tree covers the words from the from-position to the
+to-position of edge *E.
+
+\begin{definition}\label{AllParseTrees}[All phrase structure trees] 
+
+ps\_trees(*E) is a set of all phrase structure trees for *E.
+\end{definition}
+
+
+\subsection*{[Relations between Edges and Arcs/Partial Dependency Trees]}
+
+Although the parsing algorithm is constructed using packed edges as
+basic data structures, the packing of edges is performed only when
+inactive edges are generated (Figure \ref{fig:ChartAlgotithm}
+(c), (d)). Therefore, every active packed edge has one single
+edge,\footnote{The parsing algorithm utilizes packed edges because
+  another algorithm, which shares active edges, can be constructed.}
+and one active packed edge corresponds to one single active edge and
+vice versa. In the following discussion, the word ``edge'' is used for
+representing a packed edge.
+
+Parsing proceeds by generating new edges by combining an inactive edge
+to an active edge. Using a diagrammatic expression, as described in
+Section \ref{sec:EdgeConstruction}, a combination of two arcs
+generates a new edge by moving `・' in the active edge to the right
+neighbor position, and binding the variable for the constituent at `・'
+to the phrase head (node) of the inactive edge to
+combine. Figure \ref{fig:EdgeCombinationTree} is a tree called an ``edge
+combination tree,'' which represents the generation process of
+inactive edges from a grammar rule by edge combinations. The inactive
+edges located at the leaf of the edge combination tree are generated
+from a grammar rule located at the root of the tree\footnote{The
+  grammar rule is written in edge form in the edge combination
+  tree. This edge is not generated in the real parsing process, but is
+  introduced for convenience of explanation.} through the active edges
+in between. The grammar rule is as follows:
+\[
+\mathrm{y}/X_h \rightarrow \mathrm{x}_1/X_1 \cdots \mathrm{x}_h/X_h \cdots \mathrm{x}_n/X_n : \{A_1, A_2, \ldots, A_{n-1}\}
+\]
+
+\begin{figure}[b]
+ \begin{center}
+\includegraphics{21-4ia6f28.eps}
+ \end{center}
+\caption{Edge combination tree}
+\label{fig:EdgeCombinationTree}
+\end{figure}
+
+$A_i$ is an arc in the form of arc($a_i$, $X_k$, $X_l$), where $a_i$ is
+an arcname, 1${\leq}k{\leq}n$, 1${\leq}l{\leq}n$, $k{\neq}l$. A set of
+arcs \{$A_1, \ldots, A_{n-1}$\} satisfies the partial dependency
+structure condition in Section \ref{sec:bunpoukisoku}.
+
+The edges in the edge combination tree are expressed in diagrammatic
+form using `・', neglecting the from and to positions. The arrows
+between edges represent the edge combinations where the edge at the
+source of the arrow is combined with the inactive edge attached to the
+arrow to generate the resulting edge at the target position of the
+arrow. For example, E$_{11}$ (Figure \ref{fig:EdgeCombinationTree} (a))
+is combined with $\langle$*E x$_2$/n$_{21} \rightarrow \ldots \rangle$
+((b)) to generate E$_{21}$ ((c)). Since `・' moves to the right
+neighbor position, the depth of the tree, i.e., the number of arcs
+from E$_0$ to each inactive edge, is equal to $n$, i.e., the number of
+elements in the rule body in the grammar rule.
+
+The phrase head (node) is bound to a variable in the active edge
+during edge combination. The variable bindings are shown at the right
+of the edge by \{ \}. For example, the combination of E$_0$ and the
+edge (d) whose phrase head is n$_{11}$ generates E$_{11}$ which is
+then combined with the edge (b), whose phrase head is n$_{21}$ to
+produce E$_{21}$. As a result, the variable bindings of E$_{21}$ are
+\{$X_1$:=n$_{11}$, $X_2$:=n$_{21}$\}.\footnote{Scope of a variable is
+  within edge. } An arc whose governor and dependent are bound is
+called a ``fixed arc'' and has a new unique arc-ID generated by
+add\_arcid at Figure \ref{fig:ChartAlgotithm} (i).  Fixed arcs are
+represented by a small letter such as a$_1$ in
+Figure \ref{fig:EdgeCombinationTree} (e). One variable binding may
+generate zero or more fixed arcs. The generated fixed arc has one
+unique variable binding corresponding to one edge combination. This
+edge combination generates one unique edge. This unique edge is called
+the edge, which generated the fixed arc, or simply ``source edge'' of
+the fixed arc, and is referred to as src\_Edge(a), where 'a' is a fixed
+arc. For example, in the edge combination between (e) and (f) in
+Figure \ref{fig:EdgeCombinationTree}, provided that the binding of the
+node n$_{im}$ (let it [like]-pre-3) to the variable $X_i$ generates
+the fixed arc a$_i$ (let it arc(pre-28, [like]-pre-3, [time]-v-0))
+from the unfixed arc $A_i$ (arc(pre, $X_i$, [time]-v-0)), the edge
+that generated the fixed arc a$_i$, i.e., src\_Edge(a$_i$) is
+E$_{im}$ in Figure \ref{fig:EdgeCombinationTree} (g).
+
+Each inactive edge (leaf of the combination tree)
+(e.g., Figure \ref{fig:EdgeCombinationTree} (h)) has only fixed arcs
+because all variables including phrase head variable in the edge are
+bound, due to the partial dependency structure condition. An inactive edge
+represents a result of a sequence of variable bindings, caused by the
+edge bindings from the root to the leaf of the edge combination
+tree. The following shows the definitions of terms and relations
+related to the edge combination tree.
+
+\vspace{0.5\Cvs}
+\noindent
+\fbox{
+\begin{minipage}{405pt}
+\hangafter=1\hangindent=1em
+\textbf{fixed arc}: Arc whose governor and dependent nodes are fixed by the variable bindings caused by edge combinations.
+
+\hangafter=1\hangindent=1em
+\textbf{src\_Edge($a$) (source edge)}: The active or inactive edge that generated a fixed arc $a$. Mapping from a fixed arc to its corresponding edge is one to one, whereas the reverse is 1 to 0 - many.
+
+\hangafter=1\hangindent=1em
+\textbf{$X \xrightarrow[{\rm CT}]{*} Y$ (origin)}: Edge $X$ is located on a route from the top node to edge $Y$ or $X=Y$. $X$ is called an origin of $Y$.
+
+\hangafter=1\hangindent=1em
+\textbf{origin relation}: Edges $X$, $Y$ in an edge combination tree CT are said to be in origin relation if $X {\xrightarrow[{\rm CT}]{*}} Y$ or $Y {\xrightarrow[{\rm CT}]{*}} X$ is true.
+
+\hangafter=1\hangindent=1em
+\textbf{edge($a$, $DT$) (corresponding edge)}: The corresponding edge for a fixed arc $a$ and a well-formed dependency tree $DT$ is a single edge $e$ that satisfies the following condition (defined in Lemma \ref{lem:app2-2}):\\
+\qquad $DT {\supseteq} {\rm ds(}e{\rm )}, {\rm a}{\in}{\rm ds(}e{\rm )}$
+\end{minipage}
+}
+\vspace{0.5\Cvs}
+
+\noindent
+According to the structure of the edge combination tree
+described above, two fixed arcs a$_i$ and a$_j$ have the following
+relations.
+
+\begin{lemma}[Relation between arcs in one partial dependency tree]
+\label{lem:TwoArcsInOneDS}
+Let a$_i$ and a$_j$ be fixed arcs a$_i$, a$_j \in$ds($e$), where $e$ is a single edge. Their source edges src\_Edge(a$_i$) and src\_Edge(a$_j$) are in origin relation.
+\end{lemma}
+
+\noindent
+A fixed arc in edge $e$ in the edge combination tree is
+in the edges that have $e$ as their origins. For example, fixed arc
+a$_i$ generated at (g) is contained in (h).
+
+\begin{lemma}[Relation between an arc and the edge that generated the arc]
+\label{lem:app2-1}
+\hspace{-0.5em}Suppose 
+\linebreak
+that fixed arcs a$_i$, a$_j$ satisfy
+src\_Edge(a$_i$)${\xrightarrow[{\rm CT}]{*}}$src\_Edge(a$_j$).
+Then a$_j \in$ds(*e) implies a$_i \in$ ds(*e) for every single arc *e
+in PF (*e${\in}$*E, *E${\in}$PF).
+\end{lemma}
+
+Since a unique arc-ID is assigned to each arc, all inactive single
+edges in the inactive packed edges in an arc combination tree, i.e.,
+the leaves of the tree *E$_{n1}$ ${\cdots}$ *E$_{no}$ ${\ldots}$
+*E$_{nw}$ in 
+\linebreak
+Figure~\ref{fig:EdgeCombinationTree}, have different partial
+dependency trees. Therefore, ds(*e$_i$)${\neq}$ds(*e$_j$) for
+arbitrary arcs *e$_i$, *e$_j$(*e$_i \neq$*e$_j$) in PF. A single
+inactive edge and a partial dependency tree have one-to-one mapping.
+In the parsing process, inactive edges that satisfy the conditions
+shown in Figure \ref{fig:ChartAlgotithm} (j) are merged into one, and
+this merged edge becomes an element of the phrase structure
+forest. The one-to-one mapping relation between a single edge and a
+partial dependency tree is assured in the phrase structure forest
+because this merge operation does not change the dependency structures
+in the single edges. Moreover, the following lemma related to the
+phrase structure forest is established with respect to the C-Matrix
+setting condition (C2).
+
+\begin{lemma}[Constraints with respect to the arcs in the edges included in a path]
+\label{lem:ArcConstraintOfArcsOnOnePath}
+Suppose arcs a$_i \in$ds(e$_i$), a$_j\in$ds(e$_j$). If e$_i \xrightarrow[{\rm PF}]{+}$e$_j$, then dep(a$_i$)${\neq}$dep(a$_j$) is true. Inversely, if dep(a$_i$)$=$dep(a$_j$), then ${\neg}$(e$_i \xrightarrow[{\rm PF}]{+}$e$_j$) is true.
+
+\proof{
+This lemma is established because data structures in the single edges are trees whose top nodes are phrase heads, according to the partial dependency structure condition in \ref{sec:bunpoukisoku}.\\
+}
+\end{lemma}
+
+\begin{lemma}[Existence of corresponding edge]
+\label{lem:app2-2}
+Suppose an arc a$_i$ in a well-formed dependency tree DT
+(a$_i \in$DT). There exists only one packed edge E${\in}$PF
+and single edge e${\in}$E that satisfy the following condition:
+
+$\mathrm{DT} \supseteq \mathrm{ds}(e)$, $\mathrm{a}_i \in \mathrm{ds}(e)$
+
+\proof{
+Let the number of nodes in DT be $n$ (Number of arcs is $n-1$). Divide arc
+set DT into the following two arc sets IN\_ARCS, OUT\_ARCS with respect
+to a$_i$.
+
+IN\_ARCS = \{ $a_j$ ${\mid}$ src\_Edge($a_i$)${\xrightarrow[{\rm CT}]{*}}$src\_Edge($a_j$) or src\_Edge($a_j$)${\xrightarrow[{\rm CT}]{*}}$src\_Edge($a_i$)\}
+
+OUT\_ARCS = DT$-$IN\_ARCS
+
+\noindent
+Let SRC\_EDGES be a set of source edges corresponding to the arcs in IN\_ARCS.
+
+SRC\_EDGES = \{$E$ ${\mid}$ $E$=src\_Edge($a$), $a{\in}$IN\_ARCS\}
+
+\noindent
+First, the following statement is to be established.
+\[
+\text{``Arbitrary edges in SRC\_EDGES are in origin relation''} \eqno{(A)}
+\]
+Suppose edges $U$, $V{\in}$SRC\_EDGES. $U$ and $V$ are in origin
+relation by definition and in one of the following three cases.
+
+\begin{itemize}
+\item[(a)] One arc is an origin of E$_i$, and E$_i$ is an origin of the other arc. $U{\xrightarrow[{\rm CT}]{*}}$ E$_i$, E$_i \xrightarrow[{\rm CT}]{*} V$
+\item[(b)] Both arcs are origins of E$_i$. $U{\xrightarrow[{\rm CT}]{*}}$ E$_i$, $V{\xrightarrow[{\rm CT}]{*}}$E$_i$
+\item[(c)] E$_i$ is an origin of both arcs. E$_i \xrightarrow[{\rm CT}]{*}U$, E$_i \xrightarrow[{\rm CT}]{*}V$
+\end{itemize}
+ 
+\noindent
+In cases (a) and (b), statement (A) obviously holds,
+according to the structure of the edge combination tree. The following
+shows that a contradiction is derived from the assumption that $U$ and
+$V$ are not in origin relation in case (c).
+
+Suppose that $U$ and $V$ are not in origin relation. There exist arcs
+a$_u$, a$_v \in$DT such that $U$=src\_Edge(a$_u$),
+$V$=src\_Edge(a$_v$), according to the premise. Since all arcs in DT
+are in the packed shared forest, there exist inactive edges that have
+$U$ and $V$ as their origin, respectively. Let *E$_u$ and *E$_v$ be
+origins of $U$ and $V$, respectively. Let e$_u$ in *E$_u$ and *e$_v$
+in *E$_v$ be edges such that a$_u \in$*e$_u$,
+a$_v \in$*e$_v$. From Lemma \ref{lem:app2-1}, both *e$_u$ and
+*e$_v$ contain a$_i$. Arcs a$_u$ and a$_v$ in the well-formed
+dependency tree DT satisfy any of the C-Matrix setting conditions
+(C1) to (C3). However, a$_u$ and a$_v$ do not satisfy (C1) because the
+contradiction for the assumption that $U$ and $V$ are not in origin
+relation is deduced from (C1), i.e., the existence of $e$ such that
+a$_u$, a$_v \in$ds($e$), according to Lemma
+\ref{lem:TwoArcsInOneDS}. (C2) indicates that *e$_u \xrightarrow[{\rm
+      PF}]{+}$*e$_v$ is true (The reverse case is shown in the same
+way). Nodes included in arcs in ds(*e$_u$) are phrase heads of the
+constituents in cs(*e$_u$), according to the partial dependency
+structure condition. This implies that either dep(a$_i$) or gov(a$_i$)
+of a$_i \in$ds(*e$_u$) is a node that locates outside the
+coverage of *e$_v$. On the other hand, both dep(a$_i$) and gov(a$_i$)
+must be in the coverage of *e$_v$ because a$_i \in$ds(*e$_v$) is
+true. From this contradiction, a$_u$ and a$_v$ do not satisfy
+(C2). The (C3), i.e., *e$_u \swarrow_{[PF]} \searrow$*e$_v$ ,
+is not satisfied by a$_u$ and a$_v$ because the coverage of *e$_u$ and
+*e$_v$ have to be overlapped, due to the premise that a$_i$ is in both
+*e$_u$ and *e$_v$. From the above, the supposition that $U$ and $V$
+are not in origin relation contradicts the C-Matrix setting conditions
+between a$_u$ and a$_v$. Therefore, statement (A) is true.
+
+\noindent
+Now, let E$_{last}$ be the last edge connected from
+E$_i$, i.e., the edge that satisfies the following conditions:
+
+E$_i \xrightarrow[{\rm CT}]{*}$E$_{last}$ 
+
+E$_{last}$ is the only edge E$_j$ such that
+E$_{last}{\xrightarrow[{\rm CT}]{*}}$E$_j$ (E$_j \in$SRC\_EDGES)
+
+\noindent
+Figure \ref{fig:CorrespondenceDT2Edge} shows the relation between
+IN\_ARCS and SRC\_EDGES diagrammatically. E$_{start}$ corresponds to a
+grammar rule. The grammar rule is as follows:
+
+\begin{center}
+y/$X_h$ $\rightarrow$ x$_1$/$X_1$ ${\cdots}$ x$_z$/$X_z$ :\{$A_1$, ${\ldots}$, $A_{z-1}$\}
+\end{center}
+
+\noindent
+SRC\_EDGES constitutes a route on the edge combination tree CT with
+root E$_{start}$, containing E$_1$, ${\ldots}$, E$_{last}$. The source
+edge E$_i$ for a$_i$ exists somewhere on this route. There exists at
+least one arc a$_{last}$ that is generated by E$_{last}$ in IN\_ARCS.
+
+\begin{figure}[b]
+ \begin{center}
+\includegraphics{21-4ia6f29.eps}
+ \end{center}
+\caption{Edges corresponding to arcs in DT}
+\label{fig:CorrespondenceDT2Edge}
+\end{figure}
+
+E$_{last}$ is either an active edge or an inactive
+edge. Figure \ref{fig:CorrespondenceDT2Edge} shows a case where
+E$_{last}$ is an active edge. E$_{last}$ is proved to be an inactive
+edge as follows:
+
+Suppose that E$_{last}$ is an active edge. As shown in
+Figure \ref{fig:ActiveEdgeLast}, E$_{last}$ (Figure \ref{fig:ActiveEdgeLast}
+(a)) has at least one remaining constituent x$_{u+1}$
+(Figure \ref{fig:ActiveEdgeLast} (b). Variable for the constituent is not
+shown). Let s1 and t1 be a from-position and a to-position of
+E$_{last}$, respectively.
+
+From the premise a$_{last}{\in}$DT, there exists at least one inactive
+edge *E$_x$ (Figure \ref{fig:MapFromOnePTToTwoDTs} (c)) that has
+E$_{last}$, the source edge of a$_{last}$, as its origin in the phrase
+structure forest PF. As shown in the figure, *E$_x$ has the
+from-position equal to the from-position s1 of E$_{last}$ and the
+to-position greater than the to-position t1 of E$_{last}$.
+
+\begin{figure}[t]
+ \begin{center}
+\includegraphics{21-4ia6f30.eps}
+ \end{center}
+\caption{Existence of corresponding edge}
+\label{fig:ActiveEdgeLast}
+\end{figure}
+
+Consider the node n$_{t1+1}$ at the position t1+1
+(Figure \ref{fig:ActiveEdgeLast} (d)).\footnote{One n$_{t1+1}$ exists due
+  to the well-formedness condition of DT.} DT has one arc
+\linebreak
+$\mathrm{a}_\mathit{next}$(dep($\mathrm{a}_\mathit{next})=\mathrm{n}_{t1+1}$ (Figure \ref{fig:ActiveEdgeLast}
+(e)). a$_{next}$ is an element of OUT\_ARCS, as per the definition of
+a$_{last}$. a$_{next}{\in}$DT implies that at least one inactive edge
+*E$_y$ whose origin is E$_{next}$, the source edge of a$_{next}$,
+exists in the phrase structure forest PF. Since E$_{next}$ has
+a$_{next}$ within its coverage, E$_{next}$ has the from-position s1
+less than or equal to t1 (Figure \ref{fig:ActiveEdgeLast} (f)), and the
+to-position t2 is greater than or equal to t1+1
+(Figure \ref{fig:ActiveEdgeLast} (g)). Therefore, the from-position of
+*E$_y$ is less than or equal to t1. From the above, *E$_x$, which has
+its origin E$_{last}$, overlaps *E$_y$, which has its origin E$_{next}$
+at the t1 position.
+
+Now, no co-occurrence setting conditions for a$_{last}$ and a$_{next}$ hold:
+
+Arcs a$_{last}$ and a$_{next}$ do not satisfy (C3) because *E$_x$ and
+*E$_y$ overlap, as explained above. (C1) is not satisfied from the
+premise *E$_x{\neq}$*E$_y$. Consider (C2) meaning that
+*E$_x \xrightarrow[{\rm PF}]{+}$*E$_y$ is true (the reverse case is
+shown in the same way). Let a$_m$ be the arc in *E$_x$ whose
+dependent node is n$_{t1+1}$. a$_m\neq$a$_{next}$.\footnote{If
+  a$_m =$a$_{next}$, src\_Edge(a$_{next}$) and E$_i$ are in origin
+  relation. This contradicts the premise
+  a$_{next}{\in}$OUT\_ARCS.} According to Lemma
+\ref{lem:ArcConstraintOfArcsOnOnePath}, if *E$_x \xrightarrow[{\rm
+      PF}]{+}$*E$_y$ is not true, then (C2) is not satisfied. From
+the above, a$_{last}$ and a$_{next}$ satisfy no co-occurrence setting
+conditions. This contradicts the premise that DT is a well-formed
+dependency tree. Therefore, E$_{last}$ is not an active edge.
+
+\noindent
+Let E$_{last}$ be an inactive edge *E$_{last}$.
+
+\begin{itemize}
+\item[(a)] If *E$_{last}$, the source edge of a$_{last}$, is an inactive edge (a leaf of the edge combination tree), then no other packed edges contain a$_{last}$. Moreover, there exists only one *e$_{last}$ such that a$_{last}{\in}$ds(*e$_{last}$), *e$_{last}{\in}$*E$_{last}$.
+\item[(b)] *E$_{last}{\in}$PF is true, due to a$_{last}{\in}$DT.
+\item[(c)] According to the premise a$_{last}{\in}$DT and Lemma \ref{lem:app2-1}, DT$⊇$ds(*e$_{last}$) is true.
+\end{itemize}
+
+\noindent
+Lemma \ref{lem:app2-1} is true due to (a) to (c). 
+
+}
+
+\end{lemma}
+
+
+
+\subsection*{[Relation between Connected Arcs and their Corresponding Edges]}
+
+Arcs a$_i$, a$_j$(a$_i\xrightarrow[{\rm DT}]{1}$a$_j$ or
+sib(a$_i$, a$_j$)) are called ``connected arcs.'' The following two
+lemmas are established with respect to connected arcs in a well-formed
+dependency tree DT.
+
+\begin{lemma}[Connected arcs and their corresponding edges]
+\label{lem:app2-3}
+Suppose *e$_i=\mathrm{edge}(\mathrm{a}_i, \mathrm{DT})$，*e$_j=\mathrm{edge}(\mathrm{a}_j, \mathrm{DT})$ for connected
+arcs a$_i$, a$_j$ in DT. At least one of (a), (b), (c) is true.
+\begin{itemize}
+\item[(a)]*e$_i=$*e$_j$
+\item[(b)]*e$_i{\xrightarrow[{\rm PF}]{+}}$*e$_j$
+\item[(c)]*e$_j{\xrightarrow[{\rm PF}]{+}}$*e$_i$
+\end{itemize}
+
+Lemma \ref{lem:app2-3} means that if two arcs in DT are connected, one
+of their corresponding edges is reachable from another edge in PF.
+
+\proof{
+
+*e$_i$ and *e$_j$ satisfy at least one of the C-Matrix setting
+conditions (r1) to (r3), because *e$_i$ and *e$_j$ co-occur in DT.
+
+\begin{itemize}
+\item[(r1)] *e$_i$=*e$_j$
+\item[(r2)] *e$_i \xrightarrow[\mathrm{PF}]{+}$*e$_j$ or *e$_j \xrightarrow[\mathrm{PF}]{+}$*e$_i$
+\item[(r3)] *e$_i \swarrow_{[PF]} \searrow$ *e$_j$
+\end{itemize}
+
+Let $n$ be a node shared by the connected arcs a$_i$ and a$_j$. Both
+*e$_i$ and *e$_j$ cover $n$. Therefore, (r3) is not satisfied by
+*e$_i$ and *e$_j$. *e$_i$ and *e$_j$ have to satisfy (r1) or (r2).  }
+\end{lemma}
+
+\begin{lemma}[Ancestor-descendant arcs and their corresponding arcs]
+\label{lem:app2-4}
+Suppose *e$_i=\mathrm{edge}(\mathrm{a}_i, \mathrm{DT})$，*e$_j=\mathrm{edge}(\mathrm{a}_j, \mathrm{DT})$ for a$_i$, a$_j$(a$_i\xrightarrow[{\rm DT}]{+}$a$_j$). 
+
+*e$_i{\xrightarrow[{\rm PF}]{*}}$*e$_j$
+
+\proof{
+In the case that dep(a$_i$)=gov(a$_j$), one of (a), (b), or (c) in
+Lemma \ref{lem:app2-3} is true. From the node positioning relation
+prescribed by the partial dependency structure condition in Section
+\ref{sec:bunpoukisoku}, (c) is not satisfied by a$_i$ and a$_j$
+because ${\neg}$(*e$_j \xrightarrow[{\rm PF}]{+}$*e$_i$) is true
+for *e$_j$ and *e$_i$. Therefore, parent-child arcs satisfy either (a)
+or (b). Lemma \ref{lem:app2-4} is established for
+a$_i \xrightarrow[{\rm DT}]{*}$a$_j$, due to the associativity of
+the relation ${\xrightarrow[{\rm PF}]{*}}$.
+
+}
+\end{lemma}
+
+
+\subsection*{[Top single edge top\_edge(DT)]}
+
+\begin{definition}\label{def:TopSingEdge}[Top single edge]
+
+A ``top single edge'' for DT top\_edge(DT) is the single edge that
+locates at the topmost position in PF among the edges that correspond
+to the arc just under the top node of DT. That is, top\_edge(DT) is
+edge a$_i$ satisfying the following conditions.
+
+top\_node(DT)$=$gov(a$_i$) 
+
+edge(a$_i$)${\xrightarrow[{\rm PF}]{*}}$edge(a$_j$) for all a$_j$ such that top\_node(DT)$=$gov(a$_j$)
+
+\end{definition}
+
+If DT is a tree consisting of one node, top\_node(DT) is the single
+lexical edge corresponding to the node.
+
+\begin{lemma}[Relation between top\_edge(DT) and edge(a$_j$, DT)]
+\label{lem:RelBetweenTopedgeAndEdge}
+
+*e$_t \xrightarrow[{\rm PF}]{*}$*e$_j$ is true for *e$_t$=top\_edge(DT) and *e$_j$=edge(a$_j$, DT) (a$_j \in$DT).
+
+\proof{
+If a$_j$ is an arc just under the top node of DT, i.e.,
+gov(a$_j$)$=$top\_node(DT), *e$_t\xrightarrow[{\rm PF}]{*}$*e$_j$,
+is true, according to Lemma \ref{lem:app2-3} and the definition of
+top\_edge. If not, a$_j$ is a descendant of one of the arcs just under
+the top node of DT. *e$_t\xrightarrow[{\rm PF}]{*}$*e$_j$ is true,
+according to Lemma \ref{lem:app2-4}.\\
+}
+\end{lemma}
+
+
+\subsection*{[Division of Well-formed Dependency Tree]}
+
+The ``division of a well-formed dependency tree DT'' means the
+creation of a set of partial dependency trees DT$_1$, ${\ldots}$, DT$_m$
+by removing a set of arcs in ds(top\_edge(DT)) from DT, where $m$ is the
+number of nodes in ds(top\_edge(DT)). Nodes isolated from all other
+nodes by this operation are dependency trees that consist of one
+node. For example, suppose that
+ds(top\_edge(DT))=\{a$_s$, a$_t$, a$_u$, a$_w$\} in
+Figure \ref{fig:DTGraphDivision}, DT is divided into partial dependency
+trees DT$_s$, DT$_t$, DT$_u$, DT$_v$, DT$_w$ whose top nodes are
+n$_s$, n$_t$, n$_u$, n$_v$, n$_w$, respectively. Since nodes n$_s$, n$_w$
+are isolated from other nodes, DT$_s$ and DT$_w$ are dependency trees
+consisting of a single node, i.e., \{n$_s$\} and \{n$_w$\},
+respectively. The phrase heads of the packed edges in cs($e$) of a
+single edge $e$ have one-to-one correspondence with the nodes in the
+partial dependency tree df($e$), due to the partial dependency
+structure condition in Section \ref{sec:bunpoukisoku}. Therefore,
+there exists one packed edge *E$_i$ (1${\leq}i{\leq}m$) whose phrase
+head is a top node n$_i$ of DT$_i$(1${\leq}i{\leq}m$). *E$_i$ is
+called a ``root packed edge'' for DT$_i$ and is referred to as
+root\_Edge(DT$_i$).
+
+\begin{figure}[b]
+ \begin{center}
+\includegraphics{21-4ia6f31.eps}
+ \end{center}
+\caption{Division of well-formed DT}
+\label{fig:DTGraphDivision}
+\end{figure}
+
+\begin{definition}\label{def:RootPackedEdge}[Root packed edge] 
+
+Suppose DT$_i$ and its top node n$_i$ (1${\leq}i{\leq}m$) is obtained
+by the division of DT. A root\_Edge(DT$_i$) is a packed edge that is
+an element of cs(top\_edge(DT)) and whose phrase head is
+top\_node(DT$_i$).
+\end{definition}
+
+For example, in Figure \ref{fig:DTGraphDivision}, *e$_v$ is top\_edge(DT)
+and has the constituent sequence *E$_s$, *E$_t$, *E$_u$, *E$_v$, *E$_w$,
+whose phrase heads are n$_s$, n$_t$, n$_u$, n$_v$, n$_w$,
+respectively. Then, root\_Edge(DT$_t$) is *E$_t$. The following two
+lemmas are explained with reference to
+Figure \ref{fig:DTiObtainedFromDT}.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-4ia6f32.eps}
+ \end{center}
+\caption{Well-formed DT$_i$ obtained from division of DT}
+\label{fig:DTiObtainedFromDT}
+\end{figure}
+
+\begin{lemma}[Relation between root packed edge and top single edge]
+\label{lem:app2RootEdgeAndTopEdge}
+\hspace{-0.5em}Suppose 
+partial dependency trees DT$_i$, obtained from the division of
+the well-formed dependency tree DT. *E$_i \xrightarrow[{\rm
+      PF}]{+}$*e$_{o}$ is true for the root packed edge
+*E$_i=$root\_Edge(DT$_i$) and the top single edge
+*e$_{o}=$top\_edge(DT$_i$).
+
+\proof{
+Let *e$_t$ be top\_edge(DT) and n$_i$ be the top node of DT$_i$
+(Figure \ref{fig:DTiObtainedFromDT}). Consider the case where DT is a
+tree consisting of a single node, i.e., DT$i=$\{n$_i$\}. *e$_{o}$ is
+the single lexical edge corresponding to
+n$_i$. *E$_i\xrightarrow[{\rm PF}]{+}$*e$_{o}$ is true because the
+phrase head of *E$_i$ is n$_i$. Consider another case where DT is a
+tree consisting of arcs. *e$_t\xrightarrow[{\rm PF}]{*}$*e$_{o}$
+is true, according to Lemma \ref{lem:app2-4}. Therefore,
+X${\xrightarrow[{\rm PF}]{*}}$*e$_{o}$ is true for some packed edge X
+in cs(*e$_t$). X$=$*E$_i$ is true because *E$_i \in$cs(*e$_t$) from
+the definition and the phrase heads of *E$_i$ and *e$_{o}$ are the
+same.
+
+}
+\end{lemma}
+
+\begin{lemma}[Well-formedness of partial trees obtained by division of DT]
+\label{lem:app2-6}
+Suppose 
+\linebreak
+partial dependency trees DT$_i$ and its root packed edge
+*E$_i$ with the from-position sp$_i$ and to-position tp$_i$ are obtained
+from the division of the well-formed dependency tree DT. DT$_i$ is a
+well-formed dependency tree that covers from sp$_i$ to tp$_i$.
+
+\proof{
+DT$_i$ is a well-formed dependency tree if it satisfies the
+co-occurrence constraint and the well-covering constraint. Obviously
+DT$_i$ satisfies the co-occurrence constraint because DT satisfies the
+co-occurrence constraint. The following part shows the well-covering
+constraint.
+
+In the case that DT is a tree consisting of a single node, it
+satisfies the well-covering constraint from the definition. Consider
+the case where DT is a tree consisting of arcs. Let n$_i$ and n$_j$ be
+the top node of DT and one of any other nodes in DT
+(n$_j \neq$n$_i$). There exists arc a$_j$ such that
+n$_j=dep(a_j$) in DT. Moreover, there exists a$_k\in$DT$_i$ such
+that gov(a$_k$)$=$n$_i$, a$_k \xrightarrow[{\rm DT}]{*}$a$_j$ for
+a$_j \in$DT$_i$. Let *e$_j$ and *e$_k$ be *e$_j=$edge(a$_j$, DT),
+*e$_k=$edge(a$_k$, DT). *e$_k\xrightarrow[{\rm PF}]{*}$*e$_j$ is
+true due to Lemma \ref{lem:app2-4}, because a$_k$ is equal to a$_j$ or
+a$_k$ is an ancestor of a$_j$. Now, let *e$_t$ be the top single node
+of DT, *e$_t \xrightarrow[{\rm PF}]{*}$*e$_k$ is true according to
+Lemma \ref{lem:RelBetweenTopedgeAndEdge}. *e$_k$ is reachable from one
+of the packed edges in cs(*e$_t$). *E$_i \xrightarrow[{\rm
+      PF}]{*}$*e$_k$ is true because the phrase head of *e$_k$ is
+n$_i$.
+
+From the above, *E$_i\xrightarrow[{\rm
+      PF}]{*}$*e$_k \xrightarrow[{\rm PF}]{*}$*e$_j$ is true and
+n$_j$ is in the coverage of *E$_i$; that is, all nodes in DT$_i$ are
+in the coverage from sp$_i$ to tp$_i$. Furthermore, the nodes in
+DT$_k$($k{\neq}i$) are not in the coverage from sp$_i$ to
+tp$_i$. Since DT satisfies the well-covering constraint, all nodes in
+DT$_i$ occupy whole positions from sp$_i$ to tp$_i$.
+
+}
+\end{lemma}
+
+
+\subsection*{[Proof of the Completeness and Soundness of the Dependency Forest]}
+
+A corresponding dependency tree dependency\_tree(PT) for a phrase
+structure tree PT = \{*e$_1$, ${\ldots}$, *e$_m$\} is defined as
+follows:
+
+\begin{definition}\label{def:DTforPT}[Dependency tree for a phrase structure tree PT]
+dependency\_tree(PT) = ds(*e$_1$) ${\uplus}$ ${\cdots}$ ${\uplus}$ ds(*e$_m$) 
+
+\noindent
+The operator ${\uplus}$ is similar to the union operator
+${\cup}$ , which is introduced to manage the union of dependency
+structures that may be either a set of arcs or a set of a
+node. ${\uplus}$ removes nodes from the union of dependency structures
+if it has at least one arc. The following are examples of ${\uplus}$,
+where n$_i$ and a$_i$ represent node and arc, respectively.
+
+\begin{itemize}
+\item[] \{n$_1$\}${\uplus}$\{a$_1$, a$_2$\} = \{a$_1$, a$_2$\}
+\item[] \{a$_1$\}${\uplus}$\{a$_2$, a$_3$\} = \{a$_1$, a$_2$, a$_3$\}
+\item[] \{n$_1$\}${\uplus}$\{\} = \{n$_1$\}
+\end{itemize}
+
+\end{definition}
+
+\noindent
+dependency\_tree(PT) is a tree because it is consructed
+by combining each partial dependency tree ds(*e$_i$).
+
+\begin{theorem}[The completeness of the dependency forest]
+\label{the:CompletenessOfPF}
+Let PT be a phrase structure tree in the phrase structure forest
+PF. DT=dependency\_tree(PT) is a well-formed dependency tree in the
+dependency forest DF.
+
+\proof{
+From the definition of the dependency forest, DT is included in
+DG. Nodes contained in DT and PT have a one-to-one relation, according
+to the partial dependency structure condition. Since PT covers the
+whole sentence, DT is a well-covered dependency tree. According to the
+C-Matrix setting conditions, every two arcs in DT satisfy the
+co-occurrence constraint. Therefore, dependency\_tree(PT) is a
+well-covering and well-co-occurred dependency tree in DF.\\
+}
+\end{theorem}
+
+\begin{theorem}[The soundness of the dependency forest]
+\label{the:SoundnessOfPF}
+Let DT be a well-formed dependency tree in the dependency forest
+DT. There exists a phrase structure tree PT in the phrase structure
+forest PF such that DT=dependency\_tree(PT).
+
+\proof{
+The existence of a phrase structure tree PT that satisfies
+PT${\in}$ps\_trees(*E$_{root}$) and dependency\_tree(PT)=DT is shown
+below.
+
+Let $n$ be a number of input words. The following is an algorithm,
+called the phrase structure tree generation algorithm, which generates
+a phrase structure tree from a packed edge *E$_r$ with from-position
+sp$_r$ and to-position tp$_r$ (1${\leq}$sp$_r <$tp$_r{\leq}$n) and a
+well-formed dependency tree DT, which covers from sp$_r$ to
+tp$_r$. The proof that the phrase structure tree generation algorithm
+generates a phrase structure tree that satisfies the above
+conditions is shown below using mathematical induction for the number
+of arcs in the dependency tree.
+
+\vspace{0.5\Cvs}
+\noindent
+\fbox{
+\begin{minipage}{405pt}
+\setlength{\parindent}{0pt}
+[Phrase Structure Tree Generation Algorithm]
+
+In the case that DT is a set of arcs:
+
+\hangafter=1\hangindent=2em
+\quad A-Step1(Identification of the Top Single Edge): Let *e$_t$ be the top single edge top\_edge(DT).
+
+\hangafter=1\hangindent=2em
+\quad A-Step2 (Identification of a Path): Identify a path from *E$_r$ to *e$_t$. Let PATH be a set of single edges in the path except for *e$_t$.
+
+\hangafter=1\hangindent=2em
+\quad A-Step3 (Division of DT): Divide DT by removing edges in ds(top\_edge(DT)) to get a set of partial dependency trees DT$_i$($1{\leq}i{\leq}m$) and root packed edges *E$_i$=root\_Edge(DT$_i$).
+
+\hangafter=1\hangindent=2em
+\quad A-Step4 (Computation of Partial Phrase Structure Trees): Apply the phrase structure tree generation algorithm to each DT$_i$ and *E$_i$($1{\leq}i{\leq}m$) and compute each PT$_i$.
+
+\hangafter=1\hangindent=2em
+\quad A-Step5 (Construction of Phrase Structure Tree): Returns PT=PATH ${\cup}$ \{*e$_t$\} ${\cup}$ PT$_1$ ${\cup}$ ${\cdots}$ ${\cup}$PT$_m$ as a phrase structure tree for DT, *E$_r$.
+
+In the case that DT is a set of a node (DT=\{n\}):
+
+\hangafter=1\hangindent=2em
+\quad N-Step1 (Identification of Lexical Edge): Identify the lexical edge @e$_{lex}$ that generated node n.
+
+\hangafter=1\hangindent=2em
+\quad N-Step2 (Identification of a Path): Identify a path from *E$_r$ to e$_{lex}$ and return a set of single edges in the path as a phrase structure tree for DT, *E$_r$.
+
+\end{minipage}
+}
+\vspace{0.5\Cvs}
+
+\noindent
+When DT is s a set of arcs, the phrase structure tree PT is
+constructed through A-Step1 to
+A-Step5. Figure \ref{fig:DttoParseTreeExplain} shows the behavior of the
+algorithm diagrammatically. A-Step1 computes the top single edge
+*e$_t$($=$top\_edge(DT)) (Figure \ref{fig:DttoParseTreeExplain}
+(S1)). A-Step2 identifies a path from *E$_r$ to *e$_t$ and computes
+PATH, a set of single edges. The existence of this path
+(*E$_r \xrightarrow[{\rm PF}]{+}$*e$_t$) is assured as follows:
+
+\begin{figure}[b]
+ \begin{center}
+\includegraphics{21-4ia6f33.eps}
+ \end{center}
+\caption{Generation of PT from DT and *E$_r$}
+\label{fig:DttoParseTreeExplain}
+\end{figure}
+
+In the case that *E$_r$ is *E$_{root}$, it is obvious. In the case
+that *E$_r$ is obtained by the division of a dependency graph (*E$_i$
+in A-Step4), it is assured by Lemma
+\ref{lem:app2RootEdgeAndTopEdge}. The dependency structure parts of
+the single edges in PATH are \{\}. This is obvious because *E$_r$ and
+*e$_t$ have the same coverage since all nodes in DT are in the
+coverage of *e$_t$.
+
+\[
+\text{dependency\_tree(PATH)} = \{\} \eqno{(A)}
+\]
+A-Step3 performs the division of DT and generates DT$_i$,
+*E$_i$($1{\leq}i{\leq}m$), as shown in
+Figure \ref{fig:DttoParseTreeExplain} (S3). According to Lemma
+\ref{lem:app2-6}, DT$_i$ is a well-formed dependency tree covering the
+coverage of *E$_i$ and the phrase structure tree generation algorithm
+is applicable recursively at A-Step4. A-Step5 computes the phrase
+structure tree PT (Figure \ref{fig:DttoParseTreeExplain} (S5)). From the
+definition of the phrase structure tree, it is obvious that PT is a
+phrase structure tree if each PT$_i$ is a phrase structure tree.
+
+When DT is a set of a node (DT=\{n\}), N-Step1 and N-Step2 compute a
+phrase structure tree PT. The existence of a path from *E$_r$ to
+e$_{lex}$ is assured for the same reason described in the explanation
+of A-Step1.
+
+The phrase structure tree PT generated by the phrase structure tree
+generation algorithm satisfying DT=dependency\_tree(PT) is shown as
+follows:
+
+In the case that DT=\{n$_r$\}, the algorithm generates PT at
+N-Step2. PT is a phrase structure tree containing one node n$_r$. From
+the definition of dependency\_tree, dependency\_tree(PT)=\{n$_r$\} is
+true. In the case that DT is a dependency tree that consists of a set
+of arcs, the phrase structure tree generation algorithm, the
+definition of dependency\_tree, and (A) give the following equation.
+\begin{align*}
+ & \text{dependency\_tree(PT)}\\
+ & \quad = \text{dependency\_tree}(\mathrm{PATH} \cup \{\mathrm{*e}_t\} \cup \mathrm{PT}_1 \cup \cdots \cup \mathrm{PT}_m) \\
+ & \quad = \text{dependency\_tree}(\mathrm{PATH}) \uplus \text{dependency\_tree}(\{\mathrm{*e}_t\}) {\uplus}\text{dependency\_tree}(\mathrm{PT}_1)\\
+ & \qquad \uplus \cdots \uplus \text{dependency\_tree}(\mathrm{PT}_m)\\
+ & \quad = \text{dependency\_tree}(\{\mathrm{*e}_t\}) \uplus \text{dependency\_tree}(\mathrm{PT}_1) \uplus \cdots \uplus \text{dependency\_tree}(\mathrm{PT}_m)
+\end{align*}
+Assume that PT$_i$ corresponding to DT$_i$, *E$_i$ in A-Step4 satisfies the following.
+
+dependency\_tree(PT$_i$)=DT$_i$  (1${\leq}i{\leq}$m)
+
+\noindent
+Now, PT generated at A-Step5 generates DT as shown below.
+\begin{align*}
+ & \text{dependency\_tree(PT)} \\
+ & \quad = \mathrm{ds}_t \uplus \mathrm{DT}_1 \uplus \cdots \uplus \mathrm{DT}_m \\
+ & \quad = \mathrm{DT}
+\end{align*}
+}
+\end{theorem}
+
+\begin{biography}
+
+\bioauthor[:]{Hideki Hirakawa}{Hideki Hirakawa
+  received the B.E. and M.E. degrees in electrical engineering from
+  Kyoto University, Kyoto, Japan, in 1978 and 1980, respectively. He
+  received the PhD degree of Information and Science Technology from
+  Tokyo University, Tokyo, Japan, in 2007. In April 1980, he joined
+  the Toshiba Corp, Kawasaki, Japan. From 1982 to 1984, he was a
+  researcher at Institute for New Generation Computer Technology
+  (ICOT), Tokyo, Japan. From 1994 to 1995, he worked as a research
+  affiliate of the MIT Media Laboratory, Boston, U.S.A. He is
+  currently a Chief Specialist of the Government \& External Relations
+  Office, Toshiba Corp., Tokyo, Japan. He is a member of the
+  Association for Natural Language Processing of Japan, the
+  Information Processing Society of Japan, and the Japanese Society for
+  Artificial Intelligence.}
+
+\end{biography}
+
+\biodate
+
+
+
+
+
+\clearpage
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+\clearpage
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+\end{document}

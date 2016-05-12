@@ -1,0 +1,939 @@
+\documentclass{nlp}
+\usepackage{graphicx}
+
+\begin{document}
+
+\setcounter{page}{1}
+\setcounter{Volume}{2}
+\setcounter{Number}{3}
+\setcounter{Month}{7}
+\received{1995}{5}{6}
+\revised{1995}{7}{8}
+\accepted{1995}{9}{10}
+
+
+\title{知覚的群化に基づく参照表現の生成}
+\author{船越 孝太郎\affiref{CS} \and 渡辺 聖\affiref{CS} \and 栗山 直
+    子\affiref{HUM} \and 徳永 健伸\affiref{CS}}
+
+\headauthor{船越，渡辺，栗山，徳永}
+
+\headtitle{知覚的群化に基づく参照表現の生成}
+
+\affilabel{CS}{
+  東京工業大学 大学院情報理工学研究科 計算工学専攻\\
+  Department of Computer Science,
+  Graduate School of Information Science and Engineering,
+  Tokyo Institute of Technology
+}
+ 
+\affilabel{HUM}{
+  東京工業大学 大学院社会理工学研究科 人間行動システム専攻\\
+  Department of Human System Science,
+  Graduate School of Decision Science and Technology,
+  Tokyo Institute of Technology
+}
+
+\begin{abstract}
+  参照表現とは，複数の物体のなかから特定の物体を識別するための言語表現
+  である．これまでに提案されている参照表現の生成手法は，物体の属性と物
+  体間の二項関係のみを用いていた．しかしながら，このようなアプローチで
+  は，弁別的な属性や二項関係が存在しない状況において適当な参照表現を生
+  成できない．この問題を克服するため，本論文では，知覚的群化と多項間関
+  係を用いた参照表現の生成手法を提案する．人間が知覚的に認識しやすい物
+  体の群を利用することで，「左の三つの玉のうちの一番右の玉」のような表
+  現を生成することが可能になる．我々は42人の被験者に対して心理実験を行
+  ない，知覚的群化を用いた参照表現を収集した．生成アルゴリズムは収集し
+  た表現に基づいて構築した．23人の被験者を用いた評価実験により，提案手
+  法が適切な参照表現を生成できることが確認できた．
+\end{abstract}
+
+\keywords{参照表現，空間記述，知覚的群化，言語生成}
+
+\etitle{Generating Referring Expressions based-on \\Perceptual Grouping}
+
+\eauthor{Kotaro Funakoshi\affiref{CS} Satoru Watanabe\affiref{CS}
+   Naoko Kuriyama\affiref{HUM} \\ {\hspace*{-7pt}\rm and} Takenobu
+   Tokunaga\affiref{CS}}
+
+
+\begin{eabstract}
+  Past work of generating referring expressions mainly utilized
+  attributes of objects and binary relations between objects to
+  distinguish the referent from other objects. However, such an
+  approach does not work well when there is no distinctive attribute
+  among objects. To overcome this limitation, this paper proposes a
+  novel generation method utilizing the perceptual groups of objects
+  and $n$-ary relations among them. With the proposed method, an
+  expression like ``the rightmost ball in the left cluster of three
+  balls'' can be generated. The key is to identify groups of objects
+  that are naturally recognized by humans. We conducted psychological
+  experiments with 42 subjects to collect referring expressions in
+  such situations, and built a generation algorithm based on the
+  results. The evaluation using another 23 subjects showed that the
+  proposed method could effectively generate proper referring
+  expressions.
+\end{eabstract}
+
+\ekeywords{Referring Expression, Spatial Description, Perceptual
+  Grouping, Language Generation}
+
+\maketitle
+
+\def\Fig#1{}
+\def\Tab#1{}
+\def\Sec#1{}
+\def\App#1{}
+\def\mi#1{}
+\def\ti#1{}
+\def\func#1{}
+
+
+\section{はじめに}
+\label{sec:intro}
+
+過去20年の間，機械と人とのコミュニケーションを実現するために，多くの研
+究者が参照表現の生成に取り組んできた．参照表現の生成において，先行研究
+の多くは，聞き手に特定させたい対象（以後，対象物とよぶ）の属性，および
+対象物と他の物体（以後，非対象物とよぶ）の間の二項間関係を用いている
+\cite{DA1985,RD1991,RD1992,RD1995,PH1995,HH1997,EK2002,KV2002,EK2003}．
+従って，これらの手法は，対象物と非対象物との間に外見的な差異が存在せず，
+どの二項関係も対象物を特定するには有効でない状況において，適切な参照表
+現を生成することができない．ここで「適切な参照表現」とは，聞き手に対象
+物を特定させうる簡潔で自然な表現を指す．後に示すように，論理的には成立
+するものの，人間に提示する表現としては不適切な表現も存在する．
+
+例として，\Fig{ex}において対象物\ti{b}を図中の人物\ti{P}に示すことを考
+える．ただし，\ti{a}，\ti{b}などのラベルは説明上付加したもので，人
+物\ti{P}には提示されない．対象物\ti{b}は外見からは物体\ti{a}や物
+体\ti{c} から区別することができない．そこで次の方策として，対象
+物\ti{b}とテーブルとの間の関係を用いることが考えられる（例えば，「テー
+ブルの右の玉」）．しかし，物体\ti{a}も物体\ti{c}もテーブルの右にあるた
+め，この状況においては「$X$の右の$Y$」という関係に弁別能力は無い．テー
+ブルの代わりに物体\ti{a} や物体\ti{c}を参照先として使うことも意味が無い．
+なぜなら物体\ti{a}および物体\ti{c}は物体\ti{b}が一意に特定できないのと
+同じ理由によって一意に特定することができないからである．このように，物
+体の属性と二項間関係のみを用いる従来の手法では参照表現の生成に失敗する．
+手法によっては「玉の前の玉の前の玉」のような論理的には誤りでない表現を
+生成できるが，適切な参照表現ではない．このような状況は今まで注目されて
+こなかったが，物体配置のようなドメイン（例えば\cite{TH2004}）では容易か
+つ頻繁に起こりうる．
+
+\cite{IV2000}は，\Fig{ex}のような状況において，指差しのようなジェスチャ
+を用いることを提案している．しかしながら，指差しや視線は話し手と聞き手
+の位置関係によっては常に利用できるとは限らない．
+一方，\Fig{ex}に示す状況では，話し手は「一番前の玉」という表現を用いる
+ことで，ジェスチャを用いなくても対象物\ti{b}を人物\ti{P}に対して示すこ
+とができる．このような表現を生成するためには，話し手は知覚的に特徴のあ
+る物体群を認識し，群に含まれる物体の間の多項間関係を用いる必要がある
+\footnote{\cite{EK2003}は彼らの手法が多項間関係を用いることができると主
+  張しているが詳細は示されていない．我々は彼らの手法は直接的にはここで
+  示したような状況を扱えないと考える．}．このような群の認識を知覚的群化
+（perceptual grouping）とよぶ．
+
+本論文では，群の要素間の多項間関係を利用した参照表現の生成手法を提案す
+る．提案手法は，Th\'{o}rissonの手法\cite{KT1994}を用いて知覚的群化を行
+う．本論文では問題に取り組むにあたり，簡単のため\Fig{experiment}のよう
+に均質な物体が乱雑に配置された状況を対象とする．従って，ここで扱う多項
+間関係は位置関係だけである．一般には，大きさや色についてもその度合いに
+応じた多項間関係が存在する\footnote{先行研究が「大きさ」などを扱う場合
+  には，相対的な関係としてではなく，例えば，「大きい玉」と「小さい玉」
+  のように，個々の物体の離散化された絶対属性として扱っていた．}．
+
+また，本論文では対話者は適当な参照枠\cite{SL2003}を共有していると仮定す
+る. 参照枠は視点と基準が決まったときに前後・左右の方向を決定する．しか
+しながら，\cite{MC2002,TH2004}のような会話エージェントシステムに提案手
+法を適用しようとすれば，参照枠は対話の各時点において適切に決定されなけ
+ればならない\footnote{個々の対象に対する参照枠についての研究は多くなさ
+  れているが\cite{HC1973,AH1986,JW2002,SL2003}，物体の群とその要素に関
+  して参照枠がどのように決定されるのかについてその計算モデルはほとんど
+  研究されておらず，今後検討する必要がある．また，
+  適切な参照表現を生成するためには話者間の視界／視点の違いも考慮しなけ
+  ればならない．問題の一つは，障害物などの存在によって見える範囲が変わ
+  ることである．もう一つの問題は，人がしばしば3次元空間を2 次元平面に投
+  射して物体を認識するために視点によって位置関係の認識がずれてしまい，
+  例え参照枠を統一してもうまく対象物を特定できない恐れがあることであ
+  る．}．
+
+
+話し手は対象物を参照する過程でしばしば複数の群に言及する．このような場
+合，我々は2種類の関係を使うことができる．一つは，「机の近くの五つの玉の
+うちの手前の玉」のような，内部参照関係（「五つの玉」に「手前の玉」が含
+まれる）である．もう一つは，「五つの玉の右の二つの玉」のような，外部参
+照関係（「五つの玉」に「二つの玉」は含まれない）である．内部参照関係に
+ある二つの群は必ず包含関係にある．\Sec{sec:experiment}で述べるように，
+本論文では包含関係だけを用いた参照表現に注目する．
+
+本論文の構成は以下の通りである．まず\Sec{sec:experiment}では，知覚的群
+化に基づく参照表現を収集するために行った実験について説明する．そして提
+案手法を\Sec{sec:generation}に示す．\Sec{sec:scoring}では，知覚的群化の
+観点から表現の妥当性を予測することが可能かどうかを検討する．最後に，
+\Sec{sec:conclusion}で本論文を結び，今後の課題について述べる．
+
+
+\begin{figure}[bt]
+  \centering
+    \includegraphics[width=0.3\linewidth]{image/example_new.eps}
+    \caption{従来手法が対応できない状況の一例}
+    \label{ex}
+\end{figure}
+
+
+\section{データ収集}
+\label{sec:experiment}
+
+知覚的群化に基づく参照表現を収集するために，42人の日本人大学生に対して
+心理実験を行った．そして，収集した表現を評価するための実験を，別の44人
+の日本人大学生に対して行なった．二つの被験者グループ間に重なりは無い．
+実験の詳細を以下に記す．
+
+\subsection{参照表現の収集（実験1）}
+\label{subsec:experiment1}
+
+\paragraph{方法:}
+
+被験者に同色同形同大の物体が複数配置された2次元の俯瞰図を提示し，図中に
+描かれた第三者に対象物を伝えるように要求した．各図には，3から9個の物体
+が配置されている．布置は12種類を人手で作成した．被験者に提示した図の一
+例を\Fig{experiment}に示す（提示した12 種類の布置
+は，\App{sec:arrangements}を参照されたい．）．図中の物体に割り振られた
+ラベル$a,\dots,f,x$は，被験者に示した実際の図では表示されていな
+い\footnote{以後，$x$で対象物を示し，それ以外の小文字英字で非対象物を示
+  す．}．各被験者には，図中の人物$P$が破線で囲まれた物体を取ることがで
+きるような指令を記述するように指示した．対象物に対する参照表現は，これ
+らの指示表現から取り出した．被験者が適当な表現を作ることができない場合
+にはその課題を放棄し，次の課題に進むことを許した．対象物は各布置毎に固
+定したので，全被験者は各布置において同一の対象物に対する言語表現を生成
+する．
+
+\begin{figure}[tb]
+  \centering
+      \includegraphics[width=0.3\hsize]{image/experiment-example_new.eps}
+      \caption{視覚刺激の一例（物体のラベルは被験者には見えない）}
+      \label{experiment}
+\end{figure}
+
+\paragraph{分析:}
+
+42人の被験者に対して12の布置を示し，476表現を収集した．予定した504表現
+（$42 \times 12$）のうち，13表現については被験者に放棄され，15表現につ
+いては明らかに誤っている表現であったので取り除いた．収集した表現を分析
+した結果，被験者は一般にすべての物体を含む群から始めて対象物だけを含む
+群に絞り込んでいくことを確認した．従って，ある参照表現は被験者の絞り込
+みの過程を反映した群の系列（SOG: Sequence of Groups）として形式化できる．
+
+以下の例は，\Fig{experiment}の対象物$x$に対して実際に観察された表現であ
+る．表現の下に対応するSOGを記す\footnote{以後，SOGも含めて，群のリスト
+  を鍵括弧で閉じて表現する．}．
+
+\begin{center}
+  \begin{minipage}{.75\linewidth}
+\begin{quote}
+  「左奥にある三つの玉のうちの一番右の玉」\\ 
+  \\
+  SOG: $[\{a,b,c,d,e,f,x\},\{a,b,x\},\{x\}]$
+  \\
+  ここで，\\
+  $\{a,b,c,d,e,f,x\}$は図中のすべての物体（全体群）を示し，\\
+  $\{a,b,x\}$は左奥の三つの物体からなる群を示し，\\
+  $\{x\}$は対象物のみからなる群を示す.\\
+\end{quote}
+  \end{minipage}
+\end{center}
+
+絞り込みは全体群から始まるので，SOGはすべての物体の群から始まり，対象物
+だけを含む群で終わる．収集した言語表現をSOGに翻訳することで，表現を抽象
+化し分類することができる．各布置に対しては平均39.7表現を手に入れたが，
+それらは平均8.4の異なるSOGに分類できた．収集した表現の概要
+を\Tab{tab:sum_data}に示す．布置が複雑になると，生成される表現が多様化
+すると同時に放棄や誤りの割合も増えることがわかる\footnote{誤りの割合に
+  ついては，\Sec{sec:evaluation}の\Tab{tab:accuracy_arrangements}参
+  照．}．
+
+\Sec{sec:intro}で述べたように群間の関係は二種類存在する．しかし，内部
+参照関係（包含関係）だけを用いた表現が収集表現全体の70\%を占めた．
+
+\begin{table*}[htbp]
+  \centering
+  \caption{収集した表現の概要}\vspace{2mm}
+  \begin{tabular}{l|cccccccccccc|c}\hline
+    布置番号     & 1 & 2 & 3 & 4 & 5 & 6 & 7 &
+    8 & 9 & 10 & 11 & 12 & 平均\\\hline
+    収集表現の数 & 41 & 40 & 41 & 41 & 42 & 37 & 42 & 32 & 42
+    & 41 & 41 & 36 & 39.7  \\
+    SOGの異なり数 & 5 & 6 & 8 & 8 & 6 & 12 & 4 & 15 & 4 & 11 & 5 & 17
+    & 8.4 \\ \hline
+  \end{tabular}
+  \label{tab:sum_data}
+\end{table*}
+
+
+\subsection{収集した表現の評価（実験2）}
+\label{subsec:experiment2}
+
+\paragraph{方法:}
+
+\Sec{subsec:experiment1}で使用した図とその図を用いて収集した表現を被験
+者に提示し，提示された参照表現が指す物体を選択するように指示した．被験
+者は，実験1の被験者とは異なる日本人大学生の男女である．被験者に提示した
+図は，対象物を示す破線がないことを除いて，実験1で使用したものと同じであ
+る．また，被験者には物体の選択に関する確信度と，提示された表現の簡潔さ
+と自然さをそれぞれ8段階で主観的に評価させた．
+
+被験者の数が限られているため，評価できる表現の数も限られる．そこで我々
+は，各布置に対して最大10表現を選択して評価を行った．これらの表現は，異
+なるSOGが可能な限り被覆されるようにした．異なるSOGが11以上ある場合には，
+頻度の高いSOGから順に選んだ．異なるSOGが10未満の場合には，頻度の高い
+SOGから対応する複数の言語表現を選択した．あるSOGに対して複数の言語表現
+がある場合には，頻度の高いもの，あるいは主観的により適切と思われる表現
+を選んだ．結果，49人の被験者に117表現を評価させた．各被験者は平均して
+29.5表現を評価した．
+
+\paragraph{分析: }
+
+無効な回答を除き，全部で1,429の評価を得た．一表現あたりの平均評価数は
+12.2である．
+各表現の質を測るために，評価値という尺度を用意した．評価値は式
+(\ref{eq:properness})によって与えられる．評価値により，どのような表現が
+好まれるのかを分析した．また，機械生成の表現に対するスコアリング関数
+(\ref{eq:score})の設計にも用いた（\Sec{sec:method}参照）．
+
+ \begin{equation}
+ (\mbox{評価値})=
+  (\mbox{正答率})\times(\mbox{確信度})\times\frac{(\mbox{自然さ})+(\mbox{簡潔さ})}{2}
+ \label{eq:properness}
+ \end{equation}
+
+分析の結果，内部参照関係だけを用いた84表現が高い正答率（平均79.3\%）と
+高い評価値（平均33.1）を得た．一方，外部参照表現を一度でも用いた33表現
+は，内部参照関係だけを用いた表現に比べ，低い正答率（平均69.1\%）と低い
+評価値（平均19.7）を得た．
+外部参照関係を用いない（すなわち内部参照関係だけを用いた）言語表現は，
+外部参照関係を用いる表現の2倍観察された．\Fig{experiment}中の対象物$x$
+に対する表現の例を示す．
+
+
+\begin{itemize}
+\item 外部参照関係なし
+  \begin{itemize}
+  \item 「左奥の三つの玉のうちの一番右の玉」
+  \end{itemize}
+\item 外部参照関係あり
+  \begin{itemize}
+  \item 「手前の二つの玉の後ろの玉」
+  \end{itemize}
+\end{itemize}
+
+また，全体群について言及する表現に対する評価値は全体的に低かった．こ
+れらの観察から，我々は内部参照関係だけを用い，全体群については明示
+的に言及しない表現生成アルゴリズムを構築する．
+
+\section{参照表現の生成}
+\label{sec:generation}
+
+本節では知覚的群化に基づく参照表現生成アルゴリズムを提案し，その評
+価を行う．知覚的群化にはTh\'{o}rissonのアルゴリズム~\cite{KT1994}を採
+用する．
+
+\subsection{Th\'{o}rissonの知覚的群化アルゴリズム}
+\label{sec:grouping-algorithm}
+
+Th\'{o}rissonのアルゴリズムは人間の知覚的群化を模倣する．知覚的群化は物
+体の物理的な近接性，色の類似性，形状の類似性など様々な観点（特徴）に基
+づいて行うことができるが，各特徴空間における物体間の「距離」を定義する
+ことにより，Th\'{o}rissonのアルゴリズムは様々な特徴に対して一様に対応す
+る．また，各特徴の距離関数を合成することで，複数の観点に基づいた群化を
+行うこともできる（例えば，色が類似してかつ近傍に存在する物体だけを群化
+することができる）．本論文で群化に使用する特徴は近接性だけである．物体
+間の近接性を表す「距離」は物体の中心間のユークリッド距離として定義し
+た\footnote{今回用いる物体は全て均一であるので，物体の大きさは無視し
+  た．}． \Fig{experiment}の布置に対して群化を行った結果
+を，\Fig{grouped}に示す．
+
+\begin{figure}[tb]
+  \centering
+  \includegraphics[width=0.45\hsize]{image/experiment-example_new_grouped.eps}
+  \caption{群化アルゴリズムによる群化結果}
+  \label{grouped}
+\end{figure}
+
+Th\'{o}rissonの群化アルゴリズムは，ある一つの特徴（例えば，本論文の場合
+では物体の近接性）に関して群化を行う際に，包含関係を持たずに交差する群
+を生成することはない．\Sec{sec:method}で提案する表現生成アルゴリズム
+の\textbf{ステップ2}の処理は，この特性を前提としている．
+
+Th\'orissonのアルゴリズムは線状に並んだ物体の群を認識することができない．
+しかしながらこのような形状は人間には非常に認識しやすいため，人間はしば
+しば線状の配置に言及する表現を生成する．このような表現も機械が生成・理
+解するためには，顕現性の高い幾何学形状を認識できる群化アルゴリズムが必
+要であるが，これについては今後の研究課題とする\footnote{ 人間に対して顕
+  現性の高い幾何学形状のほとんどは，辞書やシソーラスの中の形状を表す語
+  彙（例えば，線，円，四角形など）を参照することで数え上げられると予想
+  できる．知覚的群化を模倣するアルゴリズムは，少なくともこれらの語彙に
+  よって参照される形状をなす物体配置を認識できる必要がある．}．
+
+\subsection{参照表現生成アルゴリズム}
+\label{sec:method}
+
+物体の布置と対象物を入力として，提案アルゴリズムは次の3ステップで参
+照表現を生成する．
+\begin{description}
+\item[ステップ1:] 群の列挙: 物体間の近接性に基づいて知覚的群化を行う
+\item[ステップ2:] SOGの生成: 群を組み合わせてSOGを生成する
+\item[ステップ3:] 言語表現の生成: SOGを言語表現に変換する
+\end{description}
+
+以降，
+\Fig{experiment}を用いて参照表現生成のための上記の3ステップを説明する．
+
+\subsubsection*{ステップ1: 群の列挙}
+物体の布置が与えられると，まずTh\'{o}rissonのアルゴリズムにより，物体の
+近接性にもとづいて群のリストを生成する．前節で述べたように，我々は内部
+参照関係だけを利用するので，生成された群のリストの中から対象物$x$を含む
+群だけを選択する．内部参照関係だけで対象物を特定するためには，SOGを使っ
+て対象物を絞り込む過程において，すべての群が対象物$x$を含まなければなら
+ない．次に，群をその大きさに従って降順にソートする．最後に，もし対象物
+だけを含む群がソートされたリストに含まれなければ，それをリストの最後に
+付け加える．以上の処理で得られた群のリスト$\mit{GL}$が，ステップ1の出力
+である．
+
+例えば，\Fig{experiment}に対して，Th\'{o}rissonのアルゴリズムは五つの群
+\begin{quote}
+  $\{a,b,c,d,e,f,x\},\{a,b,c,d,x\},\{a,b,x\},\{c,d\},\{e,f\}$
+\end{quote}
+を生成する．
+対象物を含まない群を除き，対象物だけを含む群を加えて，群のリスト
+\begin{equation}
+  [\{a,b,c,d,e,f,x\},\{a,b,c,d,x\},\{a,b,x\},\{x\}]
+  \label{eq:makeGroupList_output}
+\end{equation}
+を得る．
+
+\subsubsection*{ステップ2: SOGの生成}
+
+
+このステップでは，ステップ1の出力した$\mi{GL}$から，\Sec{experiment}で
+説明したSOGを生成する．SOGは(\ref{eq:tag})の形式を取る．ここで$G_i$はあ
+る群を表し，$G_0$は全ての物体を含む群である．SOG(\ref{eq:tag})は，絞り
+込みが全体群$G_0$から始まり対象物$x$のみを含む群で終わることを表してい
+る．
+
+\begin{equation}
+  [G_{0},G_{1}, \ldots ,G_{m-2},\{x\}] \label{eq:tag}
+\end{equation}
+
+まず，群のリスト$\mi{GL}$から，全ての可能なSOGを生成する．リストのサイズが
+$m$のとき，$G_{0}$と$\{x\}$は必ずSOGに含まれるので，$2^{m-2}$個のSOGが
+生成される．従って，群のリスト$[G_0, G_1, G_2, \{x\}]$からは，
+四つのSOG $[G_0, \{x\}]$，$[G_0, G_1, \{x\}]$，$[G_0, G_2, \{x\}]$，
+$[G_0, G_1, G_2, \{x\}]$が生成される．
+例えば，リスト(\ref{eq:makeGroupList_output})から生成されるSOGの一つは
+\begin{equation}
+  [\{a,b,c,d,e,f,x\},\{a,b,x\},\{x\}]
+  \label{eq:tag_ex}
+\end{equation}
+である．
+\Sec{sec:grouping-algorithm}で述べたように，群化アルゴリズムが生成する
+群のリスト中の任意の二つの群$G_{i}$および$G_{j}$は交差しない（$G_{i}
+\cap G_{j} = \phi$）か，そうでなければ，一方が他方を包含する（$G_i
+\subset G_j$あるいは$G_j \subset G_i$）．
+
+\subsubsection*{ステップ3: 言語表現の生成}
+
+\begin{figure}[htb]
+  \centering
+  \begin{minipage}{.95\linewidth}
+
+  \begin{enumerate} \setlength\itemsep{0pt}
+  \item $|G_{i+1}| = 1$の場合
+    \begin{enumerate} \setlength\itemsep{0pt}
+    \item  $|G_i| > 2$の場合
+      \begin{enumerate} \setlength\itemsep{0pt}
+      \item $G_{i+1}$のBB（バウンディングボックス）が$G_{i}$のBBに接触する場合\\
+        $E(R(G_i, G_{i+1}))=$「のうちの一番$X$の」: $X$は，右，左，手前，
+        奥，右手前，左手前，右奥，左奥の順に判定して，最初に該当した関係．
+      \item $G_{i+1}$のBBが$G_{i}$のBBに接触しない場合
+        \begin{enumerate} \setlength\itemsep{0pt}
+        \item $G_{i}$のBBが横長（図の左右方向に長い）の場合\\
+          対象$x$が右から$m$番目，左から$n$番目として，
+\[
+E(R(G_i, G_{i+1})) = \left\{
+\begin{array}{l@{\quad :\quad }l}
+\mbox{「右から$m$番目の」} & m \le n\\
+\mbox{「左から$n$番目の」} & m > n\\
+\end{array} \right.
+\]
+        \item $G_{i}$のBBが縦長（図の上下方向に長い）の場合\\
+          対象$x$が下（手前）から$m$番目，上（奥）から$n$番目として，
+\[
+E(R(G_i, G_{i+1})) = \left\{
+\begin{array}{l@{\quad :\quad }l}
+\mbox{「手前から$m$番目の」} & m \le n\\
+\mbox{「奥から$n$番目の」} & m > n\\
+\end{array} \right.
+\]
+        \end{enumerate}
+      \end{enumerate}
+    \item  $|G_i| = 2$の場合\\
+      $E(R(G_i, G_{i+1}))=$「のうちの$X$」: $X$は，右，左，手前，
+        奥，右手前，左手前，右奥，左奥の順に判定して，最初に該当した関係．
+    \end{enumerate}
+  \item\label{bb} $|G_{i+1}| > 1$の場合\\
+    $E(R(G_i, G_{i+1}))=$「のうちの$X$の」: $X$は，右，左，手前，奥，右
+    手前，左手前，右奥，左奥，真ん中の順に判定して，最初に該当した関係．
+  \end{enumerate}
+  
+  \end{minipage}
+  \caption{$E(R(G_i, G_{i+1}))$に対する言語表現の付与}
+  \label{fig:sr_procedure}
+\end{figure}
+
+最後にSOGを言語表現に変換する．日本語は主要部後置型言語なので，SOGに含
+まれる各群に関する言語表現の順序は，最終的な言語表現においても保持さ
+れる．すなわち，SOG $[G_0, G_1,\ldots, G_{n-2}, \{x\}]$は，
+(\ref{eq:expression})のように言語化される．ここで，$E(X)$は$X$に対する
+言語表現を表し，$R(X,Y)$は$X$と$Y$の間の関係を示す．「$+$」は文字列連結
+子である．
+\begin{equation}
+  E(G_{0})+E(R(G_{0},G_{1}))+E(G_{1})+\ldots+E(R(G_{n-2},\{x\}))+E(\{x\}) \label{eq:expression}
+\end{equation}
+ただし，\Sec{subsec:experiment2}で述べたように，全体群について明示的に
+言及する表現の評価値は低かったので，提案アルゴリズムは$E(G_0)$ について
+は言語化しない．使用する言語表現は実験1で得た実験データから収集した．
+
+言語表現の生成は決定的に行う．本論文では，$E(G_i)$ $(i>0)$に対して以下
+のように言語表現を与える($n=|G_i|$)．
+\[
+E(G_i) = \left\{
+\begin{array}{l@{\quad :\quad }l}
+\mbox{「}n\mbox{つの玉」} & n>1\\
+\mbox{「玉」} & n=1\\
+\end{array} \right.
+\]
+$E(R(G_i, G_{i+1}))$に対しては，$G_i$と$G_{i+1}$それぞれの要素数と互い
+の位置関係から，\Fig{fig:sr_procedure}に示す条件判断に従って言語表現を
+与える．ただし，$E(R(G_0, G_1))$については，$E(G_0)$を言語化しないため，
+$E(R(G_0, G_1))$によって生成される表現から「のうちの」という部分を除く．
+「$G_i$のバウンディングボックス」とは，\Fig{fig:bb}に示すように群の要素
+を包囲する最小の矩形のことである．位置関係の判定は座標計算によって行う．
+\Fig{fig:bb}における$G_i$ $(\{a,b,c,d,e\})$と$G_{i+1}$ $(\{c,d,e\})$の
+関係は，\Fig{fig:sr_procedure}の\ref{bb}.に相当する．そして二つのグルー
+プの位置関係は，$G_{i+1}$が$G_{i}$の右辺に接触しているため「右」に該当
+すると判定される．
+
+
+各SOGに対してアルゴリズムは一つの言語表現を生成する．ただしアルゴリズム
+は一般に入力布置に対して複数のSOGを生成するので，最終的に複数の言語表現
+を生成することがある．SOG (\ref{eq:tag_ex})は\Fig{fig:realization}のよ
+うに言語化される．
+
+\begin{figure}[tb]
+  \centering
+  \includegraphics[width=.4\linewidth]{image/bb.eps}
+  \caption{バウンディングボックス}
+  \label{fig:bb}
+\end{figure}
+
+
+\begin{figure}[tb]
+  \quad\quad\quad SOG: $[\{a,b,c,d,e,f,x\},\{a,b,x\},\{x\}]$\\
+  \\
+  \quad\quad$\to$
+  $E(R(\{a,b,c,d,e,f,x\},\{a,b,x\}))+E(\{a,b,x\})+E(R(\{a,b,x\},\{x\}))+E(\{x\})$\\
+  \\
+  \quad\quad$\to$
+  「左奥の」+「三つの玉」+「のうちの一番右の」+「玉」
+\caption{表現生成の例}
+\label{fig:realization}
+\end{figure}
+
+\subsection{生成表現の評価（実験3）}
+\label{sec:evaluation}
+
+\Sec{sec:method}で提案したアルゴリズムを実装し，実験1，2の被験者とは異
+なる23人の大学生を被験者として評価を行った．評価実験の手順は
+\Sec{subsec:experiment2}での実験2と同一である．
+
+結果を表\ref{tab:evaluation}に示す．Human-12-allは実験1で12の布置を用い
+て人間から収集した表現を実験2で評価した結果である．Human-12-90と
+Human-12-100は，それぞれそのうち90\%以上と100\%の正答率を得た言語表現だ
+けに関する評価である．
+
+System-12は，実験1，2で用いた12布置に対して機械が生成した表現に対する評
+価の平均値である．12布置に対して提案アルゴリズムは18 表現を生成した．こ
+れらの18表現を各被験者に無作為な順序で提示し，対象物を特定させるととも
+に評価を求めた．
+
+System-20は，物体を無作為に自動的に配置して生成した20の布置に対する平均
+評価である．これらの20布置については，最低二つの言語表現が生成されるよ
+うにした．提案アルゴリズムはこれらの20布置に対して48表現を生成した．こ
+の48 表現もSystem-20の場合と同様に評価し
+た．System-AverageはSystem-12とSystem-20を併せた全体の平均（micro
+average）である．
+
+「正答率」の列は，被験者が与えられた表現から対象物を正しく特定できた割
+合である．前述のように，Human-12-*とSystem-12とでは評価を行った被験者集
+団が異なる．従って数値の直接的な比較はできないが，提案アルゴリズムが適
+切な表現を生成していることがわかる．
+
+提案アルゴリズムは自然さと簡潔さにおいて，人間が生成した表現より評価が
+高い．提案アルゴリズムは，実験1で収集した表現の中から著者らが自然である
+と判断した表現を組み合わせて参照表現を生成する．一方，人間が生成した表
+現には，このような制約がないため，提案アルゴリズムによって生成される表
+現に比べ多様性があり，中には正答率は高いが簡潔さや自然さにおいて評点の
+高くない表現が含まれている．このような表現が簡潔さ・自然さにおける平均
+評点を低くしていると考えられる．簡潔さや自然さの評価に負の影響を与えて
+いると思われる性質をこれらの表現に一貫して見いだすことはできないが，聞
+き手に十分な確信を与えるには簡素すぎる表現(10番の布置に対する「真ん中の
+赤い玉」という表現)や，複雑な布置に対して正確であろうとしたためか冗長に
+なっている表現(6番の布置に対する「真ん中あたりに横に並んでいる4つの玉の
+中の左から2番目」という表現)などが見られた．
+
+\begin{table*}[tb]
+  \centering
+  \caption{生成表現の評価}\vspace{2mm}
+  \begin{tabular}{l|ccccc}
+    \hline
+    & 正答率 (\%)& 自然さ & 簡潔さ & 確信度 & 評価値\\
+    \hline
+    Human-12-all  & 87.3  & 4.82  & 5.27  & 6.14 & 29.3 \\
+    Human-12-90   & 97.9  & 5.20  & 5.62  & 6.50 & 35.0 \\
+    Human-12-100  & 100   & 5.36  & 5.73  & 6.65 & 37.2 \\
+    \hline
+    System-12     & 91.0  & 5.60  & 6.25  & 6.32 & 40.1  \\
+    System-20     & 88.4  & 5.09  & 5.65  & 6.25 & 35.2  \\
+    System-Average& 89.2  & 5.24  & 5.82  & 6.27 & 36.6  \\
+    \hline
+  \end{tabular}
+  \label{tab:evaluation}
+\end{table*}
+
+表\ref{tab:accuracy_arrangements}に，布置ごとの正答率を示す．
+Human-12-allとSystem-12の意味は前述の通りである．12番の布置においては，
+人間も機械も正解率が落ちているが，4番，6番，8番，10番の布置では，人間の
+作った表現に対する正答率が落ちているのに対し，機械の方は正答率を比較的
+高く維持できている．
+
+\begin{table*}[tb]
+\small
+  \centering
+  \caption{布置ごとの正答率（\%）}\vspace{2mm}
+  \begin{tabular}{l|cccccccccccc}\hline
+布置番号     & 1&2&3&4&5&6&7&8&9&10&11&12 \\\hline
+Human-12-all & 95.8 & 91.6 & 95.2 & 84.0 & 97.4 & 74.2 & 99.2 & 85.2 & 100 & 67.6 & 97.9 &62.7 \\
+System-12    & 100  & 100 & 95.7 & 97.1 & 100 & 91.3 & 100 & 95.7 &
+97.8 & 95.7 & 100 & 73.9 \\ \hline
+  \end{tabular}
+  \label{tab:accuracy_arrangements}
+\end{table*}
+
+
+\section{SOGに対するスコア付け}
+\label{sec:scoring}
+
+前節で提案した表現生成アルゴリズムは，複数の可能な表現を出力する．従っ
+て，出力された表現からもっとも望ましいと思われる表現を選択する手段が必
+要である．生成された表現のスコアは，表現の複雑さ，参照物の顕現性など，
+いくつもの指標に従って計算することができる．本節では，絞り込みの過程の
+妥当性を予測できるかどうか，すなわち，SOGのスコアを計算することができる
+かどうかという問題について検討する．
+
+\subsection{群間の規模比によるスコア付け}
+SOGは(\ref{eq:tag})に示した形式をとる．ここで我々は，話し手
+が$G_i$から$G_{i+1}$へ物体群を絞り込むとき，群$G_{i}$と$G_{i+1}$の規模
+（dimension）の間に最適な比が存在すると仮定する．例えば非常に大きな群か
+ら非常に小さな群に絞り込むことは，聞き手を混乱させやすいと予想でき，そ
+のような場合には間に中間的な大きさの群を挟んだ表現がより適切であると考
+えられる．例えば，次の2つの表現を考える．この2表現はとも
+に\Fig{experiment}中の物体$x$を指している．表現(ii)は表現(i)よりも単純
+であるが，聞き手は表現(ii)よりも表現(i)を好むだろう．
+
+\begin{quote}
+\begin{itemize}
+\item[(i)] 「左奥の3つの玉のうち一番右の玉」
+\item[(ii)] 「右から4番目の玉」
+\end{itemize}
+\end{quote}
+
+実際，\Sec{subsec:experiment1}の実験1で収集したデータは表現(i)を含んで
+いたが，表現(ii)はデータ中に存在しなかった．また，提案アルゴリズム
+は(i)と(ii)の両表現を生成し，それぞれの表現の得た評価値は44.4と32.1であっ
+た．我々の仮定が正しければ，群間の適切な規模比をもつ表現を選択すること
+で，よりよい表現を選択することが期待できる．
+
+\subsubsection*{計算式}
+SOGのスコアの計算式を(\ref{eq:score})に示す．SOG全体のスコアは，SOG内で
+隣接する群間に対して関数$f_1$と$f_2$が与えるスコアを平均することで求
+める．$n$はSOGが含む群の数である．
+\begin{equation}
+  \mi{score(SOG)}= \frac{1}{n-1}\left\{ \sum^{n-3}_{i=0}
+  f_1\left(\frac{\mi{dim}(G_{i+1})}{\mi{dim}(G_{i})}\right)
+  +f_2\left(\frac{\mi{dim}(\{x\})}{\mi{dim}(G_{n-2})}\right)\right\} \label{eq:score}
+\end{equation}
+
+群$G$の規模$\mi{dim}(G)$は，群の幾何中心から群の各メンバまでの距離の平
+均として表す．$\{x\}$の規模は定数とする．この$\{x\}$の特異性のために，
+$f_2$を$f_1$から分離して定義する．ただし，両関数の基本的な概念は同一で
+ある．
+
+二つの群間の最適な比率$f_1$および$f_2$は，\Sec{subsec:experiment2}に
+記した実験で集めたデータを二次回帰分析することで求めた．$f_1$および
+$f_2$は，規模比と式(\ref{eq:properness})で与えられる評価値の間の相関関
+係を表す回帰曲線である．規模比と正答率の間には直接的な相関関係を見いだ
+せなかった．
+
+\subsection{結果}
+
+生成した表現に対して式(\ref{eq:score})が与えるスコアがどの程度人間の評
+価（式 (\ref{eq:properness})）と一致するかを調べた．一致度は
+\Sec{sec:evaluation}で説明した20布置を用いて計算した．
+
+はじめに，式(\ref{eq:score})が与えるスコアに従って，生成した表現を順序
+付けた．同様に式(\ref{eq:properness})が与える評価値に従って，別に順序付
+けた．こうして順序づけられた二つのリストから，全ての2表現間の順序関係を
+抽出した．一致度は，全ての2表現間の順序関係のうち，二つのリスト間で同じ
+順序関係にあるものの割合として定義した．
+
+式(\ref{eq:score})によるスコアと式(\ref{eq:properness})による評価値との
+間の一致度は45.8\%と低く，スコアはSOGの評価値を十分に予測できなかった．
+
+以上のことから，SOGに含まれる群の間の規模比だけをもとに最終的な表現の良
+し悪しを判断することはできないことがわかった．複数の表現から適切な表現
+を選択するためには，他の要素を考慮しなくてはならない．
+
+\section{おわりに}
+\label{sec:conclusion}
+
+本論文は，知覚的群化に基づいて多項間関係を用いる参照表現を生成する手法
+を提案した．提案アルゴリズムは，心理学実験によって収集した表現に対する
+分析に基づいて構築し，23人の被験者によって評価した．アルゴリズムが生成
+した表現はその89.2\%で対象物体の特定に成功し，人間の生成した参照表現と
+ほぼ同等の評価を得た．
+
+今後の課題として，まず位置関係以外の関係の利用があげられる．
+本論文では，群間の位置的な関係だけに焦点を当てた．しかし，色の度合い
+や大きさなど他の種類の関係も同様に扱われるべきである．
+Th\'orissonのアルゴリズムは，物体間の類似性を特徴別に定義することで，こ
+れらの関係も位置関係と同様に扱うことができる．しかしながら，複数の種類
+の関係を同時に用いる場合，提案アルゴリズムのステップ1で生成される群同
+士が交差しないという前提が必ずしも成立しなくなる．そのため，ステップ2の
+SOG生成手法を再考する必要がある．
+
+もう一つの課題として提案手法と従来手法との融合がある．
+本論文では，物体の固有の属性がまったく対象特定の役に立たない状況に限定
+して焦点を当てた．しかしそのような状況は一般的ではない．従来の属性ベー
+スの手法と提案手法を融合した生成アルゴリズムが必要である．また，外部参
+照関係も使えるようにする必要がある．
+
+考えられる一つの方向性は，Krahmerらの提案する手法\cite{EK2003}の拡張で
+ある．彼らの手法は，物体の配置をラベル付き有効グラフとして記述し，表現
+内容の選択をユニークでコスト最小の部分グラフを発見するグラフ探索問題と
+見なす．探索はコスト関数によって主に制御される．
+知覚的群化によって認識された群を，\Fig{graph}に示すように通常の物体と
+同様に見なせば，彼らの手法を適用することができる．これによって，内部参
+照関係（\Fig{graph}中でfront，middle，backなどのラベルがついた辺）だけ
+でなく，外部参照関係（例えばノードGroup 1からノードTableへの辺）も扱う
+ことができる．しかしながら，群をグラフ表現の中に導入することは探索を
+制御するコスト関数の設計を難しくする．簡潔でわかりやすい表現を生成する
+ためには適切に設計されたコスト関数が必要である．そうでなければ，
+\Fig{ex}に対して，「玉の前の玉の前の玉」などといった誤りではないが適切
+ではない表現を生成してしまう．
+
+
+\begin{figure}[hbt]
+  \centering
+  \includegraphics[width=0.5\hsize]{image/graph.eps}
+  \caption{\Fig{ex}中の状況をあらわすグラフ}
+  \label{graph}
+\end{figure}
+
+\bibliographystyle{jnlpbbl}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Appelt}{Appelt}{1985}]{DA1985}
+Appelt, D.~E. \BBOP 1985\BBCP.
+\newblock \BBOQ Planning {English} Referring Expressions\BBCQ\
+\newblock {\Bem Artificial Intelligence}, {\Bbf 26}, 1--33.
+
+\bibitem[\protect\BCAY{Cavazza\JBA Charles \BBA\ Mead}{Cavazza
+  et~al.}{2002}]{MC2002}
+Cavazza, M.\JBA Charles, F.\JBA  \BBA\ Mead, S.~J. \BBOP 2002\BBCP.
+\newblock \BBOQ Character-based Interactive Stroytelling\BBCQ\
+\newblock {\Bem IEEE Intelligent Systems}, {\Bbf 17}  (4), 17--24.
+
+\bibitem[\protect\BCAY{Clark}{Clark}{1973}]{HC1973}
+Clark, H.~H. \BBOP 1973\BBCP.
+\newblock \BBOQ Space, time, semantics, and the child\BBCQ\
+\newblock In Moore, T.~E.\BED, {\Bem Cognitive development and the acquisition
+  of language}, \BPGS\ 65--110. Academic Press.
+
+\bibitem[\protect\BCAY{Dale}{Dale}{1992}]{RD1992}
+Dale, R. \BBOP 1992\BBCP.
+\newblock \BBOQ Generating Referring Expressions: Constructing Descriptions in
+  a Domain of Objects and Processes\BBCQ.
+\newblock MIT Press, Cambridge.
+
+\bibitem[\protect\BCAY{Dale \BBA\ Haddock}{Dale \BBA\ Haddock}{1991}]{RD1991}
+Dale, R.\BBACOMMA\  \BBA\ Haddock, N. \BBOP 1991\BBCP.
+\newblock \BBOQ Generating referring expressions involving relations\BBCQ\
+\newblock In {\Bem Proceedings of the Fifth Conference of the European Chapter
+  of the Association for Computational Linguistics(EACL'91)}, \BPGS\ 161--166.
+
+\bibitem[\protect\BCAY{Dale \BBA\ Reiter}{Dale \BBA\ Reiter}{1995}]{RD1995}
+Dale, R.\BBACOMMA\  \BBA\ Reiter, E. \BBOP 1995\BBCP.
+\newblock \BBOQ Computational interpretations of the Gricean maxims in the
+  generation of referring expressions\BBCQ\
+\newblock {\Bem Cognitive Science}, {\Bbf 19}  (2), 233--263.
+
+\bibitem[\protect\BCAY{Heeman \BBA\ Hirst}{Heeman \BBA\ Hirst}{1995}]{PH1995}
+Heeman, P.\BBACOMMA\  \BBA\ Hirst, G. \BBOP 1995\BBCP.
+\newblock \BBOQ Collaborating referring expressions\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 21}  (3), 351--382.
+
+\bibitem[\protect\BCAY{Herskovits}{Herskovits}{1986}]{AH1986}
+Herskovits, A. \BBOP 1986\BBCP.
+\newblock {\Bem Language and Spatial cognition: an interdisciplinary study of
+  the prepositions in English}.
+\newblock Cambridge University Press.
+
+\bibitem[\protect\BCAY{Horacek}{Horacek}{1997}]{HH1997}
+Horacek, H. \BBOP 1997\BBCP.
+\newblock \BBOQ An Algorithm for Generating Referential Descriptions with
+  Flexible Interfaces\BBCQ\
+\newblock In {\Bem Proceedings of the 35th Annual Meeting of the Association
+  for Computational Linguistics}, \BPGS\ 206--213.
+
+\bibitem[\protect\BCAY{J\"{o}rding \BBA\ Wachsmuth}{J\"{o}rding \BBA\
+  Wachsmuth}{2002}]{JW2002}
+J\"{o}rding, T.\BBACOMMA\  \BBA\ Wachsmuth, I. \BBOP 2002\BBCP.
+\newblock \BBOQ An Anthropomorphic Agent for the Use of Spatial Language\BBCQ\
+\newblock In Coventry, K.~R.\BBACOMMA\  \BBA\ Olivier, P.\BEDS, {\Bem Spatial
+  Language}, \BPGS\ 69--85. Kluwer Academic Publishers.
+
+\bibitem[\protect\BCAY{Krahmer \BBA\ Theune}{Krahmer \BBA\
+  Theune}{2002}]{EK2002}
+Krahmer, E.\BBACOMMA\  \BBA\ Theune, M. \BBOP 2002\BBCP.
+\newblock \BBOQ Efficient context-sensitive generation of descriptions\BBCQ\
+\newblock In van Deemter, I.~K.\BBACOMMA\  \BBA\ Kibble, R.\BEDS, {\Bem
+  Information Sharing: Givenness and Newness in Language Processing}, \BPGS\
+  223--264. CSLI Publications, Stanford, California.
+
+\bibitem[\protect\BCAY{Krahmer\JBA van Erk \BBA\ Verleg}{Krahmer
+  et~al.}{2003}]{EK2003}
+Krahmer, E.\JBA van Erk, S.\JBA  \BBA\ Verleg, A. \BBOP 2003\BBCP.
+\newblock \BBOQ Graph-Based Generation of Referring Expressions\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 29}  (1), 53--72.
+
+\bibitem[\protect\BCAY{Levinson}{Levinson}{2003}]{SL2003}
+Levinson, S.~C.\BED\ \BBOP 2003\BBCP.
+\newblock {\Bem Space in Language and Cognition}.
+\newblock Cambridge University Press.
+
+\bibitem[\protect\BCAY{Tanaka\JBA Tokunaga \BBA\ Shinyama}{Tanaka
+  et~al.}{2004}]{TH2004}
+Tanaka, H.\JBA Tokunaga, T.\JBA  \BBA\ Shinyama, Y. \BBOP 2004\BBCP.
+\newblock \BBOQ Animated Agents Capable of Understanding Natural Language and
+  Performing Actions\BBCQ\
+\newblock In Prendinger, H.\BBACOMMA\  \BBA\ Ishizuka, M.\BEDS, {\Bem Life-Like
+  Characters}, \BPGS\ 429--444. Springer.
+
+\bibitem[\protect\BCAY{Th\'{o}risson}{Th\'{o}risson}{1994}]{KT1994}
+Th\'{o}risson, K.~R. \BBOP 1994\BBCP.
+\newblock \BBOQ Simulated Perceptual Grouping: An Application to Human-Computer
+  Interaction\BBCQ\
+\newblock In {\Bem Proceedings of the Sixteenth Annual Conference of the
+  Cognitive Science Society}, \BPGS\ 876--881.
+
+\bibitem[\protect\BCAY{van Deemter}{van Deemter}{2002}]{KV2002}
+van Deemter, K. \BBOP 2002\BBCP.
+\newblock \BBOQ Generating referring expressions: Boolean extensions of the
+  incremental algorithm\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 28}  (1), 37--52.
+
+\bibitem[\protect\BCAY{van~der Sluis \BBA\ Krahmer}{van~der Sluis \BBA\
+  Krahmer}{2000}]{IV2000}
+van~der Sluis, I.\BBACOMMA\  \BBA\ Krahmer, E. \BBOP 2000\BBCP.
+\newblock \BBOQ Generating Referring Expressions in a Multimodal Context: An
+  empirically oriented approach\BBCQ.
+\newblock Presented at the CLIN meeting 2000, Tilburg.
+
+\end{thebibliography}
+
+
+\newpage
+\appendix
+
+\section{実験に用いた布置}
+\label{sec:arrangements}
+
+布置中の玉の数は最低3個，最大9個である．布置の作成は，最初に玉を3個含む
+布置を作成し，そこに玉を一つずつ付け加えていった．元となる三つの布置から18布置を作成し，そこから12の布置を選択した．
+3番，10番，6番の布置は7番の布置を元に作成した．1番，11番，4番，8番の布
+置は9番の布置を元に作成した．2番，12番の布置は5番の布置を元に作成した．
+
+\subsubsection*{}
+
+\begin{tabular}{ccc}
+\fbox{\includegraphics[width=0.4\hsize]{image/arrangements/1.eps}}&&
+\fbox{\includegraphics[width=0.4\hsize]{image/arrangements/2.eps}}\\ 
+1 && 2 \\\\
+\fbox{\includegraphics[width=0.4\hsize]{image/arrangements/3.eps}}&&
+\fbox{\includegraphics[width=0.4\hsize]{image/arrangements/4.eps}}\\ 
+3 && 4 \\\\
+\fbox{\includegraphics[width=0.4\hsize]{image/arrangements/5.eps}}&&
+\fbox{\includegraphics[width=0.4\hsize]{image/arrangements/6.eps}}\\ 
+5 && 6 \\\\
+\end{tabular}
+
+\begin{tabular}{ccc}
+\fbox{\includegraphics[width=0.4\hsize]{image/arrangements/7.eps}}&&
+\fbox{\includegraphics[width=0.4\hsize]{image/arrangements/8.eps}}\\ 
+7 && 8 \\\\
+\fbox{\includegraphics[width=0.4\hsize]{image/arrangements/9.eps}}&&
+\fbox{\includegraphics[width=0.4\hsize]{image/arrangements/10.eps}}\\ 
+9 && 10 \\\\
+\fbox{\includegraphics[width=0.4\hsize]{image/arrangements/11.eps}}&&
+\fbox{\includegraphics[width=0.4\hsize]{image/arrangements/12.eps}}\\ 
+11 && 12 \\\\
+\end{tabular}
+  
+\newpage
+\begin{biography}
+\bioauthor{船越 孝太郎 (正会員)}{
+2002年東京工業大学大学院情報理工学研究科修士課程修了．
+2005年同大学同研究科博士課程修了．
+現在，同大学同研究科特別研究員．博士（工学）．
+自然言語理解，音声対話に関する研究に従事．
+情報処理学会，人工知能学会，IEEE, AAAI各会員．
+}
+
+\bioauthor{渡辺 聖 (非会員)}{
+2004年東京工業大学工学部情報工学科卒業．
+同年同大学院情報理工学研究科修士課程進学，在学中．
+自然言語生成に関する研究に従事．
+}
+
+\bioauthor{栗山 直子 (非会員)}{
+1998年東京工業大学院社会理工学研究科修士課程修了.
+2002年同大学大学院博士課程修了.
+現在, 同大学大学院社会理工学研究科助手. 博士 (学術).
+認知科学会, 認知心理学会，日本心理学会，教育心理学会，
+教育工学会，各会員.
+}
+
+\bioauthor{徳永 健伸 (正会員)}{
+1961年生. 1983年東京工業大学工学部情報工学科卒業. 
+1985年同大学院理工学研究科修士課程修了. 
+同年(株)三菱総合研究所入社. 
+1986年東京工業大学大学院博士課程入学. 
+現在, 同大学大学院情報理工学研究科助教授. 博士 (工学).
+自然言語処理, 計算言語学，情報検索などの研究に従事. 
+情報処理学会, 認知科学会, 人工知能学会, 計量国語学会, 
+Association for Computational Linguistics, ACM SIGIR各会員.
+}
+\end{biography}
+
+\end{document}
+
+
+

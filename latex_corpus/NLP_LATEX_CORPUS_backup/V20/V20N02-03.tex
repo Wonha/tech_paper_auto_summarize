@@ -1,0 +1,1059 @@
+    \documentclass[english]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvips]{graphicx}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+\usepackage{amsmath}
+
+\Volume{20}
+\Number{2}
+\Month{June}
+\Year{2013}
+
+\received{2012}{10}{9}
+\revised{2012}{12}{21}
+\accepted{2013}{2}{14}
+
+\setcounter{page}{133}
+
+\etitle{Extracting Translation Pairs from Comparable Corpora through Graph-based Label Propagation}
+\eauthor{Akihiro Tamura\affiref{NICT}\affiref{TITECH} \and Taro Watanabe\affiref{NICT} \and Eiichiro Sumita\affiref{NICT} \and \\
+	Hiroya Takamura\affiref{TITECH} \and Manabu Okumura\affiref{TITECH}} 
+\eabstract{
+This paper proposes a novel method for bilingual lexicon extraction from comparable corpora using graph-based label propagation. 
+A previous study found that performance drastically decreases when the coverage of a seed lexicon is small. 
+We address this problem by using indirect relations with bilingual seeds together with direct relations, in which each word is represented by a distribution of lexical seeds. 
+The seed distributions are propagated over a graph that represents relations among words. Translation pairs are extracted by identifying word pairs with high similarities in the seed distributions. 
+We propose two types of graphs: (1) a co-occurrence graph, representing co-occurrence relations between words; and (2) a similarity graph, representing context similarities between words. 
+Evaluations on comparable corpora of English and Japanese patent documents show that our proposed graph propagation method outperforms conventional methods. 
+Further, the similarity graph improved performance by clustering synonyms into the same translation. 
+}
+\ekeywords{Bilingual lexicon, Comparable corpora, Label propagation}
+
+\headauthor{Tamura et al.}
+\headtitle{Extracting Translation Pairs from Comparable Corpora through LP}
+
+\affilabel{NICT}{}{Multilingual Translation Laboratory, National Institute of Information and Communications Technology}
+\affilabel{TITECH}{}{Precision and Intelligence Laboratory, Tokyo Institute of Technology}
+
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+\vspace{-0.5\Cvs}
+Bilingual lexicons are important resources for bilingual tasks, such as machine translation (MT) and cross-language information retrieval (CLIR). 
+Therefore, the automatic construction of bilingual lexicons from corpora is an important issue that has attracted many researchers. 
+As a solution, a previous study proposed the extraction of bilingual lexicons from comparable corpora in which documents were not direct translations but shared a topic or domain\footnote{Although Vuli{\'{c}} et al.~\citeyear{ivan11} regarded document-aligned texts such as texts on Wikipedia as comparable corpora, we do not limit comparable corpora to these types of texts.}. 
+The use of comparable corpora is motivated by the availability of large parallel corpora only for a few language pairs and limited domains. 
+
+Most previous methods are based on assumption (I), namely that a word and its translation tend to appear in similar contexts across languages~\cite{rapp99}. 
+On the basis of this assumption, many methods calculate word similarity using context and then extract word translation pairs that have high context similarities. 
+These methods are called context-similarity-based methods. 
+Context similarities are usually computed using a seed bilingual lexicon (e.g., a general bilingual dictionary) by projecting contexts expressed in two different languages into the same space. 
+In the projection, information not represented by the seed lexicon is discarded. 
+Therefore, context-similarity-based methods cannot find accurate translation pairs if a small seed lexicon is used. 
+
+Some previous methods attempted to alleviate this problem of limited seed lexicon size~\cite{koehn02,morin11,hazem11}, while other approaches did not require any seed lexicon~\cite{rapp95,fung95,haghighi08,ismail10,hal11}. 
+However, these approaches suffer from high computational cost~\cite{rapp95}, sensitivity to parameters~\cite{hazem11}, low accuracy~\cite{fung95,ismail10}, and ineffectiveness for language pairs using different characters~\cite{koehn02,haghighi08,hal11}. 
+
+Given the above problems, we propose a novel method that uses a graph-based label propagation (LP) technique~\cite{zhu02}. 
+Our proposed method is based on assumption (II), which is derived by recursively applying assumption (I) to the ``contexts''; assumption (II) states that a word and its translation tend to have similar co-occurrence (direct and indirect) relations with all bilingual seeds across languages. 
+
+On the basis of assumption (II), we propose the following three-step approach: (1) construct a graph for each language with each edge indicating a direct co-occurrence relation; (2) represent every word as a seed translation distribution by iteratively propagating lexical seeds in each graph; and (3) find two words in different languages with a high similarity with respect to seed distributions. 
+By propagating all seeds on the graph, indirect co-occurrence relations, which have been neglected in previous methods, are also considered when computing bilingual relations. 
+In addition to the co-occurrence-based graph construction, we propose a similarity graph, which also considers context similarities between words. 
+
+The main contributions of this paper are as follows: 
+\begin{itemize}
+\item We propose a bilingual lexicon extraction method that captures co-occurrence relations with all seeds, including indirect relations, by using graph-based LP. In our experiments, we confirm that the proposed method outperforms conventional context-similarity-based methods~\cite{rapp99,andrade10} and works well even if the coverage of a seed lexicon is small. 
+\item We propose a similarity graph that represents context similarities between words. In our experiments, we confirm that the similarity graph is more effective than the co-occurrence graph. 
+\end{itemize}
+
+
+\section{Context-Similarity-Based Extraction}
+\label{sect:related}
+
+Extracting bilingual lexicon from comparable corpora was pioneered in Rapp~\citeyear{rapp95} and Fung~\citeyear{fung95}. 
+The popular similarity-based methods consist of the following steps: (1) model the contexts; (2) calculate the context similarities; and (3) find the translation pairs. 
+
+\noindent {\bf Step 1. Modeling contexts}: The context of each word is generally modeled by a vector in which each dimension corresponds to a context word and has a value indicating occurrence correlation. 
+Various definitions for context have been used, such as distance-based context (e.g., in a sentence~\cite{laroche10}, paragraph~\cite{fung97}, or predefined window~\cite{rapp99,andrade10}) and syntax-based context (e.g., predecessors and successors in dependency trees~\cite{garera09} or a certain dependency position~\cite{otero08}). 
+Some treated context words equally regardless of their positions~\cite{fung98}, while others treated words separately for each position~\cite{rapp99}. 
+Similarly, various correlation measures have been used, such as the log likelihood ratio~\cite{rapp99,chiao02}, tf-idf~\cite{fung98}, pointwise mutual information (PMI)~\cite{andrade10}, and context heterogeneity~\cite{fung95}. 
+
+Other approaches abound. Shao and Ng~\citeyear{shao04} represented contexts using language models. 
+Andrade et al.~\citeyear{andrade10} used a set of words with a positive association as a context. 
+Andrade et al.~\citeyear{andrade11:CIC} used dependency relations instead of context words. 
+Ismail and Manandhar~\citeyear{ismail10} used only in-domain words in contexts. 
+Pekar et al.~\citeyear{pekar06} constructed smoothed context vectors for rare words. 
+Laws et al.~\citeyear{laws10} used graphs in which vertices correspond to words and edges indicate three types of syntactic relations such as adjectival modification. 
+
+\noindent {\bf Step 2. Calculating context similarities}: Contexts expressed in two languages are projected into the same space. In general, previous methods used a seed bilingual lexicon for this projection. 
+After that, similarities are calculated on the basis of the projected context vectors using various measures, such as the city-block metric~\cite{rapp99}, the cosine similarity~\cite{fung98}, the weighted Jaccard index~\cite{hazem11}, the Jensen-Shannon divergence~\cite{pekar06}, the number of overlapping context words~\cite{andrade10}, SimRank~\cite{laws10}, and the Euclidean distance~\cite{fung95}. 
+
+Andrade et al.~\citeyear{andrade11} performed a linear transformation of context vectors in accordance with the notion that importance varies by context positions. 
+Gaussier et al.~\citeyear{gaussier04} projected context vectors via latent classes to capture synonymy and polysemy in a seed lexicon. 
+Fi{\v{s}}er et al.~\citeyear{fiser11} and Kaji~\citeyear{kaji05} calculated two-way similarities. 
+
+\noindent {\bf Step 3. Finding translation pairs}: A pair of words is treated as a translation pair when their context similarity is high. Various clues have been considered when computing similarities, such as the use of concept class information obtained from a multilingual thesaurus~\cite{dejean02}, co-occurrence models generated from aligned documents~\cite{prochasson11}, and transliteration information~\cite{shao04}.
+
+
+\subsection{Problems from Previous Studies}
+\label{sect:problem}
+
+Most previous methods used a seed bilingual lexicon for projecting modeled contexts in two different languages into the same space. 
+This projection heavily relies on the entries in a given bilingual lexicon. 
+Therefore, if the coverage of the seed lexicon is small, the context vectors become sparse and their discriminative capability becomes low, leading to the extraction of incorrect translation equivalents. 
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{20-2ia3f1.eps}
+\end{center}
+\caption{Example using a Context-Similarity-Based Method and our Proposed Method}
+\label{fig:example}
+\end{figure}
+
+Consider the example shown in Figure \ref{fig:example}, in which a context-similarity-based method and our proposed method find translation equivalents of the Japanese word ``ピラニア (piranha).'' The seed lexicon has three entries: ``アマゾン---Amazon,'' ``ジャングル---jungle,'' and ``魚---fish.'' 
+A context-similarity-based method first generates a context vector of each word, which is called a query word. 
+The tables above indicate the correlation strength between the occurrences of a query word and its context words. 
+From the tables shown, a context vector for the Japanese word ``ピラニア(piranha)'' has the dimensions ``$F_{アマゾン}=0.8$, $F_{ジャングル}=0.6$, $F_{淡水}=0.5$,'' where ``$F_{x}=a$'' indicates that the value of the dimension corresponding to the word $x$ is $a$. 
+Similarly, context vectors for the English words ``piranha'' and ``anaconda'' have the dimensions ``$F_\mathrm{Amazon}=0.8$, $F_\mathrm{jungle}=0.6$, $F_\mathrm{freshwater}=0.5$'' and ``$F_\mathrm{Amazon}=0.8$, $F_\mathrm{jungle}=0.6$,'' respectively. 
+These context vectors are projected into the same space by using the seed lexicon for calculating similarities between the context vectors. 
+After the context vector for ``ピラニア(piranha)'' is projected, the information on co-occurrence with ``淡水 (freshwater)'' disappears, because the seed lexicon does not include ``淡水 (freshwater).'' 
+The same problem occurs with ``piranha.'' 
+Hence, after the projection, all context vectors for ``ピラニア(piranha),'' ``piranha,'' and ``anaconda'' become the same with the dimensions ``$F_{アマゾン\mathrm{-Amazon}}=0.8$, $F_{ジャングル\mathrm{-jungle}}=0.6$.'' 
+Therefore, both the similarity of ``ピラニア (piranha)'' and ``piranha'' and that of ``ピラニア (piranha)'' and ``anaconda'' are 1, and the pair ``ピラニア (piranha)'' and ``anaconda'' could be wrongly identified as a translation pair. 
+
+An additional previous study focused on the problem of limited seed lexicon size. 
+Morin and Prochasson~\citeyear{morin11} complemented the seed lexicon with a bilingual lexicon extracted from parallel sentences. 
+Koehn and Knight~\citeyear{koehn02} used identically spelled words in two languages as the seed lexicon. 
+However, this method would not be applicable to language pairs using different characters, such as English and Japanese. 
+Hazem et al.~\citeyear{hazem11} exploited \textit{k}-nearest words for a query word, which is very sensitive to the parameter \textit{k}. 
+
+Some previous studies did not require any seed lexicon. 
+Rapp~\citeyear{rapp95} proposed a computationally demanding matrix permutation method that maximizes similarity between co-occurrence matrices in two languages. 
+Ismail and Manandhar~\citeyear{ismail10} introduced a similarity measure between two words in different languages without requiring any seed lexicon. 
+Fung~\citeyear{fung95} used context heterogeneity vectors in which each dimension is independent of the language types. 
+However, their performances are worse than those of conventional methods that use a small seed lexicon. 
+Haghighi et al.~\citeyear{haghighi08} and Daum{\'e} III and Jagarlamudi~\citeyear{hal11} proposed a generative model based on probabilistic canonical correlation analysis in which words are represented by context and orthographic features\footnote{In~Haghighi et al.~\citeyear{haghighi08} and Daum{\'e} III and Jagarlamudi~\citeyear{hal11}, indirect relations with seeds are considered topologically, but our method utilizes degrees of indirect correlations with seeds.}. 
+However, their experiments showed that orthographic features are important for their effectiveness, which means they provide low performance for language pairs using different characters. 
+
+
+\section{Label Propagation Based Extraction}
+\label{sect:proposed}
+
+As described in Section \ref{sect:related}, the performance of the previous study suffers significant degradation when used with a small seed lexicon. 
+This problem can be resolved by incorporating indirect relations with all seeds when identifying translation pairs. 
+For example, in Figure \ref{fig:example}, ``ピラニア (piranha)'' has a certain degree of association with the seed ``魚---fish'' through ``淡水 (freshwater)'' in both Japanese and English, although ``ピラニア (piranha)'' and ``魚 (fish)'' do not co-occur in the same contexts. 
+Moreover, ``anaconda'' has very little association with the seed ``魚---fish'' in English. 
+Therefore, the indirect relation with the seed ``魚---fish'' enables to discriminate between ``piranha'' and ``anaconda'' and could be an important clue for identifying a correct translation pair. 
+
+To utilize indirect relations, we introduce assumption (II), namely that a word and its translation tend to have similar co-occurrence (direct and indirect) relations with all bilingual seeds across languages\footnote{Assumption (I) indicates that direct co-occurrence relations between a word and its context words are preserved across different languages. Therefore, assumption (II) is derived by recursively applying assumption (I) to the ``context words.''}. 
+On the basis of assumption (II), we propose to identify a word pair as a translation pair when its co-occurrence (direct and indirect) relations with all seeds are similar. 
+
+To obtain co-occurrence relations with all seeds, including indirect relations, we focus on a graph-based LP technique~\cite{zhu02}. 
+In general, LP transfers labels from labeled to unlabeled data points. 
+Through this process, all vertices have soft labels that can be interpreted as label distributions. 
+We apply LP to bilingual lexicon extraction by treating each lexical seed as a label and representing each word as a vertex in a graph with each edge encoding a direct co-occurrence relation. 
+Lexical seeds are propagated as labels and seed distributions are obtained for each word. 
+From the seed distributions, we identify translation pairs. 
+
+In summary, our proposed method consists of the following three steps, as presented in Figure \ref{fig:algorithm}: (1) graph construction for each language; (2) seed propagation in each graph; and (3) translation pair extraction. 
+More formally, our algorithm extracts translation pairs $T$ from two monolingual corpora $D^e$ in language $e$ and $D^f$ in language $f$ using a seed lexicon $S$. 
+Step 1-1 shows graph construction on language $e$, where a graph $G^e$ with a set of edges $E^e$, vertices $V^e$, and edge weights $W^e$ is constructed from $D^e$. 
+In Step 1-2, another graph $G^f$ is constructed for language $f$. 
+Next, seed distributions $Q^e$ for all vertices $V^e$ of $G^e$ are computed by propagating language $e$ words in the seed lexicon $S^e = \{v^{e}|\langle v^{f},v^{e} \rangle \in S \}$ on the graph $G^e$ in Step 2-1. 
+Similarly, Step 2-2 propagates language $f$ words in the seed lexicon $S^f = \{v^{f}|\langle v^{f}, v^{e} \rangle \in S \}$ on the graph $G^f$. 
+Finally, Step 3 extracts translation pairs $T$ based on $Q^e$ and $Q^f$ paired by $S$. 
+
+\begin{figure}[t]
+\input{03fig02.txt}
+\caption{Algorithm of Proposed Method}
+\label{fig:algorithm}
+\end{figure}
+
+
+
+\subsection{Graph Construction}
+\label{sect:construct}
+
+Here, we construct a graph representing the association between words for each language. 
+Each graph is undirected because such associations do not require direction. 
+Graphs are constructed via the following steps. 
+
+\noindent {\bf Step 1. Vertex assignment} extracts words from each corpus and assigns a vertex to each extracted word. Let $V=\{v_{1},\cdots,v_{n}\}$ be a set of vertices. 
+
+\noindent {\bf Step 2. Edge weight calculation} calculates the association strength between two words as the edge weight. 
+Let $E$ and $W$ be a set of edges and weights, respectively, where $e_{ij} \in E$ links $v_{i}$ and $v_{j}$ and $w_{ij} \in W$ is the weight of $e_{ij}$. Note that $|E| = |W|$. 
+
+\noindent {\bf Step 3. Edge pruning} excludes edges whose weights are below a predefined threshold to reduce the computational cost of seed propagation. 
+
+We propose two types of graphs that differ in the association measure used in Step 2, namely a co-occurrence graph and a similarity graph\footnote{We can combine the association measures used in co-occurrence and similarity graphs. We leave this combination approach for future work.}. 
+
+
+\subsubsection{Co-occurrence Graph}
+
+A co-occurrence graph directly encodes assumption (II). 
+Each edge in the graph indicates the correlation strength between occurrences of the two linked words. 
+An example is shown in Figure~\ref{fig:example}. 
+
+In the {\bf edge weight calculation} step, co-occurrence frequencies are first computed for each word pair in the same context. Next, the correlation strength is estimated. 
+There are various definitions of context and correlation measures that can be used (e.g., the approaches used for modeling contexts in context-similarity-based methods). 
+In this paper, we use words in a predefined window (window size of 10) as the context and PMI as the correlation measure. More specifically, 
+\begin{equation}
+w_{ij}=\mathit{PMI}(v_{i},v_{j})=\mathit{log}\frac{p(v_{i},v_{j})}{p(v_{i})\cdot p(v_{j})},
+\end{equation}
+where $p(v_{i})$ (or $p(v_{j})$) is the probability that $v_{i}$ (or $v_{j}$) occurs in a context, and $p(v_{i},v_{j})$ is the probability that $v_{i}$ and $v_{j}$ co-occur within the same context. 
+We estimate $\mathit{PMI}(v_{i},v_{j})$ using the Bayesian method proposed by Andrade et al.~\citeyear{andrade10}. 
+Finally, edges with a negative association, $\mathit{PMI}(v_{i},v_{j}) \le 0$, are pruned in the {\bf edge pruning} step. 
+
+
+\subsubsection{Similarity Graph}
+
+Co-occurrence graphs are very sensitive to accidental relations caused by infrequent co-occurrences. 
+Thus, we propose a similarity graph in which context similarities are employed as edge weights instead of simple co-occurrence-based correlations. 
+Since context similarities are computed by the global correlation among words that co-occur, a similarity graph is less subject to accidental co-occurrences. 
+The use of a similarity graph is inspired by assumption (III), namely that a word and its translation tend to have similar context similarities with all bilingual seeds across languages\footnote{This assumption is justified because context similarities are based on co-occurrence relations that are preserved across different languages.}. 
+
+In the {\bf edge weight calculation} step, we first construct a correlation vector representing co-occurrence relations for each word. 
+The correlation vectors are constructed in the same way as the context vectors used in context-similarity-based methods (Section \ref{sect:related}); here context words are words in a predefined window (window size of 4), the association measure is PMI, and context words are treated separately for each position. 
+A correlation vector for each position is computed separately, and then concatenated into a single vector within the window. 
+Second, we calculate similarities between correlation vectors. 
+While there are numerous similarity measures that can be used, we opt to use the cosine similarity: 
+\begin{equation}
+w_{ij}=\mathit{Cos}(\vec{f_{i}},\vec{f_{j}})=\frac{\vec{f_{i}}\cdot\vec{f_{j}}}{|\vec{f_{i}}||\vec{f_{j}}|}, 
+\end{equation}
+where $\vec{f_{i}}$ (or $\vec{f_{j}}$) is the correlation vector of $v_{i}$ (or $v_{j}$). 
+Finally, in the {\bf edge pruning} step, we preserve the edges with the top 100 weights for each vertex. 
+
+
+\subsection{Seed Propagation}
+\label{sect:propagate}
+
+LP is a graph-based technique that transfers labels from labeled to unlabeled data to infer labels for unlabeled data. 
+This general technique is primarily used when there is a scarcity of labeled data but abundant unlabeled data. 
+LP has been successfully applied to common natural language processing tasks, such as word sense disambiguation~\cite{niu05,andrei07}, part-of-speech tagging~\cite{das11}, and multi-class lexicon acquisition~\cite{andrei07}. 
+
+LP generates a label distribution for each vertex in which the weights of all labels add up to 1 by optimizing the following objective function ~\cite{zhu02}: 
+\begin{equation}
+\begin{split}
+ C(q) & =  \sum_{v_{i} \in V \setminus V_{S},~v_{j} \in N(v_{i})} w_{ij} \cdot \parallel q_{i} - q_{j} \parallel \\
+  & = \sum_{v_{i} \in V \setminus V_{S},~v_{j} \in N(v_{i})} w_{ij} \cdot \sum_{z}(q_{i}(z)-q_{j}(z))^{2} \\
+  & \text{s.t.}\quad \sum_{z} q_{i}(z)=1~\forall v_{i}~~\text{and}~~q_{i}(z) \geq 0~\forall v_{i},z~~\text{and}~~q_{i}=u~\forall v_{i} \in V_{S}, 
+\end{split}
+\end{equation}
+where $V_{S} \subseteq V$ is the subset of all vertices and corresponds to lexical seeds, $N(v_{i})$ is the set of vertices linking to $v_{i}$, $q_{i}(i=1 \cdots |V|)$ is the seed distribution for $v_{i}$, $q_{i}(z)$ is the weight of a label (i.e., a lexical seed) $z$ in $q_{i}$, and $u$ is a uniform distribution. 
+The objective function acts as a smoothness regularizer that encourages the similarity in seed distributions of close vertices. 
+We adopt the LP technique to obtain relations with all bilingual seeds, including indirect relations, by treating each lexical seed on the same language as a label. 
+
+In solving the optimization problem, we adopt an iterative update-based method described in Zhu and Ghahramani~\citeyear{zhu02}\footnote{We cannot adopt a closed-form solution that can be computed using matrix methods described in Zhu, Ghahramani, and Lafferty~\citeyear{zhu03}, because it requires the inversion of a matrix of order $|V|$. }. 
+First, each lexical seed is assigned to a label. Then, the labels are iteratively propagated in the graph described in Section \ref{sect:construct}. 
+After the completion of such propagations, a label distribution for each vertex is generated. 
+
+Specifically, the seed distribution for each word $v_i$ is initialized as follows: 
+\begin{equation}
+q_{i}^{0}(z)= \left \{
+\begin{array}{ll}
+1 & \text{if}~~v_{i} \in V_{S}~ \text{and}~ z = v_{i} \\
+0 & \text{if}~~v_{i} \in V_{S}~ \text{and}~ z \neq v_{i}    \\
+u(z) & \text{otherwise}
+\end{array}
+\right., 
+\end{equation}
+where $q_{i}^{k}(i=1 \cdots |V|)$ is the seed distribution for $v_{i}$ after $k$ propagations and $q_{i}^{k}(z)$ is the weight of a label $z$ in $q_{i}^{k}$. 
+
+After initialization, we iteratively propagate the seeds through weighted edges. 
+In each propagation, seeds are probabilistically propagated from linked vertices under the condition that larger edge weights allow seeds to propagate more easily. 
+Thus, the closer the vertices are, the more likely they are to have similar seed distributions. 
+In Figure \ref{fig:example}, the balloons attached to vertices in the graphs show examples of the seed distributions generated by these propagations. 
+For example, the English word ``piranha'' has a seed distribution with weights of seeds ``Amazon,'' ``jungle,'' and ``fish'' as 0.5, 0.3, and 0.2, respectively. 
+Specifically, each seed distribution is updated as follows: 
+\begin{equation}
+q_{i}^{k}(z)= \left \{
+\begin{array}{ll}
+q_{i}^{0}(z) & \text{if}~~ v_{i} \in V_{S} \\
+\displaystyle \frac{\sum_{v_{j} \in N(v_{i})} w_{ij} \cdot q_{j}^{k-1}(z)}{\sum_{v_{j} \in N(v_{i})} w_{ij}} & \text{otherwise}
+\end{array}
+\right..
+\end{equation}
+We ran this procedure for 10 iterations in our experiments. 
+
+Seed distributions for words in the Japanese graph in Figure \ref{fig:example} are computed as follows. 
+Note that, hereafter, the first, second, and third dimension of a seed distribution correspond to lexical seeds ``アマゾン,'' ``ジャングル,'' and ``魚,'' respectively. 
+First, seed distributions are initialized using Equation (4). 
+The seed distributions for seeds ``アマゾン,'' ``ジャングル,'' and ``魚'' are initialized as $(1,0,0)$, $(0,1,0)$, and $(0,0,1)$, respectively. 
+Seed distributions for  ``淡水'' and  ``ピラニア,'' which are not seeds, are set as uniform distribution $(0.\dot{3}, 0.\dot{3}, 0.\dot{3})$. 
+Second, seed information is propagated through weighted edges by using Equation (5). 
+The seed distributions for seeds ``アマゾン,'' ``ジャングル,'' and ``魚'' remain at the initial distribution throughout the seed propagation. 
+The seed distribution for ``淡水'' is updated by transferring seed information from nearby vertices, ``魚'' and ``ピラニア,'' as follows: 
+\begin{align*}
+ q^1_{淡水} & = \frac{w_{淡水 \cdot 魚} \times q^0_{魚} + w_{淡水 \cdot ピラニア} \times q^0_{ピラニア}}{w_{淡水 \cdot 魚}+w_{淡水 \cdot ピラニア}} \\
+  & = (0.128,\ 0.128,\ 0.744).
+\end{align*}
+Similarly, the seed distribution for ``ピラニア'' is updated as follows: 
+\begin{align*}
+ q^1_{ピラニア} & = \frac{w_{ピラニア \cdot 淡水} \times q^0_{淡水} + w_{ピラニア \cdot ジャングル} \times q^0_{ジャングル} + w_{ピラニア \cdot アマゾン} \times q^0_{アマゾン}}{w_{ピラニア \cdot 淡水}+w_{ピラニア \cdot ジャングル}+w_{ピラニア \cdot アマゾン}} \\
+  & =  (0.509,\ 0.403,\ 0.088).
+\end{align*}
+After the first iteration, the distributions are updated as follows: 
+\begin{align*}
+ q^2_{淡水} &= \frac{w_{淡水 \cdot 魚} \times q^1_{魚} + w_{淡水 \cdot ピラニア} \times q^1_{ピラニア}}{w_{淡水 \cdot 魚}+w_{淡水 \cdot ピラニア}} \\
+ q^2_{ピラニア} &= \frac{w_{ピラニア \cdot 淡水} \times q^1_{淡水} + w_{ピラニア \cdot ジャングル} \times q^1_{ジャングル} + w_{ピラニア \cdot アマゾン} \times q^1_{アマゾン}}{w_{ピラニア \cdot 淡水}+w_{ピラニア \cdot ジャングル}+w_{ピラニア \cdot アマゾン}}. \\
+\end{align*}
+These procedures are iteratively performed. 
+
+
+
+\subsection{Translation Pair Extraction}
+\label{sect:identify}
+
+After LP, we treat a pair of words in different languages with similar seed distributions as a translation pair. 
+Seed distribution can be regarded as a vector in which each dimension corresponds to each lexical seed and has an updated weight through LP. 
+A similarity between seed distributions can therefore be calculated in a way similar to that in the context-similarity-based method. 
+In this paper, we use the cosine similarity as the similarity measure, defined as follows: 
+\begin{equation}
+ \mathit{Cos}(q_{x}^{f}, q_{y}^{e}) = \frac{\sum_{\langle v_{k}^{f}, v_{l}^{e} \rangle \in S} {q_{x}^{f}(v_{k}^{f}) \cdot q_{y}^{e}(v_{l}^{e})}}{\sqrt{\sum_{\langle v_{k}^{f}, v_{l}^{e} \rangle \in S} (q_{x}^{f}(v_{k}^{f}))^{2}} \sqrt{\sum_{\langle v_{k}^{f}, v_{l}^{e} \rangle \in S} (q_{y}^{e}(v_{l}^{e}))^{2}}}, 
+\end{equation}
+where $q_{x}^{f}$ (or $q_{y}^{e}$) is the seed distribution for a word $x$ (or $y$) in the source language (or target language) and $S$ is the seed lexicon consisting of the word pair $\langle v_{k}^{f}, v_{l}^{e} \rangle$. 
+
+Since a seed lexicon includes one-to-many or many-to-one translation pairs, certain dimensions may be counted more than once in Equation (6). 
+This means that each seed distribution in the {\bf translation pair extraction} step cannot be considered as a probability distribution, although the seeds are probabilistically propagated. 
+Therefore, we do not use a measure of the difference between two probability distributions (e.g., the Kullback-Leibler divergence). 
+
+In Figure \ref{fig:example2}, the similarity of the seed distributions for ``ピラニア'' and ``anaconda'' are computed on the basis of Equation (6). 
+The numerator of Equation (6) is calculated as follows: 
+\[
+\begin{split}
+ & \sum_{(v_{i}^{f}, v_{i}^{e}) \in S} {q_{ピラニア}(v_{i}^{f}) \cdot q_\mathrm{anaconda}(v_{i}^{e})} \\
+ & \quad = q_{ピラニア}(アマゾン) \times q_\mathrm{anaconda}(\mathrm{Amazon}) + q_{ピラニア}(ジャングル) \times q_\mathrm{anaconda}(\mathrm{jungle}) \\
+ & \qquad + q_{ピラニア}(魚) \times q_\mathrm{anaconda}(\mathrm{fish}) + q_{ピラニア}(魚類) \times q_\mathrm{anaconda}(\mathrm{fish})
+\end{split}
+\]
+Note that the dimension ``fish'' of seed distribution for ``anaconda'' is counted twice. 
+In short, the similarity is calculated as follows: 
+\begin{align*}
+ \mathit{Cos}(q_{ピラニア}, q_\mathrm{anaconda}) & =  \frac{0.3\times0.55 + 0.25\times0.4+ 0.2\times0.05+ 0.25\times 0.05}{\sqrt{0.3^2+0.25^2+0.2^2+0.25^2}\sqrt{0.55^2+0.4^2+0.05^2+0.05^2}} \\
+ & = 0.83
+\end{align*}
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{20-2ia3f3.eps}
+\end{center}
+\caption{Example of a Seed Lexicon and Seed Distributions}
+\label{fig:example2}
+\end{figure}
+
+
+\section{Experiment}
+\label{sect:experiment}
+
+
+\subsection{Experimental Data}
+
+For our experiments, we used English and Japanese patent documents published between 1993 and 2005 by the US Patent \& Trademark Office and the Japanese Patent Office, respectively. 
+We selected the documents belonging to the \textit{physics} domain from each monolingual corpus based on the International Patent Classification (IPC) code\footnote{\textit{SECTION G} of IPC code indicates the \textit{physics} domain.} because it has the most documents among all domains. The comparable corpora consisted of approximately 1.5 million Japanese documents and 438,000 English documents. 
+Table \ref{tbl:data} shows the details of our experimental data. 
+
+Note that these documents are not aligned; however, some data includes the NTCIR parallel data used in the NTCIR-8 patent translation task for training, development, and testing purposes~\cite{fujita10}. 
+The majority of the ``parallel'' data comes from the document-aligned data that originates from Japanese patents. 
+However, these patents are considerably lesser than the entire experimental data; 
+only 2.0\% (=29,554/1,479,831) of Japanese documents and 5.7\% (=25,148/438,227) of English documents are employed in the NTCIR parallel data. 
+Further, such documents are not completely parallel at the document level, in part because the documents are automatically aligned. 
+Therefore, our experiments are designed for bilingual lexicon mining from very comparable corpora. 
+
+\begin{table}[b]
+\caption{Data Set Employed for Our Experiments}
+\label{tbl:data}
+\input{03table01.txt}
+\end{table}
+\begin{table}[b]
+\caption{Size of Seed Lexicons}
+\label{tbl:seed}
+\input{03table02.txt}
+\end{table}
+
+We employed seed lexicons from the following two sources: (1) the EDR bilingual dictionary~\cite{edr} and (2) automatic word alignments generated by running GIZA++~\cite{och03} with the NTCIR parallel data consisting of 3,190,654 parallel sentences. 
+From each source, we extracted pairs of nouns appearing in our corpus. 
+From (2), we excluded word pairs in which the average of two-way translation probabilities was below 0.5. 
+Lexicons from (1) and (2) accounted for 27,353 and 2,853 pairs, respectively, and the two sets were not exclusive. 
+To measure the impact of seed lexicon size, we prepared the following two seed lexicons: 
+$Lex_{L}$, a large seed lexicon, which is a union of all extracted word pairs; 
+and $Lex_{S}$, a small seed lexicon, which is a union of a random sampling of one-tenth of the pairs from (1) and one-tenth of the pairs from (2). 
+Table \ref{tbl:seed} shows the size of each seed lexicon. 
+Note that our seed lexicons included one-to-many or many-to-one translation pairs. 
+As pointed out by Morin and Prochasson~\citeyear{morin11}, it is effective to augment a seed lexicon with the lexical entries automatically extracted from in-domain parallel sentences, although the augmented seed lexicon may contain incorrect translation pairs. 
+Our preliminary examination justified their findings, and we used the merged seed lexicon, (1) and (2), throughout our experiments\footnote{Top 1 and 20 accuracies of $Cooc$ using both seeds (1) and (2) are 9.2\% and 28.3\%, respectively. On the other hand, those using only seed (1) are 7.9\% and 23.4\%, respectively.}. 
+
+The Japanese texts were segmented and part-of-speech-tagged by ChaSen\footnote{IPAdic Version 2.7.0 ({http://chasen.naist.jp/snapshot/ipadic/ipadic/doc/ipadic-ja.pdf}) was used as the dictionary. ChaSen is available for download from {http://chasen-legacy.sourceforge.jp/}.}. 
+The English texts were tokenized and part-of-speech-tagged by TreeTagger~\cite{schmid94}. 
+Next, function words were removed since they have little semantic information and spuriously co-occur with many words. 
+Thus, our data set contained approximately 1.1 million unique Japanese content words and 4.1 million unique English content words, as shown in Table \ref{tbl:data}. 
+Note that the number of unique English content words is four times the Japanese words, even though there are lesser English documents. This is because the English words contain words in tables or mathematical formulae; however, this is not the case for Japanese words because the data format differs for English and Japanese. 
+
+Both the EDR bilingual dictionary and the NTCIR parallel data accounted for only approximately 7.3\% (=81,006/1,111,302) of the Japanese words and 1.4\% (=588,097/4,099,825) of the English words in our experimental data. 
+This is due to the presence of many technical terms and neologisms in patent documents. 
+Therefore, the patent translation task requires bilingual lexicon extraction from nonparallel data. 
+
+In our experiments, we concentrated on content words identified as either a noun or an unknown\footnote{We focused on performance for nouns and unknowns because they occupy majority of the words not covered by either the EDR bilingual dictionary or NTCIR parallel data. We would like to investigate other word types as our future work.} by ChaSen, which accounted for 1,077,474 and 4,070,589 Japanese and English words, respectively. 
+We further excluded those covered by either the EDR bilingual dictionary or NTCIR parallel data, which resulted in 1,012,267 and 3,499,444 Japanese and English words, respectively (Table \ref{tbl:data}). 
+This is because we aim to complement existing bilingual dictionaries or parallel data. 
+We randomly selected 1,000 words from the 1,012,267 Japanese words as our test data. 
+Note that our experimental data may not include translation equivalents of the Japanese test words. 
+
+
+\subsection{Competing Methods}
+\label{sect:method}
+
+We evaluated two types of our LP-based methods ($\mathit{Cooc}$ and $\mathit{Sim}$) against two baselines ($\mathit{Rapp}$ and $\mathit{Andrade}$). 
+When constructing graphs for LP, $\mathit{Cooc}$ employs co-occurrence graphs, whereas $\mathit{Sim}$ uses similarity graphs (as described in Section \ref{sect:proposed}). 
+$\mathit{Rapp}$ is a typical context-similarity-based method described in Section \ref{sect:related}~\cite{rapp99}. 
+Context words are words in a window (window size of 10) and are treated separately for each position. 
+Associations with context words are computed using the log likelihood ratio~\cite{dunning93}. 
+The similarity measure between context vectors is the city-block metric, otherwise known as the Manhattan distance. 
+The Manhattan distance between two vectors ($\vec{x}=(x_{1},\ldots,x_{n})$, $\vec{y}=(y_{1},\ldots,y_{n}$)) is computed as follows: 
+\begin{equation}
+\mathit{Manhattan}(\vec{x},\vec{y})=\sum^{n}_{i=1}|x_{i}-y_{i}|. 
+\end{equation}
+
+$\mathit{Andrade}$ is a sophisticated context-similarity-based method~\cite{andrade10}. 
+Context is a set of words with a positive association in a window (window size of 10). 
+The association is calculated using PMI estimated by a Bayesian method. 
+A similarity between contexts is estimated on the basis of the number of overlapping words, as follows: 
+\begin{equation}
+ \mathit{Sim}(x,y) = -\mathit{log}(P(\mathit{matches}=m)),
+\end{equation}
+where $x$ is a query word, $y$ is a candidate, $m$ is the number of overlapping words between context words of $x$ and $y$, and $P(\mathit{matches}=m)$ is the probability that the candidate was selected by chance. 
+$P(\mathit{matches}=m)$ is calculated as follows: 
+\begin{equation}
+ P(\mathit{matches}=m)=\frac{{}_qC_m \cdot {}_{w-q}C_{c-m}}{{}_wC_c},
+\end{equation}
+where $q$ (or $c$) is the number of context words of $x$ (or $y$) and $w$ is the total number of seeds. 
+
+
+
+\subsection{Experimental Results}
+
+Figure \ref{fig:result} plots the performance of each method using $\mathit{Lex}_{S}$ or $\mathit{Lex}_{L}$. 
+Hereafter, $\mathit{Method}(L)$ (or $\mathit{Method}(S)$) denotes the $\mathit{Method}$ using $\mathit{Lex}_{L}$ (or $\mathit{Lex}_{S}$). 
+We measured the performance on bilingual lexicon extraction as Top {$N$} ($ 1 \leq N \leq 20 $) accuracy ($\mathit{Acc}_{N}$), which is the number of test words whose Top {$N$} translation candidates contain the correct translation equivalent over the total number of test words. 
+We manually\footnote{We could not evaluate using existing dictionaries because most test data are technical terms and neologisms that are not included in the dictionaries.} evaluated whether the translation candidates contained a correct translation equivalent. 
+We did not use recall because the appearance of the translation equivalents of a test word in the corpus was unknown. 
+The Top $N$ accuracies for $N=1$ and $20$ are summarized in Table \ref{tbl:result}. 
+
+As indicated in Table \ref{tbl:result}, our LP-based methods outperform baselines both when using $\mathit{Lex}_{S}$ and $\mathit{Lex}_{L}$. 
+The improvements are statistically significant in the sign test with a 1\% significance level. 
+Results show that capturing relations with all seeds including indirect relations, is effective. 
+Figure \ref{fig:result} also indicates the merit of our methods in all Top $N$ accuracy curves. 
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{20-2ia3f4.eps}
+\end{center}
+\caption{Top {$N$} Accuracy Graph}
+\label{fig:result}
+\end{figure}
+\begin{table}[t]
+\caption{Performance on Bilingual Lexicon Extraction}
+\label{tbl:result}
+\input{03table03.txt}
+\end{table}
+
+The accuracies of the baselines are worse than previous studies: 14\% $\mathit{Acc}_{1}$ and 46\% $\mathit{Acc}_{10}$~\cite{andrade10} and 72\% $\mathit{Acc}_{1}$~\cite{rapp99}. 
+This discrepancy exists because previous studies evaluated only test words whose translation equivalents existed in the experimental data, which was not always true in our experiments. 
+Moreover, previous studies evaluated only high-frequency words, such as common nouns~\cite{rapp99} and words with a document frequency of at least 50~\cite{andrade10}. 
+Our test data, on the other hand, included many low-frequency words. 
+It is generally true that the translation of high-frequency words is much easier than that of low-frequency words. We discuss the impact of test word frequencies in detail in Section \ref{sect:freq}. 
+
+Table \ref{tbl:result} and Figure \ref{fig:result} also show that $\mathit{Sim}$ outperforms $\mathit{Cooc}$ both when using $\mathit{Lex}_{S}$ and $\mathit{Lex}_{L}$. 
+The improvements of $\mathit{Acc}_{20}$ are statistically significant in the sign test with a 5\% significance level. 
+
+
+\section{Discussion}
+\label{sect:discuss}
+
+
+\subsection{Effect of Indirect Relations with Seeds}
+\label{sect:casestudy}
+
+\begin{table}[b]
+\caption{Translation Candidates for 躁鬱病 (manic-depression)}
+\label{tbl:rank}
+\input{03table04.txt}
+\end{table}
+
+Table \ref{tbl:rank} shows a list of the top 5 translation candidates for the Japanese word ``躁鬱病 (manic-depression)'' for each method, where the values in parentheses indicate the ranks of the correct translations. 
+Table \ref{tbl:feature} shows the top 5 lexical seeds that characterize the query word, where the values in the parentheses indicate weights. 
+Table \ref{tbl:rank} shows cases in which $\mathit{Cooc}(L)$ found the correct translation equivalent but $\mathit{Andrade}(L)$ did not. 
+Table \ref{tbl:feature} shows that $\mathit{Cooc}(L)$ utilized more seeds closely tied to the query word (e.g., ``神経症 (neurosis),'' ``不眠症 (insomnia)''), which did not occur in the context of the query word in the experimental data. 
+Results show that indirectly related seeds are also important clues, and our proposed method can utilize them. 
+
+\begin{table}[t]
+\caption{Seeds with the Highest Weights}
+\label{tbl:feature}
+\input{03table05.txt}
+\end{table}
+
+
+
+\subsection{Impact of Seed Lexicon Size}
+\label{sect:seedsize}
+
+Table \ref{tbl:result} shows that a reduction of seed lexicon size degrades performance. 
+This is natural for the baseline methods because $\mathit{Lex}_{S}$ cannot translate most context words that are necessary for word characterization. 
+Consider $\mathit{Andrade}(L)$ and $\mathit{Andrade}(S)$ in the above example. 
+\mbox{Table} \ref{tbl:feature} shows that $\mathit{Andrade}(S)$ uses fewer relevant seeds with the query word and expresses the query word by seeds with less association. 
+For example, ``精神病 (psychosis)'' cannot be used in $\mathit{Andrade}(S)$ because $\mathit{Lex}_{S}$ does not have that seed. 
+Therefore, to find correct translation pairs is more difficult for $\mathit{Andrade}(S)$. 
+
+The proposed methods also share the same tendency, although each word is expressed by all seeds in the seed lexicon. 
+Consider $\mathit{Cooc}(L)$ and $\mathit{Cooc}(S)$ in the above example. 
+Table \ref{tbl:feature} shows that $\mathit{Cooc}(S)$ expresses the query word with a smooth seed distribution, which is difficult to discriminate from others.  
+This is because $\mathit{Lex}_{S}$ did not have relevant seeds for the query word. 
+Further, this explains why $\mathit{Cooc}(S)$ cannot find the correct translation equivalent. 
+On the other hand, $\mathit{Cooc}(L)$ characterizes ``躁鬱病'' and ``manic-depression'' by strongly relevant seeds (e.g., ``精神病 (psychosis),'' ``神経症 (neurosis)''), and then finds the correct translation equivalent. 
+
+To examine the robustness of seed lexicon size, we calculated the reduction rate of $\mathit{Acc}_{20}$ via the following expression: ($\mathit{Acc}_{20}$ with $\mathit{Lex}_{L} - \mathit{Acc}_{20}$ with $\mathit{Lex}_{S}$)/$\mathit{Acc}_{20}$ with $\mathit{Lex}_{L}$. 
+The reduction rates of $\mathit{Rapp}$, $\mathit{Andrade}$, $\mathit{Cooc}$, and $\mathit{Sim}$ are 78.4\%, 76.1\%, 69.6\%, and 62.4\%, respectively. 
+The difference between degradation in $\mathit{Cooc}$ and $\mathit{Andrade}$ is statistically significant in the sign test with a 1\% significance level. 
+These results indicate that the proposed methods are more robust to seed lexicon size than the baselines, because the proposed methods can utilize seeds with indirect relations, while the baselines utilize only seeds in the context. 
+
+To verify our claim, we examined the number of test words that occurred without seeds in the context. 
+There were 570 such words in $\mathit{Rapp}(S)$, 387 in $\mathit{Rapp}(L)$, 572 in $\mathit{Andrade}(S)$, and 388 in $\mathit{Andrade}(L)$. 
+The baselines cannot find their translation equivalents. 
+Such words occur even if $\mathit{Lex}_{L}$ is used, and this number increases when $\mathit{Lex}_{S}$ is used. 
+Our proposed methods were able to utilize all seeds to find equivalents for such words. 
+Therefore, our proposed methods work well even if the coverage of a seed lexicon is low. 
+
+
+\subsection{Impact of Word Frequencies}
+\label{sect:freq}
+
+Our test data includes many low-frequency words that are not covered by the EDR bilingual dictionary or NTCIR parallel data. 
+More specifically, 624 words in the test data appear below 50 times. 
+Hereafter, these words are called low-frequency words, while the other words are called high-frequency words. 
+Table \ref{tbl:freq} shows $\mathit{Acc}_{N}$ using $\mathit{Lex}_{L}$ for the 624 low- and 376 high-frequency words. 
+It also shows that performance for low-frequency words is much worse than that of high-frequency words. 
+This is because the translation of high-frequency words utilizes abundant and reliable context information, whereas context information for low-frequency words is statistically unreliable. 
+
+\begin{table}[b]
+\caption{Comparison of Performance for High- and Low-Frequency Words}
+\label{tbl:freq}
+\input{03table06.txt}
+\end{table}
+
+In our proposed methods, edges linking rare words were sometimes generated on the basis of accidental co-occurrences; in such cases, unrelated seed information was transferred through these edges. 
+Therefore, even our LP-based methods, especially $\mathit{Cooc}$, could not identify the correct translation equivalents for rare words. 
+$\mathit{Sim}$ alleviated the problem by using a similarity graph in which edges were generated on the basis of global correlation among words, as indicated by Table \ref{tbl:freq}. 
+It also suggests that the top 20 translation candidates for high-frequency words may contribute to bilingual tasks such as MT and CLIR, although the overall performance was still low. 
+
+
+\subsection{Effect of Similarity Graphs}
+\label{sect:comp_proposed}
+
+We examined $\mathit{Acc}_{N}$ for synonyms of lexical seeds in Japanese. 
+The $\mathit{Acc}_{1}$ and $\mathit{Acc}_{20}$ of $\mathit{Sim}(L)$ are 15.6\% and 56.3\%, respectively, while those of $\mathit{Cooc}(L)$ are 9.4\% and 37.5\%, respectively. 
+These results show that similarity graphs are effective for clustering synonyms into the same translation equivalents. 
+For example, $\mathit{Sim}(L)$ extracted the correct translation pair of the English word ``iodine'' and the Japanese word ``イオディン,'' a synonym of the lexical seed ``ヨウ素 (iodine)'' in Japanese. 
+This occurred because synonyms tend to be linked in the similarity graph and have similar seed distributions. 
+On the other hand, in the co-occurrence graph, synonyms tend to be indirectly linked through mutual context words so that their seed distributions are far away from each another. 
+
+Further, there are many loanwords in patent documents that are spelled differently from document to document. 
+For example, the loanword for the English word ``user'' is often written as ``ユーザ,'' but it is sometimes written as ``ユーザー,'' with an additional prolonged sound mark. 
+Therefore, the similarity graph is particularly effective for the experimental data. 
+
+
+\subsection{Impact of Seed Propagation}
+\label{sect:seedpropagation}
+
+\begin{table}[b]
+\caption{Impact of Seed Propagation}
+\label{tbl:seedpropagation}
+\input{03table07.txt}
+\end{table}
+
+We also examined the impact of seed propagation. 
+Table \ref{tbl:seedpropagation} shows the performance of our proposed methods in which the number of LP iterations varied by $k=0$, $5$, and $10$. 
+Note that $\mathit{Cooc}(k=0)$ or $\mathit{Sim}(k=0)$ does not perform seed propagation. 
+In particular, $\mathit{Cooc}(k=0)$ is a conventional context-similarity-based method 
+ and is different from $\mathit{Andrade}$ in the similarity measure between contexts: $\mathit{Cooc}(k=0)$ uses the cosine similarity (Equation (6)) and $\mathit{Andrade}$ uses the measure based on the number of overlapping words (Equation (8)). 
+
+In general, we observe that more iterations improve the performance both when using $\mathit{Lex}_{S}$ and $\mathit{Lex}_{L}$. 
+In particular, at the fifth iteration, the improvements are statistically significant in the sign test with a 1\% significance level. 
+Further iterations, such as the tenth iteration, improve performance by propagating seed information to nodes that are far away from seeds in the co-occurrence or similarity graph. 
+
+
+\subsection{Error Analysis}
+
+Besides errors caused by infrequently occurring words, our test data included words for which translation equivalents could not be found inherently. 
+The first type includes words whose equivalents do not exist in the English corpus. 
+Our test data included 133 such words (12 high- and 121 low-frequency words). 
+This is an unavoidable problem for methods based on comparable corpora. 
+
+The second type includes words for which English equivalents are compound words. 
+The Japanese morphological analyzer tends to group a compound word into a single word, while the English text analyzer does not group collocations of words divided by the delimiter \textit{space}. 
+For example, the single Japanese word ``掌紋'' is equivalent to ``palm pattern'' or ``palm print,'' which consists of two words. 
+This case was considered as an error even though the proposed methods found the word ``palm'' equivalent to ``掌紋.'' 
+Our test data included 142 such cases (20 high- and 122 low-frequency words). 
+A solution to this multiword expression problem is to include compound words in the vocabulary and construct co-occurrence or similarity graphs with significantly more vertices. 
+Due to the computational cost, we leave this for future work. 
+
+Table \ref{tbl:gs} shows the results of recalculation after removing these two types of error words from our test data. 
+In the table, ``High Freq.'' corresponds to a standard experimental setting, which evaluated only high-frequency words whose translation equivalents existed in the experimental data. 
+
+\begin{table}[t]
+\caption{Performance under Ideal Setting}
+\label{tbl:gs}
+\input{03table08.txt}
+\end{table}
+
+The primary reason for other errors is word sense ambiguity, which is different in every language. 
+For example, the Japanese word ``右'' means ``right'' and ``conservatism'' in English. 
+Our proposed methods merged different senses by propagating seeds through these polysemous words in only one language. 
+This caused translation pairs to have wrong seed distributions, and therefore our proposed methods could not identify correct translation pairs. 
+We leave this word sense disambiguation problem for future work. 
+
+
+\section{Related Studies}
+
+Besides the comparable corpus approach discussed in Section \ref{sect:related}, many alternatives have been proposed for bilingual lexicon extraction. 
+The first alternative includes finding translation pairs in parallel corpora~\cite{wu94,fung94,och03}. 
+However, large parallel corpora are available only for a few language pairs and limited domains. 
+Moreover, even the large parallel corpora are relatively small in comparison with comparable corpora. 
+
+The second alternative includes exploiting the web. 
+Lu et al.~\citeyear{lu04} extracted translation pairs by mining web anchor texts and link structures. 
+As an alternative, mixed-language webpages are analyzed by first retrieving texts that include both source and target languages from the web via search engines or simple rules, and then extracting translation pairs from the mixed-language texts utilizing various clues. 
+Zhang and Vines~\citeyear{zhang04} used co-occurrence statistics; Cheng et al.~\citeyear{cheng04} used co-occurrences and context similarity information; and Huang et al.~\citeyear{fei05} used phonetic, semantic, and frequency-distance features. 
+Lin et al.~\citeyear{lin08} proposed a method for extracting parenthetically translated terms, where a word alignment algorithm is used for establishing the correspondences between in- and pre-parenthesis words. 
+However, these methods cannot find translation pairs when they are not linked through link structures or when they do not co-occur in the same text. 
+
+Transliteration is a completely different method of bilingual lexicon acquisition in which a word in one language is converted into another language using phonetic equivalence~\cite{knight98,karimi11}. 
+Although machine transliteration works particularly well for proper names and loanwords, it cannot be employed for phonetically dissimilar translations. 
+
+All abovementioned methods may extract translation pairs more precisely than our comparable corpus approach when their underlying assumptions are satisfied. 
+Since their methods are orthogonal to our LP-based method, we might improve the performance by augmenting a seed lexicon with translation pairs extracted using the above methods. 
+
+
+\section{Conclusion}
+\label{sect:conclusion}
+
+In this paper, we proposed a novel bilingual lexicon extraction method using LP for alleviating the problem of limited seed lexicon size. 
+Our proposed method captured relations with all seeds, including indirect relations, by propagating seed information. 
+Further, in addition to co-occurrence graphs, we proposed our method using similarity graphs in the propagation process. 
+Our experiments showed that the proposed method outperforms conventional context-similarity-based methods~\cite{rapp99,andrade10} and the similarity graphs improve the performance by clustering synonyms into the same translation. 
+
+We plan to investigate many open problems in our future work. One such problem is word sense disambiguation and the translation of compound words as described in Daille and Morin~\citeyear{daille05} and Morin et al.~\citeyear{morin07}. 
+In addition, indirect relations have been used in other tasks, such as paraphrase acquisition from bilingual parallel corpora~\cite{kok10}. 
+We will utilize their random walk approach and other graph-based techniques, such as modified adsorption~\cite{pratim09} to generate seed distributions. 
+We also plan an end-to-end evaluation, for instance, by employing the extracted bilingual lexicon in an MT system. 
+
+
+\acknowledgment
+
+This paper is based on the conference paper by Tamura, Watanabe, and Sumita~\citeyear{tamura12}, extended with a more complete description of our proposed method and the conventional methods and an additional analysis of the experimental results. 
+We thank anonymous reviewers for their helpful suggestions and comments on the first version of this paper. 
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Alexandrescu \BBA\ Kirchhoff}{Alexandrescu \BBA\
+  Kirchhoff}{2007}]{andrei07}
+Alexandrescu, A.\BBACOMMA\ \BBA\ Kirchhoff, K. \BBOP 2007\BBCP.
+\newblock \BBOQ {Data-Driven Graph Construction for Semi-Supervised Graph-Based
+  Learning in NLP}.\BBCQ\
+\newblock In {\Bem Proceedings of NAACL-HLT 2007}, \mbox{\BPGS\ 204--211}.
+
+\bibitem[\protect\BCAY{Andrade, Matsuzaki, \BBA\ Tsujii}{Andrade
+  et~al.}{2011a}]{andrade11:CIC}
+Andrade, D., Matsuzaki, T., \BBA\ Tsujii, J. \BBOP 2011a\BBCP.
+\newblock \BBOQ {Effective Use of Dependency Structure for Bilingual Lexicon
+  Creation}.\BBCQ\
+\newblock In {\Bem Proceedings. of CICLing 2011}, \mbox{\BPGS\ 80--92}.
+
+\bibitem[\protect\BCAY{Andrade, Matsuzaki, \BBA\ Tsujii}{Andrade
+  et~al.}{2011b}]{andrade11}
+Andrade, D., Matsuzaki, T., \BBA\ Tsujii, J. \BBOP 2011b\BBCP.
+\newblock \BBOQ {Learning the Optimal Use of Dependency-parsing Information for
+  Finding Translations with Comparable Corpora}.\BBCQ\
+\newblock In {\Bem Proceedings of the 4th Workshop on Building and Using
+  Comparable Corpora}, \mbox{\BPGS\ 10--18}.
+
+\bibitem[\protect\BCAY{Andrade, Nasukawa, \BBA\ Tsujii}{Andrade
+  et~al.}{2010}]{andrade10}
+Andrade, D., Nasukawa, T., \BBA\ Tsujii, J. \BBOP 2010\BBCP.
+\newblock \BBOQ {Robust Measurement and Comparison of Context Similarity for
+  Finding Translation Pairs}.\BBCQ\
+\newblock In {\Bem Proceedings of COLING 2010}, \mbox{\BPGS\ 19--27}.
+
+\bibitem[\protect\BCAY{Cheng, Teng, Chen, Wang, Lu, \BBA\ Chien}{Cheng
+  et~al.}{2004}]{cheng04}
+Cheng, P.-J., Teng, J.-W., Chen, R.-C., Wang, J.-H., Lu, W.-H., \BBA\ Chien,
+  L.-F. \BBOP 2004\BBCP.
+\newblock \BBOQ {Translating Unknown Queries with Web Corpora for
+  Cross-Language Information Retrieval}.\BBCQ\
+\newblock In {\Bem Proceedings of SIGIR 2004}, \mbox{\BPGS\ 146--153}.
+
+\bibitem[\protect\BCAY{Chiao \BBA\ Zweigenbaum}{Chiao \BBA\
+  Zweigenbaum}{2002}]{chiao02}
+Chiao, Y.-C.\BBACOMMA\ \BBA\ Zweigenbaum, P. \BBOP 2002\BBCP.
+\newblock \BBOQ {Looking for Candidate Translational Equivalents in
+  Specialized, Comparable Corpora}.\BBCQ\
+\newblock In {\Bem Proceedings of COLING 2002}, \mbox{\BPGS\ 1208--1212}.
+
+\bibitem[\protect\BCAY{Daille \BBA\ Morin}{Daille \BBA\ Morin}{2005}]{daille05}
+Daille, B.\BBACOMMA\ \BBA\ Morin, E. \BBOP 2005\BBCP.
+\newblock \BBOQ {French-English Terminology Extraction from Comparable
+  Corpora}.\BBCQ\
+\newblock In {\Bem Proceedings of IJCNLP 2005}, \mbox{\BPGS\ 707--718}.
+
+\bibitem[\protect\BCAY{Das \BBA\ Petrov}{Das \BBA\ Petrov}{2011}]{das11}
+Das, D.\BBACOMMA\ \BBA\ Petrov, S. \BBOP 2011\BBCP.
+\newblock \BBOQ {Unsupervised Part-of-Speech Tagging with Bilingual Graph-Based
+  Projections}.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-HLT 2011}, \mbox{\BPGS\ 600--609}.
+
+\bibitem[\protect\BCAY{{Daum{\'e} III} \BBA\ Jagarlamudi}{{Daum{\'e} III} \BBA\
+  Jagarlamudi}{2011}]{hal11}
+{Daum{\'e} III}, H.\BBACOMMA\ \BBA\ Jagarlamudi, J. \BBOP 2011\BBCP.
+\newblock \BBOQ {Domain Adaptation for Machine Translation by Mining Unseen
+  Words}.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-HLT2011}, \mbox{\BPGS\ 407--412}.
+
+\bibitem[\protect\BCAY{D{\'{e}}jean, Gaussier, \BBA\ Sadat}{D{\'{e}}jean
+  et~al.}{2002}]{dejean02}
+D{\'{e}}jean, H., Gaussier, {\'{E}}., \BBA\ Sadat, F. \BBOP 2002\BBCP.
+\newblock \BBOQ {An Approach based on Multilingual Thesauri and Model
+  Combination for Bilingual Lexicon Extraction}.\BBCQ\
+\newblock In {\Bem Proceedings of COLING 2002}, \mbox{\BPGS\ 1--7}.
+
+\bibitem[\protect\BCAY{Dunning}{Dunning}{1993}]{dunning93}
+Dunning, T. \BBOP 1993\BBCP.
+\newblock \BBOQ {Accurate Methods for the Statistics of Surprise and
+  Coincidence}.\BBCQ\
+\newblock {\Bem COMPUTATIONAL LINGUISTICS}, {\Bbf 19}  (1), \mbox{\BPGS\
+  61--74}.
+
+\bibitem[\protect\BCAY{EDR}{EDR}{1990}]{edr}
+EDR \BBOP 1990\BBCP.
+\newblock \BBOQ {Bilingual Dictionary}.\BBCQ\
+\newblock \BTR, TR-029, Japan Electronic Dictionary Research Institute, Tokyo.
+
+\bibitem[\protect\BCAY{Fi{\v{s}}er, Ljube{\v{s}}i{\'{c}}, Vintar, \BBA\
+  Pollak}{Fi{\v{s}}er et~al.}{2011}]{fiser11}
+Fi{\v{s}}er, D., Ljube{\v{s}}i{\'{c}}, N., Vintar, {\v{S}}., \BBA\ Pollak, S.
+  \BBOP 2011\BBCP.
+\newblock \BBOQ {Building and Using Comparable Corpora for Domain-Specific
+  Bilingual Lexicon Extraction}.\BBCQ\
+\newblock In {\Bem Proceedings of the 4th Workshop on Building and Using
+  Comparable Corpora}, \mbox{\BPGS\ 19--26}.
+
+\bibitem[\protect\BCAY{Fujii, Utiyama, Yamamoto, Utsuro, Ehara, Echizen-ya,
+  \BBA\ Shimohata}{Fujii et~al.}{2010}]{fujita10}
+Fujii, A., Utiyama, M., Yamamoto, M., Utsuro, T., Ehara, T., Echizen-ya, H.,
+  \BBA\ Shimohata, S. \BBOP 2010\BBCP.
+\newblock \BBOQ {Overview of the Patent Translation Task at the NTCIR-8
+  Workshop}.\BBCQ\
+\newblock In {\Bem Proceedings of the 8th NTCIR Workshop}, \mbox{\BPGS\
+  371--376}.
+
+\bibitem[\protect\BCAY{Fung}{Fung}{1995}]{fung95}
+Fung, P. \BBOP 1995\BBCP.
+\newblock \BBOQ {Compiling Bilingual Lexicon Entries from a Non-Parallel
+  English-Chinese Corpus}.\BBCQ\
+\newblock In {\Bem Proceedings of the 3rd Annual Workshop on Very Large
+  Corpora}, \mbox{\BPGS\ 173--183}.
+
+\bibitem[\protect\BCAY{Fung \BBA\ Church}{Fung \BBA\ Church}{1994}]{fung94}
+Fung, P.\BBACOMMA\ \BBA\ Church, K.~W. \BBOP 1994\BBCP.
+\newblock \BBOQ {K-vec: A New Approach for Aligning Parallel Texts}.\BBCQ\
+\newblock In {\Bem Proceedings of COLING 1994}, \mbox{\BPGS\ 1096--1102}.
+
+\bibitem[\protect\BCAY{Fung \BBA\ McKeown}{Fung \BBA\ McKeown}{1997}]{fung97}
+Fung, P.\BBACOMMA\ \BBA\ McKeown, K. \BBOP 1997\BBCP.
+\newblock \BBOQ {Finding Terminology Translations from Non-parallel
+  Corpora}.\BBCQ\
+\newblock In {\Bem Proceedings of the 5th Annual Workshop on Very Large
+  Corpora}, \mbox{\BPGS\ 192--202}.
+
+\bibitem[\protect\BCAY{Fung \BBA\ Yee}{Fung \BBA\ Yee}{1998}]{fung98}
+Fung, P.\BBACOMMA\ \BBA\ Yee, L.~Y. \BBOP 1998\BBCP.
+\newblock \BBOQ {An IR Approach for Translating New Words from Nonparallel,
+  Comparable Texts}.\BBCQ\
+\newblock In {\Bem Proceedings of COLING-ACL 1998}, \mbox{\BPGS\ 414--420}.
+
+\bibitem[\protect\BCAY{Garera, Callison-Burch, \BBA\ Yarowsky}{Garera
+  et~al.}{2009}]{garera09}
+Garera, N., Callison-Burch, C., \BBA\ Yarowsky, D. \BBOP 2009\BBCP.
+\newblock \BBOQ {Improving Translation Lexicon Induction from Monolingual
+  Corpora via Dependency Contexts and Part-of-Speech Equivalences}.\BBCQ\
+\newblock In {\Bem Proceedings of CoNLL 2009}, \mbox{\BPGS\ 129--137}.
+
+\bibitem[\protect\BCAY{Gaussier, Renders, Matveeva, Goutte, \BBA\
+  D{\'{e}}jean}{Gaussier et~al.}{2004}]{gaussier04}
+Gaussier, E., Renders, J.-M., Matveeva, I., Goutte, C., \BBA\ D{\'{e}}jean, H.
+  \BBOP 2004\BBCP.
+\newblock \BBOQ {A Geometric View on Bilingual Lexicon Extraction from
+  Comparable Corpora}.\BBCQ\
+\newblock In {\Bem Proceedings of ACL 2004}, \mbox{\BPGS\ 526--533}.
+
+\bibitem[\protect\BCAY{Haghighi, Liang, Berg-Kirkpatrick, \BBA\ Klein}{Haghighi
+  et~al.}{2008}]{haghighi08}
+Haghighi, A., Liang, P., Berg-Kirkpatrick, T., \BBA\ Klein, D. \BBOP 2008\BBCP.
+\newblock \BBOQ {Learning Bilingual Lexicons from Monolingual Corpora}.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-08: HLT}, \mbox{\BPGS\ 771--779}.
+
+\bibitem[\protect\BCAY{Hazem, Morin, \BBA\ Saldarriaga}{Hazem
+  et~al.}{2011}]{hazem11}
+Hazem, A., Morin, E., \BBA\ Saldarriaga, S.~P. \BBOP 2011\BBCP.
+\newblock \BBOQ {Bilingual Lexicon Extraction from Comparable Corpora as
+  Metasearch}.\BBCQ\
+\newblock In {\Bem Proceedings of the 4th Workshop on Building and Using
+  Comparable Corpora}, \mbox{\BPGS\ 35--43}.
+
+\bibitem[\protect\BCAY{Huang, Zhang, \BBA\ Vogel}{Huang et~al.}{2005}]{fei05}
+Huang, F., Zhang, Y., \BBA\ Vogel, S. \BBOP 2005\BBCP.
+\newblock \BBOQ {Mining Key Phrase Translations from Web Corpora}.\BBCQ\
+\newblock In {\Bem Proceedings of HLT-EMNLP 2005}, \mbox{\BPGS\ 483--490}.
+
+\bibitem[\protect\BCAY{Ismail \BBA\ Manandhar}{Ismail \BBA\
+  Manandhar}{2010}]{ismail10}
+Ismail, A.\BBACOMMA\ \BBA\ Manandhar, S. \BBOP 2010\BBCP.
+\newblock \BBOQ {Bilingual Lexicon Extraction from Comparable Corpora using
+  In-domain Terms}.\BBCQ\
+\newblock In {\Bem Proceedings of COLING 2010}, \mbox{\BPGS\ 481--489}.
+
+\bibitem[\protect\BCAY{Kaji}{Kaji}{2005}]{kaji05}
+Kaji, H. \BBOP 2005\BBCP.
+\newblock \BBOQ {Extracting Translation Equivalents from Bilingual Comparable
+  Corpora}.\BBCQ\
+\newblock {\Bem IEICE transactions on information and systems}, {\Bbf E88-D}
+  (2), \mbox{\BPGS\ 313--323}.
+
+\bibitem[\protect\BCAY{Karimi, Scholer, \BBA\ Turpin}{Karimi
+  et~al.}{2011}]{karimi11}
+Karimi, S., Scholer, F., \BBA\ Turpin, A. \BBOP 2011\BBCP.
+\newblock \BBOQ {Machine Transliteration Survey}.\BBCQ\
+\newblock {\Bem ACM Computing Surveys}, {\Bbf 43}  (3), \mbox{\BPGS\ 1--46}.
+
+\bibitem[\protect\BCAY{Knight \BBA\ Graehl}{Knight \BBA\
+  Graehl}{1998}]{knight98}
+Knight, K.\BBACOMMA\ \BBA\ Graehl, J. \BBOP 1998\BBCP.
+\newblock \BBOQ {Machine Transliteration}.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 24}  (4), \mbox{\BPGS\
+  599--612}.
+
+\bibitem[\protect\BCAY{Koehn \BBA\ Knight}{Koehn \BBA\ Knight}{2002}]{koehn02}
+Koehn, P.\BBACOMMA\ \BBA\ Knight, K. \BBOP 2002\BBCP.
+\newblock \BBOQ {Learning a Translation Lexicon from Monolingual
+  Corpora}.\BBCQ\
+\newblock In {\Bem Proceedings of ACL Workshop on Unsupervised Lexical
+  Acquisition}, \mbox{\BPGS\ 9--16}.
+
+\bibitem[\protect\BCAY{Kok \BBA\ Brockett}{Kok \BBA\ Brockett}{2010}]{kok10}
+Kok, S.\BBACOMMA\ \BBA\ Brockett, C. \BBOP 2010\BBCP.
+\newblock \BBOQ {Hitting the Right Paraphrases in Good Time}.\BBCQ\
+\newblock In {\Bem Proceedings of HLT-NAACL 2010}, \mbox{\BPGS\ 145--153}.
+
+\bibitem[\protect\BCAY{Laroche \BBA\ Langlais}{Laroche \BBA\
+  Langlais}{2010}]{laroche10}
+Laroche, A.\BBACOMMA\ \BBA\ Langlais, P. \BBOP 2010\BBCP.
+\newblock \BBOQ {Revisiting Context-based Projection Methods for
+  Term-Translation Spotting in Comparable Corpora}.\BBCQ\
+\newblock In {\Bem Proceedings of COLING 2010}, \mbox{\BPGS\ 617--625}.
+
+\bibitem[\protect\BCAY{Laws, Michelbacher, Dorow, Scheible, Heid, \BBA\
+  Sch{\"{u}}tze}{Laws et~al.}{2010}]{laws10}
+Laws, F., Michelbacher, L., Dorow, B., Scheible, C., Heid, U., \BBA\
+  Sch{\"{u}}tze, H. \BBOP 2010\BBCP.
+\newblock \BBOQ {A Linguistically Grounded Graph Model for Bilingual Lexicon
+  Extraction}.\BBCQ\
+\newblock In {\Bem Proceedings of COLING 2010}, \mbox{\BPGS\ 614--622}.
+
+\bibitem[\protect\BCAY{Lin, Zhao, Durme, \BBA\ Pasca}{Lin et~al.}{2008}]{lin08}
+Lin, D., Zhao, S., Durme, B.~V., \BBA\ Pasca, M. \BBOP 2008\BBCP.
+\newblock \BBOQ {Mining Parenthetical Translations from the Web by Word
+  Alignment}.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-08: HLT}, \mbox{\BPGS\ 994--1002}.
+
+\bibitem[\protect\BCAY{Lu, Chien, \BBA\ Lee}{Lu et~al.}{2004}]{lu04}
+Lu, W.-H., Chien, L.-F., \BBA\ Lee, H.-J. \BBOP 2004\BBCP.
+\newblock \BBOQ {Anchor Text Mining for Translation of Web Queries: A
+  Transitive Translation Approach}.\BBCQ\
+\newblock {\Bem ACM Transactions on Information Systems}, {\Bbf 22}  (2),
+  \mbox{\BPGS\ 242--269}.
+
+\bibitem[\protect\BCAY{Morin, Daille, Takeuchi, \BBA\ Kageura}{Morin
+  et~al.}{2007}]{morin07}
+Morin, E., Daille, B., Takeuchi, K., \BBA\ Kageura, K. \BBOP 2007\BBCP.
+\newblock \BBOQ {Bilingual Terminology Mining---Using Brain, not brawn
+  comparable corpora}.\BBCQ\
+\newblock In {\Bem Proceedings of ACL 2007}, \mbox{\BPGS\ 664--671}.
+
+\bibitem[\protect\BCAY{Morin \BBA\ Prochasson}{Morin \BBA\
+  Prochasson}{2011}]{morin11}
+Morin, E.\BBACOMMA\ \BBA\ Prochasson, E. \BBOP 2011\BBCP.
+\newblock \BBOQ {Bilingual Lexicon Extraction from Comparable Corpora Enhanced
+  with Parallel Corpora}.\BBCQ\
+\newblock In {\Bem Proceedings of the 4th Workshop on Building and Using
+  Comparable Corpora}, \mbox{\BPGS\ 27--34}.
+
+\bibitem[\protect\BCAY{Niu, Ji, \BBA\ Tan}{Niu et~al.}{2005}]{niu05}
+Niu, Z.-Y., Ji, D.-H., \BBA\ Tan, C.~L. \BBOP 2005\BBCP.
+\newblock \BBOQ {Word Sense Disambiguation Using Label Propagation Based
+  Semi-Supervised Learning}.\BBCQ\
+\newblock In {\Bem Proceedings of ACL 2005}, \mbox{\BPGS\ 395--402}.
+
+\bibitem[\protect\BCAY{Och \BBA\ Ney}{Och \BBA\ Ney}{2003}]{och03}
+Och, F.~J.\BBACOMMA\ \BBA\ Ney, H. \BBOP 2003\BBCP.
+\newblock \BBOQ {A Systematic Comparison of Various Statistical Alignment
+  Models}.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 29}  (1), \mbox{\BPGS\
+  19--51}.
+
+\bibitem[\protect\BCAY{Otero \BBA\ Campos}{Otero \BBA\ Campos}{2008}]{otero08}
+Otero, P.~G.\BBACOMMA\ \BBA\ Campos, J. R.~P. \BBOP 2008\BBCP.
+\newblock \BBOQ {Learning Spanish-Galician Translation Equivalents Using a
+  Comparable Corpus and a Bilingual Dictionary}.\BBCQ\
+\newblock In {\Bem Proceedings of CICLing 2008}, \mbox{\BPGS\ 423--433}.
+
+\bibitem[\protect\BCAY{Pekar, Mitkov, Blagoev, \BBA\ Mulloni}{Pekar
+  et~al.}{2006}]{pekar06}
+Pekar, V., Mitkov, R., Blagoev, D., \BBA\ Mulloni, A. \BBOP 2006\BBCP.
+\newblock \BBOQ {Finding Translations for Low-Frequency Words in Comparable
+  Corpora}.\BBCQ\
+\newblock {\Bem Machine Translation}, {\Bbf 20}  (4), \mbox{\BPGS\ 247--266}.
+
+\bibitem[\protect\BCAY{Prochasson \BBA\ Fung}{Prochasson \BBA\
+  Fung}{2011}]{prochasson11}
+Prochasson, E.\BBACOMMA\ \BBA\ Fung, P. \BBOP 2011\BBCP.
+\newblock \BBOQ {Rare Word Translation Extraction from Aligned Comparable
+  Documents}.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-HLT 2011}, \mbox{\BPGS\ 1327--1335}.
+
+\bibitem[\protect\BCAY{Rapp}{Rapp}{1995}]{rapp95}
+Rapp, R. \BBOP 1995\BBCP.
+\newblock \BBOQ {Identifying Word Translations in Non-Parallel Texts}.\BBCQ\
+\newblock In {\Bem Proceedings of ACL 1995}, \mbox{\BPGS\ 320--322}.
+
+\bibitem[\protect\BCAY{Rapp}{Rapp}{1999}]{rapp99}
+Rapp, R. \BBOP 1999\BBCP.
+\newblock \BBOQ {Automatic Identification of Word Translations from Unrelated
+  English and German Corpora}.\BBCQ\
+\newblock In {\Bem Proceedings of ACL 1999}, \mbox{\BPGS\ 519--526}.
+
+\bibitem[\protect\BCAY{Schmid}{Schmid}{1994}]{schmid94}
+Schmid, H. \BBOP 1994\BBCP.
+\newblock \BBOQ {Probabilistic Part-of-Speech Tagging Using Decision
+  Trees}.\BBCQ\
+\newblock In {\Bem Proceedings of the International Conference on New Methods
+  in Language Processing}, \mbox{\BPGS\ 44--49}.
+
+\bibitem[\protect\BCAY{Shao \BBA\ Ng}{Shao \BBA\ Ng}{2004}]{shao04}
+Shao, L.\BBACOMMA\ \BBA\ Ng, H.~T. \BBOP 2004\BBCP.
+\newblock \BBOQ {Mining New Word Translations from Comparable Corpora}.\BBCQ\
+\newblock In {\Bem Proceedings of COLING 2004}, \mbox{\BPGS\ 618--624}.
+
+\bibitem[\protect\BCAY{Talukdar \BBA\ Crammer}{Talukdar \BBA\
+  Crammer}{2009}]{pratim09}
+Talukdar, P.~P.\BBACOMMA\ \BBA\ Crammer, K. \BBOP 2009\BBCP.
+\newblock \BBOQ {New Regularized Algorithms for Transductive Learning}.\BBCQ\
+\newblock In {\Bem Proceedings of ECML-PKDD 2009}, \mbox{\BPGS\ 442--457}.
+
+\bibitem[\protect\BCAY{Tamura, Watanabe, \BBA\ Sumita}{Tamura
+  et~al.}{2012}]{tamura12}
+Tamura, A., Watanabe, T., \BBA\ Sumita, E. \BBOP 2012\BBCP.
+\newblock \BBOQ {Bilingual Lexicon Extraction from Comparable Corpora Using
+  Label Propagation}.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP-CoNLL 2012}, \mbox{\BPGS\ 24--36}.
+
+\bibitem[\protect\BCAY{Vuli{\'{c}}, Smet, \BBA\ Moens}{Vuli{\'{c}}
+  et~al.}{2011}]{ivan11}
+Vuli{\'{c}}, I., Smet, W.~D., \BBA\ Moens, M.-F. \BBOP 2011\BBCP.
+\newblock \BBOQ {Identifying Word Translations from Comparable Corpora Using
+  Latent Topic Models}.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-HLT 2011}, \mbox{\BPGS\ 479--484}.
+
+\bibitem[\protect\BCAY{Wu \BBA\ Xia}{Wu \BBA\ Xia}{1994}]{wu94}
+Wu, D.\BBACOMMA\ \BBA\ Xia, X. \BBOP 1994\BBCP.
+\newblock \BBOQ {Learning an English-Chinese Lexicon from a Parallel
+  Corpus}.\BBCQ\
+\newblock In {\Bem Proceedings of AMTA 1994}, \mbox{\BPGS\ 206--213}.
+
+\bibitem[\protect\BCAY{Zhang \BBA\ Vines}{Zhang \BBA\ Vines}{2004}]{zhang04}
+Zhang, Y.\BBACOMMA\ \BBA\ Vines, P. \BBOP 2004\BBCP.
+\newblock \BBOQ {Using the Web for Automated Translation Extraction in
+  Cross-Language Information Retrieval}.\BBCQ\
+\newblock In {\Bem Proceedings of SIGIR 2004}, \mbox{\BPGS\ 162--169}.
+
+\bibitem[\protect\BCAY{Zhu \BBA\ Ghahramani}{Zhu \BBA\
+  Ghahramani}{2002}]{zhu02}
+Zhu, X.\BBACOMMA\ \BBA\ Ghahramani, Z. \BBOP 2002\BBCP.
+\newblock \BBOQ {Learning from Labeled and Unlabeled Data with Label
+  Propagation}.\BBCQ\
+\newblock \BTR, CMU-CALD-02-107.
+
+\bibitem[\protect\BCAY{Zhu, Ghahramani, \BBA\ Lafferty}{Zhu
+  et~al.}{2003}]{zhu03}
+Zhu, X., Ghahramani, Z., \BBA\ Lafferty, J. \BBOP 2003\BBCP.
+\newblock \BBOQ {Semi-supervised Learning using Gaussian Fields and Harmonic
+  Functions}.\BBCQ\
+\newblock In {\Bem Proceedings of ICML 2003}, \mbox{\BPGS\ 912--919}.
+
+\end{thebibliography}
+
+
+\begin{biography}
+
+\bioauthor[:]{Akihiro Tamura}{
+received his B.E. and M.E. from the Tokyo Institute of Technology in 2005 and 2007, respectively. 
+He is currently a researcher at the National Institute of Information and Communications Technology. 
+His current research interest is natural language processing. 
+He is a member of the Information Processing Society of Japan and the Association for Computational Linguistics. 
+}
+
+\bioauthor[:]{Taro Watanabe}{
+received his B.E. and M.E. degrees in Information Science from Kyoto University in 1994 and 1997, respectively, and obtained his M.S. degree in Language and Information Technologies from the School of Computer Science, Carnegie Mellon University in 2000. 
+In 2004, he earned his Ph.D. in Informatics from Kyoto University. 
+After serving as a researcher at ATR and NTT, Dr. Watanabe is currently a senior researcher at the National Institute of Information and Communications Technology. 
+His research interests include natural language processing, machine learning and statistical machine translation. 
+}
+
+\bioauthor[:]{Eiichiro Sumita}{
+received his M.S. in Computer Science from the University of Electro-Communications in 1982 and his Ph.D. in Engineering from Kyoto University in 1999. 
+Dr. Sumita is the Director of the NICT Multilingual Translation Laboratory. 
+His research interests include machine translation and e-Learning. 
+}
+
+\bioauthor[:]{Hiroya Takamura}{
+received his B.E. and M.E. from the University of Tokyo in 1997 and 2000, respectively (in 1999, he was a research student at Technische Universitaet von Wien). 
+He received his Dr. Eng. from Nara Institute of Science and Technology in 2003. 
+He was an assistant professor from 2003 to 2010 and is currently an associate professor at the Tokyo Institute of Technology. 
+His current research interest is computational linguistics. 
+He is a member of the Information Processing Society of Japan and the Association for Computational Linguistics. 
+}
+
+\bioauthor[:]{Manabu Okumura}{
+received his B.E., M.E., and Dr. Eng. from the Tokyo Institute of Technology in 1984, 1986, and 1989, respectively. 
+He was an assistant professor at the Department of Computer Science, Tokyo Institute of Technology from 1989 to 1992, and an associate professor at the School of Information Science, Japan Advanced Institute of Science and Technology from 1992 to 2000. 
+He was also a visiting associate professor at the Department of Computer Science, University of Toronto from 1997 to 1998. 
+He is currently an associate professor at Precision and Intelligence Laboratory, Tokyo Institute of Technology. 
+His current research interests include natural language processing, especially automatic text summarization, sentiment analysis, and text mining. 
+He is a member of the Information Processing Society of Japan, the American Association for Artificial Intelligence, the Association for Computational Linguistics, and the Japanese Cognitive Science Society. 
+}
+
+
+\end{biography}
+
+\biodate
+
+
+
+
+\end{document}

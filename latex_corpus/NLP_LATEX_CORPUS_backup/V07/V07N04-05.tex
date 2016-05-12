@@ -1,0 +1,980 @@
+\documentstyle[epsbox,jnlpbbl,version]{jnlp_j}
+
+\def\atari(#1,#2,#3){}
+
+
+\setcounter{page}{099}
+\setcounter{巻数}{7}
+\setcounter{号数}{4}
+\setcounter{年}{2000}
+\setcounter{月}{10}
+\受付{1999}{12}{6}
+\再受付{2000}{1}{17}
+\再々受付{2000}{3}{3}
+\採録{2000}{6}{30}
+
+\newenvironment{RULE}[1]{}{}
+
+\newenvironment{LIST}{}{}
+
+\newcounter{sentcounter}
+\newenvironment{SENT}{}{}
+
+\newenvironment{SENT3}{}{}
+
+\newcounter{corpuscounter}
+\newenvironment{CORPUS}{}{}
+
+
+\title{頑健な英日機械翻訳システム実現のための\\原文自動前編集}
+\author{吉見 毅彦\affiref{SHARP} \and 佐田 いち子\affiref{SHARP}
+\and 福持 陽士\affiref{SHARP}}
+
+\headauthor{吉見, 佐田, 福持}
+\headtitle{頑健な英日機械翻訳システム実現のための原文自動前編集}
+
+\affilabel{SHARP}{シャープ(株) 情報システム事業本部}
+{Information Systems Group, SHARP Corporation}
+
+\jabstract{本稿では，従来の機械翻訳システムの構文解析能力を越える倒置や
+挿入などを含む文に対して頑健な処理を実現するための一手法として，形態素解
+析と簡単な構文解析によって得られる情報に基づいて原文を書き換える自動前編
+集手法を示す．
+原文書き換え系を既存システムに追加することによって，
+1) より品質の高い翻訳がシステムの既存部分にほとんど変更を加えることなく
+得られるようになるだけでなく，
+2) 構文解析の負担が減少するためシステム全体としての効率化が実現できる．
+実際，提案手法を我々の英日機械翻訳システムPower E/Jに組み込み，新聞
+記事を対象として実験を行なったところ，
+1) 書き換え規則が適用された330文の78.8\%にあたる260文の翻訳品質が改善さ
+れ，
+2) 書き換えを行なった場合の翻訳速度は行なわない場合の速度の1.12倍にな
+った．}
+
+\jkeywords{原文書き換え，自動前編集，不適格文，頑健性，機械翻訳}
+
+\etitle{Automatic Preediting of English Sentences \\
+for a Robust English-to-Japanese MT System}
+\eauthor{Takehiko Yoshimi\affiref{SHARP} \and
+Ichiko Sata\affiref{SHARP} \and
+Yoji Fukumochi\affiref{SHARP}} 
+
+\eabstract{As a means of allowing for robust processing of such linguistic 
+phenomena as inversion, ellipsis, parenthesis and emphasis, which are liable to
+prevent a syntactic parser from generating appropriate syntactic structures,
+this paper shows a method of automatically preediting sentences, based on 
+information obtained by morpholexical and simple syntactic analysis.
+Addition of a preediting module to the existing system
+makes it possible
+1) to generate better translations, which would not otherwise be generated,
+with little or no changes to the existing parts of the system, and
+2) to reduce the load of syntactic analysis, thus enhancing the efficiency 
+of the whole system.
+We have incorporated the proposed method into our English-to-Japanese
+machine translation system Power E/J, and carried out an experiment with 
+sentences in news wire articles.
+The incorporation of the preediting module has satisfactorily 
+1) improved the quality of translations for the 260 sentences out of 
+rewritten 330 ones (78.8\%), and
+2) marked up the speed of 1.12 times as fast as the system without the 
+module.}
+
+\ekeywords{Rewriting, Automatic Preediting, Ill-formedness, Robustness,
+Machine Translation}
+
+\begin{document}
+\maketitle
+
+\section{はじめに}
+\label{sec:introduction}
+
+様々な状況で利用される機械翻訳システムが直面する現実の文には，
+システムが持つ言語知識では適切に解析できない様々な言語現象が現れる．
+このような現象を含む文は，人間にとっても適格でない(が理解できる)絶対的不
+適格文と，人間にとっては適格であるがシステムの処理能力を越えている相対的
+不適格文に分けられるが，両者を適切に扱える頑健なシステムが求められている
+\cite{Matsumoto94}．
+絶対的不適格現象のうち語句の欠落や主語述語の不一致などの構文レベルの現
+象へ対処することを目的とした手法としては，
+部分解析法\cite{Imaichi95}や制約緩和法\cite{Mellish89,KatoTsuneaki95}な
+どがこれまでに提案されている．
+
+他方，我々は，相対的不適格文への対処に焦点を当て，機械翻訳システムの翻訳
+品質の向上を目指している．
+以降本稿では紛れない限り，相対的不適格文を単に不適格文と呼ぶ．
+構文レベルの不適格文すなわちシステムの解析能力を越えた構文構造を持つ文を
+扱うための代表的な手法には，
+1) 対象テキストの分野を限定した専用文法を用いる手法\cite{Aizawa96}や，
+2) 原文を書き換える手法\cite{Kim94,Narita94,Sagawa94,Shirai95,KatoTerumasa97}
+などがある．
+また，後者の手法に関連して，原文とそれを人間が書き換えた結果とを比較した
+差分から原文書き換え規則を学習する手法\cite{Yamaguchi98}も示されている．
+(1)と(2)の手法の設計方針は，システムの既存部分の変更を避け，新たな処理系
+を追加するという点で共通しているが，以下の点で異なっている．
+前者の手法では，システムの既存部分による処理は，可能な場合には，新たに追
+加した処理系による処理によって代行される．
+すなわち，新たな処理系による解析(分野依存の専用文法による解析)が成功した
+場合には，既存の処理系による解析(汎用文法による解析)は実行されない．
+これに対して後者では，新たに追加した処理系は既存部分の前処理系と
+位置付けられる．
+
+原文書き換えによる手法は，書き換えを構文解析の前に行なうか後に行なうかに
+よって二つに分けられる．
+構文解析後に行なう場合\cite{Sagawa94,Shirai95}
+\footnote{白井らは，文献\cite{Shirai98}で，一部の書き換えを構文解析前に
+行なうように拡張を施しているが，書き換え規則の多くは構文解析後に適用され
+る．}
+は，
+構文情報が得られているため，構文解析前すなわち形態素解析後に行なう場合に
+比べてより翻訳品質の高いシステムが実現できる可能性がある．
+しかし，実用的な機械翻訳システムにおいて原文書き換えの実行を構文解析終了
+後まで遅らせることは，処理効率の点では望ましくない．
+なぜならば，入力文全体を覆う構文構造が生成できず構文解析に失敗すること
+\footnote{以降本稿では，入力文全体を覆う構文構造が生成できないことを構文
+解析の失敗と呼ぶ．}
+が判明するのは構文解析規則をすべて適用し終えた後であるが，実用的な機械
+翻訳システムでは構文解析規則の規模は非常に大きくなっており，構文解析に要
+する時間は解析全体に要する時間の大半を占めているため，
+構文解析後の書き換えは処理の効率化につながりにくいからである．
+これに対して，構文解析が失敗しないようにあらかじめ原文を書き換えれば，す
+べての構文解析規則の適用が試みられる可能性は低くなるため，システム全体と
+して効率の良い処理が実現できる．
+また，構文情報が(ほとんど)得られていない時点で行なう書き換えがどの程度有
+効であるかを明らかにすることも重要である．
+
+このような観点から本稿では，形態素解析で得られる情報と通常よりも簡単な
+構文解析
+\footnote{具体的には，\ref{sec:preedit:ruleformat:condition}\,節で述べる
+手続きによる処理を指す．}
+で得られる情報に基づいて原文書き換えを構文解析前に行なうことによって翻
+訳品質と共に翻訳速度を改善する手法を示す．
+以下，本稿で扱う書き換え対象を\ref{sec:object}\,節で整理する．
+次に\ref{sec:preedit}\,節で原文書き換え系の処理枠組について説明する．
+\ref{sec:experiment}\,節では，原文書き換え系を既存の英日機械翻訳システム
+に組み込み，システムの性能向上にどの程度貢献できるかを実験によって検証す
+る．
+\ref{sec:relatedworks}\,節では関連研究との比較を行なう．
+
+\section{書き換え対象文}
+\label{sec:object}
+
+我々の従来システムにとっての不適格現象には様々なものがあるがそれらをすべ
+て一度に扱うことは容易ではない．
+このため本研究では，出現頻度が高い現象や翻訳品質の改善度が大きい現象を含
+む文を書き換え対象として優先的に選ぶことにする．
+書き換え対象を選定するために，
+英文法書の例文や新聞記事\cite{Lewis97}を我々のシステムで処理し，
+構文解析に失敗した文のうち558文についてその原因を分析した．
+構文解析に失敗する現象は595箇所で見られた．
+このうち238箇所は，綴り誤りなどの絶対的不適格現象や，辞書や形態素解析
+系の不備によるものであった．
+残り357箇所のうち108箇所が省略現象によるもの，61箇所が倒置によるもの，41
+箇所が挿入語句によるものであった．
+また，特殊構文を含まないが文が長いために構文解析に失敗する文が26文存在し
+た．
+
+この分析結果に基づいて，表\ref{tab:illformedness}\,に示すパターンへ対処
+することを目的とした
+\footnote{表\ref{tab:illformedness}\,は対象とするパターンの概略であり，
+実際の書き換え規則の適用条件部にはより厳密な条件を記述している．
+また，強調構文は構文解析に失敗するわけではないが重要な構文であるので，
+書き換え対象に含めた．}．
+表\ref{tab:illformedness}\,のパターンで，構文解析に失敗した558文に現れた
+すべての倒置，省略，挿入を網羅しているわけではない．
+パターン7ないし10は，複雑で長い部分を動詞の後方に置くための前置詞句の前
+置であるが，ここでは倒置とみなす．
+表\ref{tab:illformedness}\,において，上付き記号?は任意項を，\{\ \}は選択
+項をそれぞれ表し，斜字体の語句は省略されている語句を意味する．
+\begin{table}[htbp]
+\caption{書き換え対象パターン}
+\label{tab:illformedness}
+\begin{center}
+\begin{tabular}{|c||r|l|}\hline
+分類&\multicolumn{1}{c}{\#}&\multicolumn{1}{|c|}{パターン}\\\hline\hline
+&  1.& [$副詞句^?$\ \{分詞$|$形容詞\}\ $前置詞句^?$\ $助動詞^?$\ be動詞] \\
+&  2.& [$副詞句^?$\ 前置詞句\ $助動詞^?$\ be動詞] \\
+&  3.& [\{nor$|$neither\}\ 助動詞\ 名詞句\ 原形動詞] \\
+&  4.& [\{nor$|$neither\}\ have\ 名詞句\ 過去分詞] \\
+&  5.& [\{nor$|$neither\}\ be動詞\ 名詞句] \\
+\multicolumn{1}{|c||}{\raisebox{1.5ex}[0pt]{倒置}}
+&  6.& [should$\langle$文頭$\rangle$] \\
+&  7.& [関係代名詞\ 前置詞句\ 動詞] \\
+&  8.& [名詞句\ 前置詞句$\langle$意味標識:TIME$\rangle$\ 動詞] \\
+&  9.& [助動詞\ 前置詞句\ 原形動詞] \\
+& 10.& [have\ 前置詞句\ to\ 原形動詞] \\\hline
+& 11.& [so\ 形容詞\ {\it that}\ 代名詞] \\
+& 12.& [say\ {\it that}\ $\cdots$\ and\ that\ $\cdots$] \\
+\multicolumn{1}{|c||}{\raisebox{1.5ex}[0pt]{省略}}
+& 13.& [say\ {\it that}\ there\ 動詞] \\
+& 14.& [\{double$|$twice\}\ that\ {\it figure}] \\\hline
+& 15.& [,\ \{all$|$most$|$much$|$$\cdots$\}\ of\ \{it$|$them\}\ $\cdots$\ \{,$|$.\}] \\
+& 16.& [,\ but\ not\ 動詞\ $\cdots$\ ,] \\
+\multicolumn{1}{|c||}{\raisebox{1.5ex}[0pt]{挿入}}
+& 17.& [名詞句\ and\ 名詞句\ ,\ 名詞句\ ,\ 動詞] \\
+& 18.& [名詞句\ ,\ \{which$|$who\}\ $\cdots$\ ,\ 動詞] \\\hline
+強調& 19.& [it\ be動詞\ $\mbox{not}^?$\ 名詞句\ \{which$|$who\}] \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+表\ref{tab:illformedness}\,のパターンは我々の従来システムにとっての不適
+格現象であり，他のシステムの中には適切に処理できるものも存在すると考えら
+れる．
+しかし，例えば日本電子工業振興協会の自然言語処理技術委員会で編集され
+た翻訳品質評価用テストセット\cite{NihonDenshiKogyoShinkoKyokai95}で取り
+扱いが重要な特殊構文として取り上げられているように，これらを適切に処理す
+ることは一般の機械翻訳システムにとっても重要な課題である．
+また，これらの現象のうち，倒置，省略，挿入は，英日機械翻訳システムの一般
+利用者が日々接することが多いテキストの一つである英字新聞記事に比較的頻繁
+に現れる表現である\cite{Uenoda78,Horiuchi79,Tomita94}ため，これらを適切
+に処理する必要性は高い．
+
+本節では，これらの現象\cite{Egawa64,Yasui82,Greenbaum90}を含む文をどのよ
+うに書き換えれば翻訳品質が改善されるかを検討する．
+以降，従来システムとは我々の従来システムを指す．
+
+\subsection{倒置}
+\label{sec:object:inversion}
+
+倒置のうち分詞を中心とする叙述部の倒置や否定表現が冒頭に置かれた文におけ
+る倒置などを扱う．
+例えば文(E\ref{SENT:inversion_whatis})は過去分詞が文頭に現れているために，
+構文解析に失敗し(J\ref{SENT:inversion_whatis})のような出力しか得られない
+\footnote{記号◇で構文解析が失敗したことを表し，記号‖で区切られた区間が
+部分的な構造にまとめられたことを表す．}．
+しかし，文(E\ref{SENT:inversion_whatis})の先頭に``what is''という語句
+を追加して文(E\ref{SENT:inversion_whatis}')のように書き換えると，従来シ
+ステムにとって適格文となり文(J\ref{SENT:inversion_whatis}')のような翻訳
+が得られる．
+\begin{SENT}
+\sentE Affiliated is the parent company of Globe Newspaper Co.
+\sentJ ◇加入した‖Globe Newspaper Coの親会社である。
+\sentNewE What is affiliated is the parent company of Globe Newspaper Co.
+\sentNewJ 合併されるものは、Globe Newspaper Coの親会社である。
+\label{SENT:inversion_whatis}
+\end{SENT}
+
+文(E\ref{SENT:inversion_neither})に見られるように，否定の副詞``neither''
+が冒頭に置かれた節では主語と助動詞の倒置が生じる．
+このような節に対しては，``neither''を``and also''に書き換えて，助動詞
+``have''を否定形にし主語の後方に移動する．
+このような処理の実現には，助動詞の移動先を決定しなければならないため，主
+語になる名詞句この場合`` the government regulators''を認識する必要がある．
+このため，書き換え規則の適用条件部には簡単な構文構造を認識するための手続
+きも記述する．この手続きに関しては
+\ref{sec:preedit:ruleformat:condition}\,節で述べる．
+
+\begin{SENT}
+\sentE Neither have the government regulators indicated that there will 
+be a problem.
+\sentJ ◇どちらも、政府取締官を示された状態にしない‖そこのそれは、問題
+であろう
+\sentNewE And also the government regulators have not indicated 
+that there will be a problem.
+\sentNewJ そしてまた、政府取締官は、問題があるであろうことを示さなかった。
+\label{SENT:inversion_neither}
+\end{SENT}
+
+\subsection{省略}
+\label{sec:object:ellipsis}
+
+接続詞の省略など構文的知識に依存する省略のいくつかを扱う．
+文(E\ref{SENT:ellipsis_saythat})は，二つの被伝達節が``and''で連結されて
+いるが，一つ目の被伝達節を導く``that''が明示されていない．
+これが原因で構文解析に失敗するが，``said''の直後に``that''を補えば
+構文解析の失敗は避けられるようになる．
+\begin{SENT}
+\sentE Sprinkel said the fall of the dollar had substantially restored 
+U.S. cost competitiveness and that the deterioration of the U.S. trade 
+balance appeared to have abated. 
+\sentJ ◇Sprinkelによれば、ドルの低下は、米国のコスト競争、及び、それを
+大幅に回復した‖米国の貿易収支の悪化は、減少したために、現れた。
+\sentNewE Sprinkel said that the fall of the dollar had substantially 
+restored U.S. cost competitiveness and that the deterioration of the U.S. 
+trade balance appeared to have abated.
+\sentNewJ Sprinkelは、ドルの低下が米国のコスト競争を大幅に回復したという
+こと、そして、米国の貿易収支の悪化が減少したように思われるということを言
+った。 
+\label{SENT:ellipsis_saythat}
+\end{SENT}
+
+また，文(E\ref{SENT:ellipsis_sothat})で``so''と相関関係にある``that''が
+省略されていることは，``so''の直後の形容詞に代名詞が後続していることを手
+がかりにすれば検出できる．
+\begin{SENT}
+\sentE The 2.5 pct discount rate is so low it is politically impossible 
+to cut it further. 
+\sentJ 2.5パーセント割引率は、そのようにそれが政治上まで不可能である安値
+が更にそれを切ったことである。
+\sentNewE The 2.5 pct discount rate is so low that it is politically
+impossible to cut it further.
+\sentNewJ 2.5パーセント割引率は、更にそれを切ることが政治上不可能である
+ほど低い。
+\label{SENT:ellipsis_sothat}
+\end{SENT}
+
+\subsection{挿入}
+\label{sec:object:parenthesis}
+
+挿入句は文中の他の語句と特に構文的な関係を持つことなく現れ，コンマやダッ
+シュや括弧などで区切られる．
+括弧で囲まれた挿入句を発見することは比較的容易であるが，コンマで囲まれて
+いる場合にはコンマの他の用法との区別を行なう必要があり，挿入句の正確な認
+識は容易ではない\cite{TakedaNoriko95}．
+しかし，コンマだけでなくその前後の語句も手がかりとし，
+表\ref{tab:illformedness}\,のようなパターンとして捉えれば，
+挿入句の発見はより正確に行なえる．
+例えば文(E\ref{SENT:parenthesis_someofthem})において，一つ目のコンマの直
+後に存在する
+``some of them''
+のような特徴的な語句や二つ目のコンマの直後に存在する(助)動詞に着目すれば
+よい．
+このような手がかりに基づいて認識した挿入句を括弧で囲めば，既存の構文解
+析系による処理が成功するようになる．
+ただし，文(E\ref{SENT:parenthesis_someofthem})は挿入だけでなくbe動詞の
+省略も含んでいるため，``them''の直後に``are''を補う必要がある．
+\begin{SENT}
+\sentE Their separate proposals, some of them conflicting, will be woven
+by House Democratic leaders into a final trade bill for a vote by the 
+full House in late April.
+\sentJ ◇それらの個別の提案、‖いくらかの‖それら‖対立する、‖下院の民
+主党のリーダーによって4月下旬の下院本会議による投票のための最終の貿易手
+形に織られるであろう。
+\sentNewE Their separate proposals ( some of them are conflicting )
+ will be woven by House Democratic leaders into a final trade bill for 
+a vote by the full House in late April.
+\sentNewJ それらの個別の提案(それらのうちのいくらかが対立している)は、下
+院の民主党のリーダーによって4月下旬の下院本会議による投票のための最終の
+貿易手形に組み立てられるであろう。
+\label{SENT:parenthesis_someofthem}
+\end{SENT}
+
+\subsection{強調}
+\label{sec:object:emphasis}
+
+強調のための言語的手段には，\ref{sec:object:inversion}\,節で述べた倒置文
+の他に感嘆文や修辞疑問文や分裂文などがある．
+このうち従来システムでは文(E\ref{SENT:emphasis})のような分裂文を適切に
+処理することができないが，これを文(E\ref{SENT:emphasis}')のように書き換
+えれば翻訳が改善される．
+文(E\ref{SENT:emphasis}')は，文(E\ref{SENT:emphasis})に対して，
+``it''を削除し，
+``which''を``what''に置換し，
+焦点の名詞句とその直前のbe動詞を``which''節の後方へ移動する
+という三操作を行なうことによって得られる．
+\begin{SENT}
+\sentE However, he added that in the end, it was market forces which 
+prevailed.
+\sentJ しかしながら、彼は、結局それが普及していた市場諸力であるとつけ加
+えた。
+\sentNewE However, he added that in the end, what prevailed was market 
+forces. 
+\sentNewJ しかしながら、彼は、結局普及していたものが市場諸力であるとつけ
+加えた。
+\label{SENT:emphasis}
+\end{SENT}
+
+\section{原文書き換え系}
+\label{sec:preedit}
+
+\subsection{原文書き換えの枠組}
+\label{sec:preedit:flow}
+
+本節で述べる原文書き換え系を組み込んだ機械翻訳システムにおけ
+る解析の流れを図\ref{fig:flow}\,に示す．
+このシステムでは，形態素解析終了後に書き換えを実行した後，書き換えた部分
+の形態素解析を行ない，入力文全体の形態素解析結果を構文解析系に送る．
+一度目の書き換え結果に対して全体を覆う構文構造が生成できず構文解析に失敗
+した場合，処理の制御は原文書き換え系に戻る．
+再度書き換えを行なう場合には，各書き換え規則に記述されている規則の信頼
+度(後述)に従って，一度目の書き換えでは用いなかった規則を新たに適用した
+り，逆に一度目の処理で行なった書き換えを取り消したりする
+\footnote{二度目の構文解析に失敗した場合には，断片的な構文構造を
+解析結果とする．}．
+\begin{figure}[htbp]
+\begin{center}
+    \begin{epsf}
+\fbox{\epsfile{file=flow32.eps,width=0.65\columnwidth}}	
+    \end{epsf}
+    \begin{draft}
+    \atari(264.46587,49.13538,1pt)
+    \end{draft}
+\end{center}
+\caption{解析の流れ}
+\label{fig:flow}
+\end{figure}
+
+原文書き換え系での処理は，形態素解析結果に対して先頭から順に書き換え規則
+の適用条件との照合を行なっていき，適用条件が満たされる部分を順次書き換え
+ていく．
+
+\subsection{書き換え規則の形式}
+\label{sec:preedit:ruleformat}
+
+書き換え規則には，次に示すように，適用条件と書き換え操作の他，制御情報
+として適用抑制規則集合と信頼度を記述することができる．
+\[ (\,識別番号，適用条件，書き換え操作，適用抑制規則集合，信頼度\,) \]
+
+\subsubsection{適用条件部}
+\label{sec:preedit:ruleformat:condition}
+
+適用条件は，ある指定された属性を持つ語句がある位置あるいは区間に存在する
+かどうかを調べる手続きの論理積，論理和の形で表現される．
+入力文中での書き換え対象候補の出現位置は次のように表す．
+まず着目語の出現位置を変数$p$で表し，$p+n$で着目語の$n$語後方(文末側)の
+語を，$p-n$で着目語の$n$語前方(文頭側)の語を指す．
+コンマや終止符なども語とみなす．
+特別な記号として文末の語を指すドル記号\$を用いる．
+この他，コンマが書き換え対象を発見するための重要な手がかりとなることが多
+い\cite{Jones94}ため，$\mbox{com\_fwd\_}m$で着目語の後方に存在する$m$番
+目のコンマを指し，$\mbox{com\_bwd\_}m$で前方の$m$番目のコンマを指すこと
+にする．
+例えばword\_class(com\_fwd\_$1+2$, noun)という手続きは，着目語に最も近い
+後方のコンマの二語後方に，語種(品詞)候補として名詞を持つ語が存在するとき
+真を返し，存在しないとき偽を返す．
+
+適用条件部に記述する手続きは主に語の形態素語彙属性を調べるものである
+が，特別な手続きとして，入力文のある部分を節や名詞句と解釈できるかという
+構文的な属性を調べる手続きを記述する．
+ただし，簡単な構文解析しか行なわない方針であることから，節の認識は次の
+ような手順で行なう．
+\begin{quote}
+処理対象の先頭から順に述語になり得る定形動詞を探していく．
+もし見つかれば，その述語候補と人称・数が一致する名詞を主辞とする名詞句が
+その前方に存在するかどうかを調べる．
+もしそのような名詞句が存在すれば，それを主語とみなし，節が存在するものと
+する．
+\end{quote}
+ここで，名詞句を認識する手続きは次のような簡単な構造を検出するものであ
+る．
+上付き記号?と+はそれぞれ一回以下，一回以上の出現を意味する．
+\begin{eqnarray*}
+名詞句  &=& 名詞句0\ (前置詞\ 名詞句0)^? \\
+名詞句0 &=& (副詞^?\ \{形容詞|過去分詞|現在分詞\})^?\ \mbox{名詞}^+
+\end{eqnarray*}
+
+\subsubsection{操作部}
+\label{sec:preedit:ruleformat:action}
+
+書き換え操作には，語句の追加・削除・置換・移動，文の分割，前編集記号の付
+加がある．
+前編集記号の付加は，語の形態素語彙属性を指定したり，節や句の範囲や従属先を指
+定したりするためのものである．
+語句の語彙属性や従属先の指定によって解釈の曖昧性が減るため，解析の品質と
+速度の向上が期待できる．
+
+\subsubsection{適用抑制規則集合}
+
+ある規則$R$に与えられている適用抑制規則集合は$R$の適用を抑える他の規
+則に関するメタ条件を表し，規則$R$はその適用抑制規則集合に記述されてい
+る識別番号の規則が既に適用されている場合には適用されない．
+規則$R$の適用抑制規則集合には，$R$の書き換え対象と重複する部分を書き換
+えようとする規則だけでなく，書き換え対象が$R$のものと重複しない規則を
+含めてもよい．
+
+\subsubsection{信頼度}
+
+規則には，その信頼性が高く規則の適用によって翻訳品質が向上すること
+がほぼ確実な規則もあれば，信頼性があまり高くない規則もある．
+信頼度は，このようなことを考慮して，信頼性があまり高くない規則による悪
+影響を抑えるために設定したものである．
+各規則には，その信頼性に応じてA，B，Cのいずれかの信頼度を与える．
+信頼度Aの規則は最初の構文解析の前に適用し，構文解析に失敗してもこの規
+則による書き換えは取り消さない．
+規則に信頼度Aを与えるのは，この規則を適用しないと構文解析に失敗するこ
+とがほぼ確実であり，たとえこの規則によって書き換えた表現の構文解析に失
+敗して断片的な構文構造しか得られなかったとしても，この規則を適用しない
+場合の(断片的な)構文構造から生成される翻訳よりも高い品質の翻訳が生成さ
+れると期待される場合である．
+信頼度Bの規則は最初の構文解析の前に適用するが，最初の構文解析に失敗し
+た場合，この規則による書き換えは取り消す．
+信頼度Cの規則は最初の構文解析の前には適用せず，最初の構文解析に失敗し
+た場合に初めて適用する．
+各規則にどの信頼度を与えるかは実験を繰り返して経験的に決定する．
+
+\subsection{書き換え規則の例}
+\label{sec:preedit:example}
+
+書き換え規則の例として，挿入と省略を含む文(E\ref{SENT:parenthesis_someofthem})
+に対処するための規則と分裂文(E\ref{SENT:emphasis})に対処するための規則を
+図\ref{fig:rule_ex}\,に示す．
+図\ref{fig:rule_ex}\,の最初の規則が挿入と省略のための規則であり，二つ目
+が分裂文のための規則である．
+ただし，これらは，理解を容易にするため実際の規則を簡単化したものである．
+
+最初の規則の適用条件が満たされるのは，
+現在着目している位置に``some of them''が存在し，
+着目語の直前がコンマであり，
+着目語に最も近い後方のコンマの直後に動詞が存在し，
+二つのコンマに挟まれた区間に``some of them''を主語とする述語が存在しないとき
+である．
+このとき，コンマを括弧に書き換え，``some of them''の直後にbe動詞``are''
+を挿入する．
+
+二つ目の規則は，
+現在着目している位置に代名詞``it''が存在し，
+着目語の直後がbe動詞の肯定形あるいは否定形であり，
+その直後に名詞句が存在し，
+その名詞句の直後に``which''が存在するときに適用する．
+\begin{figure}[tbhp]
+\begin{RULE}{0.9\textwidth}
+\begin{verbatim}
+(/* 識別番号 */
+ 36,
+ /* 適用条件 */
+ (word(p, p+2, "some of them") == TRUE &&
+  word(p-1, ",") == TRUE &&
+  word_class(com_fwd_1+1, verb) == TRUE &&
+  subject_predicate(com_bwd_1+1, com_fwd_1-1) == FALSE),
+ /* 書き換え操作 */
+ (substitute(com_bwd_1, "("),
+  substitute(com_fwd_1, ")"),
+  insert(p+2, "are")),
+ /* 適用抑制規則集合 */
+ (),
+ /* 信頼度 */
+ A
+)
+
+(/* 識別番号 */
+ 42,
+ /* 適用条件 */
+ (word(p, "it") == TRUE &&
+  word_class(p+1, be) == TRUE &&
+  (noun_phrase(p+2, q) == TRUE ||
+   word(p+2, "not") == TRUE && noun_phrase(p+3, q) == TRUE) &&
+  word(q+1, "which") == TRUE),
+ /* 書き換え操作 */
+ (remove(p),
+  substitute(q+1, "what"),
+  move(p+1, q, $-1)),
+ /* 適用抑制規則集合 */
+ (),
+ /* 信頼度 */
+ B
+)
+\end{verbatim}
+\end{RULE}
+\caption{書き換え規則の例}
+\label{fig:rule_ex}
+\end{figure}
+
+\section{実験と考察}
+\label{sec:experiment}
+
+原文書き換えの有効性を検証するために，提案手法を我々の従来システムに
+組み込み，翻訳品質がどの程度向上するかを調べる実験と翻訳速度がどの程度
+向上するかを調べる実験を行なった．
+
+\subsection{実装}
+
+今回の実験のために実装した書き換え規則の総数は35規則であり，
+その内訳は倒置，省略，挿入，強調用がそれぞれ18，6，8，3規則である
+\footnote{規則作成に要した時間的，人的コストも提案手法の有効性を判断す
+る上で重要なファクターであるとの指摘を査読者の方より受けたが，
+記録がなく記載できない．}
+． 
+規則の適用条件部には，形態素語彙属性を調べる手続きと構文的な属性を調べる
+手続きの二種類が記述されている．
+構文的な属性を調べる手続きは，\ref{sec:preedit:ruleformat:condition}\,節
+で述べた，簡単な名詞句を認識する手続きnoun\_phrase()と，
+これを利用して節を認識する手続きsubject\_predicate()である．
+形態素属性を調べる手続きは，単語の語形，語種(品詞)，意味標識などの照合を
+行なうものである．
+形態素属性を調べる手続きの一覧を付録の表\ref{tab:morph_proc}\,に示す．
+
+各規則の適用条件部に含まれる平均手続き数を表\ref{tab:rule_complex}\,に示
+す．
+形態素属性を調べる手続きは，表\ref{tab:rule_complex}\,によれば，実装した
+規則全体の平均で10.1個含まれている．
+最も多い規則では16個，最も少ない規則では3個である．
+構文属性を調べる手続きについては，平均で0.9個，最も多い規則で3個，最も少
+ない規則では0個である．
+構文属性を調べる手続きを全く含まない規則は10規則存在する．
+\begin{table}[htbp]
+\caption{適用条件部を構成する平均手続き数}
+\label{tab:rule_complex}
+\begin{center}
+\begin{tabular}{|c||r|r|r|r|r|}\hline
+&\multicolumn{1}{|c|}{倒置}&\multicolumn{1}{|c|}{省略}
+&\multicolumn{1}{|c|}{挿入}&\multicolumn{1}{|c|}{強調}
+&\multicolumn{1}{|c|}{全体}\\\hline\hline
+形態素属性  &10.6 & 10.0 & 10.8 & 6.0 & 10.1 \\\hline
+構文属性    & 1.2 &  0.3 &  0.5 & 1.0 &  0.9 \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\subsection{翻訳品質評価実験}
+
+\subsubsection{実験方法}
+
+評価実験には新聞記事\cite{Lewis97}から抽出した6182文を用いた．
+これらのうち1282文は従来システムでの構文解析に失敗するものであり，
+残り4900文は失敗しないものである．
+評価文集に含まれる文の長さは，最も短いもので4語，最も長いもので63語，平
+均では27.7語であった．
+評価文集には書き換え規則作成時に参照した文も含まれているため，今回の
+実験は完全ブラインドテストではない
+\footnote{本稿では，提案手法の技術的限界を知ることを主な目的としているた
+め，ユーザの立場からの評価であるブラインドテストは今後の課題とする．}
+．
+
+規則記述の方針として，書き換えるべき表現が書き換えられない(再現率が上が
+らない)ことにはあまり注意せず，書き換えるべきでない表現を書き換えてしま
+う誤りの発生を極力抑える(適合率を上げる)ことにした．
+このため，評価では適合率のみに着目し，書き換えるべきでない表現が誤って書
+き換えられていないかを調べた．
+次に，規則が正しく適用されている文について，
+原文書き換え系を組み込んだ場合と組み込まない場合とで次の二点について比較
+した．
+\begin{LIST}
+\item[\bf 解析品質] 原文書き換えを行なうことによって，構文解析失敗の頻度
+がどの程度減少するか．
+失敗とは，\ref{sec:introduction}\,節で述べたように，入力文全体を覆う構文
+構造が生成できないことを意味する．
+\item[\bf 翻訳品質] 翻訳品質がどの程度向上するか．評価値は，品質の向上・
+若干向上・低下・若干低下・同等のいずれかとした．
+評価の実施は第三者一名に依頼した．
+\end{LIST}
+
+\subsubsection{実験結果}
+
+実験に用いた6182文のうち書き換え規則が適用された文は5.3\%にあたる330文で
+あった．
+書き換えるべきでない表現に規則が誤って適用された文は存在しなかった．
+二つ以上の規則が適用された文は存在しなかった．
+
+書き換えられた330文の構文解析品質の改善度を表\ref{tab:result_parse}\,に
+示す．
+表\ref{tab:result_parse}\,によれば，330文の55.8\%にあたる184文について，
+失敗していた構文解析が成功するようになっている．
+ここで，「成功」とは，入力文全体を覆う構文構造が生成できたことを意味して
+おり，人間にとって正しい解釈が生成できたことを必ずしも意味しない．
+原文書き換えを行なっても依然として構文解析に失敗している33文の内訳は，
+今回書き換え対象としなかった等位構造などの相対的不適格現象を含むもの
+が10文，
+記述した書き換え規則で捉えられなかった挿入や省略を含むものが8文，
+綴り誤りなどを含む絶対的不適格文が7文などであった．
+原文書き換えによって「成功」から「失敗」に悪化した文は存在しなかった．
+なお，表\ref{tab:result_parse}\,は不適格現象ごとの集計ではなく書き換え規
+則ごとの集計である．
+例えば\ref{sec:object}\,節で挙げた文(E\ref{SENT:parenthesis_someofthem})
+は挿入と省略の二つの不適格現象を含むが，図\ref{fig:rule_ex}\,に示した一
+つの書き換え規則で書き換えられるため，挿入に関する規則としてのみ数えた．
+\begin{table}[htbp]
+\caption{構文解析品質の改善}
+\label{tab:result_parse}
+\begin{center}
+\begin{tabular}{|c||r|r|r|r|r@{}r|}\hline
+&\multicolumn{1}{|c|}{倒置}&\multicolumn{1}{|c|}{省略}
+&\multicolumn{1}{|c|}{挿入}&\multicolumn{1}{|c|}{強調}
+&\multicolumn{2}{|c|}{計}\\\hline\hline
+失敗$\rightarrow$成功    &  93 &  58 & 33 & 0 & 184 & (55.8\%) \\
+失敗$\rightarrow$失敗    &   3 &  17 & 13 & 0 &  33 & (10.0\%) \\
+成功$\rightarrow$成功    &  23 &  86 &  1 & 3 & 113 & (34.2\%) \\
+成功$\rightarrow$失敗    &   0 &   0 &  0 & 0 &   0 & ( 0.0\%) \\\hline
+\multicolumn{1}{|c||}{計} & 119 & 161 & 47 & 3 & 330 & ( 100\%) \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+330文についての翻訳品質改善度の評価結果を表\ref{tab:result_trans}\,に示
+す．
+表\ref{tab:result_trans}\,によれば，規則が適用された330文の78.8\%にあ
+たる260文で品質改善が見られる．
+\begin{table}[htbp]
+\caption{翻訳品質の改善}
+\label{tab:result_trans}
+\begin{center}
+\begin{tabular}{|l||r|r|r|r|r@{}r|}\hline
+&\multicolumn{1}{|c|}{倒置}&\multicolumn{1}{|c|}{省略}
+&\multicolumn{1}{|c|}{挿入}&\multicolumn{1}{|c|}{強調}
+&\multicolumn{2}{|c|}{計}\\\hline\hline
+向上			&  62 &  64 & 25 & 3 & 154 & (46.7\%) \\
+若干向上		&  49 &  44 & 13 & 0 & 106 & (32.1\%) \\
+同等			&   5 &  41 &  8 & 0 &  54 & (16.4\%) \\
+若干低下		&   0 &   5 &  1 & 0 &   6 & ( 1.8\%) \\
+低下			&   3 &   7 &  0 & 0 &  10 & ( 3.0\%) \\\hline
+\multicolumn{1}{|c||}{計}& 119 & 161 & 47 & 3 & 330 & (100\%)  \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+書き換え規則が正しく適用されているにも拘らず評価値が「低下」となった10文
+についてその原因を分析した
+\footnote{原因は，実験に用いたシステムの既存部分の不備にあり，書き換え自
+体は文法的に正しい．}
+．
+省略に関する7文はすべて接続詞``that''の省略を含むものであった．
+``that''の補完が文(E\ref{SENT:ellipsis_saythat})のように品質改善につ
+ながることも多いが、文(E\ref{SENT:B1_saythat})のようにつながらないことも
+ある．
+文(E\ref{SENT:B1_saythat})を翻訳した文(J\ref{SENT:B1_saythat})では，
+``that''は接続詞と解釈されずに形容詞と誤解釈されている
+\footnote{``that secondary trading''が名詞句と解釈され「その第2の取引」
+と翻訳されている．}が，
+``and''以降の節``that $\ldots$ tomorrow.''も被伝達節として正しく認識され
+ている．
+これに対して文(J\ref{SENT:B1_saythat}')では，被伝達節として認識されてい
+るのは二つの節のうち一つ目の節``telephone $\ldots$ today''だけである．
+文(J\ref{SENT:B1_saythat}')は，``1500 hrs EST''などの時間表現が原語のま
+ま残っているが， 被伝達節の範囲が誤りであることは原文と照らし合わせなけ
+れば判明しないため誤解を招く危険な翻訳である．
+\begin{SENT}
+\sentE The office said telephone confirmation of allotments 
+must be received by 1500 hrs EST today and that secondary trading will 
+begin at 0930 hrs EST tomorrow.   
+\sentJ そのオフィスは言った。割当額の電話確認は、1500 hrs ESTによって今
+日受け取られなければならず、そして、その第2の取引は、0930 hrs ESTから明
+日始まるであろうと。
+\sentNewE The office said that telephone confirmation of allotments must 
+be received by 1500 hrs EST today and that secondary trading will begin 
+at 0930 hrs EST tomorrow.
+\sentNewJ そのオフィスは、割当額の電話確認が1500 hrs ESTによって今日受け
+取られなければならないと言い、そして、その第2の取引は、0930 hrs ESTから
+明日始まるであろう。
+\label{SENT:B1_saythat}
+\end{SENT}
+
+評価値が「低下」となった残りの3文は，文(E\ref{SENT:B1_should})
+のように，二つの節``should $\ldots$ this quarter''と
+``this action $\ldots$ negotiations''の節境界を示すコンマが存在しないため
+に，書き換え後の文(E\ref{SENT:B1_should}')において節境界の認識を誤ったも
+のである．
+文(E\ref{SENT:B1_should}')を翻訳した文(J\ref{SENT:B1_should}')では，
+``If $\ldots$ urgency''が名詞節と解釈されているが，``if''で導かれる節が
+名詞節ではなく副詞節であることは，文頭の``should''を``if''に置き換える規
+則を文(E\ref{SENT:B1_should})に適用する段階で判明しているので，``if''の
+語種(品詞)を副詞節接続詞と指定する前編集記号``ca\_''を付加する操作を書き
+換え規則に追加し，文(E\ref{SENT:B1_should}'') のように書き換えることは可
+能である．
+この修正によって文(J\ref{SENT:B1_should}'') のような翻訳が得られる．
+\begin{SENT3}
+\sentE3 Should Citicorp actually place the Brazilian loans in a non-performing 
+category at the end of this quarter this action would serve to alleviate 
+the urgency associated with the debt negotiations, he argues. 
+\sentJ3 ◇シティコープ‖ブラジルのローンを終りの契約不履行のカテゴリに実
+際に置く‖の。今期にこの活動が負債交渉によって関連していた切迫を緩和する
+のに役立つであろう、と彼は主張する。
+\sentNewE3 If Citicorp actually place the Brazilian loans in a non-performing 
+category at the end of this quarter this action would serve to alleviate 
+the urgency associated with the debt negotiations, he argues.
+\sentNewJ3 シティコープがブラジルのローンを切迫を緩和するためにこの活動が
+役立つであろう今期の終りの契約不履行のカテゴリに実際に置くかどうかが負債
+交渉と結合した、と彼は主張する。 
+\sentYAE3 ca\_If Citicorp actually place the Brazilian loans in a non-performing 
+category at the end of this quarter this action would serve to alleviate 
+the urgency associated with the debt negotiations, he argues.
+\sentYAJ3 シティコープがブラジルのローンを今期の終りの契約不履行のカテ
+ゴリに実際に置くならば、この活動が負債交渉と結合していた切迫を緩和するの
+に役立つであろう、と彼は主張する。
+\label{SENT:B1_should}
+\end{SENT3}
+
+\subsection{翻訳速度評価実験}
+
+\subsubsection{実験方法}
+
+構文解析前に原文を書き換えれば，その分の処理の負担が増加する一方で，すべ
+ての構文解析規則の適用が試みられる可能性が低くなり構文解析の負担が減少す
+る．
+このため，システム全体としては処理効率が向上すると予想される．
+この点を確認するために，原文書き換え系を従来システムに組み込んだ場合と組
+み込まない場合の翻訳速度を比較した．
+翻訳時間の測定は次の四種類の評価文集について行なった．
+\begin{CORPUS}
+\corpus 品質評価実験に用いた6182文．
+\label{CORPUS:all}
+\corpus 評価文集\ref{CORPUS:all}\,のうち構文解析に失敗する1282文．
+\label{CORPUS:fail}
+\corpus 評価文集\ref{CORPUS:all}\,のうち書き換え規則が適用された330文．
+\label{CORPUS:all-applied}
+\corpus 評価文集\ref{CORPUS:fail}\,のうち書き換え規則が適用された217文．
+\label{CORPUS:fail-applied}
+\end{CORPUS}
+
+\subsubsection{実験結果}
+
+各評価文集について，
+原文書き換え系を組み込まない場合の一文当り平均の翻訳時間と，
+組み込んだ場合の一文当り平均の翻訳時間，
+さらに，前者の翻訳速度を1としたときの後者の翻訳速度を
+表\ref{tab:result_efficiency}\,に示す．
+実験に用いた計算機のCPUは$\mbox{Pentium}^{\mbox{\tiny{(R)}}}$II 400MHz，メモリは128MB，
+OSは$\mbox{Windows}^{\mbox{\tiny{(R)}}}$98である．
+翻訳システムはC言語で記述されている．
+
+評価文集\ref{CORPUS:all}\,を対象とした実験の結果，原文書き換えを行なった
+場合の速度は行なわない場合の速度に対して1.12となっている．
+評価文集\ref{CORPUS:all}\,において実際に書き換えられた文の数は入力文数の
+5.3\%に過ぎないが，このことを考慮すると翻訳速度向上への原文書き換え
+の貢献度は高いと考えられる．
+
+評価文集\ref{CORPUS:all-applied}\,を対象とした実験の結果より，書き換える
+べき文がすべて書き換えられた場合には翻訳速度は2.6倍程度にまで向上すると
+いう一つの目安が得られた．
+また，構文解析が失敗することがあらかじめ判明している文だけを対象とした場
+合には，評価文集\ref{CORPUS:all}\,や\ref{CORPUS:all-applied}\,を対象とし
+た場合よりも大きな効果が現れることが確認された．
+\begin{table}[htbp]
+\caption{翻訳速度の比較}
+\label{tab:result_efficiency}
+\begin{center}
+\begin{tabular}{|c|c|c|c|}\hline
+評価文集 & 原文書き換えなし(秒) & あり(秒) & 速度比 \\\hline\hline
+\ref{CORPUS:all}          & 1.20 & 1.07 & 1.12 \\
+\ref{CORPUS:fail}         & 2.63 & 2.01 & 1.31 \\
+\ref{CORPUS:all-applied}  & 3.93 & 1.46 & 2.69 \\
+\ref{CORPUS:fail-applied} & 5.27 & 1.51 & 3.49 \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+原文書き換え系を組み込むことによってシステム全体の処理効率が向上したの
+は，具体的には次の二つの理由による．
+我々の構文解析系は二段階方式に基づいており，適格文用の構文解析規則を用い
+て解析を行なう機構と，この機構による通常の解析が失敗した時点で起動され，
+解析途中で生成された部分構造の中から発見的知識を用いて妥当なものを選び出
+すための別の機構を備えている．
+第一の理由は，システムにとっての不適格文が原文書き換え系によって適格文に
+書き換えられると，第二の機構による処理を実行する必要がなくなるからである．
+従って，構文解析前に原文書き換えを行なうことによる処理効率向上の効果は，
+我々のシステムに限らず，制約緩和法や部分解析法のように二段階方式で構文解
+析を行なっているシステムで一般に期待できる．
+
+システムが想定していない言語現象を含む文の構文解析が失敗することは，第一
+の機構に記述されている規則をすべて適用し終えないと判明しない．
+これに対して，システムが想定している言語現象の文の解釈は，すべての規則を
+適用しなくても生成できる．
+速度向上のもう一つの理由は，
+原文書き換えによって，第一の機構で適用される規則の数すなわち生成される
+部分構造の数が減っていることである
+\footnote{適用される規則の数が具体的にどの程度減ったかの検証は本稿の範囲
+を越える．}．
+
+今回実装した書き換え規則では実際には記述していないが，
+\ref{sec:preedit:ruleformat:action}\,節で述べたように，
+本稿の原文書き換え系では書き換え操作として前編集記号を付加する操作を記
+述することができる．
+前編集記号の付加によって解釈の曖昧性が減るため，この操作を記述することに
+よって解析速度がさらに向上する．
+例えば，文(E\ref{SENT:B1_should}')では``if''に名詞節接続詞か副詞節接続詞
+かの曖昧性があるが，文(E\ref{SENT:B1_should}'')では副詞節接続詞に決定さ
+れるため，文(E\ref{SENT:B1_should}')を文(E\ref{SENT:B1_should}'')に書き
+換えれば，さらに翻訳時間が短縮される．
+
+\section{関連研究との比較}
+\label{sec:relatedworks}
+
+原文書き換えを，形態素解析で得られる情報と通常よりも簡単な構文解析で得ら
+れる情報に基づいて行なう手法としては，金らの方法\cite{Kim94}や加藤らの方
+法\cite{KatoTerumasa97}がある．
+金らの方法は，長い日本語文の構文解析が失敗しやすいという問題に，長文を複
+数の短文に分割し，必要な場合には各短文に主語を補うことによって対処するも
+のである．
+これに対して本稿の原文書き換え系では，文の分割だけでなく，語句の追加・削
+除・置換・移動，前編集記号の付加が可能であり，単に文を分割する場合よりも
+品質の高い翻訳が得られる．
+
+加藤らは，英語の複文に着目してその編集方法を示しているが，書き換え方法の
+提案に留まっており評価結果は報告されていない．
+
+\section{おわりに}
+
+本稿では，一部の構文レベルの相対的不適格文を既存システムでも適切に扱える
+ように書き換えることによって頑健な処理を実現する手法を示した．
+この原文書き換え系を既存の英日機械翻訳システムの形態素解析系と構文解析
+系の間に組み込み，翻訳の品質と速度が改善されることを実験によって確認した．
+
+倒置，省略，挿入，強調の現象にはそれぞれ様々なパターンがあるが，今回着目
+したパターンは比較的単純なものであり，記述した規則で多様なパターンを網羅
+しているわけではない．
+また，書き換えるべき表現が書き換えられないことにはあまり注意を払わなかっ
+た．
+今後，これらの点を考慮に入れた規則の拡張が必要である．
+
+\acknowledgment
+
+英々変換系の初期の実装を行なって頂いたシャープ(株)設計技術開発センターの
+関谷正明さんと，議論に参加頂いた英日機械翻訳グループの諸氏に感謝します．
+また，本稿の改善に非常に有益なコメントを頂いた査読者の方に感謝いたします．
+
+\bibliographystyle{jnlpbbl}
+\bibliography{rew}
+
+\newpage
+\appendix
+
+\begin{table}[hb]
+\caption{形態素属性を調べる手続きの一覧}
+\label{tab:morph_proc}
+\begin{center}
+\begin{tabular}{|l||p{0.5\textwidth}|}\hline
+\multicolumn{1}{|c||}{手続き名}&\multicolumn{1}{c|}{説明}\\\hline\hline
+word($pos$, $w$) & 入力文中で位置$pos$に単語$w$が存在すれば真を，さもな
+ければ偽を返す．
+$pos$には，$p$(着目語の位置)，$p+n (-3 \le n \le 5)$，
+$\mbox{com\_fwd\_}m+n (m \le 3)$，$\mbox{com\_bwd\_}m+n (m \le 3)$，
+0(文頭)，\$(文末)のいずれかが記述される．\\\hline
+word($pos_1$, $pos_2$, $w$) & 入力文中の区間$[pos_1, pos_2]$に単語$w$が
+存在すれば真，さもなければ偽．\\\hline
+word\_class($pos$, $wc$) & 位置$pos$に語種が$wc$である語が存在すれば真，
+さもなければ偽．
+$wc$としては，adjective, noun, singular\_noun, plural\_noun, 
+verb, past\_participleなど59種類が記述されうる．\\\hline
+word\_class($pos_1$, $pos_2$, $wc$) & 区間$[pos_1, pos_2]$に語種が$wc$で
+ある語が存在すれば真，さもなければ偽．\\\hline
+sem\_feat($pos$, $sf$) & 位置$pos$に意味標識が$sf$である語が存在すれば
+真，さもなければ偽．
+$sf$としては，HUMAN，TIME，PLACEなど40種類が記述されうる．\\\hline
+sem\_feat($pos_1$, $pos_2$, $sf$) & 区間$[pos_1, pos_2]$に意味標識が$sf$で
+ある語が存在すれば真，さもなければ偽．\\\hline
+verb\_pat($pos$, $vp$) & 位置$pos$に動詞型が$vp$である語が存在すれば
+真，さもなければ偽．
+$vp$としては，Hornbyの分類\cite{Hornby77}を拡張した60種類が記述されうる．
+\\\hline
+verb\_pat($pos_1$, $pos_2$, $vp$) & 区間$[pos_1, pos_2]$に動詞型が$vp$で
+ある語が存在すれば真，さもなければ偽．\\\hline
+adj\_pat($pos$, $ap$) & 位置$pos$に形容詞型が$ap$である語が存在すれば
+真，さもなければ偽．
+$ap$としては，Hornbyの分類を拡張した9種類が記述されうる．\\\hline
+adj\_pat($pos_1$, $pos_2$, $ap$) & 区間$[pos_1, pos_2]$に形容詞型が$ap$
+である語が存在すれば真，さもなければ偽．\\\hline
+idiom($pos$)  & 位置$pos$の語が慣用句の構成要素ならば真，さもなければ偽. 
+\\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\begin{biography}
+\biotitle{略歴}
+\bioauthor{吉見 毅彦}
+{1987年電気通信大学大学院計算機科学専攻修士課程修了．
+1987年よりシャープ(株)にて機械翻訳システムの研究開発に従事．
+1999年神戸大学大学院自然科学研究科博士課程修了．}
+
+\bioauthor{佐田 いち子}
+{1984年北九州大学文学部英文学科卒業．
+同年シャープ(株)に入社．
+現在，同社情報システム事業本部
+ソリューション事業推進センター ソフト開発部
+係長．
+1985年より機械翻訳システムの研究開発に従事．}
+
+\bioauthor{福持 陽士}
+{1982年インディアナ大学言語学部応用言語学科修士課程修了．
+翌年，シャープ(株)に入社．
+現在，情報システム事業本部
+ソリューション事業推進センター ソフト開発部
+副参事．
+機械翻訳システムの研究開発に従事．}
+
+\bioreceived{受付}
+\biorevised{再受付}
+\biorevised{再々受付}
+\bioaccepted{採録}
+\end{biography}
+\newpage
+\
+\end{document}

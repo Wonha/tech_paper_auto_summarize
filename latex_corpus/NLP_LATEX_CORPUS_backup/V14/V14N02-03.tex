@@ -1,0 +1,1392 @@
+    \documentclass[japanese]{jnlp_1.3a}
+\usepackage{jnlpbbl_1.1}
+\usepackage[dvips]{graphicx}
+
+\setcounter{secnumdepth}{3}
+
+
+\Volume{14}
+\Number{2}
+\Month{Apr.}
+\Year{2007}
+\received{2006}{9}{19}
+\revised{2006}{11}{30}
+\accepted{2006}{12}{29}
+
+\setcounter{page}{69}
+
+\jtitle{文構造文法に基づく中国語構文解析}
+\jauthor{王　　向莉\affiref{KUEE} \and 宮崎　正弘\affiref{KUEE}}
+\jabstract{
+中国語構文解析では，
+これまで，句構造文法(Phrase Structure Grammar)
+で文の構造を取り扱ってきた．
+しかし，句構造文法規則は規則間の衝突による不整合が避けられず，
+曖昧性は大きな問題となっている．そこで，本論文では述語を中心とし，
+全ての構文要素を文のレベルで取り扱う文構造文法SSG (\underline{S}entence \underline{S}tructure \underline{G}rammar)
+を提案し，それに基づき，中国語の文構造文法規則体系を構築した．
+構築した文法規則をチャート法を拡張した構造化チャートパーザSchart上に実装し，
+評価実験を行なった．実験により，中国語SSG規則は規則間の整合性がよく，
+品詞情報と文法規則だけで，解析の曖昧性を効果的に抑止し，
+確率文脈自由文法(PCFG)に基づく構文解析より高い正解率が得られた．
+}
+\jkeywords{句構造文法，文構造文法，整合性，曖昧性}
+
+\etitle{A Chinese Syntactic Analysis Using Sentence Structure Grammar}
+\eauthor{Xiangli Wang \affiref{KUEE} \and Masahiro Miyazaki\affiref{KUEE}} 
+\eabstract{
+Chinese sentence is parsed with PSG (Phrase Structure
+Grammar) rules in syntactic analysis. Grammatical rules based on PSG
+are not consistent so that ambiguity is a big problem.
+In this paper, we propose a new kind of grammar SSG (Sentence Structure Grammar),
+which describes all component and centers on predicative verb or adjective.
+We build a Chinese grammatical rule system based on SSG and mount it on extended chart
+parser Schart. The result of experiment showed that the syntactic analysis 
+based on SSG that only uses the information of
+part of speech and grammatical rules 
+is very consistent and very effective to reduce syntactic ambiguity,
+and it can gain a higher precision than syntactic analysis based on 
+PCFG (Probabilistic Context Free Grammar).
+}
+\ekeywords{Phrase Stucture Grammar, Sentence Structure Grammar, Syntactic Ambiguity, Consistency between Rules}
+
+\headauthor{王，宮崎}
+\headtitle{文構造文法に基づく中国語構文解析}
+
+\affilabel{KUEE}{新潟大学大学院自然科学研究科}{
+	Graduate School of Science and Technology, Niigata University}
+
+
+
+\begin{document}
+\maketitle
+
+
+
+
+\section{はじめに}
+
+従来の中国語構文解析では，文脈自由型句構造文法CFG (Context Free Phrase Structure
+Grammar)で文の構造を取り扱うことが一般的となっている．
+しかし，句構造文法PSG (Phrase Structure Grammar)\footnote[1]{
+通常，句構造文法という用語は生成文法（変形文法），依存構造文法などと並べれて
+論じられ，GPSG，HPSG等の単一化文法理論を含む文法記述の枠組み，もしくは形式
+言語におけるチョムスキーの階層に関する文法記述の枠組みを表す．本論文では，
+句構造文法という用語を，「文を逐次的に句などの小さい単位に分割し，文を階層的な
+句構造によって再帰的な構造上の関係に還元して説明する考え方」の意味で用いる．
+}
+により構築した文法体系では，規則の衝突による不整合が避けられず，
+曖昧性は大きな問題となっている．中国語構文解析に関する研究はチョムスキー
+の文脈自由文法CFGを取り入れて始められた．しかし，中国語には次の特徴があり，
+CFGで中国語文構造を取り扱うと，曖昧性が顕著である．
+
+
+\begin{itemize}
+\item 文はそのまま主部，述部，目的語になれる\cite{zhu1}．
+\item 動詞や形容詞は英語のような動詞や形容詞の語尾変化などの形態的変化がない\cite{zhu1}．
+\item 動詞など複数の品詞を持つ単語が多く，しかも頻繁に使用される\cite{zhou2}．
+\end{itemize}
+そのため，文脈自由文法で記述した規則は再帰性が強く，しかも構文的制限が非常に
+緩やかであり，文脈自由文法に基づいたパーザを用いて構文解析を行なうと，
+動詞や形容詞の数が増えるにつれて，曖昧性は爆発的に増大するという問題がある
+\cite{masterpaper}
+\cite{yang}．
+
+構文解析部の実装に関しては，
+コーパスに基づく手法と規則に基づく手法とがあるが，
+中国語処理においては，コーパスに基づく手法が主流となっている\cite{huang}．
+なかでも，確率文脈自由文法
+PCFG (Probabilistic Context Free Grammar)
+がよく用いられている
+\cite{ictprop1}\cite{xiong}\cite{linying}\cite{chenxiaohui}．
+しかし，
+確率的手法に基づく解析では，分野依存性が強く，精度上の限界がある．
+一方，
+規則に基づく手法では，西欧言語を対象とする解析手法を直接中国語に
+使用するのは問題があるため，中国語に適応した方法が模索されている
+段階にある\cite{zhang}．
+このような中国語構文解析における課題を解決することが中国語処理の発展に
+必要である．そのため，中国語において，コンピュータにより効率的に
+処理できる構文解析用の文法体系を構築することは大きな意義がある．
+
+本論文では，
+文構造において述語動詞（または形容詞）を中心とし，
+すべての構文要素を文のレベルで取り扱う
+{\bf 文構造文法}
+{\bf SSG}
+(\underline{S}entence 
+\underline{S}tructure 
+\underline{G}rammar)
+を提案する．そして，
+SSGの考え方に基づき中国語におけるSSG文法規則体系を構築し，
+それを構造化チャートパーザSchart~\cite{schart}上に実装し，
+評価実験を行った．
+SSG規則は互いに整合性がよく，
+品詞情報と文法規則のみで解析の曖昧性を効果的に抑止し，
+PCFGに基づく構文解析より高い正解率が得られた．
+
+\section{PSG文法規則体系に基づく構文解析の問題点}
+
+
+\subsection{PSG文法規則の特徴}
+PSG文法の方法論は，文法事実を句構造（階層構造）に基づく構造上の
+関係に還元して説明することである．
+すなわち，文という単位は主語と述語からなり，主語や述語は
+さらに名詞句や動詞句などからなるというように，
+文の構造を全体から細部まで句の形で順次規定していく．
+この方法論では文レベルの規則は少なく，荒く，
+言語現象をカバーしていくのに，
+主に句レベルの規則を拡張することになる．
+
+以下に中国語におけるPSG文法規則の例をあげる．
+規則に現れるシンボルの意味を表~\ref{tab:cpos}に示す．
+例えば文(1A)を解析するには，
+規則(1a)，(1b)，(1c)，(1d)の4つのPSG規則が必要である．
+
+\begin{table}[b]
+  \centering
+  \caption{記号とその意味の対応表}
+\begin{tabular}{|l|l|} \hline
+\multicolumn{1}{|c|}{品詞の表示} &
+\multicolumn{1}{|c|}{対応品詞}\\\hline
+s  & 文\\
+np & 名詞句 \\
+vp & 動詞句  \\
+sp & 場所詞句\\
+pp & 介詞句  \\
+n & 名詞 \\
+v & 動詞  \\
+r & 人称代名詞 \\
+a & 形容詞 \\
+d & 副詞 \\
+p & 介詞 \\
+zv &助動詞 \\
+sq &場所詞 \\
+y &語気詞 \\
+\hline
+  \end{tabular}
+  \label{tab:cpos}
+\end{table}
+
+文(1B)と文(1C)を解析するには規則(1e)と規則(1f)を加える必要があり，
+動詞句の規則を拡張することになる．
+\def\ya{}
+\def\文(#1){}
+\def\規則(#1){}
+\def\インデント{}
+\begin{quotation}\noindent
+\文(1A) 小王/n 出来/v 了/y（王さんは出た）\\
+\文(1B) 小王/n 走/v 出来/v 了/y（王さんは歩いて出た）\\
+\文(1C) 小王/n 也/d 走/v 出来/v 了/y（王さんも歩いて出た）\\
+\規則(1a) s \ya np vp\\
+\規則(1b) s \ya s y\\
+\規則(1c) np \ya n\\
+\規則(1d) vp \ya v\\
+\規則(1e) vp \ya vp vp\\
+\規則(1f) vp \ya d vp\\
+\end{quotation}
+
+そのため，PSG文法規則体系では，
+文規則（文sを生成する規則）の数はわずかであり，
+文規則の数と
+句規則（動詞句vpなどの句を生成する規則）
+の数の分布は図\ref{fig:psgpyra}のようなピラミッド型になっている．
+
+\begin{figure}[t]
+  \begin{center}
+       \includegraphics[width=4cm]{1.eps}
+   \caption{PSG文法規則体系における規則の分布}
+   \label{fig:psgpyra}
+  \end{center}
+\end{figure}
+
+
+\subsection{PSGによる構文解析の問題点}
+構文解析を行なう際，文脈自由文法CFGが最もよく使われてきた．CFG文法に
+基づく構文解析における最も大きな問題点は，
+文法規則を拡張することで他の規則との衝突を引き起し，
+解析の曖昧性を増大させることである．
+しかも入力文が長くなるにつれて，規則間の不整合は顕著となり，
+曖昧性は爆発的に増大する．
+
+PSG文法規則における規則の特徴に注目すると，その必然性が分かる．
+PSGの方法論で構築した文法規則体系においては，
+文法現象をさらにカバーしていくために，主に句規則を増やすことになり，
+文規則の数はあまり変わらない．したがって，文規則の数は句規則に比べると，
+図~\ref{fig:psgpyra}に示すようにわずかしかない．
+そのため
+句レベルではその単語間の組み合わせは多種多様になるのにもかかわらず，
+文レベルでは相変わらずそれをわずかな文規則で解釈することになる．
+言い替えれば，1つの入力文において，句のレベルでは
+多くの句規則で解析され多数の解釈があるのにもかかわらず，
+文のレベルでは，わずかな文規則でそれをまとめている．
+PSGによる文法記述体系のこのような特徴が，
+曖昧性の原因となっている．
+
+具体例を以下にあげる．
+文(1C) 「小王/n 也/d 走/v 出来/v 了/y （王さんも歩いて出た）」
+を解析するために，規則(1e)と規則(1f)を
+加えなければならないが，図~\ref{fig:amb}に示すように，
+曖昧性が生じてしまう．
+
+\begin{figure}[t]
+  \begin{center}
+       \includegraphics[width=11cm]{2.eps}
+   \caption{PSG文法規則における文(1C)の構文解析結果}
+   \label{fig:amb}
+  \end{center}
+\end{figure}
+
+
+
+\section{文構造文法規則体系SSGの基本的考え方}
+本章では，文構造文法
+SSG (Sentence Structure Grammar)
+を提案する．
+SSGの基本的な考え方は以下の2点である．
+\begin{itemize}
+  \item 自然言語において文表現は無限であるが，それを有限な文構造規則で
+    記述できる．
+  \item 文構造規則は述語動詞または形容詞を中心とし，
+    すべての構文要素を文構造規則内に記述する．
+\end{itemize}
+SSGでは，
+文(1A)を解析する文法規則を
+(2a)，(2b)，(2c)のように記述する．
+さらに文(1B)，文(1C)を解析するために，
+規則(2d)，規則(2e)をそれぞれ加える．
+\begin{quotation}\noindent
+\文(1A) 小王/n 出来/v 了/y （王さんは出た）\\
+\文(1B) 小王/n 走/v 出来/v 了/y （王さんは歩いて出た）\\
+\文(1C) 小王/n 也/d 走/v 出来/v 了/y （王さんも歩いて出た）\\
+\規則(2a) s \ya np v\\
+\規則(2b) s \ya s y\\
+\規則(2c) np \ya n\\
+\規則(2d) s \ya np v v\\
+\規則(2e) s \ya np d v v\\
+\end{quotation}
+
+PSG規則(1a)，(1b)，(1c)，(1d)，(1e)，(1f)と
+SSG規則(2a)，(2b)，(2c)，(2d)，(2e)を比較してみると，
+以下の違いがある．
+
+\begin{itemize}
+  \item 文規則の記述形式が異なる．
+  \item 文を拡張するのに，PSG規則は動詞句規則を増やすのに対して，
+    SSG規則では文規則を増やす．
+  \item PSG規則では動詞句規則が多く，文規則が少ない．一方，SSG規則では，
+    動詞句規則が少なく，文規則が多い．
+  \item PSG規則は互いに整合が悪く，曖昧性が生じる．
+    SSG規則は規則間で整合性がよく，曖昧性が生じない．
+\end{itemize}
+文(1C)をSSG規則(2b)，(2c)，(2e)で解析した場合，
+図~\ref{fig:ssgres}のように1つの構文木しか生成されず，
+規則の拡張によって引き起こされる曖昧性を抑制することができる．
+SSGによって，規則間で整合性のよい文法規則体系を構築することが期待される．
+
+\begin{figure}[t]
+  \begin{center}
+       \includegraphics[width=6cm]{3.eps}
+    \caption{SSG文法規則における文(1C)の構文解析結果}
+    \label{fig:ssgres}
+  \end{center}
+\end{figure}
+
+\section{中国語におけるSSG文法規則体系の設計}
+本章では，SSGの基本的な考え方に基づいて，
+どのような点を考慮して，
+中国語におけるSSG規則体系を設計したかについて述べる．
+
+\subsection{中国語の文表現モデル}
+\begin{figure}[b]
+  \centering
+       \includegraphics[width=8cm]{4.eps}
+  \caption{中国語における文表現モデル}
+  \label{fig:cmodel}
+\end{figure}
+
+中国語の文表現を図~\ref{fig:cmodel}のようにモデル化した．
+まず，文を
+{\bf 主部Subj}，
+{\bf 述部Pred}，
+{\bf 状態部Z}，
+{\bf 語気詞部Y}に分ける．
+主部Subjは
+{\bf 主語S}
+から，
+述部Predは
+{\bf 補語C}，
+{\bf 目的語O}，
+{\bf 述語P}
+から構成される．
+状態部Zは
+{\bf 時間詞句tp}，
+{\bf 介詞句pp}，
+{\bf《地》字句dp}，
+{\bf 助動詞zv}，
+{\bf 副詞d}，
+{\bf 否定判断辞jf}
+から，
+語気詞部Yは
+{\bf 語気詞y}
+から構成される．主部は文の前方，述部は文の後方，状態部は述部の直前に位置する．
+語気詞は文末に置かれ，語気詞を除く文全体を受ける．
+さらにこれらの要素を，
+{\bf 骨格部}と
+{\bf 非骨格部}にわける．
+骨格部とは文が成り立つために欠かすことのできない部分であり，
+主部Sと述部Pがこれにあたる．
+非骨格部とはなくても文が成り立つ部分であり，
+状態部Zと語気詞部Yがこれにあたる．
+
+\subsection{構文要素の定義}
+構文要素は文を構成する成分であり，
+ここでは，構文要素をさらに必須構文要素と自由構文要素に分ける．
+必須構文要素は骨格部（主部と述部）となる構文要素であり，
+主語S，述語P（動詞または形容詞），補語C，目的語Oの4つである．
+自由構文要素は非骨格部（状態部と語気詞部）となる構文要素である．
+
+\begin{itemize}
+\item {\bf 主語S}\\
+  主語Sは主語となる句の性質によって以下の5種類に分類している．
+  \begin{description}
+  \item[名詞句主語Sn]名詞句からなる主語\\
+    例：「車　修　了（車は修理された）」という文の主語「車」は名詞句である．
+  \item[動詞句主語Sv]動詞句からなる主語\\
+    例：「開　車　応　守　規則（運転する際，規則を守るべきだ）」という文の主語
+    「開　車（車を運転する）」は動詞句である．
+  \item[形容詞主語Sa]形容詞からなる主語\\
+    例：「謙虚　是　一種　美徳（謙虚は美徳である）」という文の
+    主語 「謙虚」は形容詞である．
+  \item[場所主語Ssp]場所詞句からなる主語\\
+    例：「我家　来　人　了（我が家に誰かが来た）」という文の
+    主語 「我家（我が家）」は場所詞句である．
+  \item[文主語Ss]文からなる主語\\
+    例：「他　現在　去　也　不　晩（彼が今行っても遅くない）」という文の
+    主語「他　現在　去（彼が今行く）」は文である．
+  \end{description}
+\item {\bf 述語P}\\
+  述語は述語動詞と述語形容詞の2種類に分類している．
+  \begin{description}
+  \item[述語動詞v]動詞である述語
+  \item[述語形容詞a]形容詞である述語
+  \end{description}
+\item {\bf 補語C}\\
+  補語は5種類に分類している．
+  \begin{description}
+  \item[結果補語Cj]動作または変化によって生じた結果\\
+    動詞及び形容詞が結果補語になることができる．\\
+    例：「論文　写　完　了（論文は書き終った）」という文のなかで，
+    「完（終る）」という動詞は「写（書く）」という動作によって生じた結果を表し，
+    結果補語である．
+  \item[方向補語Cf]方向を表す動詞などからなる補語\\
+    「上（上がる）」，「下（下がる）」，「来（くる）」，「去（行く）」などがある．\\
+    例：「他　買　東西　去　了（彼は買物をしに行った）」という文の場合，
+    「去（行く）」という動詞は「買（買う）」という動詞の方向補語である．
+  \item[可能補語Ck]結果補語または方向補語に「得」，「不」を前置したもの\\
+    例：「論文　写　不　完（論文は書き終わらない）」という文の
+    「不　完（終わらない）」は可能補語である．
+  \item[様態補語Cq]動詞または形容詞に「得」が後置され，文などが導かれるもの\\
+    すべて動作や状態の結果または程度を表す．\\
+    例：「他　急　得　出　汗　了（彼は汗をかくくらい焦っている）」という文では，
+    「出　汗　了（汗をかく）」は様態補語である．
+  \item[介詞句補語Cp]介詞句が動詞または形容詞の後に用いられたもの\\
+    例：「他　来　自　中国（彼は中国から来た）」という文の場合，
+    介詞句「自　中国（中国から）」は動詞「来（来る）」の後に位置し，介詞句補語である．
+  \end{description}
+\item {\bf 目的語O}\\
+  目的語は5種類に分類している．
+  \begin{description}
+  \item[名詞性目的語On]名詞句からなる目的語\\
+    例：「他　写　論文（彼は論文を書く）」という文では，
+    「論文」は名詞句目的語である．
+  \item[場所目的語Osp]場所詞句からなる目的語\\
+    例：「他　去　学校（彼は学校へ行く）」という文では，
+    「学校」は場所を表す場所目的語である．
+  \item[時間目的語Otp]時間詞句からなる目的語\\
+    例：「他　喜歓　春天（彼は春が好きだ）」という文の中では，
+    「春天（春）」が時間詞からなる時間目的語である．
+  \item[動詞句目的語Ov]動詞句からなる目的語\\
+    例：「他　忘記　買　票　了（彼はチケットを買うのを忘れた）」という文では，
+    「買　票（チケットを買う）」という動詞句が動詞「忘記（忘れる）」の目的語である．
+  \item[文目的語Os]文からなる目的語\\
+    例：「我　想　他　一定　走　了（私は彼がきっと行ったと思う）」という文では，
+    「他　一定　走　了（彼がきっと行った）」という文は動詞「想（思う）」の目的語となる．
+  \end{description}
+\item{\bf 自由構文要素}\\
+  自由構文要素には以下のものがある．
+  \begin{description}
+  \item[時間詞句tp]主語と述語の間に位置する時間詞句\\
+    例：「他　今天　回　国（彼は今日帰国する）」という文では，
+    「今天（今日）」は時間詞句である．
+  \item[介詞句pp]主語と述語の間に位置する介詞句\\
+    例：「他　在　新潟　住（彼は新潟に住んでいる）」という文の中で，
+    「在新潟（新潟に）」は介詞句である．
+  \item[《地》字句dp]主語と述語の間に位置する「地」字句\\
+    例：「他　静静　地　看　着　書（彼は静かに本を読んでいる）」という文では，
+    「静静　地（静かに）」は《地》字句である．
+  \item[助動詞zv]主語と述語の間に位置する助動詞\\
+    例：「他　能　説　日語（彼は日本語をしゃべれる）」という文では，
+    「能（できる）」は助動詞である．
+  \item[否定判断辞jf]主語と述語の間に位置する否定判断辞\\
+    例：「他　不　能　説　日語（彼は日本語をしゃべれない）」という文では，
+    「不（ない）」は否定判断辞である．
+  \item[副詞d]主語と述語の間に位置する副詞\\
+    例：「他　也　不　能　説　日語（彼も日本語をしゃべれない）」という文では，
+    「也（も）」は副詞である．
+  \item[語気詞y]語気詞を除いた文全体を受ける語気詞\\
+    例：「他　去　中国　了（彼は中国に行った）」という文では，
+    「了」は語気詞で，文末に位置して，文全体を受ける．
+  \end{description}
+\end{itemize}
+
+\subsection{文構造規則基本形式とその拡張}
+文構造規則は述語を中心とし，すべての構文要素を記述する．
+その基本形式は以下の3つである．
+疑問符「?」は選択要素であることを意味し，省略可能である．
+
+\begin{quotation}\noindent
+基本形式1: 文s \ya 主語S\ 状態部Z? 述語動詞v 補語C? 目的語O? 目的語O?\\
+基本形式2: 文s \ya 主語S\ 状態部Z? 述語形容詞a 補語C?\\
+基本形式3: 文s \ya 文s\ 語気詞部Y?
+\end{quotation}
+文構造規則の基本形式から，さらに以下の8つの基本の文構造に分けられる．
+\begin{quotation}\noindent
+ s  \ya  S v\\
+ s  \ya  S v C\\
+ s  \ya  S v O\\
+ s  \ya  S v O O\\
+ s  \ya  S v C O\\
+ s  \ya  S v C O O\\
+ s  \ya  S a\\
+ s  \ya  S a C
+\end{quotation}
+主語S，補語C，目的語Oをさらに詳細化することで，
+この8つの基本構造が，多数の文構造に分けられている．
+例えば，
+\begin{quotation}\noindent
+ s \ya S v C
+\end{quotation}
+という構造は
+\begin{quotation}\noindent
+ s \ya Sn v Cj\\
+ s \ya Sn v Cf\\
+ s \ya Sn v Ck\\
+ s \ya Sn v Cq\\
+ s \ya Sn v Cp
+\end{quotation}
+の5つの文構造に詳細化されている．
+
+また，必須構文要素と自由構文要素の組合せによって，
+文構造規則を適宜追加する．
+たとえば，以下に示す文(3A)は
+主語S，述語v，目的語Oからなる単純な文であり，
+規則(3a)に対応する．
+この文に時間に関する情報（時間詞句tp）をいれたものが文(3B)である．
+これを解析するために規則(3b)を追加する．
+同様に
+介詞句，《地》字句，助動詞，否定判断辞，副詞，語気詞
+を1つずつ文(3A)に加えることで
+文(3C)，(3D)，(3E)，(3F)，(3G)，(3H)
+が生成されるが，
+これらを解析するために
+規則(3c)，(3d)，(3e)，(3f)，(3g)，(3h)
+の文規則を追加する．
+文(3I)のような複数の自由構文要素を持つ文を解析するために，
+規則(3i)のように文構造規則を記述する．
+\begin{quotation}\noindent
+\文(3A) 我/r 写/v 字/n （わたしは字を書く）\\
+\文(3B) 我/r 晩上/t 写/v 字/n （わたしは夜に字を書く）\\
+\文(3C) 我/r 用/p 筆/n 写/v 字/n （わたしは筆で字を書く）\\
+\文(3D) 我/r 静静/z 地/uv 写/v 字/n （わたしは静かに字を書く）\\
+\文(3E) 我/r 会/zv 写/v 字/n （わたしは字を書くことができる）\\
+\文(3F) 我/r 不/jf 写/v 字/n （わたしは字を書かない）\\
+\文(3G) 我/r 也/d 写/v 字/n （わたしも字を書く）\\
+\文(3H) 我/r 写/v 字/n 了/y （わたしは字を書いた）\\
+\文(3I)~我/r 也/d 会/zv 用/p 筆/n 写/v 字/n 了/y （わたしも筆で字を書くことがで\hspace*{4zw}~きた）\\
+\規則(3a) s \ya Sn v On\\
+\規則(3b) s \ya Sn tp v On\\
+\規則(3c) s \ya Sn pp v On\\
+\規則(3d) s \ya Sn dp v On\\
+\規則(3e) s \ya Sn zv v On\\
+\規則(3f) s \ya Sn jf v On\\
+\規則(3g) s \ya Sn d v On \\
+\規則(3h) s \ya s y\\
+\規則(3i) s \ya Sn d zv pp v On
+\end{quotation}
+このように，文を構成する構文要素に応じて文規則を適宜拡張していく．
+
+\subsection{文構造規則体系}
+中国語のSSG文法規則は
+文構造規則，構文要素規則，句構造規則の3階層で構成される．
+
+例えば以下に示す文(4A)は，
+文構造規則(4a)，
+構文要素規則(4b)，(4c)，
+句構造規則(4d)，(4e)，(4f)，(4g)によって解析される．
+文法中の記号の意味は表~\ref{tab:cpos}に示す．
+\begin{quotation}\noindent
+\文(4A) 我/r 在/p 家/sq 看/v 電視/n （わたしは家でテレビを見る）\\
+\規則(4a) s \ya Sn pp v On\\
+\規則(4b) Sn \ya np\\
+\規則(4c) On \ya np\\
+\規則(4d) np \ya n\\
+\規則(4e) np \ya r\\
+\規則(4f) pp \ya p sp\\
+\規則(4g) sp \ya sq
+\end{quotation}
+
+\begin{figure}[t]
+  \begin{center}
+       \includegraphics[width=5cm]{5.eps}
+    \caption{「我/r 在/p 家/sq 看/v 電視/n」の解析結果}
+    \label{fig:wotv}
+  \end{center}
+\end{figure}
+
+SSG文法規則に階層を持たせることで，
+文法規則の見通しがよくなり，規則の管理が容易になるといった利点がある．
+また図~\ref{fig:wotv}に示すように
+構文木の構成が分かりやすく，
+意味解析との整合性もよい．
+
+\subsection{SSGとPSGとの比較}
+SSGとPSGの比較を以下にまとめる．
+
+\subsubsection{方法論の違い}
+PSGでは，文を逐次的に小さい単位に分割し，それを還元する．
+SSGでは，述語を中心に構文要素を文構造規則内に記述する．
+
+\subsubsection{規則の拡張}
+PSGでは，句規則を拡張することによって，言語現象をカバーして行く．
+SSGでは，動詞句規則の代わりに主に文構造規則を増やすことで文法規則を拡張する．
+
+\subsubsection{規則の分布}
+PSGでは，名詞句規則と動詞句規則などの句規則は圧倒的多く，文規則が少ない．
+規則の分布は図~\ref{fig:psgpyra}のようになる．
+SSGでは，表~\ref{tab:nrule}に示すように文構造規則が中心となっており，
+動詞句規則は少ない．規則の分布は図~\ref{fig:ssgpyra}のようになる．
+
+\begin{table}[b]
+  \begin{center}
+    \caption{中国語SSG規則体系における規則の分布}
+    \begin{tabular}{|c|c|c|c|c|} \hline
+総規則数&文構造規則数 & 動詞句規則数 & その他  \\\hline
+807&565&24 & 218     \\\hline
+    \end{tabular}
+    \label{tab:nrule}
+  \end{center}
+\end{table}
+
+\begin{figure}[b]
+  \begin{center}
+       \includegraphics[width=4cm]{6.eps}
+    \caption{SSG文法規則体系における規則の分布}
+    \label{fig:ssgpyra}
+  \end{center}
+\end{figure}
+
+
+
+\subsubsection{規則間の整合性}
+PSGでは，規則は互いに衝突し，曖昧性の発生が顕著である．
+SSGでは，規則は互いに整合性がよく，曖昧性の発生が少ない．
+
+以下に例をあげる．
+PSG規則で文(5A)を解析するには，
+規則(5a)，(5b)，(5c)，(5d)が必要である．
+介詞句を含む文(5B)を解析するためには，
+さらに動詞句規則(5e)が必要になる．
+\begin{quotation}\noindent
+\文(5A) 論文/n 写/v 完/v 了/y （論文を書き終った）\\
+\文(5B) 論文/n 在/p 学校/sq 写/v 完/v 了/y （論文を学校で書き終った）\\
+\規則(5a) s  \ya  np vp\\
+\規則(5b) s  \ya  s y\\
+\規則(5c) np \ya  n\\
+\規則(5d) vp \ya  v v\\
+\規則(5e) vp \ya  pp vp
+\end{quotation}
+
+SSG規則で文(5A)を解析するには，
+文規則(5f)，(5g)，(5h)が必要である．
+介詞句を含む文(5B)を解析するためには，
+さらに文規則(5i)が必要になる．
+PSGの場合は拡張された規則が元の規則と衝突し，曖昧性が生じた．
+一方SSGでは，拡張された規則は元の規則との整合性がよく，曖昧性が生じない．
+\begin{quotation}\noindent
+\規則(5f) s  \ya  np v v\\
+\規則(5g) s  \ya  s y\\
+\規則(5h) np  \ya  n\\
+\規則(5i) s  \ya  np pp v v
+\end{quotation}
+
+\subsection{動詞の分類とその曖昧性解消効果}
+中国語では，
+動詞句が異なる統語構造を持っていても，動詞の形態は変わらない．
+例えば，以下に示す文(6A)と文(6B)は
+いずれも[n v n v n]と品詞から構成されており，
+文の統語構造も異なるが，動詞の形態的変化はない．
+文(6A)は「教（教える）」が述語動詞で，
+ 「小王（王さん）」は述語動詞「教（教える）」の対象を表す名詞目的語，
+ 「唱　歌（うたを歌う）」は述語動詞「教（教える）」の内容を表す動詞目的語であり，
+その文構造規則が規則(6a)である．
+一方で，文(6B)では
+ 「小王（王さん）」は述語動詞「選（選ぶ）」目的語でありながら，
+後ろの「当　代表（代表となる）」の主語でもある．
+文構造規則では，
+ 「小王　当　代表（王さんが代表となる）」は文であり，
+ 「小王　当　代表」という文全体を
+述語動詞「選（選ぶ）」の目的語とした．
+文(6B)に対応する文構造規則が規則(6b)である．
+この場合文(6A)，(6B)は規則(6a)，(6b)の両方に適合し，
+2つの構文木を生成して曖昧性が生じる．
+\begin{quotation}\noindent
+\文(6A) 小李/n 教/v 小王/n 唱/v 歌/n\\
+\インデント（李さんは王さんに歌を唱うことを教える）\\
+\文(6B) 小李/n 選/v 小王/n 当/v 代表/n\\
+\インデント（李さんは王さんを代表として選ぶ）\\
+\規則(6a) s \ya Sn v On Ov\\
+\規則(6b) s \ya Sn v Os\\
+\end{quotation}
+
+2つの文の述語動詞を注目すると，以下のことが分かる．すなわち，
+文(6A)の述語動詞「教（教える）」は
+2つの目的語，名詞性目的語Onと動詞性目的語Ovをとれるが，
+文目的語Osをとれない．
+文(6B)の述語動詞「選（選ぶ）」は文目的語Osをとれるが，
+2つの目的語，名詞性目的語Onと動詞性目的語Ovを
+とれない．
+したがって，
+動詞「選」の品詞をv\_Osに，「教」の品詞をv\_On\_Ovに詳細化し，
+規則(6a)，(6b)を規則(6a')，(6b')に書き換えることによって，
+この種の曖昧性を解消できる．
+\begin{quotation}\noindent
+\規則(6a') s \ya Sn v\_Os Os\\
+\規則(6b') s \ya Sn v\_On\_Ov On Ov
+\end{quotation}
+
+動詞を詳細化しない場合，文(6A)，(6B)からは
+図~\ref{fig:amb2}に示す2つの構文木が得られたが，
+動詞を詳細化した場合は
+図~\ref{fig:disamb}に示すように
+文(6A)，(6B)からそれぞれ1つずつの構文木が得られ，
+曖昧性が解消された．
+
+\begin{figure}[b]
+\begin{minipage}{0.45\textwidth}
+  \begin{center}
+       \includegraphics[width=5.5cm]{7.eps}
+    \caption{動詞分類前の構文木}
+    \label{fig:amb2}
+  \end{center}
+\end{minipage}
+\hfill
+\begin{minipage}{0.45\textwidth}
+  \begin{center}
+       \includegraphics[width=5.5cm]{8.eps}
+    \caption{動詞分類後の構文木}
+    \label{fig:disamb}
+  \end{center}
+\end{minipage}
+\end{figure}
+
+中国語SSG文法では，
+ここにあげた文構造規則(6a')，(6b')のように，
+文の中心となる述語動詞や述語形容詞に
+必須構文要素（主語S，補語C，目的語O）を加えた規則を，
+文構造規則として記述した．
+さらに文構造を細分化するため，
+動詞を文型情報によって分類した．
+たとえば動詞「選（選ぶ）」には，
+以下に示す文型の文を解析できるように，
+[v v\_Cj v\_Cf v\_Ck v\_On v\_Cj\_On v\_Cf\_On v\_Ck\_On v\_Os]
+の9種類の品詞を与えた．
+\begin{quotation}\noindent
+\文(7A) 代表/n 選/v 了/y （代表は選ばれた）\\
+\文(7B) 代表/n 選/v\_Cj 完/vb 了/y （代表は選び終った）\\
+\文(7C) 代表/n 選/v\_Cf 出来/vf 了/y （代表は選び出した）\\
+\文(7D) 代表/n 選/v\_Ck 不/jf 出来/vf 了/y （代表は選び出せなかった）\\
+\文(7E) 大家/n 選/v\_On 代表/n （みんなは代表を選ぶ）\\
+\文(7F) 大家/n 選/v\_Cj\_On 完 代表/n 了/y （みんなは代表を選び終った）\\
+\文(7G) 大家/n 選/v\_Cf\_On 出来 代表/n 了/y （みんなは代表を選び出した）\\
+\文(7H)~大家/n 選/v\_Ck\_On 不/jf 出来/vf 代表/n 了/y （みんなは代表を選び出せな\hspace*{4zw}~かった）\\
+\規則(7a) s \ya Sn v y\\
+\規則(7b) s \ya Sn v\_Cj Cj y\\
+\規則(7c) s \ya Sn v\_Cf Cj y\\
+\規則(7d) s \ya Sn v\_Ck Ck y\\
+\規則(7e) s \ya Sn v\_On On y\\
+\規則(7f) s \ya Sn v\_Cj\_On Cj On y\\
+\規則(7g) s \ya Sn v\_Cf\_On Cf On y\\
+\規則(7h) s \ya Sn v\_Ck\_On Ck On y
+\end{quotation}
+
+中国語SSGでは，
+動詞をそのとりうる文構造によって33種に分類した．
+また，方向補語や結果補語になれる動詞，
+名詞と複合名詞になれる動詞は一部しかないため，
+それぞれにvf，vb，vmの品詞をつけた．
+表~\ref{tab:vsys}に中国語SSGにおける動詞の分類を示す．
+
+\begin{table}[t]\centering
+  \caption{述語動詞の分類}
+  \footnotesize
+  \begin{tabular}{|l|l|l|}\hline
+\multicolumn{1}{|c|}{述語動詞} &
+\multicolumn{1}{|c|}{取れる構文要素} &
+\multicolumn{1}{|c|}{文構造規則}\\\hline
+v &名詞性主語 &s \ya Sn v\\
+v\_Cj&名詞性主語，結果補語 &s \ya Sn v\_Cj\\
+v\_Cf&名詞性主語，方向補語&s \ya Sn v\_Cf Cf\\
+v\_Ck&名詞性主語，可能補語&s \ya Sn v\_Ck Ck\\
+v\_Cq&名詞性主語，状態補語&s \ya Sn v\_Cq Cq\\
+v\_Cp&名詞性主語，介詞句補語&s \ya Sn v\_Cp Cp\\
+v\_On&名詞性主語，名詞句目的語&s \ya Sn v\_On On\\
+v\_Ov&名詞性主語，動詞句目的語&s \ya Sn v\_Ov Ov\\
+v\_Os&名詞性主語，文目的語&s \ya Sn v\_Os Os\\
+v\_Osp&名詞性主語，場所目的語&s \ya Sn v\_Osp Osp\\
+v\_Otp&名詞性主語，時間目的語&s \ya Sn v\_Otp Otp\\
+v\_On\_On&名詞性主語，名詞句目的語，名詞句目的語&s \ya Sn v\_On\_On On On\\
+v\_On\_Ov&名詞性主語，名詞句目的語，動詞句目的語&s \ya Sn v\_On\_Ov On Ov\\
+v\_Cj\_On&名詞性主語，結果補語，名詞句目的語&s \ya Sn v\_Cj\_On Cj On\\
+v\_Cf\_On&名詞性主語，方向補語，名詞句目的語&s \ya Sn v\_Cf\_On Cf On\\
+v\_Ck\_On&名詞性主語，可能補語，名詞句目的語&s \ya Sn v\_Ck\_On Ck On\\
+v\_Cj\_Ov&名詞性主語，結果補語，動詞句目的語&s \ya Sn v\_Cj\_Ov Cj Ov\\
+v\_Cf\_Ov&名詞性主語，方向補語，動詞句目的語&s \ya Sn v\_Cf\_Ov Cf Ov\\
+v\_Ck\_Ov&名詞性主語，可能補語，動詞句目的語&s \ya Sn v\_Ck\_Ov Ck Ov\\
+v\_Cj\_Osp&名詞性主語，結果補語，場所目的語&s \ya Sn v\_Cj\_Osp Cj Osp\\
+v\_Cf\_Osp&名詞性主語，方向補語，場所目的語&s \ya Sn v\_Cf\_Osp Cf Osp\\
+v\_Ck\_Osp&名詞性主語，可能補語，場所目的語&s \ya Sn v\_Ck\_Osp Ck Osp\\
+v\_Cj\_Otp&名詞性主語，結果補語，時間目的語&s \ya Sn v\_Cj\_Otp Cj Otp\\
+v\_Cf\_Otp&名詞性主語，方向補語，時間目的語&s \ya Sn v\_Cf\_Otp Cf Otp\\
+v\_Ck\_Otp&名詞性主語，可能補語，時間目的語&s \ya Sn v\_Ck\_Otp Ck Otp\\
+v\_Cj\_On\_On&名詞性主語，結果補語，名詞句目的語，名詞句目的語 &s \ya Sn v\_Cj\_On\_On Cj On On\\
+v\_Cf\_On\_On&名詞性主語，方向補語，名詞句目的語，名詞句目的語 &s \ya Sn v\_Cf\_On\_On Cf On On\\
+v\_Ck\_On\_On&名詞性主語，可能補語，名詞句目的語，名詞句目的語 &s \ya Sn v\_Ck\_On\_On Ck On On\\
+v\_Cj\_On\_Ov&名詞性主語，結果補語，名詞句目的語，動詞句目的語  &s \ya Sn v\_Cj\_On\_Ov Cj On Ov\\
+v\_Cf\_On\_Ov&名詞性主語，方向補語，名詞句目的語，動詞句目的語 &s \ya Sn v\_Cf\_On\_Ov Cf On Ov\\
+v\_Ck\_On\_Ov&名詞性主語，可能補語，名詞句目的語，動詞句目的語  &s \ya Sn v\_Ck\_On\_Ov Ck On Ov\\
+v\_Ss\_Os&文主語，文目的語 &s \ya Ss v\_Ss\_Os Os\\
+v\_Sv\_Os&動詞句主語，文目的語 &s \ya Sv v\_Sv\_Os Os\\
+\hline
+  \end{tabular}
+  \label{tab:vsys}
+\end{table}
+
+中国語SSGにおける構文木は，文の表層的構造を示すものである．
+例えば，「車/n 修理/v 了/y （車は修理された）」という文では，
+「車」は意味的には「修理」の対象格（目的格）であるが，
+述語動詞の前に位置することから主語として解析されている．
+
+また動詞の分類に関しては，
+単語間の意味的関係を考慮せずに，表層的な構造だけを考慮した．
+例えば，
+文(8A)，(8B)は表層的には同じ文構造であるが，
+単語の意味的関係を考えた場合，
+文(8A)では主語「車」は述語動詞「修理」の対象格（目的格）であるが，
+文(8B)では主語「他」は述語動詞「走」の動作主格である．
+ここでは，単語の意味的関係を考えずに，
+両方の文が文構造規則(8a)に対応するようにしている．
+\begin{quotation}\noindent
+\文(8A) 車/n 修理/v 了/y （車は修理された）\\
+\文(8B) 他/n 走/n 了/y （彼は行った）\\
+\規則(8a) s \ya Sn v
+\end{quotation}
+
+\subsection{SSG文法規則体系による中国語の多品詞性の扱い}
+中国語では，多品詞現象が顕著である．
+例えば使用頻度の高い機能語である介詞は，
+動詞から転成したものが多い．
+そのため，ほとんどの介詞は動詞の品詞多義を持っている
+~\cite{zhu1}．
+これらの多品詞語は，品詞によって構文上の特徴も異なっている．
+例えば，「用」という単語は介詞pと動詞vとの2つの品詞を持っているが，
+介詞としている「用/p」は文(3I)のように，
+述語動詞の前に位置し，述語動詞を修飾する．
+一方，動詞として用いられる「用/v」は，
+一般的に文(9A)のように文の述語となる．
+SSGは，
+述語動詞を中心とした文全体を
+文法規則として記述するため，
+このような構文上の特徴を規則として記述することができ，
+多品詞の絞り込みに有効である．
+例えば，介詞「用」を用いた文(3I)は規則(3i)で，
+動詞「用」を用いた文(9A)は規則(9a)で解析することができる．
+
+規則(9b)によって介詞句pp「用/p 餐/n」が生成されるが，
+文構造規則(9c)は構文的に正しくないために
+SSG文法規則体系には記述されていない．
+そのために介詞「用/p」を用いた解は生成されない．
+
+このように品詞多義を持つ単語に関して，
+品詞ごとの構文上の特徴をSSG文法規則体系に記述することによって，
+品詞多義を抑制することができる．
+
+\begin{quotation}\noindent
+\文(3I)~我/r 也/d 会/zv 用/p 筆/n 写/v 字/n 了/y （わたしも筆で字を書くことがで\hspace*{4zw}~きた）\\
+\文(9A) 我/r 正在/d 用/v 餐/n （私はご飯を食べている）\\
+\規則(3i) s \ya Sn d zv pp v On\\
+\規則(9a) s \ya Sn d v On\\
+\規則(9b) pp \ya p np\\
+\llap{＊\ }\規則(9c) s \ya Sn d pp  
+\end{quotation}
+
+\section{評価実験}
+\subsection{実験設定}
+設計した中国語SSG文法規則体系の
+網羅性と曖昧性解消の有効性を検証するため，
+それをSchartパーザ\cite{schart}に実装し評価実験を行った．
+SSG文法規則体系に基づく中国語パーザを以下SSGパーザと呼ぶ．
+辞書についてはインターネットで公開された中国の北京大学で開発した 
+「現代漢語句法信息詞典（現代漢語文法情報辞書）」\cite{yu}
+の10,000語をベースとして，それを修正し，作成したものを用いた．
+
+従来のCFGに基づいた中国語構文解析においては，
+単語の多品詞性によって構造多義が爆発的に引き起こされるため，
+形態素解析の段階で統計的手法を用いて
+多品詞を絞り込むことが一般的である
+\cite{ictclas}．
+SSGパーザは，
+これらの多品詞を構文解析の段階で
+文法規則を適用することによって絞り込む．
+
+評価実験ではSSGパーザの入力として，
+中国科学院が開発した形態素解析パーザICTCLAS
+\cite{ictclas}
+の単語分割の結果を利用した．
+各単語の品詞多義については，
+すべての品詞を入力として与えた．
+
+\subsection{評価実験データ}
+
+\begin{table}[t]\centering
+  \caption{実験データの内容(1)}
+  \begin{tabular}{|c|c|c|c|c|c|} \hline
+\multicolumn{2}{|c|}{文構造の類型}&章節&文数 & \multicolumn{2}{|c|}{1文あたりの単語数}\\\cline{5-6}
+\multicolumn{2}{|c|}{}&             & &最大単語長 & 最小単語長 \\\hline
+&単動詞述語文    & 第二章   &10&7 &3\\
+&動詞目的語述語文&  第三章  &10&9 &5\\
+&動詞補語述語文  &  第四章  &10&12 &4\\
+&多数動詞述語文  & 第五章   &10& 12&4\\
+&兼語述語文      &  第六章  &10& 9&4  \\
+\shortstack{単}&形容詞述語文&第七章 &10&8&3\\
+&名詞述語文      &  第八章  &10&8&2\\
+& 「是」字文      &  第九章  &10&8&3\\
+& 「有」字文      &   第十章 &10&8&3\\
+& 「把」字文      &  第十一章  &10&20&6\\
+& 「被」字文      &   第十二章 &10&9&4\\
+\shortstack{文}& 「使」字文&  第十三章  &10&15&5\\
+& 「比」字文      & 第十四章   &10&10&5\\
+&非主述文        & 第十五章   &10&4&1\\
+&存現文          & 第十六章   &10&11&3\\
+&疑問文          & 第十七章   &10&6&3\\
+&祈使文          & 第十八章   &10&7&1\\
+&評議文          & 第十九章   &10&10&4\\\hline
+&並列重文        & 第二十六章一節   &5&21&8\\
+&連貫重文& 第二十六章二節    &5&26&13\\
+&推進重文&  第二十六章三節   &5&28&10\\
+
+\shortstack{重}&選択重文       & 第二十六章四節  &5&14&9\\
+&因果重文       &第二十七章一節  &5 &22 &9\\
+&転折重文       &第二十七章二節  &5 &16 &11\\
+&条件重文       &第二十七章三節  &5 &28 &12\\
+\shortstack{文}&譲歩重文       &第二十七章四節  &5 &16 &11\\
+&注釈重文       &第二十八章一節  &5 &17 &9\\
+&総分重文       &第二十八章二節  &5 &33 &23\\
+&記述重文       &第二十八章三節  &5 &22 &10\\
+&表相重文       &第二十八章四節  &5 &17 &14\\\hline
+  \end{tabular}
+  \label{tab:data1}
+\end{table}
+
+中国語の基本の文型をそろえるために，文法書
+「漢語的句子類型（中国語における文型）」\cite{fanxiao}
+中の例文を，評価用データとして用いた．
+データは文法書で解説されているすべての文型をカバーしたものである．
+データの客観性を保つために，
+単文は各章の例文の先頭10文まで，
+重文は各節の例文の先頭5文までを，
+修正せずに用いることにした．
+単文は第1章から第19章の各章から抽出したもので，
+文法書で解説されている全ての単文構造が含まれており，全部で180文である．
+重文は第26章，27章，28章中の各節から抽出したもので，
+文法書で解説されている全ての重文構造が含まれており，全部で60文である．
+単文と重文合わせて，240文である．
+表~\ref{tab:data1}，\ref{tab:data2}，\ref{tab:data3}は
+実験データの内容を示している．
+
+
+
+
+\subsection{網羅性に関する評価}
+
+形態素パーザICTCLASで単語を分割したところ，
+240文の実験データのうち12文は正しく分割されなかった
+（表~\ref{tab:resict2}）．
+単語分割に成功した228文をSSGパーザの入力として与えて解析したところ，
+225文は木が出力された．これらには正解の構文木が含まれている．
+解析率は98.68\%に達した（表~\ref{tab:resssg0}）．
+解析できない3文はいずれも名詞述語文（名詞句が述部になる文）である．
+中国語では名詞述語文は口語で用いられる簡潔な文型で，
+書面語や正式な場面ではあまり用いられない\cite{zonglan}．
+そのため，名詞述語文に対応する文構造規則は作成していない．
+
+
+\begin{table}[t]\centering
+\begin{minipage}{120pt}
+  \caption{実験データの内容(2)}
+  \begin{tabular}{|c|c|c|c|c|} \hline
+総文数&単文数 & 重文数  \\\hline
+240&180&60       \\\hline
+  \end{tabular}
+  \label{tab:data2}
+\end{minipage}
+\hfill
+\begin{minipage}{270pt}
+\centering
+  \caption{実験データの内容(3)}
+  \begin{tabular}{|c|c|c|c|c|} \hline
+試験文数&総単語数 & 最大単語長 & 最小単語長 & 平均単語長  \\\hline
+240&2073 & 33 &1  &        8.64       \\\hline
+  \end{tabular}
+  \label{tab:data3}
+\end{minipage}
+    \par\vspace{\baselineskip}
+\begin{minipage}{160pt}
+\centering
+  \caption{ICTCLASの単語分割の正解率}
+  \begin{tabular}{|c|c|c|c|} \hline
+文数 & 成功 & 失敗 & 正解率\\\hline
+240 & 228 & 12 & 95\%\\\hline
+  \end{tabular}
+  \label{tab:resict2}
+\end{minipage}
+\hfill
+\begin{minipage}{230pt}
+  \caption{SSGパーザの解析率}
+  \begin{tabular}{|c|c|c|c|} \hline
+試験文数 & 解析可の文数 & 解析不可の文数  & 解析率\\\hline
+228 & 225 & 3 & 98.68\% \\\hline
+  \end{tabular}
+  \label{tab:resssg0}
+\end{minipage}
+\end{table}
+\begin{table}[b]
+\centering
+  \caption{SSG手法における平均構文多義数}
+  \begin{tabular}{|c|c|c|c|c|} \hline
+試験文数&総構文木数 & 最大構文木数 & 最小構文木数 & 平均構文木数  \\\hline
+225 & 405 &23  & 1  & 1.80           \\\hline
+  \end{tabular}
+  \label{tab:resssg1}
+    \vspace{\baselineskip}
+  \caption{SSG手法における平均構文多義数の分布}
+  \begin{tabular}{|c|c|c|} \hline
+解の数 & 文の数 & 割合\\\hline
+1 & 141& 62.67\% \\
+2 & 50 & 22.22\% \\
+3 & 19 & 8.44\% \\
+4以上 & 15 & 6.67\% \\\hline
+合計 & 225 & 100\% \\\hline
+  \end{tabular}
+  \label{tab:resssg2}
+\end{table}
+
+
+\subsection{曖昧性に関する評価}
+曖昧性の様子を表
+~\ref{tab:resssg1}，
+\ref{tab:resssg2}，
+\ref{tab:resssg3}に示す．
+表\ref{tab:resssg1}
+は平均構文多義数である．
+解析できた225文において，全部で405個構文木を得，
+一文当たりの構文木数は1.80である．
+表\ref{tab:resssg2}
+は平均構文多義数の分布である．
+225文のうち，構文木数が1である文は6割を占め，
+構文木が3つ以下の文は全体の文の9割以上である．
+CFGに基づく中国語構文解析では，構文木は爆発的に増えて
+何千何万になることは普通である\cite{yang}\cite{liuqun}．
+それに比べると，SSG手法は有効に曖昧性の発生を抑止している．
+表\ref{tab:resssg3}
+は文型ごとの解析結果である．
+
+
+\begin{table}[t]\centering
+  \caption{SSG手法における文型ごとの解析結果}
+  \footnotesize
+  \begin{tabular}{|c|c|c|c|c|c|c|c|} \hline
+\multicolumn{2}{|c|}{文構造の類型}&文数&解析成功の文数&解析失敗した文数 & \multicolumn{3}{|c|}{構文木数}\\\cline{6-8}
+\multicolumn{2}{|c|}{}&         &    & &最多& 最少& 平均 \\\hline
+&単動詞述語文    & 10  &10 &0 &2 &1 &1.1\\
+&動詞目的語述語文&10 &10 &0 &1&1 &1.0\\
+&動詞補語述語文  & 10&10 &0 &4 &1 &2.0\\
+&多数動詞述語文  &10 &10 &0 &4 &1 &1.6\\
+&兼語述語文      &10  &10 &0 &4 &1 &1.7\\
+\shortstack{単}&形容詞述語文&10 &9 &1 &1&0&1.4 \\
+&名詞述語文      &10  &7 &3 &1 &0 &0.8\\
+& 「是」字文      & 10 &9 &1 &3 &0 &1.5\\
+& 「有」字文      & 10 &10 &0 &3 &1 &1.6\\
+& 「把」字文      & 10 &9 &1 &3 &0 &1.9\\
+& 「被」字文      & 10 &9 &1 &4 &0 &1.3\\
+\shortstack{文}& 「使」字文  &10 &9 &1 &3 &0&1.6\\
+& 「比」字文      & 10 &9 &1 &13 &0 &2.5\\
+&非主述文        & 10 &9 &1 &3 &0 &1.1\\
+&存現文          & 10 &10 &0 &6 &1 &2.0\\
+&疑問文          & 10 &10 &0 &2 &1 &1.5\\
+&祈使文          & 10 &10 &0 &6 &1 &1.6\\
+&評議文          &10  &9 &1 &5 &0 &1.6\\\hline
+&並列重文        & 5 &4 &1 &12 &0 &3.0\\
+&継起重文        &5&5 &0 &3 &1&1.8\\
+&推進重文        &5&3 &2 &2 &0&0.8\\
+\shortstack{重}&選択重文       &5 &5 &0 &1&1 &1.0\\
+&因果重文       &5 &5 &0 &2&1 &1.2\\
+&転折重文       &5 &5 &0 &6&1 &2.6\\
+&条件重文       &5 &5 &0 &3&1 &1.6\\
+\shortstack{文}&譲歩重文       &5 &5 &0 &3&1 &1.6\\
+&注釈重文       &5 &5 &0 &3&1 &1.8\\
+&総分重文       &5 &4 &1 &2&0 &1.0\\
+&記述重文       &5 &5 &0 &2&1 &1.4\\
+&表相重文       &5 &5 &0 &23&2 &7.6\\\hline
+  \end{tabular}
+  \label{tab:resssg3}
+\end{table}
+
+\subsection{PCFG手法との比較評価}
+PSG文法規則の不整合性を克服するために，
+コーパスを利用する方法が盛んに研究されている．
+なかでも確率文脈自由型句構造文法PCFGはよく用いられる手法である．
+PCFGはCFGの規則
+$A\rightarrow\alpha$
+に対して，左辺
+$A$
+が与えられたとき，
+それが右辺の記号列
+$\alpha$
+に書き換えられる条件付確率
+$P(\alpha|A)$
+を付与したものである．
+規則の適用確率は
+構文木が例文に付与された構文構造付コーパスによって学習する．
+構文木の生成確率は，
+構文木の生成に用いられた規則の適用確率の積として計算される．
+生成確率によって，構文木に優先順位を付け，優先解を選ぶ．
+しかし，PCFGが与える優先順位はいつも正しいとは限らない．
+正解が出ない文に対して，精度をあげることが困難である．
+
+ここでは，
+曖昧性に対する有効性を比較するために，
+PCFG手法を用いたパーザICTPROP \cite{ictprop1}との比較を行なった．
+ICTPROPパーザは中国科学院の開発した中国語文パーザであり，
+意味知識を融合できるサブモデルを埋め込んだ，
+語彙化したPCFGモデルを用いている\cite{xiong}．
+われわれは240文のデータを，
+インターネット上で公開されているICTPROPパーザ~\cite{ictprop2}
+で解析した．
+
+公開されたICTPROPパーザは
+形態素解析パーザICTCLAS \cite{ictclas}の解析結果を用いており，
+2つのパーザを分離することができない．
+そのため，形態素解析の結果は誤っている12文を除外し，
+残った228文の構文解析の結果に対して評価を行なった．
+評価結果を表~
+\ref{tab:resict2}，
+\ref{tab:resict1}，
+\ref{tab:resict3}に示す．
+
+\begin{table}[t]\centering
+  \caption{PCFG手法における解析の状況}
+  \footnotesize
+  \begin{tabular}{|c|c|c|c|c|c|} \hline
+\multicolumn{2}{|c|}{文構造の類型}&文数&
+\parbox[c]{7zw}{形態素区切りが失敗した文数}&
+\parbox[c]{8zw}{構成要素区切りが失敗した文数}&
+解析成功文数 \\\hline
+&単動詞述語文    & 10  &0 &2 &8 \\
+&動詞目的語述語文&10 &0 &2 &8\\
+&動詞補語述語文  & 10&0 &4 &6\\
+&多数動詞述語文  &10 &0 &6 &4\\
+&兼語述語文      &10  &0 &4 &6\\
+\shortstack{単}&形容詞述語文&10 &1 &4 &5 \\
+&名詞述語文      &10  &1&2 &7\\
+& 「是」字文      & 10 &1 &1 &8\\
+& 「有」字文      & 10 &0 &3 &7\\
+& 「把」字文      & 10 &1 &5 &4\\
+& 「被」字文      & 10 &1 &2 &7\\
+\shortstack{文}& 「使」字文  &10 &1 &4 &5\\
+& 「比」字文      & 10 &1 &4 &5\\
+&非主述文        & 10 &0 &1 &9\\
+&存現文          & 10 &0 &2 & 8\\
+&疑問文          & 10 &0 &1 &9\\
+&祈使文          & 10 &0 &2 &8\\
+&評議文          &10  &1 &1 &8\\\hline
+&並列重文        & 5 &1&3 &1\\
+&継起重文&5&0&5 &0\\
+&推進重文&5&2 &3 &0\\
+\shortstack{重}&選択重文       &5 &0 &4 &1\\
+&因果重文       &5 &0 &4 &1\\
+&転折重文       &5 &0 &3 &2\\
+&条件重文       &5 &0 &2 &3\\
+\shortstack{文}&譲歩重文       &5 &0 &2 &3\\
+&注釈重文       &5 &0 &0 &5\\
+&総分重文       &5 &1 &3 &1\\
+&記述重文       &5 &0 &5 &0\\
+&表相重文       &5 &0 &5 &0\\\hline
+  \end{tabular}
+  \label{tab:resict1}
+\end{table}
+
+
+\begin{table}[t]\centering
+  \caption{構成要素区切りの正解率}
+  \begin{tabular}{|c|c|c|} \hline
+文数&構成要素区切りの失敗した文数&構成要素区切りの正解率\\\hline
+228&89 &60.96   \%  \\\hline
+  \end{tabular}
+  \label{tab:resict3}
+\end{table}
+
+
+\subsubsection{構文解析結果の判断基準}
+
+ICTPROPパーザの解析結果の評価基準については，
+構成要素の境界が誤って区切られたことより，
+構造が明らかに間違っている文は正しくないと判断した．
+構成要素は名詞句の構成要素，単文の構成要素，重文の構文要素の
+3つのレベルに分けられる．
+以下は不正解と判断したものの例である．
+
+\begin{quotation}\noindent
+【名詞句の例】\\
+ 「人類　霊魂　的　工程師（人類の魂のエンジニア）」\\
+　正解：［人類　霊魂］/np 的　工程師\\
+　ICTPROPの解：人類［霊魂　的］/np 工程師\\
+【単文の例】\\
+ 「張老師　病　了（張先生は病気になった）」\\
+　正解：［張老師］/np 病　了\\
+　ICTPROPの解：［張老師　病］/np 了\\
+【重文の例】\\
+「只有　参加　社会　実践，才　能　獲得　真正　的　知識（ただ社会実践に参加してこそ，真の知識を獲得できる）」\\
+　正解：［只有　参加　社会　実践，］/s 才　能　獲得　真正　的　知識\\
+　ICTPROPの解: 只有［参加　社会　実践，才　能　獲得　真正　的　知識］/s\\
+\end{quotation}
+
+\subsection{SSGとPCFGとの比較}
+
+\begin{table}[b]\centering
+\begin{minipage}{200pt}
+  \caption{情報資源の比較}
+  \begin{tabular}{|c|c|c|} \hline
+情報資源&PCFG&SSG\\\hline
+品詞情報  &使用する  & 使用する \\
+ 文法規則情報 &使用する   & 使用する  \\
+ 構文木コーパス情報  & 使用する  &  使用しない \\
+ 意味情報 & 使用する  & 使用しない  \\\hline
+  \end{tabular}
+  \label{tab:resrc}
+\end{minipage}
+\hfill
+\begin{minipage}{200pt}
+ \centering
+  \caption{正解率の比較}
+  \begin{tabular}{|c|c|c|} \hline
+手法&PCFG&SSG\\\hline
+正解率 & 60.96\%  &62.67 \%  \\
+\hline
+\multicolumn{3}{c}{　}\\\multicolumn{3}{c}{　}\\\multicolumn{3}{c}{　}
+  \end{tabular}
+  \label{tab:resfinal}
+\end{minipage}
+\end{table}
+
+表~\ref{tab:resrc}は
+SSGパーザとICTPROPパーザの情報資源の比較である．
+SSGパーザは品詞情報と文法規則だけを用いているのに対し，
+PCFGに基づくICTPROPパーザは，
+品詞情報や文法規則に加えて構文木コーパスや意味情報を用いている．
+表~\ref{tab:resfinal}に示すように，
+情報資源が少ないSSG法のほうが正解率が高いことが分かった．
+
+SSG法では，
+構文木を1つに絞り込んでいない文でも，
+正解の構文木がその解析結果に含まれる．
+表~\ref{tab:resssg2}
+によると，225の試験データのうち，
+構文木が2個以下の文は191であり，全体の84.89\%を占め，
+3つ以下の文は210あり，全体の93.33\%である．
+規則に優先度をつけたり，意味情報を導入することより，
+正解率をさらにあげることが期待される．
+その一方，PCFG法では，これ以上精度をあげることが困難である．
+正解が出ない文の正解を得るために，システムに多数の
+解析結果を出力させるようにしなければならず，
+そのことによって構文木が1つに絞り込まれなくなる．
+また多数の構文木を出力しても，
+正解が必ず含まれるとは限らないといった問題がある．
+
+
+
+\section{おわりに}
+本論文では，文構造文法SSGを提案した．それに基づき，中国語における
+SSG文法規則体系を構築し，Schartパーザ上に実装した．従来のPSG文法体系
+に基づく構文解析では，規則間の不整合により，曖昧性は大きな問題となる．
+我々が設計した中国語SSG規則体系を用いた構文解析では，規則間の整合性がよく，
+曖昧性の解決に有効であり，
+本手法によって品詞情報と文法規則といった情報資源だけで，
+PCFGに基づく構文解析器より高い正解率が得られた．
+
+今後，
+規則に優先度を付ける，意味情報を導入するなどして，
+正解率を向上させる必要がある．
+さらに，英語などのほかの言語においても，SSGの考えに基づき，
+整合性のよい文法規則体系を設計することにも検討している．
+
+
+
+\acknowledgment
+
+本研究を進めるにあたって討論して
+いただいた川辺諭氏（元JST研究員），新潟大学宮崎研究室の武本裕氏及び他の学生諸君に
+心から感謝いたします．
+
+
+
+
+\bibliographystyle{jnlpbbl_1.2}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Chen, Zhou, Yuan, \BBA\ Wu}{Chen
+  et~al.}{2006}]{chenxiaohui}
+Chen, X., Zhou, Y., Yuan, C., \BBA\ Wu, G. \BBOP 2006\BBCP.
+\newblock \BBOQ An Efficient Probabilistic Syntactic Analysis Algorithm for
+  Chinese\BBCQ\
+\newblock {\Bem Application Reseach of Computers}, {\Bbf 23}  (1), \mbox{\BPGS\
+  141--143}.
+
+\bibitem[\protect\BCAY{Lin, Shi, \BBA\ Guo}{Lin et~al.}{2006}]{linying}
+Lin, Y., Shi, X., \BBA\ Guo, F. \BBOP 2006\BBCP.
+\newblock \BBOQ A Chinese Parser Based on Probabilistic Context Free
+  Grammar\BBCQ\
+\newblock {\Bem Journal of Chinese Information Processing}, {\Bbf 20}  (2),
+  \mbox{\BPGS\ 1--7}.
+
+\bibitem[\protect\BCAY{Xiong, Li, Liu, Lin, \BBA\ Qian}{Xiong
+  et~al.}{2005}]{xiong}
+Xiong, D., Li, S., Liu, Q., Lin, S., \BBA\ Qian, Y. \BBOP 2005\BBCP.
+\newblock \BBOQ Parsing the Penn Chinese Treebank with Semantic Knowledge\BBCQ\
+\newblock In {\Bem The Second International Joint Conference on Natural
+  Language Processing(IJCNLP05)}.
+
+\bibitem[\protect\BCAY{Zhang, Liu, Zhang, Zou, \BBA\ Bai}{Zhang
+  et~al.}{2003a}]{ictprop1}
+Zhang, H., Liu, Q., Zhang, K., Zou, G., \BBA\ Bai, S. \BBOP 2003a\BBCP.
+\newblock \BBOQ Statistical Chinese Parser ICTPROP\BBCQ.
+
+\bibitem[\protect\BCAY{Zhang, Yu, Xiong, \BBA\ Liu}{Zhang
+  et~al.}{2003b}]{ictclas}
+Zhang, H., Yu, H., Xiong, D., \BBA\ Liu, Q. \BBOP 2003b\BBCP.
+\newblock \BBOQ HHMM-based Chiese Lexical Analyzer ICTCLAS\BBCQ\
+\newblock In {\Bem Proceedings of the Second SIGHAN Workshop on Chinese
+  Language Processing}, \mbox{\BPGS\ 184--187}.
+
+\bibitem[\protect\BCAY{王向莉\JBA 宮崎正弘}{王向莉\JBA
+  宮崎正弘}{2003}]{masterpaper}
+王向莉\JBA 宮崎正弘 \BBOP 2003\BBCP.
+\newblock \JBOQ 話者の認識構造を抽出する中国語文パーザ\JBCQ\
+\newblock \Jem{電子情報通信学会信越支部大会I1}, \mbox{\BPGS\ 181--182}.
+
+\bibitem[\protect\BCAY{黄昌寧}{黄昌寧}{2002}]{huang}
+黄昌寧 \BBOP 2002\BBCP.
+\newblock \JBOQ 中文信息処理的主流技術是什麼\JBCQ\
+\newblock 計算機世界報, 24.
+
+\bibitem[\protect\BCAY{朱徳煕}{朱徳煕}{1982}]{zhu1}
+朱徳煕 \BBOP 1982\BBCP.
+\newblock \Jem{語法講義}.
+\newblock 商務印書館.
+
+\bibitem[\protect\BCAY{周強}{周強}{1995}]{zhou2}
+周強 \BBOP 1995\BBCP.
+\newblock \JBOQ 規則和統計相結合的漢語詞類標注方法\JBCQ\
+\newblock \Jem{中文信息学報}, {\Bbf 9}  (2), \mbox{\BPGS\ 1--10}.
+
+\bibitem[\protect\BCAY{川辺諭\JBA 宮崎正弘}{川辺諭\JBA 宮崎正弘}{2005}]{schart}
+川辺諭\JBA 宮崎正弘 \BBOP 2005\BBCP.
+\newblock \JBOQ 構造を含む生成規則を扱える拡張型チャートパーザ\JBCQ\
+\newblock \Jem{言語処理学会第11回年次発表論文集}, \mbox{\BPGS\ 911--914}.
+
+\bibitem[\protect\BCAY{中国科学院パーザICTPROP}{中国科学院パーザICTPROP}{}]{ic
+tprop2}
+中国科学院パーザICTPROP.
+\newblock http://mtgroup.ict.ac.cn/ictparser/parser\_1.php.
+
+\bibitem[\protect\BCAY{張玉潔\JBA 山本和英}{張玉潔\JBA 山本和英}{2005}]{zhang}
+張玉潔\JBA 山本和英 \BBOP 2005\BBCP.
+\newblock \JBOQ 中国語のコンピュータ処理について\JBCQ\
+\newblock 漢字文献情報処理研究, 6.
+\newblock pp.~102--109.
+
+\bibitem[\protect\BCAY{範暁}{範暁}{1998}]{fanxiao}
+範暁 \BBOP 1998\BBCP.
+\newblock \Jem{漢語的句子類型}.
+\newblock 書海出版社.
+
+\bibitem[\protect\BCAY{楊頤明\JBA 堂下修司\JBA 西田豊明}{楊頤明\Jetal
+  }{1984}]{yang}
+楊頤明\JBA 堂下修司\JBA 西田豊明 \BBOP 1984\BBCP.
+\newblock \JBOQ 中国語解析システムにおけるヒューリスティックな知識の利用\JBCQ\
+\newblock \Jem{情報処理論文誌}, {\Bbf 25}  (6), \mbox{\BPGS\ 1044--1054}.
+
+\bibitem[\protect\BCAY{劉\JBA 潘\JBA 故}{劉\Jetal }{1996}]{zonglan}
+劉\JBA 潘\JBA 故 \BBOP 1996\BBCP.
+\newblock \Jem{現代中国語文法総覧}.
+\newblock くろしお出版.
+
+\bibitem[\protect\BCAY{劉群}{劉群}{2002}]{liuqun}
+劉群 \BBOP 2002\BBCP.
+\newblock \JBOQ 漢語詞法分析和句法分析技術綜述\JBCQ\
+\newblock 第一届学生計算語言学研討会（SWCL2002）専題講座.
+
+\bibitem[\protect\BCAY{兪\JBA 朱\JBA 王\JBA 張}{兪\Jetal }{1997}]{yu}
+兪\JBA 朱\JBA 王\JBA 張 \BBOP 1997\BBCP.
+\newblock \Jem{現代漢語信息辞典}.
+\newblock 清華大学出版社.
+
+\end{thebibliography}
+
+\begin{biography}
+
+\bioauthor{王　　向莉}{
+1992年中国内蒙古工業大学機械工程学部卒業．
+2002年新潟大学経済学部卒業．
+同年新潟大学大学院自然科学研究科博士前期課程入学．
+2004年新潟大学大学院自然科学研究科博士後期課程入学．
+現在に至る．
+中国語構文解析・意味解析などの自然言語処理の研究に従事．
+自然言語の意味処理・機械翻訳に興味を持つ．
+}
+
+\bioauthor{宮崎　正弘}{
+1969年東京工業大学工学部電気工学科卒業．
+同年日本電信電話公社に入社．
+以来，電気通信研究所においてコンピュータシステムの性能評価法，
+日本文音声出力システムや機械翻訳などの研究に従事．
+1989年より新潟大学工学部情報工学科教授．
+自然言語処理とその応用システムの研究に従事．
+2006年5月，宮崎研究室の研究成果を活用して自然言語処理応用システムの
+製品開発を行う大学発ベンチャー企業「（株）ラングテック」を設立，
+代表取締役社長を兼務．
+工学博士．
+1995年日本科学技術情報センター賞（学術賞）受賞．
+2002年電気通信普及財団賞（テレコム・システム技術賞）受賞．
+電子情報通信学会，情報処理学会，人工知能学会，言語処理学会，各会員．}
+
+\end{biography}
+
+
+
+
+
+
+\biodate
+
+\end{document}

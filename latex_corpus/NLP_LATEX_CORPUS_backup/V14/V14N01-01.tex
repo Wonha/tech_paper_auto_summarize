@@ -1,0 +1,949 @@
+    \documentclass[japanese]{jnlp_1.2c}
+
+\usepackage[dvips]{graphicx}
+
+\Volume{14}
+\Number{1}
+\Month{Jan.}
+\Year{2007}
+\received{2005}{12}{5}
+\revised{2006}{7}{25}
+\accepted{2006}{8}{26}
+
+\setcounter{page}{3}
+
+\jtitle{日本語係り受け解析の線形時間アルゴリズム}
+\jauthor{颯々野　　　　学\affiref{FujitsuLabs}\affiref{YahooJapan}}
+\jabstract{
+日本語係り受け解析を行なう新しいアルゴリズムを述べる．
+このアルゴリズムによれば，トップレベルの精度を落とすことなく線形時間で係り受け
+解析が行なえる．
+本論文では，アルゴリズムの形式的な記述を行ない，その時間計算量を理論的
+に議論する．
+加えて，その効率と精度を京大コーパス Version 2 を使って実験的にも評価する．
+改良された係り関係のモデルと提案手法を組み合わせると，
+京大コーパス Version 2 に対し
+て従来手法よりもよい精度が得られた．
+}
+\jkeywords{日本語係り受け解析，構文解析，依存構造解析}
+
+\etitle{A Linear-Time Algorithm for Dependency Analysis \\of Japanese}
+\eauthor{Manabu Sassano\affiref{FujitsuLabs}\affiref{YahooJapan}} 
+\eabstract{
+We present a novel algorithm for Japanese dependency analysis.
+The algorithm allows us to analyze dependency structures of a sentence
+in linear-time while keeping a state-of-the-art accuracy.
+In this paper, we show a formal description of the algorithm and
+discuss it theoretically with respect to time complexity.
+In addition, we evaluate its efficiency and performance
+empirically against the Kyoto University Corpus Version 2. 
+The proposed algorithm with improved models for dependency yields the best
+accuracy in the previously published results on the Kyoto University
+Corpus Version~2.
+}
+\ekeywords{dependency analysis, parsing}
+
+\headauthor{颯々野}
+\headtitle{日本語係り受け解析の線形時間アルゴリズム}
+
+\affilabel{FujitsuLabs}{株式会社富士通研究所}{Fujitsu Laboratories Ltd.}
+\affilabel{YahooJapan}{現在，ヤフー株式会社}{Now at Yahoo Japan Corporation}
+
+
+
+\begin{document}
+\maketitle
+
+
+
+
+\newcommand{\TermHead}{}
+
+
+
+\section{はじめに}
+構文解析において，精度と同様，計算効率も，自然言語処理の重要な問題の一つ
+である．
+構文解析の研究では，精度に議論の重点を置くことが多いが，
+効率についての研究もまた重要で
+ある．特に実用的な自然言語処理のアプリケーションにとっては，そうである．
+精度を落とすことなく効率を改善することは，とても大きな課題である．
+
+
+本研究の目的は，日本語の係り受け解析 (依存構造解析) を行なう効率のよい
+アルゴリズムを提案し，その効率の良さを理論的，実
+験的の両面から示すことである．
+本論文では，日本語係り受け解析の線形時間アルゴリズムを示す．
+このアルゴリズムの形式的な記述を示し，その時間計算量 
+(time complexity) を理論的に論じる．
+加えて，その効率と精度を京大コーパス Version 2 \cite{Kurohashi1998} を
+使って実験的に評価する．
+
+
+本論文の構成は以下の通りである．
+第~2 節では，日本語の構文的な特徴と典型的な日本語文の解析処理について
+述べる．
+第~3 節では，英語や日本語の依存構造解析の従来研究について簡単に述べる．
+その後，第~4 節で我々の提案手法を述べる．
+次に，第~5 節で，二つの文節の依存関係を推定するための改良したモデルを
+述べる．
+第~6 節では実験結果とその考察を記す．
+最後に，第~7 節で本論文での我々の貢献をまとめる．
+
+\section{日本語文の解析}
+本節では，日本語の構文的特徴と典型的な日本語文の解析の手順について整理
+する．
+\subsection{日本語の構文的特徴}\label{sec:prop}
+日本語は基本的には SOV 言語である．語順は比較的自由である．
+英語では，文中の語の構文的機能は語順で表される．一方，日本語では，後置
+詞 (postpositions) によって表される．
+この点では，
+名詞の後に置かれる
+日本語の格助詞は
+ドイツ語名詞の格変化と類似の役割を持っている．
+ドイツ語名詞は格変化することによって，文法的な格を表している．
+
+文節の概念\footnote{
+韓国語の {\em eojeol} も日本語の文節と似た概念である \cite{Yoon1999}．
+文献 \cite{Abney1991} で定義される英語のチャンク (chunk) も文節に近いと
+いえる．}
+は上記の日本語の性質と親和性があり，日本語文を構文的に分析するときに使われてきた．
+{\em 文節}は，1~個以上の内容語 (content words) とそれに続く 0~個以上
+の機能語 (function words) から構成される．
+文節をこのように定義することによって，ドイツ語のような屈折言語において
+文中の語の文法的役割を分析するときと似た手法を日本語文を分析するときに
+も使うことができる．
+
+それゆえ，厳密なことを言えば，日本語の場合，語順が自由なのではなく，文
+節の順序が自由である．
+ただし，文の主動詞を含む文節は文の末尾に置かれなければならない．
+例えば，以下の2文は同じ意味を持つ:
+(1) 健が 彼女に 本を あげた． (2) 健が 本を 彼女に あげた．
+この2例文で，最も右の文節「あげた」 (動詞の語幹と，過去や完了を表すマーカで
+構成されている) は文の末尾に置かれていることに注意されたい．
+
+ここで，上に述べたものも含めて，通常の書き言葉の日本語で仮定される係り
+受けの制約条件をまとめておく．
+\begin{description} 
+\item[C1.] 最も右の文節を除いて，全ての文節は必ず一つの\TermHead{}を持つ．
+\item[C2.] \TermHead{}となる文節は，必ず係り元の文節の右側に位置する．
+\item[C3.] 係り関係は交差しない\footnote{
+「これが僕は正しいと思う」
+という例文のようにこの制約条件が成立しないこともあるが，
+書き言葉では殆どの場合
+成り立つ\cite[187ページ]{Nagao1996}．}．
+\end{description}
+これらの特徴は，基本的には韓国語やモンゴル語でも共通である．
+
+\subsection{日本語文解析の典型的な手順}
+日本語には前節のような特徴があるので，日本語文の解析で
+は次のような手順が非常に一般的である:
+\begin{enumerate}
+\item 文を形態素に分割する (つまり形態素解析する)
+\item それらを文節にまとめ上げる
+\item 文節間の係り関係を解析する
+\item それぞれの係り関係に agent，object，location などの意味的役割のラベル
+を付ける
+\end{enumerate}
+我々は (3) における係り受け解析に焦点を置く．
+
+\section{関連研究}
+ここでは，主に時間計算量に重点を置いて関連研究を述べる．
+日本語はもちろん英語でも依存構造解析 (dependency analysis) は研究されてい
+る \cite{Lafferty1992,Collins1996,Eisner1996}．
+これらの論文の解析アルゴリズムでは，$O(n^{3})$ の時間がかかる．
+ここで $n$ は単語数である\footnote{
+Nivre \shortcite{Nivre2003} は，projective dependency parsing の決定的
+なアルゴリズムを提案している．
+このアルゴリズムの時間計算量の上限は $O(n)$ である．
+このアルゴリズムをスウェーデン語のテキストで評価している．}
+    $^{,}$\footnote{
+Ratnaparkhi は実際の処理時間が $O(n)$ となる句構造を返す英語のパーザにつ
+いて述べている \cite{Ratnaparkhi1997}．
+これは依存構造解析について述べたものではない．
+このアルゴリズムでは，解析途中の各ノードに対して，
+いくつかの手続きを行ない，その中で確率値の高い $K$ 個の導出 
+(derivation) を残して解析を進める (幅優先探索)．
+そのため，時間計算量の上限は $O(n^2)$ と考えられる．
+}．
+
+
+日本語の係り受け解析では，文中の二つの文節の係り受けの確率を使うことが
+非常に多かった．
+Haruno ら \shortcite{Haruno1998} は，決定木を用いて係り受けの確率を推
+定した．
+Fujio と Matsumoto \shortcite{Fujio1998} は Collins のモデル\cite{Collins1996} の
+修正版を日本語の係り受け解析に適用した．
+Haruno らと，Fujio と Matsumoto の両グループとも CYK 法を用
+いている．これは $O(n^{3})$ の時間がかかる．ここで $n$ は文の長さ，つまり文
+節数を表している．
+Sekine ら \shortcite{Sekine2000Backward} は最大エントロピー法 (Maximum
+Entropy Modeling; ME) を係り受けの確率の推定に使い，後方ビームサーチ 
+(文末から文頭に向かうビームサーチ) で最
+もよい解析結果を見つける．
+このビームサーチのアルゴリズムは $O(n^{2})$ の時間がかかる．
+Kudo と Matsumoto \shortcite{Kudo2000Japanese} らも同じ後方ビームサーチ
+を ME ではなくサポートベクタマシン (SVMs) とともに用いている\footnote{
+彼らは，係り先候補間の係りやすさの相対的な大小関係をモデル化する手法
+も報告している \cite{Kudo2005}．係り受けのモデルは異なるが，
+同じく後方ビームサーチを用いている．
+}．
+
+二つの文節間の係り受けの確率を使わない統計的手法も少ないながらある．
+一つは Sekine の決定的有限状態変換器を用いる手法\cite{Sekine2000Japanese} である．
+Sekine は，\TermHead{}の場所の 
+97\% は文中の五つの候補でカバーされると報告している．
+似た現象は Maruyama と Ogino \cite{Maruyama1992} も観測している．
+これらの調査にもとづき，Sekine は，決定
+的有限状態変換器を用いる効率のよい解析アルゴリズムを提案している．
+このアルゴリズムは，考慮する係り先の文節数を制限することでしらみつぶし
+に探索することを避け，$O(n)$ の時間計算量となっている．
+しかしながら，彼のパーザは京大コーパスに対して 77.97\% の係り受け正解
+率 (定義は第~\ref{subsec:results} 節で述べる) しか得られていない．
+これは，89\% を超える現在の最高精度よりもかなり低い．
+
+2文節間の係り受けの確率を用いない別の興味深い手法は，Kudo と Matsumoto \shortcite{Kudo2002} による 
+Cascaded Chunking Model である．このモデル
+は \cite{Abney1991,Ratnaparkhi1997} のアイデアにもとづく．
+彼らはこのモデルと SVMs を用いて，89.29\% を得ている．
+彼らの手法では，解析時に評価される係り関係の数は CYK 法や後方ビームサーチ
+よりも相当少ないが，それでも時間計算量の上限は $O(n^2)$ である．
+
+以上見たように，高い精度を保ちつつ線形時間の処理を保証して，
+どのように日本語係り受け解析を行なうかは，
+まだ解決されていない問題である．
+以下に記述するアルゴリズムがこの問題に対する答えとなろう．
+
+
+\section{アルゴリズム}\label{sec:algo}
+本節では，提案アルゴリズムを解析時に使うものと，学習時に使うものとに分
+けて記す．
+解析時のアルゴリズム，その時間計算量，学習時のアルゴリズムを
+順に述べ，
+最後に提案アルゴリズムの特徴のまとめと関連研究との理論的な比較を述べる．
+
+\subsection{文を解析するアルゴリズム}
+
+\begin{figure}[t]
+// 入力: N: 一文中の文節の数 \\
+// \hspace*{1em}  w[ ]: 処理対象の文の文節列を保持する配列 \\
+// 出力: outdep[ ]: 解析結果，つまり文節間の係り関係を格納する整数の配列． \\
+// \hspace*{1em} 例えば，j 番目の文節の係り先 ID は {\rm outdep[j]} 
+で表現される． \\
+// \\
+// stack: 係り元文節の ID を保持する．もし空なら，このスタックに対する \\
+// \hspace*{1em} pop メソッドは，{\rm EMPTY} ($-1$) を返す． \\
+// function estimate\_dependency(j, i, w[ ]): \\
+// \hspace*{1em} {\rm j} 番目の文節が {\rm i} 番目の文節に係ると
+判断するとき，非ゼロを返す． \\
+// \hspace*{1em} それ以外のとき，ゼロを返す． \\
+function analyze(w[ ], N, outdep[ ]) \\
+stack.push(0); \hspace*{1em} // ID 0 をスタックに積む． \\
+for (int i = 1; i $<$ N; i++) \{ \hspace*{1em} // 変数 i は係り先文節，
+変数 j は係り元文節を指すのに使う．\\
+\hspace*{1em}  int j = stack.pop(); \hspace*{1em} // スタックから値を
+降ろし，変数 j にセットする． \\
+\hspace*{1em} while (j != EMPTY \&\& (i == N $-$ 1 $||$ estimate\_dependency(j, i, w))) \{ \\
+\hspace*{2em} outdep[j] = i; \hspace*{1em} // j 番目の文節が i 番目の
+文節に係る． \\
+\hspace*{2em} j = stack.pop(); \hspace*{1em} // 次にチェックすべき係り
+元文節の ID をスタックから降ろす． \\
+\hspace*{1em}  \} \\
+\hspace*{1em}  if (j != EMPTY) \\
+\hspace*{2em}    stack.push(j); \\
+\hspace*{1em}  stack.push(i); \\
+ \}
+\par\vspace{8pt}
+\caption{提案手法の擬似コード (解析時)．ここで ``i == N - 1''
+は i 番目の文節が文末の文節であることを\hspace*{27pt}意味している．}
+\label{code:analysis}
+\end{figure}
+
+\begin{figure}[t]
+// indep[ ]:  訓練事例から与えられる正しい係り受け関係を保持する整数の配列． \\ 
+// \\
+// function estimate\_dependency(j, i, w[ ], indep[ ]): \\
+// \hspace*{1em} indep[j] == i が満たされるとき，非ゼロを返す．それ以外のとき，ゼロを返す． \\
+// \hspace*{1em} 同時に，j 番目の文節が i 番目の文節に係るか係らないかに
+応じて， 1 あるいは -1 の \\
+// \hspace*{1em} ラベル付きで，素性ベクタ (エンコードされた事例) を出力する． \\
+function generate\_examples(w[ ], N, indep[ ]) \\
+stack.push(0); \\
+for (int i = 1; i $<$ N; i++) \{ \\
+\hspace*{1em}  int j = stack.pop(); \\
+\hspace*{1em} while (j != EMPTY \&\& (i == N $-$ 1 $||$ estimate\_dependency(j, i, w, indep))) \{ \\
+\hspace*{2em}    j = stack.pop(); \\
+\hspace*{1em}  \} \\
+\hspace*{1em}  if (j != EMPTY) \\
+\hspace*{2em}    stack.push(j); \\
+\hspace*{1em}  stack.push(i); \\
+\}
+\par\vspace{8pt}
+\caption{訓練事例を作るための擬似コード．変数 w[ ],
+N と stack は図~\ref{code:analysis} のものと同じである．}
+\label{code:generate}
+\end{figure}
+
+我々の提案する係り受け解析のアルゴリズムの擬似コードを図
+~\ref{code:analysis} に示す．
+このアルゴリズムは，ある文節が別の文節に係るかどうかを決定する推定器 
+(estimator) とともに用いる．
+推定器の典型的なものとして，SVM や決定木などの訓練できる分類器が考えら
+れる．
+ここでは，文中の二つの文節の係り関係を推定できる，つまり係るか否かを決
+定できる何らかの分類器があり，その分類
+器の時間計算量は文の長さに影響されないと仮定しておく．
+
+
+係り関係の推定器を別にすれば，
+このアルゴリズムで使うデータ構造はわずか二つである．
+一つは入力に関するもので，もう一つは出力に関するものである．
+前者は，チェックすべき係り元の文節のID を保持するためのスタックである．
+後者は，既に解析された係り先文節のID を保持する整数の配列である．
+
+
+\begin{figure}[t]
+\begin{center}
+\begin{tabular}{llllll}
+       & 健が & 彼女に & あの & 本を & あげた． \\
+文節 ID     & 0    &  1     & 2    & 3    & 4 \\
+係り先 & 4  &4  & 3    & 4    & -
+\end{tabular}
+\end{center}
+\vspace{8pt}
+\caption{例文}
+\label{sample-parsing}
+\end{figure}
+
+以下では，例を使いながら先に示したアルゴリズムの動作を説明する．
+図~\ref{code:analysis} の擬似コードに沿って，図~\ref{sample-parsing} にある例
+文を解析してみよう．
+説明のため，図~\ref{code:analysis} の {\it estimate\_dependency}() と
+して完璧な分類器があるとする．この分類器は図
+~\ref{sample-parsing} の例文に対して必ず正しい
+結果を返すとする．
+
+まず始めに 0 (健が) をスタックに積む．0 は文の先頭の文節のIDである．
+この初期化の後，{\rm for} ループの各繰り返し (iteration) の中で解析が
+どのように進むかを見る．
+最初の iteration では，0 番目の文節と 1 番目の文節 (彼女に) の係り関係
+をチェックする．
+0 番目の文節は 1 番目の文節に係らないから，
+0 をスタックに積み，次に 1 を積む．
+ここで，スタックの底は 0 であって 1 ではないことに注意されたい．
+より小さいIDが必ずスタックの底のほうに保持される．
+この性質のおかげで，非交差の制約 (第~\ref{sec:prop} の C3) を破らずに
+解析を進めることができる．
+
+2 回目の iteration では，1 をスタックから降ろし，1 番目の文節と 2 番目
+の文節 (あの) の係り関係をチェックする．
+1 番目の文節は 2 番目には係らないので，再び 1 と 2 をスタックに積む．
+
+3 回目の iteration では，2 をスタックから降ろし，2 番目の文節と 3 番目
+の文節 (本を) の係り関係をチェックする．
+2 番目の文節は 3 番目に係るので，その関係を {\it outdep}[ ] に格納する．
+{\it outdep}[$j$] の値は，第~$j$ 番目の文節の係り先を表す．
+例えば {\it outdep}[$2$]$ = 3$ は 2 番目の文節の係り先は 3 番目の文節であ
+ることを意味している．
+
+次に，1 をスタックから降ろし，1 番目の文節と 3 番目の文節の係り関係を
+チェックする．
+1 番目の文節は 3 番目に係らないので 1 を再びスタックに積む．
+その後，3 をスタックに積む．
+この段階で，スタックには頭から底に向けて 3，1，0 が格納されている．
+
+3 回目の iteration では，3 をスタックから降ろす．
+3 番目の文節と 4 番目の係り関係はチェックする必要がない．
+4 番目の文節は文中の最も末尾の文節であり，3 番目の文節は必ず 4 番目に
+かかるからである．
+そこで {\it outdep}[$3$] $= 4$ とする．
+次に 1 をスタックから降ろす．
+この場合も，1 番目の文節と 4 番目との係り関係のチェックはする必要がな
+い．
+同様に，0 番目の文節も 4 番目に係る．
+結果として {\it outdep}[$1$] $= 4$ と {\it outdep}[$0$] $= 4$ となる．
+この時点でスタックは空となり，この解析の関数 {\it analyze}( ) は終了する．
+解析結果である係り受け関係は，配列 \linebreak
+{\it outdep}[ ] に得られている．
+
+\subsection{時間計算量}\label{subsec:time}
+一見したところ，提案したアルゴリズムの時間計算量の上限は，2 重ループを
+含むため $O(n^{2})$ と思える．
+しかしそうではない．
+時間計算量の上限が $O(n)$ であることを，図~\ref{code:analysis} に
+おける {\rm while} ループの条件部が何回実行されるかを考えることによって
+示す．
+条件部が失敗する回数と成功する回数とに分けて考える．
+
+{\rm while} ループの条件部は $N - 2$ 回失敗する．何故なら
+外側の {\rm for} ループが 1 から $N-1$ へ，つまり $N - 2$ 回実行されるからである．
+もちろん，{\rm while} ループが無限ループになることはない．
+{\rm while} ループの内部で stack に値を新たに積むことなく降ろしている
+ので，いつか $j == {\rm EMPTY}$ になる．
+つまり $j\  != {\rm EMPTY}$ を満たさず，
+{\rm while} ループを抜けることになる．
+
+
+一方，この条件部は $N - 1$ 回成功する．
+何故なら {\it outdep}[$j$] $= i$ が $N - 1$ 回実行されるからである．
+文節 $j$ それぞれについて，{\it outdep}[$j$] $= i$ は必ず一度だけ実行される．
+{\it j = stack.pop}() を実行すると，$j$ に格納されている値は失われ，
+その値は二度と再びスタックに積まれることはないからである．
+つまり，{\rm while} ループは，高々 $N - 1$ 回実行される．これは
+末尾の文節を除く文節数に等しい．
+
+結局，{\rm while} ループの条件部の実行回数は，失敗回数 $N - 2$ と 
+成功回数 $N - 1$ を合計し $2N - 3$ となる．
+これは時間計算量の上限が $O(n)$ となることを意味している．
+
+
+\subsection{訓練事例を作り出すアルゴリズム}
+前節のアルゴリズムで用いる分類器のための訓練事例を作り出すには，
+図~\ref{code:generate} に示すアルゴリズムを使う．
+図~\ref{code:analysis} にある解析用のアルゴリズムと殆ど同じである．
+違いは，{\it indep}[ ] を使って {\it estimate\_dependency}() が正しい係り
+関係の判定を返す点と，{\it outdep}[ ] に係り先の ID を格納する必要がない点
+である．
+
+\subsection{特徴のまとめと関連研究との理論的な比較}\label{comp:theory}
+我々の提案アルゴリズムは次のような特徴を持つ:
+    \begin{itemize} 
+\item[F1.] 特定の機械学習の方法に依存しない．
+訓練できる分類器ならどれでも使える．
+\item[F2.] 左から右へ文を一度だけスキャンする．
+\item[F3.] 時間計算量の上限は $O(n)$ である．
+アルゴリズム中，最も時間を消費する部分である分類器の呼び出しの回数は，
+高々 $2N - 3$ 回である．
+\item[F4.] アルゴリズムの流れとデータ構造は非常に簡単である．そのため，
+実装も易しい．
+    \end{itemize}
+
+我々のアルゴリズムと
+最も関連が深いモデルの一つは，\cite{Kudo2002} の \linebreak
+Cascaded Chunking
+ Model である．
+彼らのモデルと我々のアルゴリズムは F1 を始め多くの共通点がある
+\footnote{
+文献 \cite{Uchimoto1999} に代表される 2 文節間の係り受け確率を考える
+確率モデルと，Cascaded Chunking Model との比較は
+文献 \cite{Kudo2002} で詳細になされている．
+ほぼ全ての議論が確率モデルと我々の提案手法との比較
+にも当てはまる．
+}．
+彼らのモデルと我々のアルゴリズムの大きな違いは，入力文を何回スキャンするかに
+ある (F2)．
+彼らのモデルでは，入力文を何回かスキャンする必要があり，
+これは計算上の非効率につながっている．最悪の場合では $O(n^{2})$ の
+計算が必要になる．
+我々の解析アルゴリズムは，左から右に一度だけしかスキャンせず，
+実時間の音声認識などのような実用的なアプリケーションに対しても，
+より好適であろう．
+それに加えて，アルゴリズムの流れと利用するデータ構造は，Cascaded Chunking
+Model で使われるものよりもずっと簡単である (F4)．
+彼らのモデルでは，チャンクタグを保持する配列が必要となり，
+入力文を何度もスキャンする間，この配列は正しく更新されなければならない．
+
+Nivre による Projective Dependency Parsing の手法 \cite{Nivre2003} も，
+我々のアルゴリズムと深い関係がある\footnote{
+Nivre のいう ``projective'' とは，依存関係 (係り関係) が交差しないこと
+と同じである．
+}．
+彼のアルゴリズムも，
+スタックを用いており，時間計算量の上限も $O(n)$ である．
+ただし，
+我々のアルゴリズムが日本語を対象とし，係り先が必ず右にあることを前提に
+しているのに対し，Nivre のアルゴリズムは依存関係の向きはどちらでもよい．
+その点では，彼のアルゴリズムは我々の手法をより一般的にしたものと考え
+ることができる．
+一方，\cite{Nivre2003} では，単語間の依存関係を決めるルールを用意して
+おき，ある一定の優先度で選ぶとしている\footnote{
+スウェーデン語を対象に126のルールを人手で記述している．ルールを，
+「右向きに係る」「左向きに係る」「対象語をスタックから降ろす」「対象語
+をスタックに積む」の四つのタイプに分け (詳細はここでは略す)，タイプ間
+の優先度は，事前に人手で決める場合のみ実験で検証されている．ここでいう
+対象語とは，アルゴリズム中で係り関係をチェックする対象となっている語を指す．
+}．
+我々は，依存関係が一方向である日本語に対して，機械学習を用いる方法を提
+示し，実際に検証している．
+
+我々の解析アルゴリズムは，shift-reduce 法の最も簡単な形の一つと考えられる．
+典型的な shift-reduce 法との違いは，アクションの型を複数持つ必要がなく，
+スタックの先頭のみ調べればよいという点である．
+これらの簡潔さの理由は，
+日本語が制約 C2 (第~\ref{sec:prop} 節参照) を仮定できること，
+文脈自由文法の解析ではなく，係り受け関係のみの解析であることの二つによる．
+
+
+\section{係り関係を推定するためのモデル}\label{sec:models}
+2 文節間の係り関係を推定するために，2 文節に関係する形態的，文法的情
+報を素性のベクタとして表現し，それを入力として分類器に係るか否かを判
+断させる．
+
+その分類器として，サポートベクタマシン (SVMs) \cite{Vapnik1995} を
+用いた．
+SVMs は優れた特徴を持っている．その一つは，
+多項式カーネルを用いると，ある事例の持つ素性の組合せが自動的に
+考慮される点である．
+現在まで多数の分類タスクに対して，非常に優れた性能が報告されている．
+SVMs の形式的な記述については，文献 \cite{Vapnik1995} を参照されたい．
+
+素性として，第~\ref{subsec:stfe} 節以降で述べるものを用いた．
+実際には 2 文節間の係り関係の推定の処理は，
+図~\ref{code:analysis} の {\it estimate\_dependency}() の中で行なう．
+推定しようとする 2 文節の形態的，文法的情報を素性のベクタとして表現
+し，SVMs に係るか否かを判定させることになる．
+以下では，まず基本となる標準素性を述べ，次にそれに追加して用いる付加的な素性に
+ついて述べる．
+
+\subsection{標準素性}\label{subsec:stfe}
+ここで「標準素性」といっているものは，
+\cite{Uchimoto1999,Sekine2000Backward,Kudo2000Japanese,Kudo2002} 
+でほぼ共通に使われている素性セットを指す．
+それぞれの文節について以下の素性を使った:
+\begin{enumerate}
+\item 主辞品詞，主辞品詞細分類，主辞活用型，主辞活用形，主辞表層形
+\item 語形品詞，語形品詞細分類，語形活用型，語形活用形，語形表層形
+\item 句読点
+\item 開き括弧，閉じ括弧
+\item 位置—文の先頭か文の末尾か
+\end{enumerate}
+ここで主辞とは，概ね文節内の最も右の内容語に相当する．品詞が
+特殊，助詞，接尾辞を除き，最も文末に近い形態素を指す．
+語形とは，概ね文節内の最も右の機能語に相当する．品詞が
+特殊となるものを除き，最も文末に近い形態素を指す．
+
+これらに加えて，2 文節間のギャップに関する素性も用いた．
+距離 (1，2--5，6以上) と，助詞，括弧，句読点である．
+
+\subsection{注目文節の前後の文節}\label{subsec:loc}
+注目している係り元文節，係り先文節の前後の文節も有用である．
+それらが固定的な表現や格フレーム，その他の連語を表すことがあるからである．
+第~$j$ 番目の文節が係り元文節で，第~$i$ 番目の文節が係り先文節の
+候補だとする．
+$j$ 番目の文節と $i$ 番目の文節の前後にある文節のうち，次の三つを素性
+として考慮する:
+$j - 1$ 番目の文節 ($j$ に係るときのみ) と，
+$i - 1$ 番目の文節，
+$i + 1$ 番目の文節の三つである．
+我々のアルゴリズムでは，$j < i - 1$ を満たし $j$ 番目の文節が $i$ 番目の文節に
+係るかチェックしているとき，
+$i - 1$ 番目の文節は必ず $i$ 番目の文節に
+係っていることに注意されたい．
+提案手法におけるデータ構造を簡単にしておくために，$j$ 番目，
+$i$ 番目の文節からさらに遠い文節については考慮しなかった．
+なお，$j - 1$ 番目の文節が $j$ 番目の文節に
+係るかどうかは {\it outdep}[ ] を見れば簡単にチェックできる．
+注目している文節の前後を使うのは，\cite{Kudo2002} における動的素性\footnote{
+Kudo らのモデルは，以下の三つから動的素性を作る:
+$j$ 番目の文節に係るもの (タイプ B)，$i$ 番目の文節に係るもの (タイプ A)，
+$i$ 番目の文節の係り先 (タイプ C)．
+我々の提案手法では解析が左から右に進むので，
+タイプ C の素性を取り入れるためには，
+スタッキング \cite{Wolpert1992} やその他の手法を用いる必要がある．
+}と似ている．
+
+
+\subsection{文節内の追加素性} 
+「標準素性」では，文節内に二つ以上の機能語を含むとき格助詞の情報を見落とすことがある．
+ある文節が格助詞と提題助詞\footnote{
+提題助詞とは，主題を提示する助詞である \cite[page 50]{Masuoka1992}．
+代表的な提題助詞は「は」である．
+}を持つとする．
+このとき格助詞の後ろに提題助詞が来る．
+それゆえ，格助詞の情報を見落としてしまう．
+「標準素性」では文節内の最も右の機能語しか素性として扱われないからであ
+る\footnote{
+例えば，係り元文節が「本-に-は」の場合，第~\ref{subsec:stfe} の語形の
+素性として「は」に関する素性が採用される．「に」に関する素性は使われな
+い．}．
+こういった情報を見落とさないように，文節内の全ての格助詞を素性として扱う．
+
+
+「標準素性」で見落とされる重要な情報は他にもある．
+それは，係り先候補の文節の最も左の語の情報である．この語は係り元の文節の
+最も右の語と慣用表現のような強い相関関係を持つことも多い．
+
+これに加えて，係り先候補文節の直後の文節の表層形も素性として使う．
+これは，第~\ref{subsec:loc} 節の素性とともに用いる．
+
+
+\subsection{並列句のための素性}
+並列構造を正しく認識することは，長い文を正しく解析する際に最も難しい
+ことの一つである．
+Kurohashi と Nagao は，二つの文節列の類似度を
+計算することによって並列句を認識する手法を提案している \cite{Kurohashi1994}．
+
+現在までのところ，機械学習を使うシステムの中で並列構造を認識するための素性はあまり研究されていない．
+我々は最初のステップとして，並列構造を認識するための基本的な二つの素性を
+試した．
+注目している文節が{\em キー文節} ({\it distinctive key bunsetsu}) 
+\cite[page 510]{Kurohashi1994} であるとき，
+この二つの素性は使われる．
+一つ目の素性は，係り元文節がキー文節であるときアクティブに
+なるものである．
+もう一つの素性は，係り元文節がキー文節で，その係り元文節と
+係り先候補の文節の
+主辞表層形が
+一致していればアクティブになるものである．
+単純さを保つため，対象とする
+主辞品詞は
+名詞のみとした．
+
+
+\section{実験と考察}
+提案アルゴリズムを利用したパーザを C++ で実装し，その時間計算量の振る
+舞いや解析精度を実験的に評価した．
+\subsection{コーパス}
+提案アルゴリズムを評価するために，京大コーパス 
+Version 2 \cite{Kurohashi1998} を使った．
+新聞記事の1月1日から1月8日分 (7,958 文) を訓練事例とし，1月9日分 (1,246 文) を
+テスト事例とした．
+1月10日分を開発用に用いた．
+これらの記事の使い方は \cite{Uchimoto1999,Sekine2000Backward,Kudo2002} と
+同じである．
+
+\subsection{SVM の設定}
+独自に C++ で実装した SVMs のツールを用いた．
+カーネルとして，3 次の多項式カーネルを用いた．
+特に記述がない限り誤分類のコストは 1 に設定した．
+
+\subsection{実験結果}\label{subsec:results}
+
+\begin{table}[b]
+\caption{テスト事例に対する精度}
+\label{tbl:acc}
+\begin{center}
+\begin{tabular}{lcc} \hline\hline
+         & 係り受け正解率 (\%) & 文正解率 (\%) \\ \hline
+標準素性 & 88.72        & 45.88 \\
+全て     & 89.56 & 48.35 \\
+前後文節素性 (5.2~節) なし & 88.91 & 46.33 \\
+文節内追加素性 (5.3~節) なし  & 89.19 & 47.05 \\
+並列句素性 (5.4~節) なし & 89.41 & 47.86 \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+{\bf 解析精度}\hspace{0.4em}
+テスト事例に対する我々のパーザの性能を表~\ref{tbl:acc} に示す．
+従来研究との比較のために，性能評価には京大コーパスで標準的に使われる
+尺度である係り受け正解率と文正解率の二つを用いる．
+係り受け正解率とは，正しく解析された係り受けの割合であり
+(他の多くの文献と同様，文末の一文節を除く)，
+文正解率とは，全ての係り関係が正しく解析された文の割合である．
+
+
+「標準素性」を用いた場合の精度は比較的よい．
+実際，この係り受け正解率は動的素性を用いないときの Cascaded Chunking
+Model \cite{Kudo2002} とほぼ同じである．
+第~\ref{sec:models} 節で述べた全ての素性を用いた場合，
+我々のパーザは 89.56\% の係り受け正解率を得た．
+これは京大コーパス Version 2 に対して公表されている精度の中で最もよい
+ものである．
+
+\begin{figure}[t]
+\begin{center}
+    \includegraphics[scale=1.2]{speed-j02.eps}
+\end{center}
+\caption{一文あたりの処理時間}
+\label{speed}
+\end{figure}
+
+{\bf 時間計算量の漸近的な振る舞い}\hspace{0.4em}
+図~\ref{speed} に，我々のパーザのテスト事例に対する実行時間を示す．これは
+ワークステーション (Ultra SPARC II 450 MHz, 1GB メモリ) を用いて計測した．
+図~\ref{speed} より実行時間の上限が文の長さに比例しているのが分かる．
+これは，第~\ref{subsec:time} 節で行なった理論的な分析と一致している．
+
+この実験結果を見て，確かに従来研究よりも時間計算量の上限は
+低く抑えられているが，我々のパーザの実際の処理時間はそれほど速くない
+と思われるかもしれない．
+パーザのこの遅さの主たる原因は，SVMs におけるカーネル評価での
+膨大な計算のせいである．
+我々の実験では，SVM の分類器は 4 万個以上のサポートベクタを持っている．
+それゆえ，係り関係を判定するたびに膨大な内積計算が必要となる．
+幸い，この問題に対する解決策は既に Kudo と Matsumoto \shortcite{Kudo2003} に
+よって与えられている．
+彼らは高次の多項式カーネルを線形カーネルに変換する手法を提案し，
+変換された線形カーネルでは，精度を保ったまま元の多項式カーネルよりも
+およそ 30 から 300 倍高速だったと報告している．
+彼らの手法を我々のパーザに適用すれば，処理時間も十分高速化されるだろう．
+
+彼らの手法を用いればどのくらい我々のパーザの速度が改善されるか
+粗く見積もるために，線形カーネルを用い，同じテスト事例に対してパーザを
+走らせてみた．
+図~\ref{speed:lin} に，線形カーネルを用いたパーザの処理時間を示す．なお
+計測には多項式カーネルを用いた場合と同じマシンを使った．
+3次の多項式カーネルを使う場合に比べて相当に高速である．
+非常に長い文であっても 0.02 秒以内で
+解析が行なえている．
+加えて，このパーザのスピードばかりでなく精度も我々が期待した以上だった．
+係り受け正解率は 87.36\%，文正解率は 40.60\% に達した．
+これらの精度は，素性の組合せを人手で選択して追加している
+パーザ \cite{Uchimoto1999} よりもわずかに良い．
+
+\begin{figure}[t]
+\begin{center}
+    \includegraphics[scale=1.2]{speed-lin-j02.eps}
+\end{center}
+\caption{線形カーネルを使った場合の一文あたりの処理時間．
+誤分類のコストは 0.0056．}\label{speed:lin}
+\end{figure}
+
+
+\subsection{関連研究との比較}\label{sec:relatedwork}
+
+我々のパーザと関連研究におけるパーザとを時間計算量と精度の点から比較する．
+比較のサマリを表~\ref{tbl:comp} に示す．
+我々のアルゴリズムと SVMs と組み合わせたものが時間計算量の点から
+優れた性質を持ち，加えてトップレベルの精度が得られている．
+
+    \begin{table}[t]
+\caption{関連研究との性能の比較． KM02 = Kudo and Matsumoto 2002, KM00 = Kudo and Matsumoto 
+\hspace*{27pt}2000, USI99 = Uchimoto et al. 1999, and Seki00 = Sekine 2000. 提案アルゴリズムを Stack
+\hspace*{27pt}Dependency Analysis と記述．}
+\label{tbl:comp}
+\begin{center}
+\begin{tabular}{l|l|c|c} \hline\hline
+ & アルゴリズム/モデル & \multicolumn{1}{c|}{時間計算量}
+   & 係り受け正解率 (\%) \\
+\hline
+本論文 & Stack Dependency Analysis (SVMs) & $n$ & 89.56 \\
+           & Stack Dependency Analysis (linear SVMs) & $n$ & 87.36 \\ \hline
+KM02 & Cascaded Chunking Model (SVMs) & $n^2$ & 89.29 \\
+KM00 & 後方ビームサーチ (SVMs) & $n^2$ & 89.09 \\
+USI99 & 後方ビームサーチ (ME) & $n^2$ & 87.14 \\
+Seki00 & 決定的有限状態変換器 & $n$ & 77.97 \\ \hline
+\end{tabular}
+\end{center}
+    \end{table}
+
+文献 \cite{Kudo2002} との比較は，第~\ref{comp:theory} 
+の記述にゆずる．
+Uchimoto ら \shortcite{Uchimoto1999} は最大エントロピー法と
+後方ビームサーチを用いている．
+文献 \cite{Sekine2000Backward} によれば，解析時間は $n^{2}$ に比例する
+とのことである．
+これに対し，我々のパーザは線形時間で文を解析し，精度もよい．
+工藤と松本 \cite{Kudo2005} の「相対モデル」のパーザ\footnote{
+京大コーパス Version 2 に対する精度が不明なため，表~\ref{tbl:comp} に
+はあげていない．}も，後方ビームサーチを用いているので，時間計算量という
+点では Uchimoto らのパーザと同様である．
+文献 \cite{Kudo2005} では，「相対モデル」のパーザは，京大コーパス 
+Version 3.0 に対して，係り受け正解率 91.37\% を得，
+Cascaded Chunking Model は 91.23\% を得たと報告されている．
+我々のパーザは，京大コーパス Version 2 において，Cascaded Chunking
+Model の精度を 0.27 ポイント上回っていることを考えると，我々のパーザと
+「相対モデル」パーザとの差も大きなものではないと判断できる\footnote{
+「相対モデル」が Cascaded Chunking Model よりも，長距離の文節間の係
+り受け F 値が上回っている \cite{Kudo2005} ことは注目に値する．
+我々の提案手法も Cascaded Chunking Model と同様，直後に係りやすいという性質
+を利用しているため，「相対モデル」のほうが提案手法よりも長距離の文節間
+の係り受け F 値がよい可能性が高い．
+}．
+また，我々と同様 Sekine \shortcite{Sekine2000Japanese} も線形時間で
+処理が進む非常に高速なパーザを提案している．
+彼の手法は，後方から係り先を決定していく．
+係り元の文節の語形の情報と，係り先候補 (5つまで) の主辞の情報から，係
+り先を一つに決める決定的有限状態変換器を用いている．
+係り元の語形や5つの係り先候補の主辞の情報を細かく区別すると，
+状態 (state) の数が多くなりすぎ，大量のメモリを消費するため，係り元の語形の状
+態を40に，係り先の主辞の状態を18に限定している．
+品詞や活用形の情報のみ利用している．
+このため，精度が大きく犠牲になっている．
+
+\section{おわりに}
+我々は線形時間で処理を行なう日本語係り受け解析のアルゴリズムを提案し
+た．
+京大コーパス Version 2 に対して実験を行ない，時間計算量と解析精度を調べた．
+時間計算量の上限は $O(n)$ であることが確認でき，解析精度も従来報告さ
+れているものを上回った．
+
+精度の差は従来研究で報告されているものと大きくないため，精度面からの優
+位性は結論できないが，本研究で (1) 提案アルゴリズムが理論的にも実験的にも時間
+計算量の上限が $O(n)$ で抑えられていることと，
+(2) 時間計算量を抑え，左から右へ一度しかスキャンしないにも関わらずトップレ
+ベルの精度が得られることの二つを示せた意義は大きいと考える．
+
+後方の文節を直接考慮しない提案アルゴリズムに一定の限界があることは明ら
+かであるが，係り先として考慮する文節の数を増やしても精度が向上するとは
+限らず，その解決は単純ではない．
+我々はスタッキングにより精度が向上しないか検討したいと考えている．
+また，並列構造の認識についてもよりよいモデルを提案したい．
+
+
+
+
+
+
+\bibliographystyle{jnlpbbl_1.1}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Abney}{Abney}{1991}]{Abney1991}
+Abney, S.~P. \BBOP 1991\BBCP.
+\newblock \BBOQ Parsing by Chunks\BBCQ\
+\newblock In Berwick, R.~C., Abney, S.~P., \BBA\ Tenny, C.\BEDS, {\Bem
+  Principle-Based Parsing: Computation and Psycholinguistics}, \mbox{\BPGS\
+  257--278}. Kluwer Academic Publishers.
+
+\bibitem[\protect\BCAY{Collins}{Collins}{1996}]{Collins1996}
+Collins, M. \BBOP 1996\BBCP.
+\newblock \BBOQ A New Statistical Parser Based on Bigram Lexical
+  Dependencies\BBCQ\
+\newblock In {\Bem Proc. of ACL-96}, \mbox{\BPGS\ 184--191}.
+
+\bibitem[\protect\BCAY{Eisner}{Eisner}{1996}]{Eisner1996}
+Eisner, J.~M. \BBOP 1996\BBCP.
+\newblock \BBOQ Three New Probabilistic Models for Dependency Parsing: An
+  Exploration\BBCQ\
+\newblock In {\Bem Proc. of COLING-96}, \mbox{\BPGS\ 340--345}.
+
+\bibitem[\protect\BCAY{Fujio \BBA\ Matsumoto}{Fujio \BBA\
+  Matsumoto}{1998}]{Fujio1998}
+Fujio, M.\BBACOMMA\ \BBA\ Matsumoto, Y. \BBOP 1998\BBCP.
+\newblock \BBOQ Japanese Dependency Structure Analysis based on Lexicalized
+  Statistics\BBCQ\
+\newblock In {\Bem Proc. of EMNLP-1998}, \mbox{\BPGS\ 88--96}.
+
+\bibitem[\protect\BCAY{Haruno, Shirai, \BBA\ Ooyama}{Haruno
+  et~al.}{1998}]{Haruno1998}
+Haruno, M., Shirai, S., \BBA\ Ooyama, Y. \BBOP 1998\BBCP.
+\newblock \BBOQ Using Decision Trees to Construct a Practical Parser\BBCQ\
+\newblock In {\Bem Proc. of COLING/ACL-98}, \mbox{\BPGS\ 505--511}.
+
+\bibitem[\protect\BCAY{Kudo \BBA\ Matsumoto}{Kudo \BBA\
+  Matsumoto}{2000}]{Kudo2000Japanese}
+Kudo, T.\BBACOMMA\ \BBA\ Matsumoto, Y. \BBOP 2000\BBCP.
+\newblock \BBOQ Japanese Dependency Structure Analysis Based on Support Vector
+  Machines\BBCQ\
+\newblock In {\Bem Proc. of EMNLP/VLC 2000}, \mbox{\BPGS\ 18--25}.
+
+\bibitem[\protect\BCAY{Kudo \BBA\ Matsumoto}{Kudo \BBA\
+  Matsumoto}{2002}]{Kudo2002}
+Kudo, T.\BBACOMMA\ \BBA\ Matsumoto, Y. \BBOP 2002\BBCP.
+\newblock \BBOQ Japanese Dependency Analysis using Cascaded Chunking\BBCQ\
+\newblock In {\Bem Proc. of CoNLL-2002}, \mbox{\BPGS\ 63--69}.
+
+\bibitem[\protect\BCAY{Kudo \BBA\ Matsumoto}{Kudo \BBA\
+  Matsumoto}{2003}]{Kudo2003}
+Kudo, T.\BBACOMMA\ \BBA\ Matsumoto, Y. \BBOP 2003\BBCP.
+\newblock \BBOQ Fast Methods for Kernel-based Text Analysis\BBCQ\
+\newblock In {\Bem Proc. of ACL-03}, \mbox{\BPGS\ 24--31}.
+
+\bibitem[\protect\BCAY{工藤\JBA 松本}{工藤\JBA 松本}{2005}]{Kudo2005}
+工藤拓\JBA 松本裕治 \BBOP 2005\BBCP.
+\newblock \JBOQ 相対的な係りやすさを考慮した日本語係り受け解析モデル\JBCQ\
+\newblock \Jem{情報処理学会論文誌}, {\Bbf 46}  (4), \mbox{\BPGS\ 1082--1092}.
+
+\bibitem[\protect\BCAY{Kurohashi \BBA\ Nagao}{Kurohashi \BBA\
+  Nagao}{1994}]{Kurohashi1994}
+Kurohashi, S.\BBACOMMA\ \BBA\ Nagao, M. \BBOP 1994\BBCP.
+\newblock \BBOQ A Syntactic Analysis Method of Long {J}apanese Sentences Based
+  on the Detection of Conjunctive Structures\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 20}  (4), \mbox{\BPGS\
+  507--534}.
+
+\bibitem[\protect\BCAY{Kurohashi \BBA\ Nagao}{Kurohashi \BBA\
+  Nagao}{1998}]{Kurohashi1998}
+Kurohashi, S.\BBACOMMA\ \BBA\ Nagao, M. \BBOP 1998\BBCP.
+\newblock \BBOQ Building a {J}apanese Parsed Corpus while Improving the Parsing
+  System\BBCQ\
+\newblock In {\Bem Proc. of the 1st LREC}, \mbox{\BPGS\ 719--724}.
+
+\bibitem[\protect\BCAY{Lafferty, Sleator, \BBA\ Temperley}{Lafferty
+  et~al.}{1992}]{Lafferty1992}
+Lafferty, J., Sleator, D., \BBA\ Temperley, D. \BBOP 1992\BBCP.
+\newblock \BBOQ Grammatical Trigrams: A Probabilistic Model of Link
+  Grammar\BBCQ\
+\newblock In {\Bem Proc. of the AAAI Fall Symp. on Probabilistic Approaches to
+  Natural Language}, \mbox{\BPGS\ 89--97}.
+
+\bibitem[\protect\BCAY{Maruyama \BBA\ Ogino}{Maruyama \BBA\
+  Ogino}{1992}]{Maruyama1992}
+Maruyama, H.\BBACOMMA\ \BBA\ Ogino, S. \BBOP 1992\BBCP.
+\newblock \BBOQ A Statistical Property of {J}apanese Phrase-to-Phrase
+  Modifications\BBCQ\
+\newblock {\Bem Mathematical Linguistics}, {\Bbf 18}  (7), \mbox{\BPGS\
+  348--352}.
+
+\bibitem[\protect\BCAY{益岡隆志\JBA 田窪行則}{益岡隆志\JBA
+  田窪行則}{1992}]{Masuoka1992}
+益岡隆志\JBA 田窪行則 \BBOP 1992\BBCP.
+\newblock \Jem{基礎日本語文法 ---改訂版---}.
+\newblock くろしお出版.
+
+\bibitem[\protect\BCAY{長尾真\JBA 佐藤理史\JBA 黒橋禎夫\JBA
+  角田達彦}{長尾真\Jetal }{1996}]{Nagao1996}
+長尾真\JBA 佐藤理史\JBA 黒橋禎夫\JBA 角田達彦 \BBOP 1996\BBCP.
+\newblock \Jem{自然言語処理}.
+\newblock 岩波書店.
+
+\bibitem[\protect\BCAY{Nivre}{Nivre}{2003}]{Nivre2003}
+Nivre, J. \BBOP 2003\BBCP.
+\newblock \BBOQ An Efficient Algorithm for Projective Dependency Parsing\BBCQ\
+\newblock In {\Bem Proc. of IWPT-03}, \mbox{\BPGS\ 149--160}.
+
+\bibitem[\protect\BCAY{Ratnaparkhi}{Ratnaparkhi}{1997}]{Ratnaparkhi1997}
+Ratnaparkhi, A. \BBOP 1997\BBCP.
+\newblock \BBOQ A Linear Observed Time Statistical Parser Based on Maximum
+  Entropy Models\BBCQ\
+\newblock In {\Bem Proc. of EMNLP-1997}, \mbox{\BPGS\ 1--10}.
+
+\bibitem[\protect\BCAY{Sekine}{Sekine}{2000}]{Sekine2000Japanese}
+Sekine, S. \BBOP 2000\BBCP.
+\newblock \BBOQ Japanese Dependency Analysis using a Deterministic Finite State
+  Transducer\BBCQ\
+\newblock In {\Bem Proc. of COLING-00}, \mbox{\BPGS\ 761--767}.
+
+\bibitem[\protect\BCAY{Sekine, Uchimoto, \BBA\ Isahara}{Sekine
+  et~al.}{2000}]{Sekine2000Backward}
+Sekine, S., Uchimoto, K., \BBA\ Isahara, H. \BBOP 2000\BBCP.
+\newblock \BBOQ Backward Beam Search Algorithm for Dependency Analysis of
+  {J}apanese\BBCQ\
+\newblock In {\Bem Proc. of COLING-00}, \mbox{\BPGS\ 754--760}.
+
+\bibitem[\protect\BCAY{Uchimoto, Sekine, \BBA\ Isahara}{Uchimoto
+  et~al.}{1999}]{Uchimoto1999}
+Uchimoto, K., Sekine, S., \BBA\ Isahara, H. \BBOP 1999\BBCP.
+\newblock \BBOQ Japanese Dependency Structure Analysis Based on Maximum Entropy
+  Models\BBCQ\
+\newblock In {\Bem Proc. of EACL-99}, \mbox{\BPGS\ 196--203}.
+
+\bibitem[\protect\BCAY{Vapnik}{Vapnik}{1995}]{Vapnik1995}
+Vapnik, V.~N. \BBOP 1995\BBCP.
+\newblock {\Bem The Nature of Statistical Learning Theory}.
+\newblock Springer-Verlag.
+
+\bibitem[\protect\BCAY{Wolpert}{Wolpert}{1992}]{Wolpert1992}
+Wolpert, D.~H. \BBOP 1992\BBCP.
+\newblock \BBOQ Stacked Generalization\BBCQ\
+\newblock {\Bem Neural Networks}, {\Bbf 5}, \mbox{\BPGS\ 241--259}.
+
+\bibitem[\protect\BCAY{Yoon, Choi, \BBA\ Song}{Yoon et~al.}{1999}]{Yoon1999}
+Yoon, J., Choi, K., \BBA\ Song, M. \BBOP 1999\BBCP.
+\newblock \BBOQ Three Types of Chunking in {K}orean and Dependency Analysis
+  Based on Lexical Association\BBCQ\
+\newblock In {\Bem Proc. of the 18th Int. Conf. on Computer Processing of
+  Oriental Languages}, \mbox{\BPGS\ 59--65}.
+
+\end{thebibliography}
+
+\begin{biography}
+\bioauthor{颯々野 学}{
+1991年京都大学工学部電気工学第二学科卒業．
+同年より富士通研究所研究員．
+1999年9月より1年間，
+米国ジョンズ・ホプキンス大学客員研究員．
+2006年3月よりヤフー株式会社勤務．
+自然言語処理の研究に従事．
+2006年10月より京都大学大学院情報学研究科知能情報学専攻博士後期課
+程在学．
+言語処理学会，情報処理学会，ACL各会員．
+}
+
+\end{biography}
+
+\biodate
+
+\end{document}

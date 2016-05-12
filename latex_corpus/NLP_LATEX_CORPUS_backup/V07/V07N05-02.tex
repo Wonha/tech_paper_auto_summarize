@@ -1,0 +1,1986 @@
+
+\documentstyle[jnlpbbl,lingmacros,treemacl,tree-dvips,epic,avm]{jnlp_j}
+\thispagestyle{plain}
+\setcounter{page}{19}
+\setcounter{巻数}{7}
+\setcounter{号数}{5}
+\setcounter{年}{2000}
+\setcounter{月}{11}
+\受付{2000}{1}{6}
+\再受付{2000}{3}{31}
+\採録{2000}{5}{9}
+
+\setcounter{secnumdepth}{2}
+
+\title{HPSGにもとづく日本語文法について\\
+---実装に向けての精緻化・拡張---}
+
+\author{大谷 朗\affiref{NAIST}\affiref{OGU} \and
+	宮田 高志\affiref{NAIST} \and
+	松本 裕治\affiref{NAIST}}
+
+\headauthor{大谷,宮田,松本}
+\headtitle{HPSGにもとづく日本語文法について}
+
+\affilabel{NAIST}{奈良先端科学技術大学院大学 情報科学研究科}
+{Graduate School of Information Science, Nara Institute of Science and
+Technology}
+\affilabel{OGU}{大阪学院大学 情報学部}
+{Faculty of Informatics, Osaka Gakuin University}
+
+\jabstract{
+自然言語処理において，言語の諸相を見据えた宣言的な文法にもとづく構文解
+析は必須である．
+実用的な文法体系を構築するため，我々は最近の主辞駆動句構造文法の成果を
+実装することにより，NAIST JPSGという単一化にもとづいた日本語句構造文法
+を構築した．
+NAIST JPSGでは，日本語の様々な特徴の検討を経て，それらの間の規則性を局
+所的な制約として記述することで，文法の原理，スキーマおよび素性が設計さ
+れている．
+また，個別言語の現象として，格助詞の分布・サ変動詞構文の意味的局所性・
+連体修飾節における格を伴った修飾句の係り先について，それらの語彙情報に
+関心を持って我々は分析した．
+(i) 格助詞が現れるか否かは，言語的対象を説明する素性体系の一部である型
+階層化された格素性にもとづいて説明できる．
+(ii) サ変動詞構文は形態的には複雑な構造でありながら意味的には単純な関
+係を含んでいるが，そのような不整合は語彙記述および単一化といった一般的
+な機構によって解消される．
+(iii) 連体修飾に関してコーパスを調査することで，いくつかの修飾--被修飾
+の関係は述語的な形態素を導入することにより削減することができる．
+}
+
+\jkeywords{
+主辞駆動句構造文法，
+日本語句構造文法，
+単一化，
+格助詞，
+サ変動詞構文，\\
+連体修飾節，
+コーパス，
+統計的係り受け情報}
+
+\etitle{On HPSG-Based Japanese Grammar\\
+---Refinement and Extension\\
+~~~~~~~~~~~~~~~~~ for Implementation---}
+
+\eauthor{Akira Ohtani \affiref{NAIST}\affiref{OGU} \and
+	Takashi Miyata \affiref{NAIST} \and
+	Yuji Matsumoto \affiref{NAIST}} 
+
+\eabstract{
+A parser based on declarative grammar that deals with various aspects
+of language is indispensable for natural language processing.
+For constructing a practical grammar system, we develop
+unification-based Japanese phrase structure grammar, NAIST JPSG, which
+is an implementation of ideas from recent developments in Head-driven
+Phrase Structure Grammar.
+The principles, schemata and features are designed through considering
+various aspects of Japanese and describing regularities among them
+as a set of local constraints.
+We then devote our discussion to the analysis of language-specific
+phenomena, the distribution of case particles, 
+the thematic locality of {\it sa-hen d\^o-si\/} constructions,
+and the modification of case-marked adnominal phrase in 
+{\it rentai sy\^u-syoku\/} clauses, 
+with main focus on their specific lexical information.
+(i) Whether case particles can appear or not is accounted for under
+the type-hierarchical case feature, which is a part of the feature
+system for describing linguistic objects.
+(ii) {\it Sa-hen d\^o-si\/} constructions include simple thematic
+relation in spite of their morphologically complex status.  Lexical
+description and general mechanism as unification can reconcile such
+mismatch.
+(iii) Through the consultation of corpus, some classes of ambiguities
+on modifier-modifiee relation in {\it rentai sy\^u-syoku\/} clause can
+be reduced by introducing a predicative morpheme.  }
+
+\ekeywords{
+Head-driven Phrase Structure Grammar,
+Japanese Phrase Structure Grammar,
+Unification,
+Case Particles,
+{\it Sa-hen D\^o-si\/} Constructions, 
+Adnominal Clauses,
+Corpus,
+Statistical Information of Dependency
+}
+
+
+
+\makeatletter
+\def\mybbox#1#2{}
+\def\myfbox#1#2(#3,#4){}
+\def\myobox#1#2(#3,#4){}
+\makeatother
+
+\def\BAD{}
+\def\SQ{}
+\def\DQ{}
+\def\QB{}
+
+\avmfont{\sc}
+\avmvalfont{\rm}
+\avmsortfont{\scriptsize\it}
+\avmvskip{-.5ex}
+\avmoptions{center}
+
+\newcommand{\qtrquad}{}
+\newcommand{\boxit}[1]{}
+
+\begin{document}
+\maketitle
+
+
+\setcounter{section}{0}
+
+\section{はじめに}\label{sec:intr}
+
+構文解析は自然言語処理の基礎技術として研究されてきたものであり，それを
+支える枠組の一つに言語学上の理論があると考えるのが自然であろう．過去に
+おいては言語に関する理論的理解の進展が解析技術の開発に貢献していたこと
+は改めて述べるまでもない．しかし，現状はそうではない．現在開発されてい
+る様々な解析ツールには文法理論との直接的な関係はない．形態素解析や係り
+受け解析には独自のノウハウがあり，またそうしたノウハウは言語学上の知見
+とは無関係に開発されている．そのような事情の背景には，自然言語処理に文
+法理論を導入することは実用向きではない，という見解があった．また，そも
+そも自然言語処理という工学的な技術が文法理論の応用として位置付けられる
+ものであるかどうかすら明確ではない．
+
+工学的なシステムは，1970年代，学校文法を発展させたものか，60年代の生成
+文法などにもとづいて開発されていた．そのようなアプローチの問題は個別的
+な規則を多用したことにあり，様々な言語現象にわたる一般性が捉えられない
+ばかりか，肥大した文法は処理効率の面でも望ましいものではなかった．素性
+構造(feature structure)の概念の形式化が進んだ80年代は，それを応用した
+構文解析などの研究が行われていた．研究の関心は専ら単一化(unification)と
+いう考え方が言語に特徴的な現象の説明に有効かどうかを明らかにすることで
+あった．そのため構文解析器の開発は文法の構築と並行して行われたものの，
+実用面より理論的な興味が優先された．90年代になると，コーパスから統計的
+推定によって学習した確率モデルを用いる手法が，人手で明示的に記述された
+文法に匹敵する精度を達成しつつあった．しかしながら，コーパスだけに依存
+した方法も一つの到達点に達し，そろそろ限界が感じられてきている．
+
+これらの文法システムに共通する特徴は，自然言語に関する様々な知見を何ら
+かの計算理論にもとづいて実装しようと試みていることである．そのような知
+見は言語に関する人間の認知過程の一端を分析して得られたものに他ならない
+が，そもそも人間の情報処理というものが他の認知活動と同様に部分的な情報
+を統合して活動の自由度をできるだけ小さく抑えているようなものであるなら
+ば，言語も人間が処理している情報である以上，そのような性質を持つものと
+考えることができる．その意味で，構文解析が果たすべき役割とは，文の構造
+といった言語に関する部分的な情報を提供することで可能な解析の数を抑制す
+ることにあり，またより人間らしい，あるいは高度な自然言語処理に向けての
+一つの課題は，そのような言語解析における部分的な情報の統合にあると考え
+ることができる．
+
+本論文ではこういう前置きをおいた上で，現在NAISTで開発中の文法システム
+を概観し，自然言語処理に文法理論を積極的に導入した構文解析について論じ
+てみたいと思う．言語データを重視する帰納的な言語処理とモデルの構築を優
+先する演繹的な文法理論を両立させた本論のアプローチは，どちらか一方を指
+針とするものよりも，構文解析，あるいは言語情報解析においてシステムの見
+通しが良いことを主張する．また，このような試みが自然言語処理における実
+践的な研究に対してどのようなパースペクティブを与えるか，ということも述
+べてみたい．
+
+本論文の構成は以下のとおりである．
+文法理論は言語の普遍的な(universal)性質を説明する原理の体系であるが，
+\ref{sec:jpsg}節では，言語固有の(language-specific)データを重視して構
+築していながらも普遍的体系に包含されるような日本語文法の骨子を明示的に
+述べる．
+\ref{sec:jl}節以下は，日本語特有の現象についての具体的分析を示す．形式
+化が進んでいる格助詞，取り立て助詞，サ変動詞構文を例に．言語現象の観察・
+基本事項の抽出を踏まえた上で，断片的な現象の間に潜む関連性が我々の提案
+する文法に組み込まれた一般的な制約によって捉えられることを示す．
+\ref{sec:adn}節では，本論の構文解析の問題点の一つ，連体修飾の曖昧性に
+ついて検討する．一般に，コーパス上の雑多な現象を説明するための機構を文
+法に対して単純に組み込んでしまうと曖昧性は増大する．しかし，格助詞に関
+わる連体修飾については，文法全体を修整することなく不必要な曖昧性を抑え
+ることができる．ここでは各事例の検討を交えながら，その方法について述べる．
+\ref{sec:cncl}節は総括である．本論文が示したことを簡単にまとめ，締めく
+くりとする．
+
+\setcounter{section}{1}
+
+\section{基本的な枠組と実装に向けての理論の精緻化・拡張}\label{sec:jpsg}
+
+文法理論は，言語に関する最も体系的な知見として，人間の言語活動に対して
+見通しのよい説明を提供している．本研究が立脚する主辞駆動句構造文法
+(Head-driven Phrase Structure Grammar---HPSG)\cite{Pollard&Sag1987,
+Pollard&Sag1994,Sag&Wasow1999}は，言語現象を情報という観点から形式的に
+捉えようとした文法理論である．HPSGは，統語，意味，あるいは今日亨受でき
+る豊かなデータの蓄積をもとにした音韻・形態情報などの系統的な関係を記述
+することができ，さらにはそれらの統合的な情報も単一化によって得ることを
+可能にしている．また，開発の経緯において情報科学との交流が密であったた
+め，構文解析などの言語処理の基礎技術を考える基本的な枠組みを提供すると
+いう目的においても導入に適した理論である．以下に論じる文法システムは，
+文法理論の導入によるこのような利点が言語処理に反映されるように設計を試
+みたものである．
+
+\subsection{HPSGの実装における問題点}\label{sec:jpsg:issue}
+HPSGの体系\cite{Pollard&Sag1987,Pollard&Sag1994}を解析システムとして実
+装する場合，特に考慮を要するのは次の三点である．
+\begin{itemize}
+\item [1.] 語順に関する原理・制約
+\item [2.] 音形を持たない(空の)語彙を仮定した``省略''(や``痕跡'')の説明
+\item [3.] (無効な)構文木の生成・曖昧性の抑制
+\end{itemize}
+
+1 は線形順序制約(Linear Precedence Constraint)によって規定され，直接支
+配スキーマ(Immediate Dominance Schema---IDスキーマ)は構成素が左右どち
+らの枝にあるかという区別はしない．この制約は構成素間の局所的な順序のみ
+を規定し，制約に違反しない任意の語順を文法的とするが，このような理論的
+枠組を実際の解析に反映させるためには，予め線形順序制約とIDスキーマから
+全ての句構造規則を派生させるといった工夫が別途必要となる．
+
+2 は下位範疇化(subcategorization)に関する素性の打ち消し(cancellation) 
+を問題にする．下位範疇化された要素が表層に現れていない場合，音形を持た
+ない空の語彙を仮定することで素性は打ち消される．しかしながら，日本語で
+は文中のほとんどの要素が省略可能であるため，省略の分析を実装するには，
+実際には起きていない省略を検査してしまう冗長な解析を抑制する方法も組み
+込まなければならない．
+
+3 はシステムの処理対象と言語理論の説明対象の間の調整に関する問題である．
+原理・スキーマなどの制約は，可能であれば解析のあらゆる段階でその適用が
+全て検査されるが，その数が多いほど評価を試みる(無効な)構文木が組み合わ
+せ的に増大してしまう．処理系への負担を減らすには，システムの持つ文法を
+調整し適用可能性を抑える必要があるが，それには言語現象の理論的な一般化
+を損わないような配慮が必要である．
+
+これらは，言語理論が推し進めている抽象的な原理の体系をそのまま実装する
+上で問題となる．しかしながら，我々の文法システムでは\ref{sec:intr}節で
+述べたような言語現象に対する理論の見通しの良さを活かすために，HPSGの形
+式化に対し独自の修正を加えることでその実装を可能にした．以下では，上記
+の問題点を解消するために我々が行ったHPSGの精緻化・拡張について述べる．
+まず，\ref{sec:jpsg:frml}節では日本語文法の形式化に関する全体的見通し
+を概観し，\ref{sec:jpsg:worder}節では``語順''の扱いを，次いで
+\ref{sec:jpsg:drop}節では``省略''の扱いについて述べる．最後に，
+\ref{sec:jpsg:atree}節で構文木の生成・曖昧性の抑制に関して，頻出構文で
+ある複合述語に問題を限定して論じることにする．
+
+
+\subsection{日本語文法の形式化}\label{sec:jpsg:frml}
+
+本論文で提案する文法は当面の記述対象を日本語に限っているため，JPSGとよ
+んでいる．HPSGにもとづいた日本語文法としては，既にICOT JPSGが存在して
+いる\footnote{\citeA{Gunji1987,Tsuda&etal1989L}などを参照．90年代には，
+ICOTの成果を発展させた研究\cite{郡司1994,Gunji&Hasida1998}が，自然言語
+の一般的性質の説明を目指した理論体系の開発に関心を向けている．}．ここ
+で提案する文法も言語に関する基本的な洞察はICOTと同じである．しかし，文
+法の理論的一貫性を保持しつつ実用的なシステムを開発することに，より関心
+を向けているため，理論の射程や実装面の特徴においては大きく異なっている．
+ゆえに，ICOT JPSGとは区別して，我々が提案する文法をNAIST JPSGとよぶこ
+とにした．
+
+HPSGにもとづくJPSGの理論的構成は，
+普遍原理($P_1, \dots, P_n$)，
+日本語固有の原理($P_{n+1}, \dots,  P_{n+m}$)，
+スキーマ($S_1, \dots, S_p$)，
+語彙($L_1, \dots, L_q$)，
+の関係として図\ref{fig:jpn}のように形式化することができる．
+\begin{figure}
+\begin{center}
+$日本語 = 
+P_1 \wedge \dots \wedge P_n \wedge P_{n+1} \wedge \dots \wedge P_{n+m}
+\wedge (S_1 \vee \dots \vee S_p \vee L_1 \vee \dots \vee L_q)$
+\end{center}
+\caption{HPSGにもとづく日本語文法の形式化}\label{fig:jpn}
+\end{figure}
+このように連言的な原理と選言的なスキーマを仮定し，言語の性質を理論的に
+組み立てることによって，言語の普遍性と日本語の特徴の記述を両立させている．
+
+言語的対象物(linguistic objects)は，実際の言語状況において，
+図\ref{fig:fstr}のような属性(attribute)と値(value)が対になった素性構造で
+表わされる音韻・形態情報，統語情報，そして意味情報が互いに制約し合って
+配置された部分情報構造(partial information structures)に則して分析される．
+\begin{figure}
+\avmvskip{-.2ex}\begin{center}
+\begin{avm}
+ \[{\footnotesize\it synsem\_struc}\\
+   syn    & \[head & \[{\footnotesize\it head}\\
+                       case	& {\it case}\\
+                       arg-st & {\it list(synsem\_struc)} \\
+		       mod	& {\it list(synsem\_struc)}
+		     \]\\
+              val  & \[subcat   & {\it list(synsem\_struc)} \\
+                       adjacent & {\it list(synsem\_struc)}\]
+	    \] \\
+   sem    & {\it sem\_struc}
+ \]
+\end{avm}
+\end{center}\avmvskip{-.5ex}
+\caption{NAIST JPSGの基本的な素性構造{\protect\footnotemark}}\label{fig:fstr}
+\end{figure}
+\footnotetext{以下，素性名からどの素性の値か明らかなものについては適宜
+\ \begin{avm}\[adjcnt\ \<\,\>\,\]\end{avm}\ のように簡略化して記述する．}
+{\it synsem\_struc\/}は語または句の持つ情報を記述するための型(type)の
+総称であるが，このように部分情報構造の型の名前をイタリック体で示す．ま
+た，{\it list($\alpha$)\/}は$\alpha$という型を持つ素性のリストを表す．
+{\it synsem\_struc\/}は{\it phrase, word, \dots\/}といった下位型
+(subtype)を持つ．主辞素性(head feature---{\sc head}素性)の値{\it
+head\/}は品詞，格素性(case feature---{\sc case}素性)の値{\it case\/}は
+格に関する情報をそれぞれ表すが，各素性の詳細は以下の節で必要に応じて述
+べる．
+
+上記のように，素性構造に対する基本的な構想，またこのような言語情報の統
+合が素性構造に対する単一化によってなされる点はHPSGの見解に従うものであ
+るが，NAIST JPSGはさらに日本語の解析システムとして，日本語を指向した新
+しい型体系を導入している．
+
+HPSGなどの言語理論と構文解析・文生成といった自然言語処理技術が最も密接
+に関連するのは，句構造の構築に関するスキーマであろう．HPSGは文の構築に
+関する個別の句構造規則を仮定していない．伝統的な統語論で仮定されていた
+句構造規則は，下位範疇化に関する情報と直接支配原理(Immediate Dominance
+Principle)に関する六つのスキーマ(1.~Head-Subject, 2.~Head-Complement,
+3.~Head-Subject-Complement, 4.~Head-Marker, 5.~Head-Adjunct,
+6.~Head-Filler)といった普遍的制約に置き換えられている．
+
+NAIST JPSGも基本的にはこの考え方に従うものであるが，スキーマに関しては
+独自に図\ref{fig:schm}の四つを設定している．
+\begin{figure}
+\begin{center}
+\begin{tabular}{rllcllcl}
+a. & complement-head schema:     & [{\it phrase}] & $\rightarrow$ &
+	C[{\it phrase}] & H \\
+b. & adjunct-head schema:        & [{\it phrase}] & $\rightarrow$ &
+	A[{\it phrase}] & H[{\it phrase}]\\
+c. & 0-complement-head schema:   & [{\it phrase}] & $\rightarrow$ &
+	H[{\it word}] & \\
+d. & pseudo-lexical-rule schema: & [{\it word}]   & $\rightarrow$ &
+	X[{\it word}] & H[{\it word}] \\
+\end{tabular} 
+\end{center}
+\caption{NAIST JPSGのスキーマ{\protect\footnotemark}}\label{fig:schm}
+\end{figure}
+\footnotetext{図中のC, A, H, Xはそれぞれ，補語(complement)・
+付加語(adjunct)・主辞(head)・任意の統語範疇を表している．}
+(a)のcomplement-head schemaは1--3を包括し，(b)のadjunct-head schemaは5 
+に相当する．(c)の0-complement schemaおよび(d)のpseudo-lexical-rule
+schemaは新たに導入したものであるが，これらのスキーマの必然性は
+\ref{sec:jpsg:issue} 節で提起した問題と関連しており，順次説明していく
+ことにする．6に関しては空所という言語学的な分析をどのように実装に反映
+するかを検討中ゆえに，現在のところ扱いが明確となっていない．4に相当す
+るスキーマがないのは，NAIST JPSGでは日本語の助詞(および補文標識)をマー
+カと分析しないためである．助詞については\ref{sec:jl} 節で詳しく論じる．
+
+
+\subsection{語順に関する原理・制約}\label{sec:jpsg:worder}
+
+図\ref{fig:schm}のスキーマは，HPSGで仮定されているものとは一部異なって
+いるものの，その選択が図\ref{fig:jpn}に示すように選言的であること，ま
+たcomplement-head schemaは下位範疇化，adjunct-head schemaは付加語に関
+する制約を担うスキーマとして，伝統的な句構造規則に代わり，構成素の階層
+関係に制約を課し，図\ref{fig:btree}のような構文木の生成を保証している
+点では変わりはない．
+\begin{figure}
+\begin{center}
+ \unitlength=0.05ex
+ \tree{\node{S\rlap{\,\begin{avm}\[subcat\ \<\,\>\,\]\end{avm}}}
+  {\AnnoLn7{\llap{\boxit{1}\,}PP}{\xnode{xa}{\ }}\tangle6{健が}}
+  {\AnnoRn7{V$'$\rlap{\,\begin{avm}\[subcat\ \<\,\@1\,\>\,\]\end{avm}}}
+	{\hspace*{6.6cm}\xnode{xb}{\ }{\it complement-head}}
+   {\AnnoLn7{ADV\rlap{\,\begin{avm}\[mod\ \<\,\@3\,\>\,\]\end{avm}}}
+        {\xnode{ya}{\ }}\Tangle1{こっそり}}
+   {\AnnoRn7{\llap{\boxit{3}\,}V$'$\rlap{\,
+		\begin{avm}\[subcat\ \<\,\@1\,\>\,\]\end{avm}}}
+	{\hspace*{4.8cm}\xnode{yb}{\ }{\it adjunct-head}}
+    {\AnnoLn4{\llap{\boxit{2}\,}PP}{\xnode{za}{\ }}\Tangle1{ケーキを}}
+    {\AnnoRn3{V$'$\rlap{\,\begin{avm}\[subcat\ \@4\,\]\end{avm}}}
+	{\hspace*{3.5cm}\xnode{zb}{\ }{\it complement-head}}
+	\Annorn0{V\rlap{\,\begin{avm}
+			\[arg-st\ \@4 \<\,\@1xp[{\it ga}], \@2yp[{\it wo}]\,\>\,\]
+		\end{avm}}}
+	{\xnode{wa}{\ }\hspace*{3cm}\xnode{wb}{\ }{\it 0-complement-head}}
+		\lf{食べた}
+    }
+   }
+  }
+ }\hspace*{5cm}
+\end{center}
+\nodeconnect[r]{xa}[l]{xb}
+\nodeconnect[r]{ya}[l]{yb}
+\nodeconnect[r]{za}[l]{zb}
+\nodeconnect[l]{wa}[l]{wb}
+\caption{「健がこっそりケーキを食べた」の構文木}\label{fig:btree}
+\end{figure}
+
+図\ref{fig:stree}に図\ref{fig:btree}の語順転換(かき混ぜ，scrambling)の一
+例を示す．
+\begin{figure}
+\begin{center}
+ \unitlength=0.05ex
+ \tree{\node{S\rlap{\,\begin{avm}\[subcat \<\,\>\,\]\end{avm}}}
+  {\AnnoLn7{\llap{\boxit{2}\,}PP}{\xnode{xa}{\ }}\Tangle1{ケーキを}}
+  {\AnnoRn7{V$'$\rlap{\,\begin{avm}\[subcat \<\,\@2\,\>\,\]\end{avm}}}
+	{\hspace*{6.4cm}\xnode{xb}{\ }{\it complement-head}}
+   {\AnnoLn7{ADV\rlap{\,\begin{avm}\[mod\ \<\,\@3\,\>\,\]\end{avm}}}
+        {\xnode{ya}{\ }}\Tangle1{こっそり}}
+   {\AnnoRn7{\llap{\boxit{3}\,}V$'$\rlap{\,\begin{avm}
+		\[subcat\ \<\,\@2\,\>\,\]\end{avm}}}
+	{\hspace*{4.6cm}\xnode{yb}{\ }{\it adjunct-head}}
+    {\AnnoLn4{\llap{\boxit{1}\,}PP}{\xnode{za}{\ }}\tangle7{健が}}
+    {\AnnoRn3{V$'$\rlap{\,\begin{avm}
+			\[subcat\ \<\,\@1, \@2\,\>\,\]
+             \end{avm}}}{\hspace*{3.3cm}\xnode{zb}{\ }{\it complement-head}}
+		\lf{食べた}
+    }
+   }
+  }
+ }\hspace*{5cm}
+\end{center}
+\nodeconnect[r]{xa}[l]{xb}
+\nodeconnect[r]{ya}[l]{yb}
+\nodeconnect[r]{za}[l]{zb}
+\caption{「ケーキをこっそり健が食べた」の構文木}\label{fig:stree}
+\end{figure}
+図\ref{fig:btree}と比較するとわかるように，どちらも下位範疇化素性
+(subcategorization feature---{\sc subcat}素性)の打ち消しには違いがない．
+HPSGでは，言語の階層性を規定するこのような句構造表示の制約によって，英
+語のように語順の制限が厳しい言語と日本語のように語順の制限がゆるい言語
+を区別していた．NAIST JPSGの実装では次の2点により語順転換を説明する．
+\begin{itemize}
+\item [1.] {\sc subcat}素性の打ち消しに順序を設けないことにより，任意
+の順序での素性の打ち消しを可能とする．
+\item [2.] 構文木の構造は構成素の階層関係を直接的には反映しておらず，
+そのような情報は{\sc sem}素性の埋め込みで記述する．
+\end{itemize}
+また，complement-head schema，adjunct-head schemaの意図するところは，
+日本語の基本的な文の統語構造を，語順の制約がゆるい非階層言語のような平
+坦な構文木として分析するのでもなく，また階層言語のような主語・目的語の
+非対称性も仮定しない，ということである．
+
+1 に関してはICOT JPSGでも{\sc subcat}素性の打ち消しに順序を設けないと
+いうアプローチがとられている．しかし，その定式化は素性の値をリストでは
+なく，集合とする別の方法によって実装されていた．NAIST JPSG の{\sc
+subcat}素性は，{\sc arg-st}素性から\citeA{Sag&Wasow1999}で提案されてい
+る項顕在化原理(Argument Realization Principle)によって変換されたリスト
+であり，統語情報と意味情報の関係に対する普遍的制約によって計算されている．
+
+2 に関しては\citeA{Manning&etal1999}でも埋め込み分析が提案されているが，
+我々とは分析の対象とする言語事実やその説明の枠組，理論的帰結が異なって
+いる．
+
+また，近年の言語学では統語構造と音韻・形態構造の独立性が考えられており，
+例えば\citeA{Gunji1999}では，順序連接(sequence union)という制約を用い
+ることで，それらの関係を適切に捉えるような機構を提案している．しかし，
+順序連接は解析システムとして実装するのが困難であり，また音韻・形態情報
+を反映して語順を規定する構文木にもとづく解析の方が，係り受け情報を利用
+することで不要な可能性の数を制限しやすいため，このような分析を採用して
+いる．
+
+
+\subsection{省略に関するスキーマ}\label{sec:jpsg:drop}
+
+日本語では，いわゆるゼロ代名詞とよばれる，(\ref{ex:omit})に示すような
+項の省略が頻繁に起こる．
+\enumsentence{\label{ex:omit}
+\quad\tabcolsep=0pt
+\begin{tabular}[t]{rp{3mm}ccc}
+a. & & 健が & ケーキを & 食べた．\\
+b. & & 健が & $\phi$   & 食べた．\\
+c. & & $\phi$ & ケーキを & 食べた．\\
+d. & & $\phi$ & $\phi$ & 食べた．
+\end{tabular}
+}
+すなわち，(\ref{ex:omit}a)に対し，動詞が要求する項が一部表出していない
+ような(\ref{ex:omit}b, c)や，極端な場合，(\ref{ex:omit}d)のように項が
+全く表出していなくても，その動詞は句または文と成り得る．
+
+一方，英語ではこのようなことはほとんど起こらず，語と句は厳格に区別され
+る．英語はさらに語順が固定的であることから，\citeA{Sag&Wasow1999}では
+(主語以外の)全ての項を同時に打ち消すスキーマが標準的な機構となっている．
+
+NAIST JPSGでは次の二点を考慮し，図\ref{fig:schm}(a)のcomplement-head
+schemaの他に(c)の0-complement schemaを導入した．
+\begin{itemize}
+\item [1.] 日本語においては部分的に飽和した動詞句がごく自然に現れる．
+\item [2.] 仮に全ての項が表出しても，それらの間に任意の付加語が入り得る．
+\end{itemize}
+0-complement schemaに続けてcomplement-head schemaを再帰的に適用してゆ
+けば，任意の個数の項を打ち消すことができる．図\ref{fig:go}はこのスキー
+マによって解析を行なった(\ref{ex:omit}d)の構文木である．
+\begin{figure}
+\begin{center}
+\unitlength=0.05ex
+\tree{\node{S\,\begin{avm}
+	\[head   & \@1\\
+	  adjcnt & \<\,\>\\
+	  subcat & \@2\,\]
+	\end{avm}}
+ \Annorn0{V\,\begin{avm}
+	\[head   & \@1\,{\it verb}\\
+	  adjcnt & \<\,\>\\
+	  arg-st & \@2\,\<\,xp[{\it ga}], yp[{\it wo}]\,\>\,\]
+	\end{avm}}
+	{\xnode{a}{\ }\hspace*{3cm}\xnode{b}{\ }{\it 0-complement-head}}
+ \lf{食べた}
+ }
+\end{center}
+\nodeconnect[l]{a}[l]{b}
+\caption{(\ref{ex:omit}d)「食べた」の構文木}\label{fig:go}
+\end{figure}
+「食べた」の{\sc head}素性が主辞素性原理(Head Feature Principle)によっ
+て{\sc s}の{\sc head}素性に受け継がれている．また，「食べた」の意味的
+な項を表わす{\sc arg-st}素性は項顕在化原理によって{\sc s}の{\sc
+subcat} 素性に変換されている．
+
+
+\subsection{複合述語に関する曖昧性の抑制}\label{sec:jpsg:atree}
+
+日本語では(\ref{ex:aux})のように動詞に対する助動詞の連接が生産的に
+行われている．
+\enumsentence{\label{ex:aux} 
+\begin{tabular}[t]{rl}
+a. & 奈緒美が本を\underline{読んだ．} \\
+b. & 健が奈緒美に本を\underline{読ませた．} \\
+c. & 健が奈緒美に本を\underline{読ませたがった．} \\
+d. & 奈緒美と違って健は絵本を \underline{読ませられたがらなかった．} 
+\end{tabular}
+}
+図\ref{fig:schm}(c)の0-complement schemaとともに新たに導入した(d)の
+pseudo-lexical-rule schemaは，このようないわゆる複合述語形成を扱うスキー
+マである．例えば(\ref{ex:aux}b)における複合動詞「読ませた」は図
+\ref{fig:lcaus}のように分析される．
+\begin{figure}
+\begin{center}
+\unitlength=0.08ex
+\tree{\node{S\rlap{\,\begin{avm}
+	\[head   & \@1\\
+	  subcat & \<\@3\,\>\,\]
+	\end{avm}}}
+ {\AnnoLn7{\llap{\boxit{4}\,}PP\rlap{\,\begin{avm}
+		\[head   & \[{\it ni\/}\]\\
+		  adjcnt & \<\,\>\,\]
+		\end{avm}}}{\xnode{wa}{\ }}
+	\tangle9{奈緒美に}}
+ {\AnnoRn6{V$'$\rlap{\,\begin{avm}
+		\[head   & \@1\\
+		  subcat & \<\@3, \@4\,\>\,\]
+		\end{avm}}}
+	{\hspace*{6cm}\xnode{wb}{\ }{\it complement-head}}
+  {\AnnoLn7{\llap{\boxit{5}\,}PP\rlap{\,\begin{avm}
+		\[head   & \[{\it wo\/}\]\\
+		  adjcnt & \<\,\>\,\]
+		\end{avm}}}{\xnode{xa}{\ }}
+	\tangle4{本を}}
+  {\AnnoRn4{V$'$\rlap{\,\begin{avm}
+		\[{\footnotesize\it phrase}\\
+		  head   & \@1\\
+		  subcat & \@6\,\]
+		\end{avm}}}
+	{\hspace*{4cm}\xnode{xb}{\ }{\it complement-head}}
+   {\Annorn0{\hspace*{5zw}V\,\begin{avm}\[{\footnotesize\it word}\\
+			head & \@1\\
+			arg-st & \@6 \<\@3 xp[{\it ga\/}],
+					\@4 yp[{\it ni\/}]$_{\boxit{7}}$,
+					\@5 zp[{\it wo\/}]$_{\boxit{8}}$\>\,\]
+		     \end{avm}}
+	{\xnode{ya}{\ }\hspace*{3cm}\xnode{yb}{\ }{\it 0-complement-head}}
+    {\AnnoLn9{\llap{\boxit{2}\,}V\rlap{\,\begin{avm}
+		\[{\footnotesize\it word}\\
+		  adjcnt\ \<\,\>\\
+		  arg-st\ \<up[{\it ga}]$_{\boxit{7}}$,
+				wp[{\it wo}]$_{\boxit{8}}$\>\,\]
+		\end{avm}}}
+        {{\it pseudo-lexical-rule}\xnode{zb}{\ }\hspace*{2.0cm}}\lf{読ま}}
+    {\AnnoRn6{\hspace*{11zw}V\,\begin{avm}
+		\[{\footnotesize\it word}\\
+		  head   & \@1{\it verb}\\
+		  adjcnt & \<\@2 v[{\it word}]\>\,\\
+	          arg-st & \@6\]
+		\end{avm}}
+	{\xnode{za}{\ }}
+	\lf{せた}}
+   }
+  }
+ }
+}
+\end{center}
+\nodeconnect[r]{wa}[l]{wb}
+\nodeconnect[r]{xa}[l]{xb}
+\nodeconnect[l]{ya}[l]{yb}
+\nodeconnect[l]{za}[r]{zb}
+\caption{{\protect (\ref{ex:aux}b)}「(健が)奈緒美に本を読ませた」の構文木}\label{fig:lcaus}
+\end{figure}
+
+pseudo-lexical-rule schemaを導入することの利点は，助動詞「せた」が左に
+くる姉妹を{\it word\/}に指定することで，解析における複合動詞句の曖昧性
+を抑制できる点にある．その指定で用いられる隣接素性(adjacent
+feature---{\sc adjcnt}素性)はICOT JPSGで採用されていた素性であり，下位
+範疇化されている要素の中でも特に隣接したものに関する制約を扱う．
+図\ref{fig:val}(左)に隣接素性原理(Adjacent Feature Principle)を示す．
+\begin{figure}
+\begin{center}
+\unitlength=0.08ex
+\begin{tabular}{ccc}
+ \tree{\node{\begin{avm}\[subcat & \@3\\ adjcnt & \@2\,\]\end{avm}}
+  {\Ln5{\begin{avm}\@1 \[adjcnt & \<\,\>\,\]\end{avm}}}
+  {\Rn5{\begin{avm}\[subcat & \@3\\
+                adjcnt & \<\,\@1\,\>\ $\oplus$ \@2\,\]\end{avm}}}
+ }
+& &
+ \tree{\node{\begin{avm}\[subcat & \@2\\ adjcnt & \<\,\>\,\]\end{avm}}
+  {\Ln5{\begin{avm}\@1 \[adjnt & \<\,\>\,\]\end{avm}}}
+  {\Rn5{\begin{avm}\[subcat & \<\,\@1\,\>\ $\oplus$ \@2\,\\
+                adjcnt & \<\,\>\,\]\end{avm}}}
+ }\\
+\end{tabular}
+\end{center}
+\caption{隣接素性原理(左)と下位範疇化原理(右)}\label{fig:val}
+\end{figure}
+{\sc adjcnt}素性は{\sc subcat}素性を保存したまま語彙的に緊密な隣接要素
+を指定する．助動詞や\ref{sec:jl}節で論じる助詞のように，日本語において
+は他の要素を下位範疇化するだけでなく，それらと隣接していることを要求す
+る語が存在するため，制約を局所的に記述するにはこのような素性の導入が必
+要である．
+
+{\sc adjcnt}素性は言語類型的に膠着語(agglutinative language)とよばれる
+言語を特徴付ける素性であると考えられるが，そのような素性の普遍的位置付
+けを提案するには諸言語との比較対照研究が必要であり，現時点では日本語な
+どに固有の素性として扱っている．
+
+図\ref{fig:lcaus}の「せた」の{\sc adjcnt}素性が指定する要素を{\it
+word\/}に制限しないと，図\ref{fig:schm}(a)のcomplement-head schemaが適
+用され，(\ref{ex:aux}b)は図\ref{fig:scaus}のようにも分析できる．
+\begin{figure}
+\begin{center}
+\unitlength=0.07ex
+ \tree{\node{S}
+  {\AnnoLn5{PP}{\xnode{xa}{\ }}\Tangle1{奈緒美に}}
+  {\AnnoRn5{VP\rlap{$_2$}}{\hspace*{3.4cm}\xnode{xb}{\ }{\it complement-head}}
+   {\AnnoLn3{VP\rlap{$_1$}}{\xnode{ya}{\ }}
+    {\AnnoLn1{PP}{{\it complement-head\/}\xnode{za}{\ }\hspace*{3cm}}
+	\tangle7{本を}}
+    {\AnnoRn1{V$'$}{\xnode{zb}{\ }}\tangle7{読ま}}}
+   {\AnnoRn3{V$'$}{\hspace*{2cm}\xnode{yb}{\ }{\it complement-head}}
+	{\tangle7{せた}}}
+  }
+}\hspace*{1cm}
+\end{center}
+\nodeconnect[r]{xa}[l]{xb}
+\nodeconnect[r]{ya}[l]{yb}
+\nodeconnect[r]{za}[l]{zb}
+\caption{「奈緒美に本を読ませた」の別の構文木}\label{fig:scaus}
+\end{figure}
+これは言語学的にしばしば論じられる補文分析であるが，この分析には次の二
+つの問題がある．
+\begin{itemize}
+\item [1.] 実装が困難な順序連接を導入しないと「奈緒美に」と「本を」の
+      語順転換が説明できない．
+\item [2.] 「奈緒美に」と「本を」の間に付加語が挿入されるとVP$_1$と
+      VP$_2$のどちらに付加されるかで曖昧性が組み合わせ的に増大してしまう．
+\end{itemize}
+2については，このような曖昧性が意味的な差をもたらすこともある．例えば
+「健は奈緒美に大声で本を読ませた」は，「大声で読んだ」と「大声で指示し
+た」という二つの読みがあるが，このような意味的解釈が可能かどうかは，一
+般には統語的な構造よりも語の意味的な共起関係や背景知識に依存する．よっ
+て，統語解析の段階でこのような曖昧性を展開してしまうのは解析システムと
+して実装する上では得策ではない．
+
+図\ref{fig:lcaus}, \ref{fig:scaus}の分析にはそれぞれ利点・欠点はあるが，
+現在NAIST JPSGは次の二つの理由により(\ref{ex:aux}b)の構造を
+図\ref{fig:lcaus}とするような分析を採用している．
+\begin{itemize}
+\item [1.] ``語順転換''や(ゼロ主語などの)``省略''が構文木の情報を反映
+      した形で直接的に扱える．
+\item [2.] 構文木と意味素性の構造は必ずしも一致しないが，どちらの構造
+      を採用しても，文全体の意味論としては全く同じ{\sc sem}素性を考え
+      ることが可能である．
+\end{itemize}
+つまり，句構造構築に関して，先に述べた「音韻・形態情報は構文木に，階層
+関係などの統語情報は{\sc sem} 素性にそれぞれ反映する」という一貫した立
+場をとっているのである．
+
+\ref{sec:jpsg}節では，いくつかのHPSGの普遍原理に対し自然な拡張を行いつ
+つ，NAIST JPSGの個別言語を指向したスキーマを導入した．関連モデルとの比
+較によっても明らかだが，構文解析のようなモデルの実用面においては，本論
+文の文法はその射程と説明力において優位にあると言える．もちろん，普遍的
+な体系を考慮せずに構文に特化したスキーマを仮定することによって諸構文を
+説明することは原理的に可能である．しかし，言語の一般性を捉えるためには
+より多くの構文が原理の相互作用によって説明されることが望ましい．そこで
+\ref{sec:jl}節では，そのような分析の一例として，日本語に特徴的ないくつ
+かの現象について論じることにする．
+
+\setcounter{section}{2}
+
+\section{語彙記述の設計と素性・原理の相互作用}\label{sec:jl}
+
+普遍的かつ計算機処理に適した文法記述体系の開発には対象言語の理論的な理
+解が欠かせないが，\ref{sec:jpsg}節では，いくつかの現象にもとづいて原理
+やスキーマを拡張した日本語句構造文法を導入した．そのような枠組みに立脚
+することで，一般的な言語現象は諸現象に関与する頻度の高い一般的な原理に
+よって説明されるが，特殊な言語現象もまた原理の相互作用の結果として説明
+されることが望ましい．そこで\ref{sec:jl}節では，分析が進んでいる格助詞，
+取り立て助詞およびサ変動詞構文を取り上げ，NAIST JPSGが日本語に特有な現
+象をどのように扱っているかについて述べる．また，この枠組における文法に
+内在した計算機構(computational system)および入力となる語彙項目(lexical
+item)に関する制約の記述法についても合わせて論じることにする．
+
+
+\subsection{格助詞に関する素性と原理}\label{sec:jl:case}
+日本語などの言語に特有な現象の一つは，名詞が助詞を伴う点にある．
+格助詞については(\ref{ex:case})にあげる四つの現象が特徴的である．
+\enumsentence{\label{ex:case}
+\begin{tabular}[t]{rlll}
+a. & 名詞に後接する場合: & 
+ \underline{健が} 走る． & \underline{奈緒美を} 知っている．\\
+b. & 省略される場合: &
+ \underline{健} 来た？   & \underline{奈緒美} 知っている？\\
+c. & 動詞に後接する場合: &
+\underline{行くが} よい．& \underline{足るを} 知る．\\
+d. & 省略されない場合: &
+ \BAD \underline{行く} よい．& \BAD \underline{足る} 知る．
+\end{tabular}
+}
+
+\ref{sec:jpsg:issue}節でその方針を述べたように，NAIST JPSGでは
+(\ref{ex:case}b, c, d)に対して，空の助詞ガや形式名詞コトなどの語彙を辞
+書に仮定した解析はしない．格助詞は名詞と動詞の両方を直接下位範疇化して
+いるものとして分析する．さらに，説明できなければならない現象として
+「(\ref{ex:dcase})のように(名詞句でも動詞句でも)ガやヲ等の格助詞を二つ
+以上伴えない」ということも挙げられる．
+\enumsentence{\label{ex:dcase}
+\begin{tabular}[t]{rl}
+a. & \BAD 健をが 走る．\\
+b. & \BAD 行くがが よい．
+\end{tabular}
+}
+
+(\ref{ex:case}), (\ref{ex:dcase})のような個別言語特有の現象も，動詞・
+名詞・格助詞に対してそれぞれ図\ref{fig:lexicon}のような言語固有の語彙
+情報さえ適切に記述しておけば，原理には一切手を加えることなく説明できる．
+\begin{figure}
+\begin{center}
+\begin{tabular}{ccc}
+ \begin{avm}
+  \[\footnotesize\it{word}\\
+    head & \[\footnotesize\it{verb}\\
+             case & {\it none\/}\]\\
+    arg-st & \<xp[$\alpha$], yp[$\beta$], \dots \>\,
+  \]
+ \end{avm} &
+ \begin{avm}
+  \[\footnotesize\it{word}\\
+    head & \[\footnotesize\it{noun}\\
+             case & X\]\,\]
+ \end{avm} &
+ \begin{avm}
+  \[\footnotesize\it{word}\\
+    head & \[\footnotesize\it{ptcl}\\
+             case & {\it case\/}\]\\
+    adjcnt & \<xp[{\it none\/}]\>\,
+  \]
+ \end{avm}
+\end{tabular} 
+\end{center}
+\caption{動詞(左)・名詞(中)・格助詞(右)の素性記述}\label{fig:lexicon}
+\end{figure}
+図\ref{fig:lexicon}中の略記{\sc xp[$\alpha$]}は図\ref{fig:abbr}(左)の
+素性構造である．また，{\it none\/}および{\it ga\/}は
+\ref{sec:jpsg:frml} 節で説明した型{\it case\/}の下位型であり，図
+\ref{fig:abbr}(右)のような型階層を形成しているとする．
+\begin{figure}
+\begin{center}
+\begin{tabular}{cp{1cm}c}
+\raisebox{-12pt}{\begin{avm}
+\[{\footnotesize\it phrase}\\
+  head & \[case & $\alpha$\]\,
+\]
+\end{avm}}
+& &
+\unitlength=0.07ex
+\tree{\node{\it case}
+ {\Ln7{\it none}}
+ {\Ln2{\it ga}}
+ {\rn2{\it ni}}
+ {\Rn4{\it wo}}
+ {\Rn7{({\it to})}}}
+\end{tabular}
+\end{center}
+\caption{{\sc case}素性(左)と型階層(右)}\label{fig:abbr}
+\end{figure}
+つまり，言語理論が捉えようとしている言語の普遍的性質を損うことなく，日
+本語の現象を説明することが可能な理論となっているのである．NAIST JPSGが
+そのような仕組みを提案していることは，\ref{sec:jpsg}節の議論に加え，
+図\ref{fig:drop}に示す(\ref{ex:case}a, b)に対する名詞句と格助詞の具体的
+な素性構造の記述からも明らかである．
+\begin{figure}
+\begin{center}\small
+\begin{tabular}{cc}
+\unitlength=0.095ex
+\tree{\node{V$'$\rlap{\,\begin{avm}\[subcat\ \<\,\>\,\]\end{avm}}}
+ {\Ln4{\llap{\boxit{2}\,}PP\rlap{\,\begin{avm}
+	\[head   & \[{\it wo\/}\]\,\\
+	  adjcnt & \<\,\>\]
+	\end{avm}}}
+  {\AnnoLn2{\llap{\boxit{1}\,}NP\rlap{\,\begin{avm}\[head\ \[X\]\,\]\end{avm}}}
+	{\footnotesize X={\it none}\,}
+	\lf{奈緒美}}
+  {\AnnoRn2{P\rlap{\,\begin{avm}
+	\[head   & \[{\it wo\/}\]\\
+	  adjcnt & \<\@1 xp[{\it none\/}]\>\,\]
+	\end{avm}}}{\footnotesize \,XP=NP}
+	\lf{を}}
+ }
+ {\AnnoRn3{V$'$\rlap{\,\begin{avm}
+	\[subcat\ \<\@2 yp \[{\it wo\/}\]\,\>\,\]\end{avm}}}
+	{\footnotesize \,YP=PP}}
+}\hspace*{3.0cm} &
+\unitlength=0.17ex
+\tree{\node{V$'$\rlap{\,\begin{avm}\[subcat\ \<\,\>\,\]\end{avm}}}
+ {\Annoln9{\llap{\boxit{1}\,}NP\rlap{\,\begin{avm}\[head\ \[X\]\,\]\end{avm}}}
+	{\footnotesize X={\it wo}\,}
+	\lf{奈緒美}}
+ {\Annorn8{V$'$\rlap{\,\begin{avm}
+	\[subcat\ \<\@1 xp \[{\it wo\/}\]\,\>\,\]\end{avm}}}
+	{\footnotesize \,XP=NP}}
+}\hspace*{3.0cm}
+\end{tabular}
+\end{center}
+\caption{格助詞が名詞に後続する場合(左)と格助詞が省略される場合(右)の構文木}
+\label{fig:drop}
+\end{figure}
+図\ref{fig:drop}では，格助詞が明示される場合とされない場合の任意性が，
+名詞の{\sc case}素性を変数(すなわち{\it none\/}や{\it ga\/}の上位であ
+る{\it case\/}型)とすることで捉えられている．実際，このような省略は会
+話文においては顕著に現れ得るので，実用的な文法はそのような現象にも対処
+できなければならない．ICOT JPSGをはじめとして，従来の文法の実装ではこ
+のような現象の扱いは例外として軽視されがちであったが，NAIST JPSGでは規
+範的でない文に対しても可能な限り特別視しないという方針をとっている．
+(\ref{ex:case}c)は図\ref{fig:drop}(左)の「奈緒美」に相当する部分が「行
+く，足る」といった動詞となったものと考えるが，そのような素性構造も助詞
+の{\sc adjnt}素性の指定が{\it none\/}となっているので適切に記述するこ
+とができる．さらに，(\ref{ex:case}d)のように動詞に後接する格助詞が省略
+されないということは，動詞の{\sc case}素性が{\it none\/}であることで捉
+えられている．
+
+また，この枠組では，格助詞を二つ以上伴うことにより排除されていた
+(\ref{ex:dcase})のような現象は，すでに格の情報が指定されているものにさ
+らに格の指定をするという点において排除される．つまり，格助詞の{\sc
+adjcnt}素性には{\sc case}素性が{\it none\/}である要素に隣接することが
+記述されているが，すでに格助詞を伴った助詞句PPの{\sc case}素性は{\it
+none\/}ではないため，さらに格助詞が隣接することはできないのである．
+
+
+\subsection{取り立て助詞に関する素性と原理}\label{sec:jl:focus}
+
+現時点では全ての助詞の記述が済んだわけではない．格助詞においてもそうで
+あるが，現在のNAIST JPSGは当面の処理において必要となる助詞の機能の一部
+を記述したにすぎない．格助詞以外で分析が進んでいるのは取り立て助詞など
+とよばれるものである．サエ・スラなどの用例・用法は実に様々であるが，そ
+れらに共通する統語的特徴としては「それが選択(あるいは隣接)している語」
+の様々な情報に関して，「本来その語を選択している語」から参照することが
+できるということが挙げられる．
+\enumsentence{\label{ex:sae}
+\begin{tabular}[t]{rl}
+a. & 健が奈緒美を誉めた．\\
+b. & 健が奈緒美サエ誉めた．
+\end{tabular}
+}
+例えば，(\ref{ex:sae}a)では動詞「誉める」の目的語「奈緒美を」は，ヲ格
+を伴うことによってそれ自身の文法機能を明示しているが，(\ref{ex:sae}b)
+ではサエを伴うことによりヲ格を表出していない．しかしながら，ヲ格を伴っ
+ていなくても依然「奈緒美」は「誉める」の目的語であるので，ヲ格を明示す
+ることで示していた文法機能は単に形態的に表出していないだけであることが
+わかる．また，サエ自身はガ格などの代わりに用いることもできるので，動詞
+はサエに関係なく目的語の助詞句を下位範疇化していると考えられる．
+\begin{figure}
+\begin{center}
+\begin{tabular}{cc}
+\raisebox{-45pt}{\hspace*{-5mm}\avmvskip{0ex}\begin{avm}
+\[head\quad \[{\footnotesize\it ptcl}\\
+            case & \@1\,\\
+            arg-st & \@2 
+          \]\\
+  adjcnt\ \<\[{\footnotesize\it phrase}\\
+               head\ \[case\quad\ \@1\\
+                       arg-st\ \@2\,\]
+                     \]\>\,
+\]
+\end{avm}\avmvskip{-.5ex}} &
+\unitlength=0.09ex
+ \tree{\node{V$'$\rlap{\,\begin{avm}\[subcat\ \<\,\>\,\]\end{avm}}}
+  {\AnnoLn3{\llap{\boxit{1}\,}PP\rlap{\,\begin{avm}
+		\[case\quad\ Y\\
+		  adjcnt\ \<\,\>\,\]
+	    \end{avm}}}{\small Y={\it wo\/}\,}
+   {\AnnoLn1{NP\rlap{\,\begin{avm}
+		\[case\ X\,\]
+	     \end{avm}}}{\small X=Y\,}\lf{奈緒美}}
+   {\AnnoRn4{P\rlap{\,\begin{avm}
+		\[case   & Y\\
+	          adjcnt & \<xp[Y]\>\,\]
+	     \end{avm}}}{\small \,XP=NP}\lf{サエ}}
+  }
+  {\AnnoRn3{V$'$\rlap{\,\begin{avm}
+		\[subcat\ \<\@1 yp\[{\it wo\/}\]\>\,\]
+	    \end{avm}}}{\small \,YP=PP}}
+ }\hspace*{7zw}
+\end{tabular}
+\end{center}
+\caption{取り立て助詞の語彙項目(左)と「\dots 奈緒美サエ\dots」の構文木(右)}
+\label{fig:sae}
+\end{figure}
+
+図\ref{fig:drop}(左)では格助詞ヲの{\sc head}素性の一部である{\sc case}
+素性の値{\it wo\/}が，おなじく{\sc pp}の{\sc head}素性の一部である{\sc
+case} 素性に主辞素性原理によって受け継がれている．この情報が，下位範疇
+化原理において，{\sc pp}が動詞の{\sc subcat}素性の中のヲ格を持つ要素と
+単一化する際に制約として機能する．図\ref{fig:sae}(右)では，助詞サエの
+{\sc case}素性が変数Yになっており，{\sc pp}全体としても{\sc case}素性
+は変数のまま指定されない．この状態で，下位範疇化原理に従って動詞の{\sc
+subcat}素性の中のヲ格を持つ要素と{\sc pp}が単一化すれば，Yの値が{\it
+wo\/}となり助詞句はヲ格句と同じ素性の指定を持つ句として解析される．
+
+ただし，サエの記述は図\ref{fig:sae}で仮定しているほど単純ではない．例
+えば，サエに動詞が前接する場合，特定の活用を要求することがコーパスから
+も伺えるので，サエの記述には格の指定の有無だけでなく品詞や活用も下位範
+疇化情報として記述しておくことが考えられる．これに関してはさらに詳しく
+調査する必要がある．もちろん，こういう原理的なアプローチだけで格助詞に
+関する全ての現象を説明できるわけではなく，その点に関しては
+\ref{sec:adn:crpsadj}節でもいくつかの事例を検討してみることにする．
+
+
+\subsection{サ変動詞構文}\label{sec:jl:sahen}
+
+ここで検討するサ変動詞構文とは，いわゆる項構造(argument structure)を持つ
+漢語名詞(サ変名詞，動名詞，verbal noun---VN)とサ変動詞スルを含
+む(\ref{ex:suru})のような文のことである．
+\enumsentence{\label{ex:suru}
+\begin{tabular}[t]{rlll}
+ a. & 船が沈没した & 船の沈没
+    & 沈没 $\langle I \rangle$ \\
+ b. & 健が英語を勉強した & 健の英語の勉強
+    & 勉強 $\langle I, J \rangle$ \\
+ c. & 師匠が弟子に秘伝を伝授した & 師匠の弟子への秘伝の伝授
+    & 伝授 $\langle I, J, K \rangle$
+\end{tabular}
+}
+例えば(\ref{ex:suru}c)の$I$, $J$, $K$は，「伝授」という行為において，
+それぞれ伝授する人({\sc initiator})，伝授される人({\sc initiatee})，伝
+授される内容({\sc initiated})を表わし，NAIST JPSGでは図\ref{fig:astr}
+のように記述する．
+\begin{figure}
+\begin{center}
+\begin{avm}
+\[syn & \|head\ \|arg-st\ $\langle$ {\sc xp}$_i$, {\sc yp}$_j$, {\sc zp}$_k$ $\rangle$\\
+  sem & \[rel & {\it initiation}\\
+          initiator & {\it i}   \\
+          initiatee & {\it j}   \\
+          initiated & {\it k\/} \] 
+\]
+\end{avm}
+\end{center}
+\caption{NAIST JPSGの素性構造における項構造の表記}
+\label{fig:astr}
+\end{figure}
+この構文は(\ref{ex:suru})に示すように，VNを主辞とする名詞句と現れる項
+の数と種類が同じになっているという点に特徴がある．京大コーパス
+version2.0\cite{Kurohashi&Nagao1997}を調べてみると，「動詞・助動詞・形
+容詞・形容動詞・副詞・終助詞」を含む全述語的文節の出現回数約19,000回に
+対して約10,000回と半分以上を占めており，日本語では頻出と考えられ，文法
+の被覆率を上げるためには無視できない構文である．
+
+このサ変動詞構文の興味深い点は，いわゆる``局所性''に関するところにある．
+制約が局所的な形式化で述べられるか否かは，自然言語の記述体系としての理
+論的関心もさることながら，実装においてはこと重要である．
+(\ref{ex:suru}c)を例に詳しく見てみると，VNを主辞とする名詞句では図
+\ref{fig:nonloc}(左)に示すようにそれを主辞とした句の内部で``局所的に'' 
+意味的関係が成立している．一方，同じVNを含むサ変動詞構文ではそのような
+``局所性''に従わず，図\ref{fig:nonloc}(右)に示すように句の外側の要素と
+の間で意味的関係が成立しているように見える．
+
+このことから\citeA{Grimshaw&Mester1988}などの研究では，概ね(i)項構造を
+持たない特殊な軽動詞(light verb---LV)という語彙項目と，(ii)VNが持つ意
+味的な主辞として機能をLVに転送する(transfer)といった操作，いわゆる項転
+送(Argument Transfer)を仮定することで，図\ref{fig:nonloc}(右)における
+一見するところの局所性違反を説明しようとする．
+\begin{figure}
+\begin{center}\small
+{\unitlength=0.085ex
+\begin{tabular}{cc}
+\hspace*{-1zw}
+\tree{\node{\fbox{VNP}}
+  {\Ln6{PP$_{I}$}\tangle8{師匠の}}
+  {\Ln1{PP$_{J}$}\tangle9{弟子への}}
+  {\rn9{PP$_{K}$}\tangle8{秘伝の}}
+  {\Rn5{VN\rlap{\,$\langle I,J,K\rangle$}}\lf{伝授}}
+ }
+\hspace*{3zw}
+& 
+\hspace*{1zw}
+\tree{\node{VP}
+  {\Ln7{PP$_{I}$}\tangle8{師匠が}}
+  {\Ln4{PP$_{J}$}\tangle8{弟子に}}
+  {\rn0{PP$_{K}$}\tangle8{秘伝を}}
+  {\Rn3{\fbox{VNP}}\raisebox{1ex}{\lf{伝授}}}
+  {\Rn6{V\rlap{\,$\langle I,J,K\rangle$}}\lf{した}}
+ }
+\hspace*{3zw}
+\end{tabular}}
+\end{center}
+\caption{VNを主辞とする名詞句(左)とVNを含むサ変動詞構文(右)の意味的関係}
+\label{fig:nonloc}
+\end{figure}
+
+これに対しNAIST JPSGでは，特殊な``操作''は導入せず，スルに対してこのよ
+うな特性を反映した語彙項目を仮定するだけでサ変動詞構文の局所性に関する
+問題を説明する．この場合，語彙項目は原理から導き得ない特性を述べている
+にすぎない．単一化という，ここまでの諸現象の説明においても仮定してきた，
+NAIST JPSGでは当然の操作が，項転送を仮定するまでもなくサ変動詞構文の問
+題を局所的に説明する．つまり，\citeA{Grimshaw&Mester1988}のように特殊
+な操作を計算機構に組み込む必要はなく，ごく少数の単一化のような計算機構
+と，充実した語彙情報のみで個別言語の現象を説明するのである．
+
+では，このような分析の入力となる語彙情報は，いかにして記述されるのか．
+それは(\ref{ex:vnomit})，(\ref{ex:vnscr})のような個別言語(JPSGの場合は
+日本語)の言語事実の観察にもとづいて規定される．
+\enumsentence{\label{ex:vnomit}
+\begin{tabular}[t]{rl}
+a. & \BAD 船が $\phi$ した．\\
+b. & \BAD 健が英語を $\phi$ した．\\
+c. & \BAD 師匠が弟子に秘伝を $\phi$ した．\\
+\end{tabular}
+}
+\enumsentence{\label{ex:vnscr}
+\begin{tabular}[t]{rl}
+a. & \BAD 沈没$_i$ 船が $t_i$ した．\\
+b. & \BAD 健が 勉強$_i$ 英語を $t_i$ した．\\
+c. & \BAD 師匠が弟子に 伝授$_i$ 秘伝を $t_i$ した．
+\end{tabular}
+}
+もしVNがLVの{\sc subcat}素性の要素(ここでは目的語)ならば，省略や語順
+転換が可能だが，(\ref{ex:vnomit})，(\ref{ex:vnscr})はそれができないこ
+とを示している．このことはVNとLVが``語彙的''に緊密であり，その構文木は
+\ref{sec:jpsg:atree}節で論じた図\ref{fig:schm}(d)のpseudo-lexical-rule
+schemaによって生成されることを示唆する．図\ref{fig:lvlex}にそのような
+特性を反映したスル(以下これをLVとよぶ)の素性構造を示す．
+\begin{figure}
+\begin{center}
+\begin{avm}
+\[head   & {\it verb}\\
+  arg-st & \@1\\
+  adjcnt & \<\[{\footnotesize\it word}\\
+                  case   & {\it none}\,\\
+                  arg-st & \@1
+              \]\>\,
+\]
+\end{avm}
+\end{center}
+\caption{NAIST JPSGにおける軽動詞スルの語彙項目}\label{fig:lvlex}
+\end{figure}
+未確定の{\sc arg-st}素性，項構造を含む範疇と単一化すべき要素が{\sc 
+subcat}素性ではなく{\sc adjcnt}素性となっていること，およびその値が
+{\it word\/}型に制限されているのは先の分析にもとづいている．
+
+また，図\ref{fig:stlvc}には図\ref{fig:lvlex}の語彙記述を持つLVを入力と
+して，一般的な計算機構によって構築された(\ref{ex:suru}c)の構文木を示す．
+\begin{figure}
+\begin{center}\small
+{\unitlength=0.06ex
+ \tree{\node{S\rlap{\,\begin{avm}\[
+				  subcat\ \<\ \>\,
+				 \]\end{avm}}}
+  {\AnnoLn4{\llap{\boxit{3}\,}PP\rlap{$_{I}$}}{\xnode{xa}{\ }}
+	\tangle9{師匠が}}
+  {\AnnoRn6{V$'$\rlap{\,\begin{avm}\[
+				 subcat\ \<\@3xp$_{I}$\>\,
+				\]\end{avm}}}
+	{\hspace*{7.7cm}\xnode{xb}{\ }{\it complement-head}}
+   {\AnnoLn4{\llap{\boxit{4}\,}PP\rlap{$_{J}$}}{\xnode{ya}{\ }}
+	\tangle9{弟子に}}
+   {\AnnoRn6{V$'$\rlap{\,\begin{avm}\[
+				  subcat\ \<\@3xp$_{I}$,\@4yp$_{J}$\>\,
+				 \]\end{avm}}}
+	{\hspace*{6.2cm}\xnode{yb}{\ }{\it complement-head}}
+    {\AnnoLn4{\llap{\boxit{5}\,}PP\rlap{$_{K}$}}{\xnode{za}{\ }}
+	\tangle9{秘伝を}}
+    {\AnnoRn6{V$'$\rlap{\,\begin{avm}\[
+			   subcat\ \<\@3xp$_{I}$,\@4yp$_{J}$,\@5zp$_{K}$\>\,
+			  \]\end{avm}}}
+	{\hspace*{4.8cm}\xnode{zb}{\ }{\it complement-head}}
+     \Annorn0{V\rlap{\,\begin{avm}\[arg-st\ \@1\,\]\end{avm}}}
+       {\xnode{a}{\ }\hspace*{4cm}\xnode{b}{\ }{\it 0-complement}}
+      {\Ln6{\llap{\boxit{2}\,}VN\rlap{\,\begin{avm}\[arg-st\ \@1 \<I,J,K\>\,\]\end{avm}}}
+          \tangle5{伝授}}
+      {\Rn7{\hspace*{12zw}V\,\begin{avm}
+			\[arg-st & \@1\\
+			  adjcnt & \<\@2 \[arg-st\ \@1\,\]\,\>\,
+			\]
+			\end{avm}}\lf{した}}
+     }
+    }
+   }
+  }}
+\end{center}
+\nodeconnect[r]{xa}[l]{xb}
+\nodeconnect[r]{ya}[l]{yb}
+\nodeconnect[r]{za}[l]{zb}
+\nodeconnect[l]{a}[l]{b}
+\caption{NAIST JPSGにおけるサ変動詞構文の構文木}\label{fig:stlvc}
+\end{figure}
+未確定の部分 \begin{avm}\@1\end{avm} は{\sc adjcnt}素性と単一化したVNが
+持つ項構造と構造共有(structure sharing)されている．LVのもつ{\sc
+adjcnt}素性の要素は隣接素性原理に従って，VNによって打ち消され，VNの項
+は構造共有によって「VNスル」全体の項構造となる．この項は一般的な句構造
+同様に下位範疇化素性原理に従って打ち消されるが，項転送相当の現象は捉え
+られているのである．
+
+ところが，\citeA{Grimshaw&Mester1988}などの研究にも言えることであるが，
+スルという語彙の記述は図\ref{fig:lvlex}に挙げたものだけでは充分でない．
+(\ref{ex:vnsae})のようにVNとスルの間に取り立て助詞が介在する文や，
+(\ref{ex:sbjitv}b, c)のように主語が介在する文は，LVとはまた違った特性
+を持ったスルが必要であることを示している．
+\enumsentence{\label{ex:vnsae}
+\begin{tabular}[t]{rl}
+a. & 船が[沈没サエ]した．\\
+b. & 健が英語を[勉強サエ]した．\\
+c. & 師匠が弟子に秘伝を[伝授サエ]した．
+\end{tabular}
+}
+\enumsentence{\label{ex:sbjitv}
+\begin{tabular}[t]{rl}
+a. & \BAD 沈没サエ船がした．\\
+b. & 英語を勉強サエ健がした．\\
+c. & 弟子に秘伝を伝授サエ師匠がした．
+\end{tabular}
+}
+(\ref{ex:vnomit}), (\ref{ex:vnscr})の例では，VNとスルは隣接しなければ
+ならないと分析し，それに適ったスルの語彙記述を仮定した．しかしながら，
+(\ref{ex:vnsae}), (\ref{ex:sbjitv}b, c)は隣接していなくてもよい例と考
+えられる．さらに，(\ref{ex:sbjitv})は項との間で語順転換が可能なVN とそ
+うでないものがあることを示している．VNとスルの間に要素が介在するという
+ことは，図\ref{fig:lvlex}のように{\sc adjnt}素性でVNを指定すると説明で
+きない．そこで，新たに図\ref{fig:hvlex}のスル(これを重動詞，heavy
+verb---HVとよぶ)を導入する．
+\begin{figure}
+\begin{center}
+\begin{avm}
+\[head   & {\it verb}\\
+  arg-st & \<\@1 \[case\ {\it ga}\],
+             \[{\footnotesize\it phrase}\\
+               case   & {\it wo}\\
+               arg-st & \<\,\@1 $\mid$ \@2\,\>\,
+             \]\,$\mid$ \@2\,\>\,\\
+  adjcnt & \<\,\>
+\]
+\end{avm}
+\end{center}
+\caption{重動詞スルの語彙項目}\label{fig:hvlex}
+\end{figure}
+図\ref{fig:sthvc}は(\ref{ex:sbjitv}b)の構文木であるが，
+図\ref{fig:hvlex}のHVが図\ref{fig:schm}(c)の0-complement schemaで句となっ
+た場合，VNと単一化すべき要素と主語は{\sc subcat}素性の要素として顕在化
+するので，語順転換が可能となっている\footnote{ただし，図\ref{fig:hvlex} 
+において \begin{avm}\@2\end{avm} が未確定ならば，それを語順転換に参与
+させない機構を導入する必要がある．}．
+\begin{figure}
+\begin{center}\small\ \unitlength=0.08ex
+\tree{\node{V$'$\rlap{\,\begin{avm}
+	\[subcat\ \<\,\@4\,\>\,\\
+	  adjcnt\ \<\,\>\,
+	\]\end{avm}}}
+ {\Ln7{\llap{\boxit{3}\,}PP\rlap{\,\begin{avm}
+	\[case\quad\ \@5\\
+	  arg-st\ \@6\\
+	  adjcnt\ \<\,\>\,
+	\]\end{avm}}}
+  {\Ln5{\llap{\boxit{1}\,}VNP\rlap{\,\begin{avm}
+	\[case\quad\ \@5 X\\
+	  arg-st\ \@6\,\<\,\@2, \@4\,\>\,\\
+	  adjcnt\ \<\,\>
+	\]\end{avm}}}\lf{勉強}}
+  {\Rn6{P\rlap{\,\begin{avm}
+	\[case\quad\ \@5\\
+	  arg-st\ \@6\\
+	  adjcnt\ \<\,\@1\,\>\,
+	\]\end{avm}}}\lf{サエ}}}
+ {\AnnoRn8{V$'$\rlap{\,\begin{avm}
+	\[subcat\ \<\,\@3, \@4\,\>\,\\
+	  adjcnt\ \<\ \>
+	\]\end{avm}}}{$X=$ {\it wo}}
+  {\Ln1{\llap{\boxit{2}\,}PP}\tangle2{健が}}
+  {\Rn2{\hspace*{10zw}HVP\,\begin{avm}
+	\[subcat\ \<\@2,
+		    \@3 \[{\footnotesize\it phrase}\\
+			    case\quad\ {\it wo\/}\\
+			    arg-st\ \@6\,\],
+		    \@4\,\>\,\\
+	  adjcnt\ \<\,\>
+	\]\end{avm}}\lf{HV}\lf{スル}}
+ }
+}
+\end{center}
+\caption{(\ref{ex:sbjitv}b)「\dots 勉強サエ健がスル」の構文木}\label{fig:sthvc}
+\end{figure}
+図\ref{fig:hvlex}において{\sc arg-st}素性の第二項の{\sc case}素性が
+{\it wo\/}であることに注意されたい．これはVNが格助詞ヲを伴っている
+(\ref{ex:double})の観察にもとづいている．
+\enumsentence{\label{ex:double}
+\begin{tabular}[t]{rl}
+a. & \BAD 船サエ沈没ヲした．\\
+b. & 健が英語サエ勉強ヲした．\\
+c. & 師匠が弟子に秘伝サエ伝授ヲした．
+\end{tabular}
+}
+ただし，(\ref{ex:sbjitv}b, c)で「英語，秘伝」がヲ格を伴っていることを
+考えると，HV自体は(\ref{ex:vnwo}b,c)のような文まで認可してしまう．しか
+し，これらは日本語では一般的な，いわゆる二重ヲ格制約(Double-{\it WO\/}
+Constraint)という別の制約によって排除されていると分析することができる．
+\enumsentence{\label{ex:vnwo}
+\begin{tabular}[t]{rl}
+a. & \BAD 船ヲ沈没ヲした．\\
+b. & \BAD 健が英語ヲ勉強ヲした．\\
+c. & \BAD 師匠が弟子に秘伝ヲ伝授ヲした．
+\end{tabular}
+}
+(\ref{ex:vnwo}b)を例にとれば，「英語」もVN「勉強」もどちらも潜在的には
+ヲ格を伴うことができるのであるが，そのような制約により，両方がヲ格を伴っ
+た文は排除されていると考えるのである．また，(\ref{ex:vnwo}a)が非文法的
+なのは，文中に一つもガ格名詞句が含まれていないなどの理由によると説明で
+きる．しかしながら，ガ格の生起についての制約は検討しなければならない現
+象が広範囲に及ぶため，具体的な制約の定式化は今後の課題である．
+
+これまでの議論では，(\ref{ex:double}a)の非文法性は捉えられない．しかし，
+(\ref{ex:double}a)に含まれる「沈没」のような名詞は，能格名詞(ergative
+nominal)とよばれるクラスを形成し，ヲ格を伴えないことが
+\citeA{Miyagawa1989}などの研究により知られている．
+\enumsentence{\label{ex:ergn}
+\begin{tabular}[t]{rl}
+a. & 船が沈没(*ヲ)した．\\
+b. & 矢が的に命中(*ヲ)した．\\
+c. & 隕石が落下(*ヲ)した．
+\end{tabular}
+}
+本論文は(\ref{ex:ergn})のようなVNを含むサ変動詞構文については明確な分析
+を持たない．それはすぐ後に述べる理由によるのであるが，もし能格名詞の型
+{\it ergative}を導入して(\ref{ex:vnsae}a)，(\ref{ex:sbjitv}a)，
+(\ref{ex:double}a)を説明するならば，図\ref{fig:lvlex}のLV,
+図\ref{fig:hvlex}のHVに加えて，さらに図\ref{fig:ergvn}のような語彙項目
+のスルを導入する必要があるだろう．
+\begin{figure}
+\begin{center}
+\avmvskip{-.2ex}\begin{avm}
+\[head   & {\it verb}\\
+  arg-st & \@1\\
+  adjcnt & \<\[{\scriptsize\it phrase/ergative}\\
+                  case   \; {\it none}\,\\
+                  arg-st \; \@1
+              \]\>\,
+\]
+\end{avm}\avmvskip{-.5ex}
+\end{center}
+\caption{能格名詞を指定するスルの語彙項目}\label{fig:ergvn}
+\end{figure}
+(\ref{ex:double}a)などのスルが図\ref{fig:ergvn}のような語彙記述である
+ならば，その非文法性は{\sc case}素性が単一化できないことによると説明で
+きる．
+
+しかしながら，このような分析にも反例がある．例えば(\ref{ex:ergn}c)の
+「落下」は，主語が行為者と解釈できれば，(\ref{ex:fall}a)のようにVNが
+ヲ格を伴っていても我々の判断では容認できてしまう．
+\enumsentence{\label{ex:fall}
+\begin{tabular}[t]{rl}
+a. & スタントマンが派手な落下をした．\\
+b. & スタントマンが派手な落下サエした．\\
+c. & 派手な落下サエスタントマンがした．
+\end{tabular}
+}
+この場合(\ref{ex:fall})のスルはHVと考えられるが，(\ref{ex:vnsae}a)と
+(\ref{ex:sbjitv}a)のスルを同様にHVとするなど，これらの文が同じスルを含
+むと仮定していては文法性の差が説明できない．(\ref{ex:vnsae}a),
+(\ref{ex:sbjitv}a)の文法性は{\sc case}素性の単一化というよりは，むしろ
+主語の意味解釈の観点，つまり意味素性の制約から説明すべき問題と考えられ
+るが，現時点ではデータの指摘にとどまっている．
+
+\ref{sec:jl}節では格助詞，取り立て助詞およびサ変動詞構文という日本語特
+有の現象が，普遍的かつ計算機処理に適した文法体系において，どのように扱
+われるべきかを論じた．いくつかの言語事実を取り上げ，一部の語彙項目に関
+してはその詳細な素性記述法についても論じてきたが，言及しなかった他の語
+彙に関してもここで示したような考察・分析の過程を経ることによってはじめ
+て入力として認められる．つまり，NAIST JPSGは原理からは導き得ない情報を
+語彙に記述し，単一化といった一般的な計算機構によって諸現象を説明するの
+である．このことは，特殊な現象を処理するために特別な計算機構を導入する
+必要がなくなるということに外ならず，システムの見通しを良くし，設計を単
+純化するには不可欠な考え方と言える．
+
+\setcounter{section}{3}
+
+\section{コーパス調査にもとづく，分析と語彙記述の設計}\label{sec:adn}
+
+\ref{sec:jl}節ではNAIST JPSGで導入した図\ref{fig:schm}のスキーマの中で，
+おもに下位範疇化に関するものである(a) complement-head schema, (c)
+0-complement schema, (d) pseudo-lexical-rule schemaについて述べた．
+\ref{sec:adn}節では連体修飾に関する現象を中心に，(b) adjunct-head
+schemaについて論じることにする．
+
+\subsection{補語と付加語の意味制約}\label{sec:adn:cmpadj}
+
+VNは(\ref{ex:fasp}a)のようにLVとともに用られる以外にも，(\ref{ex:fasp}b) 
+のように相接辞(Aspecutual Morpheme---AM)とも共起できる．実際，
+(\ref{ex:fasp}b)のような連体修飾の用例はコーパスにおいてもかなりの割合
+を占めている．京大コーパスversion 2.0を調べてみても「名詞性接尾辞」で
+終わる文節の頻度は約1,000回であり，「サ変名詞＋サ変動詞」という文節の
+約10,000回に比べると十分の一程度となっている．
+\enumsentence{\label{ex:fasp}
+\begin{tabular}[t]{rl}
+a. & 師匠が弟子に秘伝を伝授した．\\
+b. & 師匠が弟子に秘伝を伝授中
+\end{tabular}
+}
+「中」などのAMは，(\ref{ex:asp})に示すように様々な項構造を持つVNと隣接
+できることから，それ自体が項構造を持っているとは考え難い．
+\enumsentence{\label{ex:asp}
+\begin{tabular}[t]{rlll}
+a. & 船が沈没後 & 船の沈没  
+   & 沈没 $\langle I\rangle$ \\
+b. & 健が英語を勉強前 & 健の英語の勉強
+   & 勉強 $\langle I, J\rangle$ \\
+c. & 師匠が弟子に秘伝を伝授中 & 師匠の弟子への秘伝の伝授 
+   & 伝授 $\langle I, J, K\rangle$ 
+\end{tabular}
+}
+AMの項構造もVNから伝わったものと考えるならば，AMを主辞として形成される
+句構造も「サセル，スル」を主辞とした場合と共通の構造を内包し，その生成
+には同様に図\ref{fig:schm}(d)のpseudo-lexical-rule schemaの適用が考え
+られるだろう．
+\begin{figure}
+\begin{center}\small
+ \unitlength=0.06ex
+ \tree{\node{S\rlap{\,\begin{avm}\[
+				  subcat\ \<\ \>\,
+				 \]\end{avm}}}
+  {\AnnoLn4{\llap{\boxit{3}\,}PP\rlap{$_I$}}{\xnode{xa}{\ }}\tangle9{師匠が}}
+  {\AnnoRn6{V$'$\rlap{\,\begin{avm}\[
+				 subcat\ \<\@3xp$_I$\>\,
+				\]\end{avm}}}
+	{\hspace*{8.2cm}\xnode{xb}{\ }{\it complement-head}}
+   {\AnnoLn4{\llap{\boxit{4}\,}PP\rlap{$_J$}}{\xnode{ya}{\ }}\tangle9{弟子に}}
+   {\AnnoRn6{V$'$\rlap{\,\begin{avm}\[
+				  subcat\ \<\@3xp$_I$,\@4yp$_J$\>\,
+				 \]\end{avm}}}
+	{\hspace*{6.7cm}\xnode{yb}{\ }{\it complement-head}}
+    {\AnnoLn4{\llap{\boxit{5}\,}PP\rlap{$_K$}}{\xnode{za}{\ }}\tangle9{秘伝を}}
+    {\AnnoRn6{V$'$\rlap{\,\begin{avm}\[
+			   subcat\ \<\@3xp$_I$,\@4yp$_J$,\@5zp$_K$\>\,
+			  \]\end{avm}}}
+	{\hspace*{5.3cm}\xnode{zb}{\ }{\it complement-head}}
+     \Annorn0{V\rlap{\,\begin{avm}\[arg-st\ \@1\,\]\end{avm}}}
+       {\xnode{a}{\ }\hspace*{4.5cm}\xnode{b}{\ }{\it 0-complement}}
+      {\Ln6{\llap{\boxit{2}\,}VN\rlap{\,\begin{avm}\[arg-st\ \@1 \<I,J,K\>\,\]\end{avm}}}
+          \tangle5{伝授}}
+      {\Rn7{\hspace*{12.8zw}V\,\begin{avm}
+			\[arg-st & \@1\\
+			  adjcnt & \<\@2 \[arg-st\ \@1\,\]\,\>\,
+			\]
+			\end{avm}}\lf{中}}
+     }
+    }
+   }
+  }\hspace*{2zw}
+\end{center}
+\nodeconnect[r]{xa}[l]{xb}
+\nodeconnect[r]{ya}[l]{yb}
+\nodeconnect[r]{za}[l]{zb}
+\nodeconnect[l]{a}[l]{b}
+\caption{{\protect (\ref{ex:asp}c)}「師匠が弟子に秘伝を伝授中」の構文木}\label{fig:sca}
+\end{figure}
+(\ref{ex:asp}c)の「師匠が弟子に秘伝を伝授中」は，使役構文・サ変動詞構
+文と同じく，主辞はそれぞれ異なるものの，複合AM句は三項述語のように振舞っ
+ている．特に，その三つの名詞句の表出には「ガ，ニ，ヲ」の格助詞が伴われ
+ていることに注目したい．HPSG/NAIST JPSGにおける格は\ref{sec:jl:case}節
+で論じたように動詞の下位範疇化素性の一部として記述される．その仮定に従
+うならば，VN「伝授」には図\ref{fig:conv}のような語彙記述がなされている
+ことになる．
+\begin{figure}
+\begin{center}
+\avmvskip{0ex}\begin{avm}
+ \[syn    & \[head & {\it noun/verb\/}\\
+              arg-st & \<xp[{\it ga\/}]$_i$, yp[{\it ni\/}]$_j$,
+                         zp[{\it wo\/}]$_k$\>\,\]\\
+   sem    & \[rel       & {\it initiation\/}\\
+              initiator & {\it i\/} \\
+              initiatee & {\it j\/} \\
+              initiated & {\it k\/} \]
+ \]
+\end{avm}\avmvskip{-.5ex}
+\end{center}
+\caption{VN「伝授」の語彙項目}\label{fig:conv}
+\end{figure}
+格に関する情報をそのように記述してしまうと，(\ref{ex:asp}c)の「師匠の
+弟子への秘伝の伝授」のような連体修飾における修飾要素のノ格の説明が捉え
+られなくなってしまうと思われるかもしれない．
+
+このような問題に対し，NAIST JPSGでは名詞句内において修飾語として機能し
+ているノ格名詞句については付加語と分析している．
+図\ref{fig:scaa}に(\ref{ex:asp}c)のノ格名詞句を伴った場合の構文木を示す．
+\begin{figure}
+\begin{center}
+ \unitlength=0.05ex
+ \tree{\node{VNP\rlap{\,\begin{avm}\[arg-st\ \@4\,\]\end{avm}}}
+  {\AnnoLn5{PP$_i$}{\xnode{xa}{\ }}\Tangle1{師匠の}}
+  {\AnnoRn5{VN$'$\rlap{\,\begin{avm}\[arg-st\ \@4\,\]\end{avm}}}
+	{\hspace*{9cm}\xnode{xb}{\ }{\it adjunct-head}}
+   {\AnnoLn5{PP$_j$}{\xnode{ya}{\ }}\Tangle1{弟子への}}
+   {\AnnoRn5{VN$'$\rlap{\,\begin{avm}\[arg-st\ \@4\,\]\end{avm}}}
+	{\hspace*{8cm}\xnode{yb}{\ }{\it adjunct-head}}
+    {\AnnoLn3{PP$_k$}{\xnode{za}{\ }}\Tangle1{秘伝の}}
+    {\AnnoRn2{VN$'$\rlap{\,\begin{avm}\[arg-st\ \@4\,\]\end{avm}}}
+	{\hspace*{7cm}\xnode{zb}{\ }{\it adjunct-head}}
+      {\rn0{VN\rlap{\,\avmvskip{0ex}\begin{avm}
+        \[syn\ \[head & {\it noun/verb\/}\\
+                     arg-st & \@4 \<\@1 xp[{\it ga\/}]$_i$, 
+                                \@2 yp[{\it ni\/}]$_j$, 
+                                \@3 zp[{\it wo\/}]$_k$\>\,\]\\
+          sem\ \[rel       & {\it initiation\/}\\
+                     initiator & {\it i\/} \\
+                     initiatee & {\it j\/} \\
+                     initiated & {\it k\/} \]
+        \]\end{avm}\avmvskip{-0.5ex}}}\lf{伝授}}
+     }
+    }
+  }
+ }\hspace*{25zw}
+\end{center}
+\nodeconnect[r]{xa}[l]{xb}
+\nodeconnect[r]{ya}[l]{yb}
+\nodeconnect[r]{za}[l]{zb}
+\caption{{\protect (\ref{ex:asp}c)}「師匠の弟子への秘伝の伝授」に対する構文木}\label{fig:scaa}
+\vspace*{-0.2mm}
+\end{figure}
+この場合，主辞「伝授」には項顕在化原理が適用されず，そのため{\sc
+arg-st}素性は{\sc subcat}素性に変換されない．よって，{\sc subcat}素性
+の打ち消しも起こらず「伝授」の{\sc arg-st}素性は投射内で母(mother)へ受
+け継がれてゆく．一般に付加語と主辞の関係は統語的な情報だけでは決められ
+ないので，NAIST JPSGではこれらの間に付加語と主辞の関係があるということ
+までは規定するが，どのような関係であるかまでは規定しない．
+
+また，通常ノ格名詞句の語順転換はできないと言われるが，上述のような
+分析をとれば，(\ref{ex:ssca})の文法性も意味論の観点から説明できる．
+\enumsentence{\label{ex:ssca}
+\begin{tabular}[t]{rl}
+a. & \% 弟子の師匠への秘伝の伝授\\
+b. & \% 弟子の秘伝への師匠の伝授
+\end{tabular}
+}
+もし付加語間の語順，つまり階層関係がなんらかの素性に反映されるならば，
+そのような素性と受け継がれた{\sc arg-st}素性を比較することで，どの名詞
+がどの項と対応すべきかが計算できる．また，その場合(\ref{ex:ssca})では，
+そのような対応が述語の意味の点から整合的でないことも予測できる．つまり，
+「伝授」という語が意味する関係{\sc initiation}においては，
+(\ref{ex:ssca}a)のように弟子が{\sc initiator}で師匠が{\sc initiatee}で
+あったり，(\ref{ex:ssca}b)のように弟子が{\sc initiator}で秘伝が{\sc
+initiatee}であることはないと考えるのである．
+
+付加語と主辞の関係を統語的制約として文法においては規定しないという立場
+は，計算機構の記述を簡潔にし，解析システム全体をモジュラーな構造にでき
+るという利点がある半面，曖昧性を抑制する手段を制限してしまうという欠点
+もある．従ってNAIST JPSG では，ある句が付加語とも必須項とも分析できる
+ならば，積極的に必須項として分析している．\ref{sec:adn:amb}節では付加
+語が関与する解析において起こる問題と，その解決方法について述べる．
+
+
+\subsection{付加語に関わる曖昧性の増大}\label{sec:adn:amb}
+
+動詞に対する必須項となっていないような修飾句も，連体修飾と同様に
+図\ref{fig:schm}(b)のadjunct-head schemaによって扱われ，
+図\ref{fig:modifier}のように分析される．
+\begin{figure}
+\begin{center}
+\unitlength=0.1ex
+\parbox{0.45\textwidth}{\tree{\node{\begin{avm}
+	\[{\it verb}\\ subcat & \@2\\ adjcnt & \<\,\>\,\]\end{avm}}
+ {\Ln4{\begin{avm}
+	\[{\it ptcl}\\ mod\ \<\@1 \[{\it verb}\]\>\,\]\end{avm}}
+	\tangle8{三時から}}
+ {\Rn4{\begin{avm}
+	\@1 \[{\it verb}\\ subcat & \@2\\ adjcnt & \<\,\>\,\]\end{avm}}
+	\Tangle1{出かける}}
+}}\quad
+\parbox{0.45\textwidth}{\tree{\node{\begin{avm}
+	\[{\it noun}\\ arg-st & \@2\\ adjcnt & \<\,\>\,\]\end{avm}}
+ {\Ln4{\begin{avm}
+	\[{\it ptcl}\\ mod\ \<\@1 \[{\it noun}\]\>\,\]\end{avm}}
+	\tangle8{演奏会の}}
+ {\Rn4{\begin{avm}
+	\@1 \[{\it noun}\\ arg-st & \@2\\ adjcnt & \<\,\>\,\]\end{avm}}
+	\tangle6{準備}}
+}}
+\end{center}
+\caption{付加語が動詞を修飾する場合(左)と名詞を修飾する場合(右)}
+\label{fig:modifier}
+\end{figure}
+これらは次のような特徴を持つ．
+\begin{itemize}
+\item[1.] 被修飾句側ではどのような修飾句が認可されるかを制限する手立てがない．
+\item[2.] 修飾句側がどのような句を修飾するかは(比較的)固定されている．
+\end{itemize}
+2 を定式化したものがHPSGでも導入されている被修飾素性(modified
+feature---{\sc mod}素性)である．これによれば「赤い花」のような形容詞に
+よる名詞の修飾や，「さんまを焼く匂い」のような連体修飾についても
+図\ref{fig:modifier}と同様の分析ができる．なお，(a)のcomplement-head
+schemaとadjunct-head schemaの間には{\sc sem}素性に関して重要な違いがあ
+る．すなわち，母の{\sc sem}素性は，complement-head schemaにおいては主
+辞の{\sc sem}素性と同一となり，adjunct-head schemaにおいては付加語の
+{\sc sem}素性と同一となる．
+
+このように{\sc mod}素性には「どのような句を修飾できるか」が記述される
+が，NAIST JPSGでは助詞を主辞にしているので，この情報は助詞が元来持って
+いる{\sc mod}素性に記述しなければならない．格助詞ガの{\sc mod}素性は，
+(\ref{ex:csadn})にあげる三通りの場合があり得る．
+\enumsentence{\label{ex:csadn}
+\begin{tabular}[t]{rlll}
+a. & 項として動詞に下位範疇化される場合:
+	& \begin{avm}\[mod\ \<\,\>\,\]\end{avm}\\[-3pt]
+	& \multicolumn{3}{l}{[$_{vp}$ \underline{健が} 走る]．}\\
+b. & 付加語として動詞句を修飾する場合:
+	& \begin{avm}\[mod\ \<\[head\ {\it verb\/}\]\>\,\]\end{avm}\\[-3pt]
+	& \multicolumn{3}{l}{[$_{vp}$ \underline{東京が} [$_{vp}$ 人が多い]]．}\\
+c. & 付加語として名詞句を修飾する場合:
+	& \begin{avm}\[mod\ \<\[head\ {\it noun\/}\]\>\,\]\end{avm}\\[-3pt]
+	& \multicolumn{3}{l}{[$_{vp}$ [$_{np}$ \underline{今年が} 初出場] の奈緒美が優勝した]．}
+\end{tabular}
+}
+
+ところが，(\ref{ex:csadn})に従うならば，「健が本を読む」のような単純な
+文でさえ，概ね [$_{vp}$ 健が [$_{vp}$ 本を 読む]] の構造に対応した
+(\ref{ex:csadn}a, b)の分析だけでなく，[$_{vp}$ [$_{np}$ 健が 本]を 読
+む] に対応した(\ref{ex:csadn}c)の分析も可能となってしまう．この問題に
+対してコーパスを予備的に調査した結果，NAIST JPSG では現在のところ次の
+ような立場をとるのが妥当であると考えている．
+\begin{itemize}
+\item[1.] 格助詞ガ・ヲ・ニ・トの四つについては(\ref{ex:csadn}c)のよう
+な語彙は仮定しない．
+\item[2.] サ変名詞以外にも項構造をもつような名詞のクラスをいくつか仮定
+する．
+\item[3.] ニ・ノ・トについては繋辞(copula)のように機能する述語的な語彙
+も用意する．
+\end{itemize}
+上記を仮定し，(\ref{ex:csadn}c)に対しては具体的に図\ref{fig:copula}の
+ような構文木を与えている．
+\begin{figure}
+\begin{center}
+\unitlength=0.06ex
+\tree{\node{V$'$\rlap{\,\begin{avm}
+	\[subcat & \@2\\
+	  adjcnt & \<\,\>\,
+	\]\end{avm}}}
+ {\AnnoLn7{PP\rlap{\,\begin{avm}
+	\[mod\ \<\@3 \[head\ {\it verb}\]\,\>\,
+	\]\end{avm}}}{\xnode{xa}{\ }}\tangle7{今年が}}
+ {\AnnoRn8{\llap{\boxit{3}\,}V$'$\rlap{\,\begin{avm}
+	\[subcat & \@2\,\\
+	  adjcnt & \<\,\>\,
+	\]\end{avm}}}{\hspace*{5.3cm}\xnode{xb}{\ }{\it adjunct-head}}
+  {\AnnoLn5{\llap{\boxit{1}\,}NP\rlap{\,\begin{avm}
+	\[arg-st & \@2\,
+	\]\end{avm}}}{\xnode{ya}{\ }}\tangle9{初出場}}
+  {\AnnoRn5{\hspace*{13zw}V\,\begin{avm}
+	\[subcat & \@2\\
+	  adjcnt & \<\@1 \[arg-st\ \@2\,\]\,\>\,
+	\]\end{avm}}{\hspace*{3.3cm}\xnode{yb}{\ }{\it complement-head}}\lf{の}}
+ }
+}
+\end{center}
+\nodeconnect[r]{xa}[l]{xb}
+\nodeconnect[r]{ya}[l]{yb}
+\caption{格助詞句が名詞句に係る場合}\label{fig:copula}
+\end{figure}
+
+このような例について調査した結果は，\ref{sec:adn:crpsadj}節
+でさらに検討する．また，以下では(\ref{ex:csadn}c)における修飾先の「名
+詞句」をより厳密に「サ変名詞・動詞・助動詞・形容詞・形容動詞・判定詞・
+終助詞・副詞を全く含まない文節」すなわち「述語的でない文節」と解釈して
+分析する．
+
+
+\subsection{コーパスを利用した連体修飾の分類}\label{sec:adn:crpsadj}
+
+まず，格助詞句が「述語的でない文節」に係る場合の頻度を調べるために，京
+大コーパスversion 2.0中の全ての係り受けの中から次の二つの条件を満たす
+ものを抽出した．
+\begin{itemize}
+\item[1.] 係り側の文節中，記号類以外で最も右の形態素が格助詞「ガ，ヲ，
+ニ，ト」である．
+\item[2.] 「通常の」係り関係である\footnote{京大コーパスでは「並立」も
+係り受け関係の一種としてタグ付けされており，普通の意味での係り受け関係
+とは付与されたマークで区別される．}．
+\end{itemize}
+このような係り受けは表\ref{tbl:all}に示すように四つの格助詞に対しての
+べ約51,000回出現する．
+\begin{table}
+\caption{格助詞句が係る文節の内訳(京大コーパス全係り受け157901から抽出)}
+\label{tbl:all}
+\begin{center}
+\begin{tabular}{c|r|r|r|r}
+		&& \multicolumn{3}{c}{受け側の文節}\\[2pt]
+\cline{3-5}
+\rule{0pt}{25pt}格助詞 & \shortstack{係り受け\\[-2pt] 出現数} &
+	\shortstack{品詞\\[-2pt] パターン数} &
+	\shortstack{述語的でない\\[-2pt] 文節} &
+	\shortstack{出現する\\[-2pt] 文数}\\[2pt]
+\hline
+&&&&\\[-7pt]
+が & 12179 & 1227 &  98 & 302\\[2pt]
+を & 16906 &  963 &  39 & 415\\[2pt]
+に & 13824 &  875 &  61 & 140\\[2pt]
+と &  8134 &  518 &  65 & 174\\[2pt]
+\hline
+&&&&\\[-7pt]
+計 & 51043 & 3583 & 263 & 1031
+\end{tabular}
+\end{center}
+\end{table}
+
+次に，受け側の文節の品詞を細分類まで区別してまとめ，パターンの数を数え
+た．例えば，
+\begin{center}
+\begin{tabular}{ll}
+\underline{健が} &
+	\underline{走った(動詞) こと(形式名詞) も(副助詞) ，(読点)}\\
+\underline{「ハトが} 都市 に &
+	\underline{増えた(動詞) の(形式名詞) は(副助詞) ，(読点)}
+\end{tabular}
+\end{center}
+の二つはいずれも「ガ格が[動詞・形式名詞・副助詞・読点]という文節に係る」
+というパターンにまとめられる．この結果，四つの格助詞の受け側の文節は約
+3,600パターンに分類できた．この中から「述語的でない文節」だけを抽出し，
+約260パターンを得た．文の数にすると約1,000文である．本来はこれら全ての
+文を確認すべきであるが，ここでは各パターンについて最初の一文だけを詳細
+に分類した．これをまとめたのが表\ref{tbl:detail}である．すなわち，考慮
+したパターン258(もとは263)のうち約1/3がコーパスの誤りであり，正しくタ
+グ付けされていれば「述語的な文節」に係ると分類されるはずのものであった．
+残りの200パターン弱のうち半分以上は，いわゆる体言止めや動詞の省略もし
+くは並立関係の一方に係っているものであった．例えば，「シンクタンクの多
+くが一％台，官公庁が一○％台であった．」のような場合である．文末の「で
+あった」まで省略される場合もあるので，動詞の省略と並立は厳密には区別し
+ていない．この結果から，確認したものだけでも約60例は(少なくとも表層上
+は)格助詞句が「述語的でない文節」に係っていたことがわかる．なお，
+表\ref{tbl:all}の「述語的でない文節」に対して表\ref{tbl:detail} の「文
+数」がガ格で2パターン，ニ格で3パターン少ないのは，同じ文が二つ以上のパ
+ターンを含んでいたことによる．
+
+\begin{table}
+\caption{述語的でない文節の内訳}\label{tbl:detail}
+\begin{center}
+\begin{tabular}{c|r|r|r|r|r|r}
+	&& \multicolumn{2}{c|}{コーパスの誤り} &
+		\multicolumn{3}{c}{考慮すべきパターン}\\[2pt]
+\cline{3-7}
+\rule{0pt}{25pt}格助詞 & 文数 & \shortstack{係り先\\[-2pt] 間違い} &
+	\shortstack{品詞\\[-2pt] 間違い} &
+	\shortstack{動詞の\\[-2pt] 省略} & 並立 & その他\\[2pt]
+\hline
+&&&&&&\\[-7pt]
+が &  96 &  14 &  13 &  55 &   3 &  11\\[2pt]
+を &  39 &   8 &   6 &  17 &   5 &   3\\[2pt]
+に &  58 &   7 &  11 &  11 &  10 &  19\\[2pt]
+と &  65 &   1 &  38 &   2 &   0 &  24\\[2pt]
+\hline
+&&&&&&\\[-7pt]
+計 & 258 &  30 &  75 &  85 &  18 &  57
+\end{tabular}
+\end{center}
+\end{table}
+以下，各々の助詞に関する特徴的な係り方のパターンについて論じる．
+
+\paragraph{ガ格}
+ガ格名詞では，時間・期間を表わす名詞に係る傾向が見られる\footnote{以下
+では例文のうち特徴的な係り方が現れている部分だけを示す．最後の(\,)内は
+文番号である．}．
+\enumsentence{\label{ex:ga}
+\begin{tabular}[t]{rp{0.8\textwidth}}
+a. & \underline{野茂投手が} \underline{大阪府立成城工高時代に} 野球部
+監督を務め，現在，府立淀川工高野球部顧問の宮崎彰夫さんは\dots ．
+(S-ID:950110151-017)\\
+b. & \underline{政界再編が} いまだ \underline{途上の} せいか，\dots ．
+(S-ID:950207056-001)\\
+c. & 法の \underline{施行が} \underline{四年後とは，}\dots ．
+(S-ID:950522042-015)
+\end{tabular}
+}
+このような係り受け関係を許す例には「Aガ〜時間・期間(中に)」などがあり，
+その主辞の名詞「時間・期間」は一定の意味クラスを形成すると考えられる．
+さらに，サ変動詞構文のLVと同じように，ニが前接する名詞から項構造を受け
+継ぐと考えると，図\ref{fig:interval}のような分析が可能となる．
+\begin{figure}
+\begin{center}
+\unitlength=0.08ex
+\tree{\node{V$'$\rlap{\,\begin{avm}
+	\[subcat & \<\,\>\,\\
+	  adjcnt & \<\,\>
+	\]\end{avm}}}
+ {\AnnoLn4{\llap{\boxit{3}\,}PP\rlap{\,\begin{avm}
+	\[mod & \<\,\>\,
+	\]\end{avm}}}{\xnode{xa}{\ }}\tangle7{健が}}
+ {\AnnoRn4{V$'$\rlap{\,\begin{avm}
+	\[subcat & \@2 \<\,\@3\,\>\,\\
+	  adjcnt & \<\,\>
+	\]\end{avm}}}{\hspace*{5.3cm}\xnode{xb}{\ }{\it complement-head}}
+  {\AnnoLn5{\llap{\boxit{1}\,}NP\rlap{\,\begin{avm}
+	\[arg-st & \@2 \<\,\@3\,\>\,
+	\]\end{avm}}}{\xnode{ya}{\ }}\tangle9{学生時代}}
+  {\AnnoRn5{\hspace*{13zw}V\,\begin{avm}
+	\[subcat & \@2\\
+	  adjcnt & \<\@1 \[arg-st\ \@2\,\]\,\>\,
+	\]\end{avm}}{\hspace*{3.7cm}\xnode{yb}{\ }{\it complement-head}}\lf{に}}
+ }
+}
+\end{center}
+\nodeconnect[r]{xa}[l]{xb}
+\nodeconnect[r]{ya}[l]{yb}
+\caption{時間・期間を表す名詞にガ格が係る場合}\label{fig:interval}
+\end{figure}
+また，係り先としてノが含まれる例も多かった．
+\enumsentence{\label{ex:no:cop}
+\begin{tabular}[t]{rp{0.8\textwidth}}
+a. & 十二月の土曜日，ちょうど半月の夜に，大人が七人，\underline{子供が}
+\ \underline{九人の} 五家族が集まった．(S-ID:950107034-007)\\
+b. & \dots，国民，\underline{メディアを} \underline{相手の} カジ取りが
+注目される．(S-ID:950107047-011)\\
+c. & 四輪部門の総合で，篠塚建次郎が \underline{首位と} ２時間４４分 
+\underline{１０秒差の} 五位に浮上した．(S-ID:950109078-001)
+\end{tabular}
+}
+(\ref{ex:no:cop}b) はヲ格が，(\ref{ex:no:cop}c) はト格がノ格名詞句に係っ
+ているが，このように係り側の格の間には，共通に見られるような修飾関係が
+いくつか存在している．
+
+\paragraph{ヲ格}
+ガ格で見られた「ニ，ノ」の他に「スル，シテ」などが省略されたとみなせる
+例がヲ格には存在する．前接する名詞もやはり「主体，先頭，中心」などを表
+わす名詞として一定の意味クラスを形成すると考えられ，これらについても統
+語的には図\ref{fig:interval}に示した分析と同様に扱うことができる．
+\enumsentence{\label{ex:wo}
+\begin{tabular}[t]{rp{0.8\textwidth}}
+a. & \underline{二月十日ぐらいを} \underline{めどに} 決着がつけられる
+\dots ．(S-ID:950101008-026)\\
+b. & ピークの午後五時半ごろには大阪，京都府境の
+\underline{天王山トンネルを} \underline{先頭に} 栗東インター付近
+まで約四十キロの車の列．(S-ID:950103137-002)
+\end{tabular}
+}
+その他に，「割合」を表わすパターンがある．
+\enumsentence{\label{ex:wo:ratio}
+\begin{tabular}[t]{rp{0.8\textwidth}}
+a. & 他県から車で乗り付け，\underline{おにぎり六個を} \underline{千五
+百円で} 売りさばいた家族連れもいた．(S-ID:950126047-017)\\
+b. & \underline{変動金利五・〇％を} \underline{四・〇％に，} 固定金利
+五・九〇％を五・四〇％に優遇する．(S-ID:950110075-002 )
+\end{tabular}
+}
+このような用法に関しては，次のニ格にも見られる．
+
+\paragraph{ニ格}
+ヲ格の例(\ref{ex:wo:ratio})のように，ニ格にも「割合」を表わすパターンが
+多い．
+\enumsentence{\label{ex:ni}
+\begin{tabular}[t]{rp{0.8\textwidth}}
+a. & 日本農業の危機的現象を示すものとして，しばしば新規学卒の就農者が 
+\underline{年に} \underline{二千人弱しか} いないことが指摘される．
+(S-ID:950419051-020)\\
+b. & \underline{年に} \underline{一度の} 便りで修復しようというのだか
+ら，\dots ．(S-ID:950104230-008)
+\end{tabular}
+}
+\enumsentence{\label{ex:ni:gap}
+\begin{tabular}[t]{rp{0.8\textwidth}}
+a. & \underline{南に} \underline {約三キロ} 離れた袖ケ浦市代宿の県企業
+庁袖ケ浦工業用水浄水場内で車から降ろし，\dots ．(S-ID:950101111-002)\\
+b. & \underline{一階に} \underline{六室，} 二階に一室と広間があった．
+(S-ID:950105224-007)
+\end{tabular}
+}
+ただし，(\ref{ex:ni:gap})のような例は，「南に\dots 離れた」のように述
+部の方に係ると考え，「南に三キロ，東に五キロ離れた」のように現れた場合
+は，「並立」として別の扱いをする．
+
+\paragraph{ト格}
+ト格で着目すべき頻出の例は，本来の係り先の文節が省略されているために，
+さらに先の文節に係るような変更が生じているものである．
+\enumsentence{\label{ex:to}
+\begin{tabular}[t]{rp{0.8\textwidth}}
+a. & 「エンディング・テーマ曲，\underline{英語詞と} {}
+\underline{初めての} 経験だったが，言葉や文化は違っても，音楽に
+それほど変わりはありません．
+(S-ID:950105207-015)\\
+b. & 公定歩合は \underline{一・七五％と} 歴史的な \underline{低水準に} 
+あり，これ以上下げると，いつの日にかインフレの火種になる恐れはある．
+(S-ID:950325045-026)
+\end{tabular}
+}
+(\ref{ex:to}a)は，本来「英語詞トいった初めての経験だった」であり，その
+解釈においては「英語詞ト」は「いった」に係る．この「いった」が省略され
+たことにより，(コーパスでは誤って「初めての」に係るとされているが)「いっ
+た」の係り先である「経験だった」に係ると考えられる．(\ref{ex:to}b)も，
+本来「一・七五％トいった低水準に」のような表現であり，「一・七五％ト」
+は「いった」が省略されたことにより，「いった」の係り先である「低水準に」
+に係るとされている．ただし，(\ref{ex:to}b)は意味的には「一・七五％ト
+(いった)」は「低水準にある」という句に係ると考えた方が自然であり，「一・
+七五％ト」の係り先を「あり」という述語的な文節としている．
+
+以上，ガ・ヲ・ニ・トの四つの格助詞が「述語的でない文節」を修飾する場合
+に関して，コーパスの調査結果を説明した．多くの用例は，(場合によっては
+ニやノを述語を形成する繋辞とみることによって)実際には述語的な文節を修
+飾しているとみなせる．すなわち，(\ref{ex:csadn}c)のように{\sc mod}素性
+が{\it noun\/}であるような助詞を仮定する必要は今のところないといえる．
+
+また，図\ref{fig:interval}中の，繋辞のように機能する語彙項目の{\sc
+adjcnt}素性は前接するNPを選択するので，ニやノを繋辞とそうでないものに
+分けても曖昧性が生じることはない．すなわち，(\ref{ex:csadn}c)の解析を
+排除し図\ref{fig:interval}の分析をとれば，曖昧性の数を減少させることが
+できる．一方，(\ref{ex:csadn}a,b)のような項か付加語かの曖昧性は依然と
+して残るが，これについては項の組み合わせに対する優先度を統計的に求め
+\cite{Miyata&etal1997,Utsuro&etal1997}，統計的係り受け情報
+にもとづいた優先度に従って漸進的に解析を進めるアルゴリズム
+\cite{Miyata&etal2000}を用いることで解決できると考えている．
+
+\setcounter{section}{4}
+
+\section{おわりに}\label{sec:cncl}
+
+本論文で論じてきたことは，次の二点に集約される．
+\begin{itemize}
+\item [1.] 文法理論における知見の実装に向けての精緻化．
+\item [2.] 文法理論の射程外である出現頻度などの調査．
+\end{itemize}
+特に文法理論の精緻化においては，実装上の都合だけに応じたような素性の設
+計はせず，言語現象を的確に捉えることを常に優先してきた．
+図\ref{fig:overview}に本論文で取り上げた言語現象とそれを扱うための主要な
+原理・スキーマの関係を示しておく．
+\begin{figure}
+\begin{center}
+\unitlength=1pt
+{\begin{picture}(405,170)
+\put(380, 80){\myfbox{head}{\shortstack{Head\\ Feature}}(40,25)}
+\put(210, 10){\myfbox{subcat}{\shortstack{Subcat\\ Feature}}(40,25)}
+\put(140,160){\myfbox{adjcnt}{\shortstack{Adjacent\\ Feature}}(45,25)}
+\put(210,110){\myobox{comphead}{\shortstack{Complement\\ Head}}(60,25)}
+\put(310,160){\myobox{ajcthead}{\shortstack{Adjunct\\ Head}}(45,25)}
+\put( 40, 80){\myobox{zerocomp}{\shortstack{0-Complement\\ Head}}(70,25)}
+\put( 90,120){\myobox{pseudlex}{\shortstack{Pseudo\\ Lexical\\ Rule}}(45,37)}
+\put( 40,160){\mybbox{complx}{\shortstack{複合動詞\\ (\ref{sec:jpsg:atree}節)}}}
+\put(210,160){\mybbox{adnoun}{\shortstack{連体修飾\\ (\ref{sec:adn:amb}節)}}}
+\put(380,160){\mybbox{nocase}{\shortstack{ノ格の修飾\\ (\ref{sec:adn:cmpadj}節)}}}
+\put(140, 80){\mybbox{sahen}{\shortstack{サ変動詞\\ (\ref{sec:jl:sahen}節)}}}
+\put(310,110){\mybbox{topic}{\shortstack{取り立て助詞\\ (\ref{sec:jl:focus}節)}}}
+\put(210, 60){\mybbox{scrmbl}{\shortstack{補語の\\ 語順転換\\ (\ref{sec:jpsg:worder}節)}}}
+\put(110, 10){\mybbox{cmpomt}{\shortstack{補語の省略\\ (\ref{sec:jpsg:drop}節)}}}
+\put(310, 50){\mybbox{mkrdrp}{\shortstack{助詞欠落\\ (\ref{sec:jl:case}節)}}}
+\end{picture}}
+\end{center}
+\anodeconnect[b]{comphead}[tr]{cmpomt}
+\anodeconnect[l]{comphead}[tr]{sahen}
+\anodeconnect[b]{comphead}[t]{scrmbl}
+\anodeconnect[r]{comphead}[tl]{mkrdrp}
+\anodeconnect[r]{comphead}[l]{topic}
+\anodeconnect[t]{comphead}[b]{adnoun}
+\anodeconnect[b]{zerocomp}[tl]{cmpomt}
+\anodeconnect[r]{zerocomp}[l]{sahen}
+\anodeconnect[t]{zerocomp}[b]{complx}
+\anodeconnect[b]{pseudlex}[tl]{sahen}
+\anodeconnect[t]{pseudlex}[br]{complx}
+\anodeconnect[l]{ajcthead}[r]{adnoun}
+\anodeconnect[r]{ajcthead}[l]{nocase}
+\anodeconnect[tl]{subcat}[br]{sahen}
+\anodeconnect[t]{subcat}[b]{scrmbl}
+\anodeconnect[tr]{subcat}[bl]{topic}
+\anodeconnect[r]{subcat}[bl]{mkrdrp}
+\anodeconnect[bl]{head}[r]{mkrdrp}
+\anodeconnect[tl]{head}[r]{topic}
+\anodeconnect[l]{adjcnt}[r]{complx}
+\anodeconnect[br]{adjcnt}[tl]{topic}
+\anodeconnect[b]{adjcnt}[t]{sahen}
+{\makedash{2pt}
+\anodeconnect[r]{adjcnt}[l]{adnoun}}
+\caption{NAIST JPSGの原理・制約と本論文で扱った言語現象}
+\label{fig:overview}
+\end{figure}
+
+もちろん，図\ref{fig:overview}に示すような枠組みだけで言語の諸相が捉えら
+れるわけではない．本論文ではコーパスの調査を行なうことで，理論指向の研究
+ではあまり顧みられることのなかった現象に関しても整合的な説明を試みた．
+
+今後の課題としては，十分に論じることができなかった次の二点があげられる．
+\begin{itemize}
+ \item [1.] 文法の適用範囲の拡大．
+ \item [2.] 構文解析の効率化・高速化．
+\end{itemize}
+文法の適用範囲を広げるということは，単にコーパスに対する被覆率をあげる
+ためだけにアドホックな文法を構築するということではない．特に，
+\ref{sec:adn}節で挙げた分析は，どのような名詞のクラスを仮定し，それら
+にどのような項を付与するか，およびどのような繋辞を仮定するかを体系的に
+決めないと，文法をいたずらに複雑化することになる．この点に関しては，従
+来単なるラベルとして捉えられていた名詞に対して様々な情報を付与する生成
+語彙\cite{Pustejovsky1995}の枠組などが参考になると思われる．
+
+また，効率化・高速化に関しては，計算機上での実装の都合というものもある
+程度考えなくてはならないが，処理系の実装という点では既に成果をあげてい
+るLiLFeS\cite{Makino&etal1998}などを参考にしたい．
+
+以上，文法理論と自然言語処理を結びつける一つの方法を示すことによって，
+本論文は新たな問題を示すことになったが，少なくとも，今後の課題が具体的
+になったという点においてはこのような試みも十分意義のあるものと考えてお
+きたい．
+
+
+
+
+
+
+\smallskip
+\noindent{\bf 謝辞}
+
+本研究を進めるにあたって郡司隆男，橋田浩一，白井英俊，松井理直，橋本喜
+代太の諸氏，および匿名の査読者から様々なコメントを頂いた．ここに記して
+感謝の意を表したい．なお，本論文に述べられている見解などについては全て
+筆者らが責任を負う．
+
+
+
+
+
+\bibliographystyle{jnlpbbl}
+\bibliography{jpaper}
+
+\begin{biography}
+\biotitle{略歴}
+\bioauthor{大谷 朗}{
+1991年愛知教育大学教育学部総合科学課程卒業．
+1993年大阪大学大学院言語文化研究科言語文化学専攻博士前期課程修了．
+1996年同大学大学院言語文化研究科言語文化学専攻博士後期課程単位取得退学．
+大阪大学言語文化部，同大学大学院言語文化研究科助手を経て，
+1999年より奈良先端科学技術大学院大学情報科学研究科情報処理学専攻博士後期課程，
+2000年より大阪学院大学情報学部講師，現在に至る．
+言語文化学博士(大阪大学)．
+言語処理学会，情報処理学会，日本認知科学会，日本言語学会，日本英語学会各会員．}
+\bioauthor{宮田 高志}{
+1991年東京大学理学部情報科学科卒業．
+1993年同大学大学院理学系研究科情報科学専攻修士課程修了．
+1996年同大学院理学系研究科情報科学専攻博士課程単位取得退学．
+同年，奈良先端科学技術大学院大学情報科学研究科助手，現在に至る．
+理学博士(東京大学)．
+言語処理学会，情報処理学会，人工知能学会，日本ソフトウェア科学会，
+ACL，ACM各会員．}
+\bioauthor{松本 裕治}{
+1977年京都大学工学部情報工学科卒業．
+1979年同大学大学院工学研究科情報工学専攻修士課程修了．
+同年電子技術総合研究所入所．
+1984〜85年英国インペリアルカレッジ客員研究員．
+1985〜87年(財)新世代コンピュータ技術開発機構に出向．
+京都大学助教授を経て，
+1993年より奈良先端科学技術大学院大学情報科学研究科教授，現在に至る．
+工学博士(京都大学)．
+言語処理学会，情報処理学会，人工知能学会，日本ソフトウェア科学会，
+日本認知科学会，AAAI，ACL，ACM各会員．}
+\bioreceived{受付}
+\biorevised{再受付}
+\bioaccepted{採録}
+
+\newpage
+
+\verb+ +
+\thispagestyle{plain}
+
+\end{biography}
+
+
+\end{document}
+

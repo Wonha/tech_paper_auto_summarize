@@ -1,0 +1,1224 @@
+    \documentclass[english]{jnlp_1.4_rep}
+
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\usepackage{amsmath}
+\usepackage{array}
+
+\usepackage{lingexample}
+\usepackage{bm}
+\newcommand{\argmax}{}
+\newcommand{\w}{}
+\newcommand{\y}{}
+
+
+\Volume{21}
+\Number{4}
+\Month{September}
+\Year{2014}
+
+\received{2011}{6}{17}
+\revised{2011}{10}{10}
+\rerevised{2011}{12}{27}
+\accepted{2012}{1}{11}
+
+\setcounter{page}{897}
+
+\etitle{Splitting Katakana Noun Compounds by Paraphrasing \\ and Back-transliteration\footnotetext{\llap{*~}This article has been partially revised for better understanding of overseas readers.}}
+\eauthor{Nobuhiro Kaji\affiref{Author_1} \and Masaru Kitsuregawa\affiref{Author_2}}
+\eabstract{
+	Word boundaries within noun compounds in a number of languages,
+	including 
+\linebreak
+Japanese, are not marked by white spaces. Thus, it is
+	beneficial for various NLP applications to split such noun
+	compounds. In the case of Japanese, noun compounds composed of
+	katakana words are particularly difficult to split because
+	katakana words are highly productive and are often out of
+	vocabulary. Therefore, we propose using	paraphrasing and
+	back-transliteration of katakana noun compounds	to split
+	them. Experiments
+	in which paraphrases and back-transliterations from unlabeled
+	textual data were extracted and used to construct splitting
+	models
+	improved splitting 
+\linebreak
+accuracy with statistical significance.
+}
+\ekeywords{paraphrasing, back-transliteration, katakana words, noun compound splitting, word segmentation}
+
+\headauthor{Kaji and Kitsuregawa}
+\headtitle{Splitting Katakana Noun Compounds}
+
+\affilabel{Author_1}{}{IIS, the University of Tokyo}
+\affilabel{Author_2}{}{National Institute of Informatics, IIS, the University of Tokyo}
+
+\Reprint[T]{Vol.~19, No.~2, pp.~65--88}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction} \label{sec:intro}
+
+\subsection{Japanese katakana words and noun compound splitting}
+
+Borrowing is a major source of word formation in Japanese, and numerous
+foreign words (proper names and neologisms) are continuously being
+imported from other languages \cite{Tsujimura06}. Most borrowed words in
+modern Japanese are transliterations\footnote{Some researchers use the term transcription rather
+than transliteration \cite{Breen09}. Our terminology is based on studies
+on machine transliteration \cite{Knight98}.} 
+from English, and they are referred to as {\it katakana words} because
+transliterated foreign words are primarily spelled using katakana
+characters in the Japanese writing system.\footnote{The Japanese writing system has four character types:
+hiragana, katakana, kanji, and Latin alphabet.} 
+Compounding is another source of word formation common in Japanese \cite{Tsujimura06}. 
+In particular, noun compounds are frequently
+produced by merging two or more nouns. These two types of word
+formation yield a significant amount of katakana noun compounds, making
+Japanese a highly productive language.
+
+In Japanese as well as some European and Asian languages (e.g., German,
+Dutch, and 
+\linebreak
+Korean), the constituent words of compounds are not separated by
+white spaces, unlike those of English. In such languages, it is beneficial for
+various NLP applications to be able to split such compounds. For example, compound
+splitting enables SMT systems to translate a compound on a word-by-word
+basis, even if the compound itself is not found in the translation table
+\cite{Koehn03,Dyer09}. In the context of IR, decompounding has an
+analogous effect to stemming, and it significantly improves retrieval
+results \cite{Braschler04}. In abbreviation recognition, the definition
+of an abbreviation is often in the form of a noun compound, and most
+abbreviation recognition algorithms assume that the definition is
+properly segmented; see e.g., \cite{Schwartz03,Okazaki08}.
+
+This has led NLP researchers to explore methods for splitting compounds,
+especially noun compounds, in various languages
+\cite{Koehn03,Nakazawa05,AlfonsecaACL08}. While many methods have been
+presented, they basically require expensive linguistic resources to
+achieve sufficiently high accuracy. For example, 
+    \citeA{AlfonsecaCICLing08} employed a word dictionary. 
+Other studies have suggested using bilingual resources such as parallel
+corpora \cite{Brown02,Koehn03,Nakazawa05}. The idea behind these methods
+is that compounds are basically split into constituent words when they
+are translated into English, and hence splitting rules can be learned by
+discovering word alignments in bilingual resources.
+
+The largest reason for the difficulty of compound splitting is the
+existence words not found in the abovementioned linguistic resources. In
+the case of Japanese, it is known that katakana words constitute a large
+source of out-of-vocabulary words \cite{Brill01,Nakazawa05,Breen09}. As
+already-mentioned, katakana words are highly productive, and thus we can
+no longer expect existing linguistic resources to have sufficient
+coverage. According to \citeA{Breen09}, almost 20\% of katakana words are
+out of vocabulary in news articles. These katakana words are often noun
+compounds, and pose considerable difficulty for Japanese text processing
+\cite{Nakazawa05}.
+
+Examples of katakana noun compounds that are difficult to split include
+the followig:“モンスターペアレント (monster parent)”{\kern-0.5zw}.\footnote{We provide English translation in parenthesis when referring
+to Japanese examples.}
+Although it might seem easy to split it into“モンスター (monster)”and“ペアレント (parent),”it is hard for existent word segmenters
+because the katakana word“ペアレント (parent)”is not registered in
+dictionaries.\footnote{The authors checked JUMAN dictionary ver.~6.0 and NAIST-jdic
+ver.~0.6.0.} In fact, we found that MeCab ver.~0.98 using NAIST-jdic
+ver.~0.6.0 fails to split it.
+
+
+\subsection{Paraphrases as implicit word boundaries}
+
+To alleviate the errors caused by out-of-vocabulary words, we explored
+the use of unlabeled textual data for splitting katakana noun compounds.
+Since the body of the available unlabeled text generally contains
+considerably more data than word dictionaries and other expensive
+linguistic resources, we think it is crucial to establish a methodology
+that takes full advantage of such easily available textual data. While
+several approaches have already been proposed, their levels of accuracy
+are still unsatisfactory (see Section \ref{sec:prev_comp}).
+
+From a broad perspective, our approach can be seen as using
+paraphrases of noun compounds. As we will see in Sections
+\ref{sec:para} and \ref{sec:trans}, katakana noun compounds can be
+paraphrased into various forms that strongly indicate word boundaries
+within the original noun compound. This paper empirically demonstrates
+that splitting accuracy can be significantly improved by extracting
+such paraphrases from unlabeled text, the Web in our case, and then
+using that information to construct splitting models.
+
+Specifically, two types of paraphrases are investigated in this
+paper. Section \ref{sec:para} explores monolingual paraphrases that can
+be generated by inserting certain linguistic markers between constituent
+words of katakana noun compounds. Section \ref{sec:trans}, in turn,
+explores bilingual paraphrases (specifically,
+back-transliteration). Since katakana words are basically
+transliterations from 
+\mbox{English,} back-transliterating katakana noun
+compounds is also useful for splitting. To avoid terminological
+confusion, monolingual paraphrases will simply be referred to as
+paraphrases and bilingual paraphrases as back-transliterations
+in the rest of this article.
+
+We performed experiments to evaluate our method empirically. The results
+demonstrated that both paraphrasing and back-transliteration
+substantially improved performance in terms of F$_{1}$-score, and
+the best performance was achieved when they were combined. We also
+confirmed that our method considerably outperforms previously proposed
+splitting methods. All these results strongly suggest the effectiveness
+of paraphrasing and back-transliteration for identifying word boundaries
+within katakana noun compounds.
+
+This paper is organized as follows. Section \ref{sec:prev} provides an
+overview of previous studies on noun compound splitting and related
+areas. Section \ref{sec:approach} presents our supervised method of
+splitting katakana noun compounds. Section \ref{sec:para} and
+\ref{sec:trans} explain how to make use of paraphrasing and
+back-transliteration as features. Section \ref{sec:exp} provides
+experimental results and discusses them. We present our conclusion in
+Section \ref{sec:conclude}.
+
+\section{Related Work}
+\label{sec:prev}
+
+\subsection{Compound splitting}
+\label{sec:prev_comp}
+
+A common approach to splitting compounds without expensive linguistic
+resources is an unsupervised method based on word and string frequencies
+estimated from unlabeled text
+\cite{Koehn03,Ando03,Schiller05,Nakazawa05,Holz08}. Nakazawa et
+al.\ \citeyear{Nakazawa05} also investigated methods of splitting katakana
+noun compounds. Although the frequency-based method generally achieves
+high recall, its level of precision is not satisfactory
+\cite{Koehn03,Nakazawa05}. Our experiments empirically compared our
+method with frequency-based methods, and the results demonstrated the
+advantages of our method.
+
+Our approach can be seen as augmenting discriminative models of compound
+splitting with large external linguistic resources, i.e., textual data
+on the Web. In a similar spirit, Alfonseca et al.\@
+\shortcite{AlfonsecaCICLing08} proposed using query logs for compound
+splitting.\footnote{Although they also proposed using anchor text, this slightly
+degraded the performance.} 
+However, their experimental results did not clearly demonstrate their
+method's effectiveness. Without the query logs, accuracy was reported
+to drop only slightly from 90.55\% to 90.45\%. In contrast, our
+experimental results showed statistically significant improvements as a
+result of using additional resources. Moreover, unlike query logs, the
+textual data used in our method is easily available.
+
+Holz and Biemann \citeyear{Holz08} proposed a method for splitting and
+paraphrasing German compounds. While their study is related to ours,
+their algorithm is a pipeline model, and the results of paraphrasing are
+not employed during splitting.
+
+
+\subsection{Other research topics}
+
+Our study is closely related to word segmentation, which is an important
+research topic in Asian languages including Japanese. Although we can
+use existing word segmentation systems to split katakana noun compounds,
+it is difficult to achieve the desired level of accuracy, as will be
+empirically demonstrated in Section \ref{sec:exp}. One reason for this
+is that katakana noun compounds often include out-of-vocabulary words,
+which are difficult for existing segmentation systems to deal
+with. See \cite{Nakazawa05} for discussion of this point. From a word
+segmentation perspective, our task can be seen as a case study focusing
+on a certain linguistic phenomenon of particular difficulty. More
+importantly, we are unaware of any attempts to use paraphraing or
+transliteration for word segmentation in the same manner.
+
+Our method of using back-transliteration for splitting katakana noun
+compounds (Section \ref{sec:trans}) is closely related to methods for
+mining transliteration from Web text
+\cite{Brill01,Cao07,Oh08,Wu09}. The greatest factor differentiating
+these studies from ours is that their primary goal was to build a
+machine transliteration system or to build a bilingual dictionary; none
+of them explored splitting compounds.
+
+\section{A Supervised Approach} \label{sec:approach}
+
+The task we examine in this paper is splitting a katakana noun compound
+$x$ into its constituent words, $\y=(y_1,y_2\dots y_{|\y|})$. Note that
+the output can be a single word, i.e., $|\y|=1$. Since it is possible
+for the input to be an out-of-vocabulary word, it is not at all trivial
+to identify the single word as such. A naive method would erroneously
+split an out-of-vocabulary word into multiple constituent words.
+
+Since katakana words are mostly transliterations from English, as we
+discussed in Section \ref{sec:intro}, we assume that the input $x$ in
+the following discussion is a transliteration from English. Although it
+is difficult to verify this assumption, \citeA{Brill01} analyzed
+queries submitted to a Web search engine and found that 87\% of the
+queries spelled by katakana were transliterations from English. From this
+data, we can expect that our assumption holds to some extent in real
+textual data.
+
+We formalize our task as a structure prediction problem that, given
+a katakana noun compound $x$, predicts the most probable splitting
+$\y^{*}$.
+\[
+ \y^{*} = \argmax_{\y\in\mathcal{Y}(x)}\w\cdot{\bm\phi}(\y),
+\]
+where $\mathcal{Y}(x)$ represents the set of all splitting options of
+$x$, ${\bm\phi}(\y)$ is a feature vector representation of $\y$, and
+$\w$ is a weight vector to be estimated from labeled data.
+
+Table \ref{tab:feature} summarizes our feature set. Features 1 and 2 are
+word $1$-gram and $2$-gram features, respectively. Feature 3 represents
+the length of the constituent word. {\sc Len}($y$) returns the number of
+characters of $y$ (1, 2, 3, 4, or $\geq$5). Feature 4 indicates whether
+the constituent word is registered in an external dictionary. {\sc
+Dict}($y$) returns true if the word $y$ is in the dictionary.\footnote{
+	We used NAIST-jdic ver.~0.6.0.} In addition to these basic
+features, we also employ paraphrasing and back-transliteration of
+katakana noun compounds as features, which are detailed in Sections
+\ref{sec:para} and \ref{sec:trans}, respectively.
+
+\begin{table}[t]
+   \caption{Feature templates}
+   \label{tab:feature}
+\input{07table01.txt}
+\end{table}
+
+We optimize the weight vector $\w$ using an arbitrary training
+algorithm. Here, we adopt the averaged perceptron algorithm for the sake
+of time efficiency \cite{Freund99}. The perceptron offers efficient
+online training and performs comparatively well with batch algorithms
+such as SVMs. Since we use only factored features (see Table
+\ref{tab:feature}, Sections \ref{sec:para} and \ref{sec:trans}), dynamic
+programming can be used to locate $\y^{*}$.
+
+\section{Paraphrase Features}
+\label{sec:para}
+
+In this section, we argue that paraphrasing of katakana noun compounds
+provides useful information on the word boundaries. Consequently, we
+propose using paraphrase frequencies as features for training the
+discriminative model (template 5 in Table \ref{tab:feature}).
+
+\subsection{Paraphrasing of noun compounds}
+
+A katakana noun compound can be paraphrased into various forms, some of
+which provide information on the word boundaries within the original
+compound.
+
+\begin{lingexample}
+ \head{\tr{アンチョビパスタ}{anchovy pasta}}{ex:anchovy}
+ \sent{\tr{アンチョビ・パスタ}{anchovy $\cdot$ pasta}\\[3pt]}
+ \sent{\tr{アンチョビの}{with anchovy}\tr{パスタ}{pasta}}
+\end{lingexample}
+
+\noindent
+These examples are paraphrases of each other. (\ref{ex:anchovy}a) is in
+the form of a noun compound whose internal word boundary is
+ambiguous. In (\ref{ex:anchovy}b), on the other hand, a centered dot
+“・”is inserted between the constituent words. In the Japanese
+writing system, the centered dot is sometimes, though not always, used to
+separate long katakana compounds for the sake of
+readability. (\ref{ex:anchovy}c) is the noun phrase generated from
+(\ref{ex:anchovy}a) by inserting the possessive marker“の”{\kern-0.5zw}, which can
+be translated as {\it with} in this context, between the constituent
+words. If we observe paraphrases of (\ref{ex:anchovy}a) such as
+(\ref{ex:anchovy}b) and (\ref{ex:anchovy}c), we can guess that a word
+boundary exists between“アンチョビ (anchovy)”and“パスタ (pasta)”{\kern-0.5zw}.
+
+
+\subsection{Paraphrasing rules}
+
+The preceding discussion led us to use paraphrase frequencies estimated
+from Web text for splitting katakana noun compounds. For this purpose, we
+established the seven paraphrasing rules illustrated in Table
+\ref{tab:para}. The rules take the form of $X_1X_2\rightarrow
+X_1MX_2$, where $X_1$ and $X_2$ represent nouns, and $M$ is a certain
+linguistic marker (e.g., the possessive marker“の”{\kern-0.5zw}). The left-hand
+term corresponds to a compound to be paraphrased, and the right-hand term
+represents its paraphrase. For instance, $X_1$ =“アンチョビ
+(anchovy)”{\kern-0.5zw}, $X_2$ =“パスタ (pasta)”{\kern-0.5zw}, and $M$ =“の”{\kern-0.5zw}. The paraphrasing
+rules we use are based on the rules proposed by \cite{Kageura04} for expanding complex terms, primarily noun
+compounds, into their variants.
+
+\begin{table}[b]
+   \hangcaption{Paraphrasing rules and examples}
+   \label{tab:para}
+\input{07table02.txt}
+\vspace{4pt}\small
+ The first column represents
+   the type of linguistic marker to be inserted, the second column shows
+   the paraphrasing rules, and the last column provides examples.\par
+\end{table}
+
+
+\subsection{Web-based frequency as a feature}
+
+We introduced a new feature using the paraphrasing rules and Web text. For
+preprocessing, we used regular expressions to count the frequencies of
+all potential paraphrases of katakana noun compounds.
+\begin{quote}
+ (katakana)+\;・\;(katakana)+ \\
+ (katakana)+\;の\;(katakana)+ \\
+ (katakana)+\;する\;(katakana)+ \\
+ (katakana)+\;した\;(katakana)+ \\
+ (katakana)+\;な\;(katakana)+ \\
+ (katakana)+\;的\;(katakana)+ \\
+ (katakana)+\;的な\;(katakana)+ 
+\end{quote}
+where (katakana) corresponds to one katakana character and $+$ is a
+greedy quantifier.
+
+These regular expressions can be used to count potential paraphrases
+without performing word segmentation, because the target is restricted
+to katakana noun compounds. Texts that match the above regular
+expressions are always surrounded by non-katakana characters (e.g.,
+hiragana and kanji). Because such a change in character type strongly
+indicates the presence of word boundaries, our simple approach can
+successfully count the frequency of the potential paraphrases.
+
+Given a candidate segmentation $\y$ at test time, we generate
+paraphrases of the noun compound by setting $X_1=y_{i-1}$ and
+$X_2=y_{i}$ and applying the paraphrasing rules. We then use
+$\log(F+1)$, where $F$ is the sum of the Web-based frequencies of the
+generated paraphrases, as the feature of the boundary between $y_{i-1}$
+and $y_{i}$.
+
+One may think this simplistic approach can sacrifice accuracy because it is
+possible that the features are fired even if $X_1$ and $X_2$ are
+replaced by noun sequences and morphemes, which are smaller units
+than nouns. However, our empirical experiments demonstrated that this
+simple method works sufficiently well in practice. Therefore, in this
+paper, we propose such an approach for the sake of simplicity.
+
+The reason that we use logarithmic frequency, rather than raw frequency,
+is for scaling of the feature value. Since the other features have
+binary valuees, we found in initial experiments, that the importance of
+this feature is overemphasized if we use raw frequency. Note that we
+use $\log(F+1)$ rather than $\log F$ to avoid the feature value being
+zero when $F$ = 1.
+
+
+\section{Back-transliteration Features}
+\label{sec:trans}
+
+Most katakana words are transliterations from English, where words are
+separated by white spaces. It is, therefore, reasonable to think that
+back-transliterating katakana noun compounds into English would provide
+information on word boundaries, similar to paraphrasing.
+
+\begin{table}[t]
+ \caption{Word-aligned transliteration pairs}
+ \label{tab:trans}
+\input{07table03.txt}
+\end{table}
+
+This section presents a method for extracting back-transliterations of
+katakana words from monolingual Web text, and establishing word
+alignments between these katakana and English words (Table
+\ref{tab:trans}): the pair of katakana words and its English
+back-transliterations are referred to as a {\it transliteration
+pair}. When the transliteration pair is annotated with word alignment
+information, as seen in Table \ref{tab:trans}, it is referred to as a {\it
+word-aligned transliteration pair}.
+
+Using word-aligned transliteration pairs extracted from the Web text, we
+derive a binary feature indicating whether katakana word $y_i$
+corresponds to a single English word. Additionally, we derive another
+feature indicating whether a katakana word $2$-gram $y_{i-1}y_{i}$
+corresponds to an English word $2$-gram (template 6 and 7 in Table
+\ref{tab:feature}).
+
+
+\subsection{Parenthetical expressions}
+
+In Japanese, transliterated words are sometimes followed by their
+English back-transliterations in parentheses:
+
+\begin{lingexample}
+ \head{アメリカで$\|$ \underline{ジャンクフード}(junk food)と言えば...}{ex:junk}
+ \sent{トラックバック$\|$ \underline{スパム}(spam)を撃退するため...}{}
+\end{lingexample}
+
+\noindent
+where the underline indicates the Japanese text that is followed by its
+English back-transliteration. We extract word-aligned transliteration
+pairs from such parenthetical expressions by establishing
+correspondences between pre-parentheses and in-parentheses words.
+
+To accomplish this, we have to resolve three problems:
+\begin{description}
+ \item[Problem A]
+	    English words inside parentheses do not always include
+	    back-transliterations of the text preceeding the parentheses
+	    text. We, therefore, have to discriminate parenthetic
+	    expressions providing back-transliterations from other types.
+ \item[Problem B]
+	    The left boundary of the text preceding the parentheses,
+	    denoted as ``$\|$'' in the example, has to be identified.
+	    For example, in (\ref{ex:junk}b), transliteration of ``spam''
+	    is not“トラックバックスパム”but“スパム.”
+ \item[Problem C]
+	    The text preceding the parentheses, which is a katakana noun
+	    compound in our case, has to be segmented into words. For
+	    example, it is necessary to split“ジャンクフード”into“ジャンク”and“フード”to extract word-aligned
+	    transliteration pairs in Table \ref{tab:trans} from the
+	    example text (\ref{ex:junk}a).
+\end{description}
+
+
+\subsection{Exploiting phonetic similarity}
+
+Although several studies have explored mining transliterations from such
+parenthetical expressions \cite{Cao07,Wu09}, the third problem has not
+been given much attention. In previous studies, the pre-parentheses text
+is typically assumed to be correctly segmented by use of existent word
+segmentation systems. This is, however, not appropriate when the
+pre-parenthesis text is a katakana noun compound, which is difficult
+for existing systems to handle, and hence causes errors.
+
+To handle these problems, we propose using the phonetic properties of
+the transliterations. For the purpose of explanation, we shall first
+focus on Problem C. Since transliterated katakana words preserve the
+pronunciation of the original English words to some extent
+\cite{Knight98}, we can discover the correspondence between substrings
+of the two languages based on phonetic similarity:
+
+\begin{lingexample}
+ \head{[ジャン]$_1$[ク]$_2$[フー]$_3$[ド]$_4$}{ex:junk2}
+ \sent{[jun]$_1$[k]$_2$ [foo]$_3$[d]$_4$}
+\end{lingexample} 
+
+\noindent
+Note that these are the pre-parenthesis and parenthetical text in
+(\ref{ex:junk}a). The substrings are surrounded by square brackets with
+the same number which correspond to each other. Given such a correspondence, we
+can segment the pre-parenthesis text (\ref{ex:junk2}a) according to its
+English counterpart (\ref{ex:junk2}b), whose words are separated by
+white space. We can recognize that the katakana string“ジャンク,”which is the concatenation of the first two substrings in
+(\ref{ex:junk2}a), forms a single word because it corresponds to the
+English word {\it junk}, and so on. Consequently, (\ref{ex:junk2}a) can
+be segmented into two words,“ジャンク (junk)”and“フード (food).”
+The word alignment is trivially established.
+
+For Problem A and B, we can also use the phonetic similarity between
+pre-parenthesis and in-parenthesis text. If the parenthetical expression
+does not provide the transliteration, or if the left boundary is
+erroneously identified, we can expect the phonetic similarity to become
+small. Thus, such situations can be identified.
+
+
+
+\subsection{A phonetic similarity model}
+\label{sec:phonetic_model}
+
+To establish substring alignment between katakana and Latin alphabet
+strings, we use the probabilistic model proposed by
+\cite{Jiampojamarn07}. Let $f$ and $e$ be the katakana and alphabet
+strings, and $\mathcal{A}$ be the substring alignment between them. More
+precisely, $\mathcal{A}$ is a set of corresponding substring pairs
+$(f_i, e_i)$ such that $f=f_1f_2\dots f_{|\mathcal{A}|}$ and
+$e=e_1e_2\dots e_{|\mathcal{A}|}$. The probability of such alignment is
+defined as
+\[
+ \log p(f,e,\mathcal{A})=\sum_{(f_i,e_i)\in\mathcal{A}}\log p(f_{i},e_{i})
+\]
+Since $\mathcal{A}$ is usually unobservable, it is treated as a hidden
+variable. Table \ref{tab:alignment} illustrates an example of the 
+substring alignment between $f=$“ジャンクフード”and $e=$``junkfood,''
+and the likelihood of each substring pair estimated in our experiment.
+
+\begin{table}[t]
+\hangcaption{Example of the substring alignment $\mathcal{A}$ between
+   $f=$“ジャンクフード”and $e=$``junkfood'' ($|\mathcal{A}|=4$)}
+   \label{tab:alignment}
+\input{07table04.txt}
+\end{table}
+
+The model parameters are estimated from a set of transliteration pairs
+$(f,e)$ using the EM algorithm. In the E-step, we estimate
+$p(\mathcal{A}|f,e)$ based on the current parameters. In the parameter
+estimation, we restrict both $f_i$ and $e_i$ to be at most three
+characters long. This not only makes the E-step computationally
+efficient but also avoids over-fitting by preventing very long
+substrings from being aligned.
+In the M-step, the parameter is re-estimated using the result of the
+E-step. We can accomplish this by using an extension of the
+forward-backward algorithm. See \cite{Jiampojamarn07} for details.
+
+Given a new transliteration pair $(f,e)$, we can determine the substring
+alignment as
+\[
+\mathcal{A}^{*}=\argmax_{\mathcal{A}}\log p(f,e,\mathcal{A}). 
+\]
+In finding the substring alignment, a white space on the English side is
+used as a constraint, so that the English substring $e_i$ does not span
+a white space.
+
+
+\subsection{Extracting word-aligned transliteration pairs}
+\label{sec:extraction}
+
+The word-aligned transliteration pairs are extracted using the phonetic
+similarity model as follows.
+\begin{description}
+ \item[Step 1]
+	    Candidate transliteration pairs $(f,e)$ are extracted from
+	    parenthetical expressions by extracting English words inside
+	    parentheses and pre-parenthesis text written in
+	    katakana. English words are normalized by lower-casing
+	    capital letters.
+ \item[Step 2]
+	    The left boundary is determined by using the following
+	    confidence score:
+	    \[
+	    \frac{1}{N}\log p(f,e,\mathcal{A}^{*}),
+	    \]
+	    Here, $N$ is the number of English words. The term
+	    $\frac{1}{N}$ prevents the score from being unreasonably
+	    small when there are many words. We truncate $f$ by removing
+	    the leftmost characters one by one, until the confidence
+	    score exceeds a predefined threshold $\theta$. If $f$
+	    becomes empty, the pair is regarded as a non-transliteration
+	    and discarded.
+ \item[Step 3]
+	    For the remaining pairs, the Japanese side is segmented and
+	    word alignment is established according to
+	    $\mathcal{A}^{*}$. This results in a list of word-aligned
+	    transliteration pairs (Table \ref{tab:trans}).
+\end{description}
+
+\noindent
+Note that it is possible in step 2 for more than one
+back-transliteration $e$ to be found for a single katakana string $f$
+because of spelling variations and errors. In such a case, we use the
+pair $(f,e)$ with the highest score.
+
+
+\section{Experiments and Discussion}
+\label{sec:exp}
+
+We conducted experiments to investigate how the use of paraphrasing and
+back-transliteration improves the performance of the discriminative
+model.
+
+\subsection{Experimental setting}
+\label{sec:setting}
+
+To train the phonetic similarity model, we used a set of transliteration
+pairs extracted from the Wikipedia.\footnote{http://ja.wikipedia.org/} 
+Since person names are almost always transliterated when they are
+imported from English to Japanese, we made use of the Wikipedia
+articles in the {\it Living people} category. From the titles of these
+articles, we automatically extracted person names written in katakana
+along with their English counterparts obtainable via the multilingual
+links provided by Wikipedia. This yielded 17,509 transliteration
+pairs for training. In performing the EM algorithm, we tried 10
+different initial parameters and selected the model that achieved the
+highest likelihood.
+
+The data for training and testing the perceptron was built using the
+Japanese-English dictionary {\sc EDICT}.\footnote{http://www.csse.monash.edu.au/{\textasciitilde}jwb/edict\_doc.html} 
+We randomly extracted 5,286 entries written in katakana from EDICT and
+manually annotated word boundaries by establishing word correspondences
+to their English transliterations. Since English transliterations are
+already provided by {\sc EDICT}, the annotation can be trivially
+provided by a native speaker of Japanese. The resulting data contained
+3,041, 2,081, and 164 examples which respectively constitute of single
+word, two words and more than two words. The average number of
+characters and constituent words per example was 6.60 and 1.46,
+respectively. Using this data set, we performed two-fold cross-validation
+for testing the perceptron. The number of iterations was set to 20 for
+all experiments.
+
+\begin{table}[b]
+\caption{50 examples of potential paraphrases extracted by using the
+    rules given in Table \ref{tab:para}}
+\label{fig:extract-para}
+\input{07table05.txt}
+\small
+The numbers in parentheses represent frequencies.\par
+\end{table}
+
+As Web corpora, we used 1.7~G sentences from blog articles. From the
+corpora, we extracted 14,966,205 (potential) paraphrases of katakana
+noun compounds together with their frequencies (Table
+\ref{fig:extract-para}). We also extracted 151,195 word-aligned
+transliteration pairs (Table \ref{fig:extract-backtrans}). Thus, we
+ranged the threshold $\theta$ in $\{-10,-20,\dots-150\}$ and chose the
+value withe the best performance ($\theta=-80$).
+
+\begin{table}[t]
+\caption{50 examples of word-aligned transliteration pairs}
+\label{fig:extract-backtrans}
+\input{07table06.txt}
+\vspace{4pt}\small
+The slash represents the word boundary recognized when the pair was extracted.
+\end{table}
+
+
+\subsection{Baseline systems}
+\label{sec:baseline}
+
+We compared our system with three frequency-based baseline systems, two
+supervised baselines, and three state-of-the-art word segmenters. The
+first frequency-based baseline, {\sc Unigram}, performs compound
+splitting based on a word $1$-gram language model
+\cite{Schiller05,AlfonsecaCICLing08}:
+\[
+ \y^{*}=\argmax_{\y\in\mathcal{Y}(x)}\prod_{i}p(y_i),
+\]
+where $p(y_i)$ represents the probability of $y_i$. The second
+frequency-based baseline, {\sc Gmf}, outputs the splitting option with
+the highest geometric mean frequency of the constituent words
+\cite{Koehn03}:
+\pagebreak
+\[
+ \y^{*}=\argmax_{\y\in\mathcal{Y}(x)}\mbox{GMF}(\y)=\argmax_{\y\in\mathcal{Y}(x)}\Bigl\{\prod_{i}f(y_i)\Bigr\}^{1/|\y|},
+\]
+where $f(y_i)$ represents the frequency of $y_i$. The third
+frequency-based baseline, {\sc Gmf2}, is a modification of {\sc Gmf}
+proposed by Nakazawa et al.\ \citeyear{Nakazawa05}. It is based on the
+following score instead of GMF$(\y)$:
+\[
+ \mbox{GMF2}(\y)=
+  \begin{cases}
+   \mbox{GMF}(\y) & (|\y|=1) \\[10pt]
+   \frac{\mbox{GMF}(\y)}{\frac{C}{N^l}+\alpha} & (|\y|\geq2),
+\end{cases}
+\]
+where $C$, $N$, and $\alpha$ are hyperparameters and $l$ is the average
+length of the constituent words. Following \cite{Nakazawa05}, the
+hyperparameters were set as $C = \text{2,500}$, $N = 4$, and $\alpha =
+0.7$. We estimated $p(y)$ and $f(y)$ from the Web corpora.
+
+The first supervised baseline, {\sc AP}, is the averaged perceptron
+model trained using only the basic feature set (templates 1--4 in Table
+\ref{tab:feature}). The second supervised baseline, {\sc AP+Gmf2} is a
+combination of {\sc AP} and {\sc Gmf2}, which performed the best amongst
+the frequency-based baselines. Following \cite{AlfonsecaCICLing08}, {\sc
+Gmf2} is integrated into {\sc AP} as two binary features indicating
+whether GMF2$(\y)$ is larger than any other candidate, and whether
+GMF2$(\y)$ is larger than the non-split candidate. Although Alfonseca et
+al.\ \citeyear{AlfonsecaCICLing08} also proposed using (the log of) the
+geometric mean frequency as a feature, this degraded the performance.
+
+For word segmenters, we used Juman ver.~6.0 \cite{Kurohashi94},
+Mecab ver.~0.98 \cite{Kudo04}, and Kytea ver.~0.3.1
+\cite{Neubig11}. These baselines were chosen to show how well
+existing word segmentation systems perform this task. Although the
+literature states that it is difficult for existing systems to handle
+katakana noun compounds \cite{Nakazawa05}, no empirical data on this
+issue has been presented so far.
+
+
+\subsection{Comparison with baseline systems}
+\label{sec:compare}
+
+Table \ref{tab:comparison_result} compares the performance of our
+system ({\sc Proposed}) with the baseline systems.
+
+First of all, we can see that {\sc Proposed} clearly improved the
+performance of {\sc AP}, demon\-strating the effectiveness of using
+paraphrasing and back-transliterations. We found that the higher accuracy
+of {\sc Proposed} in comparison with the baselines is statistically
+significant ($p<0.01$, McNemar's test).
+
+Our system also outperformed all frequency-based baselines ({\sc
+Unigram}, {\sc Gmf}, and {\sc Gmf2}). This is not surprising, since the
+simple supervised baseline, {\sc AP}, already outperformed the
+\linebreak
+unsupervised frequency-based ones. Indeed similar experimental results
+were also reported by Alfonseca \shortcite{AlfonsecaACL08}. An
+interesting observation here is the comparison between {\sc Proposed}
+and {\sc AP+Gmf2}. It reveals that our approach improved the performance
+of {\sc AP} more than the frequency-based method. These results
+indicate that paraphrasing and back-transliteration are more informative
+cues than the simple frequency of constituent words.
+
+The performance of the three word segmentation baselines ({\sc Juman},
+{\sc Mecab}, and {\sc KyTea}) is significantly worse in our task than in
+the standard word segmentation task, where nearly 99\% precision and
+recall are reported \cite{Kudo04}. This demonstrates that splitting a
+katakana noun compound is not a trivial task to resolve, even for
+the state-of-the-art word segmentation systems. On the other hand, {\sc
+Proposed} outperformed the three systems in this task, that is, our
+technique can successfully overcome the weaknesses of existing
+word segmentation systems.
+
+\begin{table}[b]
+\caption{Comparison with baseline systems}
+\label{tab:comparison_result}
+\input{07table07.txt}
+\end{table}
+\begin{table}[b]
+\caption{Example outputs of {\sc MeCab} and {\sc Proposed}}
+\label{tab:example}
+\input{07table08.txt}
+\end{table}
+
+Table \ref{tab:example} illustrates example outputs of {\sc MeCab} and
+{\sc Proposed}. In the first example, the katakana word“ディクショナリー
+(dictionary)”was not registered in NAIST-jdic, and {\sc MeCab} failed to
+handle it. On the other hand, {\sc Proposed} learned the following
+word-aligned transliteration pairs and successfully split it.
+
+\begin{quote}
+ \underline{オックスフォード}$_1$\underline{ディクショナリー}$_2$\ \ \ \
+ \underline{oxford\vphantom{y}}$_1$ \underline{dictionary}$_2$
+\end{quote}
+
+\noindent
+In the next example, {\sc MeCab} failed to split“メインタイトル (main
+title)”although both“メイン (main)”and“タイトル (title)”appear
+in NAIST-jdic. This error is probably caused by OOV word processing
+algorithm implemented in {\sc MeCab}. On the other hand, {\sc Proposed}
+could successfully split“メインタイトル (main title)”because it uses
+features based paraphrases such as“メインのタイトル (main title).”In
+the last example, {\sc MeCab} oversegments“アナトミー (anatomy)”because NAIST-jdic contains the proper name“トミー (Tommy)”{\kern-0.5zw}, while {\sc
+Proposed} avoids over-segmentation by using a back-transliteration of“アナ
+トミー (anatomy).”
+
+It is interesting that {\sc KyTea} performed the best among the
+baseline word segmenters, although this finding is not directly relevant
+to our proposal. We think this is because {\sc Juman} and
+{\sc MeCab} heavily relies on dictionary look-up for candidate
+selection, whereas {\sc KyTea} does not.
+
+
+\subsection{An investigation of out-of-vocabulary words}
+
+In our test data, 2,681 out of the 5,286 katakana noun compounds contained
+at least one out-of-vocabulary word not registered in NAIST-jdic. Table
+\ref{tab:oov} illustrates the results of the supervised systems for
+those 2,681 compounds and the remaining 2,605 katakana noun compounds
+(referred to as w/ OOV and w/o OOV data, respectively). While accuracy
+exceeds 90\% for w/o OOV data, it is substantially degraded for w/ OOV
+data. This is consistent with our claim that out-of-vocabulary words are
+a major source of errors in splitting noun compounds.
+
+\begin{table}[b]
+    \caption{Splitting results of the supervised systems for w/ OOV and w/o OOV data}
+    \label{tab:oov}
+\input{07table09.txt}
+\end{table}
+
+The three supervised systems performed almost equally for w/o OOV
+data. This is because {\sc AP} trivially performs very well on this
+subset, and further improvement is difficult. On the
+other hand, we can see that there are substantial performance gaps
+between the systems' peformance with the w/ OOV data. This result
+reflects the effect of the additional features more directly than the
+results shown in Table \ref{tab:comparison_result}.
+
+
+\subsection{Effect of the two new features}
+\label{sec:effect}
+
+To see the effect of the new features in more detail, we looked at the
+performances of our system using different feature sets (Table
+\ref{tab:comparison}). The first column represents the feature set we
+used: {\sc Basic}, {\sc Para}, {\sc Trans}, and {\sc All} represent the
+basic features, paraphrasing feature, back-transliteration feature, and
+all features. The results demonstrate that adding
+either of the new features improved the performance, and the best result
+was achieved when they were used together. In all cases, the improvement
+over {\sc Basic} was statistically significant ($p<0.01$, McNemar's
+test).
+
+ \begin{table}[b]
+    \caption{Effectiveness of paraphrasing ({\sc Para}) and
+    back-transliteration features ({\sc Trans})}
+   \label{tab:comparison}
+\input{07table10.txt}
+\end{table}
+
+Next, we investigated the coverage of the features. Our test data
+comprised 7,709 constituent words, 4,935 (64.0\%) of which were covered by
+NAIST-jdic. The coverage was significantly improved while using the
+back-transliteration feature. We observed that 5941 words (77.1\%) are
+in NAIST-jdic or word-aligned transliteration pairs extracted from the
+Web text. This shows that the back-transliteration feature successfully
+reduced the number of out-of-vocabulary words. On the other hand, our
+test data included 2,423 constituent word $2$-grams, and 79.5\%
+(1,926/2,423) and 12.8\% (331/2,423) of them were covered by
+paraphrasing-based and back-transliteration-based features, respectively.
+
+\begin{figure}[b]
+ \begin{center}
+\includegraphics{21-4ia7f1.eps}
+ \end{center}
+\hangcaption{Relation between the volume of the blog data used to compute
+  paraphrasing and back-transliteration features (X-axis) and the coverage
+  of the features (Y-axis)}
+  \label{fig:feature-coverage}
+\end{figure}
+
+We investigated the relationship between the coverage of the new
+features and the size of the blog data from which the new features are
+derived (Figure~\ref{fig:feature-coverage}). The X-axis represents the
+file size of the blog data (UTF8 encoding) compressed by gzip
+command. The figure indicates that higher coverage can be achieved by
+using a larger volume of blog data. However, at the same time, we see
+that the increase in the coverage saturates as the size of the blog data
+increases. The conclusion we draw from this figure is that it is
+difficult to further improve coverage by merely increasing the volume of
+blog data, and it is thus important to explore other approaches such as
+expanding the paraphrasing rules.
+
+
+
+\subsection{Parameter $\theta$}
+\label{sec:threshold}
+
+We investigated the influence of the threshold $\theta$ (Figure
+\ref{fig:size}, \ref{fig:coverage}, and \ref{fig:threshold}). Figures
+\ref{fig:size} and \ref{fig:coverage} illustrate the number of
+word-aligned transliteration pairs and their coverage for different
+values of $\theta$. These figures indicate that a sufficient number of
+transliteration pairs can be extracted when $\theta$ is sufficiently
+small, and consequently the features are fired in many examples. Figure
+\ref{fig:threshold} represents the relation between $\theta$ and
+F$_{1}$-score. Comparing Figure \ref{fig:threshold} with Figures
+\ref{fig:size} and \ref{fig:coverage}, we can confirm that the increase
+in the number of transliteration pairs and the coverage results in
+higher F$_1$-score.
+
+\begin{figure}[b]
+ \begin{center}
+\includegraphics{21-4ia7f2.eps}
+ \end{center}
+  \caption{Parameter $\theta$ (X-axis) and the number of word-aligned
+  transliteration pairs (Y-axis)}
+  \label{fig:size}
+\end{figure}
+\begin{figure}[b]
+ \begin{center}
+\includegraphics{21-4ia7f3.eps}
+ \end{center}
+  \hangcaption{Parameter $\theta$ (X-axis) and the coverage of
+  back-transliteration features (Y-axis). The triangles and squares
+  represents the coverage of constituent word $1$-gram and $2$-gram,
+  respectively.}
+  \label{fig:coverage}
+\end{figure}
+
+While the F$_{1}$-score drops when the value of $\theta$ is too large
+(e.g., $-20$), the F$_{1}$-score is otherwise almost constant. This
+demonstrates that accuracy of our method is not sensitive to the value
+of $\theta$ and it is generally easy to set $\theta$ near the optimal
+value. More importantly, the F$_1$-score is consistently higher than
+{\sc Basic} irrespective of the value of $\theta$. We can conclude that 
+the change in the parameter value has little influence on the accuracy
+of the proposed method.
+
+\begin{figure}[t]
+ \begin{center}
+\includegraphics{21-4ia7f4.eps}
+ \end{center}
+  \hangcaption{Parameter $\theta$ (X-axis) and F$_{1}$-score (Y-axis). The
+  triangles and squares represent the results when all features and only
+  basic features are used.}
+  \label{fig:threshold}
+\end{figure}
+
+
+
+\subsection{Error analysis}
+\label{subsec:error}
+
+Our error analysis revealed that many errors are caused by
+over-segmentation, e.g., splitting“アップロード (upload)”into“アッ
+プ (up)”and“ロード (load)”or“トランスフォーマー (transformer)”into“トランス (trans)”and“フォーマー (former).”Since“アップ
+(up)”and“トランス (trans)”are prefixes, these results are
+inappropriate for word segmentation, although they may be appropriate for
+morphological segmentation.
+
+One cause of such over-segmentation is that some strings are ambiguous
+and can be used as not only prefixes but also as words depending on their
+context. For example, while“アップ (up)”can in fact be used as a
+prefix, it can also be used as an independent noun as in“給料がアップ
+する (salary raises)”Similar discussion applies to“トランス
+(trans),”e.g.,“トランス状態 (trance state).”The problem caused by
+such ambiguities is that dictionary-based features (template 4 in Table
+\ref{tab:feature}) are over-activated. For example, in the examples
+discussed above, dictionary-based features are wrongly activated because
+both“アップ (up)”and“トランス (trans)”are registered in
+NAIST-jdic as nouns.
+
+A similar problem occurs with back-transliteration features. Our method
+of extracting word-aligned transliteration pairs assumes that English
+text is properly segmented. In practice, however, white spaces are
+sometimes inserted around prefixes and suffixes and, as the result,
+inappropriate pairs are extracted.
+
+Table \ref{tab:error} shows some word-aligned transliteration pairs that
+are considered to have caused over-segmentation. The table shows that
+transliteration pairs are appropriately extracted for“アップロード
+(upload)”and“トランスフォーマー (transformer),”but not for“アップロー
+ダー (uploader)”and“トランスフォーム (transform).”Back-transliteration features extracted from these transliteration pairs
+can be considered to have a bad influence on accuracy. It is one future
+work to decrease the number of errors of this type.
+
+\begin{table}[t]
+ \caption{Word-aligned transliteration pairs that are considered to
+ have caused over-segmentation}
+ \label{tab:error}
+\input{07table11.txt}
+\end{table}
+
+We can consider another reason for over-segmentation. In the test data,
+more than half the examples constitute a single word, and it is
+possible that the experimental setting is biased towards promoting
+over-segmentation. It is hard to verify this assumption because there
+are no other data sets available for our task. We have to futher
+investigate this matter in future research.
+
+
+\section{Conclusion}
+\label{sec:conclude}
+
+In this paper, we proposed a method for improving the accuracy of
+katakana noun compound splitting in Japanese by the use of paraphrasing
+and back-transliteration. The method allows us to take advantage of
+large sets of unlabeled data to alleviate the influence of OOV words,
+which are a major source of segmentation errors. In our experiments,
+we empirically demonstrated the effectiveness of the proposed method by
+comparing it with eight baseline methods.
+
+Our future work includes developing a model that integrates the method
+presented in this paper with existing word segmentation
+methods. Although they can be combined in a pipelined manner, such an
+ad-hoc approach is not always satisfactory from a theoretical
+perspective. One approach would be to incorporate the new features into
+existing word segmentation systems. Another interesting direction would
+be to integrate the new features into an unsupervised framework, which
+has been actively studied in recent years \cite{Mochihashi09}.
+
+We also consider it important to generalize the idea presented in
+this paper. Although the discussions in this paper are focused on
+katakana noun compounds with origins in English, a similar approach is
+likely to be effective for other types of compounds. For example, our
+paraphrasing rules would be useful for splitting“トンコツラーメン
+(pork bone noodle)”into“トンコツ (pork bone)”and“ラーメン
+(noodle)”{\kern-0.5zw}, both of which are spelled with katakana characters but not
+English transliterations. What is more, the idea of using paraphrases as
+features for word segmentation is not limited to noun compounds, and we
+plan to explore this research direction in the future.
+
+
+\acknowledgment
+
+A part of the paper was presented at the 2011 Conference on Empirical
+Methods in Natural Language Processing \cite{Kaji11}.
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Alfonseca, Bilac, \BBA\ Pharies}{Alfonseca
+  et~al.}{2008a}]{AlfonsecaACL08}
+Alfonseca, E., Bilac, S., \BBA\ Pharies, S. \BBOP 2008a\BBCP.
+\newblock \BBOQ Decompoundig Query Keywords from Compounding Languages.\BBCQ\
+\newblock In {\Bem Proceedings of ACL, Short Papers}, \mbox{\BPGS\ 253--256}.
+
+\bibitem[\protect\BCAY{Alfonseca, Bilac, \BBA\ Pharies}{Alfonseca
+  et~al.}{2008b}]{AlfonsecaCICLing08}
+Alfonseca, E., Bilac, S., \BBA\ Pharies, S. \BBOP 2008b\BBCP.
+\newblock \BBOQ German Decompounding in a Difficult Corpus.\BBCQ\
+\newblock In {\Bem Proceedings of CICLing}, \mbox{\BPGS\ 128--139}.
+
+\bibitem[\protect\BCAY{Ando \BBA\ Lee}{Ando \BBA\ Lee}{2003}]{Ando03}
+Ando, R.~K.\BBACOMMA\ \BBA\ Lee, L. \BBOP 2003\BBCP.
+\newblock \BBOQ Mostly-Unsupervised Statistical Segmentation of {J}apanese
+  {K}anji Sequences.\BBCQ\
+\newblock {\Bem Natural Language Engineering}, {\Bbf 9}  (2), \mbox{\BPGS\
+  127--149}.
+
+\bibitem[\protect\BCAY{Braschler \BBA\ Ripplinger}{Braschler \BBA\
+  Ripplinger}{2004}]{Braschler04}
+Braschler, M.\BBACOMMA\ \BBA\ Ripplinger, B. \BBOP 2004\BBCP.
+\newblock \BBOQ How Effective is Stemming and Decompounding for {G}erman Text
+  Retrieval?\BBCQ\
+\newblock {\Bem Information Retrieval}, {\Bbf 7}, \mbox{\BPGS\ 291--316}.
+
+\bibitem[\protect\BCAY{Breen}{Breen}{2009}]{Breen09}
+Breen, J. \BBOP 2009\BBCP.
+\newblock \BBOQ Identification of Neologisms in {J}apanese by Corpus
+  Analysis.\BBCQ\
+\newblock In {\Bem Proceedings of eLexicography in the 21st Century
+  Conference}, \mbox{\BPGS\ 13--22}.
+
+\bibitem[\protect\BCAY{Brill, Kacmarcik, \BBA\ Brockett}{Brill
+  et~al.}{2001}]{Brill01}
+Brill, E., Kacmarcik, G., \BBA\ Brockett, C. \BBOP 2001\BBCP.
+\newblock \BBOQ Automatically Harvesting Katakana-{E}nglish Term Pairs from
+  Search Engine Query Logs.\BBCQ\
+\newblock In {\Bem Proceedings of NLPRS}, \mbox{\BPGS\ 393--399}.
+
+\bibitem[\protect\BCAY{Brown}{Brown}{2002}]{Brown02}
+Brown, R.~D. \BBOP 2002\BBCP.
+\newblock \BBOQ Corpus-Driven Splitting of Compound Words.\BBCQ\
+\newblock In {\Bem Proceedings of TMI}.
+
+\bibitem[\protect\BCAY{Cao, Gao, \BBA\ Nie}{Cao et~al.}{2007}]{Cao07}
+Cao, G., Gao, J., \BBA\ Nie, J.-Y. \BBOP 2007\BBCP.
+\newblock \BBOQ A System to Mine Large-Scale Bilingual Dictionaries from
+  Monolingual {W}eb Pages.\BBCQ\
+\newblock In {\Bem Proceedings of MT Summit}, \mbox{\BPGS\ 57--64}.
+
+\bibitem[\protect\BCAY{Dyer}{Dyer}{2009}]{Dyer09}
+Dyer, C. \BBOP 2009\BBCP.
+\newblock \BBOQ Using a Maximum Entropy Model to Build Segmentation Lattices
+  for {MT}.\BBCQ\
+\newblock In {\Bem Proceedings of NAACL}, \mbox{\BPGS\ 406--414}.
+
+\bibitem[\protect\BCAY{Freund \BBA\ Schapire}{Freund \BBA\
+  Schapire}{1999}]{Freund99}
+Freund, Y.\BBACOMMA\ \BBA\ Schapire, R.~E. \BBOP 1999\BBCP.
+\newblock \BBOQ Large Margin Classification Using the Perceptron
+  Algorithm.\BBCQ\
+\newblock {\Bem Machine Learning}, {\Bbf 37}  (3), \mbox{\BPGS\ 277--296}.
+
+\bibitem[\protect\BCAY{Holz \BBA\ Biemann}{Holz \BBA\ Biemann}{2008}]{Holz08}
+Holz, F.\BBACOMMA\ \BBA\ Biemann, C. \BBOP 2008\BBCP.
+\newblock \BBOQ Unsupervised and Knowledge-Free Learning of Compound Splits and
+  Periphrases.\BBCQ\
+\newblock In {\Bem Proceedings of CICLing}, \mbox{\BPGS\ 117--127}.
+
+\bibitem[\protect\BCAY{Jiampojamarn, Kondrak, \BBA\ Sherif}{Jiampojamarn
+  et~al.}{2007}]{Jiampojamarn07}
+Jiampojamarn, S., Kondrak, G., \BBA\ Sherif, T. \BBOP 2007\BBCP.
+\newblock \BBOQ Applying Many-to-Many Alignment and Hidden {M}arkov Models to
+  Letter-to-Phoneme Conversion.\BBCQ\
+\newblock In {\Bem HLT-NAACL}, \mbox{\BPGS\ 372--379}.
+
+\bibitem[\protect\BCAY{Kageura, Yoshikane, \BBA\ Nozawa}{Kageura
+  et~al.}{2004}]{Kageura04}
+Kageura, K., Yoshikane, F., \BBA\ Nozawa, T. \BBOP 2004\BBCP.
+\newblock \BBOQ Parallel Bilingual Paraphrase Rules for Noun Compounds:
+  Concepts and Rules for Exploring {W}eb Language Resources.\BBCQ\
+\newblock In {\Bem Proceedings of Workshop on Asian Language Resources},
+  \mbox{\BPGS\ 54--61}.
+
+\bibitem[\protect\BCAY{Kaji \BBA\ Kitsuregawa}{Kaji \BBA\
+  Kitsuregawa}{2011}]{Kaji11}
+Kaji, N.\BBACOMMA\ \BBA\ Kitsuregawa, M. \BBOP 2011\BBCP.
+\newblock \BBOQ Splitting Noun Compounds via Monolingual and Bilingual
+  Paraphrasing: A Study on {J}apanese {K}atakana Words.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP}, \mbox{\BPGS\ 959--969}.
+
+\bibitem[\protect\BCAY{Knight \BBA\ Graehl}{Knight \BBA\
+  Graehl}{1998}]{Knight98}
+Knight, K.\BBACOMMA\ \BBA\ Graehl, J. \BBOP 1998\BBCP.
+\newblock \BBOQ Machine Transliteration.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 24}  (4), \mbox{\BPGS\
+  599--612}.
+
+\bibitem[\protect\BCAY{Koehn \BBA\ Knight}{Koehn \BBA\ Knight}{2003}]{Koehn03}
+Koehn, P.\BBACOMMA\ \BBA\ Knight, K. \BBOP 2003\BBCP.
+\newblock \BBOQ Empirical Methods for Compound Splitting.\BBCQ\
+\newblock In {\Bem Proceedings of EACL}, \mbox{\BPGS\ 187--193}.
+
+\bibitem[\protect\BCAY{Kudo, Yamamoto, \BBA\ Matsumoto}{Kudo
+  et~al.}{2004}]{Kudo04}
+Kudo, T., Yamamoto, K., \BBA\ Matsumoto, Y. \BBOP 2004\BBCP.
+\newblock \BBOQ Applying Conditional Random Fields to {J}apanese Morphological
+  Analysis.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP}, \mbox{\BPGS\ 230--237}.
+
+\bibitem[\protect\BCAY{Kurohashi \BBA\ Nagao}{Kurohashi \BBA\
+  Nagao}{1994}]{Kurohashi94}
+Kurohashi, S.\BBACOMMA\ \BBA\ Nagao, M. \BBOP 1994\BBCP.
+\newblock \BBOQ Improvements of {J}apanese Morphological Analyzer
+  \mbox{JUMAN}.\BBCQ\
+\newblock In {\Bem Proceedings of the International Workshop on Sharable
+  Natural Language \mbox{Resources}}, \mbox{\BPGS\ 22--38}.
+
+\bibitem[\protect\BCAY{Mochihashi, Yamada, \BBA\ Ueda}{Mochihashi
+  et~al.}{2009}]{Mochihashi09}
+Mochihashi, D., Yamada, T., \BBA\ Ueda, N. \BBOP 2009\BBCP.
+\newblock \BBOQ Bayesian Unsupervised Word Segmentation with Nested
+  {P}itman-{Y}or Language Modeling.\BBCQ\
+\newblock In {\Bem Proceedings of ACL}, \mbox{\BPGS\ 100--108}.
+
+\bibitem[\protect\BCAY{Nakazawa, Kawahara, \BBA\ \mbox{Kurohashi}}{Nakazawa
+  et~al.}{2005}]{Nakazawa05}
+Nakazawa, T., Kawahara, D., \BBA\ \mbox{Kurohashi}, S. \BBOP 2005\BBCP.
+\newblock \BBOQ Automatic Acquisition of Basic {K}atakana Lexicon from a Given
+  Corpus.\BBCQ\
+\newblock In {\Bem Proceedings of IJCNLP}, \mbox{\BPGS\ 682--693}.
+
+\bibitem[\protect\BCAY{Neubig, Nakata, \BBA\ Mori}{Neubig
+  et~al.}{2011}]{Neubig11}
+Neubig, G., Nakata, Y., \BBA\ Mori, S. \BBOP 2011\BBCP.
+\newblock \BBOQ Pointwise Prediction for Robust, Adaptable {J}apanese
+  Morphological Analysis.\BBCQ\
+\newblock In {\Bem Proceedings of ACL}, \mbox{\BPGS\ 529--533}.
+
+\bibitem[\protect\BCAY{Oh \BBA\ Isahara}{Oh \BBA\ Isahara}{2008}]{Oh08}
+Oh, J.-H.\BBACOMMA\ \BBA\ Isahara, H. \BBOP 2008\BBCP.
+\newblock \BBOQ Hypothesis Selection in Machine Transliteration: A {W}eb Mining
+  Approach.\BBCQ\
+\newblock In {\Bem Proceedings of IJCNLP}, \mbox{\BPGS\ 233--240}.
+
+\bibitem[\protect\BCAY{Okazaki, Ananiadou, \BBA\ Tsujii}{Okazaki
+  et~al.}{2008}]{Okazaki08}
+Okazaki, N., Ananiadou, S., \BBA\ Tsujii, J. \BBOP 2008\BBCP.
+\newblock \BBOQ A Discriminative Alignment Model for Abbreviation
+  Recognition.\BBCQ\
+\newblock In {\Bem Proceedings of COLING}, \mbox{\BPGS\ 657--664}.
+
+\bibitem[\protect\BCAY{Schiller}{Schiller}{2005}]{Schiller05}
+Schiller, A. \BBOP 2005\BBCP.
+\newblock \BBOQ German Compound Analysis with wfsc.\BBCQ\
+\newblock In {\Bem Proceedings of Finite State Methods and Natural Language
+  Processing}, \mbox{\BPGS\ 239--246}.
+
+\bibitem[\protect\BCAY{Schwartz \BBA\ Hearst}{Schwartz \BBA\
+  Hearst}{2003}]{Schwartz03}
+Schwartz, A.~S.\BBACOMMA\ \BBA\ Hearst, M.~A. \BBOP 2003\BBCP.
+\newblock \BBOQ A Simple Algorithm for Identifying Abbreviation Definitions in
+  Biomedical Text.\BBCQ\
+\newblock In {\Bem Proceedings of PSB}, \mbox{\BPGS\ 451--462}.
+
+\bibitem[\protect\BCAY{Tsujimura}{Tsujimura}{2006}]{Tsujimura06}
+Tsujimura, N. \BBOP 2006\BBCP.
+\newblock {\Bem An Introduction to {J}apanese Linguistics}.
+\newblock Wiley-Blackwell.
+
+\bibitem[\protect\BCAY{Wu, Okazaki, \BBA\ Tsujii}{Wu et~al.}{2009}]{Wu09}
+Wu, X., Okazaki, N., \BBA\ Tsujii, J. \BBOP 2009\BBCP.
+\newblock \BBOQ Semi-supervised Lexicon Mining from Parenthetical Expressions
+  in Monolingual {W}eb Pages.\BBCQ\
+\newblock In {\Bem Proceedings of NAACL}, \mbox{\BPGS\ 424--432}.
+
+\end{thebibliography}
+
+\begin{biography}
+\bioauthor[:]{Nobuhiro Kaji}{
+ He received his Ph.D.\ in Information Science and Technology from the
+ University of Tokyo, Japan, in 2005. He worked at the Institute of
+ Industrial Science, the University of Tokyo, as a Research Associate
+ and Project Assistant Professor from 2005 to 2006 and from 2006 to
+ 2012, respectively. He is currently a Project Associate Professor at
+ the Institute of Industrial Science, the University of Tokyo. His
+ research interests include natural language processing and machine
+ learning.}
+\bioauthor[:]{Masaru Kitsuregawa}{
+ He received his Ph.D.\ in Information Engineering from the University of
+ Tokyo, Japan, in 1983. He is currently a Professor at the Institute of
+ Industrial Science, the University of Tokyo, Director General/Professor
+ at Earth Observation Data Integration \& Fusion Research Initiative of
+ the University of Tokyo, Director General of the National Institute of
+ Informatics, and President of Information Processing Society of
+ Japan. His research interests include high performance database
+ engineering and big data systems. He is a recipient of the ACM SIGMOD
+ Edgar F.\ Codd Innovations Award (2009), and a co-recipient of the IPSJ
+ Contribution Award (2010) and the Medal with Purple Ribbon (2013).}
+\end{biography}
+
+\biodate
+
+
+\end{document}

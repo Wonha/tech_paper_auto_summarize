@@ -1,0 +1,1356 @@
+
+
+
+\documentstyle[eclepsf,nlpbbl]{jnlp_e}
+
+\setcounter{page}{59}
+\setcounter{巻数}{8}
+\setcounter{号数}{3}
+\setcounter{年}{2001}
+\setcounter{月}{7}
+\受付{October}{18}{2000}
+\採録{April}{13}{2001}
+
+\setcounter{secnumdepth}{3}
+
+\newcommand{\deflabel}[1]{}
+
+\newenvironment{deflist}[1]{}{}
+
+\begin{document}
+
+
+\title{}
+\etitle{A trainable method for pronominal anaphora \\ resolution using shallow information}
+
+\author{
+         パウル ミヒャエル\affiref{ATR} \and     
+         隅田  英一郎\affiref{ATR}
+}
+\eauthor{
+         Michael Paul\affiref{ATR}  \and     
+         Eiichiro Sumita\affiref{ATR}
+         }
+
+\headtitle{A trainable method for pronominal anaphora resolution $\ldots$} 
+\headauthor{Paul,~M.~and~Sumita,~E.}
+
+\affilabel{ATR}
+    {ATR音声言語通信研究所}
+    {ATR Spoken Language Translation Research Laboratories}
+
+\jkeywords{照応解析, 機械学習, 優先度}
+\ekeywords{Anaphora Resolution, Machine Learning, Saliency Measure}
+
+
+\jabstract{}
+
+\eabstract{
+         We propose a corpus-based approach to anaphora resolution of Japanese pronouns
+         combining a machine learning method and statistical information. First,
+         a decision tree trained on an annotated corpus determines the 
+         coreference relation of a given anaphor and antecedent candidates
+         and is utilized as a filter in order to reduce the number of potential
+         candidates. In the second step, preference selection is achieved by taking into
+         account the frequency information of coreferential and non-referential pairs
+         tagged in the training corpus as well as distance and counting features
+         within the current discourse.
+}
+
+
+\maketitle
+
+\section{Introduction}
+\label{intro}
+
+Coreference information is relevant for numerous NLP systems.
+Our interest in anaphora resolution is based on the demand for machine translation
+systems to be able to translate anaphoric expressions in agreement with
+the morphosyntactic characteristics of the referred object in order to prevent contextual
+misinterpretations.
+
+So far various approaches to anaphora resolution have been proposed.
+In this paper a {\em machine learning approach} (decision tree) is combined with a preference
+selection method based on the {\em frequency} information of non-/coreferential pairs tagged
+in the corpus as well as {\em counting} and {\em distance} features within the current discourse.
+
+The advantage of machine learning approaches is that they result in modular anaphora
+resolution systems automatically trainable from a corpus with no or only a minimal
+amount of human intervention. In the case of decision trees, we do have to provide information
+about possible antecedent indicators (syntactic, semantic, and pragmatic features) contained
+in the corpus, but the relevance of features for the resolution task is extracted
+automatically from the training data.
+
+The machine learning approaches using decision trees proposed so far have focused on preference
+selection criteria directly derived from the decision tree results.
+The work described in \cite{Conolly94} utilized a decision tree capable of judging which one
+of two given anaphor-antecedent pairs is ``better''. Due to the lack of a strong assumption on
+``transitivity'', however, this sorting algorithm is more like a greedy heuristic search as it
+may be unable to find the ``best'' solution.
+
+The preference selection for a single antecedent in \cite{Aone95} is based on the maximization
+of confidence values returned from a pruned decision tree for given anaphor-candidate pairs.
+However, relations between single attributes cannot be obtained automatically within the
+decision tree learning phase.
+Moreover, these confidence values do not take into account any contextual information from the discourse 
+the decision tree is applied to.
+
+The preference selection in our approach is based on the combination of statistical
+frequency information as well as distance and counting features in the discourse. Therefore, our decision
+tree is not applied directly to the task of preference selection, but aims at the elimination
+of irrelevant candidates based on the knowledge obtained from the training data.
+
+The decision tree is trained on syntactic (lexical word attributes), semantic, and
+primitive discourse (distance, counting features) information and determines the coreferential relation
+between an anaphor and antecedent candidates in the given context. Irrelevant antecedent
+candidates are filtered out, achieving a noise reduction for the preference selection
+algorithm. A preference value is assigned to each potential anaphor-candidate pair depending
+on the proportion of non-/coreferential occurrences of the pair in the training corpus
+({\em frequency ratio}), the relative position of both elements in the discourse
+({\em distance}), and the number of previous occurrences in the discourse ({\em count}).
+The candidate with the maximal preference value is resolved as the antecedent of the anaphoric expression.
+
+\section{Corpus-based anaphora resolution}
+\label{res}
+
+In this section we introduce a new approach to anaphora resolution based on 
+coreferential properties automatically extracted from a training corpus.
+The correct antecedents of anaphoric expressions ($A$) are tagged in our annotated corpus.
+Antecedent candidates ($C$) are all nouns preceding the anaphor identified according to part-of-speech tags.
+
+In the first step, the decision tree filter is trained on the linguistic, discourse, and coreference
+information annotated in the training corpus, which is described in Section~\ref{data}.
+
+\begin{figure}[htb]
+  \vspace*{-1\baselineskip}
+  \begin{center}
+
+    \atari(105,34)
+
+    \caption{System outline}\label{pic-outline}
+  \vspace*{-0.5\baselineskip}
+  \end{center}
+\end{figure}
+
+The resolution system in Figure~\ref{pic-outline} applies the coreference filter 
+(cf. Section~\ref{coref-analysis}) to all anaphor-candidate pairs ($A_{i}+C_{ij}$) found in the history. 
+The reduced set ($A_{i}+C_{ik}$) consists of all potential candidates and forms the input of the preference
+algorithm, which selects the most salient anaphor-candidate pair ($A_{i}+C_{ip}$) as described in Section~\ref{pref}.
+Preliminary experiments are conducted and the performance of our system is evaluated in Section~\ref{eval}. \\[-0.5em]
+
+\subsection{Tagged corpus}
+\label{data}
+
+For our experiments we use 500 Japanese spoken-language dialogues annotated with coreferential tags
+out of the {\em ATR-ITL Speech and Language Database} \cite{Takezawa98}.
+They include 1745 pronominal annotations, whereby the anaphoric expressions
+used in our experiments are limited to those referring to nominal antecedents.
+
+Besides the anaphor type, we also include morphosyntactic information like stem form and inflection
+attributes for each surface word as well as semantic codes \cite{Ohno81} for content words in this corpus.
+
+\begin{figure}[htb]
+  \vspace*{-1\baselineskip}
+  \begin{center}
+\atari(108,54)
+    \caption{Example dialogue}\label{pic-data}
+  \vspace*{-1.5\baselineskip}
+  \end{center}
+\end{figure}
+
+In the example dialogue between a hotel receptionist (r) and a customer (c) listed in Figure~\ref{pic-data},
+anaphora are marked with a box, whereas all underlined nouns preceding the respective anaphor form the
+list of possible candidates.
+The proper noun (r1)``シティホテル[City Hotel]'' is tagged as the antecedent of the
+pronoun (c1)``そちら[there]''.
+
+According to the tagging guidelines used for our corpus, an anaphoric tag refers to the most recent
+antecedent found in the dialogue. However, this antecedent might also refer to a previous one, e.g.,
+(r3)``こちら[here]'' refers to (c1)''そちら[there]'', which refers to (r1) ''シティホテル [City Hotel]''.
+Thus, the {\em transitive closure} between the anaphora and the first mention of the
+antecedent in the history defines the set of {\em positive examples}, whereas
+the nominal candidates outside the transitive closure are considered {\em negative examples}
+for coreferential relationships. In our example the sets consist of the following examples.
+
+\renewcommand{\arraystretch}{}
+
+\begin{center}
+  \begin{scriptsize}
+  \begin{tabular}{cccccc}
+    positive examples & \hspace*{1cm} & \multicolumn{3}{c}{negative examples} \\
+    \cline{1-1} \cline{3-5}
+                          & &                     &                     & \\[-0.5em]
+    (こちら,シティホテル) & & (こちら,田中)       & (こちら,お客様)     & (こちら,十日)       \\[-0.5em]
+    [here,City Hotel]     & & [here,Tanaka]       & [here,guest]        & [here, 10${}^{th}$] \\
+    (そちら,シティホテル) & & (こちら,弘子)       & (こちら,お名前)     & (そちら,田中)       \\[-0.5em]
+    [there,City Hotel]    & & [here,Hiroko]       & [here,name]         & [there,Tanaka]      \\
+                          & & (こちら,ホテル)     & (こちら,スペル)     &  (そちら,弘子)       \\[-0.5em]
+                          & &  [here,hotel]       & [here,spelling]     & [there,Hiroko]      \\
+                          & & \multicolumn{3}{l}{(こちら,ティーエーエヌエーケーエー)} \\[-0.5em]
+                          & & \multicolumn{3}{l}{[here, TANAKA]} \\[0.5em]
+  \end{tabular}
+  \end{scriptsize}
+\end{center}
+
+The difficulty of our resolution task can be verified according to the average number of antecedent
+candidates, i.e. the sum of positive and negative examples, for a given pronoun.
+In our corpus, the average number is 36.7 (こちら: 41.0, そちら: 28.8, etc.).
+
+Table~\ref{tab-tag} summarizes the corpus annotations for anaphoric expressions and antecedent
+candidates of the example dialogue given in Figure~\ref{pic-outline}.
+
+\setlength{\tabcolsep}{5pt}
+\begin{table}[hbt]
+  \vspace*{-0.5\baselineskip}
+   \begin{center}
+   \begin{scriptsize}
+    \caption{Corpus annotations}\label{tab-tag} 
+    \vspace*{0.5em}
+    \begin{tabular}{|r|c|c|c|c|c|}
+      \hline
+      ID & word         & stem          & pos           & sem                  & ant \\ \hline \hline
+      2  & シティホテル & シティホテル  & 普通名詞      &  \{shop\}            & --    \\ [-0.5em]
+         & [City Hotel] &  [City Hotel] & [common noun] &                      &       \\ \hline
+      6  & 田中         & 田中          & 普通名詞      &  \{name\}            & --    \\ [-0.5em]
+         & [Tanaka]     & [Tanaka]      & [common noun] &                      &       \\ \hline
+      7  & 弘子         & 弘子          & 普通名詞      &  \{name\}            & --    \\ [-0.5em]
+         & [Hiroko]     &[Hiroko]       & [common noun] &                      &       \\ \hline
+      12 & そちら       & そちら        & 代名詞        &  \{demonstratives\}  & (2,2) \\ [-0.5em]
+         & [there]      & [there]       & [pronoun]     &  \{directions\}      &       \\ [-0.5em]
+         &              &               &               &  \{third person\}    &       \\ \hline
+      14 & ホテル       & ホテル        & 普通名詞      &  \{shop\}            & --    \\ [-0.5em]
+         & [hotel]      & [hotel]       & [common noun] &                      &       \\ \hline
+      21 & お客様       & 客様          & 普通名詞      &  \{guest\}           & --    \\ [-0.5em]
+         & [guest]      & [guest]       & [common noun] &                      &       \\ \hline
+      23 & お名前       & 名前          & 普通名詞      &  \{name\}            & --    \\ [-0.5em]
+         & [name]       & [name]        & [common noun] &                      &       \\ \hline
+      25 & スペル       & スペル        & 普通名詞      &  \{notation\}        & --    \\ [-0.5em]
+         & [spelling]   & [spelling]    & [common noun] &                      &       \\ \hline
+      32 & ティーエーエヌ  & ＡＡ列     & ローマ字      &  \{letter\}          & --    \\ [-0.5em]
+         & エーケーエー    & [letter    & [letter]      &                      &       \\ [-0.5em]
+         & [TANAKA]     & sequence]     &          &                      &       \\ \hline
+      35 & 十日         & Ｎ日          & 普通名詞      &  \{day\}             & --    \\ [-0.5em]
+         & [10${}^{th}$]& [day]         & [common noun] &  \{period\}          &       \\ [-0.5em]
+         &              &               &               &  \{unit\}            &       \\ \hline
+      37 & こちら       & こちら        & 代名詞        &  \{demonstratives\}  & (12,12) \\ [-0.5em]
+         & [here]       & [here]        & [pronoun]     &  \{directions\}      &       \\ [-0.5em]
+         &              &               &               &  \{oneself\}         &       \\ \hline
+     \end{tabular}
+   \end{scriptsize}
+   \end{center}
+   \vspace*{-1\baselineskip}
+\end{table}
+
+They consist of tags for a unique identifier for each morpheme ({\em ID}), the surface word ({\em word}),
+the stem form ({\em stem}), the part-of-speech ({\em pos}), the semantic code ({\em sem}),
+and the antecedent ({\em ant}).
+The expression ``\{$\ldots$\}'' denotes the semantic class assigned to the respective word.
+``[$\ldots$]'' gives the English equivalent of the respective Japanese expression.
+
+The antecedents tagged in our corpus consist of either single nouns or compound nouns, i.e. a 
+sequence of single nouns. The tags used to mark coreferential relationships ({\em ant}) consist
+of a range {\em (startID,endID)} of morphological identifiers. {\em startID} is the ID of the
+first morpheme in the tagged sequence of single nouns, whereas {\em endID} is the ID of the
+last morpheme of this sequence. For example, a coreferential reference towards the compound noun
+「田中弘子」 [Hiroko Tanaka] given in Table~\ref{tab-tag} would be specified as {\em ant=(6,7)}.
+In the case of a single noun, {\em startID} and {\em endID} are identical.
+
+Based on the corpus annotations illustrated in Table~\ref{tab-tag}, we can obtain additional
+statistical information describing the characteristics of the underlying data.
+
+First, we extract the frequency information of coreferential anaphor-antecedent pairs ($freq^+$)
+and non-referential pairs ($freq^-$) from the training data.
+$freq^+$ denotes the number of times the anaphor-candidate pair is tagged coreferentially,
+whereas $freq^-$ is the number of times the anaphor-candidate pair does not occur coreferential
+in the training corpus.
+In Table~\ref{tab-freq} some examples are given for surface form ({\em word}) and
+semantic code ({\em sem}) combinations.
+
+\setlength{\tabcolsep}{2pt}
+\begin{table}[hbt]
+  \vspace*{-1\baselineskip}
+   \begin{center}
+   \begin{footnotesize}
+    \caption{Frequency data}\label{tab-freq} 
+    \vspace*{0.5em}
+    \begin{tabular}{|p{0.5em}lccrrp{0.5em}|}
+      \hline
+      & \multicolumn{1}{c}{type} & anaphor & candidate    & $freq^+$ & $freq^-$   & \\
+      \hline \hline
+      & word-word & そちら[there]  & シティホテル[City Hotel] &     6    &     0 & \\
+      &           & そちら[there]  & 田中[Tanaka]             &     0    &    11 & \\
+      &           & こちら[here]   & 十日[10${}^{th}$]               &     0    &     0 & \\
+      \hline
+      & word-sem  & こちら[here]   & \{shop\}                 &    33    &    33 & \\
+      \hline
+      & sem-sem   & \{demonstratives\} & \{shop\}             &    51     &   18 & \\
+      \hline
+    \end{tabular}
+   \end{footnotesize}
+   \end{center}
+   \vspace*{-1\baselineskip}
+\end{table}
+
+Moreover, each dialogue is subdivided into {\em utterances} consisting of
+one or more {\em chunks} divided by conjunctions.
+Therefore, distance features are available on the utterance ($d_{uttr}$), chunk ($d_{chunk}$),
+candidate ($d_{cand}$), and morpheme ($d_{morph}$) levels.
+For example, the distance values for the pronoun (r3)``こちら[here]'' and
+the antecedent (r1)''シティホテル[City Hotel]'' as well as those
+for the most recent candidate (r3)``十日[10${}^{th}$]'' in our sample dialog
+in Figure~\ref{pic-data} are given in Table~\ref{tab-dist}.
+
+\setlength{\tabcolsep}{10pt}
+\begin{table}[hbt]
+   \vspace*{-0.5\baselineskip}
+   \begin{center}
+   \begin{footnotesize}
+    \caption{Distance features}\label{tab-dist} 
+    \vspace*{0.5em}
+    \begin{tabular}{|ccl@{=}r|}
+      \hline
+      anaphor (ID) & candidate (ID) & \multicolumn{2}{c|}{distance} \\
+      \hline \hline
+                  &                  & $d_{uttr}$   &  4  \\
+      こちら (37) & シティホテル (2) & $d_{chunk}$  &  7  \\
+      $[$here]    &  [City Hotel]    & $d_{cand}$   &  10  \\
+                  &                  & $d_{morph}$  &  35 \\
+      \hline
+                  &                  & $d_{uttr}$   &  0  \\
+      こちら (37) & 十日 (35)        & $d_{chunk}$  &  0  \\
+      $[$here]    & [10${}^{th}$]      & $d_{cand}$   &  1  \\
+                  &                  & $d_{morph}$  &  2  \\
+      \hline
+     \end{tabular}
+   \end{footnotesize}
+   \end{center}
+   \vspace*{-1\baselineskip}
+\end{table}
+
+Additional statistics can be extracted from the dialogue by counting the occurrences of candidate features
+in the previous discourse. Table~\ref{tab-count} lists the values of the counting feature for
+the stem form ($c_{stem}$), the part-of-speech ($c_{pos}$), and
+the semantic code ($c_{sem}$) of the respective candidates.
+
+\vspace*{8mm}
+
+\setlength{\tabcolsep}{10pt}
+\begin{table}[hbt]
+   \vspace*{-0.75\baselineskip}
+   \begin{center}
+   \begin{footnotesize}
+    \caption{Count features}\label{tab-count} 
+    \vspace*{0.5em}
+     \begin{tabular}{|l|ccc|}
+      \hline
+      \multicolumn{1}{|c|}{count}  & シティホテル (2) &  ホテル (14)      & 十日 (35)  \\
+      \hline \hline
+      $c_{stem}$ & 0               &  0               & 0  \\
+      $c_{pos}$  & 0               &  3               & 7   \\
+      $c_{sem}$  & 0               &  1               & 0  \\
+     \hline
+     \end{tabular}
+   \end{footnotesize}
+   \end{center}
+   \vspace*{-0.75\baselineskip}
+\end{table}
+
+\subsection{Coreference analysis}
+\label{coref-analysis}
+
+The resolution of anaphoric expressions is important in numerous
+natural language processing applications and has been intensively
+studied in the past. Various features indicating coreferential
+relationships have already been proposed. But most of the previous
+approaches make use of quite sophisticated linguistic knowledge, such as,
+for example, dependency structures or discourse markers.
+The richness of this knowledge, however, has its drawbacks
+with respect to the scalability of a resolution system to new tasks or different languages.
+
+Therefore, we are proposing a trainable resolution approach using shallow information,
+i.e., syntactic and semantic word attributes as well as primitive discourse information
+extracted from the morphological analysis of the input utterances.
+
+To learn the coreferential relationships from our corpus we have chosen
+a C4.5-like machine learning algorithm \cite{Quinlan93}. 
+The set of attributes used for the decision tree learning consists of discrete
+and continuous values extracted from the training corpus (cf. Section~\ref{dt-attr}).
+Two decision tree classes are used to determine whether there is a coreferential
+relationship or not (cf. Section~\ref{dt-learn}).
+
+During our anaphora resolution algorithm, the learned decision tree is applied to all
+possible anaphor-candidate pairs  (cf. Section~\ref{dt-apply}).
+If the coreferential relationship can be verified, the respective candidate is taken
+into further consideration by the resolution algorithm. Otherwise, the candidate is
+judged as unrelated and deleted from the list of potential candidates,
+thus achieving a noise reduction for the preference selection scheme described
+in Section~\ref{pref}.
+
+\subsubsection{Training attributes}
+\label{dt-attr}
+
+For the learning of the decision tree we use the word attributes and the discourse
+information described in Table~\ref{tab-dt-attr}.
+
+\setlength{\tabcolsep}{5pt}
+\begin{table}[hbt]
+   \vspace*{-1\baselineskip}
+   \begin{center}
+    \caption{Training attributes}\label{tab-dt-attr} 
+     \begin{tabular}{|ll|l|}
+      \hline
+      \multicolumn{2}{|c|}{category}        & \multicolumn{1}{c|}{sample}     \\
+      \hline \hline
+      \multicolumn{2}{|l|}{content word:}   & ``そちら'', ``行く''             \\
+                                            & {\footnotesize semantic code}     & \{name\}, \{shop\}              \\
+                                            & {\footnotesize part-of-speech}    & 代名詞, 普通名詞, 本動詞        \\
+      \hline
+      functional word: & {\footnotesize particle}    & ``は'', ``を''; ``と'', ``や''        \\ 
+                       & {\footnotesize conjunction} & ``ので'', ``たら''                    \\
+                       & {\footnotesize conjugation} & ``ない'', ``れる'', ``た''            \\
+      \hline
+      discourse:       & {\footnotesize distance}    & ({\em continuous values})       \\
+                       & {\footnotesize count}       & ({\em continuous values})       \\
+      \hline
+     \end{tabular}
+   \end{center}
+   \vspace*{-1\baselineskip}
+\end{table}
+
+According to the category, we distinguish attributes concerning the stem form of specific content words,
+the semantic classification of words and their part-of-speech as well as inflectional attributes.
+Moreover, information about syntactical markers like particles or sentence conjunctions as well as
+discourse information about distance and number of occurrences are used for the determination of coreferential relationships.
+
+\begin{deflist}{}
+ \item[{\bf content word}] \hfill \\
+   For the resolution of pronouns, we have to check not only which anaphoric expressions are involved,
+   but also the existence of other content words, like, for example, the sentence predicate, are verified for the respective input sentence.
+ \item[{\bf semantic code}] \hfill \\
+   For the semantic classification of content words, we use the {\em Ruigo-Shin-Jiten}, a 3-layered semantic hierarchy
+   distinguishing 1000 semantic classes \cite{Ohno81}.
+ \item[{\bf part-of-speech}] \hfill \\
+   We distinguish 33 parts-of-speech for verbs (e.g., 本動詞, 助動詞, 判定詞), nominal expressions (e.g., 普通名詞, 代名詞),
+   adjectives (e.g., 形容詞, 数詞) and functional words (e.g., 格助詞, 接続詞). 
+ \item[{\bf functional word}] \hfill \\
+   In Japanese, the grammatical role of specific content words is marked according to particles succeeding the expression.
+   We distinguish {\em case particle} (e.g., は, が, を, に), conjunction particle (e.g., と, や), compound particle
+   (e.g., の, と言う), and adverbial particle (e.g., とか, など).
+   Moreover, the existence of specific conjunctions (e.g., ながら, ので) as well as the conjugation form of the sentence predicate
+   is verified for the determination of coreferential relationships.
+ \item[{\bf discourse}] \hfill \\
+   The attributes extracted from the respective discourse are described in more detail in Section~\ref{data}.
+   In our experiments described in Section~\ref{eval}, we use information about the occurrence of specific
+   content words and its distance in the discourse. \\[-0.5em]
+\end{deflist}
+
+\noindent
+The scope of a specific attribute is not limited to the specified expression, e.g., the anaphor, but can also be applied to
+preceding or succeeding expressions using the keywords listed below. \\
+
+\begin{deflist}{}
+ \item[{\bf :backward}] \hfill \\
+   check all elements preceding the specified expression,
+   e.g., {\em ``Which semantic classes are assigned to the content word preceding the sentence predicate?''} \\
+         {\tt (:predicate :backward :semcode)}
+ \item[{\bf :latest-cont}]  \hfill \\
+   check the most recent content word preceding the specified expression,
+   e.g., {\em ``Is the candidate modified by a verbal phrase?''} 
+        {\tt (:candidate :latest-cont (:pos  "本動詞"))}
+ \item[{\bf :latest}]  \hfill \\
+   check the element directly preceding the specified expression,
+   e.g., {\em ``Is the candidate part of a compound noun phrase?''}
+        {\tt (:candidate :latest ("と" "並立助詞"))}
+ \item[{\bf :here}]  \hfill \\
+   check the attribute of the specified expression,
+   e.g., {\em ``Is そちら the stem form of the anaphor?''} 
+        {\tt (:anaphor :here ("そちら" "代名詞"))}
+ \item[{\bf :next}]  \hfill \\
+   check the element directly succeeding the specified expression,
+   e.g., {\em ``Is the anaphor marked as the subject?''} 
+        {\tt (:anaphor :next ("が" "格助詞"))}
+ \item[{\bf :next-cont}]  \hfill \\
+   check the next content word succeeding the specified expression,
+   e.g., {\em ``How often did the content word succeeding the anaphor occurred previously?''} \\
+        {\tt (:anaphor :next-cont :count)}
+ \item[{\bf :forward}]   \hfill \\
+   check all elements succeeding the specified expression, 
+   e.g., {\em ``Does the utterance contains a specific conjunction?''}
+        {\tt (:predicate :forward ("ながら" "接続詞"))}\\[-0.5em]
+\end{deflist}
+
+\noindent
+For the training of the decision tree we provide the complete set of attributes described above.
+Besides these attributes, various coreference indicators have been proposed
+in previous resolution systems which are not included in our approach because they require
+a more sophisticated linguistic analysis of the input data. 
+These information sources include structural parsing of the input sentence \cite{Lappin94},
+semantic constraints on verb case and verbal semantic attributes \cite{Nakaiwa96},
+the analysis of discourse marker \cite{Aone95} as well as topic and focus information
+\cite{Murata97}.
+\vspace*{-0.25em}
+
+\subsubsection{Learning phase}
+\label{dt-learn}
+
+During the iterative analysis of each dialog, anaphoric expressions are identified
+according to the assigned coreference tags. Previously mentioned nouns
+are considered as possible antecedent candidates.
+
+Questions are applied to each anaphor-candidate pair by either matching specified
+expressions in the respective utterances (discrete values) or calculating attribute values
+in the given context (continuous values).
+We distinguish four groups of question sets against which these attributes are tested:
+
+\begin{itemize}
+\item unary features of the anaphor
+      (e.g., lexical word attributes, grammatical role marker)
+\item unary features of the candidate
+\item features of expressions other than the anaphor and the candidate in the respective utterances 
+      (e.g., modifying constituents, sentence predicate)
+\item features concerning anaphor and candidate alike 
+      (e.g., attribute agreement, relative distance)
+\end{itemize}
+
+The application of the four question sets to each anaphor-candidate pair
+yields a single attribute vector classifying the characteristics of the given reference.
+In the case of antecedents, this vector is assigned to the coreference class, whereas vectors
+of the non-antecedent candidates form a separate class determining the non-referential relationship.
+
+The amount of attribute vectors for all training samples forms the input of the learning
+method. By optimizing the entropy value for each subset, the automatic classifier algorithm
+produces a decision tree ranking important attributes higher in the tree in order to achieve
+an early decision about the classification of the specified input \cite{Quinlan93}.
+\vspace*{-0.25em}
+
+\subsubsection{Application phase}
+\label{dt-apply}
+
+During anaphora resolution, the decision tree is used as a module determining the
+coreferential property of each anaphor-candidate pair (cf. Figure~\ref{pic-outline}).
+For each anaphoric expression, a candidate list, i.e., a list of the nominal candidates preceding
+the anaphor element in the current discourse, is created.
+The decision tree filter is then successively applied to all anaphor-candidate pairs.
+
+\begin{figure}[ht]
+  \vspace*{-1.75\baselineskip}
+  \begin{center}
+\atari(100,46)
+    \caption{Decision tree filter}\label{pic-dt}
+  \vspace*{-1.5\baselineskip}
+  \end{center}
+\end{figure}
+
+Starting with the top node of the decision tree, the question assigned to this node is
+tested against the input, i.e., the respective anaphor-candidate attribute vector.
+Depending on the truth value of the question, the procedure descends to the respective sub-branch.
+The verification procedure is continued until a leaf containing the classification result 
+({\em coreference} vs. {\em no-relation}) is reached (cf. Figure~\ref{pic-dt}).
+
+If the decision tree application results in the {\em no-relation} class, the candidate is
+eliminated from the list of potential antecedents forming the input of the
+preference selection algorithm.
+
+\subsection{Preference selection}
+\label{pref}
+
+The primary order of candidates is given by their word distance from the anaphoric expression.
+A straightforward preference strategy we could choose is the selection of the most recent
+candidate as the antecedent, i.e., the first element of the candidate list.
+However, the experimental results described in Section~\ref{eval} show that it is not sufficient
+to rely only on single indicators like {\em recency} in order to determine the saliency of potential
+anaphor-candidate pairs.
+
+We propose a preference selection scheme (Section~\ref{pref-pref}) which is based on the combination
+of statistical information about the ratio of coreferential occurrences extracted from our training
+corpus (Section~\ref{pref-freq}), discourse information about the number of candidate occurrences
+in the current conversation (Section~\ref{pref-count}), and recency
+information (Section~\ref{pref-dist}).
+
+\subsubsection{Frequency ratio}
+\label{pref-freq}
+
+An examination of our corpus indicates that similarities to references in our training
+data might be useful for the identification of those antecedents. {\em The more frequently
+an anaphor-candidate pair is tagged coreferential in the training corpus, the more
+likely is a coreferential relationship for this pair}.
+
+In order to measure the similarity of the input data to those of the training corpus,
+we define the {\em ratio} of a given anaphor-candidate pair based on the frequency
+information described in Section~\ref{data} as follows:
+
+\vspace*{-1em}
+\setlength{\arraycolsep}{1pt}
+\begin{eqnarray*}
+  ratio & = & \left\{
+                \begin{array}{l@{\ :\ }l}
+                  -\delta & (freq^+ = freq^- = 0) \\
+                  \frac{freq^+\ -\ freq^-}{freq^+\ +\ freq^-}
+                         & otherwise
+                \end{array}
+              \right. \\[-0.5em]
+\end{eqnarray*}
+
+The value of $ratio$ is in the range of $[-1,+1]$, whereby $ratio=-1$ is the case of exclusive
+non-referential relationships and $ratio=+1$ is the case of exclusive coreferential relationships.
+In order for referential pairs occurring in the training corpus with $ratio=0$ to be preferred
+to those without frequency information, we slightly decrease the $ratio$ value of the latter
+by a factor of $\delta$.
+
+The {\em ratio} values of the sample frequency data given in Table~\ref{tab-freq} are summarized in
+Table~\ref{tab-ratio}.
+
+\setlength{\tabcolsep}{5pt}
+\begin{table}[hbt]
+  \vspace*{-0.75\baselineskip}
+   \begin{center}
+   \begin{footnotesize}
+    \caption{Frequency ratio}\label{tab-ratio} 
+    \begin{tabular}{|lccc|}
+      \hline
+      \multicolumn{1}{|c}{type} & anaphor & candidate & $ratio$ \\
+      \hline \hline
+      word-word & そちら[there]  & シティホテル      &    1   \\[-0.5em]
+                &                & [City Hotel]      &        \\
+                & そちら[there]  & 田中[Tanaka]      &   -1   \\
+                & こちら[here]   & 十日[10${}^{th}$]   & -$\delta$ \\
+      \hline
+      word-sem  & こちら[here]   & \{shop\}          &    0   \\
+      \hline
+      sem-sem   & \{demonstratives\} & \{shop\}      & 0.48   \\
+      \hline
+    \end{tabular}
+   \end{footnotesize}
+   \end{center}
+   \vspace*{-1.5\baselineskip}
+\end{table}
+
+The domain dependency of this saliency feature can be varied according to the selection
+of the frequency type used for the calculation of the {\em ratio} value.
+The most {\em domain-specific} frequency information is given by the word form. Less
+specific is the frequency information of stem forms.
+In contrast, the frequency ratio of semantic classes and parts-of-speech are more
+{\em general}. According to the experimental results described in Section~\ref{pref-freq-type}
+we are using the frequency information of the stem forms of the anaphor-candidate pair as the {\em ratio} value.
+
+\subsubsection{Count}
+\label{pref-count}
+
+Other important indicators for the determination of saliency can be obtained from
+the context in which the respective anaphor-candidate pair occurs.
+{\em The larger the number of previous occurrences of the respective candidate
+in the current conversation, the more likely the candidate will be referred to}.
+
+Similar to {\em ratio}, we could define various types of {\em count} features influencing
+the degree of generality of this feature. However, in the case of short conversations,
+the {\em count} value of specific word forms will be almost the same (i.e., close to zero)
+for most of the candidates. A more meaningful distinction can be achieved by relying on the
+semantic classification of the respective elements.
+Therefore, we define the {\em count} feature as the number of nouns $N$ with
+the same semantic code as the candidate. The utilization of different {\em count} types
+is evaluated in Section~\ref{pref-count-type}.
+\vspace*{-1em}
+
+\subsubsection{Distance}
+\label{pref-dist}
+
+Even if the {\em recency} information proves to be insufficient as a single indicator
+for saliency, the distance feature plays a crucial role in our selection method.
+{\em The smaller the distance between the anaphor and the candidate is, the more likely
+is a coreferential relationship}.
+
+As mentioned in Section~\ref{data} recency can be measured on various granularity
+(utterance, chunk, candidate, morph) levels. However, measuring the distance
+according to utterances or chunks, we might end up with multiple candidates in the same
+chunk, thus not being able to make a reliable distinction. On the other hand, the
+number of morphemes between the anaphor and the candidate depends on the length of 
+the utterances, which might vary depending on the domain. Therefore, we define
+the {\em dist} feature as the number of nouns occurring between the anaphor
+and the candidate. The utilization of different {\em dist} types
+is evaluated in Section~\ref{pref-dist-type}.
+\vspace*{-1em}
+
+\subsubsection{Saliency measure}
+\label{pref-pref}
+
+Given the saliency indicators described in the previous sections, we will prefer
+those anaphor-candidate pairs with the features:
+\vspace*{-0.1em}
+
+\begin{center}
+\parbox{4.5cm}{
+ \begin{enumerate}
+  \item large {\em ratio} value
+  \item large {\em count} value
+  \item small {\em dist} value \\[-1.2em]
+ \end{enumerate}
+ }
+\end{center}
+
+However, the examination of our corpus reveals that frequently occurring candidates
+which are mentioned at the beginning of the conversation (i.e., {\em large} ratio/count + {\em large} dist)
+as well as rarely occurring candidates mentioned in the last utterance (i.e., {\em small} ratio/count + {\em small} dist)
+are tagged as antecedents, thus leading to a conflict concerning the proposed saliency indicators.
+
+As a solution to this problem, we define the preference value $pref$ by dividing the $ratio$ and the $count$ values
+by the $dist$ value, thus enabling an appropriate decision for conflicting candidates.
+
+\begin{eqnarray*}
+  pref & = & \frac{ratio + count}{dist}
+\end{eqnarray*}
+
+The $pref$ value is calculated for each candidate and the list of
+potential candidates is sorted towards the maximization of the preference factor.
+The first element is chosen as the antecedent.
+The precedence order between candidates with the same {\em pref} value continues to remain so and
+thus a final decision is made in the case of a draw.
+
+\section{Evaluation}
+\label{eval}
+
+In order to prove the feasibility of our approach we compare the four
+preference selection methods listed in Figure~\ref{pic-exp}.
+
+\begin{figure}[htb]
+  \vspace*{-1.5\baselineskip}
+  \begin{center}
+\atari(86,30)
+    \vspace*{-0.25\baselineskip}
+    \caption{Comparison of four methods}\label{pic-exp}
+  \vspace*{-1.5\baselineskip}
+  \end{center}
+\end{figure}
+
+(1) The {\small\em MRC} method selects the most recent candidate as the antecedent
+of an anaphoric expression and shows the baseline performance of the task.
+The necessity of the filter and preference selection components
+is shown by comparing (2) the decision tree filter scheme {\small\em DT}\, (i.e., select the first
+element of the filtered candidate list) and (3) preference scheme {\small\em PREF}\, (i.e., sort
+the full candidate list and select the first element) against (4) our combined method 
+{\small\em DT+PREF}\, (i.e., sort the filtered candidate list and select the first element).
+
+Five-way cross-validation experiments are conducted for the resolution of 1745 pronominal
+input samples. The performance of the system is calculated by the percentage (\%) of correctly
+resolved antecedents.
+
+As described on Section~\ref{data} the antecedents tagged in our corpus consist
+of either single nouns or compound nouns, i.e. a sequence of single nouns.
+However, the system selects only a single noun from the list of antecedent candidates. 
+In the case that the tagged antecedent is a compound noun, the correctness of the coreference
+analysis is judged according to whether the selected candidate is contained in the set
+of tagged single nouns or not. For example, in the case of a coreferential reference towards
+the compound noun 「田中弘子」 [Hiroko Tanaka] given in Table~\ref{tab-tag}, the selection of both,
+「田中[6]」and「弘子[7]」, would be judged as correct.
+
+\subsection{Resolution method}
+\label{size}
+
+We use varied numbers of dialogues (50-400) for the training of the decision tree and
+the extraction of frequency information from the corpus. {\em Open tests} are conducted on
+100 non-training dialogues whereas {\em closed tests} use the training data itself for evaluation.
+The results of the four different preference selection methods are shown
+in Figure~\ref{pic-size}.
+
+\begin{figure}[htb]
+  \begin{center}
+    \vspace*{-1\baselineskip}
+
+\begin{minipage}{.5\linewidth}
+        \begin{center}
+                 \atari(64,44)
+        \end{center}
+\end{minipage}
+\begin{minipage}{.4\linewidth}
+        \begin{center}
+                 \atari(64,44)
+        \end{center}
+\end{minipage}
+
+    \vspace*{-0.25\baselineskip}
+   \caption{Training size}\label{pic-size}
+  \vspace*{-1.5\baselineskip}
+  \end{center}
+\end{figure}
+
+The baseline {\small\em MRC}\, succeeds in resolving only 57.1\%. The best performance of 
+{\small\em PREF}\, applied to the open data is 74\%. 
+{\small\em DT}\, performs only slightly better resulting in an accuracy of 74.5\%.
+
+A side-effect of {\small\em DT}\, is the filtering out of correct
+antecedents. In our experiments, 7.9\% of correct antecedents are classified
+as non-coreferential.
+Therefore, we might conclude that the decision tree is not much help for the
+identification of the most salient antecedent candidate.
+However, due to noise reduction\footnote{
+Looking at the results of the closed test we can see a performance drop from 90.1\% to
+85.7\% for {\small\em PREF}, whereas the filter mechanism used in {\small\em DT}\, 
+still improves. This is due to the fact that {\small\em PREF}\, assigns a preference value
+to all possible candidates in the discourse history, regardless of whether a coreferential relationship exists
+or not. In contrast, the decision tree filter reduces the number of possible candidates by 22\%.
+Moreover, the number of trivial selection cases (only one candidate) increases from 0.9\% (all candidates) to
+4.2\% (filter; closed test: 21\%). On average, two candidates are skipped in the history
+to select the correct antecedent.},
+the utilization of the decision tree filter in combination with the statistical
+preference selection proves to be effective. The combination of both methods achieves a success rate
+of 76.6\%. Therefore, {\small\em DT+PREF}\, gains a relative improvement of 2.6\% (closed: 10.1\%)
+above {\small\em PREF}\, and 2.1\% (closed: 2.3\%) above {\small\em DT}.
+
+\subsection{Data balance}
+
+However, the continuous improvement of the decision tree filter according to the training size
+as well as the large number of antecedents filtered out in the open test ({\em OUT}) 
+implies a lack of training data for the identification of potential candidates.
+Moreover, an examination of the training corpus reveals an imbalance of coreferential
+anaphor-antecedent pairs towards unrelated pairs.
+
+In order to overcome these problems, we artificially increase the amount
+of training data by repeating tagged anaphor-antecedent pairs $N*db$ times, where $db$ is the
+average of the number of negative examples divided by the number of positive examples for each
+tagged anaphor.
+
+\begin{figure}[ht]
+  \begin{center}
+    \vspace*{-0.5\baselineskip}
+    \hspace*{-1cm}
+\atari(75,54)
+    \caption{Data balance}\label{pic-balance}
+  \vspace*{-1\baselineskip}
+  \end{center}
+\end{figure}
+
+Figure~\ref{pic-balance} shows the influence of increasing the data balance factor $N$ versus
+the system performance. 
+
+Retraining the same coreferential relationship more frequently has only a small impact on
+the performance of the {\small\em DT}\, method, but it significantly decreases the number of antecedents
+filtered out from 10.5\% to 7.6\%, resulting in an improvement of the preference selection method
+when used in combination with the decision tree filter. The best performance
+of the {\small\em DT+PREF}\, method is achieved for the balance factor of $N$=10,
+whereas a larger $N$ does not improve the system performance further.
+
+\vspace*{-5mm}
+
+\section{Feature dependency}
+\label{feature}
+
+In order to be able to improve the performance described above, it is necessary to go into
+the particulars about the importance of the features utilized for the identification of coreferential
+relationships as well as the assignment of preference values.
+
+For the task of coreferential analysis, we can categorize the utilized feature sets into the
+following groups:
+
+\renewcommand{\arraystretch}{}
+\begin{center}
+\begin{tabular}{lll}
+  {\em :sem}   & $\rightarrow$ & semantic codes assigned to content words \\
+  {\em :word}  & $\rightarrow$ & identification of word strings\\
+  {\em :pos}   & $\rightarrow$ & identification of part-of-speech\\
+  {\em :conj}  & $\rightarrow$ & conjugation attributes of the respective words\\
+  {\em :hdist} & $\rightarrow$ & position in discourse history (absolute distance) \\
+  {\em :dist}  & $\rightarrow$ & relative distance between anaphor and candidate \\
+  {\em :count} & $\rightarrow$ & number of occurrences in previous discourse \\
+\end{tabular}
+\end{center}
+Moreover, we distinguish four groups according to which element in the discourse
+({\em :ana}, {\em :cand}, {\em :agree}, {\em :sen}) the features are applied to 
+and four additional groups specifying the locations of these elements
+({\em :backward}, {\em :latest}, {\em :next}, {\em :forward}).
+
+\begin{center}
+\begin{tabular}{lll}
+  {\em :ana}   & $\rightarrow$ & feature set applied to anaphor \\
+  {\em :cand}  & $\rightarrow$ & feature set applied to candidate \\
+  {\em :agree} & $\rightarrow$ & attribute agreement between anaphor/candidate \\
+  {\em :sen}   & $\rightarrow$ & feature set applied to other elements in utterance \\[0.5em]
+  {\em :backwards} & $\rightarrow$ & elements previous to coreferential expression \\
+  {\em :latest}    & $\rightarrow$ & element directly preceding coreferential expression \\
+  {\em :next}      & $\rightarrow$ & element directly succeeding coreferential expression \\
+  {\em :forward}   & $\rightarrow$ & element succeeding coreferential expression
+\end{tabular}
+\end{center}
+\renewcommand{\arraystretch}{}
+
+The assignment of saliency values is based on information about how often a given anaphor candidate pair
+is tagged coreferential vs. non-referential in the training corpus ({\em :ratio}) as well as 
+the absolute position and relative distance ({\em :pdist}). Moreover, we take into account how often
+the respective elements have already been mentioned in the discourse ({\em :pcount}).
+
+\subsection{Investigation of coreferential analysis by feature omission}
+\label{feature-coref}
+
+The importance of a feature is verified by retraining the decision tree filter without 
+using the respective feature information and comparing its performance with the {\em :all} method
+using the complete set of features.
+The results for open and closed tests are listed in Figure~\ref{pic-feature-coref}.
+\begin{figure}[ht]
+  \begin{center}
+    \vspace*{-0.5\baselineskip}
+\atari(75,54)
+    \vspace*{-0.25\baselineskip}
+    \caption{Feature dependency of coreferential analysis}\label{pic-feature-coref}
+  \vspace*{-0.75\baselineskip}
+  \end{center}
+\end{figure}
+
+The most important feature is the {\em :sem} feature, whose omission leads to a performance drop of 3.1\% in the
+open test. The descriptive power of this feature is indicated by the increase in accuracy for the closed test when
+{\em :sem} is omitted, i.e., the usage of semantic information leads to a generalization that is helpful
+for the identification of unseen data, but has its drawbacks in the classification of the training samples.
+The omission of {\em :conj} leads only to a small drop in the open test performance, but
+the closed test result is 1\% below the {\em :all} method.
+The features {\em :dist} and {\em :count} may not seem to be useful for the task of coreferential analysis
+and might lead one to consider eliminating them from the set of training features.
+However, this information proves to be very important for the preference selection task as described
+in more detail in Section~\ref{feature-pref}.
+
+Concerning the elements to which the features are applied, the biggest performance drop of 3.1\% is seen
+when any information about the anaphor ({\em :ana}) itself is omitted. In the open test, only 71.6\% of
+the antecedents can be resolved correctly, whereas the closed test performance goes down 1.6\% to 89.8\%. 
+
+\subsection{Feature distribution inside the decision tree}
+\label{feature-dt}
+
+Additional information about the importance of each feature can be retrieved by
+looking at how often the feature is used ({\em quantity}) and where its usage is located
+in the decision tree ({\em quality}).
+
+\subsubsection{Quantity}
+
+Figure~\ref{pic-feature-quantity} describes the number of tree nodes using a specific feature
+within decision trees trained with a varied number of dialogues.
+\begin{figure}[ht]
+  \begin{center}
+  \vspace*{-1\baselineskip}
+\atari(75,54)
+    \caption{Feature frequency}\label{pic-feature-quantity}
+  \vspace*{-1\baselineskip}
+  \end{center}
+\end{figure}
+
+Again, the semantic feature {\em :sem} is the most important one, as it is the feature most frequently
+used within a decision tree. Less frequent are the features {\em :word} and {\em :hdist},
+followed by {\em :pos}, {\em :dist}, and {\em :count}.
+Moreover, not only is information about the coreferential elements themselves important
+for the identification of coreferential relationships, but what also prove to be quite helpful are
+the features of elements directly succeeding the coreferential expressions ({\em :next}).
+
+Comparing the decision trees for different data balance factors, we find that an artificial increase
+of the training data leads to a quantitative increase of the {\em :sem} feature usage up to
+a specific level, with stagnation for a data balance factor of $N>$10.
+
+Additionally, the increasing number of nodes addressing features of elements directly preceding ({\em :latest})
+and succeeding ({\em :forward}) the coreferential elements indicates a focus shift towards
+local constraints around these constituents.
+Furthermore, the quantitative importance of features with continuous values ({\em :hdist},{\em :dist},{\em :count})
+decreases, because no new information is provided for the learning procedure.
+
+\subsubsection{Quality}
+
+For an investigation of the feature locations described below, we extracted the positions
+of the respective nodes within a decision tree. The distribution of the most important quantitative features
+{\em :sem}, {\em :hdist}, and {\em :word}
+is listed in Figure~\ref{pic-feature-location}.
+
+\begin{figure}[t]       
+  \begin{center}
+    \hspace*{-1cm}
+
+\begin{minipage}{.43\linewidth}
+        \begin{center}
+                 \atari(66,45)
+        \end{center}
+\end{minipage}
+\begin{minipage}{.5\linewidth}
+        \begin{center}
+                 \atari(66,45)
+        \end{center}
+\end{minipage}
+\atari(66,45)
+
+    \caption{Feature location within a decision tree}\label{pic-feature-location}
+  \vspace*{-0.5\baselineskip}
+  \end{center}
+\end{figure}
+
+The most important qualitative feature {\em :hdist} is located at the top-level of the
+decision tree. Interestingly, this node determines  whether the antecedent candidate
+is the first or second candidate in the discourse history, thus distinguishing long range
+references from more recent ones. In contrast, the relative distance feature {\em :dist}
+is mainly used on lower levels (level 11 to 35) to identify the correct antecedent
+within a short range (1 to 3 utterances apart).
+
+Concerning the qualitative importance, {\em :hdist} is followed by {\em :sem}
+and {\em :word} on levels 2 and 4. 
+However, the most frequent feature {\em :sem} (levels 2-44) is utilized on almost all levels to
+determine coreferential relationships. In contrast, the features {\em :hdist} (level 4-15),
+{\em :pos} (levels 5-20), and {\em :count} (levels 5-25) are mainly applied on medium levels,
+whereas the feature {\em :word} is also used for the purpose of disambiguation on lower levels.
+Moreover, the decision tree levels 1-3 are identical for the training size 250-400, thus
+representing general attributes to be checked for the identification
+of the correct antecedent in this task. 
+
+The investigation on the feature importance in this section suggests that it is not sufficient
+to simply provide information tagged in our training corpus for the decision tree learning,
+but a selection of appropriate learning features beforehand can positively affect the coverage
+of the decision tree performance.
+
+\subsection{Investigation of preference selection by feature type}
+\label{feature-pref-type}
+
+The preference selection scheme described in Section~\ref{pref} uses statistical information about
+the frequency ratio of anaphor-can\-didate pairs as well as distance and count features extracted
+from the discourse in order to select the most salient antecedent candidate.
+However, for all of these features, we can extract different types as described in Section~\ref{data}.
+In this section we will investigate the dependency of the system performance to different types
+of saliency features. 
+For the evaluation of our system described in Section~\ref{eval}, we used the types
+resulting in the best performance. Those are marked with ``{\large ${}^{*}$}'' in the descriptions below.
+
+\subsubsection{Frequency ratio}
+\label{pref-freq-type}
+
+The types of the frequency feature are defined using the stem form ({\em r}),
+part-of-speech ({\em p}), and semantic class ({\em s}) of the anaphor and the candidate alike.
+Each type is specified using a two-character abbreviation, whereby the first character specifies the
+type of the anaphor and the second character that of the candidate. Thus, the type {\em :rr}
+uses the stem form frequency of the anaphor-candidate pair, whereas, for example, the type
+{\em :rs} describes the frequency information of the anaphor stem form in combination
+with the semantic classification of the candidate. 
+The results for different frequency types are listed in Table~\ref{tab-freq-type}.
+
+\setlength{\tabcolsep}{3pt}
+\begin{table}[htb]
+ \vspace*{-0.75\baselineskip}
+ \begin{center}
+    \caption{Types of frequency feature}\label{tab-freq-type} 
+   \begin{small}
+    \begin{tabular}{l|cc@{\hspace{1cm}}l|cc}
+        \multicolumn{1}{c|}{type} & open & closed & \multicolumn{1}{c|}{type} & open & closed \\
+        \hline
+        :rr{\large ${}^{*}$} & 76.6 & 94.2
+                          & :sp & 74.6 & 90.1 \\
+        :ss & 75.4 & 90.3 & :rs & 75.1 & 91.5 \\
+        :pp & 74.6 & 90.1 & :ps & 75.2 & 90.6 \\
+        :rp & 74.6 & 90.2 &     &      &      \\
+        \hline
+    \end{tabular}
+    \end{small}
+    \vspace*{-1\baselineskip}
+  \end{center}
+\end{table}
+
+The best performance for the open test was achieved using the {\em :rr} type.
+The worst performance can be seen when using the part-of-speech frequency information of the
+candidate. 
+Despite the drop in performance for types other than the stem form, all frequency types
+achieved a positive improvement to the coreference filter performance
+(cf. Figure~\ref{pic-size}; DT open: 74.5\%, DT closed: 91.4\%)
+when applied to the open test data. Concerning the closed test, however, we see an improvement
+of more than 1\% only for the type {\em :rr}.
+
+\subsubsection{Count}
+\label{pref-count-type}
+
+The types of the count feature consist of the stem form ({\em :stem}),
+part-of-speech ({\em :pos}), and semantic code ({\em :sem}) of the candidate.
+The results for different count types are listed in Table~\ref{tab-count-type}.
+
+\setlength{\tabcolsep}{3pt}
+\begin{table}[hbt]
+ \vspace*{-1.25\baselineskip}
+ \begin{center}
+    \caption{Types of count feature}\label{tab-count-type} 
+    \begin{tabular}{l|cc}
+        \multicolumn{1}{c|}{type} & open & closed \\ 
+        \hline
+        :stem                 & 76.2 & 94.1 \\
+        :sem{\large ${}^{*}$} & 76.6 & 94.2 \\
+        :pos                  & 75.4 & 92.4 \\
+        \hline
+    \end{tabular}
+    \vspace*{-1.5\baselineskip}
+  \end{center}
+\end{table}
+
+As mentioned in Section~\ref{pref-count}, the count feature depends on the length of the dialogue.
+The repetition of specific stem forms of candidates does not occur very frequently in our task.
+Usually, the count factor is between 0 and 2. In our experiments, the utilization of the {\em :stem} type
+results in the performance of 76.2\% (closed: 94.1\%).
+The best results of 76.6\% can be achieved by counting semantic classes, because they occur more frequently
+in the discourse, thus resulting in a wider variation of the count feature value.
+
+\subsubsection{Distance}
+\label{pref-dist-type}
+
+The types of the distance feature consist of utterance ({\em :uttr}), chunk ({\em :chunk}),
+candidate ({\em :cand}), and morpheme ({\em :morph}).
+The results for different distance types are listed in Table~\ref{tab-dist-type}.
+
+\begin{table}[hbt]
+ \vspace*{-1\baselineskip}
+ \begin{center}
+    \caption{Types of distance feature}\label{tab-dist-type} 
+    \begin{tabular}{l|cc}
+        \multicolumn{1}{c|}{type} & open & closed \\
+        \hline
+        :uttr & 72.3 & 90.6 \\
+        :chunk  & 73.0 & 91.4 \\
+        :cand{\large ${}^{*}$} & 76.6 & 94.2 \\
+        :morph & 66.0 & 88.1 \\
+        \hline
+    \end{tabular}
+    \vspace*{-1\baselineskip}
+  \end{center}
+\end{table}
+
+The results show that the distance type {\em :cand} achieves the best performance followed by
+{\em :chunk} and {\em :uttr}. The reason for the decline in performance when using chunk and
+utterance measures is their coarseness, i.e., the same distance factor might be assigned to multiple candidates.
+In this case, the distance factor makes no contribution to the distinction of saliency of the
+respective candidates and the more frequent one is preferred, even if it precedes the other candidates.
+
+In contrast, too much stress is put on the distance factor, when using the number of morphemes as
+the distance measure, which is much larger than the number of candidates in between. Using the
+{\em :morph} type results in the worst performance of 66.0\% (closed: 88.1\%).
+
+\subsection{Investigation of preference selection by feature omission}
+\label{feature-pref}
+
+In our approach, the distance and counting information do not play a crucial role
+for the identification of potential candidates during decision tree filtering, but 
+they are very important for the determination of the preference value for each antecedent candidate.
+
+The preference selection method is based on the dependency between the distance ({\em :pdist}) and
+counting ({\em :pcount}) values of the given anaphor-candidate pair in the context of the respective
+discourse. Additionally, we use statistical knowledge about the frequency of coreferential
+and non-referential pairs extracted from the training corpus ({\em :ratio}).
+The relative importance of each factor is shown in Table~\ref{tab-feature}.
+
+\setlength{\tabcolsep}{2pt}
+\begin{table}[hbt]
+  \begin{center}
+    \vspace*{-0.5\baselineskip}
+    \caption{Feature dependency of preference selection}\label{tab-feature} 
+   \begin{scriptsize}
+    \begin{tabular}{|c|ccc|cc|cc|}
+        \multicolumn{1}{c}{} & \multicolumn{3}{c}{feature} & \multicolumn{2}{c}{open test} & \multicolumn{2}{c}{closed test}
+        \cr
+        \multicolumn{1}{c|}{}
+          & :pdist
+          & :ratio
+          & :pcount
+          & \hspace*{0.25em} {\footnotesize PREF\ } \hspace*{0.25em} 
+          & \hspace*{0.05em} {\footnotesize DT+PREF} \hspace*{0.05em} 
+          & \hspace*{0.25em} {\footnotesize PREF} \hspace*{0.25em} 
+          & \hspace*{0.05em} {\footnotesize DT+PREF} \hspace*{0.05em}
+        \cr \hline
+        only-freq  & -- & +  & -- & 64.7 & 64.5 & 92.3 & 92.3 \cr
+        only-count & -- & -- & +  & 33.7 & 38.1 & 33.7 & 44.2 \cr
+        no-count   & +  & +  & -- & 74.0 & 75.9 & 86.3 & 94.2 \cr
+        no-freq    & +  & -- & +  & 58.6 & 62.6 & 58.6 & 72.0 \cr
+        no-dist    & -- & +  & +  & 41.4 & 41.9 & 59.9 & 63.0 \cr
+        \hline
+        {\em all} & + & + & + & 74.0 & 76.6 & 84.5 & 94.2 \cr
+        \hline
+    \end{tabular}
+    \end{scriptsize}
+    \vspace*{-1\baselineskip}
+  \end{center}
+\end{table}
+
+We compare the performance of the experiments described in Section~\ref{eval}
+({\em all}) to those methods that rely only on frequency ({\em only-freq}) or counting ({\em only-count})
+information\footnote{Utilizing only distance information would not change the saliency ranking given by the primary order of candidates, thus achieving the same performance as the {\small\em DT} method.}
+as well as to preference schemes that do not use counting ({\em no-count}),
+frequency ({\em no-freq}), or distance ({\em no-dist}) information.
+
+Most of the listed methods perform significantly worse than the {\em all} approach taking into account
+all three saliency indicators.
+Relying only on frequency information achieves an accuracy of around 64.5\% (closed: 92.3\%) 
+regardless of whether the filter mechanism is used ({\small\em DT+PREF}\,) or not ({\small\em PREF}\,). Using only
+counting information decreases the performance of the {\small\em PREF}\, method to 33.7\% for open as well as
+closed test data.
+
+Thus, frequency information on coreferential relationships does appear to be more relevant
+for the identification of potential candidates over the counting of features within the current discourse. 
+Even the combination of both features ({\em no-dist} method) does not have a positive impact on
+the preference selection.
+
+The reason for this is that the larger the {\em count} factor is, the later the respective candidate occurs
+in the discourse history, thus emphasizing the selection of more recent candidates. Moreover, the {\em count} factor
+is not much help for the resolution of anaphora occurring early in the discourse due to the missed mentioning
+of previous similar expressions.
+In contrast, due to the large amount of long range references towards dialogue-initial candidates contained
+in our tagged corpus, the frequency information tends to prefer candidates occurring earlier in the discourse.
+
+In order to find a metrics that takes into account recent candidates rarely occurring coreferentially as well
+as dialogue-initial elements occurring frequently coreferentially, we divide the saliency value based on
+the frequency and count information by the distance factor.
+
+The application of the new metrics to the count information ({\em no-freq}) improves the performance
+of the {\em only-count} scheme by 25\%, but the metrics is still insufficient as a saliency measure. However, 
+this does not mean that the {\em count} information is completely unimportant for determining
+saliency. Even if the combination of the frequency and distance information ({\em no-count}) performs
+as well as the {\em all} method for the preference selection applied to all candidates ({\small\em PREF}\,),
+the additional {\em count} information gains an improvement when applied to potential candidates only
+({\small\em DT+PREF}\,).
+
+Therefore, the effectiveness of our approach is not only based on the usage of single
+antecedent indicators extracted from the corpus, but also on the combination of these
+features for the selection of the most preferable candidate in the context of the given
+discourse.
+
+\section{Related research}
+\label{relr}
+
+Due to the characteristics of the underlying data\footnote{An approach to ellipsis resolution using the same data set is described in \cite{Yamamoto98}. However, their task is limited to the resolution of omitted subjects in utterances, i.e., extra-sentential references, and does not deal with coreferential relationships.}
+used in our experiments, a comparison involving absolute numbers to previous
+approaches gives us little practical use.
+However, the difficulty of our task lies in frequent long range references.
+Resolving pronouns in our data corpus to the most recent candidate achieves
+a success rate of only 57.1\% (cf.~Section~\ref{eval}).
+
+Whereas {\em knowledge-based} systems like \cite{Carbonell88} and \cite{Rich88} combining
+multiple resolution strategies are expensive in the cost of human effort during development
+and have a limited ability to scale to new domains, more recent {\em knowledge-poor} approaches
+like \cite{Kennedy96} and \cite{Mitkov98} address the problem without sophisticated
+linguistic knowledge.
+Similar to them, we do not use any sentence parsing or structural analysis, but simply rely
+on morphosyntactic and semantic word information.
+
+Moreover, clues regarding the {\em grammatical} function of expressions are used in 
+the centering theory of \cite{Grosz95} and more specifically for Japanese in
+\cite{Walker94}. In contrast to them, the grammatical role markers of candidates
+seem to be less important for our task, because the respective questions appear
+mainly on lower levels of the decision tree.
+
+Rule-based {\em empirical approaches} to determine the most salient referent are utilized
+in \cite{Nakaiwa96} and \cite{Murata97}. These kinds of manually defined scoring heuristics,
+however, involve a considerable amount of human intervention which is avoided
+in machine learning approaches.
+
+As briefly noted in Section~\ref{intro}, the learning approaches described
+in \cite{Conolly94} and \cite{Aone95} differ from our work
+according to the usage of the decision tree in the resolution task.
+In \cite{Conolly94}, a decision tree is trained on a small number of features
+concerning anaphor type, grammatical function, recency, morphosyntactic agreement
+and subsuming concepts. Given two anaphor-candidate pairs, the system judges which is
+``better''. However, due to the lack of a strong assumption on ``transitivity'',
+this sorting algorithm may be unable to find the ``best'' solution.
+
+Based on discourse markers extracted from lexical, syntactic, and semantic processing,
+the approach of \cite{Aone95} uses unary and binary attributes (lexical, syntactic,
+semantic, position, matching category, topic) during decision tree training. The confidence
+values returned from the pruned decision tree are utilized as a saliency measure
+for each anaphor-candidate pair in order to select a single antecedent.
+However, we use dependency factors for preference selection which cannot be learned
+automatically because of the independent learning of specific features during decision tree
+training. Therefore, {\em our decision tree is not applied directly to the task of preference
+selection, but only used as a filter to reduce the number of potential candidates for
+preference selection}.
+
+In addition to salience preference, a statistically modeled {\em lexical preference} is
+exploited in \cite{Dagan95} by comparing the conditional probabilities of co-occurrence
+patterns given the occurrence of candidates.
+Experiments, however, are carried out on computer manual texts with mainly intra-sentential
+references. This kind of data is also characterized by the avoidance of disambiguities
+and only short discourse units, which prohibits almost any long-range references.
+In contrast to this research, our results show that the distance factor in addition to
+corpus-based frequency information is quite relevant for the selection of the most
+salient candidate in our task.
+
+\section{Conclusion}
+\label{conc}
+
+In this paper we proposed a corpus-based anaphora resolution method combining an automatic
+learning algorithm for coreferential relationships with statistical preference selection.
+We proved the applicability of our approach to pronoun resolution, achieving a resolution
+accuracy of 76.6\% for Japanese pronouns.
+
+In order to overcome the limitation of sparse data for the task of coreferential analysis,
+we artificially increased the number of training samples by repeating positive examples.
+As a result, the focus of the feature selection shifted towards constraints concerning non-anaphoric
+elements directly preceding/succeeding the coreferential expressions, suggesting that a preprocess
+for the selection of appropriate features for the decision tree learning is necessary to obtain
+the optimal performance for coreferential analysis.
+
+The separation of the coreferential analysis and preference selection proves quite effective.
+The decision tree filter eliminates non-coreferential candidates from the discourse history.
+This noise reduction increases the effectiveness of the preference selection method, which
+is not only based on the usage of single antecedent indicators extracted from the corpus,
+but also on the combination of statistical and discourse features for the selection of the most
+preferable candidate in the given context.
+
+Our system does not use any kind of parser to identify compound nouns, but we are only
+relying on the morphological analysis of our input sentence. Therefore, the system selects
+only a single noun as the antecedent. One future extension of our system will be the incorporation
+of a parser to obtain additional information about the sentence structure which will enable the handling
+of compound nouns in our framework.
+
+This approach is also not limited to the resolution of pronominal anaphora. We are going to apply
+this approach to other types of anaphoric reference, like ellipsis and nominal resolution, too. 
+Preliminary experiments on ellipsis resolution have also shown promising results.
+
+However, the filter mechanism proposed in this paper is automatically trained from the training corpus
+using the same attributes for all anaphoric expressions. But, comparing attribute sets
+used for the resolution of pronominal anaphora to those of other anaphoric expressions, like,
+for example, ellipsis resolution \cite{Murata97}, we can find a discrepancy which indicates
+a dependency of the attribute importance on the resolution task.
+In addition, not only the attribute type, but also the scope of specific attribute values can
+influence the performance of the system.
+For example, \cite{Kameyama97} introduces a {\em locality assumption} which restricts the reference scope
+according to the anaphor type.
+Therefore, task-oriented extensions of our general approach might be necessary to improve the resolution
+performance for specific applications.
+
+Moreover, investigations into the feasibility of our approach for languages other than Japanese,
+e.g., the English MUC corpus, will enable us to compare this approach more precisely 
+towards related research.
+
+Additionally,  we plan to incorporate this approach into multi-lingual machine translation,
+which will enable us to handle a variety of referential relations in order to improve
+the translation quality.
+
+\section*{Acknowledgment}
+
+The authors would like to thank Kadogawa-Shoten for providing us with Ruigo-Shin-Jiten.
+
+\clearpage
+
+\bibliographystyle{nlpbbl}
+\bibliography{JNLPcoref}
+
+\begin{biography}
+
+\biotitle{Biography}
+
+\bioauthor{Michael PAUL}
+{He received the B.E. and the M.E. degrees in computer science from the 
+ University of Saarland, in Saarbr\"ucken/Germany, in 1992 and 1994 
+respectively.
+ He is a research associate of the ATR Spoken Language Translation Research Laboratories.
+ His research interests include natural language processing, 
+ machine translation and context processing. He is a member of the ACL 
+ and the EAMT.
+}
+
+
+
+\bioauthor{Eiichiro SUMITA}
+{He received M.E in computer science from University of
+ Electro-Communications in 1982 and PhD in engineering from Kyoto University
+ in 1999 respectively. He is a senior researcher of ATR Spoken Language
+ Translation Research Laboratories. His research interests include natural
+ language processing, machine translation, information retrieval, and
+ parallel processing. He is a member of the IEICE and the IPSJ, and the ACL.
+}
+
+
+\bioreceived{Received}
+\bioaccepted{Accepted}
+
+\end{biography}
+
+\end{document}
+

@@ -1,0 +1,877 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+
+
+\Volume{20}
+\Number{5}
+\Month{December}
+\Year{2013}
+
+\received{2013}{5}{25}
+\revised{2013}{7}{30}
+\rerevised{2013}{9}{5}
+\accepted{2013}{10}{4}
+
+\setcounter{page}{707}
+
+\jtitle{k 近傍法とトピックモデルを利用した語義曖昧性解消の領域適応}
+\jauthor{新納　浩幸\affiref{Author_1} \and 佐々木　稔\affiref{Author_1}}
+\jabstract{
+本論文では語義曖昧性解消(Word Sense Disambiguation, WSD)の領域適応に対する手法を提案する．
+WSD の領域適応の問題は，2つの問題に要約できる．1つは領域間で語義の分布が
+異なる問題，もう1つは領域の変化によりデータスパースネスが生じる問題であ
+る．本論文では上記の点を論じ，前者の問題の対策として学習手法に k~近傍法
+を補助的に用いること，後者の問題の対策としてトピックモデルを用いるこ
+とを提案する．具体的にはターゲット領域から構築できるトピックモデル
+によって，ソース領域の訓練データとターゲット領域のテストデータ
+にトピック素性を追加する．拡張された素性ベクトルから SVM を用いて語義識
+別を行うが，識別の信頼性が低いものには k~近傍法の識別結果を用い
+る．BCCWJ コーパスの2つの領域 PB（書籍）と OC（Yahoo!知恵袋）から共に頻度が 50 以上の
+多義語 17 単語を対象にして，WSD の領域適応の実験を行い，
+提案手法の有効性を示す．
+別種の領域間における本手法の有効性の確認，
+領域の一般性を考慮したトピックモデルを WSD に利用する方法，
+および WSD の領域適応に有効なアンサンブル手法を考案することを今後の課題とする．
+}
+\jkeywords{語義曖昧性解消，領域適応，トピックモデル，k~近傍法，教師なし学習}
+
+\etitle{Domain Adaptation for Word Sense Disambiguation using k-Nearest Neighbor Algorithm and Topic Model}
+\eauthor{Hiroyuki Shinnou\affiref{Author_1} \and Minoru Sasaki\affiref{Author_1}} 
+\eabstract{
+In this paper, we propose the method of domain adaptation for word sense disambiguation (WSD).
+This method faces the following problems for WSD. 
+(1) The difference between sense distributions on domains.
+(2) The sparseness of data caused by changing the domain.
+In this paper, we discuss and recommend  the countermeasure for each problem.
+We use the k-nearest neighbor algorithm (k-NN) and the topic model 
+for the first and second problems, respectively.
+In particular, we append 
+topic features developed by the topic model for target domain corpus to 
+to training data in source domain and test data in target domain.
+Using the extended features of support vector machine (SVM) classifier, we solve WSD.
+However, when the reliability of decision of the SVM classifier for a test instance is low,
+we use the decision of the k-NN.
+In the experiment, we select 17 ambiguous words 
+in both domains, PB (books) and OC (Yahoo! Chie Bukuro) 
+in the balanced corpus of contemporary written Japanese (BCCWJ corpus),
+which appear 50 times or more in these domains,
+and  conduct the experiment of domain adaptation for WSD using these words
+to show the effectiveness of our method.
+In the future, we will apply the proposed method to other domains and
+examine a way to use the topic model considering 
+the universality of a corpus,
+and an effective ensemble learning for domain adaptation for WSD.
+}
+\ekeywords{Word Sense Disambiguation, Domain Adaptation, Topic Model, k-Nearest Neighbor Algorithm, Unsupervised Learning}
+
+\headauthor{新納，佐々木}
+\headtitle{k 近傍法とトピックモデルを利用した語義曖昧性解消の領域適応}
+
+\affilabel{Author_1}{茨城大学工学部情報工学科}{Department of Computer and Information Sciences, Ibaraki University}
+
+
+
+\begin{document}
+\maketitle
+
+
+
+\section{はじめに}
+
+
+自然言語処理のタスクにおいて帰納学習手法を用いる際，
+訓練データとテストデータは同じ領域のコーパスから得ていることが通常である．
+ただし実際には異なる領域である場合も存在する．
+そこである領域（ソース領域）の訓練データから学習された分類器を，
+別の領域（ターゲット領域）のテストデータに合うようにチューニングすることを
+領域適応という\footnote{領域適応は機械学習の分野では転移学習
+\cite{kamishima}の一種と見なされている．}．
+本論文では語義曖昧性解消(Word Sense Disambiguation, WSD)のタスクでの領域適応に対する手法を提案する．
+
+まず本論文における「領域」の定義について述べる．「領域」の正確な定義
+は困難であるが，本論文では現代日本語書き言葉均衡コーパス(BCCWJ コーパス)\cite{bccwj}
+におけるコーパスの
+「ジャンル」を「領域」としている．コーパスの「ジャンル」とは，概略，そ
+のコーパスの基になった文書が属していた形態の分類であり，書籍，雑誌，新
+聞，白書，ブログ，ネット掲示板，教科書などがある．つまり本論文における
+「領域」とは，書籍，新聞，ブログ等のコーパスの種類を意味する．
+
+領域適応の手法はターゲット領域のラベル付きデータを利用するかしないかという
+観点で分類できる．利用する場合を教師付き手法，利用しない場合を教師なし手法と呼ぶ．
+教師付き手法については多くの研究がある\footnote{
+    例えば Daum{\'e} の研究(Daum\'{e} 2007)\nocite{daume0}はその簡易性と有効性から広く知られている．}．
+また能動学習\cite{settles2010active}や半教師あり学習\cite{chapelle2006semi}は，
+領域適応の問題に直接利用できるために，
+それらのアプローチをとる研究も多い．
+これらに対して教師なし手法の従来研究は少ない．
+教師なし手法は教師付き手法に比べパフォーマンスが悪いが，
+ラベル付けが必要ないという大きな長所がある．
+また領域適応は転移学習と呼ばれることからも明らかなように，ソース領域の知
+識（例えば，ラベル付きデータからの知識）をどのように利用するか（ターゲッ
+ト領域に転移させるか）が解決の鍵であり，領域適応の手法はターゲット領域
+のラベル付きデータを利用しないことで，その効果が明確になる．このため教
+師なし手法を研究することで，領域適応の問題が明確になると考えている．
+この点から本論文では教師なし手法を試みる．
+\newpage
+
+本論文の特徴は WSD の領域適応の問題を以下の2点に分割したことである．
+\begin{enumerate}
+      \item[(1)] 領域間で語義の分布が異なる
+      \item[(2)] 領域の変化によりデータスパースネスが生じる
+\end{enumerate}
+領域適応の手法は上記2つの問題を同時に解決しているものが多いために，
+このような捉え方をしていないが，WSD の領域適応の場合，上記2つの問題を
+分けて考えた方が，何を解決しようとしているのかが明確になる．
+本論文では上記2点の問題に対して，ターゲット領域のラベル付きデータを
+必要としない各々の対策案を提示する．具体的に，(1) に対しては k~近傍法を補助的に利用し，
+(2) に対しては領域毎のトピックモデル\cite{blei}を利用する．
+実際の処理は，ターゲット領域から構築できるトピックモデル
+によって，ソース領域の訓練データとターゲット領域のテストデータ
+にトピック素性を追加する．拡張された素性ベクトルから SVM を用いて語義識
+別を行うが，識別の信頼性が低いものには k~近傍法の識別結果を用いる．
+
+上記の処理を本論文の提案手法とする．提案手法の大きな特徴は，
+トピックモデルを WSD に利用していることである．
+トピックモデルの構築には語義のラベル情報を必要としないために，
+領域適応の教師なし手法が実現される．
+トピックモデルを WSD に利用した従来の研究\cite{li,boyd1,boyd2}
+はいくつかあるため，
+それらとの差異を述べておく．まずトピックモデルを WSD に利用するにしても，
+その利用法は様々であり確立された有効な手法が存在するわけではなく，
+ここで利用した手法も 1 つの提案と見なせる．
+また従来のトピックモデルを利用した WSD の研究では，語義識別の精度改善が目的であり，
+領域適応の教師なし手法に利用することを意図していない．
+そのためトピックモデルを構築する際に，もとになるコーパスに何を使えば有効かは深くは議論されていない．
+しかし領域適応ではソース領域のコーパスを単純に利用すると，精度低下を起こす可能性もあるため，
+本論文ではソース領域のコーパスを利用せず，ターゲット領域のコーパスのみを用いて
+トピックモデルを構築するアプローチをとることを明確にしている．この点が大きな差異である．
+
+実験では BCCWJ コーパス\cite{bccwj}の2つ領域 PB（書籍）と OC（Yahoo!知恵袋）から共に頻度が 50 以上の
+多義語 17単語を対象にして，WSD の領域適応の実験を行った．
+単純に SVM を利用した手法と提案手法とをマクロ平均により比較した場合，OCをソースデータにして，
+PBをターゲットデータにした場合には有意水準 0.05で，
+ソースデータとターゲットデータを逆にした場合には有意水準 0.10で
+提案手法の有効性があることが分かった．
+
+
+
+\section{WSD の領域適応の問題}
+
+
+WSD の対象単語\( w\)の語義の集合を\( C = \{c_1,c_2,\cdots,c_k \}\)，
+\( w\)を含む文（入力データ）を\( x \)とする．
+WSD の問題は最大事後確率推定を利用すると，以下の式の値を求める問題として表現できる．
+\[
+\arg \max_{c \in C } P(c) P(x|c)
+\]
+つまり訓練データを利用して語義の分布\( P(c) \) と各語義上での入力データの分布
+\( P(x|c) \)を推定することで WSD の問題は解決できる．
+今，ソース領域を\( S\)，ターゲット領域を\( T\)とした場合，
+WSD の領域適応の問題は\( P_S (c) \ne P_T (c)\) と
+\( P_S (x|c) \ne P_T (x|c)\) から生じている．
+
+\( P_S (c) \ne P_T (c)\)が成立していることは明らかだが，
+\( P_S (x|c) \ne P_T (x|c)\) に対しては一考を要する．
+一般の領域適応の問題では\( P_S (x|c) \ne P_T (x|c)\)であるが，
+WSD に限れば\( P_S (x|c) = P_T (x|c)\)と考えることもできる．
+実際 Chan らは\( P_S (x|c) \) と \( P_T (x|c)\)の違いの影響は
+非常に小さいと考え，\( P_S (x|c) = P_T (x|c)\)を仮定し，
+\( P_T (c)\)を EM アルゴリズムで推定することで WSD の領域適応を
+行っている\cite{chan2005word,chan2006estimating}．
+古宮らは2つのソース領域の訓練データを用意し，そこからランダムに訓練データを取り出して
+WSD の分類器を学習している\cite{komiya-nenji2013}．論文中では指摘していないが，これも
+\( P_S (c)\)を\( P_T (c)\)に近づける工夫である．ソース領域が1つだとランダムに
+訓練データを取り出しても\( P_S (c)\)は変化しないが，
+ソース領域を複数用意することで\( P_S (c)\)が変化する．
+
+ただし\( P_S (x|c) = P_T (x|c)\)が成立していたとしても，
+WSD の領域適応の問題が\( P_T (c)\)の推定に帰着できるわけでない．
+仮に\( P_S (x|c) = P_T (x|c)\)であったとしても，領域\( S \)の訓練データだけから
+\( P_T (x|c)\)を推定することは困難だからである．
+これは共変量シフトの問題\cite{shimodaira2000improving,sugiyama-2006-09-05}と関連が深い．
+共変量シフトの問題とは入力\( x \)と出力\( y \)に対して，推定する分布\( P(y|x)\) が
+領域\( S \)と\( T \)で共通しているが，\( S \)における入力の分布\( P_S(x) \)と
+\( T \)における入力の分布\( P_T(x) \)が異なる問題である．
+\( P_S (x|c) = P_T (x|c)\)の仮定の下では，入力\( x \)と出力\( c \)が逆になっているので，
+共変量シフトの問題とは異なる．
+ただし WSD の場合，全く同じ文\( x \)が別領域に出現したとしても，\( x \)内の多義語\( w \)
+の語義が異なるケースは非常に稀であるため\( P_S (c|x) = P_T (c|x)\)が仮定できる．
+\( P_T (c|x)\)は語義識別そのものなので，WSD の領域適応の問題は
+共変量シフトの問題として扱えることができる．
+共変量シフト下では訓練事例\( x_i \)に対して密度比\( P_T(x_i)/P_S(x_i) \)を推定し，
+密度比を重みとして尤度を最大にするようにモデルのパラメータを学習する．
+Jiang らは密度比を手動で調整し，
+モデルにはロジステック回帰を用いている\cite{jiang2007instance}．
+齋木らは\( P(x) \)を unigram でモデル化することで密度比を推定し，
+モデルには最大エントロピーモデルを用いている\cite{saiki-2008-03-27}．
+ただしどちらの研究もタスクは WSD ではない．
+WSD では\( P(x) \)が単純な言語モデルではなく，「\( x \)は対象単語\( w \)を含む」
+という条件が付いているので，密度比\( P_T(x)/P_S(x) \)の推定が困難となっている．
+また教師なしの枠組みで共変量シフトの問題が扱えるのかは不明である．
+
+本論文では\( P_S (c|x) = P_T (c|x)\)を仮定したアプローチは取らず，
+\( P_S (x|c) = P_T (x|c)\)を仮定する．この仮定があったとしても，
+領域\( S \)の訓練データだけから\( P_T (x|c)\)を推定するのは困難である．
+ここではこれをスパース性の問題と考える．
+つまり領域\( S \)の訓練データ\( D \)は領域\( T \)においてスパースになっていると考える．
+スパース性の問題だと考えれば，半教師あり学習や能動学習を領域適応に応用するのは自然である
+\footnote{ただし\( D \)は領域\( T \)内のサンプルではなく不均衡な訓練データという点には注意すべきであり，この点を考慮した半教師あり学習や能動学習が必要である．}
+    (Rai, Saha, Daum{\'e}, and Venkatasubramanian 2010)\nocite{rai2010domain}．
+また半教師あり学習や能動学習のアプローチを取った場合，
+\( T \)の訓練データが増えるので語義の分布の違い自体も同時に解消されていく\cite{chan2007domain}．
+
+ここで指摘したいのは\( P_S (x|c) = P_T (x|c)\)が成立しており\( P_T (x|c)\)の推定を
+困難にしているのがスパース性の問題だとすれば，領域\( S \)の訓練データ\( D \)は
+多いほどよい推定が行えるはずで，\( D \)が大きくなったとしても推定が悪化するはずがない点である．
+しかし現実には\( D \)を大きくすると WSD 自体の精度が悪くなる場合もあることが報告されている
+（例えば\cite{komiya-nenji2013}）．
+これは一般に負の転移現象\cite{rosenstein2005transfer}と呼ばれている．
+WSD の場合\( P_T (x|c)\)を推定しようとして，逆に語義の分布\( P_T (c)\)の推定が悪化することから
+生じる．
+つまり領域\( T \)における WSD の解決には\( T \)におけるデータスパースネスの問題に対処しながら，
+同時に\( P_T (c)\)の推定が悪化することを避けることが必要となる．
+
+また領域適応ではアンサンブル学習も有効な手法である．
+アンサンブル学習自体はかなり広い概念であり，
+実際，バギング，ブースティングまた混合分布もアンサンブル学習の一種である．
+    Daum{\'e}らは領域適応のための混合モデルを提案している(Daum{\'e} and Marcu 2006)\nocite{daume2006domain}．
+そこでは，ソース領域のモデル，ターゲット領域のモデル，そして
+ソース領域とターゲット領域を共有したモデルの3つを混合モデルの構成要素としている．
+Dai らは代表的なブースティングアルゴリズムの AdaBoost を領域適応の
+問題に拡張した TrAdaBoost を提案している\cite{Dai2007}．
+また Kamishima らはバギングを領域適応の学習用に拡張した TrBagg を提案している\cite{kamishima2009trbagg}．
+WSD の領域適応については古宮の一連の研究\cite{komiya2,komiya3,komiya-nlp2012}があるが，
+そこではターゲット領域のラベルデータの使い方に応じて学習させた複数の分類器を用意しておき，
+単語や事例毎に最適な分類器を使い分けることで，WSD の領域適応を行っている．
+これらの研究もアンサンブル学習の一種と見なせる．
+
+
+
+\section{提案手法}
+
+\subsection{k~近傍法の利用}
+
+領域\( T \)におけるデータスパースネスの問題に対処する際に，\( P_T (c)\)の推定が
+悪化することを避けるために，
+本論文では識別の際に\( P_T (c)\)の情報をできるだけ利用しないという方針をとる．
+そのために k~近傍法を利用する．
+どのような学習手法を取ったとしても，何らかの汎化を行う以上，\( P_T (c)\)の影響を受けるが，
+k~近傍法はその影響が少ない．
+k~近傍法はデータ\( x \)のクラスを識別するのに，訓練データの中から\( x \)と近いデータ
+\( k \)個を取ってきて，それら\( k \)個のデータのクラスの多数決により\( x \)のクラスを識別する．
+\mbox{k~近傍法}が\( P_T (c)\)の影響が少ないのは\( k = 1\)の場合（最近傍法）を考えればわかりやすい．
+例えば，クラスが\( \{ c_1, c_2 \} \) であり，\( P(c_1) = 0.99 \)，\( P(c_2) = 0.01 \)であった場合，
+通常の学習手法であれば，ほぼ全てのデータを\( c_1 \)と識別するが，
+最近傍法では，入力データ\( x \)と最も近いデータ 1 つだけがクラス\( c_2 \)であれば，
+\( x \)のクラスを\( c_2 \)と判断する（\mbox{図\ref{zu1}}参照）．
+つまりk~近傍法ではデータ全体の分布を考慮せずに\( k \)個の局所的な近傍データのみで
+クラスを識別するために，その識別には\( P_T (c)\)の影響が少ない．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{20-5ia4f1.eps}
+\end{center}
+\caption{分布の影響が少ない k-NN}
+\label{zu1}
+\vspace{-1\Cvs}
+\end{figure} 
+
+ただし k~近傍法は近年の学習器と比べるとその精度が低い．
+そのためここでは k~近傍法を補助的に利用する．
+具体的には通常の識別は SVM で行い，SVM での識別の信頼度が
+閾値\( \theta \)以下の場合のみ，k~近傍法の識別結果を利用することにする．
+
+ここで\( \theta \)の値が問題だが，語義の数が\( K \)個である場合，
+識別の信頼度（その語義である確率）は少なくとも\( 1/K \)以上の値となる．
+そのためここではこの値の1割をプラスし\( \theta = 1.1/K \) とした．
+なおこの値は予備実験等から得た最適な値ではないことを注記しておく．
+
+
+
+\subsection{トピックモデルの利用}
+
+領域\( T \)におけるデータスパースネスの問題に対処するために，ここでは
+トピックモデルを利用する．
+
+WSD の素性としてシソーラスの情報を利用するのもデータスパースネスへの 1 つの
+対策である．シソーラスとしては，分類語彙表などの手作業で構築されたものと
+コーパスから自動構築されたものがある．前者は質が高いが分野依存の問題がある．
+後者は質はそれほど高くないが，分野毎に構築できるという利点がある．
+ここでは領域適応の問題を扱うので，後者を利用する．
+つまり領域\( T \)からシソーラスを自動構築し，そのシソーラス情報を
+領域\( S \)の訓練事例と領域\( T \)のテスト事例に含めることで，
+WSD の識別精度の向上を目指す．
+注意として，WSD では単語間の類似度を求めるためにシソーラスを利用する．
+そのため実際にはシソーラスを構築するのではなく，単語間の類似度が測れる仕組みを
+作っておけば良い．この仕組みが単語のクラスタリング結果に対応する．
+つまり WSD での利用という観点では，シソーラスと単語クラスタリングの結果は
+同等である．そのため本論文においてシソーラスと述べている部分は，
+単語のクラスタリング結果を指している．
+
+この単語のクラスタリング結果を得るためにトピックモデルを利用する．
+トピックモデルとは文書\( d \)の生起に\( K \)個の潜在的なトピック\( z_i \)を
+導入した確率モデルである．
+\[
+p(d) = \sum_{i = 1}^{K} p(z_i) p(d |z_i)
+\]
+トピックモデルの 1つである Latent Dirichlet Allocation (LDA) \cite{blei}を用いた場合，
+単語\( w \)に対して\( p(w|z_i) \)が得られる．
+つまりトピック\( z_i \)をひとつのクラスタと見なすことで，
+LDA を利用して単語のソフトクラスタリングが可能となる．
+
+領域\( T \)のコーパスと LDA を利用して，\( T \)に適した\( p(w|z_i) \)が得られる．
+\( p(w|z_i) \)の情報を WSD に利用するいくつかの研究\cite{li,boyd1,boyd2}があるが，
+ここではハードタグ\cite{cai}を利用する．
+ハードタグとは\( w \)に対して最も関連度の高いトピック\( z_{\hat{i}} \)を付与する方法である．
+\[
+\hat{i} = \arg \max_{i} p(w|z_i) 
+\]
+まずトピック数を\( K \)としたとき，\( K \)次元のベクトル\( t \)を用意し，
+入力事例\( x \)中に\( n \)種類の単語\( w_1, w_2, \cdots, w_n \)が存在したとき，
+各\( w_j \)(\(j = 1 \sim n\))に対して最も
+関連度の高いトピック\( z_{\hat{i}} \)を求め，\( t \)の\( \hat{i} \)次元の
+値を 1 にする．これを\( w_1 \)から\( w_n \)まで行い\( t \)を完成させる．
+作成できた\( t \)をここでは{\bf トピック素性}と呼ぶ．
+トピック素性を通常の素性ベクトル（ここでは{\bf 基本素性}と呼ぶ）に結合することで，
+新たな素性ベクトルを作成し，その素性ベクトルを対象に学習と識別を行う．
+
+なお，本論文で利用した基本素性は，対象単語の前後の単語と品詞及び
+対象単語の前後3単語までの自立語である．
+
+
+\section{実験}
+
+\subsection{実験設定と実験結果}
+
+現代日本語書き言葉均衡コーパス（BCCWJ コーパス）\cite{bccwj}の
+PB（書籍）とOC（Yahoo!知恵袋）を異なった領域として実験を行う．
+SemEval-2 の日本語 WSD タスク\cite{semeval-2010}では
+PB と OC を含む 4ジャンルの語義タグ付きコーパスが公開されているので，
+語義のラベルはこのデータを利用する．
+
+PB と OC から共に頻度が 50 以上の多義語 17単語を WSD の対象単語とする．
+これらの単語と辞書上での語義数及び各コーパスでの頻度と
+語彙数を\mbox{表\ref{tab:target-word}}に示す\footnote{語義は岩波国語辞書がもとになっている．そこでの中分類までを対象にした．
+また「入る」は辞書上の語義が3つだが，PB や OC では 4つの語義がある．
+これは SemEval-2 の日本語 WSD タスクは新語義のタグも許しているからである．}．
+領域適応としては PB をソース領域，OC をターゲット領域としたものと，
+OC をソース領域，PB をターゲット領域としたものの 2種類を行う．
+注意としてSemEval-2 の日本語 WSD タスクのデータを用いれば，更に異なった領域間の
+実験は可能であるが，領域間に共通してある程度の頻度で出現する多義語が少ないことなどから
+本論文では PB と OC 間の領域適応に限定している．
+
+\begin{table}[b]
+\caption{対象単語}
+\label{tab:target-word}
+\input{04table01.txt}
+\end{table}
+
+\begin{table}[t]
+\caption{各手法による正解率 (PB → OC)}
+\label{tab:result1}
+\input{04table02.txt}
+\end{table}
+\begin{figure}[t]
+\begin{center}
+\includegraphics{20-5ia4f2.eps}
+\end{center}
+\caption{各手法による正解率のマクロ平均 (PB → OC)}
+\label{kekka1}
+\end{figure} 
+
+PB から OC への領域適応の実験結果を\mbox{表\ref{tab:result1}}と図~\ref{kekka1} に示す．
+また OC から PB への領域適応の実験結果を\mbox{表\ref{tab:result2}}と図~\ref{kekka2} に示す．
+\mbox{表\ref{tab:result1}}と\mbox{表\ref{tab:result2}}の数値は正解率を示している．
+「k-NN」の列は k~近傍法の識別結果を示す．ここでは\( k=1 \)としている．
+「SVM」の列は基本素性だけを用いて学習した SVM の識別結果を示し，
+「SVM + TM」の列は基本素性にターゲット領域から得たトピック素性を
+加えた素性を用いて学習した SVM の識別結果を示し，
+「提案手法」の列は「SVM + TM」の識別で信頼度の低い結果を k~近傍法の
+結果に置き換えた場合の識別結果を示す．
+また「self」はターゲット領域の訓練データに対して5分割交差検定を行った場合の平均正解率であり，
+理想値と考えて良い．
+ただし一部の単語で「self」の値が「提案手法」などよりも低い．
+これはそれらの単語のソース領域のラベル付きデータの情報が，
+ターゲット領域で有効であったことを意味している．
+つまり「負の転移」が生じていないため，これらの単語については領域適応
+の問題が生じていないとも考えられる．
+
+\begin{table}[t]
+\caption{各手法による正解率 (OC → PB)}
+\label{tab:result2}
+\input{04table03.txt}
+\end{table}
+\begin{figure}[t]
+\begin{center}
+\includegraphics{20-5ia4f3.eps}
+\end{center}
+\caption{各手法による正解率のマクロ平均 (OC → PB)}
+\label{kekka2}
+\end{figure} 
+
+本実験の SVM の実行には，SVM ライブラリのlibsvm\footnote{http://www.csie.ntu.edu.tw/{\textasciitilde}cjlin/libsvm/}を利用した．
+そこで用いたカーネルは線形カーネルである．また識別の信頼度の算出には libsvm で提供されている
+\verb| -b |
+オプションを利用した．このオプションは，基本的には，one vs. rest 法を利用して
+各カテゴリ（本実験の場合，語義）までの距離（識別関数値）の比較から，信頼度を算出している．
+識別結果は最も信頼度の高いカテゴリ（語義）となる．
+また BCCWJ コーパスは形態素解析済みの形で提供されているため，
+基本素性の単語や品詞は，形態素解析システムを利用せずに直接得ることができる．
+またトピックモデルの作成には LDA ツール\footnote{http://chasen.org/{\textasciitilde}daiti-m/dist/lda/}を用い，
+トピック数は全て 100 として実験を行った．
+
+17単語の正解率のマクロ平均をみると，PB から OC への領域適応と
+OC から PB への領域適応のどちらにおいても，以下の関係が成立しており，
+提案手法が有効であることがわかる．
+
+\vspace{0.5\Cvs}
+\begin{verbatim}
+                         k-NN < SVM < SVM+TM < 提案手法
+\end{verbatim}
+\vspace{0.5\Cvs}
+
+なお本実験の評価はマクロ平均で行った．マイクロ平均による評価も可能ではあるが，
+本実験の場合，テストデータの用例数に幅がありすぎ，
+結果的にテストデータの用例数の多い単語の識別結果がマイクロ平均の値に大きく影響する．
+このためここではマクロ平均のみによる評価を行っている．
+マイクロ平均で評価した場合は，わずかではあるが SVM が最も高い評価値を出していた．
+
+
+\subsection{有意差の検定}
+
+t 検定を用いて各手法間の正解率のマクロ平均値の有意差を検定する．
+
+対象単語\( w \)のソース領域でのラベル付きデータからランダムにその9割を取り出し，
+その9割のデータから前述した WSD の実験（「SVM」，「SVM + TM」，「提案手法」）を行う．
+この際，「提案手法」では k-NN の結果を用いるが，そこでも9割のデータしかないことに注意する．
+これを 1 セットの実験とし，50セットの実験を行い，その正解率のマクロ平均を求めた．
+PB から OC への領域適応の結果を\mbox{表\ref{tab:yuui1}}に示す．
+また OC から PB への領域適応の結果を\mbox{表\ref{tab:yuui2}}に示す．
+
+t 検定を行う場合，まず分散比の検定から2つのデータが等分散と見なせることを示す必要がある．
+自由度 (49,49) の F値を調べることで，有意水準 0.10 で等分散を棄却するためには，
+分散比が 0.6222 以下か 1.6073 以上の値でなければならない．
+\mbox{表\ref{tab:yuui1}}と\mbox{表\ref{tab:yuui2}}から，
+各領域適応でどの手法間の組み合わせを行っても，
+正解率の分散が等しいことを棄却できないことは明らかであり，
+ここでは t 検定を行えると判断できる．
+
+t 検定の片側検定を用いた場合，ここでの自由度は 48 なので
+有意水準 0.05 で有意差を出す t 値は 1.6772 以上，
+有意水準 0.10 で有意差を出す t 値は 1.2994 以上の値となる．
+このため有意差の検定結果は\mbox{表\ref{yuui-kekka3}}と\mbox{表\ref{yuui-kekka4}}のようにまとめられる．
+
+\begin{table}[t]
+\begin{minipage}[t]{.49\textwidth}
+\caption{9割データでの実験結果(PB → OC)}
+\label{tab:yuui1}
+\input{04table04.txt}
+\end{minipage} 
+\hfill
+\begin{minipage}[t]{.49\textwidth}
+\caption{9割データでの実験結果(OC → PB)}
+\label{tab:yuui2}
+\input{04table05.txt}
+\end{minipage} 
+\end{table}
+\begin{table}[t]
+\caption{手法間の有意差(PB → OC)}
+\label{yuui-kekka3}
+\input{04table06.txt}
+\end{table}
+\begin{table}[t]
+\caption{手法間の有意差(OC → PB)}
+\label{yuui-kekka4}
+\input{04table07.txt}
+\end{table}
+
+結論的には提案手法と SVM との正解率のマクロ平均の差は OC から PB の領域適応では有意だが，
+PB から OC の領域適応では有意ではない．ただし有意水準を 0.10 に緩和した場合には，
+PB から OC の領域適応でも有意であると言える．
+
+細かく手法を分けて調べた場合，トピックモデルを利用すること（SVM+TM と SVM の差）と
+k-NN を併用すること（提案手法と SVM+TM の差）についての有意性はまちまちであった．
+ただし有意水準を 0.10 に緩和した場合，トピックモデルを利用する手法について
+PB から OC の領域適応以外の組み合わせについては全て有意性が認められた．
+
+
+
+
+
+\section{考察}
+
+\subsection{語義分布の違い}
+
+本論文では，WSD の領域適応は語義分布の違いの問題を解決するだけは
+不十分であることを述べた．Naive Bayes を利用して，この点を調べた．
+Naive Bayes の場合，以下の式で語義を識別する．
+\[
+\arg \max P_S(c) P_S(x|c)
+\]
+ここで事前分布\( P_S (c) \)の代わりに領域\( T \)の訓練データから推定した
+\( P_T (c) \)を用いる．これは語義分布を正確に推定できたという仮定での仮想的な実験である．
+結果を\mbox{表\ref{gogibunpu}}に示す．
+
+\begin{table}[b]
+\caption{理想的語義分布の推定による識別}
+\label{gogibunpu}
+\input{04table08.txt}
+\end{table}
+
+全体として理想的な語義分布を利用すれば，正解率は改善されるが，効果はわずかしかない．
+また PB から OC の「前」や OC から PB の「見る」「持つ」は逆に精度が悪化している．
+更に理想的な語義分布を利用できたとしても，通常の SVM よりも正解率が劣っている．
+これらのことから，語義分布の正確な推定のみでは WSD の領域適応の解決は困難で
+あることがわかる．
+
+
+\subsection{トピックモデルの領域依存性の度合い}
+
+WSD においてデータスパースネスの問題の対処として，
+シソーラスを利用することは一般に行われてきている．
+LDA から得られるトピック\( z_i \)のもとで単語\( w \)が
+生起する確率\( p(w|z_i) \)は，単語のソフトクラスタリング結果に対応しており，
+これは LDA の処理対象となったコーパスに合ったシソーラスと見なせる．
+このためトピックモデルが WSD に利用できることは明らかである．
+ただしその具体的な利用方法は確立されていない．
+
+問題は2つある．1つはトピック素性の表現方法である．
+ここではハードタグを利用したが，ソフトタグの方が優れているという報告もある\cite{cai}．
+國井はハードタグとソフトタグの中間にあたるミドルソフトタグを提案している\cite{kunii}．
+いずれにしても，トピック素性の有効な表現方法はトピック数やコーパスの規模にも依存した問題であり，
+どういった表現方法で利用すれば良いかは未解決である．
+
+もう1つの問題はトピックモデルから得られるシソーラスの領域依存性の度合いである．
+本論文でも LDA から領域依存のトピックモデルが作成できることに
+着目してトピックモデルを領域適応の問題に利用した．
+ただし領域\( A \)のコーパスと領域\( B \)のコーパスがあった場合，
+各々のコーパスから各々の知識を獲得するよりも，両者のコーパスを合わせて
+両領域の知識を獲得した方が，一方のコーパスから得られる知識よりも優れている
+ことがある．
+例えば森は単語分割のタスクにおいて，各々の領域のタグ付きデータを使うことで精度を上げることが
+できたが，全ての領域のタグ付きデータを使えば
+更に精度を上げることができたことを報告している\cite{mori}．
+領域の知識を合わせることは，その知識をより一般的にしていることであり，
+領域依存の知識はあまり領域に依存しすぎるよりも，ある程度，
+一般性があった方がよいという問題と捉えられる．
+本実験で言えば PB のコーパスと OC のコーパスと両者を合わせて学習した
+トピックモデルは，各々のコーパスから学習したトピックモデルよりも優れている可能性がある．
+以下その実験の結果を\mbox{表\ref{bunruigoi}}に示す．
+
+\begin{table}[t]
+\caption{両領域コーパスを利用した識別}
+\label{bunruigoi}
+\input{04table09.txt}
+\end{table}
+
+ターゲット領域が PB の場合，ソース領域の OC のコーパスを追加することで正解率は低下するが，
+ターゲット領域が OC の場合，ソース領域の PB のコーパスを追加することで正解率が向上する．
+これは OC（Yahoo!知恵袋）のコーパスの領域依存が強いが，
+その一方で，PB（書籍）のコーパスの領域依存が弱く，より一般的であることから
+生じていると考える．
+一般性の高い領域に領域依存の強い知識を入れると性能が下がるが，
+より特殊な領域には，その領域固有の知識に一般的知識を組み入れることで
+性能が更に向上すると考えられる．これらの詳細な分析と対策は今後の課題である．
+
+
+
+\subsection{k~近傍法の効果とアンサンブル手法}
+
+本論文では SVM での識別の信頼度の低い部分を k~近傍法の識別結果に置き換えるという
+処理を行った．置き換えが起こったものだけを対象にして，
+k~近傍法と SVM での正解数を比較した．
+結果を\mbox{表\ref{tab:change1}}と\mbox{表\ref{tab:change2}}に示す．
+
+PB から OC への領域適応では「子供」，OC から PB への領域適応では「入れる」については
+SVM の方が k~近傍法の方よりもよい正解率だが，それ以外は
+k~近傍法の正解率は SVM の正解率と等しいかそれ以上であった．
+つまり SVM で識別精度が低い部分に関しては，k~近傍法で識別する効果が確認できる．
+
+また k~近傍法の\( k \)をここでは\( k = 1 \)とした．この\( k \)の値を
+3 や 5 に変更した実験結果を\mbox{図\ref{kekka3}}と\mbox{図\ref{kekka4}}に示す．
+
+\begin{table}[p]
+\begin{minipage}[t]{.45\textwidth}
+\caption{識別結果の変更(PB → OC)}
+\label{tab:change1}
+\input{04table10.txt}
+\end{minipage}
+\hfill
+\begin{minipage}[t]{.45\textwidth}
+\caption{識別結果の変更(OC → PB)}
+\label{tab:change2}
+\input{04table11.txt}
+\end{minipage}
+\end{table}
+\begin{figure}[p]
+\begin{center}
+\includegraphics{20-5ia4f4.eps}
+\end{center}
+\caption{k による変化(PB → OC)}
+\label{kekka3}
+\end{figure} 
+
+複数の分類器を組み合わせて利用する学習手法をアンサンブル学習というが，
+本論文の手法もアンサンブル学習の一種と見なせる．
+k~近傍法自体は\( k = 1 \)よりも\( k = 3 \)や\( k = 5 \)の方が正解率が高いが，
+本手法のように SVM の識別の信頼度の低い部分のみに限定すれば，
+\( k = 1 \)の\mbox{k~近傍法}を利用した方がよい．これはアンサンブル学習では
+高い識別能力の学習器を組み合わせるのではなく，
+互いの弱い部分を補強し合うような形式が望ましいことを示している．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{20-5ia4f5.eps}
+\end{center}
+\caption{k による変化(OC → PB)}
+\label{kekka4}
+\end{figure} 
+
+
+
+
+\section{おわりに}
+
+本論文では WSD の領域適応に対する手法を提案した．
+まず WSD の領域適応の問題を，以下の 2つの問題に要約できることを示し，
+関連研究との位置づけを示した．
+\begin{itemize}
+      \item 領域間で語義の分布が異なる
+      \item 領域の変化によりデータスパースネスが生じる
+\end{itemize}
+次に上記の2つの問題それぞれに対処する手法を提案した．
+1点目の問題に対してはk~近傍法を補助的に用いること，2点目の問題に対しては
+トピックモデルを利用することである．
+BCCWJ コーパスの2つ領域 PB（書籍）と OC（Yahoo!知恵袋）から
+共に頻度が 50 以上の 多義語 17 単語を対象にして，WSD の領域適応の
+実験を行い，提案手法の有効性を示した．
+ただし領域は OC と PB に限定しており，提案手法が他の領域間で有効であるかは
+確認できていない．この点は今後の課題である．
+また領域の一般性を考慮したトピックモデルを WSD に利用する方法，および
+WSD の領域適応に有効なアンサンブル手法を考案することも
+今後の課題である．
+
+
+
+\vspace{1\Cvs}
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Blei, Ng, \BBA\ Jordan}{Blei et~al.}{2003}]{blei}
+Blei, D.~M., Ng, A.~Y., \BBA\ Jordan, M.~I. \BBOP 2003\BBCP.
+\newblock \BBOQ {Latent dirichlet allocation}.\BBCQ\
+\newblock {\Bem Machine Learning Reseach}, {\Bbf 3}, \mbox{\BPGS\ 993--1022}.
+
+\bibitem[\protect\BCAY{Boyd-Graber \BBA\ Blei}{Boyd-Graber \BBA\
+  Blei}{2007}]{boyd2}
+Boyd-Graber, J.\BBACOMMA\ \BBA\ Blei, D. \BBOP 2007\BBCP.
+\newblock \BBOQ {Putop: Turning Predominant Senses into a Topic Model for Word
+  Sense Disambiguation}.\BBCQ\
+\newblock In {\Bem Proceedings of SemEval-2007}, \mbox{\BPGS\ 277--281}.
+
+\bibitem[\protect\BCAY{Boyd-Graber, Blei, \BBA\ Zhu}{Boyd-Graber
+  et~al.}{2007}]{boyd1}
+Boyd-Graber, J., Blei, D., \BBA\ Zhu, X. \BBOP 2007\BBCP.
+\newblock \BBOQ {A Topic Model for Word Sense Disambiguation}.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP-CoNLL-2007}, \mbox{\BPGS\ 1024--1033}.
+
+\bibitem[\protect\BCAY{Cai, Lee, \BBA\ Teh}{Cai et~al.}{2007}]{cai}
+Cai, J.~F., Lee, W.~S., \BBA\ Teh, Y.~W. \BBOP 2007\BBCP.
+\newblock \BBOQ {Improving Word Sense Disambiguation using Topic
+  Features}.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP-CoNLL-2007}, \mbox{\BPGS\ 1015--1023}.
+
+\bibitem[\protect\BCAY{Chan \BBA\ Ng}{Chan \BBA\ Ng}{2005}]{chan2005word}
+Chan, Y.~S.\BBACOMMA\ \BBA\ Ng, H.~T. \BBOP 2005\BBCP.
+\newblock \BBOQ Word Sense Disambiguation with Distribution Estimation.\BBCQ\
+\newblock In {\Bem Proceedings of IJCAI-2005}, \mbox{\BPGS\ 1010--1015}.
+
+\bibitem[\protect\BCAY{Chan \BBA\ Ng}{Chan \BBA\ Ng}{2006}]{chan2006estimating}
+Chan, Y.~S.\BBACOMMA\ \BBA\ Ng, H.~T. \BBOP 2006\BBCP.
+\newblock \BBOQ Estimating class priors in domain adaptation for word sense
+  disambiguation.\BBCQ\
+\newblock In {\Bem Proceedings of COLING-ACL-2006}, \mbox{\BPGS\ 89--96}.
+
+\bibitem[\protect\BCAY{Chan \BBA\ Ng}{Chan \BBA\ Ng}{2007}]{chan2007domain}
+Chan, Y.~S.\BBACOMMA\ \BBA\ Ng, H.~T. \BBOP 2007\BBCP.
+\newblock \BBOQ Domain adaptation with active learning for word sense
+  disambiguation.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-2007}, \mbox{\BPGS\ 49--56}.
+
+\bibitem[\protect\BCAY{Chapelle, Sch{\"o}lkopf, \BBA\ Zien}{Chapelle
+  et~al.}{2006}]{chapelle2006semi}
+Chapelle, O., Sch{\"o}lkopf, B., \BBA\ Zien, A. \BBOP 2006\BBCP.
+\newblock {\Bem Semi-supervised learning}, \lowercase{\BVOL}~2.
+\newblock MIT press Cambridge.
+
+\bibitem[\protect\BCAY{Dai, Yang, Xue, \BBA\ Yu}{Dai et~al.}{2007}]{Dai2007}
+Dai, W., Yang, Q., Xue, G.-R., \BBA\ Yu, Y. \BBOP 2007\BBCP.
+\newblock \BBOQ Boosting for transfer learning.\BBCQ\
+\newblock In {\Bem Proceedings of ICML-2007}, \mbox{\BPGS\ 193--200}.
+
+\bibitem[\protect\BCAY{{Daum\'{e}, H.~III}}{{Daum\'{e}, H.~III}}{2007}]{daume0}
+{Daum\'{e}, H.~III} \BBOP 2007\BBCP.
+\newblock \BBOQ Frustratingly Easy Domain Adaptation.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-2007}, \mbox{\BPGS\ 256--263}.
+
+\bibitem[\protect\BCAY{{Daum{\'e}, H.~III} \BBA\ Marcu}{{Daum{\'e}, H.~III}
+  \BBA\ Marcu}{2006}]{daume2006domain}
+{Daum{\'e}, H.~III}\BBACOMMA\ \BBA\ Marcu, D. \BBOP 2006\BBCP.
+\newblock \BBOQ Domain adaptation for statistical classifiers.\BBCQ\
+\newblock {\Bem Journal of Artificial Intelligence Research}, {\Bbf 26}  (1),
+  \mbox{\BPGS\ 101--126}.
+
+\bibitem[\protect\BCAY{Jiang \BBA\ Zhai}{Jiang \BBA\
+  Zhai}{2007}]{jiang2007instance}
+Jiang, J.\BBACOMMA\ \BBA\ Zhai, C. \BBOP 2007\BBCP.
+\newblock \BBOQ Instance weighting for domain adaptation in NLP.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-2007}, \mbox{\BPGS\ 264--271}.
+
+\bibitem[\protect\BCAY{Kamishima, Hamasaki, \BBA\ Akaho}{Kamishima
+  et~al.}{2009}]{kamishima2009trbagg}
+Kamishima, T., Hamasaki, M., \BBA\ Akaho, S. \BBOP 2009\BBCP.
+\newblock \BBOQ Trbagg: A simple transfer learning method and its application
+  to personalization in collaborative tagging.\BBCQ\
+\newblock In {\Bem Proceedings of the 9th IEEE International Conference on Data
+  Mining}, \mbox{\BPGS\ 219--228}.
+
+\bibitem[\protect\BCAY{神嶌}{神嶌}{2010}]{kamishima}
+神嶌敏弘 \BBOP 2010\BBCP.
+\newblock 転移学習.\
+\newblock \Jem{人工知能学会誌}, {\Bbf 25}  (4), \mbox{\BPGS\ 572--580}.
+
+\bibitem[\protect\BCAY{古宮\JBA 奥村}{古宮\JBA 奥村}{2012}]{komiya-nlp2012}
+古宮嘉那子\JBA 奥村学 \BBOP 2012\BBCP.
+\newblock 語義曖昧性解消のための領域適応手法の決定木学習による自動選択.\
+\newblock \Jem{自然言語処理}, {\Bbf 19}  (3), \mbox{\BPGS\ 143--166}.
+
+\bibitem[\protect\BCAY{古宮\JBA 小谷\JBA 奥村}{古宮 \Jetal
+  }{2013}]{komiya-nenji2013}
+古宮嘉那子\JBA 小谷善行\JBA 奥村学 \BBOP 2013\BBCP.
+\newblock 語義曖昧性解消の領域適応のための訓練事例集合の選択.\
+\newblock \Jem{{言語処理学会第 19 回年次大会発表論文集}}, \mbox{\BPGS\ C6--2}.
+
+\bibitem[\protect\BCAY{Komiya \BBA\ Okumura}{Komiya \BBA\
+  Okumura}{2011}]{komiya3}
+Komiya, K.\BBACOMMA\ \BBA\ Okumura, M. \BBOP 2011\BBCP.
+\newblock \BBOQ {Automatic Determination of a Domain Adaptation Method for Word
+  Sense Disambiguation using Decision Tree Learning}.\BBCQ\
+\newblock In {\Bem Proceedings of IJCNLP-2011}, \mbox{\BPGS\ 1107--1115}.
+
+\bibitem[\protect\BCAY{Komiya \BBA\ Okumura}{Komiya \BBA\
+  Okumura}{2012}]{komiya2}
+Komiya, K.\BBACOMMA\ \BBA\ Okumura, M. \BBOP 2012\BBCP.
+\newblock \BBOQ {Automatic Domain Adaptation for Word Sense Disambiguation
+  Based on Comparison of Multiple Classifiers}.\BBCQ\
+\newblock In {\Bem {Proceedings of PACLIC-2012}}, \mbox{\BPGS\ 75--85}.
+
+\bibitem[\protect\BCAY{國井\JBA 新納\JBA 佐々木}{國井 \Jetal }{2013}]{kunii}
+國井慎也\JBA 新納浩幸\JBA 佐々木稔 \BBOP 2013\BBCP.
+\newblock ミドルソフトタグのトピック素性を利用した語義曖昧性解消.\
+\newblock \Jem{{言語処理学会第 19 回年次大会発表論文集}}, \mbox{\BPGS\ P3--9}.
+
+\bibitem[\protect\BCAY{Li, Roth, \BBA\ Sporleder}{Li et~al.}{2010}]{li}
+Li, L., Roth, B., \BBA\ Sporleder, C. \BBOP 2010\BBCP.
+\newblock \BBOQ {Topic Models for Word Sense Disambiguation and Token-based
+  Idiom Detection}.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-2010}, \mbox{\BPGS\ 1138--1147}.
+
+\bibitem[\protect\BCAY{Maekawa}{Maekawa}{2007}]{bccwj}
+Maekawa, K. \BBOP 2007\BBCP.
+\newblock \BBOQ {Design of a Balanced Corpus of Contemporary Written
+  Japanese}.\BBCQ\
+\newblock In {\Bem {Proceedings of the Symposium on Large-Scale Knowledge
+  Resources (LKR2007)}}, \mbox{\BPGS\ 55--58}.
+
+\bibitem[\protect\BCAY{森}{森}{2012}]{mori}
+森信介 \BBOP 2012\BBCP.
+\newblock 自然言語処理における分野適応.\
+\newblock \Jem{人工知能学会誌}, {\Bbf 27}  (4), \mbox{\BPGS\ 365--372}.
+
+\bibitem[\protect\BCAY{Okumura, Shirai, Komiya, \BBA\ Yokono}{Okumura
+  et~al.}{2010}]{semeval-2010}
+Okumura, M., Shirai, K., Komiya, K., \BBA\ Yokono, H. \BBOP 2010\BBCP.
+\newblock \BBOQ {SemEval-2010 Task: Japanese WSD}.\BBCQ\
+\newblock In {\Bem {Proceedings of the 5th International Workshop on Semantic
+  Evaluation}}, \mbox{\BPGS\ 69--74}.
+
+\bibitem[\protect\BCAY{Rai, Saha, {Daum{\'e}, H.~III}, \BBA\
+  Venkatasubramanian}{Rai et~al.}{2010}]{rai2010domain}
+Rai, P., Saha, A., {Daum{\'e}, H.~III}, \BBA\ Venkatasubramanian, S. \BBOP
+  2010\BBCP.
+\newblock \BBOQ Domain adaptation meets active learning.\BBCQ\
+\newblock In {\Bem Proceedings of the NAACL HLT 2010 Workshop on Active
+  Learning for Natural Language Processing}, \mbox{\BPGS\ 27--32}.
+
+\bibitem[\protect\BCAY{Rosenstein, Marx, Kaelbling, \BBA\
+  Dietterich}{Rosenstein et~al.}{2005}]{rosenstein2005transfer}
+Rosenstein, M.~T., Marx, Z., Kaelbling, L.~P., \BBA\ Dietterich, T.~G. \BBOP
+  2005\BBCP.
+\newblock \BBOQ To transfer or not to transfer.\BBCQ\
+\newblock In {\Bem Proceedings of the NIPS 2005 Workshop on Inductive Transfer:
+  10 Years Later}, \lowercase{\BVOL}~2, \mbox{\BPG~7}.
+
+\bibitem[\protect\BCAY{Settles}{Settles}{2010}]{settles2010active}
+Settles, B. \BBOP 2010\BBCP.
+\newblock \BBOQ Active Learning Literature Survey.\BBCQ\
+\newblock \BTR, University of Wisconsin, Madison.
+
+\bibitem[\protect\BCAY{Shimodaira}{Shimodaira}{2000}]{shimodaira2000improving}
+Shimodaira, H. \BBOP 2000\BBCP.
+\newblock \BBOQ Improving predictive inference under covariate shift by
+  weighting the log-likelihood function.\BBCQ\
+\newblock {\Bem Journal of statistical planning and inference}, {\Bbf 90}  (2),
+  \mbox{\BPGS\ 227--244}.
+
+\bibitem[\protect\BCAY{杉山}{杉山}{2006}]{sugiyama-2006-09-05}
+杉山将 \BBOP 2006\BBCP.
+\newblock 共変量シフト下での教師付き学習.\
+\newblock \Jem{日本神経回路学会誌}, {\Bbf 13}  (3), \mbox{\BPGS\ 111--118}.
+
+\bibitem[\protect\BCAY{齋木\JBA 高村\JBA 奥村}{齋木 \Jetal
+  }{2008}]{saiki-2008-03-27}
+齋木陽介\JBA 高村大也\JBA 奥村学 \BBOP 2008\BBCP.
+\newblock 文の感情極性判定における事例重み付けによるドメイン適応.\
+\newblock \Jem{情報処理学会研究報告．自然言語処理研究会報告}, {\Bbf 2008}
+  (33), \mbox{\BPGS\ 61--67}.
+
+\end{thebibliography}
+
+
+\vspace{1\Cvs}
+\begin{biography}
+
+\bioauthor{新納　浩幸}{
+1985年東京工業大学理学部情報科学科卒業．
+1987年同大学大学院理工学研究科情報科学専攻修士課程修了．
+同年富士ゼロックス，翌年松下電器を経て，
+1993年4月茨城大学工学部システム工学科助手．
+1997年10月同学科講師，2001年4月同学科助教授，
+現在，茨城大学工学部情報工学科准教授．博士（工学）．
+機械学習や統計的手法による自然言語処理の研究に従事．
+言語処理学会，情報処理学会，人工知能学会 各会員．
+}
+\bioauthor{佐々木　稔}{
+1996年徳島大学工学部知能情報工学科卒業．
+\pagebreak
+2001年同大学大学院博士後期課程修了．博士（工学）．
+2001年12月茨城大学工学部情報工学科助手．
+現在，茨城大学工学部情報工学科講師．
+機械学習や統計的手法による情報検索，自然言語処理等に関する研究に従事．
+言語処理学会，情報処理学会 各会員．
+}
+
+\end{biography}
+
+\biodate
+
+
+
+\end{document}

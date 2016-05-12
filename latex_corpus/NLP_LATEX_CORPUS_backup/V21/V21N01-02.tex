@@ -1,0 +1,437 @@
+    \documentclass[english]{jnlp_1.4}
+
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+\usepackage{amsmath}
+\usepackage{algorithm}
+\usepackage{algorithmicx}
+\usepackage[noend]{algpseudocode}
+\usepackage{array}
+\usepackage{multirow}
+
+\newcommand{\LineIf}[2]{}
+\newcommand{\LineElse}[1]{}
+\newcommand{\LineIfElse}[3]{}
+
+
+
+
+
+\Volume{21}
+\Number{1}
+\Month{March}
+\Year{2014}
+
+\received{2013}{8}{30}
+\revised{2013}{11}{27}
+\accepted{2013}{12}{27}
+
+\setcounter{page}{27}
+
+\etitle{Sentence Hedge Detection without Cue Annotation: \\
+	A Heuristic Cue Selection Approach}
+\eauthor{Andr\'{e} Kenji Horie\affiref{Author_1} \and Kumiko Tanaka-Ishii\affiref{Author_2}} 
+\eabstract{
+This paper presents a simple yet effective approach to sentence-level uncertainty detection which does not require cue word annotation. Unlike previous works, the proposed method focuses on cue selection, decoupling it from disambiguation and by optimizing it over sentence hedging error rate. High performance for the task is achieved in experiments, even for settings with poor disambiguation, without cue annotation and with otherwise unreliable corpora from a machine learning point-of-view.
+}
+\ekeywords{Hedge Detection, Text Mining}
+
+\headauthor{Horie and Tanaka}
+\headtitle{Sentence Hedge Detection without Cue Annotation}
+
+\affilabel{Author_1}{}{Graduate School of Information Science and Technology, the University of Tokyo}
+\affilabel{Author_2}{}{Graduate School of Information Science and Electrical Engineering, Kyushu University}
+
+
+\begin{document}
+
+\maketitle
+
+
+\section{Introduction}
+
+The detection of uncertainty in language, also known as \emph{hedging}, has received a considerable amount of interest from the NLP community. It consists of evaluating sentence uncertainty by identifying the presence of at least one \emph{cue word}, which are words that add uncertainty meaning to the base proposition (ex.: word ``\emph{may}'' in ``\emph{he may be there}''). Hedging has thus two main concerns: disambiguating words (ex.: ``\emph{may}'' does not express uncertainty in ``\emph{you may enter}''), and determining whether a word is a cue or not.
+
+It was not until recently that hedging has been investigated in NLP. Earlier works on hedge detection task include \citeA{light04} using a hand-crafted list of cues, and \shortciteA{medlock07} and \shortciteA{szarvas08} classifying sentences based on semi-automatically collected training instances. State-of-the-art methods, such as CoNLL-2010 Shared Task \cite{farkas10} participants, use feature-rich supervised learning. For training data, both sentence-level hedging (i.e., binary value indicating whether a sentence is uncertain or not) as well as cue words are annotated. Two main approaches are observed: a two-step approach, first disambiguating and identifying cues using a classifier, then evaluating sentence uncertainty based on selected cues; and a one-step approach, directly classifying hedging at sentence-level. The two-step approach thus uses cues as the classifier target, whereas the one-step uses them as features.
+
+This work presents a simple yet effective approach to hedge identification which does not require cue annotation. It decouples disambiguation and selection into a three-step approach: (i) disambiguation; (ii) cue selection; and (iii) sentence-level uncertainty evaluation. One motivation for this approach is that by not requiring cue annotation, other modal categories aside from uncertainty (ex.: volition, obligation, etc.) might be benefitted, since they are modeled in a similar fashion \cite{palmer01,nirenburg08}. Furthermore, 63\% of the cue types in a uncertainty Wikipedia corpus presented unique occurrences \cite{morante10}, which translates into unreliable examples for the classifier in the two-step approach, and into sparsity and feature inconsistency in the one-step approach. Cue selection addresses this by actively discarding non-cues and irrelevant cues. Finally, by decoupling disambiguation and selection, it is also possible to: use any WSD system, whether state-of-the-art or less-resourceful methods based only on stem/lemma/POS; tune cue selection, minimizing sentence-level hedging error; and compare effects of different WSD methods.
+
+
+\section{Datasets and baselines for the hedging detection task}
+
+In the CoNLL-2010 ST, uncertainty detection was addressed in two domains: Biological and Wikipedia articles. For biological articles, which consist of articles from the BioScope corpus \cite{vincze08}, FlyBase \shortcite{medlock07}, BMC Bioinformatics and PubMedCentral, uncertainty is expressed by using hedge cue words. Typical cues are auxiliary verbs (\emph{may}, \emph{might}, etc.), verbs with speculative content (\emph{suggest}, \emph{indicate}, etc.), adjectives or adverbs (\emph{probable}, \emph{likely}, etc.), conjunctions (\emph{or}, \emph{either}, etc.) and others. An example is as follows:
+
+\vspace{0.5\Cvs}
+\begin{quote}
+	\emph{Mild bladder wall thickening }\textbf{raises the question of}\emph{ cystitis}.
+\end{quote}
+\vspace{0.5\Cvs}
+
+For Wikipedia articles, reliable knowledge is preferred over statements reflecting author opinions. It is therefore crucial to detect weasels, which are words that vaguely specify the source of information. Typical weasels are elements denoting uncertainty (\emph{probable}, \emph{likely}, etc.), generalization (\emph{widely}, \emph{traditionally}, etc.), obviousness (\emph{clearly}, \emph{arguably}, etc.), passive forms with dummy subjects (\emph{it is claimed}, etc.), numerically vague expressions (\emph{certain}, \emph{numerous}, etc.), among others. An example is given below. It should be noted that the mentioned expressions are not always weasels, depending on the context.
+
+\vspace{0.5\Cvs}
+\begin{quote}
+	\textbf{Some people}\emph{ claim that this results in a better taste than that of other diet colas}.
+\end{quote}
+\vspace{0.5\Cvs}
+
+\begin{table}[b]
+\caption{Baseline using a na\"{i}ve algorithm \protect\shortcite{georgescul10}}
+\label{tab:benchmark}
+\input{02table01.txt}
+\vspace{0.5\Cvs}
+\end{table}
+\begin{table}[b]
+\hangcaption{Hedge detection for the CoNLL-2010 Shared Task Biological and Wikipedia corpora \protect\shortcite{farkas10}}
+\label{tab:conll}
+\input{02table02.txt}
+\par\vspace{0.5ex}
+\small
+Features are external dictionaries (dict), orthographical information (orth), stem or lemma (lem), part-of-speech tag (pos), syntactic chunk (chnk) and constituent or dependency parse (parse). Best three systems are highlighted.
+\end{table}
+
+For task 1 of the shared task, training sentences were manually marked as uncertain if they contained at least one cue word; hedge and weasel cue words were also annotated. Evaluation was done based on precision, recall and $F_1$ measure of sentence hedging. Table \ref{tab:benchmark} shows a benchmark resulting from a na\"{i}ve algorithm that simply classifies as uncertain any sentence that contains at least one of the hedge cue expressions found in training, and Table \ref{tab:conll} shows participating systems and provides a summary on methods and results.
+
+
+
+\section{Process overview}
+\label{sec:overview}
+
+\subsection{Word sense disambiguation}
+
+Disambiguation, the first step of the sentence hedge detection process, is responsible for differentiating word senses regarding uncertainty, outputting a different string representation for each word sense. In this work, the following seven different sets of linguistic information are used:
+
+\begin{itemize}
+	\item \texttt{A}: Sentence splitter, tokenizer and stemmer (minimum requirement for processing)
+	\item \texttt{B}: Sentence splitter, tokenizer, lemmatizer and POS tagger
+	\item \texttt{C}: Disambiguation using WordNet::SenseRelate, which measures semantic relatedness between a word and its neighbors using WordNet \shortcite{pedersen09}. For every content word of a sentence, similarity and relatedness measures (ex.: WordNet path lengths augmented with information content) are calculated for all surrounding word senses, and the sense with the highest sum of scores is chosen
+	\item \texttt{D}: Disambiguation using semantic graph connectivity on the basis of the underlying knowledge base offered by BabelNet \shortcite{navigli10,navigli12}
+	\item \texttt{E}: Union of \texttt{B} and \texttt{D}, adding different levels of granularity, since some disambiguated word senses may be too granular for the task
+	\item \texttt{F}: Union of \texttt{A}, \texttt{B} and \texttt{D}, adding different levels of granularity
+	\item \texttt{G}: Subset of \texttt{F}. Words within training cue expressions are encoded using \texttt{A}, \texttt{B} and \texttt{D}; they are then combined, forming the same cue expressions as in training data, but with different encodings for each word
+\end{itemize}
+
+\begin{table}[b]
+\caption{Examples of encodings for ``\emph{is believed}'' using different linguistic information}
+\label{tab:encoding}
+\input{02table03.txt}
+\end{table}
+
+Unigrams, bigrams and trigrams are used in order to account for local context for each of the previous sets as illustrated in Table \ref{tab:encoding}, except for \texttt{G}, which uses annotated cue expressions. Encoding systems are identified by \texttt{XN} herein, where \texttt{X} is the one-character code for each set and \texttt{N} is the number of n-grams. For example, \texttt{A2} stands for bigrams using stems only.
+
+
+\subsection{Cue selection}
+
+The resulting strings from the disambiguation step are then used as input of the cue selection step in a bag-of-words approach. Since different methods can have different encoding schema (ex.: ``\emph{believe}'' may be encoded as ``\emph{believe/VB/v1}'' or ``\emph{believe/VB-bn:83369v}''), selection is compatible with any WSD tool. In addition, less resource-intensive description schema can also be used (ex.: using only lemma and POS, as in ``\emph{believe/VB}'').
+
+Cue selection is then a decision problem which retrieves the set of words whose sentence hedging $F_1$ value in training data is optimal. As a decision problem, it is necessary to traverse the infeasible $\mathcal{O}(2^{m})$ combinatorial search space of $m$ words.
+
+In addition to this concern, other task-specific considerations regarding noise, cue-bounded hedging and selection equivalence are made. Firstly, noise regards non-cue words in the cue selection task. Given the below classification of cues and non-cues based on frequency and ambiguity with qualitative evaluation of precision and recall, it is understood that noise may present higher $F_1$ value than some cue words. It is thus difficult to differentiate case \ref{itm:fn} from case \ref{itm:fac}, as well as case \ref{itm:in} from both \ref{itm:iuc} and \ref{itm:iac}.
+
+\begin{enumerate}
+	\item\label{itm:fuc} Frequent unambiguous cues: High P, medium R (ex.: \emph{suggest})
+	\item\label{itm:fac} Frequent ambiguous cues: Low P, medium R (ex.: \emph{consider})
+	\item\label{itm:iuc} Infrequent unambiguous cues: High P, low R (ex.: \emph{speculate})
+	\item\label{itm:iac} Infrequent ambiguous cues: Low P, low R (ex.: \emph{assume})
+	\item\label{itm:fn} Frequent non-cues co-occurring with cues: Medium P, high R (ex.: \emph{that})
+	\item\label{itm:in} Infrequent non-cues co-occurring with cues: Variable P, low R
+	\item\label{itm:n} Non-cues not co-occurring with cues: Zero P, zero R
+\end{enumerate}
+
+Secondly, some difficulties arise from \emph{cue-bounded hedging}, which is defined as the fact that if a word from a given sentence $s$ is already selected, any other selection will not further affect the uncertainty status of $s$. Because of this property, if non-cue words are not properly filtered, the number of false positives will increase dramatically. Additionally, considering a word $w$ and a set of words $W=\{w_1, w_2, \ldots\}$, if the selection of $w$ has higher $F_1$ than each $w_1, w_2, \ldots$ individually but lower than $W$ (true when false positives for $w_1, w_2, \ldots$  are overlapping), it is not theoretically possible to determine the global optimum in a timely manner.
+
+Finally, defining \emph{selection equivalence} as two different sets of words $W_1$ and $W_2$ which pertain to the same sentences, these sets obtain exactly the same selection and consequently same $F_1$ value. Standard selection alone is not able to address this equivalence, since the choice between $W_1$ and $W_2$ has to be based on empirical observations on data.
+
+Considering these concerns, the cue selection process is then designed as iterative selections of words. Each iteration is divided into searching a candidate cue word based on some heuristics, which addresses the combinatorial search problem, and selecting/deselecting is based on improvement of $F_1$ value (the objective function). The process is halted when there are no words whose selection/deselection can further increase $F_1$.
+
+For the heuristics, $F_1$ is also the most obvious choice. However, $F_1$ for case \ref{itm:fn} is higher than cases \ref{itm:fuc} and \ref{itm:fac}, causing noise to be selected earlier; moreover, because of selection equivalence, the algorithm may choose a set of words which leads to worse results in sentence hedging, despite having defined the deselection operation. A better approach is then to guarantee as many correct selections as possible in early steps by using $F_{\beta}$ as primary heuristic ($\beta = 0.25$ determined arbitrarily) and $F_1$ as fallback. With a larger weight to precision, frequent cues have higher confidence and are thus selected earlier. This also guarantees faster convergence. Further details on the algorithm is given in Section \ref{sec:method}, and empirical observations on its behavior in Section \ref{sec:experiments}.
+
+It should be observed that cue selection (CS) is similar to feature selection (FS) methods \shortcite{dash97,yu03,fleuret04}, especially heuristic wrappers. However, the two domains differ considerably. While FS is concerned with feature redundancy, optionally removing the less informative of correlated feature sets, CS is concerned with the task-specific selection equivalence, in which it is crucial to remove all non-cue words because of cue-bounded hedging. In addition, the only way to filter non-cues is to identify the correct cue within the same sentence, favoring a confidence-based approach over a strictly correlation-based one. Heuristic CS is also similar to decision list learning \cite{chakravarthy08,goodman02}, which determines the order that rules of a rule-based system are applied. The main difference between the two is that heuristic CS is concerned not only with the order of selection, but also with determining which words are not selected.
+
+
+
+\subsection{Sentence-level hedge detection}
+
+In the final step, selected cues are used for evaluating sentence hedging in testing data. The classification is a simple binary test, in which a sentence that contains any of the identified cue words is considered to be uncertain.
+
+
+\section{Proposed method for cue selection}
+\label{sec:method}
+
+Let a training corpus be composed of sentences $s_j \in S$, $1 \leq j \leq n$, each of which has a binary modality value $mod(s_j) \in \{0,1\}$. For the hedging detection problem, $mod(s_j)$ is equal to $1$ if $s$ is uncertain, or $0$ otherwise. Each sentence is described as a bag-of-words. Each word $w_i$, $1 \leq i \leq m=|W|$, can then be described by a sparse binary vector $\vec{u}_i$, where each $u_{ij}$ indicates whether $w_i$ exists in sentence $s_j$.
+
+Let $\mathcal{S}$ be the current state of selection, and $\mathcal{S}'$ be the set of words that are not currently selected. Let also $\Gamma : W \rightarrow \{0,1\}^{n}$ be a function that given a set of words $W$, returns a binary vector as follows:
+\begin{equation}
+ \Gamma(W) = \vec{u}_1 \lor \dots \lor \vec{u}_{|W|}
+\end{equation}
+
+The vector $\vec{u} = \Gamma(\mathcal{S})$ is then defined as a sparse binary vector whose elements indicate the sentences that are selected given current state $\mathcal{S}$.
+
+Let $\vec{u}^{+}$ be a vector indicating sentences that are annotated as uncertain in training data, let $\neg \vec{v}$ be the vector whose binary elements are equal to the negation of those in $\vec{v}$, and let $|\vec{v}|$ be a function that counts the amount of 1's in a binary vector $\vec{v}$. For any given vector $\vec{v}$, it is possible to calculate precision, recall and $F_{\beta}$ measure, as indicated below:
+\begin{gather*}
+tp(\vec{v}) = |\vec{u}^{+} \land \vec{v}| \displaybreak[2]\\
+fp(\vec{v}) = |\neg \vec{u}^{+} \land \vec{v}| \displaybreak[2]\\
+fn(\vec{v}) = |\vec{u}^{+} \land \neg \vec{v}| \displaybreak[2]\\
+P(\vec{v}) = \frac{tp(\vec{v})}{tp(\vec{v})+fp(\vec{v})} \displaybreak[2]\\
+R(\vec{v}) = \frac{tp(\vec{v})}{tp(\vec{v})+fn(\vec{v}))} \displaybreak[2]\\
+F_{\beta}(\vec{v}) = \frac{(1+\beta^2) \cdot P(\vec{v}) \cdot R(\vec{v})}{\beta^2 \cdot P(\vec{v})+R(\vec{v})}
+\end{gather*}
+
+Algorithm \ref{alg:opt} provides the proposed cue selection method. It starts with an empty selected set $\mathcal{S}$ and an unselected set $\mathcal{S}'$ containing all words (lines \ref{alg:opt:init1} to \ref{alg:opt:init2}). In each step, vectors corresponding to next states are calculated for every word (lines \ref{alg:opt:next1} to \ref{alg:opt:next2}). These vectors are used in order to determine which words should be used for updating the current state.
+
+\begin{algorithm}[!bht]
+	\caption{Cue selection\label{alg:opt}}
+	{\linespread{0.8}\selectfont
+	\begin{algorithmic}[1]
+		\Function{SelectCues}{$W=\{w_i\}$, $\{\vec{u}_i\}$, $\vec{u}^{+}$}
+			\State $Filter(W)$ \label{alg:opt:filter}
+			\State $\vec{u} \gets (0,0,\dots,0)$ \label{alg:opt:init1}
+			\State $\mathcal{S} \gets \{\}$
+			\State $\mathcal{S}' \gets W$ \label{alg:opt:init2}
+			\While{$true$}
+				\State $i_{\beta} \gets 1$, $i_{1} \gets 1$
+				\For{$i \gets 2$ \textbf{to} $m$}
+					\LineIf{$w_i \in \mathcal{S}$}{$\vec{u}_i' \gets \Gamma(\mathcal{S} - \{w_i\})$} \label{alg:opt:next1}
+					\LineElse{$\vec{u}_i' \gets \Gamma(\mathcal{S} + \{w_i\})$} \label{alg:opt:next2}
+					\LineIf{$F_{\beta}(\vec{u}_i') > F_{\beta}(\vec{u}_{i_{\beta}}')$}{$i_{\beta} \gets i$} \label{alg:opt:fbeta}
+					\LineIf{$F_{1}(\vec{u}_i') > F_{1}(\vec{u}_{i_{1}}')$}{$i_{1} \gets i$} \label{alg:opt:f1}
+				\EndFor
+				\If{$F_{1}(\vec{u}_{i_{\beta}}) > F_{1}(\vec{u})$} \label{alg:opt:update1}
+					\LineIfElse{$w_{i_{\beta}} \notin \mathcal{S}$}{$Select(w_{i_{\beta}})$}{$Unselect(w_{i_{\beta}})$}
+				\ElsIf{$F_{1}(\vec{u}_{i_{1}}) > F_{1}(\vec{u})$} \label{alg:opt:update2}
+					\LineIfElse{$w_{i_{1}} \notin \mathcal{S}$}{$Select(w_{i_{1}})$}{$Unselect(w_{i_{1}})$}
+				\EndIf
+				\LineElse{\textbf{return} $\mathcal{S}$} \label{alg:opt:return}
+				\State $\vec{u} \gets \Gamma(\mathcal{S})$
+			\EndWhile
+		\EndFunction
+	\end{algorithmic}}
+\end{algorithm}
+
+Given candidate words chosen by heuristics $F_{\beta}$ and $F_1$ (lines \ref{alg:opt:fbeta} to \ref{alg:opt:f1}), one of them is selected/deselected if and only if the operation generates a gain in the global objective $F_1$ (lines \ref{alg:opt:update1} to \ref{alg:opt:update2}). As a result, the algorithm selects the candidate word if it improves $F_1$, deselects when a previous selection was harmful to $F_1$, and stops when no operation can improve $F_1$, returning the current state (line \ref{alg:opt:return}). Input words are filtered in the beginning (line \ref{alg:opt:filter}). Words whose number of true positives are smaller than a threshold $\theta$ are excluded from the input, since the ratio of noise to cue words occurrence is too large for words with small number of true positives; this $\theta$ is obtained empirically from the training data.
+
+Some properties obtained from such approach is as follows. First, the proposed selection does not require cue annotation and is completely language independent; it is also flexible as to what can be encoded as input words. Consequently, it is independent of NLP tools and works with sentence splitter, tokenizer and stemmer at the very minimum. In addition, the time complexity of the algorithm is given by $\mathcal{O}(kmn)$, where $k$ is the number of selected words $|\mathcal{S}|$ plus twice the number of deselection operations. Since the ratio of cues in the vocabulary is small ($|\mathcal{S}| \ll m$) and deselections are rare, complexity is subquadratic in a real setting. The space complexity is $\mathcal{O}(mn)$, but this can be decreased with sparse vector implementations. Finally, the algorithm is also easily parallelizable, as each run of the inner loop (lines \ref{alg:opt:next1} to \ref{alg:opt:f1}) is independent. Different distributed nodes can therefore calculate $F_{\beta}$ and $F_1$ individually, and the controller can identify the candidate words for each iteration and update the state.
+
+
+
+\section{Experiments}
+\label{sec:experiments}
+
+\subsection{Analysis of cue selection}
+
+This section analyzes the output of cue selection before using it for sentence-level hedge evaluation, given the two previously mentioned corpora. Table \ref{tab:cues} provides some of the resulting selected cue words for different settings, from which the internal mechanism of the algorithm can be better understood. By using $F_{\beta = 0.25}$ as primary heuristics for selection, the priority is given to words with higher precision, eliminating frequent non-cues from early selections and thus avoiding selection equivalence. After some selections, the fallback heuristic is then used, since the larger weight to precision generates candidates with poorer $F_1$.
+
+\begin{table}[t]
+\caption{Cue selection output example}
+\label{tab:cues}
+\input{02table04.txt}
+\end{table}
+
+In addition, threshold value $\theta$ can be empirically obtained from training data at this stage by testing different values and analyzing the resulting selection. It is observed that although satisfactory results were obtained by filtering, it is not possible to completely isolate noise from cue words by using such simple criteria.
+
+
+\subsection{Analysis of sentence-level hedge detection}
+
+The cue words obtained from the previous step are then used for detecting uncertain sentences in testing data, with experimental results indicated in Table \ref{tab:results}. These detected sentences are compared against CoNLL-2010 ST baselines in Table \ref{tab:conll}, noticing that except for \texttt{G3}, cue annotation is not used.
+
+\begin{table}[t]
+\hangcaption{Threshold, cue selection $F_1$ on halt, hedge detection results ($P$, $R$ and $F_1$ in percentage) and selection training times (in seconds for an Intel i5, 2.3~GHz, 4~GB RAM environment)}
+\label{tab:results}
+\input{02table05.txt}
+\end{table}
+
+First and foremost, it is observed that \texttt{B2} and \texttt{F3} obtained promising results in both datasets: \texttt{B2} uses little resources (only lemmatizer and POS tagger), whereas \texttt{F3} uses WSD and combines linguistic features, which increases preprocessing and training time. When comparing to CoNLL-2010 ST participants in Table \ref{tab:conll}, the proposed method outperforms all systems for the Wikipedia weasel dataset (with \texttt{B2} obtaining +1.77 percentage points when compared against the best baseline and \texttt{G3} obtaining +3.42~pp) and ranks 8th for the Biological dataset (\texttt{B2} -1.52~pp, \texttt{F3} -1.31~pp). It is also the best overall system, if $F_1$ values for the two datasets were to be averaged (\texttt{B2} +2.68~pp). In addition, bigrams and trigrams provide much better results than unigrams for the biological corpus, although such trend is not observed for the Wikipedia dataset.
+
+Specifically for the Wikipedia corpus, it is possible to verify that the proposed less supervised method obtains higher values for annotation which is less reliable from a machine learner point-of-view. As observed by the lower F-values of the baseline, cues are more ambiguous in this dataset, whereas features are not able to properly disambiguate words such as ``\emph{some}'', ``\emph{probably}'' and ``\emph{many}'' 
+    (Table \ref{tab:cues}b). 
+This also explains why increasing the local context window with bigrams or trigrams does not present a larger difference in performance.
+
+An interesting fact is that only this work and \shortciteA{georgescul10} were able to outperform the Wikipedia na\"{i}ve baseline of 59.01\% from Table \ref{tab:benchmark}. This is likely because both systems use some sort of cue selection in order to eliminate spurious cues, which is carried in parameter tuning for the other system. Another observation is that \texttt{G3} greatly improves detection for the Wikipedia corpus (+1.65~pp compared to \texttt{B2}) by restricting considered words to annotated cues in training data, providing an extra layer for noise filtering. This suggests that more efficient filters may be able to further improve results.
+
+As for execution times, aside from the computationally expensive WSD and from \texttt{F3}, which has a large $m$ due to na\"{i}vely combining sets of linguistic information, processing is very fast because of the $\mathcal{O}(kmn)$ complexity. Running times are then compared with other systems. \shortciteA{georgescul10} used a Pentium 4, 3.2~GHz, 3~GB RAM environment and took 4 hours for parameter tuning, 19.5~s for training and 2.6~s for testing in the biological corpus, and 13~h parameter tuning, 49.1~s training and 21.5~s testing in the Wikipedia corpus. \shortciteA{morante10} used a MacOS X, 2.2~GHz, 2~GB RAM, obtaining 22.5~h when training on the Wikipedia corpus, and used an Intel Xeon, 2.8~GHz, 8~GB RAM, obtaining 10.44~s when testing on the biological corpus, in a cross domain approach. \citeA{zhao10} used an Intel Xeon, 2.0~GHz, 6~GB RAM and obtained training and testing 
+in under 8 minutes in the biological corpus.
+
+Finally, it could be observed that $F_1$ obtained in training may not be used for estimating quality of hedge detection. There does not seem to be any correlation between training and testing $F_1$. It is nevertheless an indicator that optimization alone, without empirically-driven heuristics, may not produce the best results.
+
+
+\subsection{Error analysis}
+
+There are two main sources of sentence hedging error, one of which is disambiguation. Sets \texttt{C} and \texttt{D} obtained results poorer than expected for various reasons. Aside from errors from WSD systems, some cues are not covered by usual WSD methods, such as modal verbs. Furthermore, unlike CoNLL-2010 ST systems, disambiguation methods used are not designed specifically for uncertainty; there is a trade-off between disambiguation accuracy and cue annotation requirement. Sense distribution is also an issue: if a cue sense produces a number of positive instances that is smaller than $\theta$, then the number of true positives tends to decrease as well.
+
+The other source of error is filtering. Although a very simplistic filtering criteria was used, the algorithm would benefit from a more efficient approach in order to better handle differentiation of infrequent ambiguous cues and noise, as observed in \texttt{G3}. Needless to mention, an improvement in filtering should address the sense distribution problem. Finally, it is observed most errors are caused by WSD, since filtering affects only a small number of instances. In addition, precision is affected exclusively by WSD, as filtering does not cause false positives.
+
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+This work proposed a simple cue selection algorithm which minimizes hedging error and does not require cue annotation. Experimental results showed that careful selection obtains high performance regardless of disambiguation efforts, even when using only lemmas and POS tags. It outperformed baseline systems on the Wikipedia corpus, which is less reliable from a machine learner point-of-view, and obtained the highest average $F_1$ metric overall, indicating a good method for the general case. All of these suggest an approach with high applicability, suited for other languages or modal categories.
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Chakravarthy, Joshi, Ramakrishnan, Godbole, \BBA\
+  Balakrishnan}{Chakravarthy et~al.}{2008}]{chakravarthy08}
+Chakravarthy, V., Joshi, S., Ramakrishnan, G., Godbole, S., \BBA\ Balakrishnan,
+  S. \BBOP 2008\BBCP.
+\newblock \BBOQ Learning Decision Lists with Known Rules for Text Mining.\BBCQ\
+\newblock In {\Bem Proceedings of the 3rd International Joint Conference on
+  Natural Language Processing}, \mbox{\BPGS\ 835--840}.
+
+\bibitem[\protect\BCAY{Dash \BBA\ Liu}{Dash \BBA\ Liu}{1997}]{dash97}
+Dash, M.\BBACOMMA\ \BBA\ Liu, H. \BBOP 1997\BBCP.
+\newblock \BBOQ Feature Selection for Classification.\BBCQ\
+\newblock {\Bem Intelligent Data Analysis}, {\Bbf 1}  (3), \mbox{\BPGS\
+  131--156}.
+
+\bibitem[\protect\BCAY{Farkas, Vincze, M{\'o}ra, Csirik, \BBA\ Szarvas}{Farkas
+  et~al.}{2010}]{farkas10}
+Farkas, R., Vincze, V., M{\'o}ra, G., Csirik, J., \BBA\ Szarvas, G. \BBOP
+  2010\BBCP.
+\newblock \BBOQ The {CoNLL-2010 Shared Task}: Learning to Detect Hedges and
+  their Scope in Natural Language text.\BBCQ\
+\newblock In {\Bem Proceedings of the 14th Conference on Computational Natural
+  Language Learning---Shared Task}, \mbox{\BPGS\ 1--12}. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Fleuret}{Fleuret}{2004}]{fleuret04}
+Fleuret, F. \BBOP 2004\BBCP.
+\newblock \BBOQ Fast Binary Feature Selection with Conditional Mutual
+  Information.\BBCQ\
+\newblock {\Bem The Journal of Machine Learning Research}, {\Bbf 5},
+  \mbox{\BPGS\ 1531--1555}.
+
+\bibitem[\protect\BCAY{Georgescul}{Georgescul}{2010}]{georgescul10}
+Georgescul, M. \BBOP 2010\BBCP.
+\newblock \BBOQ A Hedgehop over a Max-Margin Framework using Hedge Cues.\BBCQ\
+\newblock In {\Bem Proceedings of the 14th Conference on Computational Natural
+  Language Learning---Shared Task}, \mbox{\BPGS\ 26--31}. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Goodman}{Goodman}{2002}]{goodman02}
+Goodman, J. \BBOP 2002\BBCP.
+\newblock \BBOQ An Incremental Decision List Learner.\BBCQ\
+\newblock In {\Bem Proceedings of the 2002 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 17--24}. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Light, Qiu, \BBA\ Srinivasan}{Light
+  et~al.}{2004}]{light04}
+Light, M., Qiu, X.~Y., \BBA\ Srinivasan, P. \BBOP 2004\BBCP.
+\newblock \BBOQ The Language of Bioscience: Facts, Speculations, and Statements
+  in Between.\BBCQ\
+\newblock In {\Bem Proceedings of BioLink 2004 Workshop on Linking Biological
+  Literature, Ontologies and Databases: Tools for users}, \mbox{\BPGS\ 17--24}.
+
+\bibitem[\protect\BCAY{Medlock \BBA\ Briscoe}{Medlock \BBA\
+  Briscoe}{2007}]{medlock07}
+Medlock, B.\BBACOMMA\ \BBA\ Briscoe, T. \BBOP 2007\BBCP.
+\newblock \BBOQ Weakly Supervised Learning for Hedge Classification in
+  Scientific Literature.\BBCQ\
+\newblock In {\Bem Proceedings of the 45th Annual Meeting of the Association of
+  Computational Linguistics}, \mbox{\BPGS\ 992--999}, Prague, Czech Republic.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Morante, Van~Asch, \BBA\ \mbox{Daelemans}}{Morante
+  et~al.}{2010}]{morante10}
+Morante, R., Van~Asch, V., \BBA\ \mbox{Daelemans}, W. \BBOP 2010\BBCP.
+\newblock \BBOQ Memory-based Resolution of In-sentence Scopes of Hedge
+  Cues.\BBCQ\
+\newblock In {\Bem Proceedings of the 14th Conference on Computational Natural
+  Language Learning---Shared Task}, \mbox{\BPGS\ 40--47}. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Navigli \BBA\ Lapata}{Navigli \BBA\
+  Lapata}{2010}]{navigli10}
+Navigli, R.\BBACOMMA\ \BBA\ Lapata, M. \BBOP 2010\BBCP.
+\newblock \BBOQ An Experimental Study of Graph Connectivity for Unsupervised
+  Word Sense Disambiguation.\BBCQ\
+\newblock {\Bem IEEE Transactions on Pattern Analysis and Machine
+  Intelligence}, {\Bbf 32}  (4), \mbox{\BPGS\ 678--692}.
+
+\bibitem[\protect\BCAY{Navigli \BBA\ Ponzetto}{Navigli \BBA\
+  Ponzetto}{2012}]{navigli12}
+Navigli, R.\BBACOMMA\ \BBA\ Ponzetto, S.~P. \BBOP 2012\BBCP.
+\newblock \BBOQ Multilingual {WSD} with Just a Few Lines of code: The {BabelNet
+  API}.\BBCQ\
+\newblock In {\Bem Proceedings of the ACL 2012 System Demonstrations},
+  \mbox{\BPGS\ 67--72}. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Nirenburg, Beale, \BBA\ McShane}{Nirenburg
+  et~al.}{2008}]{nirenburg08}
+Nirenburg, S., Beale, S., \BBA\ McShane, M. \BBOP 2008\BBCP.
+\newblock \BBOQ Baseline Evaluation of WSD and Semantic Dependency in
+  OntoSem.\BBCQ\
+\newblock In {\Bem Proceedings of the 2008 Conference on Semantics in Text
+  Processing}, \mbox{\BPGS\ 315--326}. Association fo Computational
+  Linguistics.
+
+\bibitem[\protect\BCAY{Palmer}{Palmer}{2001}]{palmer01}
+Palmer, F.~R. \BBOP 2001\BBCP.
+\newblock {\Bem Mood and Modality}.
+\newblock Cambridge.
+
+\bibitem[\protect\BCAY{Pedersen \BBA\ Kolhatkar}{Pedersen \BBA\
+  Kolhatkar}{2009}]{pedersen09}
+Pedersen, T.\BBACOMMA\ \BBA\ Kolhatkar, V. \BBOP 2009\BBCP.
+\newblock \BBOQ {WordNet::SenseRelate::AllWords}: A Broad Coverage Word Sense
+  Tagger that Maximizes Semantic Relatedness.\BBCQ\
+\newblock In {\Bem Proceedings of Human Language Technologies: The 2009 Annual
+  Conference of the North American Chapter of the Association for Computational
+  Linguistics, Companion Volume: Demonstration Session}, \mbox{\BPGS\ 17--20}.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Szarvas}{Szarvas}{2008}]{szarvas08}
+Szarvas, G. \BBOP 2008\BBCP.
+\newblock \BBOQ Hedge Classification in Biomedical Texts with a Weakly
+  Supervised Selection of Keywords.\BBCQ\
+\newblock In {\Bem Proceedings of 46th Annual Meeting of the Association for
+  Computational Linguistics}, \mbox{\BPGS\ 281--289}. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Vincze, Szarvas, Farkas, M{\'o}ra, \BBA\ Csirik}{Vincze
+  et~al.}{2008}]{vincze08}
+Vincze, V., Szarvas, G., Farkas, R., M{\'o}ra, G., \BBA\ Csirik, J. \BBOP
+  2008\BBCP.
+\newblock \BBOQ The {BioScope} Corpus: Biomedical Texts Annotated for
+  Uncertainty, Negation and their Scopes.\BBCQ\
+\newblock {\Bem BMC Bioinformatics}, {\Bbf 9}  (Suppl 11), \mbox{\BPG~S9}.
+
+\bibitem[\protect\BCAY{Yu \BBA\ Liu}{Yu \BBA\ Liu}{2003}]{yu03}
+Yu, L.\BBACOMMA\ \BBA\ Liu, H. \BBOP 2003\BBCP.
+\newblock \BBOQ Feature Selection for High-Dimensional Data: A Fast
+  Correlation-Based Filter Solution.\BBCQ\
+\newblock In {\Bem Proceedings of the 20th International Conference on Machine
+  Learning}, \mbox{\BPGS\ 856--863}.
+
+\bibitem[\protect\BCAY{Zhao, Sun, Liu, \BBA\ Cheng}{Zhao et~al.}{2010}]{zhao10}
+Zhao, Q., Sun, C., Liu, B., \BBA\ Cheng, Y. \BBOP 2010\BBCP.
+\newblock \BBOQ Learning to Detect Hedges and their Scope using {CRF}.\BBCQ\
+\newblock In {\Bem Proceedings of the 14th Conference on Computational Natural
+  Language Learning---Shared Task}, \mbox{\BPGS\ 100--105}. Association for
+  Computational Linguistics.
+
+\end{thebibliography}
+
+
+\begin{biography}
+
+\bioauthor[:]{Andr\'{e} Kenji Horie}{
+He received the Computer Engineering degree from the University of S\~{a}o Paulo in 2008 and M.Sc. from the University of Tokyo in 2011. He is currently a Ph.D. candidate in the University of Tokyo. His research interests include Text Mining and Semantic Computing.
+}
+
+\bioauthor[:]{Kumiko Tanaka-Ishii}{
+She is a professor at the Graduate School and Faculty of Information Science and Electrical Engineering, Kyushu University. She worked for the Electrotechnical Laboratory for three years before becoming a faculty member of the University of Tokyo in 2000, then moved to Kyushu University in 2012. She is interested in Computational Linguistics and Natural Language Processing.
+}
+\end{biography}
+
+\biodate
+
+
+
+\end{document}

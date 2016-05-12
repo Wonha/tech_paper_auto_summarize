@@ -1,0 +1,832 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.2}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+
+\usepackage{dcolumn}
+
+\newcommand{\argmax}{}
+
+\renewenvironment{itemize}{}{}
+
+\newcolumntype{d}[1]{D{.}{.}{#1}}
+
+
+
+\Volume{17}
+\Number{1}
+\Month{January}
+\Year{2010}
+
+\received{2009}{2}{5}
+\revised{2009}{5}{12}
+\rerevised{2009}{7}{7}
+\accepted{2009}{8}{2}
+
+\setcounter{page}{29}
+
+\jtitle{候補間の表層的差異に着目した地名の所属国推定}
+\jauthor{佐野　智久\affiref{keiograd} \and 延澤　志保\affiref{tcu} \and 岡本　紘幸\affiref{keiograd} \and 鈴木　宏哉\affiref{keiograd} \and \\
+	松原　正樹\affiref{keiograd} \and 斎藤　博昭\affiref{keiograd}}
+\jabstract{
+地名等の固有名詞は自然言語処理における未知語処理問題の要因の一つであり，これを自動的に認識する手法が盛んに研究されている．
+本稿では，地名の所属国を自動的に推定することで，未知語としてノイズの原因となる可能性のある地名語句に情報を与えることを目的とする．
+固有名詞である地名の認識では地名辞書が用いられることが多いが，辞書ベースの手法では，辞書未登録語の問題が避けられない．
+不特定多数の外国の地名も含めた所属国の推定の実現のため，本稿では，地名辞書や文脈情報を全く使用せず，地名の表層情報のみを利用して，地名の所属国を自動的に判別する手法を提案する．
+地名については，言語的な類似性や地理的要因によって所属国の判別が困難な場合がある．
+本稿ではこの点に着目し，所属可能性の低い国の除去による候補の絞込み処理と，所属可能性の高い候補の選択処理との組合せによって，再現率を高く保ったまま適合率の向上を実現した．
+}
+\jkeywords{エリア推定，所属国推定，言語識別，固有名詞認識，多言語処理\\ 　　　　　}
+
+\etitle{Toponym Resolution Based on \\ Surface Difference among Candidates}
+\eauthor{Tomohisa Sano\affiref{keiograd} \and Shiho Hoshi Nobesawa\affiref{tcu} \and Hiroyuki Okamoto\affiref{keiograd} \and Hiroya Susuki\affiref{keiograd} \and Masaki Matsubara\affiref{keiograd} \and Hiroaki Saito\affiref{keiograd}}
+\eabstract{
+There have been many researches on toponym resolution as an approach to solve the unknown word problem.
+In this paper we propose an area candidate estimation method for toponyms, to assign area information to unknown toponyms.
+Our aim is to expand the target toponyms to non-restricted domains.
+Thus we aim for a simple system avoiding the use of gazeteers and context information.
+Our method is based only on surface information to estimate area candidates to where the toponyms may belong.
+Toponym resolution can be difficult because of linguistic or geographic reasons.
+Focusing on the surface difference among probable countries, we constructed a system containing a reduction phase for a rough examination and a selection phase for a detailed examination among them.
+By our effective combination of these two phases, we succeeded in gaining high precision rate maintaing high recall rate.
+}
+\ekeywords{Toponym Resolution, Language Identification, Proper Noun Recognition, Multilingual Processing}
+
+\headauthor{佐野，延澤，岡本，鈴木，松原，斎藤}
+\headtitle{候補間の表層的差異に着目した地名の所属国推定}
+
+\affilabel{keiograd}{慶應義塾大学大学院理工学研究科開放環境科学専攻}{School of Science for Open and Environmental Systems, Graduate School of Science and Technology, Keio University}
+\affilabel{tcu}{東京都市大学知識工学部情報科学科}{Department of Computer Science, Faculty of Knowledge Engineering, Tokyo City University}
+
+
+\begin{document}
+\maketitle
+
+\section{はじめに}
+\label{sec:introduction}
+
+現在では，ウェブ上の文書をはじめとして，多種多様な文書に簡単にアクセスすることができる．
+ニュースやブログの記事にはさまざまな出来事が記述され，その中には数多くの地名が含まれている．
+地名等の固有名詞は辞書未登録語であることが多く，文書の自動処理における未知語処理の問題の主因の一つとなっている．
+
+地名は，人名や組織名等の他の固有名詞と比べてその要素に変動が少なく，詳細な辞書の作成が可能という特徴がある．
+地名については，地図作成や郵便業務等のため，どの国でも詳細な辞書が存在するため，これを利用することでその地名に付随する国や場所等の属性を得ることが可能である．
+しかし，文書中に出現する地名はその文書の記述言語を母語とする国の地名であるとは限らず，ニュース文書等にあっては理論上全世界のどの地名でも現れ得る．
+そのため，地名の特定にはすべての国の詳細な地名辞書を確認する必要があることとなり，これは，効率の面からも，辞書の記述方式や記述粒度の不統一の面からも，現実的であるとはいえない．
+
+外国も含めたエリア推定を行うには， (1) 地名文字列の認識， (2) 地名文字列の国推定， (3) 地名文字列と場所との対応付け，の三段階の処理が必要である．
+例を挙げれば， (1) で ``Sparta'' という語を地名と認識し， (2) で所属国がギリシャかアメリカである可能性が高いと推定し， (3) でその文書中での ``Sparta'' がアメリカのウィスコンシン州の地名を指していることを示すとの手順である．
+このうち (1) の地名文字列の認識については固有名詞認識処理の研究が盛んに行われており，また (3) の地名文字列と場所との対応付けについては，前述の例のように複数の国に出現する可能性のある曖昧な地名を対象として，地名の辞書引きを行い文脈情報と照らし合わせて地名を特定する手法が主に研究されている．
+それに対して， (2) の地名文字列の国推定処理についてはほとんど研究されておらず，国がわからないため辞書引き対象とする辞書が特定できない場合には対応できていない．
+そこで本稿では， (3) の処理の前処理として，地名に対してその所属する国を十分に絞り込む手法を提案する．
+ここでの十分な絞込みとは，可能性のある国を三個以下に抑えることを意味する．
+``Sparta'' という地名がギリシャとアメリカの両方にあるように，複数の国に同一の地名が存在する可能性があるなど，すべての地名について国を一意に絞り込むことは必ずしも正しいとはいえない．
+所属国候補の数を三個以下まで絞り込むことができれば，最終的な地名の判別は辞書ベースで行う等，他の手法との組合せによる精度の向上の実現が期待できる．
+
+本稿では，辞書を利用できない状況を想定しているため，地名の持つ表層情報のみを処理に用いる．
+これは，言語識別タスクの一つと位置づけることが可能であるが，地名は一般に二単語程度の短い単語列であり，利用できる情報が極端に少ないことが，通常の文章を対象とした言語識別と大きく異なる点である．
+
+
+\section{地名の持つ表層情報を活用した所属国推定}
+\label{sec:area-identification-with-surface-features}
+
+これまでの地名に対するエリア推定における場所との対応付け処理は，(i) 地名辞書，(ii) 文脈情報，(iii) 地理的社会的情報，の三つの要素を組み合わせることによって問題解決を試みるアプローチが主流であった．
+このアプローチの問題点は，場所の特定を行うために必要な言語リソースをあらかじめ大量に準備しなければならないことにある．
+事前に用意した辞書から得ることができる情報を参照しながら，文書中で地名が出現する前後の文脈を考慮して地名と場所の対応付けが行われるが，複数の場所が候補としてあがる場合が多く，そのときには曖昧性の解消を行うことになる．
+機械翻訳等と同様に，このような地名の曖昧性の解消のために必要な詳細な情報を事前に用意しておく必要がある．
+また，地理的情報や社会的情報は付加的なものであり，この曖昧性解消に有効な情報を十分に収集することが困難な場合もある．
+このようなアプローチにおいては，文脈情報や付加的な情報を使うことが難しい場合には，地名辞書の中にその地名が載っているかどうかが，地名と場所の対応付けの精度を大きく決定づけることになる．
+これら三つの要素をなるべく使わずに地名と場所の対応づけを行うことができれば，少ない事前準備で，比較的簡単にエリア推定を実現することが可能となる．
+
+前述のような地名辞書や文脈情報，地理的社会的情報等を使わずに，地名の表層情報のみを用いて所属国を推定するために，Sano らは $n$-gram 情報等の地名の表層に現れる特徴に着目した分類器を用いた推定手法を提案している~\cite{tomohisa07snlp}．
+Sano らは，SVM を二値分類器として使用し，ある地名が対象国の地名であるかどうかを判定することで，所属国候補を選び出している．
+Sano らの手法は文字単位の統計情報のみを素性とするシンプルな手法であるにもかかわらず，実験の結果として最高で 0.93，最低で 0.69 の F 値を得ていることから，表層的な情報は地名の所属国推定に有用な特徴を有しているものと考えられる．
+しかし，地名文字列が所属国を特定するのに十分な情報を有していない場合には，ほとんどの国が候補として残ってしまう場合があった．
+これは，正しい所属国が候補から削除されてしまうことを避けるために適合率よりも再現率をより重視していることに起因している．
+その結果として，国によっては適合率が 55.09\% と低くなる場合があり，どんな国に対しても高い精度の推定が可能な手法の提案が課題となっていた．
+この問題を解決するためには，所属国推定の結果として候補の数が多くならないように，可能性の低い候補を見つけ出して除去する処理が必要となる．
+候補に正解を残したまま，候補の数を削減することが可能となれば，適合率を向上させることができる．
+そこで，本稿では，Sano らの手法と同様に地名が持つ表層的な情報のみを利用して，所属する可能性の高い候補の推定処理に加え，所属する可能性の低い候補の除去による絞込み処理を行うことで，再現率と適合率の双方の向上を実現する手法を提案する．
+
+
+\section{所属国推定のための表層情報}
+\label{sec:surface-features}
+
+本節では本稿で対象とする国の地名が持つ表層情報の特徴について述べる．
+ここでは，対象となる国の地名が含まれるコーパスから得られる情報を明らかにし，そこから読みとることのできる特徴を示し，表層情報を用いた所属国の推定を実現するために必要な手がかりを挙げていく．
+
+地名は一般的に，数単語から成るたかだか十数文字程度の文字列であるため，そこから得られる情報は決して多いとはいえない．
+しかし，人間には地名の所属国の推測が可能であることから，地名文字列から得られる表層的な特徴は所属国の推定を可能にする情報を有していると考えることができる．
+地名は，人名や組織名と比較して，その所属国に対する帰属性が高い．
+これは，地名そのものがその土地や言語，文化に密接に関連するものであるためである．
+つまり，ある特定の国に属する地名はある特定の特徴を共有し，それが文字列としての表層にも現れていると考えることができる．
+また，地名は文字列であるだけでなく，単語列であると捉えることも可能である．
+単語レベルの情報は，文字レベルの情報と比較して，より確度の高い情報をもたらすが，個々の単語の出現頻度が低いという点を考慮する必要がある．
+Sano らは，ブロックとよばれる単位の頻度情報を用いてこの点に対処し，単語レベルで起こりやすいデータのスパースネスの問題を解決することで，所属国の推定の精度を向上させることができたと報告している\cite{tomohisa09ieice}．
+ブロックとは，一種の語頭や語尾であり，言語的特徴が地名の先頭や末尾に現れやすいという特徴を利用したものである．
+
+本稿では，地名の集合が持つ表層的な特徴を国ごとに抽出し，これを用いて所属国の推定を行う．
+表層的な情報のみを用いて所属国を推定する場合に必要な言語リソースは地名コーパスのみである．
+地名コーパスとは，国ごとに作成した地名リストを指し，その国に属する地名の集合である．
+本稿では，外国語文書中に埋め込まれた地名の所属国推定も想定しているため，字種情報が所属国の推定に影響しないよう，国に依らずラテン文字による記述とする．
+文字レベルの特徴は，約 30 種類の文字\footnote{本稿では，表記の揺れを排除するために，ラテン文字の大文字小文字の区別は行わない．その他，空白も文字として扱う．ただし，ウムラウト等のアクセント記号やハイフン等の記号は除去する．したがって，処理の上では計 27 種類の文字を用いる．例えば，``Land Baden-W\"{u}rttemberg'' という地名は ``LAND BADEN WURTTEMBERG'' として扱い，3 単語 22 文字から成るものとする（空白も一文字と数える）．}の並び方によって決定され，統計的な言語モデルを適用することで，特徴を定量的に扱うことができる．
+さらに，地名に含まれる文字数も一つの特徴といえる．
+
+本稿の手法は，地名コーパスを単に辞書引きの対象とするのではなく，地名コーパスから国ごとの特徴を抽出して処理を行うことで，地名コーパスに含まれていない地名に対しても所属国の推定を行うことを可能にするものである．
+これは，未知語処理の頑健性，柔軟性の向上に貢献するものと考える．
+また本稿ではラテン文字を処理対象として実験を行うが，本稿のアプローチは表層的な情報のみを用いているため字種に依存せず適用可能であり，その点で高い汎用性を持っているといえる．
+さらに，本稿のアプローチは地名コーパス以外の情報を一切必要としないことから，リソース準備にかかる人的労力や作業期間を大幅に軽減するものである．
+
+
+\subsection{地名コーパス}
+\label{sec:area-name-corpora}
+
+\begin{table}[b]
+  \caption{地名コーパスに含まれる地名数，単語数，文字数}
+  \label{tab:area-name-corpora}
+\input{03table01.txt}
+\vspace{-1\baselineskip}
+\end{table}
+
+本稿では，ウェブ上で多く使用される言語とそれと類似性の高い言語の地名を中心に 10 ヶ国\footnote{本稿では，比較を行うために台湾もひとつの国として扱い，実験を行った．}（中国，台湾，日本，タイ，ギリシャ，フィンランド，ドイツ，フランス，スペイン，アメリカ）を選択し，所属国推定の対象としている（表~\ref{tab:area-name-corpora}）\kern-0.5zw\footnote{本稿の実験では，アメリカ国家地球空間情報局 (National Geospatial-Intelligence Agency: http://www.nga.mil) が提供する地理空間情報のデータベース GNS (GEOnet Names Server) のデータを使用している．ただし，GNS にはアメリカの地名が含まれていないため，アメリカの地名は，アメリカ地名委員会 (United States Board on Geographic Names: http://geonames.usgs.gov/) が提供する GNIS (Geographic Names Information System) のデータを使用している．GNS は全体としては 550 万件程度の地名データ，GNIS は 200 万件程度の地名データを有している．}．
+本稿の実験では 10 の国それぞれに対して，10,000 件ずつの地名データを無作為に抽出したものを地名コーパスとして用いている．
+コーパス全体に含まれる計 100,000 個の地名は，それぞれの国のなかではすべて異なるが，国の間での地名には重複するものがあり（表~\ref{tab:duplicated-toponyms}），全体での異なり数は 99,794 である．
+地名の重複は，言語的に近いと考えられる，中国と台湾，フランスとスペインの間で他の組合せよりも大きな数値であるが，全体としては 0.2\% 程度である．
+アメリカ以外のコーパスにも英語の単語が若干含まれており，例えば ``富士山'' はコーパス中では ``Fuji Mountain'' と記載されている．
+このような英語語句の利用は徹底されたものではなく，例えば ``浅間山'' は ``Asama yama'' と記載される等，現地の語句のラテン文字表記と英語を用いた表記とが混在している．
+
+
+\begin{table}[b]
+\vspace{-0.5\baselineskip}
+  \caption{国の間における地名の重なり数}
+  \label{tab:duplicated-toponyms}
+\input{03table02.txt}
+\end{table}
+
+
+\subsection{地名の長さ情報}
+\label{sec:name-length-data}
+
+\begin{figure}[b]
+ \begin{center}
+  \includegraphics{17-1ia3f1.eps}
+ \end{center}
+  \caption{地名コーパスに含まれる地名の文字数と単語数}
+  \label{fig:toponym-word-char-length}
+\end{figure}
+
+地名を構成する単語数や文字数は国によって違いがある．
+さらに，各単語に含まれる文字数の分布にも違いがある．
+図~\ref{fig:toponym-word-char-length} は各地名コーパスに含まれる地名の文字数と単語数の国ごとの差異を表すものである．
+一つの地名に含まれる平均単語数は，最も少ない国で 1.1 単語（フィンランド），最も多い国で 2.9 単語（タイ）であり，すべての国での平均単語数は 1.9 単語である．
+また，一つの地名に含まれる平均文字数は，最も少ない国で 9.7 文字（フィンランド），最も多い国で 16.5 単語（アメリカ）であり，すべての国での平均文字数は 11.9 文字である．
+このように，各国の地名は，地名を構成する単語数，文字数に差異が認められるが，その差異はこれだけで所属国の推定を行うには十分とはいえない．
+
+図~\ref{fig:toponym-word-length-distribution} に国ごとの地名を構成する文字数の分布を示す．
+図~\ref{fig:toponym-word-length-distribution} に示されるように，例えば，タイの地名のうち約 68\% の単語は 3 文字もしくは 4 文字で構成されている．
+また，フランスやスペインの地名は，2 文字で構成される単語の割合が他の国と比べて高い．
+それに対して，フィンランドやドイツの地名のように，9 文字や 10 文字で構成される単語が最も高い割合を示し，これらの国の地名は文字数の多い単語で構成されていることがわかる．
+
+このように，地名を構成する文字数にも，国ごとに特徴がある．
+しかし，文字数は同じ国のなかであっても地名間のばらつきがあり，この情報のみで所属国の推定を行うことは困難である．
+
+\begin{figure}[t]
+ \begin{center}
+  \includegraphics{17-1ia3f2.eps}
+ \end{center}
+  \caption{地名単語中の文字数の分布}
+  \label{fig:toponym-word-length-distribution}
+\end{figure}
+
+\subsection{文字出現頻度の情報}
+\label{sec:ngram-data}
+
+地名の所属国の推定は，言語識別の一種である．
+言語識別処理では，文字の出現頻度の情報が有効であることが知られている~\cite{dunning94,Lins04}．
+ここでは，文字の出現頻度情報の地名の所属国の推定での有効性を検証するため，国ごとの $n$-gram 情報の比較を行う．
+表~\ref{tab:ngram-data} は地名コーパス中に含まれる地名の文字単位の $n$-gram を取得した結果である．
+表中の `\texttt{\_}' は空白文字を表し，ここでは一つの文字として扱っている．
+表~\ref{tab:ngram-data} では，unigram，bigram，trigram の上位 5 つを示すとともに，各国について，10\% 以上の頻度を持つ unigram の個数，3\% 以上の頻度を持つ bigram の個数，1\% 以上の頻度を持つ trigram の個数を示している．
+
+\begin{table}[b]
+ \caption{地名コーパスの $n$-gram 情報}
+ \label{tab:ngram-data}
+\input{03table03.txt}
+\end{table}
+
+表~\ref{tab:ngram-data} から，中国と台湾の地名から得られる unigram の類似性が非常に高いことがわかる．
+この二つの国は unigram と同様に bigram の出現傾向も類似している．
+特に，`\texttt{AN}' と `\texttt{NG}' は両国で 5\% 以上の出現頻度を示しており，両国の他の bigram の出現頻度と比べても高い値である．
+これは `\texttt{ANG\_}' という文字列が両国に多く出現するためで，trigram についても `\texttt{ANG}' や `\texttt{NG\_}' の値が両方の国で高くなっている．
+しかし，両国の $n$-gram の出現状況には差異も見られる．
+このことから，各国の特徴的な $n$-gram 情報を活用することで，同じ言語グループに属する地名であっても，それらの所属国を区別することは可能と考えられる．
+
+スペインの bigram 情報の上位は `\texttt{A}' `\texttt{D}' `\texttt{E}' `\texttt{L}' `\texttt{\_}' の 5 種類の文字の組合せのみである（表~\ref{tab:ngram-data}）．
+これは，スペインのコーパスに `Montes de Leon' や `Jerez de la Frontera' 等 `\texttt{DE}' や `\texttt{LA}'，`\texttt{DEL}' といった冠詞や前置詞が多く含まれるためである．
+この傾向は，フランスの地名にも同様に現れている．
+このような冠詞や前置詞は一般に文字数が少なく，2 文字や 3 文字の場合が多い．
+この特徴は，図~\ref{fig:toponym-word-length-distribution} のフランスとスペインの地名を構成する単語数の分布にも現れている．
+
+また，表~\ref{tab:ngram-data} から，unigram の比較では日本とギリシャの出現傾向が近いことがわかる．
+しかし，bigram で比較すると両国の類似性は高いとはいえない．
+これにより，unigram のみによる所属国の推定は難しいことが推測できる．
+中国と台湾のように bigram を用いても区別が困難な場合もある．
+したがって，特定の統計情報を利用するだけでは所属国の推定には限界があり，これらを適切に組み合わせることが重要であると考えられる．
+
+地名コーパスは一般に言語資源としては小さく，trigram より大きな $n$ での $n$-gram はデータスパースネスの問題が顕著化する．
+例えば，ギリシャの場合上位 5 種類の trigram を合計しても全体の出現頻度の 4.57\% しかカバーしておらず，最も高い出現頻度を持つ `\texttt{OS\_}' でもカバー率は 1.23\% である．
+上位 5 種類の trigram がカバーする割合が最も高い中国や台湾のコーパスの場合でも，上位 5 種類の trigram の合計でそれぞれ 10.27\%，10.49\% をカバーしているにすぎない．
+なお，中国や台湾は特定の $n$-gram が特に高い頻度で出現する傾向が見られ，1\% 以上の割合を占める trigram は中国コーパスには 12 個，台湾コーパスには 11 個含まれている．
+
+$n$-gram モデルの性能を評価する一つの指標として，各国の $n$-gram モデルのそれぞれの地名コーパスに対してのパープレキシティを表~\ref{tab:perplexity} に示す．
+各国の $n$-gram モデルは，対応する国のコーパスに対して高い性能を示しており，この $n$-gram モデルが所属国を推定するための情報を有していることが分かる．
+このパープレキシティの値は，対応する国に対してだけでなく，中国と台湾やフランスとスペイン等の間でも比較的小さな値となった．
+これは，これらの国を区別することが困難であることを示し，$n$-gram のみで所属国を判断することは，所属国の推定の精度向上に限界があることが分かる．
+
+\begin{table}[t]
+  \caption{各国の $n$-gram モデルによる各国の地名に対するパープレキシティ}
+  \label{tab:perplexity}
+\input{03table04.txt}
+\end{table}
+
+
+\section{候補絞込みと候補選択の二段階処理から成る地名の所属国の推定手法}
+\label{sec:two-phase-area-identification-method}
+
+地名の所属国の推定では，(i) 同一の地名が複数の国に存在する場合，(ii) 地名文字列に類似した特徴を持つ国が複数ある場合に，地名の所属国候補を一意に絞ることができないことがある．
+前者は地名の曖昧性，後者は国の類似性と考えることができる．
+どちらの場合でも，該当する複数の国で高い所属確率を持つ地名が存在し，これらの地名に対しては該当する複数の国を候補として出力するのが妥当であり，複数の国を候補として出力することはシステムの精度を落とすものではない．
+それに対して，明らかに所属国である可能性が低い国は，出力に含まれるべきではない．
+単に複数の候補を出力するだけでは，再現率は得られても適合率は下がり，結果的にシステムの信頼性は落ちる．
+
+本稿では，再現率と適合率の双方の向上を実現するため，二段階の処理で所属国の推定を行う手法を提案する．
+本手法の処理の流れを 図~\ref{fig:system-overview} に示す．
+本手法は，所属国の候補の絞込みの第一フェーズと，所属国の候補の選択の第二フェーズの，二段階で構成されている．
+本システムの入力は地名文字列である．
+まず，各地名文字列について，所属国の候補の絞込みフェーズで全 10 ヶ国から 3 ヶ国まで候補を絞り込む．
+この段階で，明らかに所属する可能性の低い国が候補から外される．
+このフェーズでは，文字単位の $n$-gram 情報をベースとした生成確率を用いて処理を行う．
+次に，所属国の候補の選択フェーズでこの 3 ヶ国それぞれに対して所属の可能性を推定し，可能性があると推定されたものを所属国の推定結果として出力する．
+このフェーズでは，$n$-gram の他，長さ情報等も用いる．
+本システムの出力は，入力地名文字列が所属する可能性のある国であり，推定結果に応じて 0 〜 3 個の国名を出力する．
+
+\begin{figure}[t]
+ \begin{center}
+  \includegraphics{17-1ia3f3.eps}
+ \end{center}
+  \caption{提案手法の処理の流れ}
+  \label{fig:system-overview}
+\end{figure}
+
+\subsection{地名の生成確率を用いた所属国の候補絞込みフェーズ}
+\label{sec:automatic-area-identification-with-ngrams}
+
+人間による直感的な地名の所属国の推定が地名を構成する文字の並びを基にしているとすれば，\ref{sec:surface-features}~節で示したような地名に関する統計的な特徴を用いて所属国の推定をすることが可能である．
+本節では，地名の表層情報として $n$-gram のみを用いて所属国の候補の絞込みを行うフェーズについて述べる．
+
+ここでは，地名を構成する文字の並びが与えられたときに，その文字列が生成される確率が最も高くなるような統計情報を持つ国を選択することで所属国の候補の絞込みを行う．
+$n$ 個の文字で構成される地名 $ T_{1}^{n} = c_{1} \cdots c_{n} $ の国 $A$ における生成確率 $ P_A(T_{1}^{n}) $ を $n$-gram 情報を用いて定義する（式~\ref{eqn:trigram}）．
+\begin{equation}
+ P_{A}(T_{1}^{n}) = P_{A}(c_{1}) P_{A}(c_{2}|c_{1}) P_{A}(c_{3}|c_{1}c_{2}) \cdots P_{A}(c_{n}|c_{n-2}c_{n-1}) \label{eqn:trigram}
+\end{equation}
+ここで， $P_{A}(c_{n}|c_{n-2}c_{n-1})$ は国 $A$ において $c_{n-2} c_{n-1}$ の後に $c_{n}$ が出現する確率を表している．
+文字単位の $n$-gram 情報は，Modified Kneser-Ney ディスカウンティングを用いて，低次の $n$-gram 情報を補間しながら平滑化を行っている．
+このとき，ある地名 $T$ に対して，その生成確率 $P_{A}(T)$ が最大となるような国をその地名が属する国と推測し，それを $\hat{A} = \argmax_{A} P_{A}(T)$ とする．
+
+この定義により $n$-gram 情報のみを用いて $\hat{A}$ を推定した結果を表~\ref{tab:accuracy-trigram} に示す．
+所属国の絞込みフェーズの出力の上位 1 位の正解率\footnote{ここでの正解率は，生成確率が最大となった国 $\hat{A}$ と正解が一致した割合を表す．} は平均で 85.96\% であった．
+表~\ref{tab:accuracy-trigram} に示されるように，単純な $n$-gram での推定でも，約 86\% と高い正解率を得ることは可能である．
+この手法で正解率が最も高い国はタイで 95.37\%，正解率が最も低い国は中国で 72.70\% であった．
+中国と台湾の正解率が低いのは，\ref{sec:ngram-data}~節で述べた両国の $n$-gram の類似性によるものと考えられる．
+
+\begin{table}[b]
+ \caption{生成確率による所属国の推定の正解率}
+ \label{tab:accuracy-trigram}
+\input{03table05.txt}
+\end{table}
+
+地名の所属国の推定は，もともと同一の地名が複数の国に存在する可能性がある等，所属国名を唯一出力する形式は馴染まない．
+唯一の正解を判定するのではなく，所属国の候補を絞り込むことを目的とした場合，上位 $n$ 個を候補として残すことで正解を所属国の候補から不適切に除去されるのを防ぎ，再現率を高めることができる．
+図~\ref{fig:ngram-coverage} は，上位三個までを候補として残した場合の正解のカバー率（正解が出力された所属国の候補に含まれた割合）を表している．
+図~\ref{fig:ngram-coverage} の Top 1 は上位一個のみ出力した場合のカバー率，Top 2 は上位二個まで出力した場合のカバー率，Top 3 は上位三個まで出力した場合のカバー率を示す．
+全体の平均で，上位二個までを候補とした場合，95.22\% をカバーし，上位三個までを候補とした場合には，97.46\% をカバーしている．
+上位三個までを選択した場合では，個々の国についても，最低でも 96.03\%，最高で 98.38\% の再現率を達成している．
+これにより，このフェーズで所属国の候補を上位三位までに絞り込むことで，98\% 程度の再現率を得ることができることがわかる．
+
+\begin{figure}[t]
+ \begin{center}
+  \includegraphics{17-1ia3f4.eps}
+ \end{center}
+  \caption{生成確率による所属国の推定を行った場合の正解のカバー率}
+  \label{fig:ngram-coverage}
+\end{figure}
+
+出力される所属国の候補の数を増やすことは，適合率を下げるだけでなく，可能性の低い国も候補に残るリスクがあるため，各地名に対して適切な所属国の候補を必要十分な個数だけ出力する必要がある．
+上位一つの国名のみを出力した場合でも，平均 86\% 程度の正解率を得ることができるが，各地名に対する出力候補数の妥当性の判断が困難なため，98\% 程度の再現率を得るために，本フェーズではすべての地名に対して三つの所属国の候補を出力する．
+本手法では，このフェーズを二段階処理の第一フェーズとし，ここで 3 候補に絞り込んだ上で，第二フェーズである候補選択フェーズで所属国の候補それぞれに対して妥当性の検証を行う（\ref{sec:automatic-area-identification-with-svm}~節）．
+
+ここで，本フェーズによる候補の絞込みの結果が妥当かつ有効であることを示す．
+10 ヶ国の組合せは ${}_{10}C_3 = 120$ 通りであるが，図~\ref{fig:ngram-coverage} で示したとおり，正解が絞込み後の 3 候補（120 通り）に含まれる可能性はおよそ 98\% である．
+たとえば，中国と台湾が 3 候補に同時に残る場合に着目すると，この組合わせは 8 種類あるが，そのすべての組合せが 120 個中上位 8 位までに出力しており，この二つの国が同時に候補に残る可能性が高い．
+同じ東アジア地域である日本が 3 候補のなかに残る場合では，中国，台湾，日本の 3 ヶ国が候補として出力された割合は，正解が中国の場合で 10.67\%（3位），台湾の場合で 11.17\%（3位），日本の場合で 13.71\%（1位）であった．
+それに対して，中国，台湾，タイの組合せでは，正解が中国の場合では 25.87\%（1位），台湾の場合で 30.68\%（1位），タイの場合で 12.76\%（1位）の割合であり，中国，台湾，日本の組合せの場合よりも高い．
+これは，中国語圏の地名が中国，台湾，タイの 3 ヶ国に絞られる割合が高いことを示している．
+また，西ヨーロッパの国であるドイツ，フランス，スペインにアメリカを加えた 4 ヶ国が互いに候補として残る確率が高くなっている．
+この 4 ヶ国は同じ言語圏に属するものではないが，歴史的，文化的背景から，他の国と比べて類似した地名が多いものと推測できる．
+
+\begin{figure}[b]
+\vspace{-0.5\baselineskip}
+ \begin{center}
+  \includegraphics{17-1ia3f5.eps}
+ \end{center}
+  \caption{絞込み結果の分類}
+  \label{fig:ngram-output-category}
+\end{figure}
+
+ここで，同時に候補に残りやすい中国，台湾，タイの 3 ヶ国をグループ A，ドイツ，フランス，スペイン，アメリカの 4 ヶ国をグループ B，どちらにも含まれていないギリシャ，フィンランド，日本の 3 ヶ国をグループ C として，3 候補に残る国の組合わせに何らかの傾向がないかどうかを調べたものが図~\ref{fig:ngram-output-category} である．
+図~\ref{fig:ngram-output-category} では，絞込み候補の組合せを，グループ A の国が二個以上出力された場合（カテゴリ A），グループ B の国が二個以上出力された場合（カテゴリ B），グループ C の国が二個以上出力された場合（カテゴリ C），すべてのグループから 1 ヶ国ずつ出力された場合（カテゴリ D）の 4 つに分けて示している．
+「 AAB 」は，グループ A に属する国が二つとグループ B に属する国が一つから成る所属国の候補が絞込み結果として出力された地名の割合を示し，グループ A に属する国が二つ以上であることから，グループ A に偏った出力としてカテゴリ A に入れている．
+この実験では各国の地名コーパスに含まれる地名数は同じなので，絞込みが完全に成功した場合には，カテゴリ A には 30\%，カテゴリ B には 40\%，カテゴリ C には 30\% が配分されるはずである．
+実際には，カテゴリ A に 26.77\%，カテゴリ B に 46.98\%，カテゴリ C に 18.74\% が配分された．
+また，3 グループからそれぞれ 1 ヶ国ずつ候補に残るような場合（カテゴリ D）は全体の 7.51\% だけであり，それ以外は 90\% 以上の割合でどれかのグループに偏った候補が出力されていることになる．
+このことから，比較的同時に候補に残りやすい組合せの存在がわかり，本フェーズが所属国の候補の絞込み処理として妥当かつ有効であることがいえる．
+
+
+\subsection{地名の所属国選択分類器を用いた所属国の候補選択フェーズ}
+\label{sec:automatic-area-identification-with-svm}
+
+\ref{sec:automatic-area-identification-with-ngrams}~節の所属国の候補絞込みフェーズでは，文字の出現頻度情報のみを用いて，所属国の候補を 3 個まで絞り込んだ．
+本フェーズでは，絞込み処理後の候補を対象に，文字の出現頻度情報と長さ情報を素性として定義し，各国に所属する地名を学習することで，分類器を用いた所属国の選択を行う．
+分類器として用いる SVM は二値分類器であり，テストする対象となる地名がその国に属するか属さないかを判定する．
+このフェーズは，分類された結果からその地名が属する国の候補を選び出していくアプローチである．
+
+学習に用いる素性は，地名コーパスから得られる表層データ情報（\ref{sec:surface-features}~節）である．
+表層データは，大別すると，地名を構成する文字の並びの長さの情報と，文字の並びが出現する確率をベースとした $n$-gram 情報の二種類がある．
+
+地名を構成する文字の並びは，所属国によって特徴が存在する．
+素性として用いる長さ情報は，以下の 4 種類である．
+\begin{itemize}
+ \item[(FL1)] 地名を構成する単語数 
+ \item[(FL2)] 地名を構成する文字数 
+ \item[(FL3)] $n$ 番目の単語に含まれる文字数 ($1 \le n \le 16$) 
+ \item[(FL4)] 地名に含まれる $m$ 文字の単語の数 ($1 \le m \le 32$) 
+\end{itemize}
+\ref{sec:area-name-corpora} 節で述べたように，地名に含まれる文字数や単語数は国によってばらつきがあり，このばらつきが所属国を推定する手がかりとなり得る (FL1，FL2)．
+単に文字数や単語数の情報だけでなく，国ごとに単語そのものの特徴や単語の分布具合の情報も利用することができる．
+例えば，フランスの地名では ``la'' という単語が頻繁に出現するが，そのうち約半数が最初の単語として登場する．
+このように，単語によっては，その単語が出現する地名内での位置に特徴がある (FL3)．
+また，図~\ref{fig:toponym-word-length-distribution} に示したように，タイの地名は他の国の地名と比較して 3 文字および 4 文字で構成される単語の割合が圧倒的に高い等，地名に含まれる単語の文字数も国の特徴となり得る (FL4)．
+
+また，素性として用いる $n$-gram の情報は，以下の 3 種類である．
+\begin{itemize}
+ \item[(FN1)] 文字単位の unigram 情報 
+ \item[(FN2)] 文字単位の bigram 情報 
+ \item[(FN3)] 文字単位の trigram 情報 
+\end{itemize}
+$n$-gram 情報は文字単位であり，空白等の記号も一つの文字としている．
+各素性の値 $V$ は国 $A$ のコーパスの $n$-gram の出現確率をベースに計算し，次のように定義する（式~\ref{eqn:feature-value}）．
+\begin{equation}
+ V_{A}(t,c) = P_{A}(c) \times N(t,c) \label{eqn:feature-value}
+\end{equation}
+$c$ を長さ $n$ ($1 \le n \le 3$) の文字の並びとした場合，$P_{A}(c)$ は国 $A$ における文字列 $c$ が出現する確率，$N(t,c)$ は地名 $t$ の中で文字列 $c$ が出現した回数を示す．
+素性の値は，$n$-gram 情報と対象とする地名に依存しており，ある文字列のその国での出現しやすさと，その地名の中での出現しやすさを示している．
+ここでは，地名が所属する国を正例，それ以外の国を負例として，地名コーパスから各国の地名の特徴を学習した SVM を二値分類器として利用し，入力となる地名を対象国として分類するべきかどうかを判断する．
+
+対象となる $p$ 個の国の中から異なる $q$ 個の国を選び出し（${}_{p}C_{q}$ 通り），選ばれた $q$ 個の国に対して所属国であるかどうかをそれぞれの分類器によって判定する．
+本フェーズでは，選ばれた $q$ 個の組合せごとに学習対象が異なるため，一つの組合せごとに $q$ 種類の分類器を用意する．
+本稿では，全体として 10 ヶ国を対象とし，絞込み処理によって 3 候補の組合せが選び出されるため，全体では 360 種類 (${}_{p}C_{q} \times q = {}_{10}C_{3} \times 3$) の分類器を用いている．
+
+\begin{table}[b]
+ \caption{候補選択分類器による所属国の選択結果（中国，台湾，タイ）}
+ \label{tab:svm-output-chthtw}
+\input{03table06.txt}
+\end{table}
+
+表~\ref{tab:svm-output-chthtw} に，グループ A の 3 ヶ国（中国，台湾，タイ）について，この 3 ヶ国を対象に本分類器を用いて所属国の推定を行った結果を示す．
+ここでは，この 3 ヶ国の地名コーパスを 5 分割し，クロスバリデーションによる評価を行うことで，地名コーパスに存在しない地名を対象としたオープンテストとして所属国の推定の正解率\footnote{ここでの正解率は，$(pp+nn)/(pp+pn+np+nn)$ で計算する．$pp$ は正解を正しく分類できた回数，$pn$ は不正解を誤って分類した回数，$np$ は正解を誤って分類した回数，$nn$ は不正解を正しく分類した回数を表す．したがって，ここでの正解率は，ある地名に対して正解を正解と推定できたか，不正解を不正解と推定できたかの両方の結果を含んでいる．}を測った．
+グループ A に属する 3 ヶ国のみを対象として学習した場合，表~\ref{tab:svm-output-chthtw} に示したとおり，F 値は最低で 0.73，最大で 0.95 となった．
+正解が台湾の場合の適合率が 59.87\% と低いが，この場合でも再現率は 93.71\% であり，正解が候補として出力される確率は十分に高い．
+表~\ref{tab:svm-output-frgmsp} はグループ B に属する 4 ヶ国を対象として，その中から 3 ヶ国ごとに対して分類器による所属国の選択を行った結果である．
+このグループでも，F 値は最低 0.75，再現率は最低で 95.55\% で，正解が候補として出力される可能性は十分高い．
+同様に，表~\ref{tab:svm-output-figrja} はグループ C に属する 3 ヶ国を対象として分類器による所属国の選択を行った結果である．
+これらの結果から，同じグループに属する国の間での分類であっても，十分な正解率が得られることが示された．
+同じグループに属する国は他の国に比べて類似性が高いものであり，これらの間での分類が最も難しい部分となる．
+10 ヶ国全体を対象とした学習では，類似性の低いもの同士の間の差異の特徴が強調され，類似性の高いもの同士の間の差異の学習は進み辛いが，本フェーズでは絞込み後の 3 ヶ国間の分類の学習を行うことで，類似性の高い国の間での所属国の選択の精度の向上を実現した．
+
+\begin{table}[b]
+ \caption{候補選択分類器による所属国の選択結果（ドイツ，フランス，スペイン，アメリカ）}
+ \label{tab:svm-output-frgmsp}
+\input{03table07.txt}
+\end{table}
+\begin{table}[b]
+ \caption{候補選択分類器による所属国の選択結果（ギリシャ，フィンランド，日本）}
+ \label{tab:svm-output-figrja}
+\input{03table08.txt}
+\end{table}
+
+
+ここで，対象国の数による影響を調べるために，10 ヶ国全てを対象として選択分類器を用いた場合の所属国推定の結果を示し，本フェーズの所属国の選択分類器の特徴を述べる．
+表~\ref{tab:accuracy-svm} は，クロスバリデーションで 10 ヶ国すべてを対象として所属国の推定を行った結果である．
+全ての国の地名に対して 90\% 以上の正解率を示し，全体でも 93.54\% の正解率を示した．
+表~\ref{tab:fmeasure-svm} は，この実験の結果について，地名に対する所属国の候補の中に正解が含まれているか否かとの観点で集計したものである．
+すべての国について F 値は最低でも 0.7 前後であり，F 値が最大となるタイの地名に関しては 0.93 に達している．
+また，全体的に適合率よりも再現率の方が高い値を示している．
+低い適合率は不正解を誤って所属国の候補として分類するケースがあることを表している．
+
+所属国の推定タスクを考える場合，最も大きな問題は同じ言語を使用する複数の国の間での判別である．
+たとえば，中国や台湾では中国語を使用している．
+使用している言語が同一であったり類似性の高いものであったりする場合，異なる国であっても，地名を構成する文字の並びが持つ特徴は類似したものとなる．
+また，言語が異なる場合でも，地理的に近い国では，文化的，歴史的背景から，似た地名が複数現れる場合がある．
+地名コーパスから得られる特徴が類似している場合，所属国の推定は困難となるが，国によっては複数の公用語や先住民の言語が使われることによって所属国の推定するための特徴を見出せる可能性がある．
+
+\begin{table}[b]
+\hfill
+\begin{minipage}[t]{150pt}
+ \caption{所属国の選択分類器の精度}
+ \label{tab:accuracy-svm}
+\input{03table09.txt}
+\end{minipage}
+\hfill
+\begin{minipage}[t]{240pt}
+  \caption{選択分類器による国ごとの所属国候補選択の結果}
+  \label{tab:fmeasure-svm}
+\input{03table10.txt}
+\end{minipage}
+\hfill
+\end{table}
+\begin{figure}[b]
+\begin{minipage}[t]{.48\textwidth}
+  \begin{center}
+  \includegraphics{17-1ia3f6.eps}
+  \end{center}
+   \caption{中国が候補として出力された割合}
+   \label{fig:classification-ch+tw-ch}
+ \end{minipage}
+ \hfill
+ \begin{minipage}[t]{.48\textwidth}
+  \begin{center}
+  \includegraphics{17-1ia3f7.eps}
+  \end{center}
+   \caption{台湾が候補として出力された割合}
+   \label{fig:classification-ch+tw-tw}
+ \end{minipage}
+\end{figure}
+
+図~\ref{fig:classification-ch+tw-ch} と 図~\ref{fig:classification-ch+tw-tw} は，各国について選択分類器を用いて所属国の推定を行った結果として，
+中国または台湾が候補となった割合を示す．
+図~\ref{fig:classification-ch+tw-ch} と 図~\ref{fig:classification-ch+tw-tw} に示されるように，中国と台湾の地名の所属国の推定では，どちらの地名も，互いを同時に候補に残す場合が多く見られ，逆に，中国と台湾以外の国が候補に残る可能性は低い．
+
+\ref{sec:surface-features} 節で述べたように，中国の地名と台湾の地名では $n$-gram 情報で類似した特徴を持っている（表~\ref{tab:ngram-data}）が，長さの情報に違いが見られる（図~\ref{fig:toponym-word-char-length}）等，差異は存在する．
+10 ヶ国での実験結果（表~\ref{tab:fmeasure-svm}）と比較して，中国と台湾のみの地名を用いて学習を行った選択分類器を用いた場合には，再現率を高く保ったままで適合率をあげることができている（表~\ref{tab:ch-tw-9}，表~\ref{tab:ch-tw-2}）．
+表~\ref{tab:ch-tw-9} と表~\ref{tab:ch-tw-2} の比較から，生成確率を用いた所属国の候補の絞込みと，選択分類器による精度の向上の組合せによって，再現率と適合率の両方を向上させることがわかる．
+10 ヶ国で学習する場合と 2 ヶ国に絞って学習する場合では学習内容が異なり，10 ヶ国での学習の場合では本稿の第一フェーズのような絞込みの意味合いが強いのに対して，類似の 2 ヶ国に絞って学習する場合ではその 2 ヶ国間での差異が強調される．
+本稿は，第一フェーズで候補の絞込みを行った上で，第二フェーズとして絞込み後の 3 候補のみを対象として学習した選択分類器を用いて候補選択を行うことで，地名の所属国の推定の精度を向上させるものである．
+
+
+\subsection{生成確率情報と選択分類器を組み合わせた地名の所属国の推定}
+\label{sec:consideration-ngrams+svm}
+
+本稿の提案手法は，\ref{sec:automatic-area-identification-with-ngrams}~節の生成確率を用いた候補絞込み手法を第一フェーズ，\ref{sec:automatic-area-identification-with-svm}~節の選択分類器を用いた所属国の候補選択手法を第二フェーズとした二段階の処理で所属国の推定を行うものである（図~\ref{fig:system-overview}）．
+
+\begin{table}[b]
+ \begin{minipage}[t]{.45\textwidth}
+  \caption{10ヶ国で学習した場合（表~\ref{tab:fmeasure-svm} 抜粋）}
+  \label{tab:ch-tw-9}
+\input{03table11.txt}
+ \end{minipage}
+ 
+ \hfill
+ 
+ \begin{minipage}[t]{.45\textwidth}
+  \caption{2 ヶ国で学習した場合}
+  \label{tab:ch-tw-2}
+\input{03table12.txt}
+ \end{minipage}
+\end{table}
+\begin{table}[b]
+ \caption{各手法を用いた所属国の推定の結果}
+ \label{tab:result-trigram+svm}
+\input{03table13.txt}
+\end{table}
+
+
+表~\ref{tab:result-trigram+svm} に，\ref{sec:automatic-area-identification-with-ngrams}~節の 生成確率のみを用いた手法，\ref{sec:automatic-area-identification-with-svm}~節の選択分類器のみを用いた手法，その両方を組み合わせた本提案手法のそれぞれについて，所属国の推定を行った結果を示す．
+生成確率のみを用いた手法では F 値は 0.49 と低いが，その主因は適合率の低さにある．
+生成確率のみを用いた手法は再現率が高く，このことから，本手法でこの手法を処理の第一段階の絞込みフェーズとして用いたことは妥当であるといえる．
+
+生成確率と選択分類器の両方を組み合わせた本手法の F 値は 0.83 であり，選択分類器のみを用いた手法の F 値 0.74 と比べて，向上を示した．
+両者の再現率にほとんど違いがないにもかかわらず，適合率は，生成確率と選択分類器を組み合わせることで，61.58\% から 74.08\% へ向上しており，これが F 値の改善に繋がった．
+
+\begin{figure}[b]
+\vspace{-0.5\baselineskip}
+ \begin{center}
+  \includegraphics{17-1ia3f8.eps}
+ \end{center}
+  \caption{3 手法の適合率および再現率の比較}
+  \label{fig:result-trigram+svm}
+\end{figure}
+
+選択分類器のみを用いた場合には，生成確率のみの場合と比べ，再現率は若干劣る．
+生成確率を用いた手法を絞込みフェーズとして用いた後に選択分類器を選択フェーズとして実行する本手法でも，再現率は選択分類器のみの場合とほぼ同じであり，絞込みフェーズの段階で再現率が 98\% 程度に落ちることを考え合わせると，本手法の所属国の選択フェーズでの正解の脱落は十分少ないことがわかる．
+
+図~\ref{fig:result-trigram+svm} は，各国の所属国の推定結果を表している．
+生成確率と選択分類器を組み合わせた本提案手法（図中の黒丸）では，再現率が 95.03\%，適合率が 74.08\% であり，F 値 が 0.83 であった．
+生成確率のみの情報を用いた手法（図中の黒三角）では適合率が 32.49\% と低いが，再現率は 97.46\% と高くなっている．
+選択分類器のみを用いた手法（図中の黒四角）では，$n$-gram と長さの情報を用いることで適合率を 61.58\% に向上させている．
+図~\ref{fig:result-trigram+svm} では，国ごとに比較した場合でも同様の傾向が見られ，どの国に対しても効果を発揮する手法であることが期待できる．
+この結果は，正しい国を候補として残しつつも，正しくない国を候補から除去する能力を向上させたことを示している．
+
+これらのことから，複数の所属国の候補をまず可能性の高い所属国の候補のみに絞り込む第一フェーズと，絞込み後の候補のみに対象を絞って選択分類器に掛ける第二フェーズから成る本提案手法は，第一フェーズによる可能性の低い候補の除去と，第二フェーズによる類似している国の間の差異を用いた候補選択とがそれぞれ有効に働き，高い再現率を保ったまま適合率を向上させることができると結論付ける．
+
+
+\section{関連研究}
+\label{sec:related-work}
+
+言語の多様化にともなって，自動的に言語の識別を行うことの重要性が増してきている．
+その一つの背景には，ウェブの急速な成長にともなう英語以外の文書の増加がある．
+Internet World Stats による近年のウェブユーザ数の言語別集計の結果\footnote{http://www.internetworldstats.com/stats7.htm} によると，2008 年現在では，依然として英語を利用するユーザが最も多く，それに続いて，中国語，スペイン語，日本語，フランス語を利用するユーザが多い．
+2000 年からの言語別ユーザ数の増加の割合は，アラビア語，ポルトガル語，中国語，フランス語，スペイン語が大きな伸びをみせている．
+この調査結果は，用いられる言語の多様性が増していることを示しているといえる．
+また，ウェブ上の文書の内の半数以上は英語以外の言語で書かれているものであると同時に，一つの文書の中で複数の言語が使われていることもある．
+多種多様な情報元からの情報検索や質問応答，機械翻訳等，ウェブ上の膨大なデータを対象とした自動処理の実現においては，
+文書の使用言語の自動推定だけでなく，文書中に出現する固有名詞等の外国語の語句の的確な解析も，自然言語処理の応用分野における精度向上に大きな影響を与える要因となりうる．
+
+
+\subsection{統計情報を用いた言語識別に関する研究}
+\label{sec:language-identification}
+
+言語識別の研究は，文書を対象としたものに限らず，音声認識 \cite{matrouf98,berkling94} や，文書イメージを対象にしたものもある．
+Sibun らは，文書イメージから抽出された文字の形状の統計的な分布を利用して言語識別を行った\cite{Sibun94}．
+彼らは，アルファベットの文字の形状を，ベースライン，ボトム，トップ，X ハイトの情報を使って分類し，文書中の文字を Linear Discriminate Analysis (LDA) を用いて分類した．
+2,000 から 3,000 文字を含む 23 の言語の文書イメージを用いて文書を構成する言語を識別する実験を行った結果，90\% 以上の精度を達成している．
+
+Dunning は，ドイツ語の `\"u' やフランス語の `\^e' 等のアクセント記号を用いずに，5,000 バイトのトレーニングコーパスと 500 バイトのテスト用テキストを用いた言語識別の実験で 97\% の精度を実現している \cite{dunning94}．
+Dunning らは 20 バイトのテスト用テキストでも 92\% の精度での言語識別を実現し，短い文書や数単語で構成される句であっても，言語識別が可能であることを示した．
+
+Lins らは，文書中に含まれる複数の単語に対して各言語の辞書中での出現の有無を調べる手法で言語識別を行った~\cite{Lins04}．
+Lins らは言語内で比較的種類が少ないとされている副詞，冠詞，接続詞，感嘆詞，数詞，前置詞，代名詞のみを辞書引きの対象とすることで，高速かつ汎用性の高い手法を提案している．
+Lins らはこの手法を用いて，ポルトガル語，スペイン語，フランス語，英語の文書（約 1,000 単語で構成される 600 の文書）を対象とした評価実験を行い，ウェブの文書でも 80\% 以上，通常の文書では 90\% 以上の精度を達成している．
+
+Martins らは，ウェブページに特化した言語識別手法を提案した\cite{Martins05}．
+Martins らの手法は，$n$-gram（1 から 5）情報のプロファイル間の距離と，ウェブページ固有のヒューリスティクスを用いるものである．
+12 の言語で各 500 ウェブページを用いた実験では，全ての言語で 84\% 以上の正解を出したが，スウェーデン語とデンマーク語等の北欧の言語の類似性が若干の精度の低下をもたらしたことを今後の課題として挙げている．
+
+また，地名以外の固有名詞として人名に着目し統計情報を用いた所属国の推定を行う研究もある．
+Nobesawa らは，言語識別の手法を人名に対して適用することで，人名用の言語識別のためのシンプルなシステムを提案し，人名を属する国で分類することが可能であることを示した\cite{nobesawa0512paclic}．
+この手法は，人名文字列の長さや，人名の文字単位の $n$-gram の情報を活用したものであり，9 種類の言語圏の 12 の国に対して 90\% 以上の精度を実現することに成功している．
+また，Nobesawa らは，英語の人名に対して SVM の分類器を用いた手法も提案している\cite{nobesawa0605ieee}．
+
+
+\subsection{エリア推定に関する関連研究}
+\label{sec:toponym-resolution}
+
+地名のエリア推定の最終的な目標は，その地名が地球上のどの場所を示しているのかを判断することである．
+文章中の地名のエリア推定タスクは，一般に， (1) 地名文字列の認識， (2) 地名文字列の国推定， (3) 地名文字列と場所との対応付け，の三段階の処理からなる．
+(1) の地名文字列の認識は固有名詞の自動抽出タスクに相当する．
+(2) および (3) は，地名文字列と地球上の場所との対応付けを行う処理である．
+本稿ではこのうち，研究のあまり進んでいなかった (2) の所属国推定を目的とし，その実現手法を提案するものである．
+
+(3) の地名文字列と場所との対応付けの研究では，あらかじめ対象ドメインや対象言語を制限することで，(2) の所属国の推定のステップを省略することが多い．
+したがって，本稿が対象とする所属国の推定の研究は，この地名文字列と場所との対応付けの研究を助け，その精度の向上に寄与するものと考えている．
+
+本節では，関連する研究として (3) の地名文字列と場所との対応付けを行っているものについて述べる．
+これらは，対象の地名が辞書に登録されていることを前提として辞書引きによって場所の候補を探しだし，複数の場所が候補として挙がる等の曖昧性がある場合には文脈情報等を用いてその判別を行うアプローチが一般的である．
+
+Hauptmann と Olligschlaeger は，音声データを対象とした場所の判別を行う手法を提案している~\cite{Hauptmann99,Olligschlaeger99}．
+基本的には地名辞書に含まれる地名のみを対象としているが，同じ地名であっても複数の異なる場所を示す曖昧性がある場合には，同一の会話内に現れる他の地名の情報を活用することによって，その場所の相違を判断している．
+Hauptmann らの手法では，200 のニュース記事に出現した 357 の地名のうち 269 の地名を正しく判別することができ，75\% の精度を達成している．
+Hauptmann らは，正しく判別することができなかったものは，地名辞書に載っていなかったもの，曖昧性によるエラー，音声認識誤り等が原因であると報告している．
+
+また，Smith らは地名の曖昧性の解消に焦点を当て，文書中の地名の出現頻度の重心を利用した手法を提案した \cite{Smith2001}．
+これは，地名の出現頻度によって重みが付けられた地図上での重心を計算し，ある閾値よりも離れているものを枝刈りした上で重心を再度計算しなおすことで候補の曖昧性を解消しようとするものである．
+大きな地名辞書を使うことによって，再現率を高く保てるようにした上で，F 値が 0.81 から 0.96 という結果を出している．
+しかし，この手法はその重心の付近を示すだけであり，重心のみを使用しただけでは頑健性に欠ける場合があると結論づけている．
+
+地名の曖昧性を解消するための手法として，Li らは，地名表現のパターンマッチングと重み付き地名の類似度グラフの探索，サーチエンジンを用いた地名辞書の補間の三つのアプローチを組み合わせる方法を提案した \cite{Li2002}．
+地名表現のパターンマッチングでは，`city of' + ``地名''（``city of Vancouver'' 等）や ``地名1'' + `,' + ``地名2'' + `,' + ``地名3''（``Boston, Massachusetts, USA'' 等）といった地名の周辺の表現のパターンを利用している．
+Li らは大きな地名辞書と地名表現のパターンマッチングを用いることで，93.8\% の精度を実現した．
+
+Pouliquen らは，ヨーロッパのエリアに限定したマルチリンガルテキストを対象として，場所の判別の精度の向上を目指す手法を提案した~\cite{Pouliquen06}．
+この手法では，``And'', ``To'', ``Be'' 等の瀕出する単語と同形異義語であるような地名を geo-stop list として抽出し，このような地名を候補から排除することで，精度の向上を図っている．
+また，それ以外にも場所の重要度，人名との区別，地名同士の物理的な距離の情報等を用いて曖昧性の解消を行っている．
+geo-stop list に登録されている地名を候補から排除することで再現率は低下するが，F 値で 0.77 という結果を示している．
+
+Clough は，複数の地名辞書を用いた場所の判別手法を提案している \cite{Clough05}．
+複数の地名辞書を優先順位を付けて検索し，stop-list を使って，各候補に対してスコアを与えている．
+このスコアは，地名表現の周辺の出現パターン，オントロジにおける階層の深さ，地名辞書の優先順位，ユーザのプリファレンスによって計算される．
+Clough はイギリス，フランス，ドイツ，スイスを対象とした実験で 89\% の精度を達成している．
+
+Zong らは，ウェブページに対してそのページが記述しているエリアを判別する実験を行った~\cite{Zong05}．
+アメリカに関する文書のみを対象とし，地名の周辺の出現パターンと地名同士の物理的な距離を利用することで，地名が 32 個以上 199 個以下だけ含まれるウェブページを対象に 760 の地名について実験を行い 88.9\% の精度を達成している．
+
+これらの関連研究のほとんどは，文書中に出現する地名を対象としており，文脈の情報を用いて地名の場所の判別を行っている．
+これらは，その地名がどんな文脈で出現し，同時に出現するその他の地名とどんな関連があるのかといった情報を積極的に利用する方法である．
+これらの手法の大きな特徴として，地名の認識および場所の判別に地名辞書を利用していることが挙げられる．
+地名を表記するときによく用いられるパターンや会話における局所性等の自然言語処理でよく用いられるヒューリスティクスだけではなく，都市の人口数，実際の二地点間の距離等の地理的な情報を活用しているものもある．
+このような辞書ベースのアプローチは，特定のドメインを対象とした処理の場合には高い精度で場所の判別を行うことが可能である．
+このように一般的な自然言語処理のヒューリスティクスが適用可能な情報元を用い，かつ，そのドメインに出現しうる地名が変化するスピードが遅く，辞書や地理的なデータの整備を十分に行える場合には，これらの手法は十分に適用可能である．
+
+しかし，全世界のすべての地名を網羅した地名辞書を整備することは現実的でない上に，情報元の多様化のスピードがますます加速している現在では，より頑健性の高い柔軟な手法が必要と考えられる．
+Rauch らは，知らない地名であっても人間はその所属地域をある程度推測可能であるという事実を背景として，表層的な統計情報をベースとしたシステムが有効であると主張している~\cite{Rauch03aconfidence-based}．
+本稿は，Rauch らと同じ主張を共有し，具体的な実現手法を提案するものである．
+
+
+\section{おわりに}
+\label{sec:conclusion}
+
+文書中に現れる地名の所属エリア推定処理は，未知語処理の観点からも，今後さらに重要になるものと考えられる．
+地名を対象とした従来のエリア推定では，対象となる地名が辞書に登録されていることを前提とするものが多く，利用する辞書への依存度が高かった．
+有名無名に関わらずすべての地名を対象としたエリア推定処理の実現のため，
+本稿では，地名辞書や文脈情報を全く使用せず，地名の表層情報のみを活用して，地名が所属する国を自動的に推定する手法を提案した．
+本手法は，表層情報としては文字単位の $n$-gram 情報や長さの情報を使い，これらの特徴を画一的に扱った表層情報の学習と文字の出現確率を組み合わせることで，所属国の推定を実現するものである．
+本稿では，10 ヶ国を対象とした評価実験で平均 95.03\% の再現率，74.08\% の適合率を得，本手法の有効性を確認した．
+地名はたかだか十数文字程度の文字列であるため，そこから得られる情報は決して多くはないが，本手法では，候補の絞込み処理と候補選択処理とを適切に組み合わせることで，再現率を高く保ったまま適合率をあげることに成功した．
+
+同名の地名が複数の国に存在し得る等，地名の所属国には曖昧性があるが，本手法ではこれを考慮し，所属する可能性の高い国を最大 3 個までに絞り込む．
+所属国の絞込みができれば，地名辞書等の情報源や文脈情報等を活用して曖昧性の除去を行う従来研究を活用することができるようになる．
+本稿の手法は地名辞書にも載っていないような小さな場所の地名にも対応できる能力を持ち，高い頑健性をもった手法である．
+
+
+
+
+\bibliographystyle{jnlpbbl_1.4}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Berkling \BBA\ Barnard}{Berkling \BBA\
+  Barnard}{1994}]{berkling94}
+Berkling, K.~M.\BBACOMMA\ \BBA\ Barnard, E. \BBOP 1994\BBCP.
+\newblock \BBOQ Language Identification of Six Languages Based on a Common Set
+  of Broad Phonemes.\BBCQ\
+\newblock In {\Bem Proceedings of the 3rd International Conference on Spoken
+  Language Processing (ICSLP '94)}, \mbox{\BPGS\ 1891--1894}.
+
+\bibitem[\protect\BCAY{Clough}{Clough}{2005}]{Clough05}
+Clough, P. \BBOP 2005\BBCP.
+\newblock \BBOQ Extracting Metadata for Spatially-aware Information Retrieval
+  on the Internet.\BBCQ\
+\newblock In {\Bem Proceedings of the 2005 ACM Workshop on Geographic
+  Information retrieval (GIR '05)}, \mbox{\BPGS\ 25--30}.
+
+\bibitem[\protect\BCAY{Dunning}{Dunning}{1994}]{dunning94}
+Dunning, T. \BBOP 1994\BBCP.
+\newblock \BBOQ Statistical Identification of Language.\BBCQ\
+\newblock \BTR\ MCCS-94-273, Computer Research Laboratory Technical Report.
+
+\bibitem[\protect\BCAY{Hauptmann \BBA\ Olligschlaeger}{Hauptmann \BBA\
+  Olligschlaeger}{1999}]{Hauptmann99}
+Hauptmann, A.~G.\BBACOMMA\ \BBA\ Olligschlaeger, A.~M. \BBOP 1999\BBCP.
+\newblock \BBOQ Using Location Information from Speech Recognition of
+  Television News Broadcasts.\BBCQ\
+\newblock In {\Bem Proceedings of the ESCA ETRW Workshop on Accessing
+  Information in Spoken Audio}, \mbox{\BPGS\ 102--106}.
+
+\bibitem[\protect\BCAY{Li, Srihari, Niu, \BBA\ Li}{Li et~al.}{2002}]{Li2002}
+Li, H., Srihari, R.~K., Niu, C., \BBA\ Li, W. \BBOP 2002\BBCP.
+\newblock \BBOQ Location Normalization for Information Extraction.\BBCQ\
+\newblock In {\Bem Proceedings of the 19th International Conference on
+  Computational Linguistics}, \mbox{\BPGS\ 1--7}.
+
+\bibitem[\protect\BCAY{Lins \BBA\ Goncalves}{Lins \BBA\
+  Goncalves}{2004}]{Lins04}
+Lins, R.~D.\BBACOMMA\ \BBA\ Goncalves, P. \BBOP 2004\BBCP.
+\newblock \BBOQ Automatic Language Identification of Written Texts.\BBCQ\
+\newblock In {\Bem Proceedings of the 2004 ACM Symposium on Applied Computing
+  (SAC '04)}, \mbox{\BPGS\ 1128--1133}.
+
+\bibitem[\protect\BCAY{Martins \BBA\ Silva}{Martins \BBA\
+  Silva}{2005}]{Martins05}
+Martins, B.\BBACOMMA\ \BBA\ Silva, M.~J. \BBOP 2005\BBCP.
+\newblock \BBOQ Language Identification in Web Pages.\BBCQ\
+\newblock In {\Bem Proceedings of the 2005 ACM Symposium on Applied Computing
+  (SAC '05)}, \mbox{\BPGS\ 764--768}.
+
+\bibitem[\protect\BCAY{Matrouf, Adda-Decker, Lamel, \BBA\ Gauvain}{Matrouf
+  et~al.}{1998}]{matrouf98}
+Matrouf, D., Adda-Decker, M., Lamel, L.~F., \BBA\ Gauvain, J.~L. \BBOP
+  1998\BBCP.
+\newblock \BBOQ Language Identification Incorporating Lexical
+  Information.\BBCQ\
+\newblock In {\Bem Proceedings of the 5th International Conference on Spoken
+  Language Processsing (ICSLP '98)}, \mbox{\BPGS\ 181--184}.
+
+\bibitem[\protect\BCAY{Nobesawa \BBA\ Tahara}{Nobesawa \BBA\
+  Tahara}{2005}]{nobesawa0512paclic}
+Nobesawa, S.\BBACOMMA\ \BBA\ Tahara, I. \BBOP 2005\BBCP.
+\newblock \BBOQ Language Identification for Person Names Based on Statistical
+  Information.\BBCQ\
+\newblock In {\Bem Proceedings of the 19th Pacific Asia Conference on Language,
+  Information and Computation (PACLIC 19)}, \mbox{\BPGS\ 289--296}.
+
+\bibitem[\protect\BCAY{Nobesawa \BBA\ Tahara}{Nobesawa \BBA\
+  Tahara}{2006}]{nobesawa0605ieee}
+Nobesawa, S.\BBACOMMA\ \BBA\ Tahara, I. \BBOP 2006\BBCP.
+\newblock \BBOQ Area Identification of {E}nglish Person Names Based on
+  Statistical Information.\BBCQ\
+\newblock In {\Bem Proceedings of the 19th IEEE Canadian Conference on
+  Electrical and Computer Engineering (CCECE 2006)}, \mbox{\BPGS\ 1688--1691}.
+
+\bibitem[\protect\BCAY{Olligschlaeger \BBA\ Hauptmann}{Olligschlaeger \BBA\
+  Hauptmann}{1999}]{Olligschlaeger99}
+Olligschlaeger, A.~M.\BBACOMMA\ \BBA\ Hauptmann, A.~G. \BBOP 1999\BBCP.
+\newblock \BBOQ Multimodal Information Systems and GIS: the Informedia Digital
+  Video Library.\BBCQ\
+\newblock In {\Bem Proceedings of the 1999 ESRI User Conference}, \mbox{\BPGS\
+  102--106}.
+
+\bibitem[\protect\BCAY{Pouliquen, Kimler, Steinberger, Ignat, Oellinger,
+  Blackler, Fuart, Zaghouani, Widiger, Forslund, \BBA\ Best}{Pouliquen
+  et~al.}{2006}]{Pouliquen06}
+Pouliquen, B., Kimler, M., Steinberger, R., Ignat, C., Oellinger, T., Blackler,
+  K., Fuart, F., Zaghouani, W., Widiger, A., Forslund, A.-C., \BBA\ Best, C.
+  \BBOP 2006\BBCP.
+\newblock \BBOQ Geocoding Multilingual Texts: Recognition, Disambiguation and
+  Visualisation.\BBCQ\
+\newblock {\Bem {CoRR}}, {\Bbf abs/cs/0609065}, \mbox{\BPGS\ 53--58}.
+
+\bibitem[\protect\BCAY{Rauch, Bukatin, \BBA\ Baker}{Rauch
+  et~al.}{2003}]{Rauch03aconfidence-based}
+Rauch, E., Bukatin, M., \BBA\ Baker, K. \BBOP 2003\BBCP.
+\newblock \BBOQ A Confidence-based Framework for Disambiguating Geographic
+  Terms.\BBCQ\
+\newblock In {\Bem Proceedings of the HLT-NAACL 2003 Workshop on Analysis of
+  Geographic References}, \mbox{\BPGS\ 50--54}.
+
+\bibitem[\protect\BCAY{Sano, Nobesawa, Okamoto, Susuki, Matsubara, \BBA\
+  Saito}{Sano et~al.}{2009}]{tomohisa09ieice}
+Sano, T., Nobesawa, S.~H., Okamoto, H., Susuki, H., Matsubara, M., \BBA\ Saito,
+  H. \BBOP 2009\BBCP.
+\newblock \BBOQ {Robust Toponym Resolution Based on Surface Statistics}.\BBCQ\
+\newblock {\Bem {IEICE Transactions on Information and Systems}}, {\Bbf E92-D}
+  (12).
+\newblock To appear.
+
+\bibitem[\protect\BCAY{Sano, Nobesawa, \BBA\ Saito}{Sano
+  et~al.}{2007}]{tomohisa07snlp}
+Sano, T., Nobesawa, S.~H., \BBA\ Saito, H. \BBOP 2007\BBCP.
+\newblock \BBOQ Automatic Country Identification of Area Names Based on Surface
+  Features.\BBCQ\
+\newblock In {\Bem Proceedings of the 7th International Symposium on Natural
+  Language Processing (SNLP 2007)}, \mbox{\BPGS\ 13--18}.
+
+\bibitem[\protect\BCAY{Sibun \BBA\ Spitz}{Sibun \BBA\ Spitz}{1994}]{Sibun94}
+Sibun, P.\BBACOMMA\ \BBA\ Spitz, A.~L. \BBOP 1994\BBCP.
+\newblock \BBOQ Language Determination: Natural Language Processing from
+  Scanned Document Images.\BBCQ\
+\newblock In {\Bem Proceedings of the 4th Conference on Applied Natural
+  Language Processing}, \mbox{\BPGS\ 15--21}.
+
+\bibitem[\protect\BCAY{Smith \BBA\ Crane}{Smith \BBA\ Crane}{2001}]{Smith2001}
+Smith, D.~A.\BBACOMMA\ \BBA\ Crane, G. \BBOP 2001\BBCP.
+\newblock \BBOQ Disambiguating Geographic Names in a Historical Digital
+  Library.\BBCQ\
+\newblock In {\Bem Proceedings of the 5th European Conference on Research and
+  Advanced Technology for Digital Libraries (ECDL '01)}, \mbox{\BPGS\
+  127--136}.
+
+\bibitem[\protect\BCAY{Zong, Wu, Sun, Lim, \BBA\ Goh}{Zong
+  et~al.}{2005}]{Zong05}
+Zong, W., Wu, D., Sun, A., Lim, E.-P., \BBA\ Goh, D. H.-L. \BBOP 2005\BBCP.
+\newblock \BBOQ On Assigning Place Names to Geography Related Web Pages.\BBCQ\
+\newblock In {\Bem Proceedings of the 5th ACM/IEEE-CS Joint Conference on
+  Digital Libraries (JCDL '05)}, \mbox{\BPGS\ 354--362}.
+
+\end{thebibliography}
+
+
+\clearpage
+
+\begin{biography}
+\bioauthor{佐野　智久}{
+1997年慶應義塾大学大学院前期博士課程計算機科学専攻修了．現在，同大学院後期博士課程開放環境科学専攻在学中．自然言語処理に関する研究に従事．
+}
+\bioauthor{延澤　志保}{
+2002年慶應義塾大学大学院後期博士課程計算機科学専攻修了．博士（工学）．同年東京理科大学理工学部助手．現在，東京都市大学（旧武蔵工業大学）知識工学部講師．自然言語処理に関する研究に従事．言語処理学会，情報処理学会，電子情報通信学会，計量国語学会各会員．
+}
+\bioauthor{岡本　紘幸}{
+2003年慶應義塾大学大学院開放環境科学専攻前期博士課程修了．現在，岡本工業株式会社に勤務．自然言語処理，画像処理，音楽情報処理などに興味を持つ．情報処理学会，言語処理学会各会員．
+}
+\bioauthor{鈴木　宏哉}{
+2005年慶應義塾大学大学院前期博士課程開放環境科学専攻修了．現在，同大学院理工学研究科後期博士課程在学中．自然言語処理に関する研究に従事．情報処理学会，言語処理学会各会員．
+}
+\bioauthor{松原　正樹}{
+2006年慶應義塾大学大学院前期博士課程開放環境科学専攻修了．現在，同大学院理工学研究科後期博士課程在学中．音楽情報処理，認知科学に関する研究に従事．日本音響学会，日本認知科学会各会員．
+}
+\bioauthor{斎藤　博昭}{
+慶應義塾大学工学部数理工学科卒業．工学博士．現在，同大理工学部情報工学科准教授．自然言語処理，音楽情報処理などに興味を持つ．言語処理学会，日本音響学会，電子情報通信学会各会員．
+}
+\end{biography}
+
+
+
+\biodate
+
+
+
+
+
+\end{document}

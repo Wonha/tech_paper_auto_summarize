@@ -1,0 +1,1311 @@
+    \documentclass[english]{jnlp_1.4}
+
+\usepackage{jnlpbbl_1.2}
+\usepackage[dvips]{graphicx}
+\usepackage{hangcaption_jnlp}
+
+\usepackage{tabularx}
+\usepackage{supertabular}
+
+
+\Volume{17}
+\Number{3}
+\Month{April}
+\Year{2010}
+
+
+
+\received{2009}{5}{15}
+\revised{2009}{12}{9}
+\accepted{2009}{12}{16}
+
+
+\setcounter{page}{3}
+
+\etitle{Estimation of Connectivity between Paragraphs \\
+	in a Mail Text}
+\eauthor{
+Ryo Nishimura\affiref{Ryukoku}
+\and
+Yasuhiko Watanabe\affiref{Ryukoku}
+\and
+Masaki Murata\affiref{NICT}
+\and \\
+Yasuhito Oota\affiref{Ryukoku}
+\and
+Yoshihiro Okada\affiref{Ryukoku}
+} 
+\eabstract{
+In order to improve the readability, 
+we often segment a mail text into smaller paragraphs than necessary.
+However,
+this oversegmentation is a problem of mail text processing.
+It would negatively affect discourse analysis,
+information extraction,
+information retrieval,
+and so on.
+To solve this problem,
+we propose methods of estimating the connectivity between paragraphs in a mail.
+In this paper, 
+we compare paragraph connectivity estimation based on machine learning methods (SVM and ME)
+with a rule-based method and 
+show that the machine learning methods outperform the rule-based method.
+}
+\ekeywords{Mail, Oversegmenatation, Paragraph Connectivity}
+
+\headauthor{Nishimura et al.}
+\headtitle{Estimation of Connectivity between Paragraphs in a Mail Text}
+
+\affilabel{Ryukoku}{}{Department of Media Informatics, Ryukoku University}
+\affilabel{NICT}{}{The National Institute of Information and Communications Technology}
+
+
+\begin{document}
+
+\maketitle
+
+
+
+\section{Introduction}
+\label{sec:Introduction}
+
+In order to improve the readability, 
+we often segment a mail text into smaller paragraphs than necessary. 
+Figure \ref{fig:An example of a mail text which was segmented into three paragraph} shows 
+an example of a mail text 
+posted to Vine Users ML\footnote[1]{http://vinelinux.org/ml.html}.
+The mail text in
+Figure \ref{fig:An example of a mail text which was segmented into three paragraph} was 
+segmented into three paragraphs. 
+The style of this text is natural 
+because we know it is a mail text.
+However, 
+when it was not a mail text, 
+we would think that it is oversegmented.
+
+The reason why a mail text 
+like Figure \ref{fig:An example of a mail text which was segmented into three paragraph} is 
+often  oversegmented 
+is the readability.
+The readability is often more important for a mail sender and receiver
+than the proper text segmentation.
+The oversegmentation is a problem of mail text processing, 
+however, 
+the previous studies 
+had given little consideration to this problem
+\cite{thesis:watanabe2008}
+\cite{thesis:hasegawa2004}
+\cite{report:lam2002}
+\cite{report:okumura2002}.
+For example, 
+Okumura et al. proposed a method of picking up the main point of a mail text
+by detecting important paragraph \cite{report:okumura2002}.
+However, 
+they did not consider the oversegmentation 
+which could reduce the accuracy of important paragraph detection.
+On the other hand, 
+a considerable number of studies have been made on text segmentation.
+These text segmentation methods
+were applied to unformatted texts and 
+the results were used in 
+discourse analysis, automatic summarization, and so on 
+\cite{thesis:genzel2005}
+\cite{proc:utiyama2001}
+\cite{proc:matsui2004}
+\cite{thesis:hearst1997}.
+These studies aimed to 
+identify and isolate topics by text segmentation 
+because identification and isolation of coherent topics are important for 
+information retrieval, summarization, and so on.
+For example, 
+in information retrieval, 
+users are often interested in particular topics of retrieved documents, 
+in stead of the documents themselves.
+To meet such needs, 
+documents should be segmented into coherent topics.
+However, 
+these studies also had given little consideration to the oversegmentation 
+although coherent topics are often split into pieces.
+As a result, 
+existing techniques for 
+text segmentation, 
+information extraction, 
+and information retrieval, and so on, 
+are not applicable or 
+work poorly to oversegmented mail texts.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{17-3ia1f1.eps}
+\end{center}
+\caption{An example of a mail text which was segmented into three paragraphs.}
+\label{fig:An example of a mail text which was segmented into three paragraph}
+\vspace{1\baselineskip}
+\end{figure}
+
+To solve this problem,
+we propose 
+a method of estimating the connectivity between paragraphs in a mail text. 
+In this study, 
+we assume that 
+the connectivity between oversegmented paragraphs is strong.
+If strong connectivity between paragraphs is found, 
+these paragraphs 
+might be oversegmented and can be united.
+In other words,
+after the preprocessing based on our method is performed, 
+existing techniques 
+can be applied to mail texts.
+In this paper, 
+we first show the investigation of paragraph segmentation in mail texts. 
+We observed mails posted to a mailing list 
+where participants exchanged several kinds of question and answer mails.
+These kinds of mails are available on the Internet and 
+expected to be used for information retrieval and question answering systems.
+Oversegmentation in these mails could negatively affect 
+the accuracy of these systems.
+Then, 
+we propose 
+machine learning methods and a rule-based method 
+of estimating the connectivity between paragraphs in a mail text, 
+and compare the results of them.
+Furthermore, 
+we compare our methods with a text segmentation method and
+show the effectiveness of our methods.
+
+
+
+
+
+\section{Clues to paragraph connectivity estimation in a mail text}
+\label{sec:Clues to paragraph connectivity estimation in a mail text}
+
+There are mailing lists to which question and answer mails are posted frequently. 
+For example, in Vine Users ML, 
+several kinds of question and answer mails are posted by participants 
+who are interested in Vine Linux.
+These mails are available on the Internet and 
+expected to be used for information retrieval and question answering systems.
+Oversegmentation in these mails could negatively affect the accuracy of these systems.
+In this study, 
+we used question mails posted to Vine Users ML
+for the investigation of paragraph segmentation in mail texts.
+We observed how a mail text was oversegmented and 
+what kinds of clues were useful 
+for estimating the connectivity between paragraphs in a mail text.
+In the investigation, 
+we used a criterion for oversegmentation:
+adjacent paragraphs are oversegmented
+when they deal with the same topic. 
+In other words, 
+the connectivity between these adjacent paragraphs is strong.
+In contrast, 
+adjacent paragraphs are not oversegmented
+when they deal with different topics.
+In other words, 
+the connectivity between these adjacent paragraphs is weak.
+If there is a discrepancy of judgment between us, 
+we tried to make decisions by discussions.
+In the investigation, 
+we observed 200 question mails posted to Vine Users ML.
+These 200 mails included 167 paragraph boundaries
+which were adjacent to significant sentences.
+Of the 167 paragraph boundaries, 
+we found that 101 cases 
+where the oversegmentation occurred and 
+the paragraph connectivity was strong. 
+A \textit{significant sentence} is the most important sentence in a mail text
+and the key to 
+discourse analysis, information extraction, information retrieval, and so on 
+\cite{thesis:watanabe2008}.
+We extracted significant sentences of these mails 
+as \cite{thesis:watanabe2008} did.
+Furthermore, 
+we found 
+the following clues 
+which we used for estimating the connectivity between paragraphs in a mail text.
+\begin{enumerate}
+ \item standard expressions in an introductory part.   
+       
+ \item conjunctions,                    
+ \item reference terms,                 
+ \item technical terms, and             
+\end{enumerate}
+
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{17-3ia1f2.eps}
+\end{center}
+ \caption{Examples of standard expressions in an introductory part.}
+ \label{fig:Examples of standard expressions in an introductory part}
+\end{figure}
+\begin{figure}[b]
+\begin{center}
+\includegraphics{17-3ia1f3.eps}
+\end{center}
+\hangcaption{A weak connectivity case:
+salutation word ``\textit{hajimemashite} (hello)'' is found 
+at the last sentence of a paragraph.
+It implies the weak connectivity between the paragraph and the following one.
+The original sender's name is replaced with \textit{watanabe} 
+for the personal information protection.}
+\label{fig:a weak connectivity case:salution word}
+\end{figure}
+
+\subsection{Standard expressions in an introductory part}
+\label{subsec:Standard expressions in an introductory part}
+
+Figure \ref{fig:Examples of standard expressions in an introductory part} shows 
+standard expressions in an introductory part: 
+salutation, self-introduction, introductory remark, and so on.
+These expressions are often found in the first paragraph of mail texts and
+good clues as to the paragraph connectivity estimation.
+When one of these expressions is found at the last sentence of a paragraph, 
+the paragraph would deal with anything other than question
+and the connectivity to the next paragraph would be weak.
+In Figure \ref{fig:a weak connectivity case:salution word}, 
+salutation word ``\textit{hajimemashite} (hello)'' is found 
+at the last sentence of the first paragraph.
+In this case, 
+we determined that 
+the connectivity between the first and second paragraph was weak and 
+this text was segmented properly.
+
+
+
+
+\begin{figure}[p]
+\begin{center}
+\includegraphics{17-3ia1f4.eps}
+\end{center}
+\hangcaption{A strong connectivity case:
+ conjunction ``\textit{shikashi} (however)'' is found 
+ at the head of the first sentence in the second paragraph.
+ It implies the strong connectivity 
+ between the first and second paragraph.}
+\label{fig:An example of conjunction shikashi (however)}
+\end{figure}
+\begin{figure}[p]
+\begin{center}
+\includegraphics{17-3ia1f5.eps}
+\end{center}
+\hangcaption{Examples of clue conjunctions.
+ When one of the conjunctions is
+ found at the head of the first sentence in a paragraph,
+ it implies the strong connectivity
+ between the paragraph and the preceding one.}
+ \label{fig:examples of conjunctions at the head of the first sentence}
+\end{figure}
+
+
+
+\subsection{Conjunctions} 
+\label{subsec:Conjunctions} 
+
+We found that 
+a conjunction at the head of the first sentence in a paragraph is 
+a good clue as to paragraph connectivity estimation.
+We take two conjunctions 
+``\textit{shikashi} (however)'' and ``\textit{tokorode} (by the way)'' for example.
+
+When conjunction ``\textit{shikashi} (however)'' is found 
+at the head of the first sentence in a paragraph, 
+the connectivity between the paragraph and the preceding one would be strong.
+In Figure \ref{fig:An example of conjunction shikashi (however)}, 
+``\textit{shikashi} (however)'' is found 
+at the head of the first sentence in the second paragraph.
+In this case, 
+we determined that 
+the connectivity between the first and second paragraph was strong and 
+this text was oversegmented.
+Figure \ref{fig:examples of conjunctions at the head of the first sentence} shows 
+examples of conjunctions
+which are good clues to detecting the strong connectivity 
+between paragraphs in mail texts.
+
+When conjunction ``\textit{tokorode} (by the way)'' is found 
+at the head of the first sentence in a paragraph, 
+the connectivity between the paragraph and the preceding one would be weak.
+In Figure \ref{fig:An example of conjunction tokorode (by the way)}, 
+``\textit{tokorode} (by the way)'' is found 
+at the head of the first sentence in the second paragraph.
+In this case, 
+we determined that 
+the connectivity between the first and second paragraph was weak and 
+this text was segmented properly.
+
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{17-3ia1f6.eps}
+\end{center}
+\hangcaption{A weak connectivity case:
+ conjunction ``\textit{tokorode} (by the way)'' is found 
+ at the head of the first sentence in a paragraph.
+ It implies the weak connectivity between the paragraph and the preceding one.}
+\label{fig:An example of conjunction tokorode (by the way)}
+\end{figure}
+\begin{figure}[b]
+\begin{center}
+\includegraphics{17-3ia1f7.eps}
+\end{center}
+\hangcaption{A strong connectivity case:
+ reference term ``\textit{kore} (this)'' is found 
+ at the head of the first sentence in a paragraph.
+ It implies the strong connectivity between the paragraph and the preceding one.}
+\label{fig:An example of reference term kore (this)}
+\end{figure}
+
+
+
+
+\subsection{Reference terms}   
+\label{subsec:Reference terms}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{17-3ia1f8.eps}
+\end{center}
+ \hangcaption{Examples of clue reference terms.
+ The reference terms are good clues to detecting 
+ the strong connectivity between paragraphs.}
+ \label{fig:examples of clue reference terms}
+\end{figure}
+
+
+We found that 
+a reference term is
+a good clue as to the paragraph connectivity estimation.
+When reference terms 
+``\textit{koko} (this)'' or ``\textit{soko} (that)'' is found 
+at the head of the first sentence in a paragraph, 
+the connectivity between the paragraph and the preceding one would be strong.
+In Figure \ref{fig:An example of reference term kore (this)}, 
+reference term ``\textit{kore} (this)'' is found 
+at the head of the first sentence in the second paragraph.
+In this case, 
+we determined that 
+the connectivity between the first and second paragraph was strong and 
+this text was oversegmented.
+Furthermore, 
+when reference term
+``\textit{ijyou} (above)'' is found in the first sentence in a paragraph, 
+the connectivity between the paragraph and the preceding one would be strong.
+In contrast, 
+when reference term 
+``\textit{ika} (below)'' is found in the last sentence in a paragraph, 
+the connectivity between the paragraph and the following one would be strong.
+Figure \ref{fig:examples of clue reference terms} shows 
+examples of reference terms 
+which are good clues to detecting the strong connectivity 
+between paragraphs in mail texts. 
+
+
+
+\subsection{Technical terms}
+\label{subsec:Technical terms}
+
+
+We found that 
+\pagebreak
+a technical term is a good clue for the paragraph connectivity estimation.
+When the same technical term is found 
+in the last sentence in a paragraph and  
+the first sentence in the following paragraph,  
+the connectivity between those paragraphs would be strong.
+In Figure \ref{fig:a strong connectity case:the same technical terms}, 
+technical term ``\textit{upgrade}'' is found 
+in the last sentence of the first paragraph and 
+the first sentence of the second paragraph.
+Also, 
+``\textit{install}'' is found 
+in the last sentence of the second paragraph and 
+the first sentence of the third paragraph.
+In this case, 
+we determined that the connectivity between 
+\begin{itemize}
+ \item the first and second paragraph, and 
+ \item the second and third paragraph 
+\end{itemize}
+were strong and 
+this text was oversegmented.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{17-3ia1f9.eps}
+\end{center}
+\hangcaption{A strong connectivity case:
+the same technical terms (``\textit{upgrade}'' and ``\textit{install}'')
+are found in the last sentence in a paragraph and  
+the first sentence in the following paragraph.
+They imply the strong connectivity between the paragraph and the following one.}
+\label{fig:a strong connectity case:the same technical terms}
+\end{figure}
+
+By the way, 
+there are many ways to distinguish technical terms from general terms.
+In this study, 
+terms which are undefined in the morphological analysis dictionaries
+were determined as technical terms.
+This is because 
+general terms are mainly registered in the dictionaries.
+
+
+
+
+
+\section{Paragraph connectivity estimation using a rule-based method}
+\label{sec:Paragraph connectivity estimation using a rule-based method}
+
+In this study, 
+we aim to compare paragraph connectivity estimation 
+using machine learning methods 
+with a rule-based method.
+In this section,
+we first propose a rule-based method of paragraph connectivity estimation.
+The rules of this method were based on clue expressions described 
+in Section \ref{sec:Clues to paragraph connectivity estimation in a mail text}.
+Then, 
+we show the experimental results of this method and 
+examine which rule was effective.
+The experimental results of this method will be compared with 
+those of machine learning methods 
+in Section \ref{sec:Paragraph connectivity estimation using machine learning methods}.
+
+
+
+\subsection{Rules of paragraph connectivity estimation}
+\label{subsec:Rules of paragraph connectivity estimation}
+
+Suppose that 
+paragraph $A$ is adjacent to and precedes paragraph $B$ in a mail text.
+The connectivity between paragraph $A$ and $B$ is estimated in the next way.
+\begin{description}
+ \item[Step 0] [preprocessing]
+
+	    paragraph $A$ and $B$ were segmented into sentences 
+	    by using punctuation marks, 
+	    and the sentences were segmented into words   
+	    by using a Japanese morphological analyzer, JUMAN \cite{man:juman05}.
+	    Paragraph boundaries were detected by using blank lines.	    
+
+ \item[Step 1] [rule based on standard expressions in an introductory part]
+
+	    estimate the connectivity between paragraph $A$ and $B$ as weak
+	    and terminate the estimation process
+	    when one of the standard expressions in an introductory part 
+	    described in 
+	    Figure \ref{fig:Examples of standard expressions in an introductory part}
+	    is found in the last sentence of paragraph $A$. 
+
+ \item[Step 2] [rule based on conjunctions]
+
+	    estimate the connectivity between paragraph $A$ and $B$ as 
+	    \begin{itemize}
+	     \item strong 
+		   and terminate the estimation process
+		   when one of the conjunctions in 
+		   Figure \ref{fig:examples of conjunctions at the head of the first sentence} is
+		   found at the head of the first sentence of paragraph $B$, or 
+		   
+	     \item weak 
+		   and terminate the estimation process
+		   when ``\textit{tokorode} (by the way)'' or ``\textit{sate} (by the way)'' 
+		   is found at the head of the first sentence of paragraph $B$. 
+		   
+	    \end{itemize}
+
+
+ \item[Step 3] [rule based on reference terms]
+
+	    estimate the connectivity between paragraph $A$ and $B$ as strong
+	    and terminate the estimation process
+	    when 
+	    \begin{itemize}
+	     \item one of the reference terms 
+		   in Figure \ref{fig:examples of clue reference terms} (a)
+		   is found in the first sentence of paragraph $B$, 
+
+	     \item one of the reference terms 
+		   in Figure \ref{fig:examples of clue reference terms} (b)
+		   is found in paragraph $B$, or
+
+	     \item one of the reference terms 
+		   in Figure \ref{fig:examples of clue reference terms} (c)
+		   is found in the last sentence of paragraph $A$.
+	    \end{itemize}
+
+ \item[Step 4] [rule based on undefined (technical) terms]
+	    
+	    estimate the connectivity between paragraph $A$ and $B$ as strong
+	    and terminate the estimation process
+	    when the same undefined term is found in 
+	    the last sentence of paragraph $A$ and 
+	    the first sentence of paragraph $B$.
+	    In this study, 
+	    an \textit{undefined term} means an undefined term 
+	    in the morphological analysis dictionaries.
+	    This rule is based on the assumption:
+	    general terms are mainly defined in the dictionaries and 
+	    technical terms are not.
+
+ \item[Step 5] [postprocess]
+
+	    Estimate the connectivity between paragraph $A$ and $B$ as weak
+	    when the connectivity between paragraph $A$ and $B$
+	    could not be estimated in Step 1, 2, 3, and 4.
+	    Then, terminate the estimation process.
+	    
+
+\end{description}
+
+
+
+We determined the priority of these rules are as follows:
+In the investigation described 
+in section \ref{sec:Clues to paragraph connectivity estimation in a mail text}, 
+we found that it was easier to find weak connectivities between paragraphs
+than strong ones.
+Also, 
+the discrepancy of judgment between us occurred less frequently 
+on weak connectivities than strong ones.
+As a result, 
+we thought, 
+it was easier and more reliable to 
+find weak connectivities between paragraphs by using the rules of Step 1 and 2 than 
+strong ones by using those of Step 3 and 4.
+This is the reason why 
+we gave priority to the rules of Step 1 and 2  over those of Step 3 and 4.
+Furthermore, 
+we gave priority to the rule of Step 1 over Step 2 
+because not only weak connectivities but strong ones are detected by the rule of Step 2.
+Also, 
+we gave priority to the rule of Step 3 over Step 4 
+because we considered the accuracy of undefined (technical) term detection in Step 4.
+
+
+
+
+\subsection{Experimental results of a rule-based method}
+\label{subsec:Experimental results of a rule-based method}
+
+
+In order to investigate the effectiveness of our rule-based method 
+described in Section \ref{subsec:Rules of paragraph connectivity estimation}, 
+we conducted the following two experiments:
+\begin{description}
+ \item[Exp. 1] paragraph connectivity estimation 
+	    at all the paragraph boundaries in each mail text, and 
+	    
+ \item[Exp. 2] paragraph connectivity estimation 
+	    at the paragraph boundary
+	    which is adjacent to the significant sentence in each mail text.
+\end{description}
+As mentioned in 
+section \ref{sec:Clues to paragraph connectivity estimation in a mail text}, 
+a significant sentence is the most important sentence in a mail text
+\cite{thesis:watanabe2008}. 
+It is the key to 
+discourse analysis, information extraction, information retrieval, and so on. 
+As a result, 
+paragraph boundaries which are caused by the oversegmentation 
+and adjacent to significant sentences
+would negatively affect these analyses.
+This is the reason why we conducted Exp. 2.
+\textit{A paragraph boundary is adjacent to a significant sentence} means that 
+the last sentence of the preceding paragraph of the boundary or 
+the first sentence of the following paragraph is a significant sentence.
+Significant sentences can be extracted 
+by using human crafted rules based on clue expressions \cite{thesis:watanabe2008}.
+
+
+
+In the experiments, 
+we used 300 question mails which were posted to Vine Users ML.
+These 300 mails did not share any mails with the 200 mails 
+used for the observation 
+in section \ref{sec:Clues to paragraph connectivity estimation in a mail text}.
+They included  
+3,605 sentences and 
+1,723 paragraph boundaries.
+Of the 1,723 paragraph boundaries, 
+we found 
+1,166 cases where the oversegmentation occurred and 
+the paragraph connectivity was strong. 
+Furthermore, 
+these 300 mails included  
+282 paragraph boundaries which were adjacent to significant sentences.
+Of the 282 paragraph boundaries, 
+we found 
+176 cases where the oversegmentation occurred and 
+the paragraph connectivity was strong. 
+In the experiments, 
+as an evaluation measure for paragraph connectivity estimation, 
+we used precision, recall, and F-measure of
+detecting paragraph boundaries with strong connectivity.
+This is because 
+the strong connectivity detection, 
+in other words,
+the detection of the oversegmentation in a mail text is 
+useful in mail text processing, 
+such as discourse analysis, information extraction, and information retrieval on mail texts. 
+To calculate the accuracy, 
+correct paragraph connectivity at the paragraph boundaries was
+manually tagged in the preparation of the experiments.
+If there is a discrepancy of judgment between subjects, 
+they tried to make decisions by discussions.
+
+
+\begin{table}[b]
+ \hangcaption{The accuracy of detecting the paragraph boundaries with strong connectivity
+ by using a rule-based method.}
+ \label{tab:(rule-based):The accuracy of detecting strong connectivity}
+\input{01table01.txt}
+\end{table}
+
+
+Table \ref{tab:(rule-based):The accuracy of detecting strong connectivity} shows 
+the results of Exp. 1 and 2.
+Furthermore, 
+Table \ref{tab:(rule-based):Effectiveness of each rule} (a) and (b) shows 
+which rule was effective in Exp. 1 and 2, respectively.
+In Table \ref{tab:(rule-based):Effectiveness of each rule} (a) and (b), 
+S and W mean strong and weak connectivity, respectively.
+Also, 
+S/W means that the connectivity was estimated as weak by our system 
+while it was estimated as strong by human subjects.
+Table \ref{tab:(rule-based):The accuracy of detecting strong connectivity} shows that, 
+in Exp. 1, 395 cases were properly estimated as strong.
+Of the 395 cases, 
+Table \ref{tab:(rule-based):Effectiveness of each rule} (a) shows  
+72, 83, and 240 cases were estimated properly 
+at Step 2 (rule based on conjunctions), 
+Step 3 (rule based on reference terms), and 
+Step 4 (rule based on undefined (technical) terms), respectively.
+Also, 
+Table \ref{tab:(rule-based):Effectiveness of each rule} (a) shows that 
+80 cases were properly estimated as weak 
+at Step 1 (rule based on standard expressions in an introductory part), 
+however, 
+11 cases were not.
+As shown in Table \ref{tab:(rule-based):Effectiveness of each rule} (a) and (b), 
+the rule based on standard expressions in an introductory part (Step 1) is 
+more effective in Exp. 2 than Exp. 1.
+This is because, we think,  
+a significant sentence is often described near the head of a mail text, 
+especially, just after the introductory part.
+Also, 
+the rule based on undefined (technical) terms (Step 4) is effective in Exp. 1 and 2.
+However, we think,  
+this rule is less effective in other documents.
+This is because 
+mails posted to Vine Users ML include more technical terms 
+than other documents.
+
+\begin{table}[t]
+\hangcaption{Effectiveness of each rule in the paragraph connectivity estimation. 
+ In this Table, 
+ S and W mean strong and weak connectivity, respectively.
+ Also, 
+ S/W means that the connectivity was estimated as weak by the system 
+ while it was estimated as strong by human subjects.}
+\label{tab:(rule-based):Effectiveness of each rule}
+\input{01table02.txt}
+\end{table}
+
+
+
+
+
+\section{Paragraph connectivity estimation using machine learning methods}
+\label{sec:Paragraph connectivity estimation using machine learning methods}
+
+In this study, 
+we aim to compare paragraph connectivity estimation 
+using machine learning methods 
+with a rule-based method.
+In this section, 
+we first show the features used in 
+machine learning methods of paragraph connectivity estimation.
+Some features used in the methods are based on clue expressions described 
+in Section \ref{sec:Clues to paragraph connectivity estimation in a mail text}.
+Then, 
+we show the experimental results of the methods and 
+examine which feature was effective.
+Finally, 
+we compare the experimental results of 
+paragraph connectivity estimation 
+using machine learning methods 
+with a rule-based method.
+
+
+
+
+\subsection{Features}
+\label{subsec:Features}
+
+Figure 
+\ref{fig:Features used in machine learning methods of paragraph connectivity estimation} shows 
+feature $S1$--$S12$
+used in machine learning 
+on mails posted to Vine Users ML.
+The features can be classified into two types:
+\pagebreak
+\begin{itemize}
+ \item features concerning clue expressions described in Section 
+       \ref{sec:Clues to paragraph connectivity estimation in a mail text} ($S1$--$S7$), 
+       and
+ \item features concerning word unigrams ($S8$--$S12$).
+\end{itemize}
+
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{17-3ia1f10.eps}
+\end{center}
+ \hangcaption{Features used in machine learning methods of paragraph connectivity estimation.
+ Paragraph $A$ and $B$ mean 
+ the preceding and following paragraph of a paragraph boundary, respectively.}
+ \label{fig:Features used in machine learning methods of paragraph connectivity estimation}
+\end{figure}
+
+
+\subsubsection{Features concerning clue expressions}
+
+$S1$--$S7$ are features concerning clue expressions. 
+$S1$ is based on the assumption that 
+character strings at the head of the first sentence after a paragraph boundary
+are useful in connectivity estimation at the boundary.
+$S2$ and $S6$ are specific features for mail texts  
+and might not be useful in analyzing other documents such as newspaper articles.
+On the other hand, 
+$S3, S4$, and  $S7$ are general features 
+and used for analyzing newspaper articles \cite{proc:matsui2004}.
+In $S2, S3$, and $S4$,  
+the same clues of 
+standard expressions in an introductory part, 
+conjunctions, and 
+reference terms 
+were used as 
+in human-crafted rules described 
+in Section \ref{sec:Clues to paragraph connectivity estimation in a mail text}.
+$S5$ is based on lexical cohesion, 
+more precisely, 
+cohesion of undefined words.
+Actually, we think, 
+$S5$ is based on cohesion of technical terms.
+This is because,
+we think, 
+general terms are mainly defined in the morphological analysis dictionaries and 
+technical terms are not.
+In this study, 
+we used JUMAN \cite{man:juman05} for the morphological analysis. 
+
+
+
+\subsubsection{Features concerning word unigrams}
+
+$S8$--$S12$ were features concerning word unigrams.
+In the paragraph connectivity estimation, 
+we use the preceding and following sentences of a target sentence.
+For this purpose, 
+we introduce a notion of \textit{window size}.
+Hereafter, 
+``window size is $n$'' means 
+``the preceding $n$ sentences, the following $n$ sentences,  
+and the target sentence are used to make a feature vector''.
+For example, 
+if the window size is 1 and 
+the target sentence is the first sentence of a paragraph, 
+the sentences in the window are:
+\begin{itemize}
+ \item the second sentence of the paragraph, and 
+
+ \item the last sentence of the preceding paragraph.
+\end{itemize}
+Especially, 
+if the paragraph consists of only the target sentence, 
+the sentences in the window are:
+\begin{itemize}
+ \item the first sentence of the following paragraph, and 
+
+ \item the last sentence of the preceding paragraph.
+\end{itemize}
+Furthermore, 
+if the window size is 0, 
+we use only the target sentence.
+If the window size is $\infty$, 
+we use all the sentences in the mail text.
+Also, a word in the target sentence and the same word in the other
+sentences are regarded as two different
+features \cite{proc:tamura2005}.
+
+
+
+
+\subsection{Experimental results of machine learning methods}
+\label{subsec:Experimental results of machine learning methods}
+
+We conducted the following two experiments 
+by using the features described in Section \ref{subsec:Features}.
+\begin{description}
+ \item[Exp. 1] paragraph connectivity estimation 
+	    at all the paragraph boundaries in each mail text, and 
+	    
+ \item[Exp. 2] paragraph connectivity estimation 
+	    at the paragraph boundary
+	    which is adjacent to the significant sentence in each mail text.
+\end{description}
+These experiments are the same as 
+in Section \ref{subsec:Experimental results of a rule-based method}.
+Also, in the experiments, 
+we used the same 300 question mails as 
+in Section \ref{subsec:Experimental results of a rule-based method}.
+As mentioned, 
+correct paragraph connectivity at the paragraph boundaries was
+manually tagged in the preparation of the experiments.
+In the experiments, 
+we developed the following two experimental data:
+\begin{description}
+ \item[experimental data $A$] was developed 
+	    by using all the paragraph boundaries in mail texts, and
+
+ \item[experimental data $B$] was developed 
+	    by using the paragraph boundaries
+	    which are adjacent to the significant sentence in mail texts.
+\end{description}
+We conducted Exp. 1 using experimental data $A$, 
+on the other hand, 
+we conducted Exp. 2 using experimental $A$ and $B$.
+In both experiments, 
+we used a package for 
+support vector machine (SVM) and 
+maximum entropy method (ME),  
+TinySVM \cite{soft:kudoh2002} with polynomial kernel ($d = 2, c = 1$) and 
+maxent \cite{soft:utiyama2008}, respectively.
+We also used a Japanese Morphological analyzer, JUMAN 
+for word segmentation of Japanese mail texts. 
+We conducted Exp. 1 and 2 
+by using the following feature sets 
+\begin{description}
+ \item[\bf{S13}] S1, S2, S3, S4, S5, S6, S7, S8
+ \item[\bf{S14}] S1, S2, S3, S4, S5, S6, S7, S9
+ \item[\bf{S15}] S1, S2, S3, S4, S5, S6, S7, S10
+ \item[\bf{S16}] S1, S2, S3, S4, S5, S6, S7, S11
+ \item[\bf{S17}] S1, S2, S3, S4, S5, S6, S7, S12
+\end{description}
+Each feature set consisted of all the features concerning clue expressions ($S1$--$S7$)
+and one feature concerning word unigrams ($S8/S9/S10/S11/S12$).
+The difference between $S13$ and the other feature sets was
+the window size of word unigrams.
+All the experimental results were obtained with 10-fold cross-validation and 
+evaluated by using accuracy, 
+which is defined as the number of paragraph boundaries 
+where paragraph connectivity was correctly estimated 
+over the number of all the paragraph boundaries.
+Table \ref{tab:Accuracy of paragraph connectivity estimation (machine learning methods)} shows
+the experimental results. 
+The underlined numbers written in bold-faced type are
+the best results of machine learning methods (SVM and ME) on Exp. 1 and 2.
+
+
+
+\begin{table}[b]
+ \hangcaption{Accuracy of paragraph connectivity estimation based on machine learning methods.
+ Exp. 2A and 2B mean Exp. 2 using experimental data $A$ and $B$, respectively.}
+ \label{tab:Accuracy of paragraph connectivity estimation (machine learning methods)}
+\input{01table03.txt}
+\end{table}
+
+As shown in 
+Table \ref{tab:Accuracy of paragraph connectivity estimation (machine learning methods)},
+the best result in Exp. 2 using experimental data $A$ (89.7\%) 
+was obtained when feature sets $S17$ were given to SVM.  
+On the other hand, 
+the best result in Exp. 2 using experimental data $B$ (88.3\%) 
+was obtained when feature sets $S15$ were given to ME. 
+This results show that,
+to estimate the connectivity at the paragraph boundaries 
+adjacent to significant sentences, 
+experimental data $A$, developed by using all the paragraph boundaries in mail texts, 
+was better for Exp. 2
+than experimental data $B$, 
+developed by using the paragraph boundaries adjacent to significant sentences in mail texts. 
+It shows that 
+good clues for paragraph connectivity estimation are scattered all over the mail text 
+and never distributed unevenly. 
+
+
+The results of Exp. 1 and 2 show that
+feature set $S13$ was less useful than the other feature sets, $S14$--$S17$.
+The difference between $S13$ and the other feature sets was
+the window size of word unigrams.
+In $S13$, the window size was 0, 
+on the other hand, 
+in the other feature sets, 
+the window sizes were more than 0.
+It shows that 
+word unigrams in the preceding and following sentences are effective 
+in paragraph connectivity estimation.
+
+
+\begin{table}[b]
+ \hangcaption{Results of experiments with each feature being excluded.
+ ``baseline'' means the best results of the experiments
+ each of which was obtained by using the feature set in brackets below, 
+ such as [S17].
+ The feature in parentheses, such as (S12), 
+ is a feature concerning word unigrams of 
+ the feature set in brackets below.}
+ \label{tab:Results of experiments with each feature being excluded}
+\input{01table04.txt}
+\end{table}
+
+
+Next, 
+to examine which feature is effective in paragraph connectivity estimation, 
+we conducted experiments of paragraph connectivity estimation
+by excluding a feature one by one from the feature set 
+by which the best result in 
+Table \ref{tab:Accuracy of paragraph connectivity estimation (machine learning methods)} was 
+obtained.
+Take Exp. 2 using experimental data $A$ 
+for example. 
+Because the best result of Exp. 2 using experimental data $A$ (89.7\%) 
+was obtained by using SVM with feature set $S17$, 
+the experiments were conducted 
+by excluding a feature one by one from feature set $S17$.  
+Table \ref{tab:Results of experiments with each feature being excluded} shows the results. 
+The underlined numbers written in bold-faced type show that 
+the accuracy was improved.
+Precisely, 
+there were some cases where the accuracy was improved 
+when a feature concerning clue expressions ($S2/S4/S6/S7$) was excluded.
+For example, in Exp. 2 using experimental data $A$, 
+we obtained 0.4\% increase of accuracy 
+when $S2$ was excluded from feature set $S17$.
+On the other hand, 
+there was no case where the accuracy was improved 
+when a feature concerning word unigrams ($S9/S10/S11/S12$) was excluded.
+For example, in Exp. 2 using experimental data $A$, 
+we obtained 13.5\% decrease of accuracy 
+when $S12$ was excluded from feature set $S17$.
+Furthermore, 
+we found some examples 
+which were not estimated properly by using a feature 
+concerning clue expressions, 
+but by using a feature concerning word unigrams.
+Take 
+``\textit{itsumo osewa ni natte masu} (I always appreciate your kindness).'' 
+for example.
+It is a standard expression in an introductory part of a Japanese mail text, 
+and when this expression is found in the last sentence of a paragraph, 
+the connectivity between the paragraph and the following one would be weak. 
+However, in this study, 
+this expression was not defined as a standard expression in an introductory part.
+As a result, 
+$S2$ was not useful in this case, 
+but a feature concerning word unigrams, such as $S12$, was.
+In conclusion, 
+the best results of Exp. 1 and 2 
+were obtained under the following conditions:
+\begin{description}
+ \item[Exp. 1] $S1, S2, S3, S4, S5, S7$ and $S11$ were given to SVM
+
+ \item[Exp. 2] 
+	    $S1, S3, S4, S5, S6, S7$ and $S12$ of experimental data $A$ 
+	    were given to SVM 
+\end{description}
+By using these feature sets and SVM, 
+we conducted Exp. 1 and 2 by using the 300 mails.
+In the experiments, 
+as evaluation measures for paragraph connectivity estimation, 
+we used precision, recall, and F-measure of
+detecting paragraph boundaries with strong connectivity
+in the 300 mails. 
+Table \ref{tab:(machine learning):The accuracy of detecting strong connectivity} shows 
+the precision, recall, and F-measure of the experiments.
+All the experimental results were obtained with 10-fold cross-validation.
+ 
+
+\begin{table}[b]
+ \hangcaption{The accuracy of detecting the paragraph boundaries with strong connectivity
+ by using machine learning methods.}
+ \label{tab:(machine learning):The accuracy of detecting strong connectivity}
+\input{01table05.txt}
+\end{table}
+
+ 
+\begin{table}[t]
+ \hangcaption{The accuracy of detecting the paragraph boundaries with strong connectivity 
+ of Exp. 1 and Exp. 2 
+ by using (1) machine learning method, (2) rule-based method, and (3) textseg.}
+ \label{tab:(our methods and textseg):The accuracy of detecting strong connectivity}
+\input{01table06.txt}
+\end{table}
+
+
+Finally, 
+we compare our methods with a text segmentation method, 
+textseg, 
+a statistical method for domain independent text segmentation
+\cite{proc:utiyama2001}.
+Table \ref{tab:(our methods and textseg):The accuracy of detecting strong connectivity} shows 
+the results of detecting paragraph boundaries with strong connectivity 
+in the 300 mails 
+by using  
+\pagebreak
+\begin{enumerate}
+ \item our machine learning method, 
+ \item our rule-based method, and 
+ \item textseg.
+\end{enumerate}
+First, 
+we compare the results of our machine learning method with 
+those of our rule-based method.
+The precision of the machine learning method was slightly worse than 
+that of the rule-based method. 
+However, 
+the recall and F-measure of the machine learning method were better 
+than those of the rule-based method.
+Precisely, 
+we obtained 
+0.426 
+and 
+0.328 
+increase of F-measure 
+in case of Exp.~1 and 2, respectively.
+The results show that 
+the machine learning method outperforms 
+the rule-based method.
+Next, 
+we compare the results of our machine learning method with those of textseg.
+In this experiment, 
+the results of textseg were obtained in the next way:
+We merged paragraphs in each test document and applied textseg to the document, 
+and then, 
+examined whether textseg segmented the test document 
+at the paragraph boundaries with strong connectivity.
+If textseg segmented the test document at paragraph boundaries with strong connectivity, 
+we determined that textseg failed to detect them.
+As shown in 
+Table \ref{tab:(our methods and textseg):The accuracy of detecting strong connectivity}, 
+the precision, recall, and F-measure of the machine learning method were better 
+than those of textseg.
+For example, 
+we obtained 
+0.247 
+and 
+0.278 
+increase of F-measure 
+in case of Exp.~1 and 2, respectively.
+We thought the reasons were
+\begin{itemize}
+ \item Oversegmentation is considered in our method
+       while it is not in textseg.
+       Oversegmentation in mail texts is caused by writing style, 
+       not by document domains.
+       Textseg is domain-independent, 
+       but not writing style independent.
+       It cannot handle oversegmented documents well, 
+       for example, 
+       mail texts and messages in web communication sites.
+
+ \item Training data was used in our method 
+       while it was not in textseg.
+       In our method, 
+       stylistic features of mail texts were learned by using the training data
+       and good performance was achieved.
+
+\end{itemize}
+
+
+
+
+\section{Conclusions}
+\label{sec:Conclusions}
+
+In this paper, 
+we proposed a method of estimating the connectivity
+between paragraphs in a mail text. 
+We showed that 
+the method of paragraph connectivity estimation 
+based on machine learning methods (SVM and ME) 
+outperformed the rule-based method: 
+we obtained
+0.426 increase of F-measure 
+in case of detecting the paragraph boundaries with strong connectivity 
+by using the machine learning methods.
+Furthermore, 
+we showed 
+our machine learning methods outperformed 
+a statistical method for domain independent text segmentation, 
+textseg \cite{proc:utiyama2001}:
+we obtained
+0.247 increase of F-measure 
+by using our machine learning methods.
+
+
+We will develop QA system based on information extracted 
+by using paragraph connectivity estimation. 
+We will also apply our method to 
+articles in blogs and 
+messages in communication sites, 
+such as Yahoo! chiebukuro\footnote[2]{http://chiebukuro.yahoo.co.jp}.
+
+
+
+
+\acknowledgment
+\label{sec:Acknowledgment}
+
+We would like to thank 
+all of the program committee members, staff, and participants of EMALP 2008.
+We would also like to thank the reviewers for providing valuable feedback 
+during the writing of this paper.
+This research has been supported partly by the Grant-in-Aid for
+Scientific Research (C) under Grant No.20500106.
+
+
+\bibliographystyle{jnlpbbl_1.4}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Genzel}{Genzel}{2005}]{thesis:genzel2005}
+Genzel, D. \BBOP 2005\BBCP.
+\newblock \BBOQ A Paragraph Boundary Detection System.\BBCQ\
+\newblock {\Bem Computational Linguistics and Intelligent Text Processing},
+  {\Bbf 3406}, \mbox{\BPGS\ 816--826}.
+
+\bibitem[\protect\BCAY{Hasegawa, Hayashi, \BBA\ Yamazaki}{Hasegawa
+  et~al.}{2004}]{thesis:hasegawa2004}
+Hasegawa, T., Hayashi, Y., \BBA\ Yamazaki, T. \BBOP 2004\BBCP.
+\newblock \BBOQ Sentence Extraction from Emails and Its Use in Mobile
+  Phones.\BBCQ\
+\newblock {\Bem Transactions of Information Processing Society of Japan}, {\Bbf
+  45}  (7), \mbox{\BPGS\ 1745--1754}.
+
+\bibitem[\protect\BCAY{Hearst}{Hearst}{1997}]{thesis:hearst1997}
+Hearst, M. \BBOP 1997\BBCP.
+\newblock \BBOQ TextTiling: Segmenting Sext into Multi-paragraph Subtopic
+  Passages.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 23}  (1), \mbox{\BPGS\
+  33--64}.
+
+\bibitem[\protect\BCAY{Kudoh}{Kudoh}{2002}]{soft:kudoh2002}
+Kudoh, T.
+\newblock \BBOQ TinySVM: Support Vector Machines.\BBCQ\
+\newblock
+  \Turl{http://chasen.org/{\textasciitilde}taku/software/{\linebreak[2]}TinySV
+M/{\linebreak[2]}index.html}.
+
+\bibitem[\protect\BCAY{Kurohashi \BBA\ Kawahara}{Kurohashi \BBA\
+  Kawahara}{2005}]{man:juman05}
+Kurohashi, S.\BBACOMMA\ \BBA\ Kawahara, D. \BBOP 2005\BBCP.
+\newblock {\Bem JUMAN Manual version 5.1}.
+\newblock Kyoto University.
+
+\bibitem[\protect\BCAY{Lam, Rohall, Schmandt, \BBA\ Stern}{Lam
+  et~al.}{2002}]{report:lam2002}
+Lam, D., Rohall, S., Schmandt, C., \BBA\ Stern, M. \BBOP 2002\BBCP.
+\newblock \BBOQ Exploiting Email Structure to Improve Summarization.\BBCQ\
+\newblock In {\Bem IBM Watson Research Center Technical Report}.
+
+\bibitem[\protect\BCAY{Matsui, Inui, \BBA\ Kotani}{Matsui
+  et~al.}{2004}]{proc:matsui2004}
+Matsui, Y., Inui, N., \BBA\ Kotani, Y. \BBOP 2004\BBCP.
+\newblock \BBOQ Text Segmentation using Cohesion Scores of Words and Surface
+  Linguistic Cues.\BBCQ\
+\newblock In {\Bem IPSJ-NL-162}, \mbox{\BPGS\ 151--158}.
+
+\bibitem[\protect\BCAY{Okumura, Nonaka, Hamaguchi, Nozaki, Okumura, \BBA\
+  Shimizu}{Okumura et~al.}{2002}]{report:okumura2002}
+Okumura, A., Nonaka, M., Hamaguchi, Y., Nozaki, M., Okumura, K., \BBA\ Shimizu,
+  Y. \BBOP 2002\BBCP.
+\newblock \BBOQ Extraction summary from mail and Transfer system/Soukai
+  Mail.\BBCQ\
+\newblock {\Bem Oki Technical Review}, {\Bbf 69}  (4), \mbox{\BPGS\ 64--67}.
+
+\bibitem[\protect\BCAY{Tamura, Takamura, \BBA\ Okumura}{Tamura
+  et~al.}{2005}]{proc:tamura2005}
+Tamura, A., Takamura, H., \BBA\ Okumura, M. \BBOP 2005\BBCP.
+\newblock \BBOQ Classification of Multiple-Sentence Questions.\BBCQ\
+\newblock In {\Bem IJCNLP-05}, \mbox{\BPGS\ 426--437}.
+
+\bibitem[\protect\BCAY{Utiyama}{Utiyama}{2008}]{soft:utiyama2008}
+Utiyama, M.
+\newblock \BBOQ Maximum Entropy Modeling Packages.\BBCQ\
+\newblock
+  \Turl{http://mastarpj.nict.go.jp/{\linebreak[2]\textasciitilde}mutiyama/soft
+ware/maxent}.
+
+\bibitem[\protect\BCAY{Utiyama \BBA\ Isahara}{Utiyama \BBA\
+  Isahara}{2001}]{proc:utiyama2001}
+Utiyama, M.\BBACOMMA\ \BBA\ Isahara, H. \BBOP 2001\BBCP.
+\newblock \BBOQ A Statistical Model for Domain-Independent Text
+  Segmentation.\BBCQ\
+\newblock In {\Bem ACL/EACL-2001}, \mbox{\BPGS\ 491--498}.
+
+\bibitem[\protect\BCAY{Watanabe, Nishimura, \BBA\ Okada}{Watanabe
+  et~al.}{2008}]{thesis:watanabe2008}
+Watanabe, Y., Nishimura, R., \BBA\ Okada, Y. \BBOP 2008\BBCP.
+\newblock \BBOQ A Question Answer System based on Confirmed Knowledge Acquired
+  from a Mailing List.\BBCQ\
+\newblock {\Bem Journal of Internet Research}, {\Bbf 18}  (2), \mbox{\BPGS\
+  165--176}.
+
+\end{thebibliography}
+
+
+
+\begin{biography}
+
+\bioauthor[:]{Ryo Nishimura}{
+received the Bachelor and Master degree of Engineering from Ryukoku University.
+He currently works at Hitachi Systems \& Services, Ltd.
+His research interests include natural language processing, information retrieval, 
+question answering, and information credibility on the Web.
+He received Yahoo! Japan Award (2009).
+}
+
+\bioauthor[:]{Yasuhiko Watanabe}{
+received his PhD (Informatics) from Kyoto University.
+He is currently a lecturer in the Department of Media Informatics, Ryukoku University. 
+His research interests are natural language processing and multimedia communication.
+He received Yahoo! Japan Award (2009).
+}
+
+\bioauthor[:]{Masaki Murata}{
+received his Bachelor's, Master's, and Doctorate degrees in engineering 
+from Kyoto University in 1993, 1995, and 1997, respectively.
+He is a senior researcher at the National Institute 
+of Information and Communications Technology, Japan,
+an independent administrative institution.
+He is a member of the Information Processing Society of Japan,
+the Japanese Society for Artificial Intelligence,
+the Institute of Electronics, 
+Information and Communication Engineers,
+and the Mathematical Linguistic Society of Japan. 
+His research interests include 
+natural language processing, machine translation,
+information retrieval, and question answering.
+}
+\bioauthor[:]{Yasuhito Oota}{
+received the Bachelor degree of Engineering from Ryukoku University.
+He currently works at TIS. Co., Ltd.
+His research interests include natural language processing and communications on the Web.
+}
+\bioauthor[:]{Yoshihiro Okada}{
+received his PhD in information engineering from Kyoto University.
+He is currently a professor in the Department of Media Informatics, Ryukoku University.
+His research interests include pattern recognition and analysis.
+}
+\end{biography}
+
+\biodate
+
+
+
+
+
+\end{document}
