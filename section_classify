@@ -9,74 +9,75 @@ $#ARGV == 0 || die "Usage: ./section_classify [NAME OF DOC]\n";
 
 
 # set list of section devider
-my (@list_intro, @list_conclusion, @list_test);
+my (@list_intro, @list_conclusion, @list_experiment);
 @list_intro = qw/はじめに/;
-@list_test = qw/実験/;
+@list_experiment = qw/実験/;
 @list_conclusion = qw/結論 おわりに 終わりに/;
-## sample: $re_* = "intro|introduction|introduce";
-my ($re_intro, $re_conclusion, $re_test);
+## make regular expression form. sample: $re_* = "intro|introduction|introduce";
+my ($re_intro, $re_conclusion, $re_experiment);
 $re_intro = join '|', @list_intro;
-$re_test = join '|', @list_test;
+$re_experiment = join '|', @list_experiment;
 $re_conclusion = join '|', @list_conclusion;
 ### 関連研究
-### 提案手法
 
 
-# read file contents
-my ($file_name, $origin_file_lines);
+# read contents from input file
+my ($fh, $file_name, $origin_file_lines, $file_lines);
 $file_name = $ARGV[0];
-open my $fh, '<:encoding(UTF-8)', $file_name || die "Can't open '$file_name': $!";
+open $fh, '<:encoding(UTF-8)', $file_name || die "Can't open '$file_name': $!";
 $origin_file_lines = join '', <$fh>;
+$file_lines = $origin_file_lines;
+close $fh;
 
+
+my ($fh_intro, $fh_experiment, $fh_conclusion, $fh_proposedtech);
+open $fh_intro, '>:encoding(UTF-8)', 'test_intro';
+open $fh_experiment, '>:encoding(UTF-8)', 'test_experiment';
+open $fh_conclusion, '>:encoding(UTF-8)', 'test_conclusion';
+open $fh_proposedtech, '>:encoding(UTF-8)', 'test_proposedtech';
 
 # classify section (another implementation method : split operator | use m// in list context)
-my ($file_lines, $content_intro, $content_conclusion, $content_test, $content_proposedtech);
-
+my ($content_intro, $content_conclusion, $content_experiment, $content_proposedtech);
 ## classify proposed technique
-$file_lines = $origin_file_lines;
 $content_proposedtech = $file_lines;
 
 ## classify intro
 =begin MATCH_TWICE 
 if( $file_lines =~ /^(\\section{$re_intro})(.*)(\\section{(?:[^\n])+)}/sump ) {
 	print "found [${^MATCH}]\n";
-#	if (${^POSTMATCH} =~ /^\\section{.*}/ump ) {
-#		$content_intro = ${^PREMATCH};
-#		print "[contents of intro section]\n$content_intro\n";
-#	}
+	if (${^POSTMATCH} =~ /^\\section{.*}/ump ) {
+		$content_intro = ${^PREMATCH};
+		print "[contents of intro section]\n$content_intro\n";
+	}
 }
 =end MATCH_TWICE
 =cut
-if( $content_proposedtech =~ s/^(\\section{(?:$re_intro)})(.*?)((?:\\section{(?:[^\n])+})|(?:\\end{document}))/$3/sump ) {
-#	print "$content_proposedtech\n\n\n";
-	$content_intro = $2;
-	print "********************************************************************intro is \n $content_intro\n\n";
+if( $content_proposedtech =~ s/^(\\section{(?:$re_intro)[^\n]*?})(.*?)((?:\\section{(?:[^\n])+})|(?:\\end{document}))/$3/sum ) {
+	$content_intro = $1.$2;
+	print "intro        found : $1\n";
+	print $fh_intro "$content_intro\n\n";
 }
 
-## classify test
-=begin ORIGIN
-if( $file_lines =~ /^\\section{(?:$re_test)(?:\S)*}/ump ) {
-	print "found [${^MATCH}]\n";
-}
-=end ORIGIN
-=cut
-if( $content_proposedtech =~ s/^(\\section{(?:$re_test)})(.*?)((?:\\section{(?:[^\n])+})|(?:\\end{document}))/$3/sump ) {
-#	print "$content_proposedtech\n\n\n";
-	$content_test = $2;
-	print "********************************************************************test is \n $content_test\n\n";
+## classify experiment
+if( $content_proposedtech =~ s/^(\\section{(?:$re_experiment)[^\n]*?})(.*?)((?:\\section{(?:[^\n])+})|(?:\\end{document}))/$3/sum ) {
+	$content_experiment = $1.$2;
+	print "experiment   found : $1\n";
+	print $fh_experiment "$content_experiment\n\n";
 }
 
 ## classify conclusion
-=begin ORIGIN
-if( $file_lines =~ /^\\section{(?:$re_conclusion)(?:\S)*}/ump ) {
-	print "found [${^MATCH}]\n";
-}
-=end ORIGIN
-=cut
-if( $content_proposedtech =~ s/^(\\section{(?:$re_conclusion)})(.*?)((?:\\section{(?:[^\n])+})|(?:\\end{document}))/$3/sump ) {
-#	print "$content_proposedtech\n\n\n";
-	$content_conclusion = $2;
-	print "********************************************************************conclusion is \n $content_conclusion\n\n";
+if( $content_proposedtech =~ s/^(\\section{(?:$re_conclusion)[^\n]*?})(.*?)((?:\\section{(?:[^\n])+})|(?:\\end{document}))/$3/sum ) {
+	$content_conclusion = $1.$2;
+	print "conclusion   found : $1\n";
+	print $fh_conclusion "$content_conclusion\n\n";
 }
 
-print "********************************************************************proposed technique is \n $content_proposedtech\n\n";
+## print proposed technique
+for ( $content_proposedtech =~ /^\\section{[^\n]*?}/umg ) {
+	print "proposedtech found : $_\n";
+}
+print $fh_proposedtech "$content_proposedtech\n\n";
+close $fh_intro;
+close $fh_experiment;
+close $fh_conclusion;
+close $fh_proposedtech;
