@@ -2,11 +2,20 @@
 use strict;
 use 5.010;
 use utf8;
+#use feature 'unicode_strings';
 binmode(STDOUT, ":utf8");
-#fgrep \\section *.tex
-
+binmode(STDERR, ":utf8");
+# fgrep \\section *.tex
+# next jobs
+## add usable tokens by looking all file.
+## unify loop in clarifying section 
+## make log directory
 $#ARGV == 0 || die "Usage: ./section_classify [NAME OF DOC]\n";
 
+# Active logging
+my $log_on_off = 0;
+my ($log_file_name, $intro_file_name, $experiment_file_name, $conclusion_file_name, $proposedtech_file_name);
+$log_on_off = &test_on;
 
 # set list of section devider
 my (@list_intro, @list_conclusion, @list_experiment);
@@ -22,62 +31,102 @@ $re_conclusion = join '|', @list_conclusion;
 
 
 # read contents from input file
-my ($fh, $file_name, $origin_file_lines, $file_lines);
-$file_name = $ARGV[0];
-open $fh, '<:encoding(UTF-8)', $file_name || die "Can't open '$file_name': $!";
-$origin_file_lines = join '', <$fh>;
-$file_lines = $origin_file_lines;
-close $fh;
+my ($fh_src, $src_file_name, $src_file_lines_origin, $src_file_lines);
+$src_file_name = $ARGV[0];
+open $fh_src, '<:encoding(UTF-8)', $src_file_name || die "Can't open '$src_file_name': $!";
+$src_file_lines_origin = join '', <$fh_src>;
+$src_file_lines = $src_file_lines_origin;
+close $fh_src;
 
 
-my ($fh_intro, $fh_experiment, $fh_conclusion, $fh_proposedtech);
-open $fh_intro, '>:encoding(UTF-8)', 'test_intro';
-open $fh_experiment, '>:encoding(UTF-8)', 'test_experiment';
-open $fh_conclusion, '>:encoding(UTF-8)', 'test_conclusion';
-open $fh_proposedtech, '>:encoding(UTF-8)', 'test_proposedtech';
+# classify section (another implementation method : split operator | use m// in list context | use s/// as condition for for loop : for(initailization; s///;): see p.177 learning perl )
+my ($head_intro, $body_intro, $head_conclusion, $body_conclusion, $head_experiment, $body_experiment, $head_proposedtech, $body_proposedtech);
 
-# classify section (another implementation method : split operator | use m// in list context)
-my ($content_intro, $content_conclusion, $content_experiment, $content_proposedtech);
 ## classify proposed technique
-$content_proposedtech = $file_lines;
+$body_proposedtech = $src_file_lines;
 
 ## classify intro
-=begin MATCH_TWICE 
-if( $file_lines =~ /^(\\section{$re_intro})(.*)(\\section{(?:[^\n])+)}/sump ) {
-	print "found [${^MATCH}]\n";
-	if (${^POSTMATCH} =~ /^\\section{.*}/ump ) {
-		$content_intro = ${^PREMATCH};
-		print "[contents of intro section]\n$content_intro\n";
-	}
-}
-=end MATCH_TWICE
-=cut
-if( $content_proposedtech =~ s/^(\\section{(?:$re_intro)[^\n]*?})(.*?)((?:\\section{(?:[^\n])+})|(?:\\end{document}))/$3/sum ) {
-	$content_intro = $1.$2;
-	print "intro        found : $1\n";
-	print $fh_intro "$content_intro\n\n";
+if( $body_proposedtech =~ s/
+															^(\\section\{(?:$re_intro)[^\n]*?\})
+															(.*?)
+															((?:\\section\{(?:[^\n])+\})|(?:\\end\{document\}))
+															/$3/sumx ) {
+	$head_intro = $1;
+	$body_intro = $2;
+	printf STDERR "intro%16s%5s\n", 'found : ', $1 if ($log_on_off);
 }
 
 ## classify experiment
-if( $content_proposedtech =~ s/^(\\section{(?:$re_experiment)[^\n]*?})(.*?)((?:\\section{(?:[^\n])+})|(?:\\end{document}))/$3/sum ) {
-	$content_experiment = $1.$2;
-	print "experiment   found : $1\n";
-	print $fh_experiment "$content_experiment\n\n";
+if( $body_proposedtech =~ s/
+															^(\\section\{(?:$re_experiment)[^\n]*?\})
+															(.*?)
+															((?:\\section\{(?:[^\n])+\})|(?:\\end\{document\}))
+															/$3/sumx ) {
+	$head_experiment = $1;
+	$body_experiment = $2;
+	printf STDERR "experiment%11s%s\n", 'found : ', $1 if ($log_on_off);
 }
 
 ## classify conclusion
-if( $content_proposedtech =~ s/^(\\section{(?:$re_conclusion)[^\n]*?})(.*?)((?:\\section{(?:[^\n])+})|(?:\\end{document}))/$3/sum ) {
-	$content_conclusion = $1.$2;
-	print "conclusion   found : $1\n";
-	print $fh_conclusion "$content_conclusion\n\n";
+if( $body_proposedtech =~ s/
+															^(\\section\{(?:$re_conclusion)[^\n]*?\})
+															(.*?)
+															((?:\\section\{(?:[^\n])+\})|(?:\\end\{document\}))
+															/$3/sumx ) {
+	$head_conclusion = $1;
+	$body_conclusion = $2;
+	printf STDERR "conclusion%11s%s\n", 'found : ', $1 if ($log_on_off);
 }
 
-## print proposed technique
-for ( $content_proposedtech =~ /^\\section{[^\n]*?}/umg ) {
-	print "proposedtech found : $_\n";
+## print proposed technique to log file
+if ($log_on_off) {
+	for ( $body_proposedtech =~ /^\\section\{[^\n]*?\}/umg ) {
+		printf STDERR "proposedtech%9s%s\n", 'found : ', $_;
+	}
 }
-print $fh_proposedtech "$content_proposedtech\n\n";
-close $fh_intro;
-close $fh_experiment;
-close $fh_conclusion;
-close $fh_proposedtech;
+
+## print fgrep result to log file
+if($log_on_off) {
+	print STDERR "\nfgrep searched\n"; 
+	system ("fgrep \\section $src_file_name >> $log_file_name");
+}
+
+
+# make section files
+&print_section if ($log_on_off);
+
+
+
+## test functions
+sub test_on{
+	$log_on_off = 1;
+
+	$log_file_name = "./logs/log";
+	$intro_file_name = "./logs/intro";
+	$experiment_file_name = "./logs/experiment";
+	$conclusion_file_name = "./logs/conclusion";
+	$proposedtech_file_name = "./logs/proposedtech";
+	
+	open STDERR, '>:encoding(UTF-8)', $log_file_name || die "can not reopen STDERR: $!";
+}
+
+sub print_section {
+
+	my ($fh_intro, $fh_experiment, $fh_conclusion, $fh_proposedtech);
+	open $fh_intro, '>:encoding(UTF-8)', $intro_file_name || die "can not open ; $!";
+	open $fh_experiment, '>:encoding(UTF-8)', $experiment_file_name || die "can not open : $!";
+	open $fh_conclusion, '>:encoding(UTF-8)', $conclusion_file_name || die "can not open : $!";
+	open $fh_proposedtech, '>:encoding(UTF-8)', $proposedtech_file_name || die "can not open : $!";
+
+	print $fh_intro $head_intro.$body_intro;
+	print $fh_experiment $head_experiment.$body_experiment;
+	print $fh_conclusion $head_conclusion.$body_conclusion;
+	print $fh_proposedtech $body_proposedtech;
+
+	close $fh_intro;
+	close $fh_experiment;
+	close $fh_conclusion;
+	close $fh_proposedtech;
+	
+
+}	
