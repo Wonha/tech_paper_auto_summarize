@@ -1,0 +1,1279 @@
+    \documentclass[english]{jnlp_1.4}
+
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{hangcaption_jnlp}
+
+    \usepackage{tikz}
+
+\Volume{22}
+\Number{4}
+\Month{December}
+\Year{2015}
+
+\received{2015}{5}{1}
+\revised{2015}{7}{16}
+\accepted{2015}{9}{5}
+
+\setcounter{page}{251}
+
+\etitle{Left-corner Parsing for Dependency Grammar}
+\eauthor{Hiroshi Noji\affiref{Author_1}\affiref{Author_2} \and Yusuke Miyao\affiref{Author_1}\affiref{Author_2}} 
+\eabstract{
+In this article, we present an incremental dependency parsing algorithm with an arc-eager variant of the left-corner parsing strategy.
+Our algorithm's stack depth captures the center-embeddedness of the recognized dependency structure.
+A higher stack depth occurs only when processing deeper center-embedded sentences in which people find difficulty in comprehension.
+We examine whether our algorithm can capture the syntactic regularity that universally exists in languages through two kinds of experiments across treebanks of 19 languages.
+We first show through oracle parsing experiments that our parsing algorithm consistently requires less stack depth to recognize annotated trees relative to other algorithms across languages.
+This result also suggests the existence of a syntactic universal by which deeper center-embedding is a rare construction across languages, a result that has yet to be quantitatively cross-linguistically examined.
+We further investigate the above claim through supervised parsing experiments and show that our proposed parser is consistently less sensitive to constraints on stack depth bounds when decoding across languages, while the performance of other parsers such as the arc-eager parser is largely affected by such constraints.
+We thus conclude that the stack depth of our parser represents a more meaningful measure for capturing syntactic regularity in languages than those of existing parsers.
+}
+\ekeywords{Transition-based Dependency Parsing, Left-corner, Universal Syntactic \linebreak Regularity}
+
+\headauthor{Noji and Miyao}
+\headtitle{Left-corner Parsing for Dependency Grammar}
+
+\affilabel{Author_1}{}{National Institute of Informatics}
+\affilabel{Author_2}{}{SOKENDAI (The Graduate University for Advanced Studies)}
+
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+Many parsing algorithms in computational linguistics can be formalized as a manipulation of elements on a stack.
+For example, the shift-reduce algorithm constructs a parse tree by combining subtrees on the stack in a bottom-up manner.
+In general, the stack preserves disjoint elements (e.g., unconnected subtrees) and the parser constructs a parse tree by combining those subtrees in a parser-specific manner.
+
+Here, we focus on an instance of stack-based algorithms called arc-eager left-corner parsing\footnote{There are two types of left-corner parsing, namely arc-standard and arc-eager. Since we only focus on arc-eager left-corner parsing, we refer to left-corner parsing as the arc-eager algorithm in this article. Note that these terms (i.e., arc-standard and arc-eager) are also used as the names of dependency parsing algorithms (transition system) \cite{Nivre:2008}, but they are not relevant with one another.} and propose an extension for dependency grammars.
+An interesting property of left-corner parsing is its relevance to human language processing \cite{Cognitive:MentalModels,abney91memory,journals/coling/SchulerAMS10}.
+During parsing, its stack depth increases only on center-embedded sentences in which people face difficulties in comprehension \cite{Miller1963-MILFMO,Gibson2000The-dependency-}.
+Our algorithm has the property that its stack depth increases only on center-embedded {\it dependency} structures, the precise definition of which will be formally introduced in Section \ref{sec:memorycost} below.
+
+We focus on dependency parsing for a number of reasons.
+The key advantage of a dependency grammar is its simplicity over conventional phrase-structure grammar.
+This simplicity facilitates the development of new dependency treebanks, which make it more suitable for the cross-linguistic study of grammar and parsing, as we explore in this article.
+As an example, in addition to the several genuine dependency annotation projects \cite{sl,ar}, the dependency treebank is available from a phrase-structure treebank via automatic conversion\footnote{The opposite is generally infeasible since in most cases each nonterminal symbol in a phrase-structure tree encodes richer information than a (possibly labeled) arc in a dependency tree.} \cite{Yamada03}.
+The new annotation projects across languages, such as Universal Dependencies \cite{DEMARNEFFE14.1062} and HamleDT \cite{halmedt}, also facilitate this tendency.
+
+Though many previous left-corner parsing models have been motivated by the relevance to human language processing \cite{Roark:2001:RPP:933637,journals/coling/SchulerAMS10,vanschijndel-schuler:2013:NAACL-HLT}, our motivation is not on the cognitive side, but rather left-corner parsing as a tool to capture the syntactic regularity that may universally exist in languages.
+
+In particular, we examine the hypothesis that correct syntactic trees exhibit a preference to reduce the stack depth incurred by left-corner parsing.
+The intuitive basis of this idea involves the difficulty of center-embedding observed in psycholinguistics \cite{Gibson2000The-dependency-} as well as the left-corner parsing property in which stack depth corresponds to the center-embeddedness of the recognized structure.
+\citeA{journals/coling/SchulerAMS10} found that the preference described above is observed in the Penn Treebank syntactic trees for English.
+With our dependency algorithm, we empirically examine language universality via two cross-linguistic experiments across treebanks of 19 languages collected from datasets used in the previous CoNLL shared tasks \cite{buchholz-marsi:2006:CoNLL-X,nivre-EtAl:2007:EMNLP-CoNLL2007}.
+First, we show that our parsing algorithm consistently requires less stack depth to recognize annotated trees relative to other algorithms across languages.
+This result also suggests the existence of a syntactic universal by which deeper center-embedding is a rare construction across languages, a phenomenon that has not yet been quantitatively examined cross-linguistically.
+We further investigate the above claim through supervised parsing experiments and find that the parser using our proposed algorithm is consistently less sensitive to the decoding constraints of stack depth bound across languages.
+Conversely, the performance of other incremental dependency parsers such as the arc-eager parser is largely affected by the same constraints.
+This suggests that the stack depth of our parser provides a more meaningful measure for capturing syntactic regularity in dependencies across languages compared with other existing parsers.
+This finding is appealing in that we may then consider language modeling that relies on universal syntactic constraints, as previously pursued with the preference shorter dependency lengths in supervised parsing \cite{eisner2010} and unsupervised parsing \cite{smith-eisner-2006-acl-sa}.
+
+In addition to this introductory section, this article is organized as follows.
+After covering the background of left-corner parsing in Section \ref{sec:background}, we present a survey of stack depth behavior in existing transition systems for dependency parsing in Section \ref{sec:others}.
+This discussion is an extension of a previous survey on the incrementality of transition systems \cite{nivre:2004:IncrementalParsing}.
+In Section \ref{sec:left-corner}, we develop our new transition system that follows a left-corner parsing strategy for dependency grammars and discuss the formal properties of the system, including the spurious ambiguity and its implications.
+Next, we evaluate our system in two different ways: first via a corpus analysis to shed light on the coverage of a left-corner parsing system within some stack depth bound in a cross-linguistic setting (Section \ref{sec:analysis});
+second via cross-linguistic parsing experiments with or without stack depth bounds (Section \ref{sec:parse}).
+Finally, we summarize the relationships between our current study and previous work in Section \ref{sec:relatedwork}, and then conclude our article and provide avenues for future work in Section \ref{sec:conclusion}.
+
+Note that some portions of this article including the description of our transition system and cross-linguistic oracle analysis have been previously published as \citeA{noji-miyao:2014:Coling}.
+In the current article, we extend that work with a more careful formalization of our system that includes an analysis of its unsoundness, token- and sentence-level coverage results of the oracle, and supervised automatic parsing experiments.
+
+
+\section{Background}
+\label{sec:background}
+
+\subsection{Left-corner Parsing Strategy}
+
+In this section, we describe left-corner parsing as a parsing strategy.
+A parsing strategy is a useful abstract notion for characterizing the properties of a parser and gaining intuition into parser behavior.
+As such, it defines a means to enumerate the nodes and arcs of parse trees \cite{abney91memory}.
+A parsing algorithm, on the other hand, defines the implementation of that strategy, typically with a push-down automaton for a phrase-structure grammar or a transition system for a dependency grammar (as we discuss in Sections \ref{sec:others} and \ref{sec:left-corner}).
+
+The left-corner parsing strategy is defined by the order of enumerating nodes and arcs as follows: (1) a node is enumerated when the subtree of its first child has been enumerated; (2) an arc is enumerated when the two nodes it connects have been enumerated \cite{abney91memory}.
+    Figures \ref{fig:structures}(a), (b), and (c) show
+ examples of the left-order parsing strategy in which the enumerating order is shown for three kinds of distinguished tree structures, i.e., left-branching, right-branching, and center-embedding, respectively.
+The notable property of the left-corner strategy is that it generates disconnected tree fragments only on a center-embedded structure.
+    Therefore, in Figure \ref{fig:structures}(d), after reading $b$, we reach step 6 in Figure \ref{fig:structures}(c), 
+but $a$ and $b$ cannot be connected at this point.
+    We do not generate such fragments for other structures, e.g., for the right-branching structure shown in Figure \ref{fig:structures}(b), 
+we reach step 7 after reading $b$, so $a$ and $b$ are connected by a subtree at this point.
+The number of tree fragments grows as the depth of center-embeddedness increases.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-4ia2f1.eps}
+\end{center}
+\hangcaption{(a)--(c) Three kinds of branching structures with numbers on symbols and arcs showing the order of recognition with a left-corner strategy; (d) a partial parse of (c) using a left-corner strategy just after reading symbol $b$, with gray edges and symbols showing elements not yet recognized; note the number of connected subtrees here is 2.}
+\label{fig:structures}
+\end{figure}
+
+The property of the left-corner strategy illustrated above is appealing from a psycholinguistic viewpoint.
+One well-known observation regarding human language processing is that sentences with multiple center-embedded constructions such as ``{\it the rat [that the cat [that the dog chased] bit] ate the cheese}'' are quite difficult to understand, while left- and right-branching constructions seem to cause no particular difficulty \cite{Miller1963-MILFMO,Gibson2000The-dependency-}.
+For example, the sentence above can be rewritten as ``{\it the dog chased tha cat [that bit the rat [that ate the cheese]]}'', which is right-branching, and hence the parse becomes easier.
+This observation leads us to hypothesize that a left-corner parser can be a tool to capture the syntactic preference of language in that it tries to avoid deeper center-embedding.
+This hypothesis may hold cross-linguistically, but it has not yet been quantitatively examined.
+
+Other parsing strategies such as bottom-up or top-down strategies do not have the same property in terms of the number of tree fragments.
+For example, the bottom-up strategy enumerates a node when all of its children have been enumerated, meaning that when processing a right-branching structure, it must separately remember all input tokens before starting the tree construction.
+    More specifically, in Figure \ref{fig:structures}(b), 
+it must separately remember $a$, $b$, and $c$ before connecting $c$ and $d$.
+The top-down strategy has the opposite property, i.e., it must remember all tokens before starting to construct the left-branching structures
+The left-corner strategy defined above is a mixed strategy of these two approaches.
+
+
+\subsection{Dependency-to-CFG Reduction}
+\label{sec:reduction}
+
+Next, we briefly summarize the relationship between dependency grammar and context-free grammar (CFG).
+In particular, we discuss how a dependency tree can be transformed into a CFG tree in Chomsky normal form (CNF).\footnote{A CNF tree comprises of binary rules and unary rules; further, a unary rule is only allowed on a preterminal node.In this article, though, we omit unary rules for simplicity; therefore, every tree is just a binary-branching tree.}
+This transformation is useful for dependency parsing algorithms that utilize the left-corner strategy.
+
+\begin{figure}[b]
+\vspace{-0.5\Cvs}
+\begin{center}
+\includegraphics{22-4ia2f2.eps}
+\end{center}
+\hangcaption{Conversions from dependency trees into CNF trees; (a) can be uniquely converted to (b), while (c) can be converted to both (d) and (e).}
+\label{fig:reduction}
+\vspace{-0.5\Cvs}
+\end{figure}
+
+As shown in Figure \ref{fig:reduction}, some dependency trees can be uniquely converted to a corresponding CNF tree, while others cannot.\footnote{A one-to-one correspondence between a dependency tree and a CNF tree is obtainable with the unfold-fold technique \cite{johnson:2007:ACLMain}, though the transformed grammar looks very different than the original grammar; therefore, it seems meaningless to relate stack depth to that conversion.}
+In the figure, nonterminal $X_w$ indicates that the constituency consists of $w$ and $w$'s descendants.
+Intuitively, a left-corner dependency parsing algorithm would increase its stack depth only on dependency trees that become center-embedded with this conversion;
+however, it is not apparent which dependency trees become center-embedded due to the ambiguity in the conversion.
+In general, a tree with a token that has dependents in both left and right directions has one or more ambiguities.
+
+We revisit this subtlety in Section \ref{sec:oracle} after formally presenting our left-corner dependency parsing algorithm.
+Fortunately, we can analyze the properties of the stack depth for a dependency parsing algorithm and ignore this ambiguity by restricting our attention to trees without the ambiguity, as we see below.
+
+Note that in this article, we call a dependency tree that becomes center-embedded a {\it center-embedded dependency tree (structure)}, or more simply a {\it center-embedded structure} (or a left- or right-branching structure).
+
+
+\section{Stack Depth of Existing Transition Systems}
+\label{sec:others}
+
+Our goal is to obtain a stack-based dependency parsing algorithm in which its stack depth captures the important syntactic regularity of the given language.
+Various stack-based parsing algorithms for dependency trees have been proposed, most of which are classified as {\it transition-based} dependency parsing algorithms.
+Since how stack depth grows in existing transition systems has not received much attention in the literature, we survey parsing strategies and stack depth behavior of existing systems before presenting our left-corner transition system (see Section \ref{sec:left-corner}).
+
+
+\subsection{Transition-based Dependency Parsing}
+\label{sec:trans-based}
+
+First, we review the framework of transition-based dependency parsing (see \citeA{Nivre:2008} for more details).
+A transition-based dependency parser processes a sentence on a transition system, which is defined as a set of {\it configurations} and a set of {\it transition actions} applied to a configuration.
+Each configuration is a tuple $(\sigma,\beta,A)$;
+here, $\sigma$ is a stack, and we use a vertical bar to signify the append operation, e.g., $\sigma=\sigma'|\sigma_1$ denotes $\sigma_1$ is the topmost element of stack $\sigma$.
+Further, $\beta$ is an input buffer consisting of token indexes that have yet to be processed;
+here, $\beta=j|\beta'$ indicates that $j$ is the first element of $\beta$.
+Finally, $A \subseteq V_w \times V_w$ is a set of arcs given $V_w$, a set of token indexes for sentence $w$.
+
+
+\subsection{Arc-Standard}
+\label{sec:standard}
+
+The arc-standard system \cite{nivre:2004:IncrementalParsing} consists of the following three transition actions, with $(h, d)$ representing a dependency arc from $h$ (head) to $d$ (dependent).
+\begin{itemize}
+ \item {\sc Shift}: $(\sigma,j|\beta,A) \mapsto (\sigma | j, \beta, A)$;
+ \item {\sc LeftArc}: $(\sigma|\sigma'_2|\sigma'_1, \beta, A) \mapsto (\sigma, \beta, A \cup \{ (\sigma'_1, \sigma'_2) \})$;
+ \item {\sc RightArc}: $(\sigma|\sigma'_2|\sigma'_1, \beta, A) \mapsto (\sigma, \beta, A \cup \{ (\sigma'_2, \sigma'_1) \})$.
+\end{itemize}
+
+We first observe here that the stack depth of the arc-standard system increases linearly for a right-branching structure, such as $a^\curvearrowright b^\curvearrowright c^\curvearrowright \cdots$, in which the system first shifts all words on the stack before connecting each pair of words.
+\citeA{nivre:2004:IncrementalParsing} analyzed this system and observed that stack depth grows when processing structures that become right-branching with the CNF conversion.
+Figure \ref{fig:right-deps} shows these dependency structures for three words;
+the system must construct a subtree of $b$ and $c$ before connecting $a$ to either, thus increasing stack depth.
+This occurs because the system builds a tree in a bottom-up manner, i.e., each token collects all dependents before being attached to its head.
+The arc-standard system is essentially equivalent to the push-down automaton of a CFG in CNF with a bottom-up strategy \cite{nivre:2004:IncrementalParsing}, so it has the same property as the bottom-up parser for a CFG.
+This equivalence also indicates that its stack depth increases for center-embedded structures.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-4ia2f3.eps}
+\end{center}
+\caption{(a)--(c) Right-branching dependency trees for three words and (d) the corresponding CNF.}
+\label{fig:right-deps}
+\end{figure}
+
+
+\subsection{Arc-eager}
+
+The arc-eager system \cite{Nivre2003} uses the following four transition actions:
+\begin{itemize}
+ \item {\sc Shift}: $(\sigma,j|\beta,A) \mapsto (\sigma | j, \beta, A)$;
+ \item {\sc LeftArc}: $(\sigma|\sigma'_1, j|\beta, A) \mapsto (\sigma, j|\beta, A \cup \{ (j, \sigma'_1) \})$ ~~~ (if $\neg \exists k, (k,\sigma'_1) \in A$);
+ \item {\sc RightArc}: $(\sigma|\sigma'_1, j|\beta, A) \mapsto (\sigma|\sigma'_1|j, \beta, A \cup \{ (\sigma'_1, j) \})$;
+ \item {\sc Reduce}: $(\sigma|\sigma'_1,\beta,A) \mapsto (\sigma,\beta,A)$ ~~~ (if $\exists k, (k,\sigma'_1) \in A$).
+\end{itemize}
+Note that {\sc LeftArc} and {\sc Reduce} are not always applicable.
+{\sc LeftArc} requires that $\sigma'_1$ is not a dependent of any other tokens, while {\sc Reduce} requires $\sigma'_1$ is a dependent of some token (attached to its head).
+These conditions originate from the property of the arc-eager system by which each element on the stack may not be disjoint.
+In this system, two successive tokens on the stack may be combined with a left-to-right arc $(a^\curvearrowright b)$, thus constituting a {\it connected component}.
+
+For this system, we slightly abuse the notation and define stack depth as the number of connected components, not as the number of tokens on the stack, since our concern is the syntactic bias that may be captured with measures on the stack.
+With the definition based on the number of tokens on the stack, the arc-eager system would have the same stack depth properties as the arc-standard system.
+As we see below, the arc-eager approach has several interesting properties with this modified definition.\footnote{The stack of the arc-eager system can be seen as the stack of stacks; i.e., each stack element itself is a stack preserving a connected subtree (a right spine). Our definition of stack depth corresponds to the depth of this stack of stacks.}
+
+From this definition, unlike the arc-standard system, 
+    the arc-eager system recognizes the structure shown in Figure \ref{fig:right-deps}(a) and 
+more generally $a^\curvearrowright b^\curvearrowright c^\curvearrowright \cdots$ within constant depth (just one) since it can connect all tokens on the stack with consecutive {\sc RightArc} actions.
+More generally, the stack depth of the arc-eager system never increases as long as all dependency arcs are left to right.
+This result indicates that the construction of the arc-eager system is no longer purely bottom-up and makes it difficult to formally characterize the stack depth properties based on the tree structure.
+
+We argue two points regarding the stack depth of the arc-eager system.
+First, it recognizes a part of the right-branching structures within a constant depth, as we analyzed above, while increasing stack depth linearly for other right-branching structures, 
+    including the trees shown in Figures \ref{fig:right-deps}(b) and (c).
+Second, it recognizes a part of the center-embedded structures within a constant depth, such as \tikz[baseline=-.5ex]{
+\node at (0.0, 0.0) {$a^\curvearrowright b ^\curvearrowright c ~~ d$,};
+\draw[line width=0.35pt,->] (-0.16,0.08) .. controls(-0.09,0.3) and (0.50,0.3) .. (0.57,0.08);
+}, which becomes center-embedded when converted to CNF with all arcs left-to-right.
+For other center-embedded structures, the stack depth grows linearly as with the arc-standard system.
+
+\begin{table}[b]
+\hangcaption{Order of required stack depth for each structure for each transition system. $O(1\sim n)$ means that it recognizes a part of structures within a constant stack depth but demands linear stack depth for the other structures.}
+\label{tab:order}
+\input{02table01.txt}
+\end{table}
+
+We summarize the above results in Table \ref{tab:order}.
+\pagebreak
+Our proposed transition system (see Section \ref{sec:left-corner}) has the properties of the third row of the table, and its stack depth grows only on center-embedded structures.
+
+
+\subsection{Other Systems}
+
+All systems in which stack elements cannot be connected have the same properties as the arc-standard system because of their bottom-up constructions including the hybrid system of \citeA{kuhlmann-gomezrodriguez-satta:2011:ACL-HLT2011}.
+\citeA{kitagawa-tanakaishii:2010:Short} and \citeA{sartorio-satta-nivre:2013:ACL2013} present an interesting variant that attaches one node to another node that may not be the head of a subtree on the stack.
+We do not explore these systems in our experiments because their stack depth essentially has the same properties as the arc-eager system, e.g., their stack depth does not always grow on center-embedded structures, although it grows on some kinds of right-branching structures.
+
+
+\section{Left-corner Dependency Parsing}
+\label{sec:left-corner}
+
+In this section, we develop our dependency transition system using the left-corner strategy.
+We first describe an existing left-corner algorithm for a CFG \cite{conf/coling/Resnik92}, an implementation that employs the left-corner strategy (see Section \ref{sec:background}), and then discuss how the idea can be adapted to dependency parsing.
+
+
+\subsection{Inference Rules of Resnik (1992)}
+\label{sec:resnik}
+
+Though there are several ways to define an algorithm using a push-down automaton that employs some strategy, \citeA{conf/coling/Resnik92} observed that a left-corner parsing algorithm must be equipped with two key operations: {\bf prediction} and {\bf composition}.
+We show inference rules\footnote{An inference rule has the form $\displaystyle \frac{A}{C}S$; $A$ stands for a list of {\it antecedents}, i.e., partial parse trees that have already been recognized, while $C$ represents the {\it consequent} that can be deduced from $A$. $S$ is optional {\it side conditions}, which must be satisfied when applying the rule.} of these operations in Figure \ref{fig:inference}.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{22-4ia2f4.eps}
+\end{center}
+\hangcaption{Two inference rules to achieve the left-corner strategy on a CFG, with $R$ representing a set of CFG rules.}
+\label{fig:inference}
+\end{figure}
+
+The fundamental idea behind these two operations is to expand currently recognized structures by predicting the right-hand side structure of the tree that is not yet recognized.
+When a subtree rooted at symbol (e.g., $B$) is constructed, {\bf prediction} recognizes its parent and sibling nodes by applying a CFG rule in which that symbol appears in the first position of the right-hand side (e.g., $A \rightarrow B~C$).
+Intuitively, the resulting structure represents a partial tree that awaits its rightmost structures rooted at the predicted symbols (e.g., $C$).
+{\bf Composition} then expands this predicted tree by combining it with another recognized subtree (e.g., the subtree rooted at $D$) in two steps, i.e., it first predicts the parent and sibling nodes of a subtree, just as in prediction, and then immediately connects two incomplete trees by unifying two predicted nodes with the same symbol (e.g., $C$);
+these two predicted nodes are the predicted parent node and the predicted child node in another tree.
+
+
+\subsection{Dummy Node}
+
+Next, we turn to the discussion of dependency parsing.
+The key characteristic of our transition system is the introduction of a dummy node to the subtree, which is needed to represent a subtree containing predicted structures, just as with the constituency subtrees used in Resnik's recognizer, as shown in Figure \ref{fig:inference}.
+To intuitively understand the parser actions, 
+    we present a simulation of transitions for the sentence shown in Figure \ref{fig:right-deps}(b) for which 
+all existing systems demand a linear stack depth.
+Our system first shifts $a$ and then conducts a {\bf prediction} operation that yields subtree \hspace{-3pt}\tikz[baseline=-1.ex]{
+\draw[->] (-0.12,-0.08) -- (-0.5,-0.25);
+\node at (0,0) {$x$};
+\node at (-0.6,-0.3) {$a$};
+}, where $x$ is a dummy node.
+Here, we predict that $a$ will become a left dependent of an incoming word.
+Next, it shifts $b$ to the stack and then conducts a {\bf composition} operation to obtain a tree \hspace{-3pt}\tikz[baseline=-1.ex]{
+\draw[->] (-0.12,-0.02) -- (-0.6,-0.25);
+\draw[->] (-0.03,-0.1) -- (-0.2,-0.25);
+\node at (0,0) {$x$};
+\node at (-0.7,-0.3) {$a$};
+\node at (-0.25,-0.3) {$b$};
+}.
+Finally, $c$ is inserted into the position of $x$, thus recovering the tree.
+
+
+\subsection{Transition System}
+\label{subsec:transitionsystem}
+
+Our system uses the same notation for a configuration as other systems presented in Section \ref{sec:trans-based}.
+Figure \ref{fig:config} shows an example of a configuration in which the $i$-th word in a sentence is written as $w_i$ on the stack.
+Each element on the stack is a list representing a right spine of a subtree, which is similar to \citeA{kitagawa-tanakaishii:2010:Short} and \citeA{sartorio-satta-nivre:2013:ACL2013}.
+Here, right spine $\sigma_i = \langle \sigma_{i1},\sigma_{i2},\cdots,\sigma_{ik} \rangle$ consists of all nodes in a descending path from the head of $\sigma_i$, i.e., from $\sigma_{i1}$, taking the rightmost child at each step.
+We also write $\sigma_i = \sigma'_i | \sigma_{ik}$, meaning that $\sigma_{ik}$ is the rightmost node of spine $\sigma_i$.
+Each element of $\sigma_i$ is an index of a token in a sentence or dummy node $x(\lambda)$, where $\lambda$ is the set of left dependents of $x$.
+
+Further, we state that right spine $\sigma_i$ is {\it complete} if it does not contain any dummy nodes, while $\sigma_i$ is {\it incomplete} if it contains a dummy node.
+Our transition system uses six actions, two of which are {\bf shift} actions and four of which are {\bf reduce} actions.
+All actions are defined in Figure \ref{fig:actions} and described below.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-4ia2f5.eps}
+\end{center}
+\caption{Example configuration of a left-corner transition system.}
+\label{fig:config}
+\end{figure}
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-4ia2f6.eps}
+\end{center}
+\hangcaption{Actions of the left-corner transition system including two shift operations (top) and reduce operations (bottom).}
+\label{fig:actions}
+\end{figure}
+
+
+
+    \noindent\textbf{Shift Action}
+There are two shift actions: {\sc Shift} and {\sc Insert}.\footnote{We use small caps to refer to a specific action, e.g., {\sc Shift}, while ``shift'' refers to an action type.}
+{\sc Shift} moves a token from the top of the buffer to the stack, while {\sc Insert} replaces a dummy node on the top of the stack with a token from the top of the buffer.
+The latter action adds arcs from or to tokens connected to the dummy node.
+Note that this action can be performed for a configuration in which $x(\lambda)$ is the top of $\sigma_1$ or $\lambda$ is empty, in which case arcs $(i, j)$ or $\cup_{k\in\lambda} (j,k)$ are not added.
+Also note that after a shift action, the top element of the stack must be complete.
+
+    \noindent\textbf{Reduce Action}
+Reduce actions creates new arcs for subtrees on the stack.
+{\sc LeftPred} and {\sc RightPred} correspond to the predictions of the CFG counterpart.
+Figure \ref{fig:correspondence} describes these transitions for minimal subtrees.
+More specifically, {\sc LeftPred} assigns a dummy node $x$ as the head of $a$ (this corresponds to $\sigma_{11}$), while {\sc RightPred} creates $x$ as a new right dependent.
+When we convert the resulting tree into CNF, we observe that the difference between these two operations lies in the predicted parent node of $a$:
+{\sc LeftPred} predicts a nonterminal X$_x$, i.e., it predicts that the head of this subtree is the head of the predicting sibling node, while {\sc RightPred} predicts that the head is $a$.
+Different from CFG rules, we do not have to predict the actual sibling node;
+rather, we can abstract this predicted node as dummy node $x$.
+A similar correspondence holds between composition actions {\sc RightComp} and {\sc LeftComp}.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{22-4ia2f7.eps}
+\end{center}
+\hangcaption{Correspondences of reduce actions between dependency and CFG. Nonterminal X$_t$ means that its lexical head is $t$. We only show minimal example subtrees for simplicity. However, $a$ can have an arbitrary number of children, so can $b$ or $x$, provided $x$ is on a right spine and has no right children.}
+\label{fig:correspondence}
+\end{figure}
+
+To obtain a valid tree, shift and reduce actions must be alternately performed.
+We prove this as follows.
+Let $c=(\sigma|\sigma_2|\sigma_1,\beta,A)$.
+Since reduce actions turn an incomplete $\sigma_1$ into a complete subtree, we cannot perform two consecutive reduce actions.
+Conversely, shift actions make $\sigma_1$ complete;
+therefore, after a shift action, we cannot perform {\sc Insert} since it requires $\sigma_i$ to be incomplete.
+If we perform {\sc Shift}, the top two elements on the stack become complete, but we cannot connect these two trees because the only way to connect two trees on the stack is composition, but this requires $\sigma_2$ to be incomplete.
+
+Given a sentence of length $n$, the number of actions required to arrive at the final configuration is $2n-1$, because every token except the last word must be shifted once and reduced once, and the last word is always inserted as the final step.
+
+Every projective dependency tree is derived from at least one transition sequence with this system, i.e., our system is {\it correct} for the class of projective dependency trees \cite{Nivre:2008}.
+We omit a rigorous proof of this claim since it is somewhat involved.
+We instead focus on the more practically important limitation of our system on {\it soundness}. Our system is {\it unsound} for the class of projective dependency trees, meaning that a transition sequence on a sentence does not always generate a valid projective dependency tree.
+We can easily verify this claim with an example.
+Let $a~b~c$ be a sentence and consider the action sequence ``{\sc Shift LeftPred Shift LeftPred Insert}'' with which we obtain the terminal configuration of $\sigma= [ x(a), c ]; \beta=[]; A=\{ (b,c) \}$,\footnote{For clarity, we use words instead of indices for stack elements.} but this is not a valid tree.
+The arc-eager system also suffers from a similar restriction \cite{NivreAEP14}, which may lead to lower parse accuracy.
+Instead of fixing this problem, in our parsing experiment, which is described in Section \ref{sec:parse}, we implement simple post-processing heuristics to combine those fragmented trees that remain on the stack.
+
+
+\subsection{Oracle and Spurious Ambiguity}
+\label{sec:oracle}
+
+The oracle for a transition system is a function that returns a correct action given the current configuration and a set of gold arcs.
+Though typically used to obtain training examples for a parsing model, we also use the oracle as a corpus study to explore syntactic preferences that exist in the treebanks, as described further in Section \ref{sec:analysis}.
+Below, we present an oracle algorithm and analyze the properties of the oracle with respect to stack depth for dependency structures that face ambiguities in the CFG reduction, i.e., the problem we discussed in Section \ref{sec:reduction} above.
+
+Since our system performs shift and reduce actions interchangeably, we need two functions to define the oracle.
+Let $A_g$ be a set of arcs in the gold tree and $c$ be the current configuration.
+We select the next shift action if the stack is empty (i.e., the initial configuration) or the top element of the stack is incomplete as follows:
+\begin{itemize}
+ \item {\sc Insert}:
+       Let $c=(\sigma| \langle \sigma'_1 | i | x(\lambda) \rangle, j|\beta, A)$. $i$ may not exist.
+       The condition is:
+\begin{itemize}
+        \item if $i$ exists, $(i,j)\in A_g$ and $j$ has no dependents in $\beta$;
+        \item otherwise, $\exists k\in \lambda;(j,k)\in A_g$.
+       \end{itemize}
+ \item {\sc Shift}: otherwise.
+\end{itemize}
+If the top element on the stack is complete, we select the next reduce action as follows:
+\begin{itemize}
+ \item {\sc LeftComp}:
+       Let $c=(\sigma| \langle \sigma'_2 | i | x(\lambda) \rangle | \langle \sigma_{11},\cdots \rangle, \beta, A)$. $i$ may not exist.
+       Then
+       \begin{itemize}
+        \item if $i$ exists, $\sigma_{11}$ has no dependents in $\beta$ and $i$'s next dependent is the head of $\sigma_{11}$;
+        \item otherwise, $\sigma_{11}$ has no dependents in $\beta$ and $k\in\lambda$ and $\sigma_{11}$ share the same head.
+       \end{itemize}
+ \item {\sc RightComp}:
+       Let $=(\sigma| \langle \sigma'_2 | i | x(\lambda) \rangle | \langle \sigma_{11},\cdots \rangle, \beta, A)$. $i$ may not exist.
+       Then
+\begin{itemize}
+        \item if $i$ exists, $\sigma_{11}$ has no more dependents in $\beta$ and $(i,\sigma_{11}) \in A_g$;
+        \item otherwise, $\sigma_{11}$ has no more dependents in $\beta$ and $\exists k\in \lambda,(\sigma_{11},k)\in A_g$.
+       \end{itemize}
+ \item {\sc RightPred}: if $c=(\sigma| \langle \sigma_{11},\cdots \rangle, \beta, A)$ and $\sigma_{11}$ has one more dependent in $\beta$.
+ \item {\sc LeftPred}: otherwise.
+\end{itemize}
+Essentially, each condition ensures that we do not miss any gold arcs by performing the transition.
+This is ensured at each step so we can recover the gold tree in the terminal configuration.
+We use this algorithm in our experiments, as described in Sections \ref{sec:analysis} and \ref{sec:parse}.
+
+Next, we observe that the algorithm above is not a unique algorithm to define oracle transitions.
+Consider sentence $a ^\curvearrowleft b ^\curvearrowright c$, 
+    which is a simplification of the sentence shown in Figure \ref{fig:reduction}(c) above.
+If we apply the algorithm presented above to this sentence, we obtain the following sequence:
+\begin{equation}
+ \textsc{Shift} \rightarrow \textsc{LeftPred} \rightarrow \textsc{Insert} \rightarrow \textsc{RightPred} \rightarrow \textsc{Insert} \label{eqn:oracleseq1}
+\end{equation}
+Note, however, that the following transitions also recover the parse tree:
+\begin{equation}
+ \textsc{Shift} \rightarrow \textsc{LeftPred} \rightarrow \textsc{Shift} \rightarrow \textsc{RightComp} \rightarrow \textsc{Insert} \label{eqn:oracleseq2}
+\end{equation}
+The above results indicate that our system suffers from a {\it spurious ambiguity} \cite{GoldbergTDP13}.
+
+We do not resolve this ambiguity here and instead analyze the differences in the transitions leading to the same tree, wherein our argument lies in the form of the recognized constituency (i.e., CNF) tree.
+Here, Expression (\ref{eqn:oracleseq1}) performs {\sc RightPred} at step four, meaning that it recognizes a CNF tree of the form $((a~b)~c)$, while Expression (\ref{eqn:oracleseq2}) recognizes $(a~(b~c))$ due to its {\sc RightComp} operation. Therefore, the spurious ambiguity of our system is caused by the ambiguity of converting a dependency tree to a CNF tree.
+
+The presented oracle above follows the strategy of performing compose or insert operations when possible.
+As we saw in the given example, sometimes {\sc Insert} and {\sc Shift} can both be valid for recovering the gold arcs, though here we always select {\sc Insert}.
+Sometimes the same ambiguity exists between {\sc LeftComp} and {\sc LeftPred} or {\sc RightComp} and {\sc RightPred};
+we always prefer composition.
+Note that this oracle is optimal in terms of stack depth, i.e., it always minimizes the maximum stack depth required to build a parse tree (proof omitted).
+
+This oracle implicitly performs the following binarization to the given dependency tree:
+\begin{itemize}
+ \item If the head of a subtree is in its {\it right} side or the head is the sentence root, it constructs its left children first.
+ \item If the head of a subtree is in its {\it left} side, it constructs its right children first.
+\end{itemize}
+Figure \ref{fig:binarize} shows an example, though the proof is omitted here.
+If we construct another oracle algorithm, we would have different properties regarding implicit binarization.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-4ia2f8.eps}
+\end{center}
+\caption{Implicit binarization process of the oracle described in the body.}
+\label{fig:binarize}
+\end{figure}
+
+
+\subsection{Stack Depth of the Transition System}
+\label{sec:memorycost}
+
+Having established the relationship between transitions and the underlying CNF structure, it is then possible to formally discuss the stack depth properties of our transition system.
+To do so, we first introduce two measures, i.e., depth$_{re}$ and depth$_{sh}$, with the former representing the stack depth after a reduce step and the latter representing the stack depth after a shift step.
+Then, we have:
+\begin{itemize}
+ \item depth$_{re} \leq 1$ unless the implicitly constructed CNF tree does not contain center-embedding (i.e., is just left-linear or right-linear).
+       This linearly increases as the depth of center-embeddedness increases.
+ \item depth$_{sh} \leq 2$ if the implicit CNF tree does not contain center-embedding.
+       The extra element on the stack occurs with a {\sc Shift} action, but it does not imply the existence of center-embedding.
+       This linearly increases as the depth of center-embeddedness increases.
+\end{itemize}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-4ia2f9.eps}
+\end{center}
+\hangcaption{Center-embedded dependency trees and zig-zag patterns observed in the implicit CNF trees: (a)--(b) depth 1, (c)--(d) depth 2, (e) CNF for (a) and (b), and (f) CNF for (c) and (d).}
+\label{fig:level}
+\end{figure}
+
+Figure \ref{fig:level} shows examples of how the depth of center-embeddedness increases, with the distinguished zig-zag patterns in center-embedded structures shown in bold.
+Note that depth$_{re}$ corresponds to the depth of center-embeddedness of the structure, while depth$_{sh}$ may not.
+We do not precisely discuss the condition with which an extra factor of depth$_{sh}$ occurs.
+Of importance here is that both depth$_{re}$ and depth$_{sh}$ increase as the depth of center-embeddedness of the implicit CNF increases, though though they may differ only by a constant (just one).
+
+
+\section{Empirical Stack Depth Analysis}
+\label{sec:analysis}
+
+In this section, we evaluate the cross-linguistic coverage of our developed transition system.
+We compare our system with other systems by observing the required stack depth as we run oracle transitions for sentences on a set of typologically diverse languages.
+We thereby verify the hypothesis that our system consistently demands less stack depth across languages in comparison with other systems.
+Note that this claim is not obvious from our theoretical analysis (Table \ref{tab:order}) since the stack depth of the arc-eager system is sometimes smaller than that of the left-corner system (i.e., a portion of center-embedding), which suggests that it may possibly provide a more meaningful measure for capturing the syntactic regularity of a language.
+
+
+\subsection{Settings}
+\label{sec:analysis:settings}
+
+We collected 19 treebanks from the CoNLL-X and 2007 shared tasks \cite{buchholz-marsi:2006:CoNLL-X,nivre-EtAl:2007:EMNLP-CoNLL2007}.
+Some languages\footnote{Arabic, Chinese, Czech, and Turkish.} were covered by both shared tasks;
+we used only 2007 data.
+Since all systems presented in this article cannot handle nonprojective structures \cite{Nivre:2008}, we projectivize all nonprojective sentences using pseudo-projectivization \cite{nivre-nilsson:2005:ACL} implemented in the MaltParser \cite{NivreMAL07}.
+We expect that this modification does not substantially change the overall corpus statistics as nonprojective constructions are relatively rare \cite{nivre-EtAl:2007:EMNLP-CoNLL2007}.
+Some treebanks such as the Prague dependency treebanks (including Arabic and Czech) assume that a sentence comprises multiple independent clauses that are connected via a dummy root token.
+We place this dummy root node at the end of each sentence, because doing so does not change the cost of sentences with a single root token on all systems and improves the parsing accuracy of some systems such as arc-eager across languages as compared with the conventional approach in which the dummy token is placed only at the beginning of each sentence \cite{journals/coling/BallesterosN13}.
+
+We compare three transition systems: arc-standard, arc-eager, and left-corner.
+For each system, we perform oracle transitions for all sentences and languages, measuring stack depth at each configuration.
+The arc-eager system sometimes creates a subtree at the beginning of a buffer, in which case we increment stack depth by one.
+
+We run an oracle transition for each sentence with each system.
+For the left-corner system, we implemented the algorithm presented in Section \ref{sec:oracle}.
+For the arc-standard and arc-eager systems, we implemented oracles preferring reduce actions over shift actions, which minimizes the maximum stack depth.
+
+
+\subsection{Stack Depth for General Sentences}
+\label{sec:analysis:general}
+
+For each language, we count the number of configurations of a specific stack depth while performing oracles on all sentences.
+Figure \ref{fig:load-comparison} shows the cumulative frequencies of configurations as the stack depth increases for the arc-standard, arc-eager, and left-corner systems.
+The data answer the question as to which stack depth is required to cover X\% of configurations when recovering all gold trees.
+Note that comparing absolute values here is less meaningful since the minimal stack depth to construct an arc is different for each system, e.g., the arc-standard system requires at least two items on the stack, while the arc-eager system can create a right arc if the stack contains one element.
+Instead, we focus on the universality of each system's behavior for different languages.
+
+As discussed in Section \ref{sec:standard}, the arc-standard system can only process left-branching structures within a constant stack depth;
+such structures are typical in head-final languages such as Japanese or Turkish, and we observe this tendency in the data.
+The system performs differently in other languages, so the behavior is not consistent across languages.
+
+The arc-eager and left-corner systems behave similarly for many languages, but we observe that there are some languages for which the left-corner system behaves similarly across numerous languages, while the arc-eager system tends to incur a larger stack depth.
+In particular, except Arabic, the left-corner system covers over 90\% (specifically, over 98\%) of configurations with a stack depth $\leq 3$.
+The arc-eager system also has 90\% coverage in many languages with a stack depth $\leq 3$, though some exceptions exist, e.g., German, Hungarian, Japanese, Slovene, and Turkish.
+
+\begin{figure}[p]
+\begin{center}
+\includegraphics{22-4ia2f10.eps}
+\end{center}
+\hangcaption{Crosslinguistic comparison of the cumulative frequencies of stack depth during oracle transitions.}
+\label{fig:load-comparison}
+\end{figure}
+
+\begin{table}[p]
+\hangcaption{Token-level and sentence-level coverage results of left-corner oracles with depthre. Here, the right-hand numbers in each column are calculated from corpora that exclude all punctuation, e.g., 92\% of tokens in Arabic are covered within a stack depth $\leq 3$, while the number increases to 94.1 when punctuation is removed. Further, 57.6\% of sentences (61.6\% without punctuation) can be parsed within a maximum depthre of three, i.e., 57.6\% of sentences contain at most depth three center-embedded constructions. Av. len. indicates the average number of words in a sentence.}
+\label{tab:token}
+\input{02table02.txt}
+\end{table}
+
+We observe that results for Arabic are notably different from other languages.
+We suspect that this is because the average length of each sentence is very long (i.e., 39.3 words; see Table \ref{tab:token} for overall corpus statistics).
+\citeA{buchholz-marsi:2006:CoNLL-X} noted that the parse unit of the Arabic treebank is not a sentence but a paragraph in which every sentence is combined via a dummy root node.
+To remedy this inconsistency of annotation units, we prepared the modified treebank, which we denote as Arabic$^*$ in the figure, by treating each child tree of the root node as a new sentence.\footnote{Note that we removed the resulting sentence if the length was one.}
+The results then are closer to other language treebanks, especially Danish, which indicates that the exceptional behavior of Arabic largely originates with the annotation variety.
+From this point, we review the results of Arabic$^*$ instead of the original Arabic treebank.
+
+
+\subsection{Comparing with Randomized Sentences}
+\label{sec:random}
+
+The next question we examine is whether the observation from the last experiment, i.e., that the left-corner parser consistently demands less stack depth, holds only for naturally occurring or grammatically correct sentences.
+We attempt to answer this question by comparing oracle transitions on original treebank sentences and on (probably) grammatically incorrect sentences.
+We create these incorrect sentences using the method proposed by \citeA{gildea-temperley:2007:ACLMain}.
+We reorder words in each sentence by first extracting a directed graph, and then randomly reorder the children of each node while preserving projectivity.
+Following \citeA{gildea-temperley:2007:ACLMain}, we remove punctuation from all corpora in this experiment beforehand, since how punctuation is attached to words is not essential.
+
+The dotted lines shown in Figure \ref{fig:load-comparison-random} denote the results of randomized sentences for each system.
+There are notable differences in required stack depth between original and random sentences in many languages.
+For example, with a stack depth $\leq 3$, the left-corner system cannot reach 90\% of configurations in many modified treebanks such as Arabic$^*$, Catalan, Danish, English, Greek, Italian, Portuguese, and Spanish.
+These results suggest that our system demands less stack depth only for naturally occurring sentences.
+For Chinese and Hungarian, the differences are subtle;
+however, the differences are also small for the other systems, which implies that these corpora have biases on graphs to reduce the differences.
+
+\begin{figure}[p]
+\begin{center}
+\includegraphics{22-4ia2f11.eps}
+\end{center}
+\hangcaption{Stack depth results in corpora with punctuation removed; the dashed lines show results on randomly reordered sentences.}
+\label{fig:load-comparison-random}
+\end{figure}
+
+
+\subsection{Token-level and Sentence-level Coverage Results}
+\label{sec:token}
+
+As noted in Section \ref{sec:memorycost}, the stack depth of the left-corner system in our experiments thus far is not the exact measurement of center-embeddedness of the construction due to an extra factor introduced by the {\sc Shift} action.
+In this section, we focus on depth$_{re}$, which calculates the exact center-embeddedness and may be more applicable to some applications.
+
+Table \ref{tab:token} shows token- and sentence-level statistics with and without punctuations.
+The token-level coverage of depth $\leq 2$ substantially improves from the results shown in Figure \ref{fig:load-comparison} in many languages, consistently exceeding 90\% except for Arabic$^*$, which indicates that many configurations of a stack depth of two in previous experiments are due to the extra factor caused by the {\sc Shift} action rather than the deeper center-embedded structures.
+Results showing that the token-level coverage reaches 99\% in most languages with depth$_{re} \leq 3$ indicate that the center-embedded construction of depth four rarely occurs in natural language sentences.
+Overall, sentence-level coverage results are slightly decreased, but they are still very high, notably 95\%--99\% with depth$_{re} \leq 3$ for most languages.
+
+
+\section{Parsing Experiment}
+\label{sec:parse}
+
+Our final experiment is the parsing experiment on unseen sentences.
+A transition-based dependency parsing system is typically modeled with a structured discriminative model, such as with the structured perceptron and beam search \cite{zhang-clark:2008:EMNLP,huang-sagae:2010:ACL}.
+We implemented and trained the parser model in this framework to investigate the following questions:
+\begin{itemize}
+ \item How does the stack depth bound at decoding affect parsing performance of each system?
+       The underlying concern here is basically the same as in the previous oracle experiment discussed in Section \ref{sec:analysis}, i.e., to determine whether the stack depth of the left-corner system provides a meaningful measure for capturing syntactic regularity.
+       More specifically, we wish to observe whether the observation from the last experiment, i.e., that the behavior of the left-corner system is mostly consistent across languages, also holds with parse errors.
+ \item Does our parser perform better than other transition-based parsers?
+       One practical disadvantage of our system is that its attachment decisions are made more eagerly, i.e., that it has to commit to a particular structure at an earlier point;
+       however, this also means the parser may utilize rich syntactic information as features that are not available in other systems.
+       We investigate whether these rich features help disambiguation in practice.
+ \item Finally, we examine parser performance of our system under a restriction on features to prohibit lookahead on the buffer.
+       This restriction is motivated by the previous model of probabilistic left-corner parsing \cite{journals/coling/SchulerAMS10} in which the central motivation is its cognitive plausibility.
+       We report how accuracies drop with the cognitively motivated restriction and discuss a future direction to improve performance.
+\end{itemize}
+
+
+\subsection{Feature}
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{22-4ia2f12.eps}
+\end{center}
+\hangcaption{(Left) Elementary features extracted from an incomplete and complete node, and (Right) how feature extraction is changed depending on whether the next step is shift or reduce.}
+\label{fig:feature}
+\end{figure}
+\begin{table}[t]
+\hangcaption{Feature templates used in both full and restricted feature sets, with ${\sf t}$ representing POS tag and ${\sf w}$ indicating the word form, e.g., $s_0.{\sf l.t}$ refers to the POS tag of the leftmost child of $s_0$.}
+\label{tab:feature}
+\input{02table03.txt}
+\end{table}
+\begin{table}[t]
+\caption{Additional feature templates only used in the full feature model.}
+\label{tab:additional}
+\input{02table04.txt}
+\end{table}
+
+The feature set we use is explained in Figure \ref{fig:feature} and Tables \ref{tab:feature} and \ref{tab:additional}.
+Our transition system is different from other systems in that it has two modes, i.e., a shift mode in which the next action is either {\sc Shift} or {\sc Insert} and a reduce mode in which we select the next reduce action, thus we use different features depending on the current mode.
+Figure \ref{fig:feature} shows how features are extracted from each node for each mode.
+In reduce mode, we treat the top node of the stack as if it were the top of buffer ($q_0$), which allows us to use the same feature templates in both modes by modifying only the definitions of elementary features $s_i$ and $q_i$.
+A similar technique has been employed in the transition system proposed by \citeA{sartorio-satta-nivre:2013:ACL2013}.
+
+To explore the last question, we develop two feature sets.
+Our full feature set consists of features shown in Tables \ref{tab:feature} and \ref{tab:additional}.
+For the limited feature set, we remove all features that depend on $q_1$ and $q_2$ in Figure \ref{fig:feature}, which we list in Table \ref{tab:additional}.
+Here, we only look at the top node on the buffer in shift mode.
+This is the minimal amount of lookahead in our parser and is the same as the previous left-corner PCFG parsers \cite{journals/coling/SchulerAMS10}, which are cognitively motivated.
+
+Our parser cannot capture a head and dependent relationship directly at each reduce step, because all interactions between nodes are via a dummy node, which may be a severe limitation from a practical viewpoint;
+however, we can exploit richer context from each subtree on the stack, as illustrated in Figure \ref{fig:feature}.
+We construct our feature set with many nodes around the dummy node, including the parent (${\sf p}$), grandparent (${\sf gp}$), and great grandparent (${\sf gg}$).
+
+
+\subsection{Settings}
+\label{sec:exp:setting}
+
+We compare parsers with three transition systems: arc-standard, arc-eager, and left-corner.
+The feature set of the arc-standard system is borrowed from \citeA{huang-sagae:2010:ACL}.
+For the arc-eager system, we use the feature set of \citeA{zhang-nivre:2011:ACL-HLT2011} from which we exclude features that rely on arc label information.
+
+We train all models with different beam sizes in the violation fixing perceptron framework \cite{huang-fayong-guo:2012:NAACL-HLT}.
+Since our goal is not to produce a state-of-the-art parsing system, we use gold POS tags as input both in training and testing.
+
+As noted in Section \ref{subsec:transitionsystem}, the left-corner parser sometimes fails to generate a single tree, in which case the stack contains a complete subtree at the top position (since the last action is always {\sc Insert}) and one or more incomplete subtrees.
+If this occurs, we perform the following post-processing steps:
+\begin{itemize}
+ \item We collapse each dummy node in an incomplete tree. More specifically, if the dummy node is the head of the subtree, we attach all children to the sentence (dummy) root node; otherwise, the children are reattached to the parent of the dummy node.
+ \item The resulting complete subtrees are all attached to the sentence (dummy) root node.
+\end{itemize}
+
+
+\subsection{Results on the English Development Set}
+
+We first evaluate our system on the common English development experiment.
+We train the model in section 2-21 of the WSJ Penn Treebank \cite{Marcus93buildinga}, which are converted into dependency trees using the penn converter.\footnote{http://nlp.cs.lth.se/software/treebank\_converter/}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-4ia2f13.eps}
+\end{center}
+\caption{Accuracy vs. stack depth bound at decoding for several beam sizes ($b$).}
+\label{fig:accuracy-depth}
+\end{figure}
+
+    \noindent\textbf{Impact of Stack Depth Bound}
+To explore the first question posed at the beginning of this section, we compare parse accuracies under each stack depth bound with several beam sizes, with results shown in Figure \ref{fig:accuracy-depth}.
+In this experiment, we calculate the stack depth of a configuration in the same way as our oracle experiment (see Section \ref{sec:analysis:settings}), and when expanding a beam, we discard candidates for which stack depth exceeds the maximum value.
+As discussed in Section \ref{sec:token}, for the left-corner system, depth$_{re}$ might be a more linguistically meaningful measure, so we report scores with both definitions.\footnote{This can be achieved by allowing any configurations after a shift step.}
+The general tendency across different beam sizes is that our left-corner parser (in particular with depth$_{re}$) is much less sensitive to the value of the stack depth bound.
+For example, when the beam size is eight, the accuracies of the left-corner (depth$_{re}$) are 90.6, 91.7, 91.7, and 91.7 with increased stack depth bounds, while the corresponding scores are 82.5, 90.6, 92.6, and 93.3 in the arc-eager system.
+This result is consistent with the observation in our oracle coverage experiment discussed in Section \ref{sec:analysis}, and suggests that a depth bound of two or three might be a good constraint for restricting tree candidates for natural language with no (or little) loss of recall.
+Next, we examine whether this observation is consistent across languages.
+
+    \noindent\textbf{Performance without Stack Depth Bound}
+Figure \ref{fig:plot} shows accuracies with no stack depth bound when changing beam sizes.
+We can see that the accuracy of the left-corner system (full feature) is close to that of the other two systems, but some gap remains.
+With a beam size of 16, the scores are
+left-corner: 92.0;
+arc-standard: 92.9;
+arc-eager: 93.4.
+Also, the score gaps are relatively large at smaller beam sizes;
+e.g., with beam size 1, the score of the left-corner is 85.5, while that of the arc-eager is 91.1.
+This result indicates that the prediction with our parser might be structurally harder than other parsers even though ours can utilize richer context from subtrees on the stack.
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-4ia2f14.eps}
+\end{center}
+\hangcaption{Accuracy vs. beam size for each system on the English Penn Treebank development set. Left-corner (full) is the model with the full feature set, while Left-corner (limited) is the model with the limited feature set.}
+\label{fig:plot}
+\end{figure}
+
+    \noindent\textbf{Performance of Limited Feature Model}
+Next we move on to the results with cognitively motivated limited features (Figure \ref{fig:plot}).
+When the beam size is small, it performs extremely poorly (63.6\% with beam size 1).
+This is not surprising since our parser has to deal with each attachment decision much earlier, which seems hard without lookahead features or larger beam.
+However, it is interesting that it achieves a reasonably higher score of 90.6\% accuracy with beam size 16.
+In the previous constituency left-corner parsing experiments that concerned their cognitive plausibility \cite{journals/coling/SchulerAMS10,TOPS:TOPS12034}, typically the beam size is quite huge, e.g., 2,000.
+The largest difference between our parser and their systems is the model: our model is discriminative while their models are generative.
+Though discriminative models are not popular in the studies of human language processing \cite{keller:2010:Short}, the fact that our parser is able to output high quality parses with such smaller beam size would be appealing from the cognitive viewpoint (see Section \ref{sec:relatedwork} for further discussion).
+
+
+\subsection{Result on CoNLL Datasets}
+
+We next examine whether the observations above with English dataset are general across languages using CoNLL datasets.
+Note that although we train on the projectivized corpus, evaluation is against the original nonprojective trees.
+As our systems are unlabeled, we do not try any post-deprojectivization \cite{nivre-nilsson:2005:ACL}.
+In this experiment, we set the beam size to 8.
+
+    \noindent\textbf{Effect of Stack Depth Bound}
+The cross-linguistic results with stack depth bounds are summarized in Figure \ref{fig:conll_depth_to_accuracy} from which we can see that the overall tendency of each system is almost the same as the English experiment.
+Little accuracy drops are observed between models with bounded depth 2 or 3 and the model without depth bound in the left-corner (depth$_{re}$), although the score gaps are larger in the arc-eager.
+The arc-standard parser performs extremely poorly with small depth bounds except Japanese and Turkish, and this is consistent with our observation that the arc-standard system demands less stack depth only for head-final languages (Section \ref{sec:analysis:general}).
+
+Notably, in some cases the scores of the left-corner parser (depth$_{re}$) drop when loosing the depth bound (see Basque, Danish, and Turkish), meaning that the stack depth bound of the left-corner sometimes help disambiguation by ignoring linguistically implausible structures (deep center-embedding) during search.
+The result indicates the parser performance could be improved by utilizing stack depth information of the left-corner parser, though we leave further investigation as a future work.
+
+\begin{figure}[p]
+\begin{center}
+\includegraphics{22-4ia2f15.eps}
+\end{center}
+\caption{Accuracy vs. stack depth bound.}
+\label{fig:conll_depth_to_accuracy}
+\end{figure}
+
+    \noindent\textbf{Performance without Stack Depth Bound}
+Table \ref{tab:parse} summarizes the results without stack depth bounds.
+Again, the overall tendency is the same as the English experiment.
+The arc-eager performs the best except Arabic.
+In some languages (e.g., Bulgarian, English, Spanish, and Swedish), the left-corner (full) performs better than the arc-standard, while the average score is 1.1 point below.
+This difference and the average difference between the arc-eager and the arc-standard (85.8 vs. 84.6) are both statistically significant (p $<$ 0.01, the McNemar test).
+We can thus conclude that our left-corner parser is not stronger than the other state-of-the-art parsers even with rich features.
+
+\begin{table}[t]
+\hangcaption{Parsing results on CoNLL X and 2007 test sets with no stack depth bound (unlabeled attachment scores).}
+\label{tab:parse}
+\input{02table05.txt}
+\end{table}
+
+    \noindent\textbf{Performance of Limited Feature Model}
+With limited features, the left-corner parser performs worse in all languages. The average score is about 2 point below the full feature models (83.7\% vs. 81.4\%) and shows the same tendency as in the English development experiment.
+This difference is also statistically significant (p $<$ 0.01, the McNemar test).
+The scores of English are relatively low compared with the results in Figure \ref{fig:plot}, probably because the training data used in the CoNLL 2007 shared task is small, about half of our development experiment, to reduce the cost of training with large corpora for the shared task participants \cite{nivre-EtAl:2007:EMNLP-CoNLL2007}.
+
+Finally, though the overall score of the left-corner parser is lower,
+we suspect that it could be improved by inventing new features, in particular those with external syntactic knowledge.
+The analysis below is based on the result with limited features, but we expect a similar technique would also be helpful to the full feature model.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{22-4ia2f16.eps}
+\end{center}
+\hangcaption{(a)--(b) Example of a parse error by the left-corner parser that may be saved with external syntactic knowledge (limited features and beam size 8). (c) Two corresponding configuration paths: the left path leads to (a) and the right path leads to (b).}
+ \label{fig:error:example}
+\end{figure}
+
+As we have discussed (see the beginning of Section \ref{sec:parse}), an attachment decision of the left-corner parser is more eager, which is the main reason for the lower scores.
+One particular difficulty with the left-corner parser is that the parser has to decide whether each token has further (right) arguments with no (or a little) access to the actual right context.
+Figure \ref{fig:error:example} shows an example of a parse error in English caused by the left-corner parser with limited features (without stack depth bound).
+This is a kind of PP attachment error on {\it on CNN}, though the parser has to deal with this attachment decision implicitly before observing the attached phrase ({\it on CNN}).
+When the next token in the buffer is {\it times} (Figure \ref{fig:error:example}(c)), performing {\sc Shift} means {\it times} would take more than one argument in future, while performing {\sc Insert} means the opposite:
+{\it times} does not take any arguments.
+Resolving this problem would require knowledge on {\it times} that it often takes no right arguments (while {\it appear} generally takes several arguments), but it also suggests that the parser performance could be improved by augmenting such syntactic knowledge on each token as new features, such as with distributional clustering \cite{koo-carreras-collins:2008:ACLMain,BohnetJMA13}, supertagging \cite{ouchi-duh-matsumoto:2014:EACL2014-SP}, or refined POS tags \cite{mueller-EtAl:2014:EMNLP2014}.
+All those features are shown to be effective in transition-based dependency parsing;
+we expect those are particularly useful for our parser though the further analysis is beyond the scope of this article.
+In PCFG left-corner parsing, \citeA{TOPS:TOPS12034} reported accuracy improvement with symbol refinements obtained by the Berkeley parser \cite{petrov-EtAl:2006:COLACL} in English.
+
+
+\section{Related Work and Discussion}
+\label{sec:relatedwork}
+
+There have been several theoretical and empirical studies of left-corner parsing but none have applied the idea into dependency parsing as we presented in this article.
+The first implemented left-corner constituency parsing system is presented in \citeA{Roark:2001:RPP:933637}.
+His idea is instead of modeling left-corner transitions directly as in our parser, incorporating the left-corner strategy into a CFG parser via a left-corner grammar transform \cite{conf/acl/Johnson98}.
+This design makes the overall parsing system top-down and makes it possible to compare the pure top-down and the left-corner parsing systems in a unified way.
+
+The parser presented in \citeA{journals/coling/SchulerAMS10} and \citeA{vanschijndel-schuler:2013:NAACL-HLT} is an example of left-corner parsing system that directly models prediction and composition operations, which is first described in \citeA{conf/coling/Resnik92}, as we introduced in Section \ref{sec:resnik}.
+Their parsing algorithm is, while it is for constituency, very similar to our presented algorithm.
+The main difference is in predicting the right-side structure of the currently constructed subtree.
+At a prediction or composition operation, their parser predicts the nonterminal symbols.
+This is possible in constituency parsing since the number of possible parent and sibling nonterminals is only finite given a CFG.
+However, the same type of prediction is impossible in dependency parsing since each predicted node is an actual word in the sentence, which is unseen when doing prediction.
+Our solution for this problem is the introduction of a dummy node, which enables to minimize the amount of predicted structures and we observed that accurate parsing with such predicted dummy nodes is feasible with a discriminative model and relatively small beam sizes.
+
+Most of previous left-corner parsing models have been motivated by the study of cognitively plausible parsing models, an interdisciplinary research on psycholinguistics and computational linguistics \cite{keller:2010:Short}.
+Though we also evaluated our parser with cognitively motivated limited feature models and got an encouraging result, this is preliminary and we do not claim from this experiment that our parser is cross-linguistically cognitively plausible.
+Our parser is able to parse most sentences within a limited stack depth bound.
+However, it is skeptical whether there is any connection between the stack of our parser and memory units preserved in human memory.
+\citeA{vanschijndel-schuler:2013:NAACL-HLT} calculated several kinds of {\it memory cost} obtained from a configuration of their left-corner parser and discussed which cost is more significant indicator to predict human reading time data, such as the current stack depth and the integration cost in the dependency locality theory \cite{Gibson2000The-dependency-}, which is obtained by calculating the distance between two subtrees at composition.
+Discussing cognitive plausibility of a parser requires such kind of careful experimental setup, which is beyond the scope of the current work.
+
+Our main focus in this article is rather a syntactic bias exist in language universally.
+In this view, our work is more relevant to previous dependency parsing model with a constraint on possible tree structures \cite{eisner2010}.
+They studied parsing with a hard constraint on dependency length based on the observation that grammar may favor a construction with shorter dependency lengths \cite{gildea-temperley:2007:ACLMain,DBLP:journals/cogsci/GildeaT10}.
+Instead of prohibiting longer dependency lengths, our method prohibits deeper center-embedded structures, and we have shown that this bias is effective to restrict natural language grammar.
+The two constraints, length and center-embedding, are often correlated since center-embedding constructions typically lead to longer dependency length.
+It is therefore an interesting future topic to explore which bias is more essential for restricting grammar.
+This question can be perhaps explored through unsupervised dependency parsing tasks \cite{klein-manning:2004:ACL}, where such kind of light supervision has significant impact on the performance \cite{smith-eisner-2006-acl-sa,marevcek-vzabokrtsky:2012:EMNLP-CoNLL,DBLP:journals/tacl/BiskH13}.
+
+We introduced a dummy node for representing a subtree with an unknown head or dependent.
+Recently, Menzel and colleagues \cite{beuck2013,kohn-menzel:2014:ACL} have also studied dependency parsing with a dummy node.
+While conceptually similar, the aim of introducing a dummy node is different between our approach and theirs:
+We need a dummy node to represent a subtree corresponding to that in Resnik's algorithm, while they introduced it to confirm that every dependency tree on a sentence prefix is fully connected.
+This difference leads to a technical difference; a subtree of their parser can contain more than one dummy node, while we restrict each subtree to containing only one dummy node on a right spine.
+
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+We have presented the left-corner parsing algorithm for dependency structures and showed that our parser demands less stack depth for recognizing most of natural language sentences.
+The result also indicates the existence of universal syntactic biases that center-embedded constructions are rare phenomena across languages.
+In future, we are particularly interested in applying our parser to the model of unsupervised grammar induction, where recovering dependency trees is a central problem \cite{klein-manning:2004:ACL} and where exploiting syntactic regularities in the model is the essential problem \cite{smith-eisner-2006-acl-sa,marevcek-vzabokrtsky:2012:EMNLP-CoNLL,DBLP:journals/tacl/BiskH13}.
+
+
+\acknowledgment
+
+We would like to thank the anonymous reviewers for their detailed feedback, which has greatly improved the quality of this article.
+The first author was supported by JSPS KAKENHI, Grant-in-Aid for JSPS Fellows, Grant Numbers 15J07986.
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Abney \BBA\ Johnson}{Abney \BBA\
+  Johnson}{1991}]{abney91memory}
+Abney, S.\BBACOMMA\ \BBA\ Johnson, M. \BBOP 1991\BBCP.
+\newblock \BBOQ Memory Requirements and Local Ambiguities of Parsing
+  Strategies.\BBCQ\
+\newblock {\Bem Journal of Psycholinguistic Research}, {\Bbf 20} (3),
+  \mbox{\BPGS\ 233--250}.
+
+\bibitem[\protect\BCAY{Ballesteros \BBA\ Nivre}{Ballesteros \BBA\
+  Nivre}{2013}]{journals/coling/BallesterosN13}
+Ballesteros, M.\BBACOMMA\ \BBA\ Nivre, J. \BBOP 2013\BBCP.
+\newblock \BBOQ Going to the Roots of Dependency Parsing.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 39}  (1), \mbox{\BPGS\
+  5--13}.
+
+\bibitem[\protect\BCAY{Beuck \BBA\ Menzel}{Beuck \BBA\
+  Menzel}{2013}]{beuck2013}
+Beuck, N.\BBACOMMA\ \BBA\ Menzel, W. \BBOP 2013\BBCP.
+\newblock \BBOQ Structural Prediction in Incremental Dependency Parsing.\BBCQ\
+\newblock In Gelbukh, A.\BED, {\Bem Computational Linguistics and Intelligent
+  Text Processing}, \lowercase{\BVOL}\ 7816 of {\Bem Lecture Notes in Computer
+  Science}, \mbox{\BPGS\ 245--257}. Springer Berlin Heidelberg.
+
+\bibitem[\protect\BCAY{Bisk \BBA\ Hockenmaier}{Bisk \BBA\
+  Hockenmaier}{2013}]{DBLP:journals/tacl/BiskH13}
+Bisk, Y.\BBACOMMA\ \BBA\ Hockenmaier, J. \BBOP 2013\BBCP.
+\newblock \BBOQ An {HDP} Model for Inducing Combinatory Categorial
+  Grammars.\BBCQ\
+\newblock {\Bem {TACL}}, {\Bbf 1}, \mbox{\BPGS\ 75--88}.
+
+\bibitem[\protect\BCAY{Bohnet, Nivre, Boguslavsky, Farkas, Ginter, \BBA\
+  Haji{\v{c}}}{Bohnet et~al.}{2013}]{BohnetJMA13}
+Bohnet, B., Nivre, J., Boguslavsky, I.~M., Farkas, R., Ginter, F., \BBA\
+  Haji{\v{c}}, J. \BBOP 2013\BBCP.
+\newblock \BBOQ Joint Morphological and Syntactic Analysis for Richly Inflected
+  Languages.\BBCQ\
+\newblock {\Bem Transactions of the Association for Computational Linguistics},
+  {\Bbf 1}  (Oct), \mbox{\BPGS\ 429--440}.
+
+\bibitem[\protect\BCAY{Buchholz \BBA\ Marsi}{Buchholz \BBA\
+  Marsi}{2006}]{buchholz-marsi:2006:CoNLL-X}
+Buchholz, S.\BBACOMMA\ \BBA\ Marsi, E. \BBOP 2006\BBCP.
+\newblock \BBOQ CoNLL-X Shared Task on Multilingual Dependency Parsing.\BBCQ\
+\newblock In {\Bem Proceedings of the 10th Conference on Computational Natural
+  Language Learning (CoNLL-X)}, \mbox{\BPGS\ 149--164}, New York City.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{D\v{z}eroski, Erjavec, Ledinek, Pajas,
+  \v{Z}abokrtsk\'{y}, \BBA\ \v{Z}ele}{D\v{z}eroski et~al.}{2006}]{sl}
+D\v{z}eroski, S., Erjavec, T., Ledinek, N., Pajas, P., \v{Z}abokrtsk\'{y}, Z.,
+  \BBA\ \v{Z}ele, A. \BBOP 2006\BBCP.
+\newblock \BBOQ Towards a {S}lovene Dependency Treebank.\BBCQ\
+\newblock In {\Bem Proceedings of the 5th International Language Resources
+  and Evaluation Conference, {LREC} 2006}, \mbox{\BPGS\ 1388--1391}, Genova,
+  Italy. European Language Resources Association ({ELRA}).
+
+\bibitem[\protect\BCAY{Eisner \BBA\ Smith}{Eisner \BBA\
+  Smith}{2010}]{eisner2010}
+Eisner, J.\BBACOMMA\ \BBA\ Smith, N. \BBOP 2010\BBCP.
+\newblock \BBOQ Favor Short Dependencies: Parsing with Soft and Hard
+  Constraints on Dependency Length.\BBCQ\
+\newblock In Bunt, H., Merlo, P., \BBA\ Nivre, J.\BEDS, {\Bem Trends in Parsing
+  Technology}, \lowercase{\BVOL}~43 of {\Bem Text, Speech and Language
+  Technology}, \mbox{\BPGS\ 121--150}. Springer Netherlands.
+
+\bibitem[\protect\BCAY{Gibson}{Gibson}{2000}]{Gibson2000The-dependency-}
+Gibson, E. \BBOP 2000\BBCP.
+\newblock \BBOQ {The Dependency Locality Theory: A Distance-based Theory of
+  Linguistic Complexity}.\BBCQ\
+\newblock In {\Bem Image, Language, Brain: Papers from the 1st Mind
+  Articulation Project Symposium}, \mbox{\BPGS\ 95--126}.
+
+\bibitem[\protect\BCAY{Gildea \BBA\ Temperley}{Gildea \BBA\
+  Temperley}{2007}]{gildea-temperley:2007:ACLMain}
+Gildea, D.\BBACOMMA\ \BBA\ Temperley, D. \BBOP 2007\BBCP.
+\newblock \BBOQ Optimizing Grammars for Minimum Dependency Length.\BBCQ\
+\newblock In {\Bem Proceedings of the 45th Annual Meeting of the Association of
+  Computational Linguistics}, \mbox{\BPGS\ 184--191}, Prague, Czech Republic.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Gildea \BBA\ Temperley}{Gildea \BBA\
+  Temperley}{2010}]{DBLP:journals/cogsci/GildeaT10}
+Gildea, D.\BBACOMMA\ \BBA\ Temperley, D. \BBOP 2010\BBCP.
+\newblock \BBOQ Do Grammars Minimize Dependency Length?\BBCQ\
+\newblock {\Bem Cognitive Science}, {\Bbf 34}  (2), \mbox{\BPGS\ 286--310}.
+
+\bibitem[\protect\BCAY{Goldberg \BBA\ Nivre}{Goldberg \BBA\
+  Nivre}{2013}]{GoldbergTDP13}
+Goldberg, Y.\BBACOMMA\ \BBA\ Nivre, J. \BBOP 2013\BBCP.
+\newblock \BBOQ Training Deterministic Parsers with Non-Deterministic
+  Oracles.\BBCQ\
+\newblock {\Bem Transactions of the Association for Computational Linguistics},
+  {\Bbf 1}  (Oct), \mbox{\BPGS\ 403--414}.
+
+\bibitem[\protect\BCAY{Huang, Fayong, \BBA\ Guo}{Huang
+  et~al.}{2012}]{huang-fayong-guo:2012:NAACL-HLT}
+Huang, L., Fayong, S., \BBA\ Guo, Y. \BBOP 2012\BBCP.
+\newblock \BBOQ Structured Perceptron with Inexact Search.\BBCQ\
+\newblock In {\Bem Proceedings of the 2012 Conference of the North American
+  Chapter of the Association for Computational Linguistics: Human Language
+  Technologies}, \mbox{\BPGS\ 142--151}, Montr\'{e}al, Canada. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Huang \BBA\ Sagae}{Huang \BBA\
+  Sagae}{2010}]{huang-sagae:2010:ACL}
+Huang, L.\BBACOMMA\ \BBA\ Sagae, K. \BBOP 2010\BBCP.
+\newblock \BBOQ Dynamic Programming for Linear-Time Incremental Parsing.\BBCQ\
+\newblock In {\Bem Proceedings of the 48th Annual Meeting of the Association
+  for Computational Linguistics}, \mbox{\BPGS\ 1077--1086}, Uppsala, Sweden.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Johnson}{Johnson}{1998}]{conf/acl/Johnson98}
+Johnson, M. \BBOP 1998\BBCP.
+\newblock \BBOQ Finite-state Approximation of Constraint-based Grammars using
+  Left-corner Grammar Transforms.\BBCQ\
+\newblock In Boitet, C.\BBACOMMA\ \BBA\ Whitelock, P.\BEDS, {\Bem COLING-ACL},
+  \mbox{\BPGS\ 619--623}. Morgan Kaufmann Publishers/ACL.
+
+\bibitem[\protect\BCAY{Johnson}{Johnson}{2007}]{johnson:2007:ACLMain}
+Johnson, M. \BBOP 2007\BBCP.
+\newblock \BBOQ Transforming Projective Bilexical Dependency Grammars into
+  Efficiently-parsable CFGs with Unfold-Fold.\BBCQ\
+\newblock In {\Bem Proceedings of the 45th Annual Meeting of the Association of
+  Computational Linguistics}, \mbox{\BPGS\ 168--175}, Prague, Czech Republic.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Johnson-Laird}{Johnson-Laird}{1983}]{Cognitive:MentalModels}
+Johnson-Laird, P.~N. \BBOP 1983\BBCP.
+\newblock {\Bem Mental Models: Towards a Cognitive Science of Language, 
+  Inference, and Consciousness}.
+\newblock Harvard University Press, Cambridge, MA, USA.
+
+\bibitem[\protect\BCAY{Keller}{Keller}{2010}]{keller:2010:Short}
+Keller, F. \BBOP 2010\BBCP.
+\newblock \BBOQ Cognitively Plausible Models of Human Language
+  Processing.\BBCQ\
+\newblock In {\Bem Proceedings of the ACL 2010 Conference Short Papers},
+  \mbox{\BPGS\ 60--67}, Uppsala, Sweden. Association for Computational
+  Linguistics.
+
+\bibitem[\protect\BCAY{Kitagawa \BBA\ Tanaka-Ishii}{Kitagawa \BBA\
+  Tanaka-Ishii}{2010}]{kitagawa-tanakaishii:2010:Short}
+Kitagawa, K.\BBACOMMA\ \BBA\ Tanaka-Ishii, K. \BBOP 2010\BBCP.
+\newblock \BBOQ Tree-Based Deterministic Dependency Parsing---An Application
+  to Nivre's Method---.\BBCQ\
+\newblock In {\Bem Proceedings of the ACL 2010 Conference Short Papers},
+  \mbox{\BPGS\ 189--193}, Uppsala, Sweden. Association for Computational
+  Linguistics.
+
+\bibitem[\protect\BCAY{Klein \BBA\ Manning}{Klein \BBA\
+  Manning}{2004}]{klein-manning:2004:ACL}
+Klein, D.\BBACOMMA\ \BBA\ Manning, C. \BBOP 2004\BBCP.
+\newblock \BBOQ Corpus-Based Induction of Syntactic Structure: Models of
+  Dependency and Constituency.\BBCQ\
+\newblock In {\Bem Proceedings of the 42nd Meeting of the Association for
+  Computational Linguistics (ACL'04), Main Volume}, \mbox{\BPGS\ 478--485},
+  Barcelona, Spain.
+
+\bibitem[\protect\BCAY{Kohn \BBA\ Menzel}{Kohn \BBA\
+  Menzel}{2014}]{kohn-menzel:2014:ACL}
+Kohn, A.\BBACOMMA\ \BBA\ Menzel, W. \BBOP 2014\BBCP.
+\newblock \BBOQ Incremental Predictive Parsing with TurboParser.\BBCQ\
+\newblock In {\Bem Proceedings of the ACL 2014 Conference Short Papers},
+  Baltimore, USA. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Koo, Carreras, \BBA\ Collins}{Koo
+  et~al.}{2008}]{koo-carreras-collins:2008:ACLMain}
+Koo, T., Carreras, X., \BBA\ Collins, M. \BBOP 2008\BBCP.
+\newblock \BBOQ Simple Semi-supervised Dependency Parsing.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-08: HLT}, \mbox{\BPGS\ 595--603},
+  Columbus, Ohio. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Kuhlmann, G\'{o}mez-Rodr\'{i}guez, \BBA\ Satta}{Kuhlmann
+  et~al.}{2011}]{kuhlmann-gomezrodriguez-satta:2011:ACL-HLT2011}
+Kuhlmann, M., G\'{o}mez-Rodr\'{i}guez, C., \BBA\ Satta, G. \BBOP 2011\BBCP.
+\newblock \BBOQ Dynamic Programming Algorithms for Transition-Based Dependency
+  Parsers.\BBCQ\
+\newblock In {\Bem Proceedings of the 49th Annual Meeting of the Association
+  for Computational Linguistics: Human Language Technologies}, \mbox{\BPGS\
+  673--682}, Portland, Oregon, USA. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Marcus, Santorini, \BBA\ Marcinkiewicz}{Marcus
+  et~al.}{1993}]{Marcus93buildinga}
+Marcus, M.~P., Santorini, B., \BBA\ Marcinkiewicz, M.~A. \BBOP 1993\BBCP.
+\newblock \BBOQ Building a Large Annotated Corpus of English: The Penn
+  Treebank.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 19}  (2), \mbox{\BPGS\
+  313--330}.
+
+\bibitem[\protect\BCAY{Mare\v{c}ek \BBA\ \v{Z}abokrtsk\'{y}}{Mare\v{c}ek \BBA\
+  \v{Z}abokrtsk\'{y}}{2012}]{marevcek-vzabokrtsky:2012:EMNLP-CoNLL}
+Mare\v{c}ek, D.\BBACOMMA\ \BBA\ \v{Z}abokrtsk\'{y}, Z. \BBOP 2012\BBCP.
+\newblock \BBOQ Exploiting Reducibility in Unsupervised Dependency
+  Parsing.\BBCQ\
+\newblock In {\Bem Proceedings of the 2012 Joint Conference on Empirical
+  Methods in Natural Language Processing and Computational Natural Language
+  Learning}, \mbox{\BPGS\ 297--307}, Jeju Island, Korea. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Marneffe, Dozat, Silveira, Haverinen, Ginter, Nivre,
+  \BBA\ Manning}{Marneffe et~al.}{2014}]{DEMARNEFFE14.1062}
+Marneffe, M.-C.~D., Dozat, T., Silveira, N., Haverinen, K., Ginter, F., Nivre,
+  J., \BBA\ Manning, C.~D. \BBOP 2014\BBCP.
+\newblock \BBOQ Universal Stanford Dependencies: A Cross-Linguistic
+  Typology.\BBCQ\
+\newblock In {\Bem Proceedings of the 9th International Conference on
+  Language Resources and Evaluation (LREC'14)}, Reykjavik, Iceland.
+
+\bibitem[\protect\BCAY{Miller \BBA\ Chomsky}{Miller \BBA\
+  Chomsky}{1963}]{Miller1963-MILFMO}
+Miller, G.~A.\BBACOMMA\ \BBA\ Chomsky, N. \BBOP 1963\BBCP.
+\newblock \BBOQ Finitary Models of Language Users.\BBCQ\
+\newblock In Luce, D.\BED, {\Bem Handbook of Mathematical Psychology},
+  \mbox{\BPGS\ 2--419}. John Wiley \& Sons.
+
+\bibitem[\protect\BCAY{Mueller, Farkas, Judea, Schmid, \BBA\ Schuetze}{Mueller
+  et~al.}{2014}]{mueller-EtAl:2014:EMNLP2014}
+Mueller, T., Farkas, R., Judea, A., Schmid, H., \BBA\ Schuetze, H. \BBOP
+  2014\BBCP.
+\newblock \BBOQ Dependency Parsing with Latent Refinements of Part-of-speech
+  Tags.\BBCQ\
+\newblock In {\Bem Proceedings of the 2014 Conference on Empirical Methods in
+  Natural Language Processing (EMNLP)}, \mbox{\BPGS\ 963--967}, Doha, Qatar.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Nivre}{Nivre}{2003}]{Nivre2003}
+Nivre, J. \BBOP 2003\BBCP.
+\newblock \BBOQ An Efficient Algorithm for Projective Dependency Parsing.\BBCQ\
+\newblock In {\Bem Proceedings of the 8th International Workshop on Parsing
+  Technologies (IWPT)}, \mbox{\BPGS\ 149--160}.
+
+\bibitem[\protect\BCAY{Nivre}{Nivre}{2004}]{nivre:2004:IncrementalParsing}
+Nivre, J. \BBOP 2004\BBCP.
+\newblock \BBOQ Incrementality in Deterministic Dependency Parsing.\BBCQ\
+\newblock In Keller, F., Clark, S., Crocker, M., \BBA\ Steedman, M.\BEDS, {\Bem
+  Proceedings of the ACL Workshop Incremental Parsing: Bringing Engineering and
+  Cognition Together}, \mbox{\BPGS\ 50--57}, Barcelona, Spain. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Nivre}{Nivre}{2008}]{Nivre:2008}
+Nivre, J. \BBOP 2008\BBCP.
+\newblock \BBOQ Algorithms for Deterministic Incremental Dependency
+  Parsing.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 34}  (4), \mbox{\BPGS\
+  513--553}.
+
+\bibitem[\protect\BCAY{Nivre \BBA\ Fern{\'a}ndez-Gonz{\'a}lez}{Nivre \BBA\
+  Fern{\'a}ndez-Gonz{\'a}lez}{2014}]{NivreAEP14}
+Nivre, J.\BBACOMMA\ \BBA\ Fern{\'a}ndez-Gonz{\'a}lez, D. \BBOP 2014\BBCP.
+\newblock \BBOQ Arc-Eager Parsing with the Tree Constraint.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 40}  (2), \mbox{\BPGS\
+  259--267}.
+
+\bibitem[\protect\BCAY{Nivre, Hall, K\"ubler, McDonald, Nilsson, Riedel, \BBA\
+  Yuret}{Nivre et~al.}{2007a}]{nivre-EtAl:2007:EMNLP-CoNLL2007}
+Nivre, J., Hall, J., K\"ubler, S., McDonald, R., Nilsson, J., Riedel, S., \BBA\
+  Yuret, D. \BBOP 2007a\BBCP.
+\newblock \BBOQ The {CoNLL} 2007 Shared Task on Dependency Parsing.\BBCQ\
+\newblock In {\Bem Proceedings of the CoNLL Shared Task Session of EMNLP-CoNLL
+  2007}, \mbox{\BPGS\ 915--932}.
+
+\bibitem[\protect\BCAY{Nivre, Hall, Nilsson, Chanev, Eryi{\u{g}}it, K{\"u}bler,
+  Marinov, \BBA\ Marsi}{Nivre et~al.}{2007b}]{NivreMAL07}
+Nivre, J., Hall, J., Nilsson, J., Chanev, A., Eryi{\u{g}}it, G., K{\"u}bler,
+  S., Marinov, S., \BBA\ Marsi, E. \BBOP 2007b\BBCP.
+\newblock \BBOQ {M}alt{P}arser: A Language-Independent System for Data-Driven
+  Dependency Parsing.\BBCQ\
+\newblock {\Bem Natural Language Engineering}, {\Bbf 13}  (2), \mbox{\BPGS\
+  95--135}.
+
+\bibitem[\protect\BCAY{Nivre \BBA\ Nilsson}{Nivre \BBA\
+  Nilsson}{2005}]{nivre-nilsson:2005:ACL}
+Nivre, J.\BBACOMMA\ \BBA\ Nilsson, J. \BBOP 2005\BBCP.
+\newblock \BBOQ Pseudo-Projective Dependency Parsing.\BBCQ\
+\newblock In {\Bem Proceedings of the 43rd Annual Meeting of the Association
+  for Computational Linguistics (ACL'05)}, \mbox{\BPGS\ 99--106}, Ann Arbor,
+  Michigan. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Noji \BBA\ Miyao}{Noji \BBA\
+  Miyao}{2014}]{noji-miyao:2014:Coling}
+Noji, H.\BBACOMMA\ \BBA\ Miyao, Y. \BBOP 2014\BBCP.
+\newblock \BBOQ Left-corner Transitions on Dependency Parsing.\BBCQ\
+\newblock In {\Bem Proceedings of COLING 2014, the 25th International
+  Conference on Computational Linguistics: Technical Papers}, \mbox{\BPGS\
+  2140--2150}, Dublin, Ireland. Dublin City University and Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Ouchi, Duh, \BBA\ Matsumoto}{Ouchi
+  et~al.}{2014}]{ouchi-duh-matsumoto:2014:EACL2014-SP}
+Ouchi, H., Duh, K., \BBA\ Matsumoto, Y. \BBOP 2014\BBCP.
+\newblock \BBOQ Improving Dependency Parsers with Supertags.\BBCQ\
+\newblock In {\Bem Proceedings of the 14th Conference of the European Chapter
+  of the Association for Computational Linguistics, Volume 2: Short Papers},
+  \mbox{\BPGS\ 154--158}, Gothenburg, Sweden. Association for Computational
+  Linguistics.
+
+\bibitem[\protect\BCAY{Petrov, Barrett, Thibaux, \BBA\ Klein}{Petrov
+  et~al.}{2006}]{petrov-EtAl:2006:COLACL}
+Petrov, S., Barrett, L., Thibaux, R., \BBA\ Klein, D. \BBOP 2006\BBCP.
+\newblock \BBOQ Learning Accurate, Compact, and Interpretable Tree
+  Annotation.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on
+  Computational Linguistics and 44th Annual Meeting of the Association for
+  Computational Linguistics}, \mbox{\BPGS\ 433--440}, Sydney, Australia.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Resnik}{Resnik}{1992}]{conf/coling/Resnik92}
+Resnik, P. \BBOP 1992\BBCP.
+\newblock \BBOQ Left-Corner Parsing And Psychological Plausibility.\BBCQ\
+\newblock In {\Bem COLING}, \mbox{\BPGS\ 191--197}.
+
+\bibitem[\protect\BCAY{Roark}{Roark}{2001}]{Roark:2001:RPP:933637}
+Roark, B.~E. \BBOP 2001\BBCP.
+\newblock {\Bem Robust Probabilistic Predictive Syntactic Processing:
+  Motivations, Models, and Applications}.
+\newblock Ph.D.\ thesis, Providence, RI, USA.
+\newblock AAI3006783.
+
+\bibitem[\protect\BCAY{Sartorio, Satta, \BBA\ Nivre}{Sartorio
+  et~al.}{2013}]{sartorio-satta-nivre:2013:ACL2013}
+Sartorio, F., Satta, G., \BBA\ Nivre, J. \BBOP 2013\BBCP.
+\newblock \BBOQ A Transition-Based Dependency Parser Using a Dynamic Parsing
+  Strategy.\BBCQ\
+\newblock In {\Bem Proceedings of the 51st Annual Meeting of the Association
+  for Computational Linguistics (Volume 1: Long Papers)}, \mbox{\BPGS\
+  135--144}, Sofia, Bulgaria. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Schuler, AbdelRahman, Miller, \BBA\ Schwartz}{Schuler
+  et~al.}{2010}]{journals/coling/SchulerAMS10}
+Schuler, W., AbdelRahman, S., Miller, T., \BBA\ Schwartz, L. \BBOP 2010\BBCP.
+\newblock \BBOQ Broad-Coverage Parsing Using Human-Like Memory
+  Constraints.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 36}  (1), \mbox{\BPGS\
+  1--30}.
+
+\bibitem[\protect\BCAY{Smith \BBA\ Eisner}{Smith \BBA\
+  Eisner}{2006}]{smith-eisner-2006-acl-sa}
+Smith, N.~A.\BBACOMMA\ \BBA\ Eisner, J. \BBOP 2006\BBCP.
+\newblock \BBOQ Annealing Structural Bias in Multilingual Weighted Grammar
+  Induction.\BBCQ\
+\newblock In {\Bem Proceedings of the International Conference on Computational
+  Linguistics and the Association for Computational Linguistics (COLING-ACL)},
+  \mbox{\BPGS\ 569--576}, Sydney.
+
+\bibitem[\protect\BCAY{Smr{\v{z}}, Bielick{\'{y}}, Kou{\v{r}}ilov{\'{a}},
+  Kr{\'{a}}{\v{c}}mar, Haji{\v{c}}, \BBA\ Zem{\'{a}}nek}{Smr{\v{z}}
+  et~al.}{2008}]{ar}
+Smr{\v{z}}, O., Bielick{\'{y}}, V., Kou{\v{r}}ilov{\'{a}}, I.,
+  Kr{\'{a}}{\v{c}}mar, J., Haji{\v{c}}, J., \BBA\ Zem{\'{a}}nek, P. \BBOP
+  2008\BBCP.
+\newblock \BBOQ {P}rague {A}rabic Dependency Treebank: A Word on the Million
+  Words.\BBCQ\
+\newblock In {\Bem Proceedings of the Workshop on Arabic and Local Languages
+  ({LREC} 2008)}, \mbox{\BPGS\ 16--23}, Marrakech, Morocco. European Language
+  Resources Association.
+
+\bibitem[\protect\BCAY{van Schijndel, Exley, \BBA\ Schuler}{van Schijndel
+  et~al.}{2013}]{TOPS:TOPS12034}
+van Schijndel, M., Exley, A., \BBA\ Schuler, W. \BBOP 2013\BBCP.
+\newblock \BBOQ A Model of Language Processing as Hierarchic Sequential
+  Prediction.\BBCQ\
+\newblock {\Bem Topics in Cognitive Science}, {\Bbf 5}  (3), \mbox{\BPGS\
+  522--540}.
+
+\bibitem[\protect\BCAY{van Schijndel \BBA\ Schuler}{van Schijndel \BBA\
+  Schuler}{2013}]{vanschijndel-schuler:2013:NAACL-HLT}
+van Schijndel, M.\BBACOMMA\ \BBA\ Schuler, W. \BBOP 2013\BBCP.
+\newblock \BBOQ An Analysis of Frequency- and Memory-Based Processing
+  Costs.\BBCQ\
+\newblock In {\Bem Proceedings of the 2013 Conference of the North American
+  Chapter of the Association for Computational Linguistics: Human Language
+  Technologies}, \mbox{\BPGS\ 95--105}, Atlanta, Georgia. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Yamada \BBA\ Matsumoto}{Yamada \BBA\
+  Matsumoto}{2003}]{Yamada03}
+Yamada, H.\BBACOMMA\ \BBA\ Matsumoto, Y. \BBOP 2003\BBCP.
+\newblock \BBOQ {Statistical Dependency Analysis with Support Vector
+  machines}.\BBCQ\
+\newblock In {\Bem {The 8th International Workshop of Parsing Technologies
+  (IWPT2003)}}.
+
+\bibitem[\protect\BCAY{Zeman, Du\v{s}ek, Mare\v{c}ek, Popel, Ramasamy,
+  \v{S}t\v{e}p\'{a}nek, \v{Z}abokrtsk\'{y}, \BBA\ Haji\v{c}}{Zeman
+  et~al.}{2014}]{halmedt}
+Zeman, D., Du\v{s}ek, O., Mare\v{c}ek, D., Popel, M., Ramasamy, L.,
+  \v{S}t\v{e}p\'{a}nek, J., \v{Z}abokrtsk\'{y}, Z., \BBA\ Haji\v{c}, J. \BBOP
+  2014\BBCP.
+\newblock \BBOQ HamleDT: Harmonized multi-language dependency treebank.\BBCQ\
+\newblock {\Bem Language Resources and Evaluation}, {\Bbf 48}  (4),
+  \mbox{\BPGS\ 601--637}.
+
+\bibitem[\protect\BCAY{Zhang \BBA\ Clark}{Zhang \BBA\
+  Clark}{2008}]{zhang-clark:2008:EMNLP}
+Zhang, Y.\BBACOMMA\ \BBA\ Clark, S. \BBOP 2008\BBCP.
+\newblock \BBOQ A Tale of Two Parsers: {I}nvestigating and Combining
+  Graph-based and Transition-based Dependency Parsing.\BBCQ\
+\newblock In {\Bem Proceedings of the 2008 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 562--571}, Honolulu, Hawaii.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Zhang \BBA\ Nivre}{Zhang \BBA\
+  Nivre}{2011}]{zhang-nivre:2011:ACL-HLT2011}
+Zhang, Y.\BBACOMMA\ \BBA\ Nivre, J. \BBOP 2011\BBCP.
+\newblock \BBOQ Transition-based Dependency Parsing with Rich Non-local
+  Features.\BBCQ\
+\newblock In {\Bem Proceedings of the 49th Annual Meeting of the Association
+  for Computational Linguistics: Human Language Technologies}, \mbox{\BPGS\
+  188--193}, Portland, Oregon, USA. Association for Computational Linguistics.
+
+\end{thebibliography}
+
+
+\begin{biography}
+\bioauthor[:]{Hiroshi Noji}{
+ He received his master's degree in Information Science and Technology from the University of Tokyo in 2013.
+ He is currently a Ph.D. student in the Graduate University for Advanced Studies.
+ His research interests are syntactic parsing as well as modeling of human language processing such as language acquisition.
+}
+
+\bioauthor[:]{Yusuke Miyao}{
+ He received his Ph.D. from the University of Tokyo in 2006.
+ He was Assistant Professor at the University of Tokyo from 2001 to 2010 and has been Associate Professor at National Institute of Informatics since 2010.
+ He is engaged in research on natural language processing, in particular on syntactic parsing and its applications.
+}
+\end{biography}
+
+\biodate
+
+
+
+\end{document}
+

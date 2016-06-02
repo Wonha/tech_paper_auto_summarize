@@ -1,0 +1,669 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{array}
+
+\usepackage{tabularx}
+\usepackage{bm}
+
+
+\Volume{22}
+\Number{4}
+\Month{December}
+\Year{2015}
+
+\received{2015}{2}{27}
+\revised{2015}{6}{29}
+\accepted{2015}{8}{12}
+
+\setcounter{page}{225}
+
+\jtitle{Deep Belief Networkを用いた検索用語の予測}
+\jauthor{馬　　　青\affiref{Author_1} \and 谷河　息吹\affiref{Author_1} \and 村田　真樹\affiref{Author_2}}
+\jabstract{
+	本稿は機械学習を用いて関連語・周辺語または説明文書から適切な検索用語を予測する手法を提案する．機械学習には深層学習の一種である Deep Belief Network (DBN) を用いる．DBN の有効性を確認するために，用例に基づくベースライン手法，多層パーセプトロン (MLP)，サポートベクトルマシン (SVM) との比較を行った．学習と評価に用いるデータは手動と自動の 2 通りの方法でインターネットから収集した．加えて，自動生成した疑似データも用いた．各種機械学習の最適なパラメータはグリッドサーチと交差検証を行うことにより決定した．
+実験の結果，DBN の予測精度はベースライン手法よりはるかに高く MLP と SVM のいずれよりも高かった．また，手動収集データに自動収集のデータと疑似データを加えて学習することにより予測精度は向上した．さらに，よりノイズの多い学習データを加えても DBN の予測精度はさらに向上したのに対し，MLP の精度向上は見られなかった．このことから，DBN のほうが MLP よりもノイズの多い学習データを有効利用できることが分かった．
+}
+\jkeywords{深層学習，Deep Belief Network，検索用語予測，関連語，周辺語，情報検索支援}
+
+\etitle{Retrieval Term Prediction Using Deep Belief Networks}
+\eauthor{Qing Ma\affiref{Author_1} \and Ibuki Tanigawa\affiref{Author_1} \and Masaki Murata\affiref{Author_2}} 
+\eabstract{
+	This paper presents a method to predict retrieval terms from relevant/surrounding words or descriptive texts in Japanese by using deep belief networks (DBN), one of two typical types of deep learning. To determine the effectiveness of using DBN for this task, we tested it along with baseline methods using example-based approaches and conventional machine learning methods, i.e., multi-layer perceptron (MLP) and support vector machines (SVM), for comparison. The data for training and testing were obtained from the Web in manual and automatic manners. Automatically created pseudo data was also used. A grid search was adopted for obtaining the optimal hyperparameters of these machine learning methods by performing cross-validation on training data. Experimental results showed that (1) using DBN has far higher prediction precisions than using baseline methods and higher prediction precisions than using either MLP or SVM; (2) adding automatically gathered data and pseudo data to the manually gathered data as training data is an effective
+measure for further improving the prediction precisions; and (3) DBN is able to deal with noisier training data than MLP, i.e., the prediction precision of DBN can be improved by adding noisy training data, but that of MLP cannot be.
+}
+\ekeywords{Deep Learning, Deep Belief Network, Retrieval Term Prediction, Relevant Word, Surrounding Word, Information Retrieval Support}
+
+\headauthor{馬，谷河，村田}
+\headtitle{Deep Belief Networkを用いた検索用語の予測}
+
+\affilabel{Author_1}{龍谷大学理工学部}{Faculty of Science and Technology, Ryukoku University}
+\affilabel{Author_2}{鳥取大学工学研究科}{Graduate School of Engineering, Tottori University}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+
+Googleに代表される現在の検索エンジンはその性能が非常によくなってきており，適切な検索用語（キーワード）さえ与えてやればおおむね期待通りの検索結果が得られる．しかし一方，多くのユーザ，特に子どもや高齢者，外国人などにとって検索対象を表す適切な検索用語（特に専門用語など）を見つけることは往々にしてそう簡単ではない．マイクロソフトの「現在の検索で不満に思う点」に関する調査\footnote{http://www.garbagenews.net/archives/1466626.htmlまたは http://news.mynavi.jp/news/2010/07/05/028/}によれば，57.6\%の人が適切なキーワード探しの難しさに不満を感じている．また，「何か欲しい情報を求めて検索エンジンを利用しているのに，それを利用するための適切なキーワードをまた別のところで探さねばならないという，堂々巡りをした経験を持つ人も多いはず」とも指摘されている．これは2010年の調査ではあるが，現在においてもこれらの不満点が大方解消されたとは言い難い．そこで，関連語・周辺語（たとえば「コンピュータ」，「前の状態」，「戻す」）またはそれらの語から構成される文を手掛かりに適切な検索用語（この場合「システム復元」）を予測・提示する検索支援システムがあればより快適な検索ができるのではないかと考えられる．
+
+本研究では，ITや医療など様々な分野において，これらの分野の関連語・周辺語またはそれらの語から構成される文を入力とし，機械学習を用いて適切な検索用語を予測・提示する検索支援システムの開発を目標としている．このような研究は，すくなくとも日本語においては我々が調べた限りではこれまでなされていなかった\footnote{類似研究として，「意味的逆引き辞書」に関する研究\cite{Aihara}や「クロスワードを解く」に関する研究\cite{Uchiki}がある．しかしこれらは分野ごとの検索用語の予測・提示に基づく検索支援を第一の目的としておらず，それゆえに，精度（正解率）は本研究で得られたものよりはるかに低かった．また，手法もLSIを利用した情報検索技術やエキスパートなどに基づくアプローチを取っており，本研究が取っている機械学習のアプローチとは異なる．}．本稿ではその第一歩として，分野をコンピュータ関連に限定し，深層学習 (Deep Learning) の一種であるDeep Belief Network (DBN) を用いた予測手法を提案する．
+
+近年，深層学習は様々な分野で注目され，音声認識~\cite{Li}や画像認識~\cite{Krizhevsky} のみならず，自然言語処理の諸課題への応用にも優れた性能を出している．それらの諸課題は，形態素・構文解析~\cite{Billingsley,Hermann,Luong,Socher:13a}，意味処理~\cite{Hashimoto,Srivastava,Tsubaki}，言い換え~\cite{Socher:11}，機械翻訳~\cite{Auli,Liu,Kalchbrenner,Zou}，文書分類~\cite{Glorot}，情報検索~\cite{Salakhutdinov}，その他~\cite{Seide,Socher:13b}を含む．さらに，統一した枠組みで品詞タグ付け・チャンキング・固有表現認識・意味役割のラベル付けを含む各種の言語処理課題を取り扱えるニューラルネットおよび学習アルゴリズムも提案されている~\cite{Collobert}．
+
+しかしながら，われわれの知っている限りでは，前に述べたような情報検索支援に関する課題に深層学習を用いた研究はこれまでなされていない．したがって，本稿で述べる研究は主に二つの目的を持っている．一つは，関連語・周辺語などから適切な検索用語を正確に予測する手法を提案することである．もう一つは，深層学習がこのような言語処理課題において，従来の機械学習手法である多層パーセプトロン (MLP) やサポートベクトルマシン(SVM) より優れているか否かを確かめることである．
+
+本研究に用いたデータはインターネットから精度保証がある程度できる手動収集と，ノイズ\footnote{ここのノイズとは，関係のない単語が含まれている，または必要な単語が欠落していることを指す．}は含まれるが規模の大きいデータの収集が可能な自動収集との 2 通りの方法で収集した．加えて，ある程度規模が大きく精度もよい疑似データも自動生成して用いた．機械学習のパラメータチューニングはグリッドサーチと交差検証を用いて行った．実験の結果，まず，学習データとして手動収集データのみを用いても自動収集データと疑似データを加えてもDBNの予測精度は用例に基づくベースライン手法よりははるかに高くMLPとSVMのいずれよりも高いことが確認できた．また，いずれの機械学習手法も，手動収集データにノイズの多い自動収集データとノイズの少ない疑似データを加えて学習することにより予測精度が向上した．さらに，手動収集データにノイズの多い自動収集データのみを加えて学習した場合，DBNとSVMには予測精度の向上が見られたがMLPにはみられなかった．この結果から，MLPよりもDBNとSVMのほうがノイズに強くノイズの多い学習データも有効利用できる可能性が高いと言えよう．
+
+
+\section{関連語・周辺語コーパス}
+
+\begin{table}[b]
+\caption{コーパスの入力とラベルのペアの例}
+\label{tab:example}
+\input{01table01.txt}
+\end{table}
+
+機械学習を用いて関連語・周辺語から検索用語を予測・提示する場合，その学習データとして，入力（関連語・周辺語）と正解となるレスポンス（検索用語）のペアからなるコーパスが必要となる．本稿ではこのようなコーパスを「関連語・周辺語コーパス」と呼ぶ．また，教師あり機械学習では，レスポンスをラベルと呼ぶ場合が多いので，本稿では検索用語をラベルと呼ぶ．表~\ref{tab:example}はコーパスの入力（関連語・周辺語とその元となる説明文書）とラベルのペアの例を示す．
+本章では，コーパスデータの収集・作成方法について述べる．また，収集・作成したデータからの関連語・周辺語の抽出方法と特徴ベクトルの構成方法について述べる．
+
+
+\subsection{手動収集と自動収集}
+
+本研究では，ラベルを説明している文書には関連語・周辺語が多く含まれると考え，インターネットからこのようなWebページを手動と自動の 2 通りの方法で収集した．手動収集では人手でラベルを説明するWebページを選別し収集する\footnote{人手でWebページを選別した後，そのWebページから説明文書として該当する箇所を人手で選別する処理を行っている．}．一方，自動収集では，ラベルの後に「とは」「は」「というものは」「については」「の意味は」の 5 語を付けて（たとえば，ラベルが「グラフィックボード」であれば「グラフィックボードとは」「グラフィックボードというものは」などで）Googleで検索したものを説明文書として収集する\footnote{収集したWebページ全体をそのラベルの説明文書として扱っている．}．手動収集データは規模が小さい代わりに精度が高く，自動収集データは精度が低い代わりに規模が大きい．
+
+
+\subsection{疑似データ}
+
+機械学習の汎化能力を向上させるために，学習データとして，精度は高いが規模が小さい手動収集データに加え，精度はそれほど高くない（つまり，ノイズはある）が相対的に規模の大きい自動収集データを用いることにした．しかし，自動収集したデータには説明文書とラベルがそもそも一致しない，つまり説明文書へのラベルが履き違えられている可能性も考えられる．そのために，手動で収集した説明文書をオリジナルのデータとしてとらえ，それらに適度なノイズを加えて作成した疑似データも用いることにした．このようなデータは自動収集したデータに比べノイズが少なくラベルの履き違いもないと考えることができる．疑似データの具体的な生成手順は以下の通りである．
+\begin{enumerate}
+\item オリジナルの説明文書からすべての異なり単語を抽出する．
+\item 個々のオリジナルの説明文書に対し，追加，削除，または追加\&削除の処理を加える．具体的には，手順(1)で抽出した単語のうち，説明文書にない単語を説明文書の単語数の10\%個ランダムに選んで加える，説明文書から単語を説明文書の単語数の10\%個ランダムに選んで削除する，または上記の（10\%ずつの）追加と削除を同時に施す，という処理を等確率（つまり，それぞれを1/3の確率）で行う\footnote{10\%という値は，予備実験などで精査して決めたものではなく，著者らが適度なノイズとして主観で設定したものである．}．
+\item 手順(2)で得られたデータを疑似データとする．
+\end{enumerate}
+なお，この生成方法においては，1 つのオリジナルの説明文書に対し，疑似データを複数生成することが可能である．
+
+
+\subsection{評価データ}
+
+評価データは学習データとは別に自動収集したものを用いる．ただし，自動収集データは，ラベルが正確とは限らないため，評価データとして用いても適切な評価とならない可能性がある．そのため，評価データとして自動収集データの中からラベルの正しいものを人手で選別して用いることにした．
+
+
+\subsection{関連語・周辺語抽出とベクトル変換}
+
+以下の手順(1)〜(4)で説明文書から関連語・周辺語を抽出する．それに手順(5)(6)を加えることにより，機械学習に必要な特徴ベクトルへの変換を行う．
+\begin{enumerate}
+\item
+手動収集のデータを形態素解析し，名詞（固有名詞，サ変接続，一般）を抽出する\footnote{形態素解析にMeCab 0.98を使用した．未知語と表記ゆれについては特別な処理を施しておらず今後の課題となる． ただし，未知語としての複合語については，たとえば「木村製作所」や「株式会社ウエーブ」など大半の日本企業名の場合は（中小企業で社名としては未知語であっても）「木村」と「製作所」などがそれぞれ名詞として解析されているので，手順(2)にしたがって問題なく1つの既知単語として扱われる．一方，たとえば「騰迅公司」のような表現において，最初の漢字が名詞以外の品詞と判断された場合は1つの既知単語として正しく扱うことができない．また，表記ゆれについては，「サーバ」と「サーバー」，「神経回路」と「ニューラルネット」のような形態素解析ツールの辞書に登録されているものはそれぞれ異なる単語として扱われてしまい，予測性能を落とす可能性がある．}．
+\item
+名詞が連続しているならば，日本語同士なら結合し，英語同士なら空白を間に入れて結合し，1 つの単語と見なす．
+\item
+各ラベルから出現頻度がトップ50以内の単語を抽出する\footnote{50という値は，手動で収集したデータにおいて各ラベルの関連語・周辺語の数は確実にそれ以下であることを確認した上で，提案手法の拡張性（つまり多少大きい目に）と機械学習の素性選択能力（つまり多少大きい目にしても問題がないこと）も考慮にいれて設定した．なお，この値は多少大きく設定されても手順(4)で絞られるので値をある程度大きい目に設定しておけば40 がよいか60 がよいかといった細かい選択はほとんど意味をなさないと思われる．}．
+\item
+ラベル間で重複している単語を除外する．本研究では，以下に述べる考えに基づき 2 ラベル間で重複する単語を除外する，または，3 ラベル以上で共通する単語を除外するという 2 通りの方法を採用した．まず，各ラベルにできるだけ特徴的な単語のみを素性にするためには重複単語をできるだけ除外するのが効果的と考える．また，今回は実験規模が小さくあまり問題にならないが，予測用語の数の増加に伴う特徴ベクトル次元の大幅な増加を抑える 1 つの方法として重複単語を除外することが考えられる．特徴ベクトル次元の抑制はまた一般的に，学習におけるデータスパースネス問題の緩和にもつながる．しかし一方，ラベル間の単語重複をまったく認めないと，たとえば「USBメモリ」のような，「USB」や「メモリ」に共通する重要な単語を除外してしまう問題も考えられる．そのため，本研究では 2 ラベル間の重複を許容し 3 ラベル以上で共通する単語を除外する方法も用いる．
+\item 上記手順で得られた単語をベクトルの要素とし，個々の要素はその単語が出現していれば1，出現していなければ0の2値を取る．
+\item 2.1, 2.2, 2.3節で述べたすべてのデータに対し形態素解析を行い，手順(5)にしたがって特徴ベクトルに変換する．
+\end{enumerate}
+
+
+\section{深層学習}
+
+深層学習とは従来の機械学習より深い層構造をしている機械学習手法全般のことを指す．
+その代表的な手法としてDeep Belief Network (DBN)~\cite{Hinton,Lee,Bengio:09,Bengio:13}とStacked Denoising Autoencoder (SdA)~\cite{Bengio:07,Bengio:09,Bengio:13,Vincent:08,Vincent:10}が提案されている．数多くの課題において，その両者の性能がほぼ同じと言われているが，本研究ではよりスマートなアーキテクチャを有するDBNを用いることにした．
+
+深層学習は，本来経験則で行っていた特徴抽出を機械学習に組み込もうとしてできたものである．そのため，DBNは，Restricted Boltzmann Machine (RBM) を複数並べ教師なし学習の特徴抽出器として利用する多層のニューラルネットと，ラベルを出力する教師あり学習の最終層から構成される．特徴抽出器の教師なし学習はPre-training，最終層の教師あり学習はFine-tuningと呼ばれる．
+
+
+\subsection{Restricted Boltzmann Machine (RBM)}
+
+RBMは制限付きボルツマンマシンとも呼ばれ，学習データの確率分布を教師なし学習で表現する（言い換えれば，学習データの生成モデルを統計的な機械学習の方法で構築する），一種の確率的なグラフィカルモデルである．本来のボルツマンマシンの可視層と隠れ層のユニット間の結合を制限することにより，効率的な教師なし学習を実現している．
+
+RBMの構造は図~\ref{fig_rbm}に示しているように可視層と隠れ層の  2層から構成され，層内ユニット間に結合がなく，層間のユニット，すなわち可視ユニット($v_1, v_2, \cdots, v_m$)と隠れユニット ($h_1, h_2, \cdots, h_n$)， は結合されている． 
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{22-4ia1f1.eps}
+\end{center}
+\caption{Restricted Boltzmann Machineの構造}
+\label{fig_rbm}
+\vspace{-1\Cvs}
+\end{figure}
+
+以下，その学習アルゴリズム~\cite{Bengio:09}を簡潔に述べておく．
+
+学習データ$\bm{v}$が可視層に与えられたとき，まず，式(1)，(2)，そして再度(1)の順で条件付確率に基づくサンプリングを行う．
+{\allowdisplaybreaks
+\begin{gather}
+P(h_i^{(k)}=1|\bm{v}^{(k)})={\rm sigmoid}\bigg(\sum_{j=1}^m w_{ij}v_j^{(k)}+c_i\bigg) \\
+P(v_j^{(k+1)}=1|\bm{h}^{(k)})={\rm sigmoid}\bigg(\sum_{i=1}^n w_{ij}h_i^{(k)}+b_j\bigg)
+\end{gather}
+}
+ただし，$k$ ($\geq 1$)はサンプリングの繰り返し回数，$\bm{v}^{(1)}=\bm{v}$，$w_{ij}$はユニット$v_j$と$h_i$間の結合の重み，そして， $b_j$と$c_i$は可視層と隠れ層のユニット$v_j$と$h_i$のオフセット（バイアス）である． 
+サンプリングを$k$回行った後，重みとオフセットは以下のように更新される．
+\begin{gather}
+\bm{W} \leftarrow \bm{W} + \epsilon (\bm{h}^{(1)}\bm{v}^{T}- P(\bm{h}^{(k+1)}=1|\bm{v}^{(k+1)})\bm{v}^{(k+1)T}) \\
+\bm{b} \leftarrow \bm{b} + \epsilon(\bm{v}-\bm{v}^{(k+1)}) \\
+\bm{c} \leftarrow \bm{c} + \epsilon(\bm{h}^{(1)}-P(\bm{h}^{(k+1)}=1|\bm{v}^{(k+1)}))
+\end{gather}
+ただし，$\epsilon$は学習率である．$\bm{W}$は微小な乱数\footnote{本研究では，http://deeplearning.net/tutorial/mlp.htmlのチュートリアルに従って，区間[$-4\frac{\sqrt{6}}{\sqrt{m+n}}$, $4\frac{\sqrt{6}}{\sqrt{m+n}}$]内の一様乱数を用いる（ただし，$m$と$n$はそれぞれ可視層と隠れ層のユニット数である）
+．その数学的な考えについては\cite{Glorot:10}を参照されたい．}， $\bm{b}$, $\bm{c}$は$\bm{0}$で初期化する． 
+サンプリングの繰り返し回数が十分多いときはGibbs samplingと呼ばれており計算コストが非常に高い．そのため，通常，サンプリングを$k$回のみ行う$k$-Contrastive Divergence （略してCD-$k$）と呼ばれる方法が採用される．実際，$k=1$ (CD-1)でも結果が十分よいことが経験的に知られており\cite{Bengio:09}，本研究も$k=1$に設定して学習を行う．
+
+ここで$N$個の学習データに対しCD-$k$と呼ばれるサンプリング方法で$e$回繰り返し学習を行う手順を図~\ref{fig:procedure-RBM}にまとめる．学習が進むにつれ，可視層のサンプル\footnote{ここでは条件付確率の式(1)(2)に基づき生成されたデータをサンプルと呼んでいる．} $\bm{v}^{(k+1)}$が学習データ$\bm{v}$に近づいていく．
+
+
+\subsection{Deep Belief Network (DBN)}
+
+図~\ref{fig_dbn}は一例として，三つのRBMと教師あり学習器から構成されるDBNを示す．ただし実際，DBNを構成するRBMの数は可変である．それらRBMはPre-trainingとも呼ばれ，教師なしの特徴抽出器として機能する．一方，教師あり学習器はFine-tuningとも呼ばれ，入力（図~\ref{fig_dbn}の場合はその入力から得られたRBM 3の出力）とラベルのペア（つまり正解付学習データ）を学習することにより未知の入力に対しても適切なラベルを出力できるようになる．図に示しているように前方のRBMの隠れ層は後方のRBMの可視層となっている．ここでは簡便化のために，RBMの層（ただし入力層を除く）をDBNの隠れ層と見なす．つまり，図の例は三層の隠れ層のDBNである（隠れ層の数とRBMの数は同じであることに注意されたい）．なお，教師あり学習はいろいろな方法で実現できるが，本稿ではロジスティク回帰を用いることにした．
+
+\begin{figure}[b]
+\vspace{-0.5\Cvs}
+\begin{center}
+\includegraphics{22-4ia1f2.eps}
+\end{center}
+\caption{RBMの学習手順}
+\label{fig:procedure-RBM}
+\end{figure}
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-4ia1f3.eps}
+\end{center}
+\caption{Deep Belief Networkの例}
+\label{fig_dbn}
+\end{figure}
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-4ia1f4.eps}
+\end{center}
+\caption{三つのRBMを持つDBNの学習手順}
+\label{fig:procedure-DBN}
+\end{figure}
+
+
+三つのRBMを持つDBNの学習手順を図~\ref{fig:procedure-DBN}にまとめる． 
+
+
+\section{実験}
+
+\subsection{実験設定}
+
+\subsubsection{データ}
+
+\begin{table}[b]
+\caption{10個のラベルと各ラベルの入力（説明文書）の数とそれらの全ラベルに占める割合}
+\label{tab:dist}
+\input{01table02.txt}
+\vspace{-0.5\Cvs}
+\end{table}
+\begin{table}[b]
+\caption{学習用データセット}
+\label{tab:data}
+\input{01table03.txt}
+\end{table}
+
+
+学習と評価には10個のラベルとそれらの入力（説明文書）のペアから構成されるデータを用いた．
+表~\ref{tab:dist}はラベル名と各ラベルの入力（説明文書）の数とそれらの全ラベルに占める割合を示す\footnote{自動収集データにおいて各ラベルのデータ数に多少のバラつきがあるが，ある程度のバランスが取れている．}．
+ただし，学習データは，手動収集データをベースとし，そのベースとなるデータに異なる数の自動収集データと疑似データを加えることにより13個のデータセット（表~\ref{tab:data}）を作成して用いた．表中のm300はベースとなるデータセットで手動で収集した300個のデータである．また，たとえばa2400は2,400個の自動収集データとm300で構成されたデータセット，p2400は2,400個の疑似データとm300から構成されたデータセット，そしてa2400p2400は2,400個の自動収集データ，2,400個の疑似データ，そしてm300から構成されたデータセットである．
+また，評価には学習データと異なる100個のデータを用いた． 個々の説明文書は2.4節で述べた方法で，2 ラベル間で重複する単語を除外する場合と 3 ラベル以上で共通する単語を除外する場合においてそれぞれ182と223次元の特徴ベクトルに変換される．
+
+
+\subsubsection{パラメータのチューニング}
+
+\begin{table}[b]
+\caption{グリッドサーチに用いるパラメータ}
+\label{tab:gs}
+\input{01table04.txt}
+\end{table}
+
+各種の機械学習の各学習データセットにおける最適なパラメータは，それぞれの学習データセットに対しグリッドサーチと5-fold交差検証を行って決定した．グリッドサーチに用いるパラメータの詳細は表~\ref{tab:gs}にまとめている．たとえば，DBNの入力が182次元の場合の構造（隠れ層）の欄に152-121-91がある．これは，そのDBNは182-{\bf 152-121-91}-10という構造を持つ，ということを表している．ただし，数字182と10は入力層と出力層のユニット数であり，それぞれ特徴ベクトルの次元数とラベルの数に対応している．また，これら隠れ層のユニット数は恣意的にではなく，前半の 3 つについては線形等間隔に設定している．すなわち，入力層のユニット数 (182) から，ピラミッド的に，最初の隠れ層のユニット数を$182 \times 5/6$ (152)， 次の隠れ層のユニット数を$182 \times 4/6$ (121)， そして， 最後の隠れ層のユニット数を$182 \times 3/6$ (91) のように設定している．一方，後半の 3 つについては，Bengioの\cite{Bengio:12}
+の薦め，すなわち，過学習への対処が適切であれば隠れ層のユニット数は基本的に多いほどよい，ネットワーク構造は各層が同じサイズでよい場合が多い（ピラミッドまたは逆ピラミッドである必要はない）に基づき，すべての隠れ層のユニット数を入力層のユニット数の3/2倍であるように設定した．入力層のユニット数が223の場合も同様な考え方に基づいて設定した．
+
+DBNがMLPとSVMよりパラメータが多いため，同じ細かさのグリッドサーチで最適なパラメータを決めてしまうと，パラメータの多いDBNのほうが細かなチューニングができるため有利になる可能性がある．このようなバイアスをなくすために，
+MLPとSVMについてそのパラメータグリッドをより細かくし，MLPとSVMの探索すべきパラメータセットの数（つまり，パラメータの組み合わせの数）をDBNのそれと等しいかそれ以上にした．一方，MLPについては，構造，学習率，学習回数がDBNとまったく同じものも比較に用いた．本稿では後者をMLP 1，前者をMLP 2と呼ぶ．その結果，DBNとMLP 2は同じく864通りのパラメータセット，SVM (Linear) とSVM (RBF) は900通りのパラメータセット，また，MLP 1は72通りのパラメータセットを持つことになる．
+
+
+\subsubsection{ベースライン}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-4ia1f5.eps}
+\end{center}
+\caption{ベースライン手法 (Baseline 1, Baseline 2) およびその正解率算出のアルゴリズム}
+\label{fig:baseline}
+\end{figure}
+
+MLPとSVMに加え，用例に基づく手法をベースラインとして比較実験に加えた．これは，評価データを学習データの一つひとつと比較し，共通する単語のもっとも多い，または共通する単語数をその評価データの単語数で正規化した値がもっとも大きい学習データのラベルを評価データのラベルとする方法である．ここで両者をそれぞれBaseline 1とBaseline 2と呼ぶ．
+図~\ref{fig:baseline}は本手法および本手法による予測結果の正解率算出のアルゴリズムを示す．ただし，カウントに用いる単語は2.4節で述べた(1)〜(4)の手順に従って説明文書から抽出されたものである．
+
+
+\subsection{実験結果}
+
+\subsubsection{182次元の特徴ベクトルを使用した場合}
+
+図~\ref{fig:prec}は各機械学習において，異なる学習データセットを用いた場合の評価データへの予測精度を示す．ここでの精度は，各パラメータセットの交差検証誤差を昇順（小さい順）に並べたときの上位N個（ただしNは5から30まで可変）のパラメータセットを用いた場合の平均精度である．なお，本論文に用いられている平均精度はすべてマクロ平均で算出したものである．
+
+\begin{figure}[p]
+\begin{center}
+\includegraphics{22-4ia1f6.eps}
+\end{center}
+\hangcaption{交差検証誤差の昇順で上位N(5〜30)セットのパラメータを用いた場合の各機械学習の平均精度についての学習データセット間の比較（182次元の特徴ベクトルを用いた場合）}
+\label{fig:prec}\end{figure}
+
+図に示しているように，全般的に見れば，学習データセットa2400p2400を用いた場合（逆三角形マークの点線\footnote{点線と破線の違いに注意されたい．}），すなわち手動収集データに自動収集データと疑似データの両方を最も多く加えた場合，DBNとMLPは最高の精度，そしてSVMもほぼ最高の精度を出している\footnote{SVM (RBF)の場合，逆三角形マークの点線は四角形マークの点線と重ねていることに注意されたい．}．また，手動収集データに自動収集データと疑似データの両方を適度に加えた場合（点線）は，手動収集データのみの場合（星マークの太線）に比べ，DBNとMLPとSVM  (RBF)の予測精度はおおむね向上している．しかしSVM (Linear) についてはそのような傾向は見られなかった\footnote{これはSVM  (Linear)が線形分離可能なデータしか取り扱えないことに起因するものと思われる．}．さらに，手動収集データのみを用いた場合と，自動収集データと疑似データのどちらか一方のみを手動収集データに加えた場合について比べると，DBNとSVM (RBF)については自動収集データのみを加えた場合（実線），MLPについては疑似データのみを加えた場合（破線）のほうがそれぞれに精度の向上が見られた．自動収集データのほうが疑似データよりもノイズが多いことから，上記結果はDBNとSVM (RBF)のほうがMLPよりもノイズの多い学習データを有効利用できる可能性が高いことを示している．
+
+図~\ref{fig:cmp}は各機械学習間の評価データへの予測精度の比較を示す．ここでの精度は図~\ref{fig:prec}と同様，各パラメータセットの交差検証誤差を昇順に並べたときの上位N個（ただしNは5から30まで可変）のパラメータセットを用いた場合の平均精度である．学習データセットも図~\ref{fig:prec}のとまったく同じであるがそれらの詳細の明示は省略されている．ただし，各グラフの縦軸の範囲が統一されているため，グラフDBN vs. SVM (RBF)において，SVM (RBF)の精度が0.9未満なもの（計 4 本の線）が表示されていない（なお，すべての結果は図~\ref{fig:prec}には示されている）．この図からはDBNのほう（実線）が他の機械学習（破線）より性能がよいことが一目瞭然にわかる．
+
+\begin{figure}[p]
+\begin{center}
+\includegraphics{22-4ia1f7.eps}
+\end{center}
+\hangcaption{交差検証誤差の昇順で上位N(5〜30)セットのパラメータを用いた場合の平均精度についての機械学習間の比較（182次元の特徴ベクトルを用いた場合）}
+\label{fig:cmp}
+\end{figure}
+\begin{table}[p]
+\caption{ベースラインの精度}
+\label{tab:baseline}
+\input{01table05.txt}
+\end{table}
+
+表~\ref{tab:baseline}，\ref{tab:rst-top1}，\ref{tab:rst-top5}，\ref{tab:rst-top10}はそれぞれ，各学習データセットを用いた場合の，ベースラインの予測精度，交差検証誤差が最小のパラメータセットを用いた場合の予測精度，交差検証誤差を昇順に並べたときの上位5個，10個のパラメータセットを用いた場合の平均予測精度を示す．
+まず，機械学習とは対照的に，ベースライン手法では，ノイズの多い学習データを加えても（つまり，手動収集データに自動収集データのみを加えた場合と，自動収集データと疑似データの両方を加えた場合），予測精度の向上に役立たないばかりか，逆に，これらのデータは予測精度を大きく下げてしまった．
+次に，ほとんどの場合において，ベースラインの予測精度は機械学習のそれよりかなり低かった．
+また，ほとんどの場合において，DBNがすべての機械学習において最高の予測精度を出している（各学習セットにおいて各機械学習手法中の最高の精度は太字で表されている）．
+
+\begin{table}[t]
+\hangcaption{交差検証誤差が最小のパラメータセットを用いたDBN, MLP, SVMの予測精度（182次元の特徴ベクトルを用いた場合）}
+\label{tab:rst-top1}
+\input{01table06.txt}
+\end{table}
+\begin{table}[t]
+\hangcaption{交差検証誤差を昇順に並べたときの上位5個のパラメータセットを用いたDBN, MLP, SVMの平均予測精度（182次元の特徴ベクトルを用いた場合）}
+\label{tab:rst-top5}
+\input{01table07.txt}
+\end{table}
+
+
+\subsubsection{223次元の特徴ベクトルを使用した場合}
+
+前節の実験結果はすでに提案手法の予測精度が従来の機械学習手法より高いことを示しただけでなく，
+学習データにおけるノイズに対する頑健性もある程度示せたと考える．しかし上記実験では，手動学習データのラベル間の重複単語を除外していたため，疑似データの作成時はそれらをノイズとして加えることができず，提案手法のノイズへの頑健性に疑問が残る．本節の実験は，2 ラベル間の重複単語を残しているため，前節の実験よりも，より適切にノイズの頑健性を確認できると考える．
+
+\begin{table}[t]
+\hangcaption{交差検証誤差を昇順に並べたときの上位10個のパラメータセットを用いたDBN, MLP, SVMの平均予測精度（182次元の特徴ベクトルを用いた場合）}
+\label{tab:rst-top10}
+\input{01table08.txt}
+\end{table}
+
+\begin{figure}[p]
+\begin{center}
+\includegraphics{22-4ia1f8.eps}
+\end{center}
+\hangcaption{交差検証誤差の昇順で上位N(5〜30)セットのパラメータを用いた場合の各機械学習の平均精度についての学習データセット間の比較（223次元の特徴ベクトルを用いた場合）}
+\label{fig:prec-add}
+\end{figure}
+
+図~\ref{fig:prec-add}は図~\ref{fig:prec}と同様，各機械学習において，異なる学習データセットを用いた場合の評価データへの予測精度を示す．DBNのグラフにおいて，すべての点線と2本の実線が星マークの太線（つまり手動データ）の上にあること，また，SVM (RBF)においてすべての点線と実線が星マークの太線の上にあることから，前の実験結果と同様，DBNとSVM (RBF)については疑似データを含めたノイズのある学習データの利用が有効であることが確認できる．一方，MLPとSVM (Linear)については，手動データの星マークの太線がほとんど一番上に位置していることから，疑似データを含めたノイズのある学習データの有効性がほとんど見られない．すなわち，MLPとSVM (Linear)のノイズに対する頑健性については，前節の実験結果よりも悪い結果となった（逆にDBNの優位性がより顕著になったとも言える）．なお，182次元の特徴ベクトルを用いた実験結果ではa2400p2400を用いた場合（逆三角形マークの点線），すなわち手動収集データに自動収集データと疑似データの両方を最も多く加えた場合，DBNが最高の精度を出しているのに対し，本実験結果ではDBNはa600p600を用いた場合（正三角形マークの点線）に最高の精度を出している．これは，精度の高いデータに対し，加えてよいノイズのあるデータについては適正の数があるはずで，次元数が増えると個々の特徴ベクトルの本来のノイズの度合いが増強したため，ノイズデータの適正数が減少したと考えることができ，両者の結果は矛盾しないと思われる．
+
+
+\subsubsection{有意差検定}
+
+\begin{table}[b]
+\vspace{-0.5\Cvs}
+\hangcaption{交差検証誤差が最小のパラメータセットを用いた場合のDBNと他の手法との性能比較に関する両側符号検定とt検定の結果}
+\label{tab:test-top1}
+\input{01table09.txt}
+\vspace{4pt}\small
+数値はp値であり，有意水準10\%で有意に差があるものには*，有意水準5\%で有意に差が
+あるものには**，有意水準1\%で有意に差があるものには***を付けている．\par
+\end{table}
+\begin{table}[b]
+\hangcaption{各学習データセットについて，それらにおける交差検証誤差を昇順に並べたときの上位10個のパラメータセットを用いた場合の平均予測精度についてのDBNと他の手法との性能比較に関する両側t検定の結果}
+\label{tab:test-top10}
+\input{01table10.txt}
+\small
+数値はp値であり，有意水準10\%で有意に差があるものには*，有意水準5\%で有意に差が
+あるものには**，有意水準1\%で有意に差があるものには***を付けている．\par
+\end{table}
+
+交差検証誤差が最小のパラメータセットを用いた場合と，交差検証誤差を昇順に並べたときの上位10個のパラメータセットを用いた場合について，DBNと他の手法との性能の有意差検定を行った．
+交差検証誤差が最小のパラメータセットを用いた場合，各学習データセットについて単独で検定を行うとデータ数が少なすぎるため，各学習データセットの結果を 1 つにまとめて符号検定とt検定を行った．
+一方，交差検証誤差上位10個のパラメータセットを用いた場合は各学習データセットについて単独でt
+検定を行った．
+検定結果を表~\ref{tab:test-top1}，\ref{tab:test-top10} に示す．
+これらの結果から，182次元と223次元の特徴ベクトルのいずれを用いても，多数の場合においてDBNが他の手法より有意に優れていることが確認できる．また，詳細をみると，たとえばa2400p2400の学習データセットについては182次元の特徴ベクトルを，a600p600/a1200p1200の学習データセットについては223次元の特徴ベクトルを用いたほうが有意差が顕著であることがわかり，特徴ベクトルの構成方法について，DBNと他の手法との性能差の観点からどれが一番よいかは一概に断言することができない\footnote{この結果については4.2.2節でも述べたように，ノイズデータについては適正の数があるはずであることと，次元数が増えると個々のベクトルの本来のノイズの度合いが増強する（よってノイズデータの適正数が減る）ことを合わせて考えれば両者の結果は矛盾しないと思われる．}．
+
+\begin{table}[t]
+\hangcaption{各学習データセットに対して交差検証誤差が最小のパラメータセットを用いた場合のラベルごとの全学習データセットにおける平均予測精度}
+\label{tab:label-prec}
+\input{01table11.txt}
+\end{table}
+
+最後に，参考として，各手法のラベル（検索語）ごとの予測精度（表~\ref{tab:label-prec}）と，交差検証誤差が最小のパラメータセット（表~\ref{tab:parameter}）を示しておく．表~\ref{tab:label-prec}から，182次元の「PCケース」を除き各ラベルへの予測精度にばらつきが小さいことがわかる．
+また，全般的にDBNのほうがほかの手法より各ラベルに対する予測精度がよいことがわかる．さらに，たとえばDBNの予測精度は182次元の場合のほうが10個中の6個のラベルについて223次元の場合に勝っており，182次元と223次元のどちらのほうがよいかが一概に言えないことがわかる．
+表~\ref{tab:parameter}には，隠れ層のユニット数が182次元で273，223次元で335が多く出現しており，隠れ層のユニット数は多いほうがよいというBengioの提言と合致している．
+
+\begin{table}[t]
+\caption{DBNの各学習データセットに対して交差検証誤差が最小のパラメータセット}
+\label{tab:parameter}
+\input{01table12.txt}
+\end{table}
+
+
+\section{本課題の意義について}
+
+本研究では特定の分野の関連語・周辺語または説明文書を入力としたときの
+\pagebreak
+検索用語の予測・提示を行う検索支援を想定している．まず，説明文書による支援の意義は，たとえばThe 5th NTCIR Workshop Meeting on 
+Evaluation of Information Access Technologies: Information Retrieval, Question Answering and Cross-Lingual Information Accessのようなワークショップ型共同研究\cite{Ma}における長い文書を検索課題\footnote{検索課題例：AOLとタイムワーナー合併の影響に関する記事を探したい．AOL・タイムワーナー合併がインターネットとエンターテインメントというメディア産業に与える影響に関する意見を適合とする．AOL・タイムワーナー合併の展開についての記述は部分的に適合とする．総額と所有権転換の仕組みに関する情報は不適合とする．}としたタスクからも類推できる．
+つまり，たとえばユーザが関連語・周辺語もはっきりわからないときはその支援要求を文書の形で伝える（入力する）ニーズはあると考える．また一方，当然のことではあるが，本研究では，少数キーワード（関連語・周辺語）による検索用語の予測も期待している．実際，表~\ref{tab:keyword-prec}は，DBNについて，各学習データセットを用いた場合の，表~\ref{tab:keyword}に示す 3 関連語・周辺語（$+1$ ノイズ語）\footnote{これらのキーワードは予備実験も含め一切精査せずに著者らの知識に頼って手動収集のデータから関連語・周辺語・ノイズ語としてふさわしいものを主観で選んでいる．しかし当然なことではあるが，これらのキーワードはすべて誰にも知られている用語である保証はない（また，本実験の目的からしてそう保証する必要もない）．}による全検索用語の平均予測精度を示している\footnote{当然のことではあるが，予測精度は用いるキーワードに大きく依存する．試しに10検索用語のうち6検索用語の関連語・周辺語を意識的に関連性の弱いものを選んで実験すると平均精度が8割程度までに下がった．}．実験はまだ小規模ではあるが，この結果は
+提案手法が少数キーワードによる支援も可能であることを示唆していると思われる．
+
+\begin{table}[t]
+\caption{予測に用いるキーワード}
+\label{tab:keyword}
+\input{01table13.txt}
+\end{table}
+\begin{table}[t]
+\caption{DBNの少数キーワードによる予測精度（223次元の特徴ベクトルを用いた場合）}
+\label{tab:keyword-prec}
+\input{01table14.txt}
+\end{table}
+
+
+\section{結び}
+
+本稿では深層学習の代表的な手法であるDeep Belief Network (DBN)を用いて
+\pagebreak
+関連語・周辺語またはそれらの語から構成される説明文書から適切な検索用語を予測する手法を提案した．DBNの有効性を確認するために，用例に基づくベースライン手法，多層パーセプトロン (MLP)，およびサポートベクトルマシン (SVM) との比較を行った．学習と評価に用いるデータは手動と自動の 2 通りの方法でインターネットから収集した．加えて，自動生成した疑似データも用いた．各種機械学習の最適なパラメータはグリッドサーチと交差検証を行うことにより決めた．実験の結果，DBNの予測精度はベースライン手法よりはるかに高くMLPとSVMのいずれよりも高かった．また，手動収集データに自動収集のデータと疑似データを加えて学習することにより予測精度は向上した．さらに，よりノイズの多い学習データを加えてもDBNの予測精度はさらに向上した．しかしながらこの場合MLPの精度向上は見られなかった．このことから，DBNのほうがMLPよりもノイズの多い学習データを有効利用できることが分かった．なお，まだ少数の実験例しかなかったが，提案手法が少数キーワードによる支援も可能であることを示唆した実験結果も得られた．
+
+今後はより大規模な評価実験を通じ，提案手法の有効性の確認を行うとともに，様々な分野における実用的な検索用語の予測システムを構築していく予定である．
+
+
+\acknowledgment
+
+本稿に対して丁寧かつ有益なご意見ご指摘をいただきました査読者の方に感謝いたします．
+本稿の内容の一部は，The 28th Pacific Asia Conference on Language, Information and Computing (Paclic 28)で発表したものです\cite{Ma:14}．
+また，本研究はJSPS科研費25330368の助成を受けています．記して謝意を表します．
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{粟飯原\JBA 長尾\JBA 田中}{粟飯原 \Jetal }{2013}]{Aihara}
+粟飯原俊介\JBA 長尾真\JBA 田中久美子 \BBOP 2013\BBCP.
+\newblock 意味的逆引き辞書『真言』.\
+\newblock \Jem{言語処理学会第19回年次大会発表論文集}, \mbox{\BPGS\ 406--409}.
+
+\bibitem[\protect\BCAY{Auli, Galley, Quirk, \BBA\ Zweig}{Auli
+  et~al.}{2013}]{Auli}
+Auli, M., Galley, M., Quirk, C., \BBA\ Zweig, G. \BBOP 2013\BBCP.
+\newblock \BBOQ Joint Language and Translation Modeling with Recurrent Neural
+  Networks.\BBCQ\
+\newblock In {\Bem Proceedings of the 2013 Conference on Empirical Methods in
+  Natural Language Processing (EMNLP 2013)}, \mbox{\BPGS\ 1044--1054}.
+
+\bibitem[\protect\BCAY{Bengio}{Bengio}{2009}]{Bengio:09}
+Bengio, Y. \BBOP 2009\BBCP.
+\newblock \BBOQ Learning Deep Architectures for AI.\BBCQ\
+\newblock {\Bem Foundations and Trends in Machine Learning}, {\Bbf 2}  (1),
+  \mbox{\BPGS\ 1--127}.
+
+\bibitem[\protect\BCAY{Bengio}{Bengio}{2012}]{Bengio:12}
+Bengio, Y. \BBOP 2012\BBCP.
+\newblock \BBOQ Practical Recommendations for Gradient-Based Training of Deep
+  Architectures.\BBCQ\
+\newblock {\Bem eprint arXiv:1206.5533}, \mbox{\BPGS\ 1--33}.
+
+\bibitem[\protect\BCAY{Bengio, Courville, \BBA\ Vincent}{Bengio
+  et~al.}{2013}]{Bengio:13}
+Bengio, Y., Courville, A., \BBA\ Vincent, P. \BBOP 2013\BBCP.
+\newblock \BBOQ Representation Learning: A Review and New Perspectives.\BBCQ\
+\newblock {\Bem IEEE Transactions on Pattern Analysis and Machine
+  Intelligence}, {\Bbf 35}  (8), \mbox{\BPGS\ 1798--1828}.
+
+\bibitem[\protect\BCAY{Bengio, Lamblin, Popovici, \BBA\ Larochelle}{Bengio
+  et~al.}{2007}]{Bengio:07}
+Bengio, Y., Lamblin, P., Popovici, D., \BBA\ Larochelle, H. \BBOP 2007\BBCP.
+\newblock \BBOQ Greedy Layer-wise Training of Deep Networks.\BBCQ\
+\newblock In {\Bem Advances in Neural Information Processing Systems 19 (NIPS
+  2006)}, \mbox{\BPGS\ 153--160}.
+
+\bibitem[\protect\BCAY{Billingsley \BBA\ Curran}{Billingsley \BBA\
+  Curran}{2012}]{Billingsley}
+Billingsley, R.\BBACOMMA\ \BBA\ Curran, J. \BBOP 2012\BBCP.
+\newblock \BBOQ Improvements to Training an RNN Parser.\BBCQ\
+\newblock In {\Bem Proceedings of the 24th International Conference on
+  Computational Linguistics (COLING 2012)}, \mbox{\BPGS\ 279--294}.
+
+\bibitem[\protect\BCAY{Collobert, Weston, Bottou, Karlen, Kavukcuoglu, \BBA\
+  Kuksa}{Collobert et~al.}{2011}]{Collobert}
+Collobert, R., Weston, J., Bottou, L., Karlen, M., Kavukcuoglu, K., \BBA\
+  Kuksa, P. \BBOP 2011\BBCP.
+\newblock \BBOQ Natural Language Processing (Almost) from Scratch.\BBCQ\
+\newblock {\Bem Journal of Machine Learning Research}, {\Bbf 12}, \mbox{\BPGS\
+  2493--2537}.
+
+\bibitem[\protect\BCAY{Glorot \BBA\ Bengio}{Glorot \BBA\
+  Bengio}{2010}]{Glorot:10}
+Glorot, X.\BBACOMMA\ \BBA\ Bengio, Y. \BBOP 2010\BBCP.
+\newblock \BBOQ Understanding the Difficulty of Training Deep Feedforward
+  Neural Networks.\BBCQ\
+\newblock In {\Bem Proceedings of the 13th International Conference on
+  Artificial Intelligence and Statistics (AISTATS 2010)}, \mbox{\BPGS\
+  249--256}.
+
+\bibitem[\protect\BCAY{Glorot, Bordes, \BBA\ Bengio}{Glorot
+  et~al.}{2011}]{Glorot}
+Glorot, X., Bordes, A., \BBA\ Bengio, Y. \BBOP 2011\BBCP.
+\newblock \BBOQ Domain Adaptation for Large-Scale Sentiment Classification: A
+  Deep Learning Approach.\BBCQ\
+\newblock In {\Bem Proceedings of the 28th International Conference on Machine
+  Learning (ICML 2011)}, \mbox{\BPGS\ 513--520}.
+
+\bibitem[\protect\BCAY{Hashimoto, Miwa, Tsuruoka, \BBA\ Chikayama}{Hashimoto
+  et~al.}{2013}]{Hashimoto}
+Hashimoto, K., Miwa, M., Tsuruoka, Y., \BBA\ Chikayama, T. \BBOP 2013\BBCP.
+\newblock \BBOQ Simple Customization of Recursive Neural Networks for Semantic
+  Relation Classification.\BBCQ\
+\newblock In {\Bem Proceedings of the 2013 Conference on Empirical Methods in
+  Natural Language Processing (EMNLP 2013)}, \mbox{\BPGS\ 1372--1376}.
+
+\bibitem[\protect\BCAY{Hermann \BBA\ Blunsom}{Hermann \BBA\
+  Blunsom}{2013}]{Hermann}
+Hermann, K.~M.\BBACOMMA\ \BBA\ Blunsom, P. \BBOP 2013\BBCP.
+\newblock \BBOQ The Role of Syntax in Vector Space Models of Compositional
+  Semantics.\BBCQ\
+\newblock In {\Bem Proceedings of the 51st Annual Meeting of the Association
+  for Computational Linguistics (ACL 2013)}, \mbox{\BPGS\ 894--904}.
+
+\bibitem[\protect\BCAY{Hiton, Osindero, \BBA\ Teh}{Hiton et~al.}{2006}]{Hinton}
+Hiton, G.~E., Osindero, S., \BBA\ Teh, Y. \BBOP 2006\BBCP.
+\newblock \BBOQ A Fast Learning Algorithm for Deep Belief Nets.\BBCQ\
+\newblock {\Bem Neural Computation}, {\Bbf 18}, \mbox{\BPGS\ 1527--1554}.
+
+\bibitem[\protect\BCAY{Kalchbrenner \BBA\ Blunsom}{Kalchbrenner \BBA\
+  Blunsom}{2013}]{Kalchbrenner}
+Kalchbrenner, N.\BBACOMMA\ \BBA\ Blunsom, P. \BBOP 2013\BBCP.
+\newblock \BBOQ Recurrent Continuous Translation Models.\BBCQ\
+\newblock In {\Bem Proceedings of the 2013 Conference on Empirical Methods in
+  Natural Language Processing (EMNLP 2013)}, \mbox{\BPGS\ 1700--1709}.
+
+\bibitem[\protect\BCAY{Krizhevsky, Sutskever, \BBA\ Hinton}{Krizhevsky
+  et~al.}{2012}]{Krizhevsky}
+Krizhevsky, A., Sutskever, I., \BBA\ Hinton, G.~E. \BBOP 2012\BBCP.
+\newblock \BBOQ ImageNet Classification with Deep Convolutional Neural
+  Networks.\BBCQ\
+\newblock In {\Bem Advances in Neural Information Processing Systems 25 (NIPS
+  2012)}, \mbox{\BPGS\ 1097--1105}.
+
+\bibitem[\protect\BCAY{Lee, Grosse, Ranganath, \BBA\ Ng}{Lee
+  et~al.}{2009}]{Lee}
+Lee, H., Grosse, R., Ranganath, R., \BBA\ Ng, A.~Y. \BBOP 2009\BBCP.
+\newblock \BBOQ Convolutional Deep Belief Networks for Scalable Unsupervised
+  Learning of Hierarchical Representations.\BBCQ\
+\newblock In {\Bem Proceedings of the 26th International Conference on Machine
+  Learning (ICML 2009)}, \mbox{\BPGS\ 609--616}.
+
+\bibitem[\protect\BCAY{Li, Zhao, Jiang, Zhang, Wang, Gonzalez, Valentin, \BBA\
+  Sahli}{Li et~al.}{2013}]{Li}
+Li, L., Zhao, Y., Jiang, D., Zhang, Y., Wang, F., Gonzalez, I., Valentin, E.,
+  \BBA\ Sahli, H. \BBOP 2013\BBCP.
+\newblock \BBOQ Hybrid Deep Neural Network - Hidden Markov Model (DNN-HMM)
+  Based Speech Emotion Recognition.\BBCQ\
+\newblock In {\Bem Proceedings of Humaine Association Conference on Affective
+  Computing and Intelligent Interaction (ACII 2013)}, \mbox{\BPGS\ 312--317}.
+
+\bibitem[\protect\BCAY{Liu, Watanabe, Sumita, \BBA\ Zhao}{Liu
+  et~al.}{2013}]{Liu}
+Liu, L., Watanabe, T., Sumita, E., \BBA\ Zhao, T. \BBOP 2013\BBCP.
+\newblock \BBOQ Additive Neural Networks for Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 51st Annual Meeting of the Association
+  for Computational Linguistics (ACL 2013)}, \mbox{\BPGS\ 791--801}.
+
+\bibitem[\protect\BCAY{Luong, Socher, \BBA\ Manning}{Luong
+  et~al.}{2013}]{Luong}
+Luong, T., Socher, R., \BBA\ Manning, C. \BBOP 2013\BBCP.
+\newblock \BBOQ Better Word Representations with Recursive Neural Networks for
+  Morphology.\BBCQ\
+\newblock In {\Bem Proceedings of the 51st Annual Meeting of the Association
+  for Computational Linguistics (ACL 2013)}, \mbox{\BPGS\ 104--113}.
+
+\bibitem[\protect\BCAY{Ma, Nakao, \BBA\ Murata}{Ma et~al.}{2005}]{Ma}
+Ma, Q., Nakao, K., \BBA\ Murata, M. \BBOP 2005\BBCP.
+\newblock \BBOQ Single Language Information Retrieval at NTCIR-5.\BBCQ\
+\newblock In {\Bem Proceedings of the Fifth NTCIR Workshop Meeting on
+  Evaluation of Information Access Technologies: Information Retrieval,
+  Question Answering and Cross-Lingual Information Access}, \mbox{\BPGS\
+  39--43}.
+
+\bibitem[\protect\BCAY{Ma, Tanigawa, \BBA\ Murata}{Ma et~al.}{2014}]{Ma:14}
+Ma, Q., Tanigawa, I., \BBA\ Murata, M. \BBOP 2014\BBCP.
+\newblock \BBOQ Retrieval Term Prediction Using Deep Belief Networks.\BBCQ\
+\newblock In {\Bem Proceedings of the 28th Pacific Asia Conference on Language,
+  Information and Computing (Paclic 28)}, \mbox{\BPGS\ 338--347}.
+
+\bibitem[\protect\BCAY{内木\JBA 佐藤\JBA 駒谷}{内木 \Jetal }{2013}]{Uchiki}
+内木賢吾\JBA 佐藤理史\JBA 駒谷和範 \BBOP 2013\BBCP.
+\newblock 日本語クロスワードを解く：性能向上の検討.\
+\newblock \Jem{2013年度人工知能学会全国大会}.
+
+\bibitem[\protect\BCAY{Salakhutdinov \BBA\ Hinton}{Salakhutdinov \BBA\
+  Hinton}{2009}]{Salakhutdinov}
+Salakhutdinov, R.\BBACOMMA\ \BBA\ Hinton, G.~E. \BBOP 2009\BBCP.
+\newblock \BBOQ Semantic Hashing.\BBCQ\
+\newblock {\Bem International Journal of Approximate Reasoning}, {\Bbf 50}
+  (7), \mbox{\BPGS\ 969--978}.
+
+\bibitem[\protect\BCAY{Seide, Li, \BBA\ Yu}{Seide et~al.}{2011}]{Seide}
+Seide, F., Li, G., \BBA\ Yu, D. \BBOP 2011\BBCP.
+\newblock \BBOQ Conversational Speech Transcription Using Context-Dependent
+  Deep Neural Networks.\BBCQ\
+\newblock In {\Bem Proceedings of 12th Annual Conference of the International
+  Speech Communication Association (INTERSPEECH 2011)}, \mbox{\BPGS\ 437--440}.
+
+\bibitem[\protect\BCAY{Socher, Bauer, Manning, \BBA\ Ng}{Socher
+  et~al.}{2013}]{Socher:13a}
+Socher, R., Bauer, J., Manning, C.~D., \BBA\ Ng, A.~Y. \BBOP 2013\BBCP.
+\newblock \BBOQ Parsing with Computational Vector Grammars.\BBCQ\
+\newblock In {\Bem Proceedings of the 51st Annual Meeting of the Association
+  for Computational Linguistics (ACL 2013)}, \mbox{\BPGS\ 455--465}.
+
+\bibitem[\protect\BCAY{Socher, Huang, Pennington, Ng, \BBA\ Manning}{Socher
+  et~al.}{2011}]{Socher:11}
+Socher, R., Huang, E.~H., Pennington, J., Ng, A.~Y., \BBA\ Manning, C.~D. \BBOP
+  2011\BBCP.
+\newblock \BBOQ Dynamic Pooling and Unfolding Recursive Autoencoders for
+  Paraphrase Detection.\BBCQ\
+\newblock In {\Bem Advances in Neural Information Processing Systems 24 (NIPS
+  2011)}, \mbox{\BPGS\ 801--809}.
+
+\bibitem[\protect\BCAY{Socher, Perelygin, Wu, \BBA\ Chuang}{Socher
+  et~al.}{2013}]{Socher:13b}
+Socher, R., Perelygin, A., Wu, J.~Y., \BBA\ Chuang, J. \BBOP 2013\BBCP.
+\newblock \BBOQ Recursive Deep Models for Semantic Compositionality Over a
+  Sentiment Treebank.\BBCQ\
+\newblock In {\Bem Proceedings of the 2013 Conference on Empirical Methods in
+  Natural Language Processing (EMNLP 2013)}, \mbox{\BPGS\ 1631--1642}.
+
+\bibitem[\protect\BCAY{Srivastava, Hovy, \BBA\ Hovy}{Srivastava
+  et~al.}{2013}]{Srivastava}
+Srivastava, S., Hovy, D., \BBA\ Hovy, E.~H. \BBOP 2013\BBCP.
+\newblock \BBOQ A Walk-Based Semantically Enriched Tree Kernel Over Distributed
+  Word Representations.\BBCQ\
+\newblock In {\Bem Proceedings of the 2013 Conference on Empirical Methods in
+  Natural Language Processing (EMNLP 2013)}, \mbox{\BPGS\ 1411--1416}.
+
+\bibitem[\protect\BCAY{Tsubaki, Duh, Shimbo, \BBA\ Matsumoto}{Tsubaki
+  et~al.}{2013}]{Tsubaki}
+Tsubaki, M., Duh, K., Shimbo, M., \BBA\ Matsumoto, Y. \BBOP 2013\BBCP.
+\newblock \BBOQ Modeling and Learning Semantic Co-Compositionality through
+  Prototype Projections and Neural Networks.\BBCQ\
+\newblock In {\Bem Proceedings of the 2013 Conference on Empirical Methods in
+  Natural Language Processing (EMNLP 2013)}, \mbox{\BPGS\ 130--140}.
+
+\bibitem[\protect\BCAY{Vincent, Larochelle, Bengio, \BBA\ Manzagol}{Vincent
+  et~al.}{2008}]{Vincent:08}
+Vincent, P., Larochelle, H., Bengio, Y., \BBA\ Manzagol, P.~A. \BBOP 2008\BBCP.
+\newblock \BBOQ Extracting and Composing Robust Features with Denoising
+  Autoencoders.\BBCQ\
+\newblock In {\Bem Proceedings of the 25th International Conference on Machine
+  Learning (ICML 2008)}, \mbox{\BPGS\ 1096--1103}.
+
+\bibitem[\protect\BCAY{Vincent, Larochelle, Lajoie, Bengio, \BBA\
+  Manzagol}{Vincent et~al.}{2010}]{Vincent:10}
+Vincent, P., Larochelle, H., Lajoie, I., Bengio, Y., \BBA\ Manzagol, P.~A.
+  \BBOP 2010\BBCP.
+\newblock \BBOQ Stacked Denoising Autoencoders: Learning Useful Representations
+  in a Deep Network with a Local Denoising Criterion.\BBCQ\
+\newblock {\Bem Journal of Machine Learning Research}, {\Bbf 11}, \mbox{\BPGS\
+  3371--3408}.
+
+\bibitem[\protect\BCAY{Zou, Socher, Cer, \BBA\ Manning}{Zou et~al.}{2013}]{Zou}
+Zou, W.~Y., Socher, R., Cer, D.~M., \BBA\ Manning, C.~D. \BBOP 2013\BBCP.
+\newblock \BBOQ Bilingual Word Embeddings for Phrase-Based Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 2013 Conference on Empirical Methods in
+  Natural Language Processing (EMNLP 2013)}, \mbox{\BPGS\ 1393--1398}.
+
+\end{thebibliography}
+
+
+\begin{biography}
+\bioauthor{馬　　　青}{
+1983年北京航空航天大学自動制御学科卒業．1987年筑波
+  大学大学院修士課程理工学研究科理工学専攻修了．1990年同大学院博士課程工学研究科電子・情報工学専攻修了．工学博士．郵政省通信総合研究所・独立行政法人通信総合研究所（現国立研究開発法人情報通信研究機構）主任研究官・主任研究員を経て， 2003年4月より，龍谷大学理工学部教授．自然言語処理，機械学習の研究に従事．言語処理学会，情報処理学会，電子情報通信学会，日本神経回路学会，各会員．
+}
+\bioauthor{谷河　息吹}{
+2013年龍谷大学数理情報学科卒業．
+2015年龍谷大学大学院理工学研究科数理情報学専攻修士課程修了．
+人工知能学会員．
+}
+\bioauthor{村田　真樹}{
+1993年京都大学工学部電気工学第
+二学科卒業．1997年同大学院工学研究科電子
+通信工学専攻博士課程修了．博士（工学）．
+同年，京都大学にて日本学術振興会リサーチ
+・アソシエイト．1998年郵政省通信総合研究
+所入所．独立行政法人情報通信研究機構主任
+研究員を経て，2010年4月より，鳥取大学大
+学院工学研究科情報エレクトロニクス専攻教
+授．自然言語処理，情報抽出の研究に従事．
+言語処理学会，情報処理学会，電子情報通信
+学会，人工知能学会，計量国語学会，各会員．
+}
+\end{biography}
+
+
+\biodate
+
+
+
+
+\end{document}

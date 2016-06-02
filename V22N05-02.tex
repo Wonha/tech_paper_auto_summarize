@@ -1,0 +1,1186 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{amsmath}
+\usepackage{array}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+
+
+\Volume{22}
+\Number{5}
+\Month{December}
+\Year{2015}
+
+\received{2015}{5}{21}
+\revised{2015}{8}{7}
+\accepted{2015}{9}{16}
+
+\setcounter{page}{363}
+
+\jtitle{Web情報からの罹患検出を対象とした\\
+	事実性解析・主体解析の誤り分析}
+
+\jauthor{叶内　　晨\affiref{Author_1}\and 北川　善彬\affiref{Author_1} \and 荒牧　英治\affiref{Author_2} \and 岡崎　直観\affiref{Author_3} \and 小町　　守\affiref{Author_1}}
+\jabstract{
+\rule{0pt}{1\Cvs}
+ソーシャルメディアサービスの普及により，人々や社会の状況を調査する新しいアプローチが開拓された．
+ひとつの応用事例として，ソーシャルメディアの投稿から疾患・症状の流行を検出する公衆衛生サーベイランスがある．
+本研究では，自然言語処理技術を応用して，ソーシャルメディアの投稿から風邪やインフルエンザなどの罹患を検出するタスクに取り組んだ．
+最先端のシステムのエラー分析を通じて，事実性解析と主体解析という重要かつ一般性のあるサブタスクを見い出した．
+本研究では，これらのサブタスクへの取り組みを行い，罹患検出タスクへの貢献を実証した．
+}
+\jkeywords{ソーシャルメディア，事実性解析，主体解析，エラー分析，Twitter}
+
+\etitle{\rule{0pt}{1.5\Cvs}
+	Infection Detection from the Web with Subject Identification and Factuality Analysis}
+\eauthor{Shin Kanouchi\affiref{Author_1} \and Yoshiaki Kitagawa\affiref{Author_1} \and Eiji Aramaki\affiref{Author_2} \and Naoaki Okazaki\affiref{Author_3} \and Mamoru Komachi\affiref{Author_1}}
+
+\eabstract{
+\rule{0pt}{1\Cvs}
+The development and spread of social media services have made it possible for new approaches to be used to survey the public and society. 
+One popular application is health surveillance, that is, predicting disease epidemics and symptoms from texts on social media services. 
+In this paper, we address an application of natural language processing for detecting an episode of a disease/symptom (e.g., flu and cold) in social media texts. 
+Following an error analysis of the state-of-the-art system, we identified two important and generic subtasks for improving the accuracy of the system: factuality analysis and subject identification. 
+We address these subtasks and demonstrate their impact on detecting an episode of a disease/symptom.
+}
+\ekeywords{Social Media, Factuality Analysis, Subject Identification, Error Analysis, \linebreak
+	Twitter, Epidemiology}
+
+\headauthor{叶内，北川，荒牧，岡崎，小町}
+\headtitle{Web情報からの罹患検出を対象とした事実性解析・主体解析の誤り分析}
+
+\affilabel{Author_1}{首都大学東京}{Tokyo Metropolitan University}
+\affilabel{Author_2}{奈良先端科学技術大学院大学}{NAIST}
+\affilabel{Author_3}{東北大学}{Tohoku University}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+
+2000年以降の自然言語処理 (NLP) の発展の一翼を担ったのはWorld Wide Web（以降，Webとする）である．Webを大規模テキストコーパスと見なし，そこから知識や統計量を抽出することで，形態素解析~\cite{Kaji:2009,sato2015mecabipadicneologd}，構文解析~\cite{Kawahara:05}，固有表現抽出~\cite{Kazama:07}，述語項構造解析~\cite{Komachi:10,Sasano:10}，機械翻訳~\cite{Munteanu:06}など，様々なタスクで精度の向上が報告されている．これらは，WebがNLPを高度化した事例と言える．
+同時に， 誰もが発信できるメディアという特性を活かし，Webならではの新しい研究分野も形成された．評判情報抽出~\cite{Pang:2002}がその代表例である．さらに，近年では，TwitterやFacebookなどのソーシャルメディアが爆発的に普及したことで，自然言語処理技術をWebデータに応用し，人間や社会をWebを通して「知ろう」とする試みにも関心が集まっている．
+
+ソーシャルメディアのデータには，(1) 大規模，(2) 即時性，(3) 個人の経験や主観に基づく情報など，これまでの言語データには見られなかった特徴がある．例えば，「熱が出たので病院で検査をしてもらったらインフルエンザA型だった」という投稿から，この投稿時点（即時性）で発言者は「インフルエンザに罹った」という個人の経験を抽出し，大規模な投稿の中からこのような情報を集約できれば，インフルエンザの流行状況を調べることができる．このように，NLPでWeb上の情報をセンシングするという研究は，地震検知~\cite{Sakaki:10}，疾病サーベイランス~\cite{Culotta:2010}を初めとして，選挙結果予測，株価予測など応用領域が広がっている．
+
+大規模なウェブデータに対して自然言語処理技術を適用し，社会の動向を迅速かつ大規模に把握しようという取り組みは，対象とするデータの性質に強く依拠する．そのため，より一般的な他の自然言語処理課題に転用できる知見や要素技術を抽出することが難しい．そこで，Project Next NLP\footnote{https://sites.google.com/site/projectnextnlp/}ではNLPのWeb応用タスク (WebNLP) を立ち上げ，次のゴールの達成に向けて研究・議論を行った．
+
+\begin{enumerate}
+\item ソーシャルメディア上のテキストの蓄積を自然言語処理の方法論で分析し，人々の行動，意見，感情，状況を把握しようとするとき，現状の自然言語処理技術が抱えている問題を認識すること
+\item 応用事例（例えば疾患状況把握）の誤り事例の分析から，自然言語処理で解くべき一般的な（複数の応用事例にまたがって適用できる）課題を整理すること．ある応用事例の解析精度を向上させるには，その応用における個別の事例・言語現象に対応することが近道かもしれない．しかし，本研究では複数の応用事例に適用できる課題を見出し，その課題を新しいタスクとして切り出すことで，ソーシャルメディア応用の解析技術のモジュール化を目指す．
+\item (2)で見出した個別の課題に対して，最先端の自然言語処理技術を適用し，新しいタスクに取り組むことで，自然言語処理のソーシャルメディア応用に関する基盤技術を発展させること
+\end{enumerate}
+
+本論文では，NLPによるソーシャルリスニングを実用化した事例の 1 つである，ツイートからインフルエンザや風邪などの疾患・症状を認識するタスク（第\ref{sec:used-corpus}章）を題材に，現状の自然言語処理技術の問題点を検討する．
+第\ref{sec:analysis}章では，既存手法の誤りを分析・体系化し，この結果から事実性の解析，状態を保有する主体の判定が重要かつ一般的な課題として切り出せることを説明する．
+第\ref{sec:factuality}章では，事実性解析の本タスクへの貢献を実験的に調査し，その分析から事実性解析の課題を議論する．
+第\ref{sec:subject}章では，疾患・症状を保有する主体を同定するサブタスクに対する取り組みを紹介する．
+さらに第\ref{sec:factandsub}章では，事実性解析と主体解析を組み合わせた結果を示す．
+その後，第\ref{sec:relatedworks}章で関連研究を紹介し，最後に，第\ref{sec:conclusion}章で本論文の結論を述べる．
+
+
+
+\section{コーパス}
+\label{sec:used-corpus}
+
+本研究では，風邪およびその症状に関するTwitter上での発言を集めたコーパス（以下，風邪症状コーパス）と，インフルエンザに関するTwitter上での発言を集めたコーパス（以下，インフルエンザ・コーパス）の 2 つを用いる．風邪症状コーパスは誤り分析及び主体解析の検証に，インフルエンザ・コーパスは事実性判定の検証に用いる．
+これらは2008 年 11 月から 2010 年 7 月にかけて Twitter API を用いて 30 億発言 を収集し，そこから「インフルエンザ」や「風邪」といったキーワードを含む発言を抽出したものである（表\ref{keywords}）．
+
+\begin{table}[b]
+\caption{検索のためのキーワード}
+\label{keywords}
+\input{02table01.txt}
+\end{table}
+
+先行研究においても，風邪やインフルエンザなど感染症に関する研究は多く~\cite{lamb-paul-dredze:2013:NAACL-HLT}，他にも西ナイル熱~\cite{sugumaran2012real}などが扱われている．これらの多くは，経験則により「風邪」や「インフルエンザ」などのキーワードとなる単語を選択し，その頻度を集計し，感染状況の把握を行っている~\cite{culotta2010detecting,aramaki-maskawa-morita:2011:EMNLP}. 本研究では，先行研究の 1 つである~\cite{aramaki-maskawa-morita:2011:EMNLP}で使われたインフルエンザコーパス，及び，~\cite{荒牧2011}や商用サイト「カゼミル・プラス」 で用いられた風邪症状コーパスを用いる．
+
+
+\subsection{風邪症状コーパス}
+
+風邪症状コーパスは，「風邪・咳・頭痛・寒気・鼻水・熱・喉の痛み」の7種類の症状に関して，ツイートの発言者が疾患・症状にあるかどうか（正例か負例か）をラベル付けしたものである ．
+このコーパスでは，投稿者が以下の除外基準に照らし，1つでも該当するものがあれば負例とみなした．
+
+\begin{itemize}
+\item 発言者（または，発言者と同一都道府県近郊の人間）の疾患でない．居住地が正確に分からない場合は負例発言とみなす．例えば，「風邪が実家で流行っている」では，「実家」の所在が不明であるので，負例とみなす．
+\item 現在または近い過去の疾患のみ扱い，それ以外の発言は除外する．ここでいう「近い過去」とは 24 時間以内とする．例えば，「昨年はひどいインフルエンザで参加できなかった」は，負例とみなす．
+\item 「風邪でなかった」等の否定の表現は負例とする．また，疑問文や「かもしれない」といった不確定な発言も負例とする．
+\end{itemize}
+
+コーパスサイズは，疾患の種類ごとに異なる．それぞれの疾患・症状ごとのコーパスサイズと疾患のラベル数を表\ref{corpus_size}に示す．
+
+\begin{table}[b]
+\caption{コーパスサイズ}
+\label{corpus_size}
+\input{02table03.txt}
+\end{table}
+
+
+\subsection{インフルエンザ・コーパス}
+
+インフルエンザ・コーパスは，「インフルエンザ」を含む10,443件の発言に対して，正例か負例かをラベル付けしたものである．アノテーションの基準については，風邪症状コーパスに準拠している．なお，正例数が1,319件，負例数が9,124件となっている．実際のコーパスからアノテーションの具体例を示す（表\ref{annotation_example}）．
+
+\begin{table}[t]
+    \caption{コーパスのアノテーションの具体例}
+    \label{annotation_example}
+\input{02table02.txt}
+\end{table}
+
+
+
+
+\section{誤り分析}
+\label{sec:analysis}
+
+本章では，疾患・症状を検出するタスク（以降，罹患検出）について取り組み，風邪症状コーパスを用いて既存のシステムの誤り分析を行った．
+既存システムとして，単語n-gram素性を用いた手法~\cite{aramaki-maskawa-morita:2011:EMNLP}と同等の分類器をSupport Vector Machine (SVM) にて構築し，その誤りを人手で分類した．
+
+  誤りには，本来，疾患・症状の事実があると判定すべきであるのに，それができなかった場合であるFalse Negative（以降，FN）の事例と，その逆に，疾患の事実がないのに誤って疾患とみなしてしまう場合であるFalse Positive（以降，FP）の事例がある．
+ 罹患検出は大規模な母集団に対して行われるので，再現率はさほど重要ではなく，適合率が重要になる．そこでFPに注目し，解析を進めた．
+ FPと判定された事例に対して，なぜそれがNegativeな事例なのかという観点から，人手で誤りを分類した．
+ 誤り原因の分類と発言例を表\ref{FP_eg}に示す．誤りの分類は以下の通りである．
+
+\begin{table}[t]
+\caption{誤り分析 （FPの原因ごとの例文）}
+\label{FP_eg}
+\input{02table04.txt}
+\end{table}
+
+\begin{itemize}
+\item \textbf{非当事者}： 疾患・症状を所有する対象が，発言者およびその周辺の人物ではない．特定の二人称，三人称の人物が疾患・症状を保有する場合や，「みんな風邪ひかないように」といった発言のように一般的な人に向けたものも含める．
+\item \textbf{比喩}： 比喩的に疾患表現が利用されている場合が当てはまる．「凄すぎて鼻水ふいた」という発言は，実際に疾患として鼻水が出ているとは考えにくく，「鼻水をふいた」という表現を利用することで大変驚いた様子を比喩的に表しているものだと推測される．
+\item \textbf{一般論}： そもそも疾患・症状の保有に関する話題ではなく，疾患そのものについて議論していたり，「風邪予防マスク」のように疾患が名詞句の一部として出現した場合である．
+\item \textbf{モダリティ}： 「かもしれない」（疑い），「かな？」（疑問）などのモダリティ表現により，疾患の事実が認められない場合を指す．ここでは以下に示す否定，時制を除いた狭義のモダリティ表現を意味し，英語表現で置き換えれば，``must''，``might''，``have to'' などの助動詞が当てはまる．
+\item \textbf{時制}： 疾患のあった時間が異なる．
+\item \textbf{否定}： 「風邪でなくてよかった」など，疾患の事実が否定されている．
+\item \textbf{その他}： その他の理由によるもので，人でも理解不能な発言や，発言が短すぎて解析に失敗したものが含まれる．
+\end{itemize}
+
+表\ref{FP}に，風邪症状コーパスの6つの疾患・症状について，それぞれ100件の誤り (False Positive) 事例について分析を行った結果を示す（600事例）．
+表\ref{FP}より，疾患・症状の種類ごとに誤り方に大きな違いがあることがわかった．
+風邪，咳，熱は「非当事者」が原因となる解析誤りが多く，疾患・症状を保有する主体を識別する部分に課題がある．
+一方で寒気，鼻水は「非当事者」による解析誤りが少ない．これは，例えば，鼻水は他人の鼻水について言及することが少ないことが原因としてあげられる．
+また，頭痛，寒気，鼻水は比喩的な解析誤りが多く，改善すべき点が大きく異なる．
+事実性の問題（時制，モダリティ，否定）に注目すると，どの疾患・症状においても一定数見られ，一般的な問題と捉えることができる．
+
+これらのエラー分析の結果から，言語処理の研究課題という観点から整理すると，疾患があったのかという\textbf{事実性}（時制，モダリティ，否定）と，仮に疾患の事実があったとして，疾患を所有しているのは誰なのかという\textbf{主体性}（非当事者や一般論の問題）と，比喩の 3 つの大きな言語現象に大別できる．
+これらの現象について，少し詳しく説明する．
+
+\begin{table}[t]
+\caption{誤り分析 （False Positiveについての誤りの分類）}
+\label{FP}
+\input{02table05.txt}
+\end{table}
+
+事実性は，一般的かつ重要な課題でありながら，解析の難しさから高い精度に到達できていない\cite{narita2013lexicon,matsuyoshi2010annotating}．疾患があったのかという事実性の問題を解消することができれば，7 つの誤りの分類のうち，モダリティ (10.8\%)，時制 (10.1\%)，否定 (5.9\%) を改善することができ，最大で合計26.8\%のエラーを解消する可能性がある．事実性の問題はWeb文書に特化した話ではなく，言語処理全般における課題である．
+
+仮に疾患・症状の事実があったとして，疾患・症状を保有しているのは誰なのかという主体を認識するタスクも重要である．
+疾患・症状を認識するタスクでは，地域ごとに疾患・症状の流行状況を把握したいために，一次情報（本人が観測・体験した情報）であるかどうかの識別が重要となる．
+エラー分析を行った結果，発言者とは関係のない有名人や発言者との物理的な位置関係が明確でない返信先の人物が疾患・症状に罹っている発言が多数見受けられた．
+一方で，疾患・症状を意味する表現が名詞句の一部として現れることで，特定の主体を言及するものではない場合もある．
+例えば，「風邪予防マスク」のように風邪が名詞句の一部として使われているだけの発言が存在する．
+この場合，「風邪」という単語はただの名詞句の一部として「予防」を修飾しており，疾患のイベントを保有していないため，その主体も存在しない．
+
+この問題を合わせると，疾患・症状を保有した対象は存在するのか，存在する場合は誰なのか，という主体を認識するタスクを考えることができる．7 つの誤りの分類のうち，非当事者 (23.5\%) ，一般論 (14.8\%) がこのタスクで解決できる課題であり，合わせれば最大で38.3\%のエラーを解消することが可能である．
+主体解析の問題は，疾患に限ったことではなく，評判抽出（だれの評判なのか？），感性情報処理（だれが喜び／悲しんでいるのか？）など，Web文章，特にブログなど個人が発言する情報を扱う上で基盤となる技術であり，言語処理がWebを通して世の中を把握するため，解くべき大きな課題である．
+
+Web上のテキストを扱う上で，比喩 (20.4\%) の問題も見過ごせない．
+例えば「凄すぎて鼻水でた」という発言があった場合，事実性解析的にはイベントが成立していて，かつ，主体も発言者（一人称）と推定されるが，常識的に考えて症状は発生していない．
+私たちはこの発言において，直感的に，何かのイベントが起きて驚いたことに対する口語的表現として，「鼻水出た」という表現が利用されたと判断することができる．
+この比喩的な表現の問題を解決するには，比喩に関する人間の常識的な推論が必要である．
+例えば，「頭が痛い」「寒気がする」「発熱がある」など，疾患・症状が比喩的に使用される例は多くある．
+
+実用面を考えると，比喩の問題は重要であるが，特定の疾患・症状に依存した処理になりがちである．
+そこで，本論文では一般性が高いサブタスクとして，先に挙げた 2 つの課題（事実性解析，主体解析）に取り組み，罹患検出器の改善に取り組む．以降，\ref{sec:factuality}章にて事実性解析，\ref{sec:subject}章にて主体解析において罹患検出器を改善した結果を報告し，\ref{sec:factandsub}章にて事実性解析と主体解析を組み合わせた結果を示す．
+
+
+
+
+\section{事実性解析}
+\label{sec:factuality}
+
+\subsection{事実性解析とは}
+
+事実性解析については，\ref{sec:used-corpus}章で説明されたインフルエンザ・コーパスを対象とし実験を行った．ここで，インフルエンザ・コーパスを使用して事実性解析を行ったのは，インフルエンザ・コーパスにおいては，予防方法やニュース等といった「インフルエンザに感染している」という事実をもたない発言が多いという傾向が強く見られたことから，事実性解析の必要性が高いと判断したためである．実際に，他のコーパスに比べて，負例の割合が極端に高い傾向がある．
+
+インフルエンザの流行の検出のためには，実際にインフルエンザに感染している人がどの程度いるのかを判断する必要がある．しかし，機械的に「インフルエンザ」を含む発言を集めるだけでは感染している人がどの程度存在するかはわからない．このために，集めた発言を感染者に関する発言かそうでないかの分類を行うことにより流行の検出を行う．
+
+このような分類のためには，文に記述されている事象が，実際に起こったことなのか，そうでないことなのかの事実性を判定する技術が必要となる．これは，事実性解析 (Factuality analysis) と呼ばれる\cite{sauri2012you}．
+
+事実性解析が必要な例は以下のような例である．
+
+\begin{quote}
+
+(1)熱があったので、病院に行ったら\fbox{インフルエンザ}\underline{{\bf だった}}。
+
+(2)\fbox{インフルエンザ}に罹った\underline{{\bf かもしれない}}。
+
+(3)\fbox{インフルエンザ}に罹ってい\underline{{\bf たら}}、休まざるを得ないだろう。
+
+\end{quote}
+例を見ると，インフルエンザであることを「だった」として断定したり，「かもしれない」と推量をしたり，「たら」と仮定をしたりしていることがわかる．これにより，(1)は，「インフルエンザに感染する」という事実を持っており，反対に(2)，(3)はこの事実を持たないと判断できる．このような表現はモダリティと呼ばれ，人間が情報の真偽を考える上で重要な手がかりになる．
+
+
+\subsection{事実性解析の活用}
+\label{sec:modality}
+
+本研究における事実性解析の目標は，「インフルエンザに感染している」という事実を持つ発言を検出することである．我々は，これを「対象とする事実」をもつかもたないかの2値分類タスクとして考え，分類器を構築し分類を行った．本章では，モダリティを利用した2つの手法について説明する．
+
+
+\subsubsection{つつじによる素性}
+
+事実性解析を罹患検出に活用する1つの方法として，つつじ\footnote{つつじ 日本語機能表現辞書 http://kotoba.nuee.nagoya-u.ac.jp/tsutsuji/ } の利用を試みた．日本語の文を構成する要素には，主に内容的な意味を表す要素（内容語）以外に，助詞や助動詞といった，主に文の構成に関わる要素がある．ここでは，後者を総称して，「機能語」と呼び，「に対して」や「なければならない」のように，複数の語から構成され，かつ，全体として機能語のように働く表現である「複合辞」と合わせて，これらを機能表現と呼ぶ\cite{matsuyoshi2007}．つつじは16,801の機能表現の表層形を階層的に分類しており，同じような意味を持つ機能表現には同じ意味IDが振られている．
+
+\begin{table}[b]
+\caption{つつじによる意味ID素性の例}
+\label{ex tsutsuji feature}
+\input{02table06.txt}
+\end{table}
+
+本研究はTwitterのデータを使用しているため，発言の中には文が複数ある場合も多い．これにより，注目しているインフルエンザ感染に関連する機能表現と関係のない機能表現も多く存在すると考えられる．そこで，「インフルエンザ」の右の15文字中につつじの機能表現の表層形が含まれる場合にその意味IDを素性として利用することにした．つつじによる意味ID素性の具体例を表\ref{ex tsutsuji feature}に示す．
+
+
+\subsubsection{Zundaによる素性}
+
+次に，2つ目のモダリティの利用法として，Zunda\footnote{Zunda 拡張モダリティ解析器 https://code.google.com/p/zunda/} の解析結果を利用する手法を提案する．Zundaは文中のイベント（動詞や形容詞，事態性名詞など）に対して，その真偽判断（イベントが起こったかどうか），仮想性（仮定の話かどうか）などを解析することのできる日本語拡張モダリティ解析器である．本手法においては，Zundaの出力する真偽判断のタグを利用した．真偽判断についてのラベルとしては，「成立」，「不成立」，「不成立から成立」，「成立から不成立」，「高確率」，「低確率」，「低確率から高確率」，「高確率から低確率」，「0」のラベルが存在する．真偽判断ラベルについての具体的を表\ref{example label of zunda} に示す．また，これらのラベルのうち頻出の「成立」，「不成立」「0」のラベルの解析精度を表\ref{zundanoseido}に示す．
+
+\begin{table}[b]
+\caption{Zundaの真偽判断ラベル}
+\label{example label of zunda}
+\input{02table07.txt}
+\end{table}
+\begin{table}[b]
+\caption{Zundaの真偽判断タグにおける解析精度}
+\label{zundanoseido}
+\input{02table08.txt}
+\end{table}
+\begin{table}[b]
+\caption{Zundaによる素性の例}
+\label{ex zunda feature}
+\input{02table09.txt}
+\end{table}
+
+これらのラベルが各イベントに対してついているが，つつじを使用した場合と同様にインフルエンザに関連するイベントがどこに存在するかを考えなければならない．我々はZundaが動詞，事態性名詞を「イベント」
+として解析していることから，「インフルエンザ」の右に続く動詞，事態性名詞で一番近いものをインフルエンザに関連するイベントとみなし，そのイベントとイベントに付けられたラベルの組み合わせを素性として利用した．具体例を表\ref{ex zunda feature}に示す．
+
+
+ \subsection{インフルエンザ感染か否かの2値分類の実験・評価}
+
+ \subsubsection{実験設定}
+
+本研究は，発言をした人物，あるいはその周りの人物がインフルエンザにかかっているか否かを判定する2値分類をL2正則化ロジスティック回帰により行った．評価は5分割交差検定による適合率，再現率， F1-スコアを用いた．ツールとしては，Classias (ver.~1.1) \footnote{Classias http://www.chokkan.org/software/classias/index.html.ja} を使用した．
+ウィンドウを決めるための形態素解析器としてはMeCab (ver.~0.996)\footnote{MeCab 日本語形態素解析器 http://taku910.github.io/mecab/} を利用し，MeCabの辞書はIPA-Dic (ver.~2.7.0) を用いた．
+
+
+本研究のような風邪等の疾患情報を検出するために発言の分類を行うタスクは先行研究
+\linebreak
+\cite{aramaki-maskawa-morita:2011:EMNLP}があり，分類のためには，注目している疾患・症状を表す単語の周辺の単語が良い素性となることが知られている．ここでは，形態素解析により，分かち書きを行い，形態素を1つの単位としたウィンドウを作成した．「インフルエンザ」を含むウィンドウを中心として，左側の3つの形態素と右側の3つの形態素をBag of Words (BoW) の素性とし，これにモダリティに関しての素性以外を加えたものをベースラインの分類器として作成した．
+
+ベースラインに使用した素性を表\ref{feature}に示す．つつじによる素性とZundaによる素性に関しては前節の説明によるものとする．
+
+\begin{table}[b]
+\caption{ベースラインに使用した素性}
+\label{feature}
+\input{02table10.txt}
+\end{table}
+
+
+\subsubsection{実験結果}
+
+インフルエンザ感染に関しての2値分類を行った結果を表\ref{result}に示す．まず，BoWの素性にそれぞれの素性を加えた結果について言及したい．全体を見ると，適合率は少し減少する傾向にあるが，再現率は増加する傾向にある．F1-スコアに関してはURL, RPの素性以外については全て増加している．つつじの意味IDによる素性Tsutsujiを加えたときは適合率，再現率のどちらも増加している．適合率を上げることが難しいのは使用しているコーパスにおける負例の割合が非常に大きいためである．このため，再現率をあげることにより負例の多いデータからいかに正例をあつめられるかは重要である．本論文では，適合率を上げることを主要な目的としているが，インフルエンザ・コーパスのように正例の割合が小さく，再現率が低くなる場合，インフルエンザの感染者の増減を捉えることは難しくなる．以上のことから，本節では，適合率と再現率の両方を考慮したF1スコアの向上により性能を評価する．
+
+
+\begin{table}[t]
+\caption{インフルエンザ感染に関しての2値分類の結果}
+\label{result}
+\input{02table11.txt}
+\end{table}
+
+次に，つつじによる素性とZundaによるモダリティ素性以外を全て合わせたベースライン (baseline) に対してつつじの意味IDを加えたところ，F1-スコアが2.2ポイントほど向上した．BoWに加えたときと同様に，適合率，再現率が共に上がっている．
+また，Zundaによる素性をベースラインに加えたところ，F1-スコアは1.1ポイントほど向上した．
+
+最後に，ベースラインにつつじに関しての素性と，Zundaに関しての素性を両方を加えたAllを使用したとき，最高精度となった．この結果は，提案手法の素性を抜いたbaselineより，3.5ポイントのF1-スコアの向上が見られるので，提案手法の素性が有用であることを支持する．
+
+
+\subsubsection{コーパスサイズの影響}
+
+データのサイズに対する精度変化を見るために学習曲線を図\ref{learning_curve}に示す．これを見ると，データサイズの増加により，適合率は5,000件あたりで一定値に収束しているが，再現率，F1-スコアは増加し続けている．このことから膨大なデータを利用することでも精度向上が見込める事がわかる．一方で，コーパスの作成には人手によるアノテーションが必要でありコストがかかるため，少ないデータでも頑健に分類ができる分類器は有用である．
+
+ \subsection{考察}
+
+本論文では，モダリティに関しての素性の貢献を見ることができたが，実際にどのような事例に対して貢献が見られたか，また，うまくいかなくなった事例はどのようなものかについて調査する．表\ref{example}に実際の発言例を示す．
+
+ \begin{figure}[t]
+  \begin{center}
+  \includegraphics{22-5ia2f1.eps}
+ \end{center}
+  \caption{コーパスサイズに対する精度変化}
+  \label{learning_curve}
+\end{figure}
+\begin{table}[t]
+\caption{分類に成功した例と失敗した例}
+\label{example}
+\input{02table12.txt}
+\end{table}
+
+
+\subsubsection{つつじによる素性}
+
+つつじにおける素性について，分類器の判断に大きく影響を与える素性を調べた．その結果を表\ref{tsutsuji weight}に示す．ここで，重みはベースラインにつつじによる素性を加えたもの (baseline+Tsutsuji) を利用した．
+
+表\ref{example}の発言例1においては，表\ref{tsutsuji weight}における，「らしい」のような推量のモダリティ表現をつつじの意味ID素性が捉えることにより，正しい出力を得るようになった．
+
+
+逆に，発言例2においては，ひらがな1文字の「と」や「え」が誤ってマッチしてしまっている．本来，このようなひらがな1文字のものがなければ，正例として正しい分類をしていたのにも関わらず，誤ってマッチしたことにより，分類に失敗している．ひらがな一文字の場合，機能表現として使われていないのにも関わらずマッチしたり，本来の意味と違った意味IDが割り振られてしまったりすることがある．例えば「I23」の意味IDをもつひらがな「え」は表\ref{tsutsuji weight}に示している「うる」，「だろう」に該当するものであり，正しい意味を捉えることができていない．ひらがな一文字の場合は前後の文脈の情報を考慮し，機能表現として使われているかを判別すること，どの意味の機能表現として使われているかの曖昧性を解消することが必要であ
+\linebreak
+る．
+
+
+\subsubsection{Zundaによる素性}
+
+次に，Zundaによる素性について，分類器の判断に大きく影響を与える素性を調べた．つつじの場合と同様に，重みの大きな素性を大きい順に並べた結果を表\ref{zunda weight}に示す．ここで，重みはベースラインにZundaによる素性を加えたもの (baseline+Zunda) を利用した．
+
+\begin{table}[b]
+\caption{重みの絶対値の 大きい素性とその表層形例（つつじによるもの）}
+\label{tsutsuji weight}
+\input{02table13.txt}
+\end{table}
+\begin{table}[b]
+\caption{重みの絶対値の 大きい素性とその表層形例（Zundaによるもの）}
+\label{zunda weight}
+\input{02table14.txt}
+\end{table}
+
+表\ref{zunda weight}を見るとつつじの素性に比べて直感的に理解できるものが多い．インフルエンザの発言は，注意を呼びかける発言，予防接種の内容の発言，ニュースに関する発言等が多く，負の重みによくそれが現れている．正の重みに関しては直接疾患に関係のある名詞や動詞が多くなっている．
+
+発言例3においては，「かかり＝成立」の素性により，判別できるようになった．Zundaにおいてはこのように素性がうまく働き，分類の成否を分ける例が多く見られた．
+
+
+発言例4においては，実際に感染しているのは発言をしている本人でもなく周りの人でもないため，ここでは，負例を正解とするのが正しいが，「感染=成立」という素性のために正例になってしまっている．このように，確かにインフルエンザに感染しているという事実を持っているにも関わらず，インフルエンザに罹っている人物が，ソーシャル・メディア上で言及されやすい人物である場合，今回のインフルエンザ・コーパスの正負の定義から，分類に失敗する．このことから，インフルエンザに罹っている人物が誰なのかを知る必要がある．これは，主体解析の問題として次のセクションで言及する．
+
+
+
+\section{主体解析}
+\label{sec:subject}
+
+\subsection{主体解析が必要な事例}
+
+はじめに述べたように，Webデータをフルに利用するためには，事実性解析とならんで，誰が疾患・症状にあるのかという主体の推定（主体解析）が重要である．
+
+例えば，「娘が風邪を引いた」という発言において「風邪」という疾患を保有するのは「娘」であることが解析できれば，発言者の近くで「風邪」が出現したことが分かる．
+一方，「風邪と風を誤変換していた」という発言では「風邪」という疾患を保有している主体が存在せず，風邪の流行とは無関係である．
+主体が明らかになることにより，疾患・症状を保有する主体が周辺に存在しない発言を判別することができる．
+つまりWebの情報を利用して個人の状態を把握するためには，調べたい状態に言及する表現を認識することに加え，\underline{その状態に置かれている人物の特定}が重要となる．
+
+従来の自然言語処理においてこのタスクに最も近いのは，述語項構造解析である．
+もし，調べたい疾患・症状が事態性名詞である場合（例えば「発熱」）は，そのガ格を調べればよい．
+しかしながら，疾患・症状が事態性名詞になるかどうかは，述語項構造解析のアノテーション基準に依る所が大きく，通常「風邪」「鼻水」などは事態性名詞として扱われない．
+
+代わりに，用言の項構造に着目するアプローチも考えられる．
+先ほどの「娘が風邪を引いた」という例では，「風邪」は「引いた」のヲ格で，「娘」は「引いた」のガ格なので，「風邪」の保有者は「娘」と推定できる．
+しかし，このアプローチにも複数の問題がある．
+第 1 に，風邪を保有していることを表す述語を識別する問題である．
+例えば「医者が風邪を診察した」という文では，「風邪」は「診察した」のヲ格で，「医者」は「診察した」のガ格であるが，「風邪」の保有者は「医者」ではない．
+第 2 に，口語表現特有の解析誤りがある．
+例えば「風邪引いた」のようにヲ格が省略されると，述語項構造解析は失敗してしまう．
+さらに，「風邪ツラい」などカタカナの表現は，形態素解析にすら失敗する可能性がある．
+このように，既存の述語項構造解析の研究と，疾患・症状を保有する主体を推定するタスクの間には，かなりの乖離がある．
+そのため，既存の述語項構造解析では主体を正しく特定することは期待できない．
+
+この点を鑑み， 本章では，疾患・症状を保有する主体を推定するという新しいタスクに取り組む．
+まず，ツイートの本文に対して，疾患・症状を保有する主体をラベル付けしたコーパスを構築するための方針を設計し，アノテーション作業を行った．
+次に，このデータを訓練事例として用い，疾患・症状を保有する主体を推定する解析器を設計した．
+評価実験では，主体を推定する解析器の精度を計測すると共に，主体を推定することによる後続のタスクである罹患検出における貢献を実証した．
+また，疾患・症状の主体を推定するタスクは，個別の疾患・症状への依存することなく，一般的な解析器を構築できることが分かった．
+
+
+\subsection{コーパスへのラベル付与}
+\label{sec:corpus}
+
+風邪症状コーパスにおいて，誰が疾患・症状にあるのかの情報を付与した．この作業は，疾患・症状毎に500件ずつ，合計で3,000件行った．
+図\ref{LabelExa}はラベル付けの例を示しており，疾患ラベル，ツイート，疾患クエリが\ref{sec:used-corpus}章で説明した風邪症状コーパスである．
+それに対して．疾患・症状を保有する主体が発言内に存在する場合に主体としてラベル付けし，二つ目の例のように省略されている場合には「（省略）」とした．また主体の種類を5つに分けた主体ラベルを用意し，疾患・症状を保有する主体がどの主体ラベルに当てはまるかをラベル付けした．
+
+\begin{figure}[b]
+  \begin{center}
+  \includegraphics{22-5ia2f2.eps}
+  \end{center}
+  \caption{ラベル付けの例}
+  \label{LabelExa}
+\end{figure}
+
+ラベルの種類と発言例を表\ref{PersonLabel}に示す．ソーシャルメディアの分析では，一次情報（本人が観測・体験した情報）であるかどうかの識別が重要なので，「一人称」「周辺人物」「その他人物」「物体」「主体なし」の5つのラベルを用意した．
+
+\begin{itemize}
+\item 「一人称」のラベルの，発言した話者が疾患・症状に\underline{関与}するという意味は，必ずしも症状にある場合だけではなく，主体が疾患・症状と関係する場合を全て含む．
+例えば，表\ref{PersonLabel}の一人称の発言例のように症状に対して願望を抱いている場合は，今は症状を保有していないため，カゼミル＋の応用から考えると抽出したくない情報である．
+しかし，本章では疾患・症状と関与する主体の推定を目的としているため，疾患・症状を保有していない場合においても主体の同定を行う．
+願望以外にも，「風邪はひいていない」などの否定の発言も同様に扱い，疾患のラベルは「負例」となる一方で主体ラベルは「一人称」となる．疾患に罹っているかどうかの判断は，主体を推定した後に事実性の解析で行うべきである．
+主体が「周辺人物」「その他人物」の場合にも同様な条件で判断し，主体ラベルを付与した．
+
+
+\item 「周辺人物」のラベルは話者が直接見聞きできる範囲の人物が症状にあるかを一つの分類基準とした．
+Aramakiらの風邪症状コーパス~\cite{aramaki-maskawa-morita:2011:EMNLP}は，話者か話者と同じ都道府県の人物が症状にある場合に正例となるが，人手で主体のラベル付けする際に，同じ都道府県かどうかを判断することは極めて難しいためである．
+
+\item 「その他人物」のラベルは，疾患・症状を保有する主体となる人物が存在するが，「一人称」「周辺人物」「物体」には該当しない全てのケースを含む．
+返信先に疾患・症状の主体が存在する場合が一例で，表\ref{PersonLabel}の発言例では話者と物理的に見聞きできる距離にいることを確認できない．
+2つ目の例は，症状を保有する人物を観測することができるが，メディアの報道によって拡散された情報で，話者が直接見聞きした情報ではない．
+
+\item 「物体」のラベルは物体，もしくは人間以外の生物が主体となる場合に付与され，パソコンなどの物体が発熱した場合が例として挙げられる．
+
+\item 「主体なし」のラベルは，発言例にある「風邪薬」のように，風邪の単語自体に疾患のイベントが存在しておらず，風邪が名詞句の一部として出現する場合を含む．
+他にも「寒気」が「さむけ」ではなくて「かんき」として使われる場合のように語義が異なる場合や，疾患・症状が慣用句的に使われている場合，記事・作品のタイトルとして出現する場合にも「主体なし」とした．
+\end{itemize}
+
+\begin{table}[t]
+\caption{疾患症状に関する主体ラベルの種類と発言例}
+\label{PersonLabel}
+\input{02table15.txt}
+\end{table}
+
+
+表\ref{LabeLratio}を見ると，主体が「一人称」の場合にはほぼ省略されるが，主体が「周辺人物」「その他人物」「物体」の場合には約9割が発言内で言及される．
+正解ラベルとの比率に着目すると，「一人称」と「周辺人物」の場合は約8割が正例である一方で，「物体」「その他人物」「主体なし」の場合は1割以下であった．
+
+\begin{table}[t]
+\caption{疾患クエリを保有するtweetの主体ラベルの比率}
+\label{LabeLratio}
+\input{02table16.txt}
+\end{table}
+
+基本的には主体が認識できれば主体ラベルを認識することができる．ただし，まれに主体が認識できるのに主体ラベルが認識が難しい場合があり，それは「周辺人物ラベル」と「その他人物ラベル」の違いが見抜けない場合などである．例えば「今日学校へ行ったらAさんが風邪だと知った」という発言では，Aさんが風邪であるという事実を直接に見聞きしているので「周辺人物ラベル」を振っている．しかし実際には，Aさんが有名人で，有名人Aさんが風邪であるというニュースを学校で友人から聞いた，などという場合が存在している．
+
+また，本実験では3,000件のアノテーションを行ったが，1つの発言に対象の疾患・症状が複数言及されている発言と，同じ疾患・症状を保有する主体が複数存在する発言を除いた結果，表\ref{LabeLratio}の合計に示されるように2,924件となっている．
+
+
+\subsection{実験}
+
+\subsubsection{主体ラベル推定器}
+
+前節のコーパスを利用して，発言内での「風邪」や「頭痛」などの疾患・症状を保有している主体ラベルを推定する分類器を構築する．
+今回の実験では，「物体」と「主体なし」のラベルについて事例が少なく，また本論文において主たる推定の対象でないため，「主体なし」に統合した．
+ツイート中のリツイート，返信，URLは，有無のフラグを残した上で削除した．
+分類器には Classias 1.1を利用し，L2正則化ロジスティック回帰モデルを学習した．利用した素性を表\ref{Feature}に示す．
+
+
+\subsubsection{推定結果}
+\label{sec:result}
+
+表\ref{PersonF}に，5分割交差検定により主体ラベル推定の精度を測定した結果を示す．
+訓練事例として，6つの疾患・症状に関するコーパスをマージした3,000事例を用いた．
+全ての素性を組み合わせた結果，macro F1スコアはベースライン (BoW) と比べて約20ポイント上昇した．
+これは，提案した素性がうまく作用していることを示唆している．
+疾患クエリ，リプライの有無，周辺人物辞書が特に強い貢献を示した．
+
+\begin{table}[t]
+\caption{主体ラベル推定器の素性}
+\label{Feature}
+\input{02table17.txt}
+\end{table}
+\begin{table}[t]
+\caption{主体ラベル推定の素性と精度}
+\label{PersonF}
+\input{02table18.txt}
+\end{table}
+
+表\ref{PersonF}においてmacro F1スコアがmicro F1スコアより低い理由として，主体ラベルの正解比率の問題が挙げられる．
+表\ref{LabeLratio}より，「一人称」の主体が全体の約7割を占めている．この比率により，分類器のバイアス項の重みは「一人称」に傾き，主体ラベル推定器は「一人称」のラベルを付与しやすくなっている．
+よって，「一人称」のラベルの再現率が高い一方で，その他のラベルの再現率は低下している．その結果，発言数の少ない「周辺人物」「その他人物」「主体なし」の推定性能が伸び悩み，macro F1スコアが低下している．
+
+表\ref{ConfusionMatrix}に予測と正解のConfusion Matrixを示す．
+対角成分の太字の数値は予測が正解したケースである．
+（+数字）はベースラインと比べ，予測した事例数が何件変化したかを表す．
+例えば「周辺人物」の推定は34件成功し，ベースラインからは22件増加している．
+
+対角成分である太字の部分を見ると，「一人称」以外においてベースラインから大きく増えていることがわかる．
+これは作成した素性を利用することで，「一人称」以外の主体ラベルを推定する際の精度が向上していることを示している．
+「主体なし」ラベルの推定精度が大きく向上した理由として，疾患クエリごとのラベル比の改善がある
+「一人称」はどの疾患においても多数存在するが， 「主体なし」は疾患毎にラベルの存在比率が異なる．
+例えば，「主体なし」は全体の発言の中で14\%を占めるが，風邪症状コーパスの中では4\%である一方で，寒気には30\%存在する．
+疾患クエリの素性は，これらの疾患毎の主体ラベルの比率を調整し，推定の精度を向上させている．
+
+\begin{table}[b]
+\caption{主体ラベルの予測と正解のConfusion Matrix}
+\label{ConfusionMatrix}
+\input{02table19.txt}
+\end{table}
+\begin{table}[b]
+\caption{主体の有無による予測精度の違い}
+\label{comparingSubject}
+\input{02table20.txt}
+\end{table}
+
+表\ref{comparingSubject}に主体の有無による正解比率を示す．
+「一人称」の予測は，そもそも主体が明示されないことが多いので，主体の有無に影響されていない．
+しかし「周辺人物」と「その他人物」の予測は，主体が明示されていない場合は精度が悪くなっていることがわかる．
+一方，「主体なし」は主体が明示されていないほうが正解率が良いという結果になった．
+これは物体 における主体のバラエティが富んでいて，現在のBoWやN-gramなどのシンプルな素性では特徴を捕らえきれていないことが原因としてあげられる．
+
+
+
+\subsubsection{主体ラベル推定における疾患・症状への依存性}
+
+前節の実験では，6つの疾患・症状に関する全ての訓練事例を利用した．
+では，疾患・症状を保有している主体を推定するタスクは，どのくらい個別の疾患・症状に依存するのか？　
+もし主体ラベルの推定が個別の疾患・症状に依存せず，新しい疾患・症状を対象とした主体ラベルを推定する際に，他の疾患・症状の教師データを利用することができれば，新しくその疾患・症状のための教師ありコーパスを構築するコストを削減することができる．
+この課題を事前に把握するため，本章では，風邪症状コーパスに含まれる事例のうち疾患クエリとして「風邪」が付与されている事例のみを用いた場合と，風邪症状コーパスに含まれる全ての事例を用いた場合の性能を比較する．
+以降，簡単のため，風邪症状コーパスの部分集合として，疾患クエリとして「風邪」が付与されている事例の集合を，特に風邪クエリコーパスと呼ぶ．
+
+コーパス毎の相違点としては，例えば，「風邪」と「引く」の共起頻度は高い一方で，別の疾患クエリ，例えば「頭痛」の事例においては，「引く」は寄与しない．よって，風邪クエリコーパスにおける主体の推定と頭痛クエリコーパスにおける主体の推定が異なる課題になっている可能性があり，そのため，新しい疾患を考えたときに主体ラベル推定の精度が悪化する可能性がある
+
+\begin{figure}[b]
+  \begin{center}
+  \includegraphics{22-5ia2f3.eps}
+ \end{center}
+  \caption{コーパスサイズと推定精度}
+  \label{CorpusFigure}
+\end{figure}
+
+図\ref{CorpusFigure}は風邪クエリの主体ラベルを推定する際に5分割交差検定を行った結果を示している．
+実線は風邪クエリコーパスのみを用いて学習した場合で，コーパスサイズを100件，200件，300件，400件増やしている．点線は，風邪症状コーパスに含まれる全ての事例を風邪クエリコーパスに足して学習した場合の性能で，風邪クエリコーパスを400件で固定し，風邪以外のコーパスをランダムに625，1,250，1,875，2,500件増やした．
+風邪クエリの主体ラベルを予測するタスクなので，風邪クエリに関する学習データとの相性がよく，400件の学習データを用いた場合のF1スコアは45.1であった．
+一方，風邪クエリ以外の症状に関する学習データを追加し，2,900件の訓練事例を用いて風邪の主体ラベルを予測した場合のF1スコアは57.3で，風邪クエリのみの学習データを用いた場合と比較すると12.2ポイント向上した．
+
+風邪クエリの主体ラベルを予測するだけであれば，風邪クエリコーパスを増やすことが最も効果的であるが，風邪クエリ以外の疾患・症状の主体に関する訓練事例を増やすことで，特定の疾患・症状だけに依存しない汎用的な主体推定器を構築できる可能性が示唆された．同様の傾向は，他の疾患・症状を予測対象とした場合でも確認された．
+
+ただ，疾患・症状を保有する主体の事前分布にばらつきがあるため，疾患・症状の依存性が皆無という訳ではない．
+例えば，頭痛に関する言及では9割以上の主体が一人称の頭痛のことを表すが，熱に関しては物体の状況（例えばPCの発熱など）を言及するものも多い．
+したがって，幅広い疾患・症状をカバーしたコーパスを構築し，主体推定器の汎用性を改善していく必要がある．
+
+
+\subsubsection{推定した主体ラベルを利用いて罹患検出を行った結果}
+
+本研究の本来の目的である，罹患検出において，本研究で構築した主体ラベル推定器がどのくらい貢献するのか，実験を行った．
+表\ref{AllF}は本論文で提案した主体ラベル推定器を利用して主体ラベルを推定し，その主体ラベルを素性に追加して疾患・症状の有無を判定した結果である．なお，ベースライン手法は先行研究~\cite{aramaki-maskawa-morita:2011:EMNLP}の設計を参考にしたが，それに加えて，主体ラベル推定器によって推定された主体ラベルを素性として利用した．
+分類器には Classias 1.1を使用し，L2正則化ロジスティック回帰モデルを学習した．学習事例は6つの疾患・症状においてそれぞれ500 件ずつ利用し，5分割交差検定を行った．
+
+\begin{table}[b]
+\caption{疾患・症状判別器の素性とF値}
+\label{AllF}
+\input{02table21.txt}
+\end{table}
+
+推定した主体ラベルを素性として利用して罹患検出を行った結果，寒気のF1スコアが5.5ポイント，熱のF1スコアが2ポイント向上し，全体のmacro F1スコアも1.3ポイント向上した．
+本研究で付与した主体の正解ラベル（ゴールドデータ）を素性として利用した場合とベースラインを比較すると，「風邪・咳・頭痛・鼻水」はF1スコアで2〜4ポイント程度向上し，「寒気・熱」は10ポイント以上向上した．
+これにより主体を正しく判定することができれば，平均で約6ポイントのF1スコアの向上が見込める．
+本研究で構築した主体推定器により，特に「寒気・熱」において，ゴールドデータとの差を縮めることができた．
+寒気の精度が向上した理由のひとつには，「寒気」が「さむけ」ではなく「かんき」として使われる場合や，「悪寒」が「予感」として使われる場合を排除できたことが挙げられる．
+一方で「頭痛」や「鼻水」においては，ほとんど精度を向上させることができなかった．
+これは，「頭痛」や「鼻水」が症状の場合に「一人称」が主体として使用される場合が多く，あまり他人の症状に言及していないためだと考えられる．
+
+\ref{sec:analysis}章で罹患検出のエラー分析をした結果から，主体解析によりFalse Positiveのうち38.3\%のエラー\footnote{False PositiveとFalse Negativeを合わせた全体のエラーのうちでは，およそ26\%を占めている．} を解消することが可能になると述べた．
+では，実際に主体解析を行った結果として，罹患検出のエラーをどの程度解消できたと言えるだろうか？　
+表\ref{AllF}の一番右のエラー解消率には，ベースラインと比べたときのエラー解消率が示されている．
+推定した主体を素性として罹患検出を行った場合には，8.4\%のエラーを解消することができた．
+これより，ベースラインと比べれば精度が改善されている一方で，まだ主体の推定に誤りが含まれることがわかる．
+一方で，主体の正解ラベルを素性として罹患検出を行ったところ，38.1\%のエラーを解消することができた．
+これは罹患検出のエラー分析を行った際の主体の違いが原因となったエラー率よりも高く，主体の違いによるエラーが解消できていると考えられる．
+
+
+
+
+
+
+\section{事実性解析と主体解析}
+\label{sec:factandsub}
+
+\begin{table}[b]
+\caption{疾患・症状判別器の素性とF値}
+\label{commonresult}
+\input{02table22.txt}
+\end{table}
+
+最後に，\ref{sec:factuality}章の疾患があったのかという「事実性解析」と，\ref{sec:subject}章の疾患を所有しているのは誰なのかという「主体解析」を合わせて実験を行った．
+ベースライン手法は\ref{sec:factuality}章の設計を利用し，それに加えて，主体ラベル推定器によって推定された主体ラベルを素性として利用した．
+主体ラベルを推定する時には，インフルエンザコーパスからも，発言をランダムに500件抽出して主体の正解ラベルを付与し，それをインフルエンザの主体を学習する際のデータとして扱った．
+分類器には Classias 1.1を使用し，L2正則化ロジスティック回帰モデルを学習した．学習事例はインフルエンザコーパスと風邪症状コーパスの疾患・症状において，それぞれ500 件ずつ利用し，5分割交差検定を行った．実験結果を表\ref{commonresult}に示す．
+
+
+ベースライン\footnote{本章の実験は4章と同一のベースラインの設計をしているため，5章の表20のベースラインとは値が異なっている．}
+と比べて，ベースラインに事実性解析を追加した結果から，事実性解析はインフルエンザにおいては大幅に上昇しているが，風邪症状コーパスに対しては，あまり変化が見られなかった．この理由としては，主体の問題や比喩的な問題が大きく関係していると考えられる．主体の問題の例としては，事実が確認出来たとしても，発言の返信先の人物が疾患に罹っている場合が挙げられる．比喩的な問題としては，例えば，鼻水の発言「面白すぎて鼻水が出たわ」では，「鼻水」が「出た」事実を解析することができたとしても，それが比喩的な表現であって，疾患は成立していない．これらの問題により，事実性の解析だけではあまり精度の向上が望めなかった．
+
+一方，ベースラインに事実性解析と主体解析の両方を組み合わせた結果，主体の問題が多少解決されることにより，ベースラインと比べて全体のmacro F1スコアで3.3ポイント向上した．これにより，事実性解析と主体解析をうまく組み合わせることで，より精度を向上させることができることが確認できた．
+
+さらに事実性と主体のゴールドラベルを合わせた結果，全ての疾患・症状において大幅に精度が向上し，全体のmacro
+F1スコアで9.6ポイント向上した．従って，事実性と主体の情報が疾患・症状判別タスクに有用な情報であるということが分かる．
+
+
+
+\section{関連研究}
+\label{sec:relatedworks}
+
+自然言語処理の研究は，Twitterを始めとしたソーシャルメディアの解析におい
+て 2 つの主要なタスクに取り組んできたと言える：(1) ひとつは実在する自
+然言語処理の技術をノイジーなテキストに適応させることで，(2) もうひと
+つは，そこから知識や統計量を抽出することである．
+
+前者としては品詞タグ付けの精度改善~\cite{gimpel-EtAl:2011:ACL-HLT2011}
+や固有表現認識~\cite{plank-EtAl:2014:Coling}のタスクを始めとして，崩れ
+た単語の正規化などが行われてきた
+\cite{han-baldwin:2011:ACL-HLT2011,chrupala:2014:P14-2}．
+
+\begin{table}[t]
+\caption{Twitterを用いた関連研究}
+\label{relwork}
+\input{02table23.txt}
+\end{table}
+
+後者としては，イベント抽出やユーザ行動分析など様々なアプリケーションが提案されてきた（表\ref{relwork}）．
+なかでも，疾患，特に即時的な把握が必要される感染症の流行検出は，主要なTwitter利用法の 1 つとして多くの研究がある．
+
+
+感染症の流行は，毎年，百万人を越える患者を出しており，重要な国家的課題
+となっている\cite{国立感染症研究所2006}．
+中でも，インフルエンザは事前に適切なワクチンを準備することにより，重篤
+な状態を避けることが可能なため，感染状態の把握は各国における重要なミッ
+ションとなっている\cite{Ferguson2005}．
+
+この把握は\textbf{ インフルエンザ・サーベイランス}と呼ばれ，膨大なコス
+トをかけて調査・集計が行われてきた．インフルエンザ以外でも， West Nile
+ウィルス検出 \cite{sugumaran2012real}など感染症の把握にTwitterなどのソーシャルメディ
+アを利用する試みは多い．
+
+本邦においてもインフルエンザが流行したことによって総死亡者数は，毎年１
+万人を超えており\cite{大日2003}，国立感染症研究所を中心にインフルエンザ・
+サーベイランスが実施されている
+\footnote{https://hasseidoko.mhlw.go.jp/Hasseidoko/Levelmap/flu/index.html}．
+
+しかし，これらの従来型の集計方式は，集計に時間がかかり，また，過疎部に
+おける収集が困難だという問題が指摘されてき
+た\footnote{http://sankei.jp.msn.com/life/news/110112/bdy11011222430044-n1.htm}．
+このような背景のもと，近年，ソーシャルメディアを用いた感染症サーベイラ
+ンスが，現行の調査法と比べて大規模かつ，即時的な収集を可能にするとして，
+数多く提案されている
+\cite{Lampos2010,culotta2010detecting,Paul2011,aramaki-maskawa-morita:2011:EMNLP,Tanida2011}．
+
+しかしながら，実際にTwitterからインフルエンザに関する情報を収集するのは
+容易ではない．例えば，ニュースや有名人の罹患に関するリツイートなど，多
+くのノイズが混入する．Aramakiら\cite{aramaki-maskawa-morita:2011:EMNLP}によると，「インフルエン
+  ザ」に関するツイートの半数は，本人の罹患に関するものではないと報告さ
+れている．
+
+これを解決するための 1 つの方法は，キーワードのセットを適切に選ぶ方法が
+考えられる．例えば，「インフルエンザ」だけでなく「高熱」や「休む」など
+のキーワードを加えることで，より確かに罹患者を抽出できると考えられる．
+そこで，インフルエンザの流行と相関の高いキーワード群を，L1正規化を用い
+た単語の次元圧縮によって得る方法\cite{Lampos2010}，疾患をある種のトピッ
+クとみたてトピックモデルを用いる方法\cite{Paul2011}や，素性選択を
+適応する手法\cite{Tanida2011}などが提案されている．
+
+一方で，キーワードを固定して，疾患・症状がポジティブな発言のみを分類す
+るというアプローチもある．高橋ら\cite{Takahashi2011}の Boostingを用いた
+文書分類，Aramakiら\cite{aramaki-maskawa-morita:2011:EMNLP}がSVMによる分類手法を提案している．
+本研究も後者をアプローチに属するが，モダリティの解析や，主体の解析いう
+2 つの自然言語処理の問題を導入することで，精度を高めることに成功した．
+
+以降，この 2 つの自然言語処理研究について関連研究をまとめる．
+
+
+\subsection{主体解析の関連研究}
+
+本研究で扱った主体解析とは，疾患に関係のある名詞の項を判別する意味解析
+だと考えることができる．
+関連する研究としては，PropBank~\cite{PropBank2004}は動詞の意味役割を大
+規模にアノテートした初めてのコーパスであり，NomBank~\cite{NomBank2004}
+は，それと似た規則で名詞の項にラベルが付与されている．
+例えばNomBankでは，``There have been no customer
+\underline{\mbox{complaints}} about that issue.''において，\textsc{arg0} とし
+て，``customer''がアノテートされ，\textsc{arg1}として``issue''がアノテー
+トされる．さらに，このアノテーションが扱う範囲を広げる研究もある
+\cite{Gerber:2010}．
+
+日本語においても，京都大学テキストコーパス4.0\footnote{http://nlp.ist.i.kyoto-u.ac.jp/} やNAISTテキストコーパス
+\cite{iida2010}において，事態性名詞の項が付与されるなど近いアノテーションが試みられている．
+Komachiら\cite{komachi2007}は，対象となる名詞に事態性があるか否かの事態性判別と，その後の項同定を別タスクとして扱い，解析精度を報告している．また，「娘の風邪」などの名詞句内の関係を解析する研究~\cite{sasano2009}も関連がある．
+発言内で疾患・症状の主体が省略されていることも多いため，省略・照応解析~\cite{sasano2008}とも関連がある．
+
+本研究で扱う課題も，基本的には，ある疾患に関する表現に関する項 (\textsc{arg0}) の同定を行なうタスクとみなすことができる．
+
+しかし，疾患に関する表現，例えば，「寒気」，などは意味としては事態性を
+もった概念であるが，文法的には，事態性があると認められず，単純な事態性
+の名詞の項同定として考えることはできない．
+つまり，意味的な疾患概念が，文法的な事態に対応づけられない場合がある．
+
+しかも，今までの事態性名詞の研究は主に新聞を元にしたコーパスで行われており，
+Twitter上への適応が困難だという技術的問題もある．これらの理由から，我々は疾患を保有する主体の推定を目的とし，主体推定器のためにラベルを付与
+することを試みた．
+
+
+\subsection{モダリティ解析の関連研究}
+
+
+先行研究\cite{aramaki-maskawa-morita:2011:EMNLP}では，モダリティに関しての事例を集めたコーパ
+スを作成することでモダリティ情報を利用しているが，本研究では，既存のリ
+ソースやツールを活用することで，コーパス作成の手間を省き，一般的なモダリティ解析
+が疾患のモダリティ解析にも貢献することを示した．
+
+
+日本語モダリティに関するリソースとしては，文献
+\cite{matsuyoshi2010}が態度表明， 時制，仮想，態度， 真偽判断，価値判断，
+焦点などについて詳細に事象アノテーションを行っている．焦点を除いた6種の
+項目を拡張モダリティと呼び，情報抽出や含意認識といった自然言語処理のタ
+スクへの応用に向けて研究が行われている．
+本研究は，意味IDとして，これを素性化したが，モダリティ間の類似関係など，
+さらに緻密な素性化が可能であり，今後の課題としたい．
+
+また， このような研究は日本語だけでなく英語に関しても活発であり，文献
+\cite{sauri2012you}がモダリティを用いて， 事実性の度合いを判断する研究
+を行っている．
+また，特にモダリティの一部である否定(Negation)
+や推量 (Speculation)については，情報抽出の実用化のために重要であり，
+専門のワークショップ [NeSp-NLP 2010] が開
+催されるなど盛んに研究されてきている．
+
+本研究にこれらの知見を導入することで，さらなる精度向上が期待される．
+ 
+
+
+
+\section{おわりに}
+\label{sec:conclusion}
+
+本論文では，Web応用タスク (WebNLP) を立ち上げ，実用性を強く意識しつつ，次のゴールの達成に向けて研究・議論を行った．
+その中で，NLPによるソーシャルリスニングを実用化した事例の 1 つである，ツイートからインフルエンザや風邪などの疾患・症状を認識する罹患検出のタスクに取り組んだ．
+まず，ソーシャルメディア上のテキストを分析する際の現状の自然言語処理技術が抱えている問題を認識し，課題を整理した．
+分析結果から，事実性の解析，状態を保有する主体の判定が重要かつ一般的な課題として切り出せると判断した．
+これらの課題を陽に扱った手法により実験した結果，両問題がそれぞれ罹患検出に貢献することを明らかにした．
+
+\ref{sec:factuality}章では，事実性解析の本タスクへの貢献を実験的に調査し，その分析から事実性解析の課題を議論した．具体的には，インフルエンザの流行検出のため，モダリティの素性を組み込む手法を提案し，これが「インフルエンザに感染している」という特定の事実の検出を目標とする事実性解析に貢献することを示した．
+
+\ref{sec:subject}章では，複数の疾患・症状に関して，その疾患・症状を保有する主体を推定する取り組みを紹介した．
+構築したコーパスを訓練事例とした主体推定器を作成し，主体の推定がmicro F1スコアで84ポイント程度の性能で行えること，異なる疾患・症状に対して横断的な主体の推定が可能であることを報告した．
+さらに推定した主体が疾患・症状を判定する上でどの程度貢献するのか実証し，主体を正しく推定できれば罹患検出を行う際にどの程度までエラーを減らすことができるかを示した．
+
+さらに\ref{sec:factandsub}章では，事実性解析と主体解析を組み合わせた実験を行い，その精度を確認した．
+
+ソーシャルメディア上の発言から個人の状態を分析することは，疾患の流行検出のみならず，個人の健康状態をモニタリングするなどの重要な応用が多く存在する．
+今後は，さらに多くのソーシャルメディア上のテキストでも検証を進め，両解析技術が発展し，より深くWebテキストを扱うことが期待される．
+
+
+
+\acknowledgment
+
+本研究は，ProjectNextNLP「Web応用タスク」による．
+本研究は首都大学東京傾斜的研究費（全学分）学長裁量枠戦略的研究プロジェクト戦略的研究支援枠「ソーシャルビッグデータの分析・応用のための学術基盤の研究」，JSTさきがけから部分的な支援を受けた．
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{荒牧\JBA 森田\JBA 篠原(山田)\JBA 岡}{荒牧 \Jetal
+  }{2011}]{荒牧2011}
+荒牧英治\JBA 森田瑞樹\JBA 篠原(山田)恵美子\JBA 岡瑞起 \BBOP 2011\BBCP.
+\newblock ウェブからの疾病情報の大規模かつ即時的な抽出手法.\
+\newblock \Jem{言語処理学会第 17 回年次大会}, \mbox{\BPGS\ 838--841}.
+
+\bibitem[\protect\BCAY{Aramaki, Maskawa, \BBA\ Morita}{Aramaki
+  et~al.}{2011}]{aramaki-maskawa-morita:2011:EMNLP}
+Aramaki, E., Maskawa, S., \BBA\ Morita, M. \BBOP 2011\BBCP.
+\newblock \BBOQ Twitter Catches The Flu: Detecting Influenza Epidemics using
+  Twitter.\BBCQ\
+\newblock In {\Bem Proceedings of the 2011 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 1568--1576}.
+
+\bibitem[\protect\BCAY{Bergsma, Dredze, Van~Durme, Wilson, \BBA\
+  Yarowsky}{Bergsma et~al.}{2013}]{bergsma-EtAl:2013:NAACL-HLT}
+Bergsma, S., Dredze, M., Van~Durme, B., Wilson, T., \BBA\ Yarowsky, D. \BBOP
+  2013\BBCP.
+\newblock \BBOQ Broadly Improving User Classification via Communication-Based
+  Name and Location Clustering on Twitter.\BBCQ\
+\newblock In {\Bem Proceedings of the 2013 Conference of the North American
+  Chapter of the Association for Computational Linguistics: Human Language
+  Technologies}, \mbox{\BPGS\ 1010--1019}.
+
+\bibitem[\protect\BCAY{Chrupa{\l}a}{Chrupa{\l}a}{2014}]{chrupala:2014:P14-2}
+Chrupa{\l}a, G. \BBOP 2014\BBCP.
+\newblock \BBOQ Normalizing Tweets with Edit Scripts and Recurrent Neural
+  Embeddings.\BBCQ\
+\newblock In {\Bem Proceedings of the 52nd Annual Meeting of the Association
+  for Computational Linguistics (Volume 2: Short Papers)}, \mbox{\BPGS\
+  680--686}.
+
+\bibitem[\protect\BCAY{Culotta}{Culotta}{2010a}]{culotta2010detecting}
+Culotta, A. \BBOP 2010a\BBCP.
+\newblock \BBOQ Detecting Influenza Outbreaks by Analyzing Twitter
+  Messages.\BBCQ\
+\newblock {\Bem arXiv preprint arXiv:1007.4748}.
+
+\bibitem[\protect\BCAY{Culotta}{Culotta}{2010b}]{Culotta:2010}
+Culotta, A. \BBOP 2010b\BBCP.
+\newblock \BBOQ Towards Detecting Influenza Epidemics by Analyzing Twitter
+  Messages.\BBCQ\
+\newblock In {\Bem Proceedings of the 1st Workshop on Social Media Analytics
+  (SOMA)}, \mbox{\BPGS\ 115--122}.
+
+\bibitem[\protect\BCAY{Ferguson, Cummings, Cauchemez, Fraser, Riley, Meeyai,
+  Iamsirithaworn, \BBA\ Burke}{Ferguson et~al.}{2005}]{Ferguson2005}
+Ferguson, N.~M., Cummings, D. A.~T., Cauchemez, S., Fraser, C., Riley, S.,
+  Meeyai, A., Iamsirithaworn, S., \BBA\ Burke, D.~S. \BBOP 2005\BBCP.
+\newblock \BBOQ Strategies for Containing an Emerging Influenza Pandemic in
+  Southeast Asia.\BBCQ\
+\newblock {\Bem Nature}, {\Bbf 437}  (7056), \mbox{\BPGS\ 209--214}.
+
+\bibitem[\protect\BCAY{Gerber \BBA\ Chai}{Gerber \BBA\
+  Chai}{2010}]{Gerber:2010}
+Gerber, M.\BBACOMMA\ \BBA\ Chai, J.~Y. \BBOP 2010\BBCP.
+\newblock \BBOQ Beyond NomBank: A Study of Implicit Arguments for Nominal
+  Predicates.\BBCQ\
+\newblock In {\Bem Proceedings of the 48th Annual Meeting of the Association
+  for Computational Linguistics}, \mbox{\BPGS\ 1583--1592}.
+
+\bibitem[\protect\BCAY{Gimpel, Schneider, O'Connor, Das, Mills, Eisenstein,
+  Heilman, Yogatama, Flanigan, \BBA\ Smith}{Gimpel
+  et~al.}{2011}]{gimpel-EtAl:2011:ACL-HLT2011}
+Gimpel, K., Schneider, N., O'Connor, B., Das, D., Mills, D., Eisenstein, J.,
+  Heilman, M., Yogatama, D., Flanigan, J., \BBA\ Smith, N.~A. \BBOP 2011\BBCP.
+\newblock \BBOQ Part-of-Speech Tagging for Twitter: Annotation, Features, and
+  Experiments.\BBCQ\
+\newblock In {\Bem Proceedings of the 49th Annual Meeting of the Association
+  for Computational Linguistics: Human Language Technologies}, \mbox{\BPGS\
+  42--47}.
+
+\bibitem[\protect\BCAY{Han \BBA\ Baldwin}{Han \BBA\
+  Baldwin}{2011}]{han-baldwin:2011:ACL-HLT2011}
+Han, B.\BBACOMMA\ \BBA\ Baldwin, T. \BBOP 2011\BBCP.
+\newblock \BBOQ Lexical Normalisation of Short Text Messages: Makn Sens a
+  \#twitter.\BBCQ\
+\newblock In {\Bem Proceedings of the 49th Annual Meeting of the Association
+  for Computational Linguistics: Human Language Technologies}, \mbox{\BPGS\
+  368--378}.
+
+\bibitem[\protect\BCAY{Han, Cook, \BBA\ Baldwin}{Han
+  et~al.}{2013}]{han-cook-baldwin:2013:SystemDemo}
+Han, B., Cook, P., \BBA\ Baldwin, T. \BBOP 2013\BBCP.
+\newblock \BBOQ A Stacking-based Approach to Twitter User Geolocation
+  Prediction.\BBCQ\
+\newblock In {\Bem Proceedings of the 51st Annual Meeting of the Association
+  for Computational Linguistics: System Demonstrations}, \mbox{\BPGS\ 7--12}.
+
+\bibitem[\protect\BCAY{Iida, Komachi, Inui, \BBA\ Matsumoto}{Iida
+  et~al.}{2007}]{iida2010}
+Iida, R., Komachi, M., Inui, K., \BBA\ Matsumoto, Y. \BBOP 2007\BBCP.
+\newblock \BBOQ Annotating a Japanese Text Corpus with Predicate-Argument and
+  Coreference Relations.\BBCQ\
+\newblock In {\Bem Proceedings of the Linguistic Annotation Workshop},
+  \mbox{\BPGS\ 132--139}.
+
+\bibitem[\protect\BCAY{鍛治\JBA 福島\JBA 喜連川}{鍛治 \Jetal
+  }{2009}]{Kaji:2009}
+鍛治伸裕\JBA 福島健一\JBA 喜連川優 \BBOP 2009\BBCP.
+\newblock 大規模ウェブテキストからの片仮名用言の自動獲得.\
+\newblock \Jem{電子情報通信学会論文誌（D 情報・システム）}, {\Bbf J92-D}  (3),
+  \mbox{\BPGS\ 293--300}.
+
+\bibitem[\protect\BCAY{河原\JBA 黒橋}{河原\JBA 黒橋}{2005}]{Kawahara:05}
+河原大輔\JBA 黒橋禎夫 \BBOP 2005\BBCP.
+\newblock 格フレーム辞書の漸次的自動構築.\
+\newblock \Jem{自然言語処理}, {\Bbf 12}  (2), \mbox{\BPGS\ 109--131}.
+
+\bibitem[\protect\BCAY{Kazama \BBA\ Torisawa}{Kazama \BBA\
+  Torisawa}{2007}]{Kazama:07}
+Kazama, J.\BBACOMMA\ \BBA\ Torisawa, K. \BBOP 2007\BBCP.
+\newblock \BBOQ Exploiting Wikipedia as External Knowledge for Named Entity
+  Recognition.\BBCQ\
+\newblock In {\Bem Proceedings of the 2007 Joint Conference on Empirical
+  Methods in Natural Language Processing and Computational Natural Language
+  Learning (EMNLP-CoNLL 2007)}, \mbox{\BPGS\ 698--707}.
+
+\bibitem[\protect\BCAY{国立感染症研究所}{国立感染症研究所}{2006}]{国立感染症研究所2006}
+国立感染症研究所 \BBOP 2006\BBCP.
+\newblock \Jem{インフルエンザ・パンデミックに関する Q＆A（2006.12 改訂版）}.
+\newblock 国立感染症研究所感染症情報センター.
+
+\bibitem[\protect\BCAY{小町\JBA 飯田\JBA 乾\JBA 松本}{小町 \Jetal
+  }{2010}]{Komachi:10}
+小町守\JBA 飯田龍\JBA 乾健太郎\JBA 松本裕治 \BBOP 2010\BBCP.
+\newblock 名詞句の語彙統語パターンを用いた事態性名詞の項構造解析.\
+\newblock \Jem{自然言語処理}, {\Bbf 17}  (1), \mbox{\BPGS\ 141--159}.
+
+\bibitem[\protect\BCAY{Komachi, Iida, Inui, \BBA\ Matsumoto}{Komachi
+  et~al.}{2007}]{komachi2007}
+Komachi, M., Iida, R., Inui, K., \BBA\ Matsumoto, Y. \BBOP 2007\BBCP.
+\newblock \BBOQ Learning Based Argument Structure Analysis of Event-nouns in
+  Japanese.\BBCQ\
+\newblock In {\Bem Proceedings of the Conference of the Pacific Association for
+  Computational Linguistics (PACLING)}, \mbox{\BPGS\ 120--128}.
+
+\bibitem[\protect\BCAY{Lamb, Paul, \BBA\ Dredze}{Lamb
+  et~al.}{2013}]{lamb-paul-dredze:2013:NAACL-HLT}
+Lamb, A., Paul, M.~J., \BBA\ Dredze, M. \BBOP 2013\BBCP.
+\newblock \BBOQ Separating Fact from Fear: Tracking Flu Infections on
+  Twitter.\BBCQ\
+\newblock In {\Bem Proceedings of the 2013 Conference of the North American
+  Chapter of the Association for Computational Linguistics: Human Language
+  Technologies}, \mbox{\BPGS\ 789--795}.
+
+\bibitem[\protect\BCAY{Lampos \BBA\ Cristianini}{Lampos \BBA\
+  Cristianini}{2010}]{Lampos2010}
+Lampos, V.\BBACOMMA\ \BBA\ Cristianini, N. \BBOP 2010\BBCP.
+\newblock \BBOQ Tracking the flu pandemic by monitoring the Social Web.\BBCQ\
+\newblock In {\Bem 2nd IAPR Workshop on Cognitive Information Processing (CIP
+  2010)}, \mbox{\BPGS\ 411--416}.
+
+\bibitem[\protect\BCAY{Li, Ritter, Cardie, \BBA\ Hovy}{Li
+  et~al.}{2014a}]{li-EtAl:2014:EMNLP20143}
+Li, J., Ritter, A., Cardie, C., \BBA\ Hovy, E. \BBOP 2014a\BBCP.
+\newblock \BBOQ Major Life Event Extraction from Twitter based on
+  Congratulations/Condolences Speech Acts.\BBCQ\
+\newblock In {\Bem Proceedings of the 2014 Conference on Empirical Methods in
+  Natural Language Processing (EMNLP)}, \mbox{\BPGS\ 1997--2007}.
+
+\bibitem[\protect\BCAY{Li, Ritter, \BBA\ Hovy}{Li
+  et~al.}{2014b}]{li-ritter-hovy:2014:P14-1}
+Li, J., Ritter, A., \BBA\ Hovy, E. \BBOP 2014b\BBCP.
+\newblock \BBOQ Weakly Supervised User Profile Extraction from Twitter.\BBCQ\
+\newblock In {\Bem Proceedings of the 52nd Annual Meeting of the Association
+  for Computational Linguistics (Volume 1: Long Papers)}, \mbox{\BPGS\
+  165--174}.
+
+\bibitem[\protect\BCAY{Marchetti-Bowick \BBA\ Chambers}{Marchetti-Bowick \BBA\
+  Chambers}{2012}]{marchettibowick-chambers:2012:EACL2012}
+Marchetti-Bowick, M.\BBACOMMA\ \BBA\ Chambers, N. \BBOP 2012\BBCP.
+\newblock \BBOQ Learning for Microblogs with Distant Supervision: Political
+  Forecasting with Twitter.\BBCQ\
+\newblock In {\Bem Proceedings of the 13th Conference of the European Chapter
+  of the Association for Computational Linguistics}, \mbox{\BPGS\ 603--612}.
+
+\bibitem[\protect\BCAY{Matsuyoshi, Eguchi, Sao, Murakami, Inui, \BBA\
+  Matsumoto}{Matsuyoshi et~al.}{2010}]{matsuyoshi2010annotating}
+Matsuyoshi, S., Eguchi, M., Sao, C., Murakami, K., Inui, K., \BBA\ Matsumoto,
+  Y. \BBOP 2010\BBCP.
+\newblock \BBOQ Annotating Event Mentions in Text with Modality, Focus, and
+  Source Information.\BBCQ\
+\newblock In {\Bem Proceedings of the 7th conference on International Language
+  Resources and Evaluation (LREC'10)}, \mbox{\BPGS\ 1456--1463}.
+
+\bibitem[\protect\BCAY{松吉\JBA 江口\JBA 佐尾\JBA 村上\JBA 乾\JBA 松本}{松吉
+  \Jetal }{2010}]{matsuyoshi2010}
+松吉俊\JBA 江口萌\JBA 佐尾ちとせ\JBA 村上浩司\JBA 乾健太郎\JBA 松本裕治 \BBOP
+  2010\BBCP.
+\newblock テキスト情報分析のための判断情報アノテーション.\
+\newblock \Jem{電子情報通信学会論文誌 D}, {\Bbf 93}  (6), \mbox{\BPGS\
+  705--713}.
+
+\bibitem[\protect\BCAY{松吉\JBA 佐藤\JBA 宇津呂}{松吉 \Jetal
+  }{2007}]{matsuyoshi2007}
+松吉俊\JBA 佐藤理史\JBA 宇津呂武仁 \BBOP 2007\BBCP.
+\newblock 日本語機能表現辞書の編纂.\
+\newblock \Jem{自然言語処理}, {\Bbf 14}  (5), \mbox{\BPGS\ 123--146}.
+
+\bibitem[\protect\BCAY{Meyers, Reeves, Macleod, Szekely, Zielinska, Young,
+  \BBA\ Grishman}{Meyers et~al.}{2004}]{NomBank2004}
+Meyers, A., Reeves, R., Macleod, C., Szekely, R., Zielinska, V., Young, B.,
+  \BBA\ Grishman, R. \BBOP 2004\BBCP.
+\newblock \BBOQ The NomBank Project: An Interim Report.\BBCQ\
+\newblock In {\Bem Proceedings of the NAACL/HLT Workshop on Frontiers in Corpus
+  Annotation}, \mbox{\BPGS\ 24--31}.
+
+\bibitem[\protect\BCAY{Munteanu \BBA\ Marcu}{Munteanu \BBA\
+  Marcu}{2005}]{Munteanu:06}
+Munteanu, D.~S.\BBACOMMA\ \BBA\ Marcu, D. \BBOP 2005\BBCP.
+\newblock \BBOQ Improving Machine Translation Performance by Exploiting
+  Non-Parallel Corpora.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 31}  (4), \mbox{\BPGS\
+  477--504}.
+
+\bibitem[\protect\BCAY{Narita, Mizuno, \BBA\ Inui}{Narita
+  et~al.}{2013}]{narita2013lexicon}
+Narita, K., Mizuno, J., \BBA\ Inui, K. \BBOP 2013\BBCP.
+\newblock \BBOQ A Lexicon-based Investigation of Research Issues in Japanese
+  Factuality Analysis.\BBCQ\
+\newblock In {\Bem Proceedings of the 6th International Joint Conference on
+  Natural Language Processing}, \mbox{\BPGS\ 587--595}.
+
+\bibitem[\protect\BCAY{O'Connor, Balasubramanyan, Routledge, \BBA\
+  Smith}{O'Connor et~al.}{2010}]{OConnor:2010}
+O'Connor, B., Balasubramanyan, R., Routledge, B.~R., \BBA\ Smith, N.~A. \BBOP
+  2010\BBCP.
+\newblock \BBOQ From Tweets to Polls: Linking Text Sentiment to Public Opinion
+  Time Series.\BBCQ\
+\newblock In {\Bem Proceedings of the 4th International AAAI Conference on
+  Weblogs and Social Media (ICWSM)}, \mbox{\BPGS\ 122--129}.
+
+\bibitem[\protect\BCAY{大日\JBA 重松\JBA 谷口\JBA 岡部}{大日 \Jetal
+  }{2003}]{大日2003}
+大日康史\JBA 重松美加\JBA 谷口清州\JBA 岡部信彦 \BBOP 2003\BBCP.
+\newblock インフルエンザ超過死亡「感染研モデル」2002/03 シーズン報告.\
+\newblock {\Bem Infectious Agents Surveillance Report}, {\Bbf 24}  (11),
+  \mbox{\BPGS\ 288--289}.
+
+\bibitem[\protect\BCAY{Palmer, Gildea, \BBA\ Kingsbury}{Palmer
+  et~al.}{2005}]{PropBank2004}
+Palmer, M., Gildea, D., \BBA\ Kingsbury, P. \BBOP 2005\BBCP.
+\newblock \BBOQ The Proposition Bank: An Annotated Corpus of Semantic
+  Roles.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 31}  (1), \mbox{\BPGS\
+  71--106}.
+
+\bibitem[\protect\BCAY{Pang, Lee, \BBA\ Vaithyanathan}{Pang
+  et~al.}{2002}]{Pang:2002}
+Pang, B., Lee, L., \BBA\ Vaithyanathan, S. \BBOP 2002\BBCP.
+\newblock \BBOQ Thumbs Up?: Sentiment Classification Using Machine Learning
+  Techniques.\BBCQ\
+\newblock In {\Bem Proceedings of the ACL-02 Conference on Empirical Methods in
+  Natural Language Processing - Volume 10}, \mbox{\BPGS\ 79--86}.
+
+\bibitem[\protect\BCAY{Paul \BBA\ Dredze}{Paul \BBA\ Dredze}{2011}]{Paul2011}
+Paul, M.~J.\BBACOMMA\ \BBA\ Dredze, M. \BBOP 2011\BBCP.
+\newblock \BBOQ You Are What You Tweet: Analysing Twitter for Public
+  Health.\BBCQ\
+\newblock In {\Bem Processing of the 5th International AAAI Conference on
+  Weblogs and Social Media (ICWSM)}.
+
+\bibitem[\protect\BCAY{Plank, Hovy, McDonald, \BBA\ S{\o}gaard}{Plank
+  et~al.}{2014}]{plank-EtAl:2014:Coling}
+Plank, B., Hovy, D., McDonald, R., \BBA\ S{\o}gaard, A. \BBOP 2014\BBCP.
+\newblock \BBOQ Adapting Taggers to Twitter with Not-so-distant
+  Supervision.\BBCQ\
+\newblock In {\Bem Proceedings of COLING 2014, the 25th International
+  Conference on Computational Linguistics: Technical Papers}, \mbox{\BPGS\
+  1783--1792}.
+
+\bibitem[\protect\BCAY{Sakaki, Okazaki, \BBA\ Matsuo}{Sakaki
+  et~al.}{2010}]{Sakaki:10}
+Sakaki, T., Okazaki, M., \BBA\ Matsuo, Y. \BBOP 2010\BBCP.
+\newblock \BBOQ Earthquake Shakes Twitter Users: Real-time Event Detection by
+  Social Sensors.\BBCQ\
+\newblock In {\Bem Proceedings of the 19th international conference on World
+  Wide Web (WWW)}, \mbox{\BPGS\ 851--860}.
+
+\bibitem[\protect\BCAY{Sasano, Kawahara, \BBA\ Kurohashi}{Sasano
+  et~al.}{2008}]{sasano2008}
+Sasano, R., Kawahara, D., \BBA\ Kurohashi, S. \BBOP 2008\BBCP.
+\newblock \BBOQ A Fully-Lexicalized Probabilistic Model for Japanese Zero
+  Anaphora Resolution.\BBCQ\
+\newblock In {\Bem Proceedings of the 22nd International Conference on
+  Computational Linguistics (COLING)}, \mbox{\BPGS\ 769--776}.
+
+\bibitem[\protect\BCAY{Sasano, Kawahara, \BBA\ Kurohashi}{Sasano
+  et~al.}{2010}]{Sasano:10}
+Sasano, R., Kawahara, D., \BBA\ Kurohashi, S. \BBOP 2010\BBCP.
+\newblock \BBOQ The Effect of Corpus Size on Case Frame Acquisition for
+  Predicate-Argument Structure Analysis.\BBCQ\
+\newblock {\Bem IEICE TRANSACTIONS on Information and Systems}, {\Bbf E93-D}
+  (6), \mbox{\BPGS\ 1361--1368}.
+
+\bibitem[\protect\BCAY{Sasano \BBA\ Kurohashi}{Sasano \BBA\
+  Kurohashi}{2009}]{sasano2009}
+Sasano, R.\BBACOMMA\ \BBA\ Kurohashi, S. \BBOP 2009\BBCP.
+\newblock \BBOQ A Probabilistic Model for Associative Anaphora
+  Resolution.\BBCQ\
+\newblock In {\Bem Conference on Empirical Methods in Natural Language
+  Processing}, \lowercase{\BVOL}~3, \mbox{\BPGS\ 1455--1464}.
+
+\bibitem[\protect\BCAY{Sato}{Sato}{2015}]{sato2015mecabipadicneologd}
+Sato, T. \BBOP 2015\BBCP.
+\newblock \BBOQ Neologism Dictionary Based on the Language Resources on the Web
+  for Mecab.\BBCQ\ {\ttfamily https://github.com/neologd/mecab-unidic-neologd}.
+
+\bibitem[\protect\BCAY{Saur{\'\i} \BBA\ Pustejovsky}{Saur{\'\i} \BBA\
+  Pustejovsky}{2012}]{sauri2012you}
+Saur{\'\i}, R.\BBACOMMA\ \BBA\ Pustejovsky, J. \BBOP 2012\BBCP.
+\newblock \BBOQ Are You Sure That This Happened? Assessing the Factuality
+  Degree of Events in Text.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 38}  (2), \mbox{\BPGS\
+  261--299}.
+
+\bibitem[\protect\BCAY{Shen, Liu, Weng, \BBA\ Li}{Shen
+  et~al.}{2013}]{shen-EtAl:2013:NAACL-HLT}
+Shen, C., Liu, F., Weng, F., \BBA\ Li, T. \BBOP 2013\BBCP.
+\newblock \BBOQ A Participant-based Approach for Event Summarization Using
+  Twitter Streams.\BBCQ\
+\newblock In {\Bem Proceedings of the 2013 Conference of the North American
+  Chapter of the Association for Computational Linguistics: Human Language
+  Technologies}, \mbox{\BPGS\ 1152--1162}.
+
+\bibitem[\protect\BCAY{Sugumaran \BBA\ Voss}{Sugumaran \BBA\
+  Voss}{2012}]{sugumaran2012real}
+Sugumaran, R.\BBACOMMA\ \BBA\ Voss, J. \BBOP 2012\BBCP.
+\newblock \BBOQ Real-time Spatio-temporal Analysis of West Nile Virus Using
+  Twitter Data.\BBCQ\
+\newblock In {\Bem Proceedings of the 3rd International Conference on Computing
+  for Geospatial Research and Applications}, \mbox{\BPG~39}. ACM.
+
+\bibitem[\protect\BCAY{高橋\JBA 野田}{高橋\JBA 野田}{2011}]{Takahashi2011}
+高橋哲朗\JBA 野田雄也 \BBOP 2011\BBCP.
+\newblock 実世界のセンサーとしてのTwitterの可能性.\
+\newblock
+  \Jem{電子情報通信学会情報・システムソサイエティ言語理解とコミュニケーション研究会},
+  \mbox{\BPGS\ 43--48}.
+
+\bibitem[\protect\BCAY{谷田\JBA 荒牧\JBA 佐藤\JBA 吉田\JBA 中川}{谷田 \Jetal
+  }{2011}]{Tanida2011}
+谷田和章\JBA 荒牧英治\JBA 佐藤一誠\JBA 吉田稔\JBA 中川裕志 \BBOP 2011\BBCP.
+\newblock Twitter による風邪流行の推測.\
+\newblock \Jem{マイニングツールの統合と活用 \& 情報編纂研究会}, \mbox{\BPGS\
+  42--47}.
+
+\bibitem[\protect\BCAY{Thelwall, Buckley, \BBA\ Paltoglou}{Thelwall
+  et~al.}{2011}]{Thelwall:2011}
+Thelwall, M., Buckley, K., \BBA\ Paltoglou, G. \BBOP 2011\BBCP.
+\newblock \BBOQ Sentiment in Twitter Events.\BBCQ\
+\newblock {\Bem Journal of the American Society for Information Science and
+  Technology}, {\Bbf 62}  (2), \mbox{\BPGS\ 406--418}.
+
+\bibitem[\protect\BCAY{Varga, Sano, Torisawa, Hashimoto, Ohtake, Kawai, Oh,
+  \BBA\ De~Saeger}{Varga et~al.}{2013}]{varga-EtAl:2013:ACL2013}
+Varga, I., Sano, M., Torisawa, K., Hashimoto, C., Ohtake, K., Kawai, T., Oh,
+  J.-H., \BBA\ De~Saeger, S. \BBOP 2013\BBCP.
+\newblock \BBOQ Aid is Out There: Looking for Help from Tweets during a Large
+  Scale Disaster.\BBCQ\
+\newblock In {\Bem Proceedings of the 51st Annual Meeting of the Association
+  for Computational Linguistics (Volume 1: Long Papers)}, \mbox{\BPGS\
+  1619--1629}.
+
+\bibitem[\protect\BCAY{Williams \BBA\ Katz}{Williams \BBA\
+  Katz}{2012}]{williams-katz:2012:ACL2012short}
+Williams, J.\BBACOMMA\ \BBA\ Katz, G. \BBOP 2012\BBCP.
+\newblock \BBOQ Extracting and Modeling Durations for Habits and Events from
+  Twitter.\BBCQ\
+\newblock In {\Bem Proceedings of the 50th Annual Meeting of the Association
+  for Computational Linguistics (Volume 2: Short Papers)}, \mbox{\BPGS\
+  223--227}.
+
+\bibitem[\protect\BCAY{Zhou, Chen, \BBA\ He}{Zhou
+  et~al.}{2014}]{zhou-chen-he:2014:P14-2}
+Zhou, D., Chen, L., \BBA\ He, Y. \BBOP 2014\BBCP.
+\newblock \BBOQ A Simple Bayesian Modelling Approach to Event Extraction from
+  Twitter.\BBCQ\
+\newblock In {\Bem Proceedings of the 52nd Annual Meeting of the Association
+  for Computational Linguistics (Volume 2: Short Papers)}, \mbox{\BPGS\
+  700--705}.
+
+\end{thebibliography}
+
+
+\begin{biography}
+\bioauthor{叶内　　晨}{
+2011年東京都立国立高等学校卒業．2015年首都大学東京システムデザイン学部システムデザイン学科情報通信システムコース卒業．同年，同大学院博士前期課程に進学．}
+\bioauthor{北川　善彬}{
+2010年私立明法高等学校卒業．2015年首都大学東京システムデザイン学部システムデザイン学科情報通信システムコース卒業．同年，同大学院博士前期課程に進学．}
+
+\bioauthor{荒牧　英治}{
+2000年京都大学総合人間学部卒業．2005年東京大学大学院情報理工系研究科博士課程修了．博士（情報理工学）．以降，東京大学医学部附属病院特任助教を経て，奈良先端科学技術大学院大学特任准教授．医療情報学，自然言語処理の研究に従事．}
+
+\bioauthor{岡崎　直観}{
+2007年東京大学大学院情報理工学研究科博士課程終了．2005年英国テキストマイニングセンター・リサーチフェロー，2007年東京大学大学院情報理工学系研究科・特別研究員を経て，2011年より東北大学大学院情報科学研究科准教授．専門は，自然言語処理，テキストマイニング，機械学習．}
+
+\bioauthor{小町　　守}{
+2005 年東京大学教養学部基礎科学科科学史・科学哲学分科卒業．2007年奈良先端科学技術大学院大学情報科学研究科博士前期課程修了．2008年より日本学術振興会特別研究員 (DC2) を経て，2010年博士後期課程修了．博士（工学）．同年より同研究科助教を経て，2013年より首都大学東京システムデザイン学部准教授．大規模なコーパスを用いた意味解析および統計的自然言語処理に関心がある．情報処理学会，人工知能学会，言語処理学会，電子情報通信学会，ACL各会員．}
+
+\end{biography}
+
+
+
+\biodate
+
+
+
+
+
+\end{document}

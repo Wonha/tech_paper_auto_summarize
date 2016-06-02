@@ -1,0 +1,811 @@
+    \documentclass[english]{jnlp_1.4}
+
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{hangcaption_jnlp}
+\usepackage{array}
+
+\usepackage{multirow}
+\usepackage{framed}
+
+\Volume{22}
+\Number{3}
+\Month{September}
+\Year{2015}
+
+\received{2014}{12}{20}
+\revised{2015}{3}{16}
+\rerevised{2015}{6}{1}
+\accepted{2015}{7}{9}
+
+\setcounter{page}{171}
+
+\etitle{Stacking Approach to Temporal Relation Classification\\ with Temporal Inference}
+\eauthor{Natsuda Laokulrat\affiref{Author_1} \and Makoto Miwa\affiref{Author_2} \and Yoshimasa Tsuruoka\affiref{Author_1}} 
+\eabstract{
+Traditional machine-learning-based approaches to temporal relation classification use only local features, i.e., those relating to a specific pair of temporal entities (events and temporal expressions), and thus fail to incorporate useful information that could be inferred from nearby entities.
+In this paper, we use timegraphs and stacked learning to perform temporal inference for classification in the temporal relation classification task.
+In our model, we predict a temporal relation by considering the consistency of possible relations between nearby entities. 
+Performing 10-fold cross-validation on the Timebank corpus, we achieve an F1 score of 60.25\% using a graph-based evaluation, which is 0.90 percentage points higher than that of the local approach, outperforming other proposed systems.
+}
+\ekeywords{Temporal Relation Classification, Information Extraction, Stacked Learning, Temporal Inference}
+
+\headauthor{Laokulrat, Miwa, Tsuruoka}
+\headtitle{Stacking Approach to Temporal Relation Classification}
+
+
+\affilabel{Author_1}{}{Department of Electrical Engineering and Information Systems, Graduate School of Engineering, The University of Tokyo}
+\affilabel{Author_2}{}{Department of Advanced Science and Technology, Faculty of Engineering, Toyota Technological Institute}
+
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+\label{sec:intro}
+Temporal relations are an important type of information for a deeper understanding of documents.
+Temporal relation classification aims to classify temporal relationships between pairs of temporal entities into relation types such as \emph{\footnotesize BEFORE}, \emph{\footnotesize AFTER}, \emph{\footnotesize SIMULTANEOUS,} and \emph{\footnotesize BEGINS.}
+\linebreak
+Being able to extract temporal relations between events and temporal expressions appearing in text is beneficial for various natural language processing applications such as textual entailment \shortcite{bos2005}, multi-document summarization \cite{bollegala2006}, and question answering \cite{ravichandran2002}. 
+
+Traditional approaches to temporal relation classification use machine-learning-based classifiers \cite{mani2006} based on local information alone, i.e., they only consider a specific pair of temporal entities at a time.
+Entities that have temporal connections to the entities in the pair are not considered, thus potentially leading to contradictions within a document.
+For instance, the system might predict that A happens before B, B happens before C, and A happens after C, which are mutually contradictory.
+
+In this paper, we tackle the problem of contradictory predictions using a {\it stacked learning} approach \shortcite{stacked}. 
+Stacked learning is a machine learning framework that allows the incorporation of non-local information into a structured prediction problem, and it has proven useful in dependency parsing \cite{martins2008}. 
+We use stacked learning to utilize the results of {\it temporal inference} as non-local features in temporal relation classification.
+To perform temporal inference, we use timegraphs \shortcite{timegraph}, representing temporal connectivity of all temporal entities in each document.
+
+Global approaches for tackling the aforementioned problem have been previously proposed \cite{chambers2008,yoshikawa2009,denis2011predicting,do2012joint}.
+\citeA{chambers2008} used integer linear programming (ILP) to maximize the confidence scores of the output of local classifiers in order to resolve the contradictory prediction problem.
+\citeA{do2012joint} constructed a globally coherent timeline for an article using ILP, leveraged event coreference to support the timeline construction, and then associated each event with a precise time interval.
+However, both studies focused only on the temporal relations between events and used the reduced sets of the temporal relations: \citeA{chambers2008} used \emph{\footnotesize BEFORE}, \emph{\footnotesize AFTER}, and \emph{\footnotesize VAGUE}, while \citeA{do2012joint} used \emph{\footnotesize BEFORE}, \emph{\footnotesize AFTER}, \emph{\footnotesize OVERLAP}, and \emph{\footnotesize NO RELATION.}
+\citeA{denis2011predicting} used ILP with a full set of temporal relations but enforced temporal relation coherence only on particular sets of events, rather than on the entire documents. 
+
+\citeA{yoshikawa2009} proposed a Markov logic model (MLN) to jointly predict the temporal relations between events and time expressions. 
+They also used a reduced set of relation types, i.e., \emph{\footnotesize BEFORE}, \emph{\footnotesize OVERLAP}, \emph{\footnotesize AFTER}, \emph{\footnotesize BEFORE-OR-OVERLAP}, \emph{\footnotesize OVERLAP-OR-AFTER}, and \emph{\footnotesize VAGUE}.
+Our method differs from \citeA{yoshikawa2009} as they used transition rules to enforce consistency within each triplet of relations, but our method can also work with a set comprising more than three relations.
+Moreover, our work uses the full set of temporal relations specified in TimeML, rather than the reduced set used in \citeA{chambers2008} and \citeA{yoshikawa2009}.
+
+We evaluate our method on the TempEval-3 Task C-relation-only data, which provides a system with all the appropriate temporal links and needs the system to only classify the relation types.
+The results show that exploiting the probability values in the stacked learning approach significantly improves classification performance.
+By performing 10-fold cross-validation on the Timebank corpus, we can achieve an F1 score of 60.25\% based on graph-based evaluation, which is 0.90 percentage points \textit{(pp)} higher than that of the local approach. 
+
+We compared our system to state-of-the-art systems that use global information in temporal relation classification and found that our system outperforms those systems. 
+Our system can achieve an accuracy of 7.7 \textit{pp} and 0.9 \textit{pp}, higher than that of Chambers' and Yoshikawa's, respectively. 
+The use of a stacked learning approach enables us to include a large number of features in our models, improving our results over those of \shortciteA{yoshikawa2009}, since including a large number of features into MLN is difficult and computationally expensive.
+
+The remainder of the paper is organized as follows.
+Section \ref{sec:trc} explains the temporal relation classification task and Timebank corpus.
+Section \ref{sec:timefeat} describes the stacked model for the temporal relation classification task, relation inference process used for boosting the performance of the classifiers, and integration of probability values in the stacked model.
+Section \ref{sec:exp} presents the experimental evaluation and its results as well as the analysis.
+Finally, we discuss the results in Section \ref{sec:discussion} and conclude with directions for future work in Section \ref{sec:conclusion}.
+
+
+\section{Temporal Relation Classification}
+\label{sec:trc}
+
+Temporal relation classification is one of the subtasks of TempEval-3 \cite{naushad2013}.
+According to TempEval-3, a temporal annotation task can be separated into three subtasks: temporal expression extraction (Task A), event extraction (Task B), and temporal link identification and relation classification (Task C). 
+Our work, similar to the previous work mentioned in Section \ref{sec:intro}, does not automatically extract events and temporal expressions but focuses only on the relation classification task (Task C-relation-only).
+
+Following TempEval-3, we consider the following four kinds of temporal relations: 
+(1) relations between an event and the \textit{Document Creation Time (DCT)}, 
+(2) relations between two events in the same sentence, 
+(3) relations between an event and a temporal expression in the same sentence, and 
+(4) relations between two events in consecutive sentences.
+
+
+\subsection{Timebank corpus}
+\label{subsec:tb}
+
+The Timebank corpus, introduced by \citeA{timebank}, is a human-annotated corpus commonly used in training and evaluating a temporal relation classifier.
+It is annotated following the TimeML specification to indicate events, temporal expressions, and temporal relations.
+
+It also provides five attributes, i.e., \textit{class, tense, aspect, modality,} and \textit{polarity}, associated with each event \textit{\small (EVENT)}, and four attributes, i.e., \textit{type, value, functionInDocument,} and \textit{temporalFunction}, associated with each temporal expression \textit{\small (TIMEX3)}.
+A TIMEX tag can be used to annotate a date, time, duration, and set of dates and times. 
+An example of an annotated event and temporal expression is shown below.
+The sentence is taken from wsj\_0292.tml in the Timebank corpus.
+
+\begin{framed}
+\textit{\small In $<$TIMEX3 tid="t88" type="DURATION" value="P9M" temporalFunction="true" functionInDocument="NONE" endPoint="t0"$>$the first nine months$<$/TIMEX3$>$, profit $<$EVENT eid="e30" class="OCCURRENCE"$>$rose$<$/EVENT$>$ 10\% to \$313.2 million, or \$3.89 a share, from \$283.9 million, or \$3.53 a share.}
+
+\textit{\small $<$MAKEINSTANCE eventID="e30" eiid="ei349" tense="PAST" aspect="NONE" polarity="POS" pos="VERB" /$>$}
+\end{framed}
+
+In addition to an \textit{\small EVENT} tag, which includes a \textit{class} attribute, an event is annotated with one or more \textit{\small MAKEINSTANCE} tags that include information pertaining to a particular instance of the event, including \textit{tense, aspect, modality,} and \textit{polarity}. 
+In the above example, there is no modal word in the sentence, so the \textit{modality} attribute does not appear.
+
+A pair of temporal entities, including events and temporal expressions, annotated as a temporal relation is called a TLINK.
+Temporal relation classification is the task of classifying TLINKs into temporal relation types.
+We use the complete set of TimeML relations, which includes 14 types of temporal relations: 
+\emph{{\footnotesize BEFORE, AFTER, IMMEDIATELY BEFORE, IMMEDIATELY AFTER, INCLUDES, IS INCLUDED, DURING, DURING INVERSE, SIMULTANEOUS, IDENTITY, BEGINS, BEGUN BY, END,}} and \emph{{\footnotesize ENDED BY.}}
+However, in TempEval-3, \emph{\footnotesize SIMULTANEOUS} and \emph{\footnotesize IDENTITY} are regarded as the same relation type, so we replace all \emph{\footnotesize IDENTITY} relations with \emph{\footnotesize SIMULTANEOUS}.
+
+Considering the example mentioned above, the temporal relation is annotated as follows.
+
+\begin{framed}
+\textit{\small $<$TLINK lid="l23" relType="DURING" eventInstanceID="ei349" relatedToTime="t88"  /$>$}
+\end{framed}
+
+From the annotated relation above, the event \textbf{rose (e30)} happens \textit{\footnotesize DURING} the temporal expression \textbf{the first nine months (t88)}.
+
+
+\section{Stacked model for temporal relation classification}
+\label{sec:timefeat}
+
+Rather than using only local information on two entities in a TLINK, we used more global information that can be extracted from a document's timegraph, which represents temporal entities and their relations.
+Our motivation is that temporal relations of nearby TLINKs in a timegraph provide useful information for predicting the relation type of a given TLINK. 
+For instance, consider the following sentence and temporal connectivity shown in Figure \ref{fig:connect}, which is constructed from the temporal entities and relations appearing in the sentence.
+
+\begin{framed}
+\textit{About 500 people \textbf{attended (e1)} a Sunday night memorial for the Buffalo-area physician who performed abortions, \textbf{one year (t1)} after he was \textbf{killed (e2)} by a sniper's bullet.
+}
+\end{framed}
+
+It can be seen that the relations between {\itshape\textbf{e1}} and \emph{\textbf{t1}} and the relation between \emph{\textbf{t1}} and \emph{\textbf{e2}} are useful in order to predict the relation between \emph{\textbf{e1}} and \emph{\textbf{e2}}.
+That is to say, if we know that \emph{\textbf{e1}} puts an end to the period \emph{\textbf{t1}}, and the period \emph{\textbf{t1}} started from the occurrence of \emph{\textbf{e2}}, then we can infer that \emph{\textbf{e1}} must have happened after \emph{\textbf{e2}}.
+
+Figure \ref{fig:connect2} shows another example of a group of temporal relations that has a longer path. 
+In this example, the relation between \emph{\textbf{e4}} and \emph{\textbf{e3}} can be inferred from nearby relations, i.e., (1) \emph{\textbf{e4}} {\em AFTER} \emph{\textbf{e2}} and \emph{\textbf{e2}} {\em AFTER} \emph{\textbf{e1}} imply  \emph{\textbf{e4}} {\em AFTER} \emph{\textbf{e1}}, (2) \emph{\textbf{e4}} {\em AFTER} \emph{\textbf{e1}} and \emph{\textbf{e1}} {\em SIMULTANEOUS} \emph{\textbf{e3}} imply \emph{\textbf{e4}} {\em AFTER} \emph{\textbf{e3}}.
+
+\begin{figure}[b]
+\begin{minipage}[b]{.45\textwidth}
+\begin{center}
+\includegraphics{22-3ia2f1.eps}
+\end{center}
+\caption{Temporal relations. Path length $\leq$ 2}
+\label{fig:connect}
+\end{minipage}
+\hfill
+\begin{minipage}[b]{.45\textwidth}
+\begin{center}
+\includegraphics{22-3ia2f2.eps}
+\end{center}
+\caption{Temporal relations. Path length $\leq$ 3}
+\label{fig:connect2}
+\end{minipage}
+\end{figure}
+
+Many machine learning approaches, such as stacked learning, MLNs, and structured perceptrons, exist that can utilize global features.
+However, each method has its advantages and disadvantages.
+An MLN can easily model dependencies between the temporal entities but is limited in using high-dimensional features, e.g., bags of words and n-grams, which are considered to be very powerful features for temporal relation classification.
+In a structured perceptron, computation time increases exponentially with the number of possible labels, unless the structure is sufficiently simple for an efficient searching algorithm, such as the Viterbi algorithm, to be used in finding the best solution.
+A stacked learning method enables a learner to be aware of the labels of nearby entities by using more than one stage of learning.
+In each stage, we can use any kind of efficient learner that can handle high-dimensional features, such as a support vector machine and logistic regression, enabling it to utilize rich linguistic and global features simultaneously without consuming excessive amounts of computation time.
+
+Motivated by its reasonable training time and the ability to use both high-dimensional and global features, we based our framework on the stacked learning method \shortcite{stacked}, which includes two stages of classification, as illustrated in Figure \ref{fig:stack}.
+The first stage uses a local model that predicts each TLINK independently.
+In the second stage, the relation types of neighbouring TLINKs, i.e., the output from the first stage, are used as non-local features.
+Since the labels in the timegraphs in the test stage are drawn from predictions provided by the local model, the training data for the second stage is created using cross-validation techniques over the original data, replacing the true labels with the predicted labels.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{22-3ia2f3.eps}
+\end{center}
+\hangcaption{Stacked learning. The output from the first stage is treated as features for the second stage. The final output is predicted using label information of nearby TLINKs.}
+\label{fig:stack}
+\end{figure}
+
+
+\subsection{Classification models}
+\label{subsec:overview}
+
+This section explains our stacked learning approach for temporal relation classification.
+The local (first stage of stacked learning) and global models (second stage) are described in Subsection \ref{subsubsec:localmodel} and \ref{subsubsec:globalmodel}, respectively.
+
+
+\subsubsection{Local pairwise model}
+\label{subsubsec:localmodel}
+
+In the local pairwise model, temporal relation classification considers only one pair of temporal entities at a time, as illustrated in Figure \ref{fig:local}.
+We use a supervised machine learning approach and the basic feature set that can be easily extracted from the document's text and the set of features proposed in \citeA{uttime}, which utilizes deep syntactic information.
+The local features at different linguistic levels are listed in Table \ref{tab:localfeature}.
+For each TLINK, the local features include event and time attributes, morphosyntactic, lexical semantic, and deep syntactic information.
+In addition, the matching of event attributes is used as a local feature for event--event TLINKs (E--E).
+
+The first stage, as shown in Figure \ref{fig:local}, uses the local classifiers and predicts the relation types of all TLINKs.
+Two classifiers are used, one for E--E, and the other for event--time TLINKs (E--T).
+
+\begin{table}[t]
+\caption{Local features}
+\label{tab:localfeature}
+\input{02table01.txt}
+\end{table}
+
+\begin{figure}[t]
+\begin{minipage}[b]{181pt}
+\begin{center}
+\includegraphics{22-3ia2f4.eps}
+\end{center}
+\caption{Local pairwise classification}
+\label{fig:local}
+\end{minipage}
+\hfill
+\begin{minipage}[b]{157pt}
+\begin{center}
+\includegraphics{22-3ia2f5.eps}
+\end{center}
+\caption{Timegraph}
+\label{fig:timegraph}
+\end{minipage}
+\end{figure}
+
+
+\subsubsection{Global model}
+\label{subsubsec:globalmodel}
+
+\begin{table}[b]
+\caption{Timegraph features}
+\label{tab:graphfeature}
+\input{02table02.txt}
+\end{table}
+
+In the second stage, the document's timegraph is constructed, and the output from the first stage is associated with TLINKs in the graph. 
+The classifiers in the second stage use the information from nearby TLINKs and predict the final output.
+We utilize features extracted from the documents' timegraphs, listed in Table \ref{tab:graphfeature}, in the second stage of the stacked learning. 
+The timegraph features include the information extracted from adjacent nodes and links, other paths that connect the temporal entities of the predicted TLINK, generalized versions of the paths, and tuples of edges and vertices along the paths.  
+We treat timegraphs as directed graphs and double the number of edges by adding new edges with opposite relation types and directions to every existing edge.
+For example, if a graph contains an edge \emph{\textbf{e1}}\_\emph{\footnotesize BEFORE}\_\emph{\textbf{e2}}, we add a new edge \emph{\textbf{e2}}\_\emph{\footnotesize AFTER}\_\emph{\textbf{e1}}.
+
+An example of a document's timegraph constructed from the TLINKs in Figure \ref{fig:local} is shown in Figure \ref{fig:timegraph}.
+
+
+\subsubsection{Using probability values as real-valued features}
+\label{subsubsec:probfeature}
+
+In this section, the probability values of the prediction in the first stage are used in temporal relation classification as real-valued features.
+
+For the first stage (local model) of stack learning, we use logistic regression classifiers, thereby obtaining not only the output relation, but also the probability values (confidence scores) of all relation types.
+We use these probability values obtained from the first stage as real-valued features in the second stage (global model) of the classifier.
+
+\begin{table}[b]
+\caption{Probability values as real-valued features}
+\label{tab:probfeature}
+\input{02table03.txt}
+\end{table}
+
+Table \ref{tab:probfeature} describes the real-valued features that we construct from the output relation 
+types and their probability values.
+An example of the features is illustrated in Figure \ref{fig:prob}. 
+In Figure~\ref{fig:prob}(a), the first stage predicts the temporal relations between \emph{\textbf{e1}}--\emph{\textbf{e3}} and \emph{\textbf{e3}}--\emph{\textbf{t1}} and provides the probability values of each relation type. 
+We create the timegraph features in Figure \ref{fig:prob}(b) by generating all combinations of the relation types and calculating the real-valued features by multiplying the probability values.
+All possible inference results of the features in Figure \ref{fig:prob}(b) are also used as timegraph features, as shown in Figure \ref{fig:prob}(c).
+If the inference result is \emph{\footnotesize UNDEFINED}, the feature will not be used.
+
+
+\subsection{Relation inference and time--time connection}
+\label{subsec:infer}
+
+We call TLINKs that have more than one path between the temporal entities \emph{multipath TLINKs}.
+The coverage of the multipath TLINKs is shown in Table \ref{tab:coverage}.
+The original Timebank corpus has 4,983 TLINKs in total, but only 282 of them have multiple paths between the specific pairs of temporal entities in the timegraphs.
+As only 5.65\% of the annotated TLINKs in the table are multipath TLINKs, the annotated entities in the Timebank corpus comprise loosely connected timegraphs. 
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{22-3ia2f6.eps}
+\end{center}
+\hangcaption{Using probability values as real-valued features. (a) Probability values of the output from the first stage. (b) All possible paths with probability values as real-valued features. (c) All possible inference results from the possible paths.}
+\label{fig:prob}
+\end{figure}
+
+\begin{table}[t]
+\caption{Coverage of multi-path TLINKs}
+\label{tab:coverage}
+\input{02table04.txt}
+\end{table}
+
+Since most of the timegraph features are applicable only to multipath TLINKs, it is important to have dense timegraphs.
+To alleviate the timegraph sparsity problem, the relation inference of Subsection \ref{subsubsec:infer} and the time--time connection of Subsection \ref{subsubsec:time--time} are performed to increase timegraph density.
+
+
+\subsubsection{Relation inference}
+\label{subsubsec:infer}
+
+\begin{table}[p]
+\begin{center}
+\rotatebox[origin=c]{90}{
+\begin{minipage}{571pt}
+\setlength\captionwidth{571pt}
+\hangcaption{Temporal relation inference. If A has relation X to B and B has relation Y to C, then A has relation Z to C. The inference relation Z is shown in the table.}
+\label{tab:inference}
+\input{02table05.txt}
+\end{minipage}}
+\end{center}
+\end{table}
+
+On the basis of the transitivity table proposed by \shortciteA{allen1983}, we construct a full set of inference relations presented in Table \ref{tab:inference}.
+The table shows the results of temporal relation inference for every case, i.e., if a temporal entity \textit{A} has relation \textit{X} to an entity \textit{B} and the entity \textit{B} has relation \textit{Y} to an entity \textit{C}, then \textit{A} has relation \textit{Z} to \textit{C}. 
+We create new E--E and E--T connections between entities in a timegraph by following this set of inference rules.
+For example, if \emph{\textbf{e1}} happens \emph{\footnotesize AFTER} \emph{\textbf{e2}} and \emph{\textbf{e2}} happens \emph{\footnotesize IMMEDIATELY AFTER} \emph{\textbf{e3}}, then we infer a new temporal relation ``\emph{\textbf{e1}} happens \emph{\footnotesize AFTER} \emph{\textbf{e3}}''.
+
+In this paper, we perform two types of inference, i.e., partial and full inference. 
+For partial inference, we add a new connection only when the inference gives only one type of temporal relation as a result of the relation inference.
+Full inference adds new connections for all of the inference results in Table \ref{tab:inference}.
+
+Figure \ref{fig:infertg}(b) shows a simple example of the timegraph after adding new inference relations to the original timegraph in Figure \ref{fig:infertg}(a).
+For example, knowing that the relation \emph{\textbf{e1}}--\emph{\textbf{t1}} is \emph{\footnotesize SIMULTANEOUS} and \emph{\textbf{t1}}--\emph{\textbf{e2}} is \emph{\footnotesize AFTER}, we can infer that the new temporal relation \emph{\textbf{e1}}--\emph{\textbf{e2}} is \emph{\footnotesize AFTER}.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{22-3ia2f7.eps}
+\end{center}
+\hangcaption{Relation inference and time--time connection. (a) Original timegraph. (b) Timegraph after relation inference. Two relations (e1--e2, e1--e3) are added. (c) Timegraph after time--time connection (t1--t2) and relation inference. Three relations (e1--e2, e1--e3, e2--e3) are added.}
+\label{fig:infertg}
+\end{figure}
+\label{fig:tg} 
+\label{fig:infer} 
+\label{fig:infertt} 
+
+
+\subsubsection{Time--time connection}
+\label{subsubsec:time--time}
+
+Similar to \citeA{chambers2007} and \shortciteA{tatu2008}, we also create new connections between time entities in a timegraph by applying rules to the normalized values of time entities provided in the corpus.
+
+Figure \ref{fig:infertg}(c) shows the timegraph after adding a time--time link and new inference relations to the original timegraph in Figure \ref{fig:infertg}(a).
+When the normalized value of \emph{\textbf{t2}} is greater than the value of \emph{\textbf{t1}}, a TLINK with the relation type \emph{\footnotesize AFTER} is added between them. 
+After that, as introduced in Subsection \ref{subsubsec:infer}, new inference relations (\emph{\textbf{e1}}--\emph{\textbf{e2}}, \emph{\textbf{e1}}--\emph{\textbf{e3}}, \emph{\textbf{e2}}--\emph{\textbf{e3}}) are added.
+
+\begin{table}[b]
+\caption{Number of relations in Timebank}
+\label{tab:te2_data}
+\input{02table06.txt}
+\end{table}
+
+\begin{table}[b]
+\caption{Number of TLINKs for each relation type after relation inference and time--time connection}
+\label{tab:labeldstr}
+\input{02table07.txt}
+\end{table}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-3ia2f8.eps}
+\end{center}
+\hangcaption{Histogram of the increased number of TLINKs for each document (The x-axis shows the ratio between the number of TLINKs after pre-processing and original number of TLINKs. The y-axis shows the number of documents.)}
+\label{fig:histnumtlink}
+\end{figure}
+
+As the number of relations becomes excessively large and the computation time increases drastically after performing time--time connection and relation inference recursively, we limit the number of TLINKs for each document's timegraph to 10,000 relations.
+The total number of TLINKs for all documents in the corpus is shown in Table \ref{tab:te2_data}.
+The first row is the number of human-annotated relations. 
+The second and third rows show the total number after performing relation inference and time--time connection, respectively. 
+Table \ref{tab:labeldstr} shows the number of TLINKs for each relation type.
+The number of TLINKs after inference for some relation types, e.g., \emph{\footnotesize IBEFORE}, \emph{\footnotesize IAFTER}, \emph{\footnotesize BEGINS}, \emph{\footnotesize BEGUN BY}, and \emph{\footnotesize ENDED BY}, decreases from the original number since the inference is performed over the results predicted by the first stage of the stacking framework.
+
+Figure \ref{fig:histnumtlink} shows the distribution of times the number of TLINKs for each document increases after performing a time--time connection and relation inference.
+As we can see from the histogram, the number of TLINKs for most of the documents' timegraphs increases by a factor of 50 when compared with the original timegraphs and preprocessing can raise the number of TLINKs for a few documents by factors of 200--500.
+
+
+\section{Experimental evaluation and results}
+\label{sec:exp}
+
+For the baselines and both stages of stacked learning, we used LIBLINEAR \cite{liblinear}, an open source library for large-scale linear classification, and configured it to work as L2-regularized logistic regression classifiers. 
+
+We trained our models on the Timebank corpus, introduced in Subsection \ref{subsec:tb}, which was provided by the TempEval-3 organizer. 
+The corpus contains a total of 183 newswire articles.
+
+\begin{table}[b]
+\caption{Combinations of features and configurations}
+\label{tab:feature_set}
+\input{02table08.txt}
+\end{table}
+
+We performed the experiments using various combinations of features and configurations.
+For cross-validation evaluation over the training data, we performed a grid search to find the best regularization coefficient for each model, in which we used the same regularization coefficient value for every fold. 
+We also used that value in the test stage.
+Refer to Table \ref{tab:feature_set} for the details of each configuration.
+
+We performed the relation inference in both training and testing stages in order to increase timegraph density.  
+However, we did not count the propagated relations as evaluation relations. 
+We evaluated only the relations annotated in the original corpus.
+
+\subsection{Results on the training data}
+
+The performance analysis is conducted based on 10-fold cross-validation over the training data.\footnote{We performed the document-level ten-fold cross-validation. The folds were generated by: (1) sorting the documents in the ascending order of file names (2) selecting the first, $11^{th}$,  $21^{st}$, ... documents to be the test data of the first fold and using the others as the training data (3) selecting the second, $12^{th}$, $22^{nd}$, ... documents to be the test data of the second fold and using the others as the training data, and so on.}
+We evaluated the system using both pairwise accuracy and the graph-based evaluation metric proposed by \shortciteA{naushad2011}.
+Table \ref{tab:resulttrain} shows the classification results over the training set, using graph-based evaluation as well as the accuracies of the E--E and E--T models separately.
+
+\begin{table}[b]
+\hangcaption{10-fold cross-validation results on the training data when all of the features are used. Refer to Table \ref{tab:feature_set} for the details of each configuration setting.}
+\label{tab:resulttrain}
+\input{02table09.txt}
+\end{table}
+
+Based on the graph-based evaluation, the classification F1 score improved by 0.36 \textit{pp} (difference between A1 and D1) and 0.34 \textit{pp} (difference between A2 and F2), compared with the respective local models with and without deep syntactic features. 
+However, by looking at the accuracies of the E--E and E--T classification results, we can see that the stacked method improved the prediction of the E--E models but decreased the accuracy of the E--T models.
+
+Table \ref{tab:topF1} shows the top F1 scores of the different sets of graph features and configurations.
+In every model shown in this table, both local and deep features are used.
+The twenty highest ranking results in the table used the stacked models, and the bottom row shows the results of the local model.
+The definitions of the acronyms of each feature set can be found in Table \ref{tab:graphfeature}.  
+We can see from the table that the stacked models with probability values outperformed other configurations because every model that ranked in the twenty highest F1 scores used probability values as real-valued features.
+The best model without probability values ranked $41^{st}$ in our feature experiment, proving that probability values are helpful.
+
+\begin{table}[b]
+\hangcaption{Twenty highest F1 scores of the different selected sets of timegraph features. Local and deep features are used in every model. The scores were obtained by performing 10-fold cross-validation over the training data.}
+\label{tab:topF1}
+\input{02table10.txt}
+\end{table}
+
+Compared to the local model with deep features (baseline), the stacked model with the highest F1 score (60.25\%) changed the relation types of 259 (out of 2,520) E--E TLINKs and 173 (out of 2,463) E--T TLINKs.
+The overall improvement of E--E and E--T classification is statistically significant* (p $<0.01$, McNemar's test, two-tailed) when the best feature set and configuration are applied to the system.
+
+We have also performed a more detailed evaluation by dividing TLINKs into four categories: 
+(1) two events within the same sentence (E--E (SS)), 
+(2) two events in adjacent sentences (E--E (DS)), 
+(3) an event and a temporal expression within the same sentence (E--T (SS)), and
+(4) an event and the DCT (E--T (DCT)).
+The number of TLINKs for each category is shown in Table~\ref{tab:4c_num}. 
+We trained the models on the Timebank corpus separately for each link type and performed a grid search to find the best regularization parameters for each model.
+
+Table \ref{tab:4c} shows the accuracy (\%) of each classifier by performing 10-fold cross-validations.
+The weighted average values, i.e., E--E and E--T, are comparable to the results in Table \ref{tab:resulttrain}.
+The accuracy for the E--E and E--T classifications of F2, i.e., the best configuration, improved by 0.79 \emph{pp} and 2.31 \emph{pp}, respectively, compared with F2 of Table \ref{tab:resulttrain}.
+We also performed graph-based evaluation on the F2 classification results and achieved the F1 score, precision, and recall measures of 61.63\%, 61.55\%, and 61.70\%, which is the best performance thus far.
+The results in Table \ref{tab:4c} also suggest that the deep syntactic information is more useful in classifying E--E (SS) TLINKs than in classifying E--T (SS) TLINKs.
+The timegraph features yield better results for E--E (SS) and E--E (DS) classifiers, while E--T (SS) and E--T (DCT) classifiers show inconsistent results between training with and without deep syntactic information.
+The overall improvement of E--E and E--T classification (F2 over A2) using timegraph features when deep syntactic information is used is statistically significant*** (p $<$ 0.001, McNemar's test, two-tailed).
+
+\begin{table}[b]
+\caption{Number of TLINKs for each link type when using four classifiers}
+\label{tab:4c_num}
+\input{02table11.txt}
+\end{table}
+
+\begin{table}[b]
+\hangcaption{Accuracy (\%) by performing 10-fold cross-validation over the Timebank corpus.
+E--E and E--T show the weighted averages over E--E (SS) and E--E (DS) and over E--T (SS) and E--T (DCT), respectively.}
+\label{tab:4c}
+\input{02table12.txt}
+\end{table}
+
+
+\subsection{Results on the test data}
+
+We performed an evaluation on the test data by dividing TLINKs into two categories, E--E and E--T.
+Table \ref{tab:resulttestg} shows the results on the test data containing 20 newswire articles, which were manually annotated and provided by the TempEval-3 organizer.
+The stacked models with partial inference (i.e., C1, C2) improve the classification F1 score by 0.95 \textit{pp} (difference between A1 and C1) and 2.37 \textit{pp} (difference between A2 and C2), compared to the respective baselines with and without deep syntactic features. 
+However, this is not statistically significant \mbox{($\mathrm{p} >0.1$}, \mbox{McNemar's} test, two-tailed). 
+In addition, incorporating probability values into the model degrades the classification results (although this is, again, not statistically
+significant).
+
+\begin{table}[b]
+\hangcaption{Results on the test data when all of the features are used. Refer to Table \ref{tab:feature_set} for the details of each configuration setting.}
+\label{tab:resulttestg}
+\input{02table13.txt}
+\end{table}
+
+As shown in Table \ref{tab:resultcompare}, we also compared our system to other systems that were submitted to TempEval-3's task C-relation-only.
+To ensure a fair comparison, the models were trained on the Timebank and AQUAINT corpora, containing 256 newswire articles provided by TempEval-3's organizer.
+We do not use the AQUAINT corpus in cross-validation evaluation, because there is much duplication in the data, which we expect would reduce the reliability of the results.
+
+Note that all the TempEval-3 participants use only local information for temporal relation classification, and UTTime \shortcite{uttime} utilizes deep syntactic features.
+
+We can see that the global model (F2) can achieve better results.
+With all of the features applied to the model, it reaches an F1 score of 57.30\%. 
+We also conducted the experiment using the selected set of features that obtained the highest F1 score in Table \ref{tab:topF1} and achieved an F1 score of 57.78\%, outperforming all other systems.
+The training times for the local model (A2) and global models (F2, G2) were 16.89, 21.50, and 25.50 seconds, respectively.\footnote{The training times do not include feature pre-processing. The experiments were run on a 64-bit machine with Intel Core i7 1.8~GHz CPU, and 4~GB main memory.}
+
+\begin{table}[t]
+\hangcaption{Comparison to other systems submitted to TempEval-3. The TempEval-3 test data set was used.}
+\label{tab:resultcompare}
+\input{02table14.txt}
+\end{table}
+
+
+\subsection{Comparison with the state of the art}
+
+We compared our system to those of \shortciteA{chambers2008} and \shortciteA{yoshikawa2009}, which use global information to improve the accuracy of temporal relation classification.
+
+In \shortciteA{chambers2008}, the experiments were performed on the Timebank corpus over the relations \textit{BEFORE} and \textit{AFTER}.
+They merged \textit{IBEFORE} and \textit{IAFTER} with those respective relations and ignored all other relations.
+Table \ref{tab:resultcompare1} shows our results when using the same experimental setting.
+Although the difference when using the local and stacked models is not significant, the overall scores of our system were better than those of their system.
+ 
+We compared our system with that of \shortciteA{yoshikawa2009} that was evaluated based on TempEval-07's rules and data set \cite{semeval2007}, in which the relation types were reduced to six: \emph{\footnotesize BEFORE}, \emph{\footnotesize OVERLAP}, \emph{\footnotesize AFTER}, \emph{\footnotesize BEFORE-OR-OVERLAP}, \emph{\footnotesize OVERLAP-OR-AFTER}, and \emph{\footnotesize VAGUE}.
+The evaluation was performed using 10-fold cross-validation over the same data set as that of their reported results.
+
+According to TempEval-07's rules, there are three tasks, as follows:
+(1) Task A: temporal relations between the events and the time expressions appearing in the same sentence,
+(2) Task B: temporal relations between the events and the DCT,
+(3) Task C: temporal relations between the main verbs of adjacent sentences.
+
+\begin{table}[t]
+\hangcaption{Comparison with Chambers' system (accuracy (\%)) by performing 10-fold cross-validation over the Timebank corpus. The configuration of our system is described in Table \ref{tab:feature_set}.}
+\label{tab:resultcompare1}
+\input{02table15.txt}
+\end{table}
+
+\begin{table}[t]
+\hangcaption{Comparison with Yoshikawa's system (accuracy (\%)) by performing 10-fold cross-validation over the TempEval-07 training data. The configuration of our system is described in Table~\ref{tab:feature_set}.}
+\label{tab:resultcompare2}
+\input{02table16.txt}
+\end{table}
+
+As shown in Table \ref{tab:resultcompare2}, our system can achieve better results on tasks B and C even without deep syntactic features but does not perform as well as their system on task A.
+We performed statistical significance tests on the overall results for all tasks of G1 and G2, and then compared the performance with the baselines to show the usefulness of our stacking approach.
+Compared with the baselines (A1, A2), the overall improvement is statistically significant* (p $<$ 0.05, McNemar's test, two-tailed) without deep syntactic features and becomes more statistically significant** (p $<$ 0.01, McNemar's test, two-tailed) when deep syntactic information is applied to the system.
+Compared with Yoshikawa09's system, the overall results for all tasks have an accuracy of approximately 2.4 \textit{pp} (difference between Yoshikawa09 (local) and G1) higher than the result of their local model and 0.9 \textit{pp} (difference between Yoshikawa09 (global) and G2) higher than that of their global model.
+Note that \shortciteA{yoshikawa2009} did not use deep syntactic features in their system.
+
+The stacked model enhances the classification accuracy of task A when timegraphs are sufficiently dense.
+Deep syntactic features can be extracted only when temporal entities are in the same sentences hence improving the model for task A (event--time pairs in the same sentence).
+However, these features clearly lower the accuracy of task C, since there are very few event--event pairs that appear in the same sentences (violating the definition of task C).
+This is most likely because the sparsity of the deep features degrades performance in task C.
+Moreover, the deep syntactic features do not assist task B in the local model, because we cannot extract any of them from TLINKs between the events and the DCT.
+However, these features contribute slightly to the improvement in the stacked model, since the accuracy of the prediction of task A is increased in the first stage of the stacked model.
+As a result, the timegraph features extracted from the output of the first stage are better than those extracted from the local model trained only on baseline features.
+
+
+\section{Discussion}
+\label{sec:discussion}
+
+As we can see from Tables \ref{tab:resulttrain} and \ref{tab:resulttestg}, although deep syntactic features can significantly improve classification accuracy, additional pre-processing is required.
+Moreover, deep parsers cannot parse sentences accurately in some domains.
+Thus, it is sometimes not practical to use this kind of features in real-world temporal relation classification problems.
+By applying the stacked learning approach to the temporal relation classification task, the system with only local features can achieve good classification results compared with the system with deep syntactic features.
+The stacked model also has the advantage that it is easy to build and does not consume excessive training time compared with the MLNs used by \shortciteA{yoshikawa2009}, which are computationally expensive, in general, and infeasible for large training sets.
+
+From Table \ref{tab:resulttrain} and \ref{tab:resulttestg}, we see that the inference and time--time connection described in Section \ref{subsec:infer} sometimes degrade performance, which is presumably because the number of features increases severely with the number of TLINKs.
+Table \ref{tab:dictsize} shows the total number and average number of features used for one TLINK for each configuration.
+However, when the adjacent nodes and edges are removed from the feature set, the inference (partial) and time--time connection play an important role in classification improvement.
+As we see from Table \ref{tab:topF1}, these steps were performed in all the systems with the top F1 scores.
+The adjacent nodes and edges decrease accuracy as they significantly increase the number of features, especially when the relation inference and time--time connection are performed; hence, excluding those features results in a significant improvement.
+
+Full relation inference is not helpful and also decreases accuracy.
+This is probably because of the severe increase in the \emph{adjacent nodes and edges} features when too many TLINKs are added to the timegraphs.
+Having too many features also causes the sparsity problem.
+As we can see from Table \ref{tab:topF1}, only graph paths with a path length of 2 or 3 are useful, while including paths with a length of 4 into the models decreases the accuracy.
+
+\begin{table}[b]
+\hangcaption{Total number of features and average number of features for a TLINK. Refer to Table \ref{tab:feature_set} for the details of each configuration setting.}
+\label{tab:dictsize}
+\input{02table17.txt}
+\end{table}
+
+\begin{table}[b]
+\hangcaption{F1 score (\%) of the prediction for E--E TLINKs. The scores were obtained by performing 10-fold cross-validation over the training data. The details of each configuration are described in Table \ref{tab:feature_set}.}
+\label{tab:errorEE}
+\input{02table18.txt}
+\end{table}
+
+Based on the 10-fold cross-validation of the training data, the classification F1 scores (pairwise evaluation) for each relation type are shown in Tables \ref{tab:errorEE} and \ref{tab:errorET}.
+The relation types that have low numbers of occurrences in the training set, i.e., \emph{\footnotesize IBEFORE}, \emph{\footnotesize IAFTER}, \emph{\footnotesize BEGINS}, \emph{\footnotesize BEGUN\_BY}, \emph{\footnotesize ENDS}, and \emph{\footnotesize ENDED\_BY}, are almost completely misclassified.
+Unfortunately, the F1 scores do not provide any further insights into how each configuration of the stacked models affects the classification results.
+\begin{table}[t]
+\hangcaption{F1 score (\%) of the prediction for E--T TLINKs. The scores were obtained by performing 10-fold cross-validation over the training data. The details of each configuration are described in Table \ref{tab:feature_set}.}
+\label{tab:errorET}
+\input{02table19.txt}
+\vspace{-1\Cvs}
+\end{table}
+
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+\vspace{-0.5\Cvs}
+In this paper, a stacked model for the temporal relation classification task and incorporation of non-local features and probability values were proposed.
+We also applied relation inference rules and time--time connection to tackle the timegraph sparsity problem.
+An evaluation was conducted to verify the effectiveness of the proposed method, and the effectiveness of each feature type was analyzed.
+
+The evaluation results showed that using probability values as real-valued features can improve classification accuracy, especially when selecting the best feature set and model configuration. 
+Our system outperforms other systems that were submitted to TempEval-3 and is highly accurate even without applying deep syntactic features.
+The evaluation results also show that our system achieves better results than state-of-the-art systems.
+
+In future work, we intend to analyze the classification results further, particularly the effects of features on each relation type, and apply our method to other relation classification tasks, such as event extraction.
+
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Allen}{Allen}{1983}]{allen1983}
+Allen, J.~F. \BBOP 1983\BBCP.
+\newblock \BBOQ Maintaining Knowledge about Temporal Intervals.\BBCQ\
+\newblock {\Bem Communications of the ACM}, {\Bbf 26}  (11), \mbox{\BPGS\
+  832--843}.
+
+\bibitem[\protect\BCAY{Bollegala, Okazaki, \BBA\ Ishizuka}{Bollegala
+  et~al.}{2006}]{bollegala2006}
+Bollegala, D., Okazaki, N., \BBA\ Ishizuka, M. \BBOP 2006\BBCP.
+\newblock \BBOQ A Bottom-up Approach to Sentence Ordering for Multi-document
+  Summarization.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on
+  Computational Linguistics and the 44th Annual Meeting of the Association for
+  Computational Linguistics}, \mbox{\BPGS\ 385--392}.
+
+\bibitem[\protect\BCAY{Bos \BBA\ Markert}{Bos \BBA\ Markert}{2005}]{bos2005}
+Bos, J.\BBACOMMA\ \BBA\ Markert, K. \BBOP 2005\BBCP.
+\newblock \BBOQ Recognising Textual Entailment with Logical Inference.\BBCQ\
+\newblock In {\Bem Proceedings of the Conference on Human Language Technology
+  and Empirical Methods in Natural Language Processing}, \mbox{\BPGS\
+  628--635}.
+
+\bibitem[\protect\BCAY{Chambers \BBA\ Jurafsky}{Chambers \BBA\
+  Jurafsky}{2008}]{chambers2008}
+Chambers, N.\BBACOMMA\ \BBA\ Jurafsky, D. \BBOP 2008\BBCP.
+\newblock \BBOQ Jointly Combining Implicit Constraints Improves Temporal
+  Ordering.\BBCQ\
+\newblock In {\Bem Proceedings of the Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 698--706}.
+
+\bibitem[\protect\BCAY{Chambers, Wang, \BBA\ Jurafsky}{Chambers
+  et~al.}{2007}]{chambers2007}
+Chambers, N., Wang, S., \BBA\ Jurafsky, D. \BBOP 2007\BBCP.
+\newblock \BBOQ Classifying Temporal Relations between Events.\BBCQ\
+\newblock In {\Bem Proceedings of the 45th Annual Meeting of the ACL on
+  Interactive Poster and Demonstration Sessions}, \mbox{\BPGS\ 173--176}.
+
+\bibitem[\protect\BCAY{Denis \BBA\ Muller}{Denis \BBA\
+  Muller}{2011}]{denis2011predicting}
+Denis, P.\BBACOMMA\ \BBA\ Muller, P. \BBOP 2011\BBCP.
+\newblock \BBOQ Predicting Globally-coherent Temporal Structures from Texts via
+  Endpoint Inference and Graph Decomposition.\BBCQ\
+\newblock In {\Bem Proceedings of the 22nd International Joint Conference on
+  Artificial Intelligence}, \mbox{\BPGS\ 1788--1793}.
+
+\bibitem[\protect\BCAY{Do, Lu, \BBA\ Roth}{Do et~al.}{2012}]{do2012joint}
+Do, Q.~X., Lu, W., \BBA\ Roth, D. \BBOP 2012\BBCP.
+\newblock \BBOQ Joint Inference for Event Timeline Construction.\BBCQ\
+\newblock In {\Bem Proceedings of the 2012 Joint Conference on Empirical
+  Methods in Natural Language Processing and Computational Natural Language
+  Learning}, \mbox{\BPGS\ 677--687}.
+
+\bibitem[\protect\BCAY{Fan, Chang, Hsieh, Wang, \BBA\ Lin}{Fan
+  et~al.}{2008}]{liblinear}
+Fan, R.-E., Chang, K.-W., Hsieh, C.-J., Wang, X.-R., \BBA\ Lin, C.-J. \BBOP
+  2008\BBCP.
+\newblock \BBOQ LIBLINEAR: A Library for Large Linear Classification.\BBCQ\
+\newblock {\Bem Journal of Machine Learning Research}, {\Bbf 9}, \mbox{\BPGS\
+  1871--1874}.
+
+\bibitem[\protect\BCAY{Fellbaum}{Fellbaum}{2010}]{wordnet}
+Fellbaum, C. \BBOP 2010\BBCP.
+\newblock \BBOQ Wordnet.\BBCQ\
+\newblock {\Bem Theory and Applications of Ontology: Computer Applications},
+  \mbox{\BPGS\ 231--243}.
+
+\bibitem[\protect\BCAY{Laokulrat, Miwa, Tsuruoka, \BBA\ Chikayama}{Laokulrat
+  et~al.}{2013}]{uttime}
+Laokulrat, N., Miwa, M., Tsuruoka, Y., \BBA\ Chikayama, T. \BBOP 2013\BBCP.
+\newblock \BBOQ UTTime: Temporal Relation Classification using Deep Syntactic
+  Features.\BBCQ\
+\newblock In {\Bem the 2nd Joint Conference on Lexical and Computational
+  Semantics (*SEM), Volume 2: Proceedings of the Seventh International Workshop
+  on Semantic Evaluation (SemEval 2013)}, \mbox{\BPGS\ 88--92}.
+
+\bibitem[\protect\BCAY{Mani, Verhagen, Wellner, Lee, \BBA\ Pustejovsky}{Mani
+  et~al.}{2006}]{mani2006}
+Mani, I., Verhagen, M., Wellner, B., Lee, C.~M., \BBA\ Pustejovsky, J. \BBOP
+  2006\BBCP.
+\newblock \BBOQ Machine Learning of Temporal Relations.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on
+  Computational Linguistics and the 44th Annual Meeting of the Association for
+  Computational Linguistics}, \mbox{\BPGS\ 753--760}.
+
+\bibitem[\protect\BCAY{Manning, Surdeanu, Bauer, Finkel, Bethard, \BBA\
+  McClosky}{Manning et~al.}{2014}]{stanford}
+Manning, C.~D., Surdeanu, M., Bauer, J., Finkel, J., Bethard, S.~J., \BBA\
+  McClosky, D. \BBOP 2014\BBCP.
+\newblock \BBOQ The Stanford CoreNLP Natural Language Processing Toolkit.\BBCQ\
+\newblock In {\Bem Proceedings of the 52nd Annual Meeting of the Association
+  for Computational Linguistics: System Demonstrations}, \mbox{\BPGS\ 55--60}.
+
+\bibitem[\protect\BCAY{Martins, Das, Smith, \BBA\ Xing}{Martins
+  et~al.}{2008}]{martins2008}
+Martins, A. F.~T., Das, D., Smith, N.~A., \BBA\ Xing, E.~P. \BBOP 2008\BBCP.
+\newblock \BBOQ Stacking Dependency Parsers.\BBCQ\
+\newblock In {\Bem Proceedings of the Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 157--166}.
+
+\bibitem[\protect\BCAY{Miller \BBA\ Schubert}{Miller \BBA\
+  Schubert}{1990}]{timegraph}
+Miller, S.~A.\BBACOMMA\ \BBA\ Schubert, L.~K. \BBOP 1990\BBCP.
+\newblock \BBOQ Time Revisited.\BBCQ\
+\newblock {\Bem Computational Intelligence}, {\Bbf 6}, \mbox{\BPGS\ 108--118}.
+
+\bibitem[\protect\BCAY{Miyao \BBA\ Tsujii}{Miyao \BBA\
+  Tsujii}{2008}]{Miyao2008}
+Miyao, Y.\BBACOMMA\ \BBA\ Tsujii, J. \BBOP 2008\BBCP.
+\newblock \BBOQ Feature Forest Models for Probabilistic Hpsg Parsing.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 34}, \mbox{\BPGS\ 35--80}.
+
+\bibitem[\protect\BCAY{Pustejovsky, Hanks, Saur{\'{\i}}, See, Gaizauskas,
+  Setzer, Radev, Sundheim, Day, Ferro, \BBA\ Lazo}{Pustejovsky
+  et~al.}{2003}]{timebank}
+Pustejovsky, J., Hanks, P., Saur{\'{\i}}, R., See, A., Gaizauskas, R., Setzer,
+  A., Radev, D., Sundheim, B., Day, D., Ferro, L., \BBA\ Lazo, M. \BBOP
+  2003\BBCP.
+\newblock \BBOQ The TIMEBANK Corpus.\BBCQ\
+\newblock In {\Bem Proceedings of Corpus Linguistics 2003}, \mbox{\BPGS\
+  647--656}.
+
+\bibitem[\protect\BCAY{Pustejovsky, Ingria, Saur{\'{i}}, Casta{\~{n}}o,
+  Littman, Gaizauskas, Setzer, Katz, \BBA\ Mani}{Pustejovsky
+  et~al.}{2005}]{timeml}
+Pustejovsky, J., Ingria, R., Saur{\'{i}}, R., Casta{\~{n}}o, J., Littman, J.,
+  Gaizauskas, R., Setzer, A., Katz, G., \BBA\ Mani, I. \BBOP 2005\BBCP.
+\newblock \BBOQ The Specification Language TimeML.\BBCQ\
+\newblock {\Bem The Language of Time: A Reader}, \mbox{\BPGS\ 545--557}.
+
+\bibitem[\protect\BCAY{Ravichandran \BBA\ Hovy}{Ravichandran \BBA\
+  Hovy}{2002}]{ravichandran2002}
+Ravichandran, D.\BBACOMMA\ \BBA\ Hovy, E. \BBOP 2002\BBCP.
+\newblock \BBOQ Learning Surface Text Patterns for a Question Answering
+  System.\BBCQ\
+\newblock In {\Bem Proceedings of the 40th Annual Meeting on Association for
+  Computational Linguistics}, \mbox{\BPGS\ 41--47}.
+
+\bibitem[\protect\BCAY{Tatu \BBA\ Srikanth}{Tatu \BBA\
+  Srikanth}{2008}]{tatu2008}
+Tatu, M.\BBACOMMA\ \BBA\ Srikanth, M. \BBOP 2008\BBCP.
+\newblock \BBOQ Experiments with Reasoning for Temporal Relations Between
+  Events.\BBCQ\
+\newblock In {\Bem Proceedings of the 22nd International Conference on
+  Computational Linguistics}, \mbox{\BPGS\ 857--864}.
+
+\bibitem[\protect\BCAY{UzZaman \BBA\ Allen}{UzZaman \BBA\
+  Allen}{2011}]{naushad2011}
+UzZaman, N.\BBACOMMA\ \BBA\ Allen, J.~F. \BBOP 2011\BBCP.
+\newblock \BBOQ Temporal Evaluation.\BBCQ\
+\newblock In {\Bem Proceedings of the 49th Annual Meeting of the Association
+  for Computational Linguistics: Human Language Technologies}, \mbox{\BPGS\
+  351--356}.
+
+\bibitem[\protect\BCAY{UzZaman, Llorens, Derczynski, Verhagen, Allen, \BBA\
+  Pustejovsky}{UzZaman et~al.}{2013}]{naushad2013}
+UzZaman, N., Llorens, H., Derczynski, L., Verhagen, M., Allen, J., \BBA\
+  Pustejovsky, J. \BBOP 2013\BBCP.
+\newblock \BBOQ SemEval-2013 Task 1: TEMPEVAL-3: Evaluating Time Expressions,
+  Events, and Temporal Relations.\BBCQ\
+\newblock In {\Bem the 2nd Joint Conference on Lexical and Computational
+  Semantics (*SEM), Volume 2: Proceedings of the Seventh International Workshop
+  on Semantic Evaluation (SemEval 2013)}, \mbox{\BPGS\ 2--9}.
+
+\bibitem[\protect\BCAY{Verhagen, Gaizauskas, Schilder, Hepple, Katz, \BBA\
+  Pustejovsky}{Verhagen et~al.}{2007}]{semeval2007}
+Verhagen, M., Gaizauskas, R., Schilder, F., Hepple, M., Katz, G., \BBA\
+  Pustejovsky, J. \BBOP 2007\BBCP.
+\newblock \BBOQ Semeval-2007 Task 15: Tempeval Temporal Relation
+  Identification.\BBCQ\
+\newblock In {\Bem Proceedings of the 4th International Workshop on Semantic
+  Evaluations}, \mbox{\BPGS\ 75--80}.
+
+\bibitem[\protect\BCAY{Wolpert}{Wolpert}{1992}]{stacked}
+Wolpert, D.~H. \BBOP 1992\BBCP.
+\newblock \BBOQ Stacked Generalization.\BBCQ\
+\newblock {\Bem Neural Networks}, {\Bbf 5}, \mbox{\BPGS\ 241--259}.
+
+\bibitem[\protect\BCAY{Yoshikawa, Riedel, Asahara, \BBA\ Matsumoto}{Yoshikawa
+  et~al.}{2009}]{yoshikawa2009}
+Yoshikawa, K., Riedel, S., Asahara, M., \BBA\ Matsumoto, Y. \BBOP 2009\BBCP.
+\newblock \BBOQ Jointly Identifying Temporal Relations with Markov Logic.\BBCQ\
+\newblock In {\Bem Proceedings of the Joint Conference of the 47th Annual
+  Meeting of the ACL and the 4th International Joint Conference on Natural
+  Language Processing of the AFNLP}, \mbox{\BPGS\ 405--413}.
+
+\end{thebibliography}
+
+
+\begin{biography}
+
+\bioauthor[:]{Natsuda Laokulrat}{
+Currently a Ph.D. student at Graduate School of Engineering, The University of Tokyo, Japan. Received a bachelor's degree in Computer Engineering from Chulalongkorn University, Thailand, in 2008, and a master's degree in Electrical Engineering and Information Systems from the University of Tokyo in 2011.}
+
+\bioauthor[:]{Makoto Miwa}{
+Completed a doctoral program of the University of Tokyo in 2008. Doctor of Science. Currently an associate professor at Toyota Technological Institute. Involved with research on natural language processing and artificial intelligence for games. Member of IPSJ, JSAI, and ACL.}
+
+\bioauthor[:]{Yoshimasa Tsuruoka}{
+Completed a doctoral program of the University of Tokyo in 2002. Doctor of Engineering. Currently an associate professor at the University of Tokyo. Involved with research on natural language processing and artificial intelligence for games.}
+
+\end{biography}
+
+\biodate
+
+
+\end{document}
