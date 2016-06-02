@@ -14,27 +14,33 @@ $#ARGV >= 0 || die "Usage: ./section_classify [NAME OF DOCS]\n";
 
 # variables for testing/logging
 my $log_switch = 0;
-my ($log_file_name, $intro_file_name, $experiment_file_name, $conclusion_file_name, $proposedtech_file_name);
+my ($log_file_name, $intro_file_name, $relstudy_file_name, $experiment_file_name, $conclusion_file_name, $proposedtech_file_name);
 
 # set list of section devider
-my (@list_intro, @list_conclusion, @list_experiment);
+my (@list_intro, @list_conclusion, @list_experiment, @list_relstudy);
 @list_intro = qw/はじめに/;
+@list_relstudy = qw/関連研究/;
 @list_experiment = qw/実験/;
 @list_conclusion = qw/結論 おわりに 終わりに/;
 ## make regular expression form. sample: $re_* = "intro|introduction|introduce";
-my ($re_intro, $re_conclusion, $re_experiment);
+my ($re_intro, $re_relstudy, $re_conclusion, $re_experiment);
 $re_intro = join '|', @list_intro;
+$re_relstudy = join '|', @list_relstudy;
 $re_experiment = join '|', @list_experiment;
 $re_conclusion = join '|', @list_conclusion;
-### 関連研究
+
 
 # get list of source files.
 my @src_file_list = <@ARGV>;
 # define section's heads and contents 
-my ($head_intro, $body_intro, $head_conclusion, $body_conclusion, $head_experiment, $body_experiment, $head_proposedtech, $body_proposedtech);
+my ($head_intro, $body_intro, $head_relstudy, $body_relstudy ,$head_conclusion, $body_conclusion, $head_experiment, $body_experiment, $head_proposedtech, $body_proposedtech);
 
 # start section classifing process for each source file.
 foreach my $src_file_name (@src_file_list) {
+#	($head_intro, $body_intro, $head_relstudy, $body_relstudy ,$head_conclusion, $body_conclusion, $head_experiment, $body_experiment, $head_proposedtech, $body_proposedtech) = "";
+
+
+
 # Active logging
 	&test_on($src_file_name);
 
@@ -61,6 +67,17 @@ foreach my $src_file_name (@src_file_list) {
 		$body_intro = $2;
 	}
 
+## classify relative study
+	if( $body_proposedtech =~ s/
+																^(\\section\{(?:$re_relstudy)[^\n]*?\})
+																(.*?)
+																((?:\\section\{(?:[^\n])+\})|(?:\\end\{document\}))
+																/$3/sumx ) {
+		$head_relstudy = $1;
+		$body_relstudy = $2;
+	}
+
+	
 ## classify experiment
 	if( $body_proposedtech =~ s/
 																^(\\section\{(?:$re_experiment)[^\n]*?\})
@@ -108,6 +125,7 @@ sub test_on{
 
 	$log_file_name = $cur_log_path."log_section_classify";
 	$intro_file_name = $cur_log_path."intro";
+	$relstudy_file_name = $cur_log_path."relstudy";
 	$experiment_file_name = $cur_log_path."experiment";
 	$conclusion_file_name = $cur_log_path."conclusion";
 	$proposedtech_file_name = $cur_log_path."proposedtech";
@@ -118,7 +136,8 @@ sub test_on{
 sub print_log{
 	my $src_file_name = $_[0];
 	
-	printf STDERR "intro%16s%5s\n", 'found : ', $head_intro if ($log_switch);
+	printf STDERR "intro%16s%5s\n", 'found : ', $head_intro if ($log_switch);# change conditional ex as $head_intro nq ""
+	printf STDERR "relstudy%13s%2s\n", 'found : ', $head_relstudy if ($log_switch);
 	printf STDERR "experiment%11s%s\n", 'found : ', $head_experiment if ($log_switch);
 	printf STDERR "conclusion%11s%s\n", 'found : ', $head_conclusion if ($log_switch);
 	## print proposed technique section title to log file
@@ -127,24 +146,27 @@ sub print_log{
 	}
 	## print fgrep result to log file
 	print STDERR "\nfgrep searched\n"; 
-	system "fgrep \\section $src_file_name >> $log_file_name";
+	system "fgrep \\\\section $src_file_name >> $log_file_name";
 
 }
 
 sub print_section {
-	my ($fh_intro, $fh_experiment, $fh_conclusion, $fh_proposedtech);
+	my ($fh_intro, $fh_relstudy, $fh_experiment, $fh_conclusion, $fh_proposedtech);
 	
-	open $fh_intro, '>:encoding(UTF-8)', $intro_file_name || die "can not open ; $!";
+	open $fh_intro, '>:encoding(UTF-8)', $intro_file_name || die "can not open ; $!"; # add if statement $head_intro nq ""
+	open $fh_relstudy, '>:encoding(UTF-8)', $relstudy_file_name || die "can not open ; $!";
 	open $fh_experiment, '>:encoding(UTF-8)', $experiment_file_name || die "can not open : $!";
 	open $fh_conclusion, '>:encoding(UTF-8)', $conclusion_file_name || die "can not open : $!";
 	open $fh_proposedtech, '>:encoding(UTF-8)', $proposedtech_file_name || die "can not open : $!";
 
 	print $fh_intro $head_intro.$body_intro;
+	print $fh_relstudy $head_relstudy.$body_relstudy;
 	print $fh_experiment $head_experiment.$body_experiment;
 	print $fh_conclusion $head_conclusion.$body_conclusion;
 	print $fh_proposedtech $body_proposedtech;
 
 	close $fh_intro;
+	close $fh_relstudy;
 	close $fh_experiment;
 	close $fh_conclusion;
 	close $fh_proposedtech;
