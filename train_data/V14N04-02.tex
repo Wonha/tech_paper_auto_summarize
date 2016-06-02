@@ -1,0 +1,461 @@
+    \documentclass[japanese]{jnlp_1.3e}
+\usepackage{jnlpbbl_1.1}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+
+\Volume{14}
+\Number{4}
+\Month{July}
+\Year{2007}
+\received{2006}{6}{23}
+\revised{2006}{8}{18}
+\accepted{2007}{1}{23}
+
+\setcounter{page}{23}
+
+\jtitle{日英特許コーパスからの専門用語対訳辞書の自動獲得}
+\jauthor{下畑さより\affiref{Author_1} \and 井佐原　均\affiref{Author_2}\affiref{Author_3}}
+\jabstract{
+本論文では，日英特許コーパスを用いて専門用語の対訳辞書を作成する方法について述べる．提案手法は，言語単位としての妥当性と分野による出現の偏りを数値化することで，コーパス中の単語（列）を専門用語として抽出し，和英辞書などの既知の対訳用語セット（seed word リスト）を介して，コーパスにおける各専門用語の共起パターンを計測し，その類似性が高い用語ペアを対訳として対応付ける．この時，対象となるコーパス間で文脈が類似している対訳のみをseed wordに利用する点が特徴である．本手法を日本語特許抄録とその英訳に適用したところ，専門用語の抽出精度は日本語で90\%，英語で93\%となった．また，訳語対応付けでは，各専門用語の対訳として1位に対応付けられた対訳候補の正解率が53\%（日英）と66\%（英日），10位以内に対応付けられた対訳候補の正解率が83\%（日英）と90\%（英日）と，従来研究と比べて高い精度を得ることができた．本論文ではさらに，PAJの日本語抄録と米国特許抄録を用いた実験を行い，コーパスの違いによる実験結果の違いについても考察する．
+}
+\jkeywords{機械翻訳，専門用語，辞書，特許}
+
+\etitle{ Retrieving Translation Candidates from Patent Corpora }
+\eauthor{Sayori Shimohata\affiref{Author_1} \and Hitoshi Isahara\affiref{Author_2}\affiref{Author_3}} 
+\eabstract{
+This paper describes a method for retrieving technical terms and finding their translations from bilingual patent corpora. The method extracts terms from each monolingual corpus and finds their translations by using a list of bilingual word pairs called ``seed words''. In the term extraction process, we quantify the unithood and termhood of word sequences to determine if they are technical terms. In the translation alignment process, we select seed words whose contexts are similar in the target corpora. We conducted experiments in term extraction and translation alignment with patent abstracts of Japan and the United States. In the term extraction, the proposed method has achieved a precision of 90\% for Japanese term extraction and 93\% for English term extraction. In the translation alignment, the accuracy was 53\% (Japanese to English) and 66\% (English to Japanese) for the top candidates and 83\% (J to E) and 90\% (E to J) for the top 10 candidates. Comparison of the results between parallel corpora and comparable corpora is also described.
+}
+\ekeywords{Machine translation, Technical terms, Dictionary, Patent }
+
+\headauthor{下畑，井佐原}
+\headtitle{日英特許コーパスからの専門用語対訳辞書の自動獲得}
+
+\affilabel{Author_1}{沖電気工業株式会社ユビキタスサービスプラットフォームカンパニー}{Ubiquitous Service Platform Company, Oki Electric Industry Co., Ltd.}
+\affilabel{Author_2}{独立行政法人情報通信研究機構情報通信部門けいはんな情報通信融合研究センター自然言語グループ}{National Institute of Information and Communications Technology}
+\affilabel{Author_3}{神戸大学大学院自然科学研究科}{Kobe University Graduate School of Science and Technology}
+
+
+\begin{document}
+\maketitle
+
+\section{はじめに}
+技術のグローバル化が進み，特許情報とその翻訳の重要性が広く認識されてきている．日米欧の特許庁では，情報共有，審査の迅速化の観点から，特許文書の相互利用を目指して三極間の協力が推し進められている．国内においても，人手による翻訳で公開特許公報の英文抄録(PAJ: Patent Abstracts of Japan)が作成されているほか，高度産業財産ネットワーク(AIPN: Advanced Industrial Property Network)が開発され，海外の特許庁において包袋書類（出願人が日本国特許庁に提出した明細書等の書類，及び，拒絶理由通知書等の特許出願の審査に係る書類等）が機械翻訳で英訳された形で提供されるようになった．
+特許は高度に専門的な文書で，新語や専門用語が多く含まれ，かつ，その内容が多岐にわたっている．「翻訳」という観点から見た場合，特許の文章には以下のような特徴がある．
+
+\begin{itemize}
+\item 文が長い\\
+一般に特許文は，文章が長くなる傾向がある．例えば，遺伝子分野(IPC：C12N)の2004年出願の全データ11,781 件から抄録部分の形態素数を集計したところ，日本語では一文が平均57 形態素（105 文字），英語では平均44 形態素であった．日本語における読みやすい文の長さの目安がおよそ50 文字以内といわれていることからも，特許の文が長くて理解しにくいものであることが分かる．文の長さとも関連して，特許文では並列構造が多く，係り受け関係が複雑であるという特徴もある．
+\item 専門用語が多い\\
+特許では分野が細分化されており，分野ごとに多くの新語や専門用語が出現する．これらの語は，分野によって概念が違っていたり，単語の組み合わせで個々の単語とはまったく異なる概念を表したりすることがある．また，専門性の高い用語の中には用語辞書や対訳辞書に登録されていないものも多い．
+\end{itemize}
+
+このような特徴を持つ文書を翻訳するには，人手であれ，機械であれ，分野に特化した専門用語の対訳辞書が不可欠である．特に，機械翻訳などの言語処理においては，未知語や専門用語を正確に認識することが，翻訳品質だけでなく，構文解析の曖昧性解消や翻訳速度の向上にも大きく寄与することがわかっている\cite{Shimohata05}．しかしながら，専門性が高くなればなるほど，市販の辞書を入手することは困難になる．また，人手で辞書を構築する場合にも膨大な時間とコストがかかってしまう．
+
+一方で，特許にはIPC (International Patent Classification)と呼ばれる体系的な分類コードが付与された大量な文書の蓄積がある．またその一部には，PAJや外国出願特許のように，翻訳されたテキストが存在する．そこで我々は，特許コーパスを用いて，専門用語およびその対訳を自動的に抽出することが可能であると考えた．
+
+ここで，本論文で用いる言葉の定義をする．本論文では，言語学的な単位として，1つの形態素からなる語を単語，複数の形態素からなる語を単語列と呼ぶ．また，術語学的な単位として，特定の分野においてある概念を表す単語及び単語列を専門用語，あるいは単に用語と呼ぶ．
+
+
+\section{コーパスを利用した対訳辞書構築の要素技術}
+
+コーパスから専門用語の対訳辞書を構築するには，2つのフェーズがある．第1フェーズは単言語コーパスから専門用語を抽出するフェーズ，第2フェーズは抽出された2言語の専門用語を対応付けるフェーズである．以下では，それぞれのフェーズについて，従来技術を説明する．
+
+\subsection{専門用語の抽出}
+
+コーパスから専門用語を抽出する場合には，コーパス中に出現する用語候補を切り出し，その用語候補の言語単位としての妥当性（ユニット性）と分野における専門性（ターム性）を測定して専門用語と認められるかどうかを判定する方法が一般的である．用語候補は，基本的に単語 N-gram である\footnote{日本語や中国語のように単語境界のない言語では，文字N-gramを用いる場合もある．}．ただし，単語N-gramを単純に頻度順に抽出するだけでは断片的な単語列が多数含まれるので，いかにユニット性とターム性を計測し，不要な単語列を抑制するかが重要になる．
+
+\cite{Shimohata97} は，隣接する単語のばらつきの度合いによって単語列のユニット性を測る手法を提案した．\cite{Ananiadou94}， \cite{Frantzi_and_Ananiadou99}は入れ子構造を持つコロケーションからユニット性の高い要素に高いスコアをつけるC-valueと呼ばれる手法を提案している．また，\cite{Nakagawa03}は，名詞のbigramから得られる統計量を利用して，複合名詞のスコア付けを行なう方法を提案している．その他にも，形態素解析や構文解析を行って，特定の構成要素をもつ単語列（例えば名詞句）を抽出するという方法が考えられる．いずれの手法においても，専門用語としての妥当性を数値化することは難しく，専門用語の抽出は各手法の指標に基づいてスコア付けした用語候補から，対象となるコーパスの量や獲得語数の条件などに応じて行うのが一般的である．また，\cite{Ananiadou94}，\cite{Frantzi_and_Ananiadou99}， \cite{Nakagawa03}の手法では，複合語，特に複合名詞を対象としており，名詞以外の語句や1語からなる専門用語の抽出は行わない．
+
+\subsection{専門用語の訳語推定}
+
+2言語のコーパスから対訳辞書を抽出する研究は，大きく2つに分類される．1つは，パラレルコーパスを用いる方法，もう1つはコンパラブルコーパスを用いる方法である\footnote{ここでパラレルコーパスとは文単位で対応づけられた対訳テキストの集合を，コンパラブルコーパスとは文書単位で内容が類似した対訳テキストの集合を指す．}．パラレルコーパスを用いる方法では，基本的に1対1の文対応を前提にしており，対応する行における単語および単語列の同時出現確率の対数尤度を利用する．2言語間で候補語どうしの同時出現確率を計算し，その値が高いものを翻訳対として抽出する方法が一般的に行われている(\cite{Kupiec93}; \cite{Dagan_and_Church94}; \cite{Smadja93};  \cite{Kitamura_and_Matsumoto04}) ．これらの方法では，80\%〜90\%の高い精度を達成しているが，1対1の文対応がついたコーパスは非常に少なく，現実には類似度の高いコーパスに段落対段落レベルの粗い対応付けを利用したり，文対応付け手法(\cite{Gale_and_Church93}; \cite{Utiyama_and_Isahara03})を用いて擬似的に文対応をつけたりする処理が必要である．
+
+それに対して，コンパラブルコーパスは比較的容易に入手可能である．コンパラブルコーパスの場合には，パラレルコーパスのように単語の同時出現確率を直接測ることができないので，既知の単語対を介して，対象とする2言語の候補語における共起語ベクトルの類似度を計算し，類似度の高い用語対を対訳として抽出する (\cite{Fung_and_McKeown97}; \cite{Fung_and_Yee98}; \cite{Rapp99})．
+
+\cite{Rapp99}は，2言語のテキストで出現する単語の共起マトリックスを作成し，その類似度を最大化する方法を提案した．英独の基本的な語による実験では，訳語候補を辞書登録語に限定し，1位正解率72\%，10位以内正解率89\%を得ている．また，\cite{Fung_and_McKeown97} は，既に対応づけられた対訳語（seed word と呼ぶ）のリストを用いて，各言語における未知語とseed word list の単語とのコーパス中での共起を調べ，その共起ベクトルの類似度を測って，類似度の高い単語ペアを対訳語として抽出する方法を提案した．日英経済紙による実験では，訳語候補の1位正解率約30\%，20位以内正解率76\%を得ている．また，\cite{Fung_and_Yee98} では，seed word に重みづけをすることで \cite{Fung_and_McKeown97} の対応付け精度を改良している．
+
+さらに最近では，Webから得られた文書を用いて訳語推定を行なう研究も提案されている(\cite{Utsuro05}\cite{Cao_and_Li02})．\cite{Utsuro05}は言語横断検索によって対応付けられた日英関連記事からパラレルコーパスの手法，および，コンパラブルコーパスの手法によって訳語対応を推定している．また，\cite{Cao_and_Li02}では基本語対訳時書中の訳語の組み合わせを訳語候補としてWebを検索し，訳語対応を推定している．
+
+コンパラブルコーパスを用いる手法は，パラレルコーパスを用いる手法に比べて訳語推定の精度が低い．また実験も小規模で，実用化を想定した設定になっていないことが多い．精度が低い原因は対象となるコーパスの性質によるものが大きいが，類似度を測るベクトルの要素が，用語の文脈を特徴付けられていないことも重要な問題である．
+本論文では，特許文書を対象に，コンパラブルコーパスの手法を用いて専門用語の対訳を抽出する．特許文書は文が長く，多数の専門用語が含まれているという特徴がある．この特徴を利用して，両言語コーパスに頻出し，かつ，その出現傾向が類似する専門用語をseed wordとすることにより，コンパラブルコーパスにおける語訳対応付けの精度向上を目指す．
+
+コンパラブルコーパスの手法を採用する理由は，柔軟性が高く，あらゆる対応度の対訳コーパスに適用可能だからである．特許文書は，PAJのようにほぼ1対1の対訳があるものから，国内出願と外国出願した特許のように文書単位の対訳があるもの，単言語でしか存在しないものまで様々である\footnote{PAJは，基本的にはアブストラクト単位の対訳であるが，文レベルで対応しているものも多い．構成文数を見ると，遺伝子分野のPAJ1年分11,781件中，両言語で文数が一致しているものは4,608件 (39.1\%), 一致していないものが7,173件 (60.9\%) であった．}．対応度の高い対訳コーパスについては，文対応付け手法によって擬似的にパラレルコーパスを作成し，パラレルコーパスの手法を適用することも可能であるが，PAJ以外の特許文書については文レベルの対応をとることは現実的ではない．それに対して，コンパラブルコーパスの手法は，文対応を考慮しなければパラレルコーパスに対しても適用することが可能である．
+
+以下，第3章では提案手法の詳細について説明し，第4章以降では提案手法に基づいて行なった実験の結果について報告する．さらに，提案手法とパラレルコーパスを用いる手法や他のコンパラブルコーパスを用いる手法との比較も行なう．
+
+
+\section{アルゴリズム}
+
+本論文の専門用語およびその対訳の獲得プロセスを図1に示す．本手法は，1．専門用語の抽出，2．seed word リストの作成，3．seed word を用いた専門用語の訳語推定という3つのステップから構成される．第1のステップでは，日英特許コーパスより専門用語を抽出し，第2のステップでは，日英特許コーパスと対訳辞書を使ってseed word リストを作成する．そして第3のステップでは，抽出された専門用語とseed wordリストとの共起ベクトルを求め，共起ベクトルの類似度の高い用語どうしを対訳として抽出する．以下では，それぞれのステップについて順に説明していく．
+\begin{figure}[t]
+\label{fig:outline}
+\begin{center}
+    \includegraphics{14-4ia2f1.eps}
+\caption{専門用語および対訳獲得のプロセス}
+\end{center}
+\end{figure}
+
+\subsection{専門用語の抽出}\label{sec:extractTerm}
+
+専門用語候補の抽出には，隣接文字（単語）の分散の度合いに基づく専門用語抽出手法\cite{Shimohata97}を用いる．この手法は，「文字列（単語列）が意味のあるまとまりである場合，その前後には様々な文字（単語）が出現する」という考えに基づき，隣接文字の分散の度合いによって単語列のユニット性を測るものである．ただし，この手法では単語列の専門性の高さは考慮していないので，上記手法による抽出結果の頻度および$\mathit{tf} \bullet \mathit{idf}$を求め，各単語列のターム性を計測する．具体的な手順は以下の通りである．
+
+\begin{enumerate}
+\item コーパスを形態素解析し，句読点を含まない，単語列の最初と最後が自立語であるなどの条件の下で，n-gram 単語列$T_{l} = \{t_{1}, t_{2},...t_{n} \}$を抽出する．
+\item $t_{i}$の前に出現する単語群$W^{i}_{L} = \{w^{i}_{1}, w^{i}_{2},…w^{i}_{m}\}$から，$t_{i}$の前に出現する単語のばらつきの度合$H(t_{i},W^{i}_{L})$を求める．ここで，$\mathit{freq}(t_{i})$は単語列$t_{i}$の出現する回数，$\mathit{freq}(t_{i},w^{i}_{j})$は単語列$t_{i}$と単語$w^{i}_{j}$が連続して出現する回数である．
+\begin{gather}
+ H(t_{i},W^{i}_{L}) = - \sum^{m}_{j=1} P(t_{i},w^{i}_{j}) \bullet \log P(t_{i},w^{i}_{j}) \\
+ P(t_{i},w^{i}_{j}) = \frac{ \mathit{freq}(t_{i},w^{i}_{j}) }{ \mathit{freq}(t_{i}) }
+\end{gather}
+
+\item  (2)と同様に，$t_{i}$の後ろに出現する単語群$W^{i}_{R} =\{w^{i}_{1}, w^{i}_{2},…w^{i}_{m}\} $から，$t_{i}$の後ろに出現する単語のばらつきの度合$H(t_{i},W^{i}_{R})$を求める．
+
+\item $\mathit{tf} \bullet \mathit{idf}(t_{i})$によって$t_{i}$のターム性を求める．
+\begin{gather}
+\mathit{tf} \bullet \mathit{idf}(t_{i}) = \mathit{freq}(t_{i}) \bullet \log ( \frac{N}{\mathit{df}(t_{i})}) \\
+N = 全文書数 \nonumber \\
+\mathit{df}(t_{i})=t_{i}が出現する文書数 \nonumber
+\end{gather}
+
+\item (2)〜(4)で得られた$H(t_{i},W^{i}_{L})$，$H(t_{i},W^{i}_{R})$，$tf \bullet \mathit{idf}(t_{i})$，および，$\mathit{freq}(t_{i})$が，
+それぞれ，閾値$\mathit{varMin}$，$\mathit{tfidfMin}$，$\mathit{freqMin}$を超える単語列$t_{i}$を専門用語として抽出する．
+\pagebreak
+\begin{gather*}
+ H(t_{i},W^{i}_{L}) \geq \mathit{varMin} \\
+ H(t_{i},W^{i}_{R}) \geq \mathit{varMin} \\
+ \mathit{tf} \bullet \mathit{idf}(t_{i}) \geq \mathit{tfidfMin} \\
+ \mathit{freq}(t_{i}) \geq \mathit{freqMin} 
+\end{gather*}
+
+\end{enumerate}
+
+\subsection{seed word リストの作成}\label{sec-SeedWord}
+
+\cite{Fung_and_McKeown97}では，「文書Tにおいて用語Aと用語Bの関連度が高い場合，別の言語の文書T$'$において用語Aの訳語であるA$'$と用語Bの訳語であるB$'$も関連度が高い」という仮説に基づき，seed word リストと呼ばれる既知の翻訳対と，対応付け候補の各用語との対象コーパスにおける関連度を測り，関連度の高い用語どうしを対応付けている．ここで，用語の関連度とは，一定の範囲内（例えば，文，パラグラフなど）における出現文脈の類似度である．つまり，単言語コーパス内でのseed word リストの単語と用語との共起を調べ，2言語間で各用語の共起パターンの類似度を測って，類似度の高いものを翻訳対として抽出する．seed wordには，対象コーパスに一定回数以上出現する辞書登録語で，かつ一対一に対応のつく翻訳対を用いている．
+
+提案手法も上記の手法を踏襲するが， seed word 獲得時にも翻訳対獲得時と同様にseed word候補語どうしの共起を調べ，出現文脈が類似している翻訳対のみを seed word として採用する．つまり，対象コーパスにおいて有効な seed word のみを利用することにより，候補語の対応付けにおける精度の向上を計る．
+
+具体的な，seed wordリスト作成プロセスは以下の通りである．
+
+\begin{enumerate}
+\item 言語$J$と$E$の対訳辞書$D_{\mathit{JE}}$より，コーパス$C_{J}$および$C_{E}$に出現頻度の閾値$\mathit{freqMin}$を超えて出現する辞書登録語の集合$D_{\mathit{JE}}=\{ \langle d^{J}_{i},d^{E}_{i} | \mathit{freq}(d^{J}_{i}) \geq \mathit{fregMin} ; \mathit{freq}(d^{E}_{i}) \geq \mathit{freqMin} \rangle \}$を抽出する．ここで$C_{L}$は言語$L$のコーパスを，$d^{L_{1 }}_{i}$は$D_{L_{1},L_{2}}$における言語$L_{1}$の$i$番目の単語を表す．また，$d^{L2}_{i}$は$d^{L1}_{i}$と対訳関係にある言語$L_{2}$の単語である．
+\item 言語$L$の$i$番目の単語$d^{L}_{i}$に対して，$d^{L}_{i}$と$\{ d^{L}_{1},d^{L}_{2},...d^{L}_{n} \}$との，コーパスにおける一定の範囲内（例えば，一定語数内，一文内，パラグラフ内など）での共起頻度の列ベクトル$\mathit{Cmat}(d^{L}_{i} \equiv [ c(d^{L}_{i},d^{L}_{1}),c(d^{L}_{i},d^{L}_{2}),...c(d^{L}_{i},d^{L}_{n}) ]^{T})$を求める．$c(x,y)$は，単語$x$と単語$y$の共起回数である．
+\item  対訳関係にある$d^{J}_{i}$と$d^{E}_{i}$の共起ベクトルの類似度$\mathit{Sim}(d^{J}_{i},d^{E}_{i})$を求め，類似度が閾値を超えるデータの対をseed wordリスト$SW_{\mathit{JE}}$として抽出する．ここで，
+\[ \mathit{SW}_{\mathit{JE}} = \{ \langle d_{J},d_{E} \rangle | \mathit{Sim}(d^{J}_{i},d^{E}_{i}) \geq \mathit{simMin} \} \] とし，
+類似度$\mathit{Sim}(d^{J}_{i},d^{E}_{i})$は，以下の式によって得る．
+\pagebreak
+\begin{equation}
+\mathit{Sim}(d^{J}_{i},d^{E}_{i}) = \sqrt{ \sum_{1 \leq j \leq n} (\frac{c(d^{J}_{i},d^{J}_{j})}{C_{J}の総文数} - \frac{c(d^{E}_{i},d^{E}_{j})}{C_{E}の総文数})^2 }
+\end{equation}
+
+\end{enumerate}
+
+\subsection{専門用語の訳語推定}
+
+訳語対応づけは，\ref{sec-SeedWord}で述べた seed word 作成と同様のプロセスによって行なう．
+
+\begin{enumerate}
+\item 両言語のコーパスから抽出された専門用語の集合$T_{J}$および$T_{E}$の各用語$t^{L}_{i}$と，seed wordリスト$\mathit{SW}_{\mathit{JE}}$の各要素$d^{L}_{k}$との各コーパスにおける共起頻度を計数し，共起ベクトル$\mathit{Cmat}(t^{L}_{i})$を作成する．
+\item $T_{J}$と$T_{E}$のすべての用語の組み合わせにおける共起マトリクスの類似度$\mathit{Sim}(t^{J}_{i},t^{E}_{j})$を求め，類似度の高いデータの対を対訳として抽出する．
+\end{enumerate}
+
+
+
+\section{実験と評価}
+
+\subsection{実験データ}
+
+日英特許抄録(PAJ)および米国特許抄録(USP: United States Patents)を用いて，図1に示す専門用語の抽出，seed word リストの作成，専門用語の訳語推定の実験を行なった．実験に使用したデータは以下の通りである．
+
+\begin{itemize}
+\item コーパス 
+\begin{tabbing} 
+日本語\=特許抄録 \=（C12N:遺伝子分野） \=  11,781件\\
+ \>日本語  \>38,481文（1,694,362単語）\\
+ \>英語    \>35,343文（1,778,663単語）\\
+米国特\>許抄録 \>（C12N:遺伝子分野） \>12,534件\\
+ \>英語	\>51,201文（1,259,299単語）
+ \end{tabbing}
+\item 対訳辞書
+ \begin{tabbing} 
+	EDICT  173,000件
+ \end{tabbing}
+\item 参照用の専門用語対訳辞書
+\begin{tabbing} 
+  	Japio辞書（C12N:遺伝子分野）  4,789件
+ \end{tabbing}
+\end{itemize}
+
+テストコーパスとして用いるPAJは，遺伝子分野（IPCコード：C12N）の日本語特許抄録およびその翻訳の1年分である．実験では，日本語と英語で記述された「発明の名称」および「要約」を用いた．また，USPについても同様に，遺伝子分野のタイトルと要約1年分を用いた．
+
+評価は人手による主観評価および同分野のJapio辞書との比較により行った．Japio辞書は，PAJ作成の補助に用いられている専門用語の対訳辞書で，人手により構築されたものである．実験にPAJの日本語と英語，および，PAJの日本語とUSPの2種類を用いたのは，訳語対応付けの精度が1)コーパスの対応度の違いによってどの程度変化するか，2)対応付け手法の違いによってどの程度違うかを検証するためである．
+
+
+\subsection{専門用語の抽出}
+\label{sec:experimentTerm}
+
+\ref{sec:extractTerm}で示した方法に基づき，対象コーパスから専門用語を抽出した．日本語の形態素解析には茶筌\footnote{http://chasen.naist.jp/hiki/ChaSen/}を，英語の形態素解析にはTree Tagger\footnote{http://www.ims.uni-stuttgart.de/projekte/corplex/TreeTagger/DecisionTreeTagger.html }を用いた．その結果，日本語で61,735件，英語で50,519件の用語が抽出された．抽出された用語の例を表\ref{tab:extractTerm}に示す．日英ともに名詞句が中心で，``amino acid'' のようによく使われる専門用語だけでなく，``acid'' や ``amino acid sequence'' のように用語の構成要素となる単語や，用語を含む複合語までが幅広く抽出されている．また，今回は品詞によるフィルタリングなどを行わなかったため，名詞句以外の用語，特に動詞を含む専門的な表現も多かった．
+
+\begin{table}[t]
+\input{table1.txt}
+\end{table}
+
+一方で，「本発明」や「該発現」，``comprise'', ``related'' のように，特許文書にはよく出現するが遺伝子分野の専門用語とはいえない用語も散見された．これらの用語は文書集合全体に出現し，値が高くなることから，抽出が抑制されると予想していたが，対象コーパスにおいて特に高頻出な用語や専門用語との組み合わせで抽出されたものは$\mathit{tf} \bullet \mathit{idf}$値が高くなり，抽出される結果となった．
+
+抽出された用語をJapio辞書と照合したところ，日本語で767件，英語で1,096件の重複があった．表\ref{tab:gene}に「遺伝子」を含む抽出結果（抜粋）およびJapio辞書の登録語を示す．「遺伝子」を含む用語は，Japio辞書では19件が登録されているが，抽出結果にはそのうちの7件が含まれていた．抽出されなかった12件の登録語のうち11件はコーパス内での出現がなく，もう1件も出現頻度が2と少なかった．また，この7件より頻度の高い用語は10件，この7件の最低頻度と同じ頻度5の用語は78件が抽出された．これらの用語はいずれも専門性が高く，本手法によって専門用語辞書作成に有効な用語が，頻度の大きさに関わらず網羅的に抽出されることが分かった．
+
+
+次に，パラメータの値を，$\mathit{varMin}=1.0$，$\mathit{tfidfMin}=100$\footnote{ここで，$\mathit{tf}\ \mathit{idfMin}$の計算に用いた文書集合はPAJおよびUSPの1年分抄録数である．}かつ$\mathit{freqMin}=100$と設定した場合の用語を抽出し，精度を調べた．$\mathit{varMin}$，$\mathit{tfidfMin}$は，抽出結果を値ごとにソートし，サンプルによる抽出精度が50\%になるポイントを用いた．その結果，日本語1,013件，英語1,034件が抽出され，それぞれ909件 (90\%), 965件 (93\%) の専門用語が含まれていることが分かった．Japio辞書に登録され，かつ，コーパスに100回以上出現した用語は日本語で142件，英語で228件存在するが，提案手法では，そのうち日本語127件，英語192件を抽出することができており，再現率はそれぞれ，84.2\%，89.4\%となった．
+
+また，Japio辞書登録の対訳で，日本語，英語とも100回以上コーパスに出現する用語対は74対あるが，そのうち日英両見出しとも抽出されたものは59対 (80\%) であった．74対のうち抽出されなかった日本語7件，英語9件を表\ref{tab:notExtracted}に示す．このうち，「疾病」以外の語は，ユニット性は基準値を超えたものの，ターム性において評価値が低く抽出されなかった．「疾病」については，「〜の疾病」という形での出現が多かったため，「疾病」単独でのユニット性が低く，抽出に至らなかった．
+
+
+\begin{table}[p]
+\input{table2.txt}
+\par\vspace{\baselineskip}
+\input{table3.txt}
+\end{table}
+
+\subsection{seed wordリストの作成}\label{sec:experimentSeedWord}
+
+実験では，対訳辞書として日英オンライン辞書 EDICT\footnote{ http://www.csse.monash.edu.au/~jwb/edict.html } を用いた．対象コーパスに100回以上出現する用語対は195組あったが，その中から，見出し語と訳語の類似度$\mathit{Sim}(\mathit{Cmat}(t^{J}_{i}),\mathit{Cmat}(t^{E}_{i}))$が見出し語と訳語以外のすべての用語の類似度より高い値となる129組の用語対を抽出し，seed wordリストを作成した．129組のうち，少なくとも日英いずれかの方向に複数訳語を持つ用語対は111組，両方向に複数訳語を持つ用語対は55組あった．また，反対に，1対1の対応関係にある用語対でも抽出されなかったものが20組あった．表\ref{tab:pluralTranslations}はEDICT中に複数訳語を持つ seed word の例である．これらの用語は複数の訳語候補を持つものの，遺伝子分野においては，ほぼ一意に対応付けられる用語のペアである．提案手法では，このような語を掬い上げ，seed wordとして有効に利用することが可能になる．
+
+\begin{table}[b]
+\input{table4.txt}
+\end{table}
+
+
+\subsection{日英PAJコーパスを用いた専門用語の訳語推定}
+\label{sec:experimentPAJ-PAJ}
+
+次に，日英PAJコーパスと\ref{sec:experimentTerm}，\ref{sec:experimentSeedWord}で得られた用語およびseed wordを用いて，訳語推定実験を行った．対象となる用語は，日英とも専門用語として抽出されたJapio辞書見出し59対を含む日本語1,013件と英語1,034件である．対応付け結果の例を表\ref{tab:alignTerm}に示す．各日本語の候補語に対して，英語の候補語を類似度の順に表示している．太字がJapio辞書における正解訳語である．
+
+\begin{table}[t]
+\input{table5.txt}
+\end{table}
+\begin{table}[t]
+\input{table6.txt}
+\end{table}
+
+日英(JE)および英日(EJ)方向に訳語対応付けを行った結果を表\ref{tab:PAJ-PAJ}に示す．Japio辞書見出し59件に対して3人の翻訳者による評価(HC) \footnote{3人の評価者が個別に評価を行い，3人で一致したものを正解とした．}を行ったところ，第1候補が正解となったものは日英で31件 (53\%), 英日で39件 (66\%) であった．また，10位以内に正解があったものは日英49件 (83\%), 英日53件 (90\%) となった．さらにJapio辞書訳語と比較したところ，HCによる正解訳語がJapio辞書訳語より上位に来たものは，日英12件，英日15件あった．
+
+
+\begin{table}[t]
+\input{table7.txt}
+\end{table}
+\begin{table}[t]
+\input{table8.txt}
+\end{table}
+
+Japio辞書訳語と翻訳者による評価(HC)で評価が異なった訳語を表\ref{tab:JapioHC_EJ}および表\ref{tab:JapioHC_JE}に示す．Japio辞書訳語，人手評価による正解訳語ともに訳語として妥当であるが，後者の方がコーパスでの使われ方を反映したものになっている．例えば ``mammalian'' の訳語として，Japio辞書訳語の「哺乳類」が19位で抽出されているのに対して，「哺乳動物」は1位で抽出されているが，テストコーパスでの出現頻度を見ると「哺乳類」141回，「哺乳動物」360回と「哺乳動物」の方が多かった．また，日英の対応付けでは，「付着」``adhere'', 「突然変異」``mutate'' のように日本語のサ変名詞に対して英語の動詞が対応付けられる例が多かった．これは，日本語では名詞連続が多用されるのに対して英語では文で記述されることが多いという，日英の特性からくるものと考えられる．
+
+
+正しい対応づけができなかった原因は大きく2つに分類される．
+
+\begin{enumerate}
+\item 正解訳語と包含関係にある用語が抽出される
+\item 正解訳語の関連語が抽出される
+\item 用語の概念範囲が広く，複数の訳語候補が存在する
+\end{enumerate}
+
+(1) の例としては，「哺乳類」に対して ``mammalian cell'' が2位に抽出されたケースがある（正解の ``mammalian'' は207位）．今回の実験ではすべての用語を同等に扱ったが，正解訳語と包含関係にある用語の抽出を抑制するためには，用語が部分文字列として出現した場合と単独で出現した場合とでカウント方法を変えるなど，構成要素に着目した評価値を導入する必要がある．また，共通する単語（列）を持つ用語は，訳語どうしも共通する単語（列）を持っていることが多いので，対応付けに有効な情報として利用していきたい．
+
+(2)の例としては，「成長」と ``hormone'', 「発現」と ``gene'' などがある．反義語や類義語，主語と述語のように，対訳ではないが同じ文脈に頻繁に出現する用語が抽出されている．このような現象は，提案手法が用語とseed wordとの共起の類似度を用いて訳語を推定していることから，必然的に起こりうるものである．しかしながら，対応付ける品詞の組を制限したり，他の用語の訳語推定結果を利用したりすることによって，関連語の抽出をある程度抑制できるのではないかと考えている．
+
+(3)の例としては，``template'', ``variety'', 「適用」「要素」「移動」などがある．これらの用語は，用語が広い概念を持ち，用いられる文脈によって訳語が変化するため，訳語の同定は困難である．こうした用語については日英，英日両方向での訳語対応付けを行い，その結果を総合的に判断するなどの方法を検討したい．
+
+\subsection{PAJとUSPを用いた専門用語の訳語推定}
+\label{sec:experimentPAJ-USP}
+
+PAJの日本語抄録と同分野のUSPを用いて，訳語の対応付け実験を行った．まず，4.2と同様の条件でUSPから用語抽出を行ったところ，885件の用語が抽出された．PAJ日本語抄録の1,013件とこの885件の組み合わせで，Japio 辞書との重複は58件であった．
+
+次に，PAJ，USP両コーパスで専門用語として抽出された58件を含む日本語1,013件と英語885件の対応付けを行った．結果を表\ref{tab:PAJ-USP}に示す．いずれの値も，PAJどうしでの対応付けと比べて精度が低下している．これは，PAJがアブストラクト単位で内容が一致しているコンパラブルコーパスであるのに対して，PAJとUSPでは分野が一致するのみで，用語の出現する文脈の類似度が下がるためである．不正解の原因はPAJどうしの場合と同様であるが，「1．正解訳語と包含関係にある用語が抽出される」に分類されるものがやや多かった．
+
+\begin{table}[b]
+\input{table9.txt}
+\end{table}
+
+\subsection{関連手法との比較}
+
+提案手法の妥当性を検証するために，\ref{sec:experimentPAJ-PAJ}および\ref{sec:experimentPAJ-USP}のデータセットに対して，以下の4種類の手法を用いて訳語対応付けの実験を行った． 
+
+\begin{itemize}
+\item SW1：提案手法により獲得された seed wordを用いる．
+\item SW2：SW1のseed wordのうち，上位X件（SW3と同数）を用いる．
+\item SW3：\cite{Fung_and_McKeown97}の手法により獲得された seed wordを用いる．
+\item P: PAJの文対応をとり，dice係数を用いて用語ペアの同時出現確率を求める(\cite{Smadja96})．
+\end{itemize}
+
+SW1は提案手法，SW3はコンパラブルコーパスを用いた訳語対応付けの代表的な手法である\cite{Fung_and_McKeown97}の手法である．SW3では，コーパス中に規定回数以上出現する対訳辞書データのうち，日英両方向（あるいは，少なくともどちらか一方向）に一意に決まる用語対のみを seed wordとして抽出していることから，獲得されるseed word数が少なくなる傾向がある．そこで，SW1で獲得されたseed word群からSW3と同数のseed wordを抽出したSW2も加えてseed wordの効果を比較した．また，PAJは比較的対応の取れたコーパスであることから，簡単な文対応付けを行い，パラレルコーパスの手法を用いた用語対応付けも行った(P)．
+
+今回の実験では，SW3で獲得されたseed word数はPAJどうしで38対，PAJとUSPでは33対となった．38対のseed wordを比較したところ，SW2とSW3の重なりは13件にとどまり，SW3では複合語が多いことが分かった．例えばSW2ではともに複数訳語を持つ ``cancer''--\linebreak[4]「癌」{\kern-0.5zw}\footnote{EDICTでは ``cancer'' には「癌」のほかに「蟹座」「キャンサー」の訳があり，「癌」には ``cancer'' のほかに ``curse'' の訳がある．} が抽出されるのに対して，SW3では日英両方向に曖昧性のない ``cancer cell''--{\kern-0.5zw}「癌　細胞」が抽出される． しかしながら，特許のように分野が細分化されている場合，辞書では複数訳語が存在しても，特定の分野では一意に訳語が決定できる場合が少なくない．実際に，遺伝子分野のコーパスで ``cancer'' を「癌」以外に訳すことはまれであり，結果として ``cancer''--{\kern-0.5zw}「癌」は ``cancer cell''--{\kern-0.5zw}「癌　細胞」と同様に曖昧性がなく，かつ ``cancer cell''--{\kern-0.5zw}「癌　細胞」よりも出現数が多いseed wordであるということになる．
+
+\begin{table}[b]
+\input{table10.txt}
+\end{table}
+\begin{table}[b]
+\input{table11.txt}
+\vspace{-1\baselineskip}
+\end{table}
+
+PAJどうしでの対応付けの結果を表\ref{tab:compPAJ-PAJ}に，PAJ日本語とUSPでの対応付けの結果を表\ref{tab:compPAJ-USP}に示す．どちらの場合も，第1候補の正解率はSW1が最も高く，ついで，SW2，SW3となった．第10候補までの正解率も同様である．以上のことから，対象コーパスでの振る舞いによって seed word を選択することは訳語の抽出精度に効果があることが確認できた．
+
+
+それに対してSW1とPとの比較ではPの正解率が高く，PAJのように対応度の高いコーパスではパラレルコーパスの手法が有効であることが分かった．提案手法においても第10候補内に83〜90％の正解訳語を含んでいることから，人間の辞書作成を支援するツールとしては十分に効果があると考えるが，実際の辞書構築では，コーパスの対応度に応じて適用する手法を選択していくことが重要であろう．
+
+
+\section{まとめ}
+
+本論文では，日英特許コーパスから専門用語を抽出し，訳語を推定する方法を提案した．提案手法の専門用語の抽出は，隣接文字（単語）の分散によって単語列のユニット性を，$\mathit{tf} \bullet \mathit{idf}$によってターム性を数値化し，評価値の高い単語列を専門用語として抽出する．専門用語の訳語対応付けは，seed wordと専門用語との単言語内での共起ベクトルを作成し，共起ベクトルの類似度が高い用語どうしを対応付ける．seed wordに両言語のコーパスにおける出現傾向が類似している用語対だけを利用することにより，類似性評価の信頼性を高めている点が特徴である．遺伝子分野の特許抄録1年分を用いた実験では，一連の対訳辞書作成プロセスにおいて提案手法が有効であることを示した．
+
+一方で，今回の実験では頻度100以上の用語を対象としたが，実際に翻訳などの処理に十分な量の対訳辞書を作成するには，さらに低頻度の用語にまで対象を拡げていく必要がある．専門用語抽出においては，低頻度の用語であっても抽出可能であることが確認されたが，訳語対応付けでは，seed wordとの共起ベクトルを作成することから，ある程度の出現頻度がなければ実用的な推定精度を出すことは難しい．抽出対象の拡大に際しては，精度低下を最小限に抑える工夫が必要になる．具体的には，高頻度の用語どうしの対応付けにより抽出された用語対を対訳辞書に追加し，そこから再帰的にseed wordを獲得して，出現頻度の閾値を段階的に下げた用語に対して訳語対応付けを行っていく方法が考えられる．訳語対応付けの場合，順位付けられた訳語候補の中から人間が適切な訳語を選択することになるので，このような方法でも辞書作成の効率化には十分効果があると考えている．
+
+さらに，特許のように新しい文書が次から次へと蓄積されていく分野では，元になるテキストに一定期間蓄積したテキストを随時追加し，用語抽出，および，対応付けを繰り返し行うことにより，次々に出現する新語や1年分のテキストでは抽出対象とならなかった用語を獲得することが可能になる．今後は，専門用語抽出及び訳語対応付けの精度向上を図るとともに，1)専門用語対訳辞書の増強，2)seed wordの品質向上，3)訳語対応付け精度向上，というサイクルを確立し，本格的な専門用語対訳辞書の構築支援に取り組んでいきたい．
+
+
+
+\acknowledgment
+本研究を進めるにあたり，データをご提供頂いた財団法人日本特許情報機構(Japio)殿，有益な議論をして頂いたアジア太平洋翻訳協会 AAMT/Japio研究会のメンバー，情報通信機構(NICT)けいはんな情報通信融合研究センター自然言語グループのメンバーに感謝する．また，本研究は情報通信機構(NICT)平成14年度基板技術研究促進制度に係る研究開発課題「多言語標準文書処理システムの研究開発」の一環として行なわれたものである．
+
+
+
+
+\bibliographystyle{jnlpbbl_1.3}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Ananiadou}{Ananiadou}{1994}]{Ananiadou94}
+Ananiadou, S. \BBOP 1994\BBCP.
+\newblock \BBOQ A Methodology for Automatic Term Recognition\BBCQ\
+\newblock In {\Bem Proceedings of the 15th International Conference on
+  Computational Linguistics (COLING 94)}.
+
+\bibitem[\protect\BCAY{Cao \BBA\ Li}{Cao \BBA\ Li}{2002}]{Cao_and_Li02}
+Cao, Y.\BBACOMMA\ \BBA\ Li, H. \BBOP 2002\BBCP.
+\newblock \BBOQ Base Noun Phrase Translation Using Web Data and the EM
+  Algorithm\BBCQ\
+\newblock In {\Bem Proceedings of the 19th COLING}.
+
+\bibitem[\protect\BCAY{Dagan \BBA\ Church}{Dagan \BBA\
+  Church}{1994}]{Dagan_and_Church94}
+Dagan, I.\BBACOMMA\ \BBA\ Church, K.~W. \BBOP 1994\BBCP.
+\newblock \BBOQ Termight: Identifying and Translating Technical
+  Terminology\BBCQ\
+\newblock In {\Bem Proceedings of the 4th Conference on Applied Natural
+  Language Processing}.
+
+\bibitem[\protect\BCAY{Frantzi \BBA\ Ananiadou}{Frantzi \BBA\
+  Ananiadou}{1999}]{Frantzi_and_Ananiadou99}
+Frantzi, K.\BBACOMMA\ \BBA\ Ananiadou, S. \BBOP 1999\BBCP.
+\newblock \BBOQ The C-value/NC-value Method for ATR\BBCQ\
+\newblock {\Bem Journal of NLP}, {\Bbf 6}  (3), \mbox{\BPGS\ 145--179}.
+
+\bibitem[\protect\BCAY{Fung \BBA\ McKeown}{Fung \BBA\
+  McKeown}{1997}]{Fung_and_McKeown97}
+Fung, P.\BBACOMMA\ \BBA\ McKeown, K. \BBOP 1997\BBCP.
+\newblock \BBOQ Finding Terminology Translations from Non-parallel
+  Corpora\BBCQ\
+\newblock In {\Bem Proceedings of the Fifth Workshop on Very Large Corpora}.
+
+\bibitem[\protect\BCAY{Fung \BBA\ Yee}{Fung \BBA\ Yee}{1998}]{Fung_and_Yee98}
+Fung, P.\BBACOMMA\ \BBA\ Yee, L.~Y. \BBOP 1998\BBCP.
+\newblock \BBOQ An IR Approach for Translating New Words from Nonparallel,
+  Comparable Texts\BBCQ\
+\newblock In {\Bem Proceedings of the 36th conference on Association for
+  Computational Linguistics}.
+
+\bibitem[\protect\BCAY{Gale \BBA\ Church}{Gale \BBA\
+  Church}{1993}]{Gale_and_Church93}
+Gale, W.~A.\BBACOMMA\ \BBA\ Church, K.~W. \BBOP 1993\BBCP.
+\newblock \BBOQ A Program for Aligning Sentences in Bilingual Corpora\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 19}  (1), \mbox{\BPGS\
+  75--102}.
+
+\bibitem[\protect\BCAY{Kitamura \BBA\ Matsumoto}{Kitamura \BBA\
+  Matsumoto}{2004}]{Kitamura_and_Matsumoto04}
+Kitamura, M.\BBACOMMA\ \BBA\ Matsumoto, Y. \BBOP 2004\BBCP.
+\newblock \BBOQ Practical Translation Pattern Acquisition from Combined
+  Language Resources\BBCQ\
+\newblock In {\Bem Proceedings of The First International Joint Conference on
+  Natural Language Processing}.
+
+\bibitem[\protect\BCAY{Kupiec}{Kupiec}{1993}]{Kupiec93}
+Kupiec, J. \BBOP 1993\BBCP.
+\newblock \BBOQ An Algorithm for Finding Noun Phrase Correspondences in
+  Bilingual Corpora\BBCQ\
+\newblock In {\Bem proceedings of the 31st Annual Conference of the Association
+  for Computational Linguistics}.
+
+\bibitem[\protect\BCAY{Rapp}{Rapp}{1999}]{Rapp99}
+Rapp, R. \BBOP 1999\BBCP.
+\newblock \BBOQ Automatic Identification of Word Translations from Unrelated
+  English and German Corpora\BBCQ\
+\newblock In {\Bem Proceedings of 37th Annual Meeting of the Association for
+  Computational Linguistics}.
+
+\bibitem[\protect\BCAY{Shimohata, Sugio, \BBA\ Nagata}{Shimohata
+  et~al.}{1997}]{Shimohata97}
+Shimohata, S., Sugio, T., \BBA\ Nagata, J. \BBOP 1997\BBCP.
+\newblock \BBOQ Retrieving Collocations by Co-occurrences and Word Order
+  Constraints\BBCQ\
+\newblock In {\Bem Proceedings of 35th Annual Meeting of the Association for
+  Computational Linguistics}.
+
+\bibitem[\protect\BCAY{Smadja}{Smadja}{1993}]{Smadja93}
+Smadja, F. \BBOP 1993\BBCP.
+\newblock \BBOQ Retrieving Collocations from Text: Xtract\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 19}  (1), \mbox{\BPGS\
+  143--177}.
+
+\bibitem[\protect\BCAY{Smadja \BBA\ Hatzivassiloglou}{Smadja \BBA\
+  Hatzivassiloglou}{1996}]{Smadja96}
+Smadja, F.\BBACOMMA\ \BBA\ Hatzivassiloglou, V. \BBOP 1996\BBCP.
+\newblock \BBOQ Translating Collocations for Bilingual Lexicons: A Statistical
+  Approach\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 22}  (1), \mbox{\BPGS\
+  1--38}.
+
+\bibitem[\protect\BCAY{Utiyama \BBA\ Isahara}{Utiyama \BBA\
+  Isahara}{2003}]{Utiyama_and_Isahara03}
+Utiyama, M.\BBACOMMA\ \BBA\ Isahara, H. \BBOP 2003\BBCP.
+\newblock \BBOQ Reliable Measures for Aligning Japanese-English News Articles
+  and Sentences\BBCQ\
+\newblock In {\Bem Proceedings of 41st Annual Meeting of the Association for
+  Computational Linguistics}.
+
+\bibitem[\protect\BCAY{下畑}{下畑}{2005}]{Shimohata05}
+下畑さより \BBOP 2005\BBCP.
+\newblock \JBOQ 特許翻訳における専門用語辞書構築\JBCQ\
+\newblock \Jem{言語処理学会第11回年次大会論文集}.
+
+\bibitem[\protect\BCAY{宇津呂\Jetal }{宇津呂\Jetal }{2005}]{Utsuro05}
+宇津呂武仁 \Jetal  \BBOP 2005\BBCP.
+\newblock \JBOQ 日英関連報道記事を用いた訳語対応推定\JBCQ\
+\newblock \Jem{言語処理学会論文誌}, {\Bbf 12}  (5), \mbox{\BPGS\ 43--69}.
+
+\bibitem[\protect\BCAY{中川\JBA 湯本\JBA 森}{中川\Jetal }{2003}]{Nakagawa03}
+中川裕志\JBA 湯本紘彰\JBA 森辰則 \BBOP 2003\BBCP.
+\newblock \JBOQ 出現頻度と連接頻度に基づく専門用語抽出\JBCQ\
+\newblock \Jem{言語処理学会論文誌}, {\Bbf 10}  (1), \mbox{\BPGS\ 27--45}.
+
+\end{thebibliography}
+
+\begin{biography}
+
+\bioauthor{下畑さより}{
+1988年同志社大学文学部英文学科卒業．
+2007年3月神戸大学大学院自然科学研究課博士後期過程単位取得後満期退学．
+現在，沖電気工業株式会社ユビキタスサービスプラットフォームカンパニー所属．
+機械翻訳を中心とする自然言語処理の研究開発に従事．
+言語処理学会，情報処理学会，人工知能学会，各会員．
+}
+\bioauthor{井佐原　均}{
+1978年京都大学工学部卒業，1980年同大学院修士課程終了．同年通商産業省電子技術総合研究所入所．1995年郵政省通信総合研究所関西支所知的機能研究室室長．現在，独立行政法人情報通信研究機構（旧通信総合研究所）けいはんな情報通信融合研究センター自然言語処理グループリーダー．博士（工学）．自然言語処理，機械翻訳の研究に従事．言語処理学会，情報処理学会，日本認知科学会，各会員．
+}
+
+\end{biography}
+
+
+\biodate
+
+
+
+\end{document}

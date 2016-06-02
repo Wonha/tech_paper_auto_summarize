@@ -1,0 +1,1649 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\newcommand{\argmax}{}
+
+
+
+\Volume{17}
+\Number{4}
+\Month{July}
+\Year{2010}
+
+\received{2009}{11}{21}
+\revised{2010}{2}{25}
+\accepted{2010}{3}{25}
+
+\setcounter{page}{59}
+
+\jtitle{自動意味役割付与における意味役割の汎化}
+\jauthor{松林優一郎\affiref{Author_1}\affiref{Author_4} \and 岡崎　直観\affiref{Author_1}
+\and 辻井　潤一\affiref{Author_1}\affiref{Author_2}\affiref{Author_3}}
+\jabstract{
+FrameNet，PropBankといった意味タグ付きコーパスの出現とともに，機械学習の
+枠組みを利用した自動意味役割付与システムが数多く研究されてきた．しかし，
+これらのコーパスは個々のフレームに固有の意味役割を定義するため，コーパス
+中に低頻度，或いは未出現の意味役割が数多く存在し，効率的な学習を妨げている．
+本論文は，意味役割付与における意味役割の汎化問題を取り上げ，既存の汎
+化指標と新たに提案する指標を役割の分類精度を通して比較し，それぞれの特徴
+を探求する．また，複数の汎化指標を同時に利用する分類モデルが自動意味役割
+付与の精度を向上させることを示す．実験では，
+FrameNetにおいて全体の精度で$19.16\%$のエラー削減，
+F1マクロ平均で$7.42\%$の向上を，PropBankにおいて全体の精度で$24.07\%$の
+エラー削減，未知動詞に対するテストで$26.39\%$のエラー削減を達成した．
+}
+\jkeywords{意味役割，フレーム，フレームネット，PropBank, VerbNet, SemLink}
+
+\etitle{Generalization of Semantic Roles in Automatic \\
+	Semantic Role Labeling}
+\eauthor{Yuichiroh Matsubayashi\affiref{Author_1}\affiref{Author_4} \and Naoaki
+Okazaki\affiref{Author_1} \and Jun'ichi Tsujii\affiref{Author_1}\affiref{Author_2}\affiref{Author_3}}
+\eabstract{
+A number of studies have applied
+machine-learning approaches to semantic
+role labeling with availability of corpora
+such as FrameNet and PropBank. These
+corpora define frame-specific semantic roles 
+for each frame. It is crucial for the machine-learning approach
+because the corpus contain a number of infrequent roles which hinder
+an efficient learning.
+This paper focus on a generalization problem of semantic roles in
+a semantic role labeling task. We compare existing generalization
+criteria and our novel criteria, and clarify characteristics of each
+criterion. 
+We also show that using multiple generalization criteria in a model
+improves the performance of a semantic role classification.
+In experiments on FrameNet, we achieved $19.16\%$ error reduction in
+terms of total accuracy and $7.42\%$ in macro F1 avarage.
+On PropBank,  we reduced $24.07\%$ of errors in total accuracy,
+and $26.39\%$ of errors in the evaluation for
+unseen verbs.
+}
+\ekeywords{semantic role labeling, FrameNet, PropBank, VerbNet, SemLink, frame}
+
+\headauthor{松林，岡崎，辻井}
+\headtitle{自動意味役割付与における意味役割の汎化}
+
+
+\affilabel{Author_1}{東京大学大学院情報理工学系研究科コンピュータ科学専攻}{Department of Computer Science, University of Tokyo}
+\affilabel{Author_2}{マンチェスター大学コンピュータ科学専攻}{School of Computer Science, University of Manchester}
+\affilabel{Author_3}{英国立テキストマイニングセンター}{National Centre for Text Mining, UK}
+\affilabel{Author_4}{4月より国立情報学研究所}{National Institute of Informatics, from this April}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+\label{section:introduction}
+
+近年，FrameNet~\shortcite{Baker:98}やPropBank~\shortcite{Palmer:05}など
+の意味役割付与コーパスの登場と共に，意味役割
+付与に関する統計的なアプローチが数多く研究されてきた~\shortcite{marquez2008srl}．
+意味役割付与問題は，述語—項構造解析の一種であり，文中の述語と，それらの項
+となる句を特定し，それぞれの項のための適切な意味
+タグ（意味役割）を付与する問題である．
+述語と項の間の意味的関係を解析する技術は，質問応答，機械翻訳，情報抽出などの
+様々な自然言語処理の応用分野で重要な課題となっており，近年の意味役割
+付与システムの発展は多くの研究者から注目を受けている
+~\shortcite{narayanan-harabagiu:2004:COLING,shen-lapata:2007:EMNLP-CoNLL2007,moschitti2007esa,Surdeanu2003}．
+
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{17-4ia5f1.eps}
+\end{center}
+\caption{PropBankとFrameNetにおける動詞{\it sell}，{\it buy}に対するフレーム定義の比較}
+\label{framenet-propbank}
+\end{figure}
+
+
+これらのコーパスは，文中の単語（主に動詞）が{\bf フレーム}と呼ばれる特定
+の項構造を持つという考えに基づく．
+図~\ref{framenet-propbank}に，例として，FrameNetとPropBankにおける
+{\it sell}と{\it buy}の二つの動詞に関するフレーム定義を示す．各フレームはそれぞれの
+コーパスで特定の名前を持ち，その項としていくつかの意味役割を持つ．
+また，意味役割は，それぞれのフレームに固有の役割として定義
+される．例えば，PropBankのsell.01フレームの役割{\it sell.01::0}と，
+buy.01フレームの役割{\it buy.01::0}は別の意味役割であり，また一見同じ記
+述(Seller)のついた{\it sell.01::0}と{\it buy.01::2}もまた，別の役割とい
+うことになる．これはFrameNetについても同様である．
+意味役割がフレームごとに独立に定義されている理由は，各フレームの意
+味役割が厳密には異なる意味を帯びているからである．
+しかし，この定義は自動意味役割付与の方法論にとってやや問題である．
+一般的に，意味役割付与システムは教師付き学習の枠組みで設計されるが，
+意味役割をフレームごとに細分化して用意することは，コーパス中に事例の少ない
+役割が大量に存在する状況を招き，学習時の疎データ問題を引き起こす．
+実際に，PropBankには4,659個のフレーム，11,500個以上の意味役割が存在し，
+フレームあたりの事例数は平均12個となっている．FrameNetでは，795個のフレー
+ム，7,124 個の異なった意味役割が存在し，役割の約半数が10個以下の事例しか
+持たない．
+この問題を解決するには，類似する意味役割を何らかの指標で汎化し，共通点の
+ある役割の事例を共有する手法が必要となる．
+
+従来研究においても，フレーム間で意味役割を汎化するためのいくつかの指標が
+試されてきた．
+例えば，PropBank上の意味役割付与に関する多くの研究では，意味
+役割に付加されている数字タグ({\it ARG0-5})が汎化ラベルとして利用されてき
+た．しかし，
+{\it ARG2}--{\it ARG5}でまとめられる意味役割は統語的，意味的に一貫性がな
+く，これらのタグは汎化指標として適さない，という指摘もある
+\shortcite{yi-loper-palmer:2007:main}．そこで近年では，主題役割，統語構
+造の類似性などの異なる指標を利用した意味役割の汎化が研究されている
+~\shortcite{gordon-swanson:2007:ACLMain,zapirain-agirre-marquez:2008:ACLMain}．
+
+
+FrameNetでは，意味役割はフレーム固有のものであるが，同時にこれらの意味役割の間
+には型付きの階層関係が定義されている．図\ref{fig:frame-hierarchy}にその
+抜粋を示す．こ
+こでは例えば，{\it Giving}フレームと{\it Commerce\_sell}フレームは継承関係
+にあり，またこれらのフレームに含まれる役割には，どの役割がどの役割の継承を受けている
+かを示す対応関係が定義されている．
+この階層関係は意味役割の汎化に利用できると期
+待できるが，これまでの研究では肯定的な結果が得られていな
+い~\shortcite{Baldewein2004}．したがって，FrameNetにおける役割の汎化も
+重要な課題として持ち上がっている~\shortcite{Gildea2002,Shi2005ppt,Giuglea2006}．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{17-4ia5f2.eps}
+\caption{FrameNetのフレーム階層の抜粋}
+\label{fig:frame-hierarchy}
+\end{center}
+\end{figure}
+
+意味役割の汎化を考える際の重要な点は，我々が意味役割と呼んでいるものが，
+種類の異なるいくつかの性質を持ち合わせているということである．
+例えば，図~\ref{framenet-propbank}におけるFrameNetの役割{\it Commerce\_sell::Seller}と，
+{\it Commerce\_buy::Seller}を考えてみたとき，これらは「販売者」と
+いう同一語彙で説明出来るという点では同じ意味的性質を持ち合わせているが，
+一方で，動作主性という観点でみると，{\it Commerce\_sell::Seller}は動作主であるが，
+{\it Commerce\_buy::Seller}は動作主性を持っていない．このように，意味役割はそ
+の特徴を単に一つの観点から
+纏めあげられるものではなく，いくつかの指標によって異なる説明がされるものであ
+る．しかし，これまでに提案されてきた汎化手法では，
+一つの識別モデルの中で異なる指標を同時に用いてこなかった．
+また，
+もう一つの重要なことは，
+これまでに利用されてきたそれぞれの汎化指標が，意味役割のどのような性質を
+捉え，その結果として，どの程度正確な役割付与に結びつい
+ているかを明らかにすべきだということである．
+
+そこで本研究では，FrameNet，PropBankの二つの意味役割付与コーパスについて，
+異なる言語学的観点に基づく
+新たな汎化指標を提案し，それらの汎化指標
+を一つのモデルの中に統合出来る分類モデルを提案する．また，
+既存の汎化指標及び新たな汎化指標に対して実験に基づいた細かな分析を与
+え，各汎化指標の特徴的効果を明らかにする．
+
+FrameNetにおける実験では，FrameNetが持つフレームの階層関係，役割の記述子，
+句の意味型，さらにVerbNetの主題役割を利用した汎化手法を提案し，これらの指標が
+意味役割分類の精度向上に貢献することを示す．
+PropBankにおける実験では，従来より汎化手法として議論の中心にあったARGタ
+グと主題役割の効果の違いを，エラー分析に基づいて正確に分析する．
+また，より頑健な意味役割の汎化のために，VerbNetの動詞
+クラス，選択制限，意味述語を利用した三つの新しい汎化手法
+を提案し，その効果について検証する．
+
+実験では，我々の提案する全ての汎化指標について，それぞれが低頻度
+或いは未知フレームに対する頑健性を向上させることを確認した．また，複数
+の汎化指標の混合モデルが意味役割分類の精度向上に貢献することを確認した．
+全指標の混合モデルは，FrameNetにおいて全体の精度で$19.16\%$のエラー削減，
+F1 Macro平均で$7.42\%$の向上を達成し，PropBankにおいて全体の精度で$24.07\%$の
+エラー削減，未知動詞に対するテストで$26.39\%$のエラー削減を達成した．
+
+
+\section{関連研究}
+
+意味役割を汎化することで意味役割付与の疎データ問題を解消する方法は，こ
+れまでにいくつか提案されてきた．
+\shortciteA{Moschitti2005}は各役割を主役割，付加詞，継続項，共参
+照項の四つの荒いクラスに分類した後，それらのクラスに対してそれぞれ専用の
+分類器でPropBankのARGタグを分類した．
+\shortciteA{Baldewein2004}は，意味役割分類器を学習する際，ある役割の訓練
+に，類似する他の役割の訓練例を再利用した．類似度の尺度としては，
+FrameNetにおける階層関係，周辺的役割，EMアルゴリズムに基づいたクラスタが
+利用された．
+\shortciteA{gordon-swanson:2007:ACLMain}はPropBankの意味役割に対して，各
+フレームの統語的類似度に基づいて役割の汎化を行う手法を提案した．
+
+また，
+異なるフレーム間の意味役割を繋ぐ懸け橋として，フレームに依存しないラベル
+セットである主題役割も用いられてきた．
+\shortciteA{Gildea2002}はFrameNetの意味役割を彼らが選定した18種類の主題
+役割に人手で置き換えることで，役割の分類精度が向上することを示した．
+\shortciteA{Shi2005ppt,Giuglea2006}は異なる意味コーパスによって定義され
+た役割の共通の写像先として，VerbNetの主題役割を採用した．
+
+意味役割の汎化指標に対する比較研究としては，
+PropBank上でARGタグと主題役割の比較を行った，
+\shortciteA{yi-loper-palmer:2007:main,loper2007clr,zapirain-agirre-marquez:2008:ACLMain}
+の研究が挙げられる．
+\shortciteA{yi-loper-palmer:2007:main,loper2007clr}は，
+主題役割をPropBankのARGタグの代替とすることで，
+{\it ARG2}の分類精度を向上出来た一方で，{\it ARG1}の精度は低下すると報告した．
+また，\shortciteA{yi-loper-palmer:2007:main}は同時に，
+{\it ARG2-5}は多種にわたる主題役割に写像されることを示した．
+\shortciteA{zapirain-agirre-marquez:2008:ACLMain}は
+最新の意味役割付与システムを用いて，PropBankのARGタグとVerbNetの主題役割
+の二つのラベルセットを評価し，全体として，PropBankのARGタグのほうがより
+頑健な汎化を達成すると結論付けた．
+しかしながら，これら三つの研究は，意味役割付与全体の精度比較しか行っていな
+いため，各汎化指標により得られる効果の正確な理解のためには，詳細な検
+証による理由付けが必要である．
+
+FrameNet，PropBankにおけるこれらの汎化ラベルは，
+汎化ラベル自身を直接推定するモデルとして設計されたため，
+コーパス中の意味役割を汎化ラベルで直接置き換える方法か，それに準じる方法
+で用いられてきた．
+しかし，この方法では，異なる汎化指標を一つの分類モデルの中で同時に用いる
+ことが出来ない．役割の特徴を複数の観点から共有しようとする我々の目的のた
+めには，これらの指標を自然に混合できる分類モデルの設計が必要となる．
+
+
+\section{フレーム辞書と意味役割付与コーパス}
+
+本節では，我々の実験で利用する意味タグ付き言語資源について，その特徴を
+簡単に説明する．我々はFrameNet，PropBankの二つの意味役割付与コーパス
+の枠組みの基で，それぞれ自動意味役割付与の実験を行う．これら
+のコーパスは，図\ref{fig:semantic-corpus}のように，
+フレームとその意味役割を定義したフレーム辞書と，これらが付与された実テキ
+ストからなる．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{17-4ia5f3.eps}
+\end{center}
+\caption{意味役割付与コーパスの概要図}
+\label{fig:semantic-corpus}
+\end{figure}
+
+また，役割汎化のためのコーパス外の知識としてVerbNet
+を用いる．FrameNet，PropBankの意味役割とVerbNetの主題役割の対応付けに
+は，SemLinkを利用する．
+
+
+\subsection{FrameNet}
+\label{sec:framenet}
+
+FrameNetは，フレーム意味論\cite{fillmore1976}を基に作られた意味役割付きコー
+パスである．FrameNetにおけるフレームは{\bf 意味フレーム}と呼ばれ，特定の
+イベントや概念を表す．各フレームには，それを想起させる単語が複数割り当て
+られている．意味役割は{\bf フレーム要素}と呼ばれ，各フレームに固有の役割
+として定義されている．また，それに加えて，各役割がそのフレームの中でどの
+程度重要な位置を占めるかを表す指標として，それぞれの役割に{\bf 中心性}と
+呼ばれる型を割り振っている．これらは，{\bf core}，{\bf core-unexpressed}，{\bf peripheral}，
+{\bf extra-thematic}の四つからなり，coreとcore-unexpressedはそのフレームの中心
+的な役割を，
+peripheralは周辺的な役割を，extra-thematicはフレーム外の概念から拡張され
+た役割をそれぞれ表す．
+FrameNetの特筆すべき特徴として，フレーム間の階層関係がある
+（図~\ref{fig:frame-hierarchy}）．これは，継承，使用，起動，原因，観点，部分，先
+行の七種類の有向関係によって定義されており，また，関係が定義されたフレームの意味
+役割間にもそれぞれ親子関係が定義される．
+一つのアノテーションは，文中の一つの想起単語とそれが想起するフレーム，及
+び適切な句への意味役割タグの割り当てで構成される．
+実テキストに対するアノテーションは，British National Corpusより抜き出さ
+れた約$140,000$文にそれぞれ一アノテーションずつが付けられたものと，追加コー
+パスに対する全文アノテーションからなり，全体で約$150,000$のアノテーショ
+ンが含まれる．
+我々の実験では，現時点の最新版である第$1.3$版を用いた．
+
+
+\subsection{PropBank}
+\label{sec:propbank}
+
+PropBankは，Penn Treebank IIのWall Street Journal部分の全てのテキストに対
+して，動詞の述語—意味役割構造を与えるコーパスである．
+フレームは，図\ref{framenet-propbank}のsell.01, buy.01などのように動詞ご
+とに個別に用意され，その動詞の項構造の数に応じて一動詞あたり平均$1.4$個
+のフレームが作られている．
+テキスト部には$112,917$アノテーションを含む．
+PropBankでは，FrameNetにあるようなフレーム間の関係は定義されておらず，
+各フレームは定義上独立な関係である．一方，意味役割の定義は二種類に分かれる．
+一つは$0$から$5$の数字がふられた
+役割({\it ARG0-5})で，
+もう一つはAMタグという，全フレームに共通な付加詞的意味役割である．
+{\it ARG0-5}については，図\ref{framenet-propbank}の{\it sell.01::0} (Seller)と
+{\it buy.01::0} (Buyer)のように，同じ数字を持つものでも各フレームで役割
+の意味が大きく異なる．
+しかし，{\it ARG0}と{\it ARG1}については，{\it ARG0}が{\it Proto-Agent}，{\it ARG1}が
+{\it Proto-Patient}に大まかに対応するように付けられており，それ以外の数字は動
+詞に応じて多様な意味を取ることが知られてい
+る~\shortcite{Palmer:05,yi-loper-palmer:2007:main}．AMタグに
+は，所格を表す{\it AM-LOC}，時格を表す{\it AM-TMP}など$14$種類がある．
+
+
+\subsection{VerbNet, SemLink}
+\label{sec:verbnet}
+
+VerbNet~\shortcite{kipper2000cbc}は，動詞間の統語的，意味的特徴の一
+般化を目的として作られた，動詞の階層的なグループ及びそれらのグループに関
+する特徴の体系的記述である．
+このグループは\shortciteA{levin1993evc}の提案に拡張を加えた$470$のクラス
+からなり， 各動詞がどの動詞クラスに分類されるかは，
+そのクラスの動詞が持つべきいくつかの特徴を所有するか否かで決定される．
+同じ動詞クラスの動詞は，その所有する項が共通であり，これらは明確に定
+義された$30$種類の主題役割から選ばれる．
+我々はVerbNet第$2.3$版の情報を利用して，意味役割の汎化を試み
+る．
+
+VerbNet
+を利用する利点は大きく二つある．一つは，全
+動詞に対して共通に定められた$30$種類の主題役割が，PropBankやFrameNetの意
+味役割を適切に汎化する指標となりうることである．もう一つは，動詞グ
+ループが捉える細かなレベルの統語的／意味的共通性を利用出来る点である．
+我々はこれらの情報を用いた汎化手法を\ref{sec:frameNet-verbnet}節，
+\ref{sec:generalization-criteria-propbank}節で提案する．
+
+
+FrameNet，PropBank，VerbNetの三つはそれぞれ異なるアプローチで開発されて
+いるため，VerbNetを役割汎化の指標として利用するためには，これらの意味役
+割を相互に変換する必要がある．我々はこの目的のために，
+\shortciteA{loper2007clr}などによって作られたSemLink\footnote{http://verbs.colorado.edu/semlink/}を利用する．
+SemLinkは異なる方法論で作られた意味タグ同士を対応付ける目的で作られてお
+り，その内容は図~\ref{fig:semlink}のように(A)フレーム辞書の対応と(B)事例
+レベルの対応の二つの資源からなる．(A)では，FrameNet，PropBankのフレーム
+が適切なVerbNetの動詞クラスと対応付けられ，また，それぞれの意味役割はそ
+の動詞クラス内の主題役割と結び付けられる．
+しかし，FrameNet，PropBank，VerbNetの間では，フレーム
+の切り分け方が異なるため，いくつかのフレームでは，動詞クラスと
+の対応が多対多となる．
+そこでSemLinkでは，(B)のような事例レベルでの項構造のマッピングも同時に与
+えている．
+これによって資源間の方法論の差による曖昧性を解消し，各事例
+のフレームと意味役割を正確な動詞クラスと主題役割に写像することを可能にしている．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{17-4ia5f4.eps}
+\end{center}
+\caption{SemLinkの概要図}
+\label{fig:semlink}
+\end{figure}
+
+現段階（第1.1版）のSemLinkでは，この事例レベルの写像はPropBankにのみ与え
+られ，FrameNetの方は，辞書レベルのマッピングのみである．FrameNetでは，こ
+の辞書マップを通じて$1,726$の意味役割がVerbNetの主題役割に写像される．こ
+れは，コーパス中に事例として一回以上出現する役割の$37.61\%$にあたる．
+また，PropBankでは，実テキスト中の62.34\%の項構造がVerbNetの動詞クラスと
+主題役割を用いたアノテーションに写像される．
+
+
+
+\section{意味役割分類問題}
+\label{sec:role-classification}
+
+意味役割付与は複数の問題が絡み合った複雑なタスクであるため，これを
+{\bf フレーム想起単語特定}（フレームを想起する単語の特定），
+{\bf フレーム曖昧性解消}（想起単語が取り得るフレームのうち正しい
+ものの選択），{\bf 役割句特定}（意味役割を持つ句の特定），
+{\bf 役割分類}（役割句に正しい役割を割り当てる），と
+いった四つの部分問題に分けて解かれることが多い．
+今回我々は，これらの部分問題のうち，役割の疎データ問題が直接関係する役割分類のみを取り扱う．
+これには，この部分問題における入力を正確に与え，他の処理によるエラーを極力排
+除することにより，意味役割の汎化による効果を厳密かつ詳細に分析する狙いが
+ある．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{17-4ia5f5.eps}
+\end{center}
+\caption{役割分類における入出力の例}
+\label{input}
+\end{figure}
+
+本研究では，既存研究の枠組みに従い，役割分類を以下のように定義する．入
+力としては，文，フレーム想起単語，フレーム，役割の候補，役割句を与え
+る．出力は，それぞれの役割句に対する正しい役割の割り当てである．
+図\ref{input}にFrameNet上の役割分類における具体的な入出力の例を示す．ここ
+では，動詞{\it sell}から{\it Commerce\_sell}フレームが想起され，文中に三か所の
+役割句が特定されている．役割の候補はフレームによって与えられる\{{\sf
+Seller}, {\sf Buyer}, {\sf Goods}, {\sf Reason}, ... , {\sf Place}\}であ
+り，各役割句の意味役割は，これらの役割候補の中から一つずつ選ばれる．
+
+
+
+\section{意味役割の汎化と役割分類モデル}
+
+\subsection{意味役割汎化の定式化}
+\label{sec:define-generalization}
+
+意味役割の汎化は，ある（言語学的）観点に基づいて，複数の意味役割の間に共通す
+る性質を捉え，同じ性質を持つ役割を
+同一視
+する行為と言うことが出来る．
+従来の意味役割の汎化は，コーパス中の意味役割ラベル
+を一対一対応のとれる汎化ラベルに置き換えることで実現されてきた．
+しかし，この方法では，一つの意味役割に対して一つの汎化ラベルしか与える
+ことが出来ない．
+一方で我々の立場は，意味役割の汎化は複数の観点から多面的に行われるべきと
+いうものである．
+したがって，我々は，意味役割の汎化を複数の汎化ラベルの集合で表現し，元の
+意味役割はこの汎化ラベルの集合を持つという形にする．
+
+具体的な例として，PropBankの意味役割が，{\it ARG0-5}ラベルと主題役割の二つ
+の汎化ラベルで同時に汎化されることを考えてみよう．今，フレーム固有の意味
+役割としてsell.01フレームの役割{\it sell.01::0} (seller)を考えると，これは，
+ARGタグと主題役割を用いてそれぞれ{\it ARG0}，{\it Agent}に汎化される．
+以降，異なる指標で作られたラベル同士を区別するため，各汎化ラベルを
+「{\it ラベル名@指標名}」で表すことにする．
+{\it sell.01::0}はこれら二つのラベルを集合として持つと考え，これを関
+数$gen$を用いて，
+\begin{equation}
+gen(\mbox{\it sell.01::0})= \{\mbox{\it ARG0@ARG}, \mbox{{\it Agent@TR}}\}
+\end{equation}
+と表すことにする．実際には，これら二つの汎化ラベルは異なる汎化指標から導き
+出されているものであるので，説明の簡単のため，汎化指標ごとに関数を分解し
+て表す．
+\begin{align}
+gen_{arg}(\mbox{\it sell.01::0}) & = \{\mbox{\it ARG0@ARG}\} \label{eqn:arg}\\
+gen_{tr}(\mbox{\it sell.01::0}) & = \{\mbox{{\it Agent@TR}}\} \label{eqn:thematic}\\
+gen(y) & =  gen_{arg}(y) \cup gen_{tr}(y)
+\end{align}
+
+
+これを一般化すれば，意味役割が$n$種の汎化指標によるラベルを同時に
+持つことを表現出来る．
+ここで，元の意味役割全体を$R$とし，
+異なる種類の汎化ラベルの集合をそれぞれ$C_1, \ldots , C_n$，これら全ての汎化ラ
+ベルの集合を$C= \bigcup_{i=1}^{n}C_i$とするとき，意味役割の汎化とは，関数
+\begin{align}
+gen_i&: R \rightarrow\{C_i'|C_i'\subset C_i\}\\
+gen&: R \rightarrow\{C'|C'\subset C\}\text{ （ただし，}gen(y) =
+ \bigcup_{i}gen_i(y)\text{）}
+\end{align}
+を定義することである．
+これら意味役割汎化のための関数をFrameNet，PropBank
+の各々の分類モデルで具体的にどのように定義するかについては，
+\ref{sec:generalization-criteria-framenet}節と
+\ref{sec:generalization-criteria-propbank}節で述べることにする．
+
+
+
+\subsection{役割分類モデル}
+
+前節で述べたように，多くの既存研究が意味役割の汎化の際に取ったアプローチ
+は，それぞれの意味役割をフレームから独立な少数の汎化ラベルに置き換える方
+法であった．これにより，役割分類の過程は，フレーム固有の役割を推定する問
+題から，これらの汎化ラベルを推定する問題へと変化した．
+ここで，文$s$，フレーム想起単語$p$，フレーム$f$，役割句$x$が与えられると
+き，与えられたフレームにより選択可能な意味役割の集合を$Y_f$とし，$s$，$p$，$f$，
+から観測される対象役割句$x$の特徴ベクトルを${\bf x}$とする．一般的に，意味役
+割分類は役割の候補$Y_f$の中から，最も適切な役割$\tilde{y}$を一つ選ぶ問題として定式化
+される．
+ここで，三つ組$(f,{\bf x},y)$に対して$y$のスコアを生成するモデルが
+あると仮定すると，$\tilde{y}$は以下のようにして選択できる．
+\begin{equation}
+ \tilde{y} = \argmax_{y \in Y_f} {\rm Score}(f,\mathbf{x},y)
+\label{equ:frame-specific-class}
+\end{equation}
+汎化ラベルを直接分類する従来の手法では，訓練データとテストデータ中の意味役割
+を汎化ラベルで上書きしてきた．例えば，PropBankのある役割$y$はそのARGタグ
+$arg(y)$によって汎化出来る．分類モデルは最適なARGタグ$\tilde{c}$を以
+下のようにして選択する．
+\begin{equation}
+\tilde{c} = \argmax_{c \in \{arg(y)|y \in Y_f\}} {\rm Score}_{arg}(f,\mathbf{x},c)
+\end{equation}
+ここで，${\rm Score}_{arg}(f,\mathbf{x},c)$は$f$と$\mathbf{x}$に関する汎化ラベル$c$の
+スコアを与える．既存の多くのシステムは，このモデルを達成するために線形或
+いは対数線形のスコアモデルを採用し，特徴関数は${\bf x}$の要素と$c$の可能なペアに
+対する指示関数として設計された．
+\begin{align}
+& {\rm Score}_{arg}(f,\mathbf{x},c) =
+	\sum_{i}\lambda_{i}g_i(\mathbf{x},c)\\
+& g_1(\mathbf{x},c) = 
+  \begin{cases}
+   1 & (\mbox{head of }x\mbox{ is ``he''}~\wedge
+   c = \mbox{{\it ARG0@ARG}})\\
+   0 & (\mbox{otherwise})
+  \end{cases}
+\end{align} 
+ここで，$G=\{g_1,\ldots,g_m\}$は$m$個の特徴関数，
+$\Lambda=\{\lambda_1,\ldots,\lambda_m\}$は$G$に関する重みベクトルを表す．
+$\tilde{y}$は少なくとも一つ，かつ唯一の役割$y\in Y_f$が$\tilde{c}$に対
+応付けられているときに一意に決定される．従来の汎化指標の比較研究に
+も，このラベルの置き換えによる手法が用いられてきた
+\shortcite{loper2007clr,yi-loper-palmer:2007:main,zapirain-agirre-marquez:2008:ACLMain}．
+
+我々は，この手法とは対照に，フレーム固有の役割を直接推定するモデル（式
+\ref{equ:frame-specific-class}）を採用する．その上で，$y$に関する汎化ラ
+ベル集合$gen(y)$を意味役割$y$の特徴として利用する．
+\begin{equation}
+ g_1(\mathbf{x},y) = 
+  \begin{cases}
+   1 & (\mbox{head of }x\mbox{ is ``he''}~\wedge 
+      \mbox{{\it ARG0@ARG}} \in gen(y))\\
+   0 & (\mbox{otherwise})
+  \end{cases}
+\label{equ:generalized-label-feature-arg0}
+\end{equation} 
+式\ref{equ:generalized-label-feature-arg0}では，特徴関数が
+$gen$の値に{\it ARG0}が含まれるかを調べることにより，役割$y$が
+{\it ARG0}ラベルによって汎化されるかどうかをテストしている．
+このように関数$gen$を特徴関数の条件部に用いることによって，
+複数の汎化ラベルを同時に扱うモデルの設計が可能になる．例えば，式
+\ref{equ:generalized-label-feature-arg0}と同様にして，同じモデルに主題役
+割をチェックする特徴関数を導入することも出来る．
+\begin{equation}
+ g_2(\mathbf{x},y) = 
+  \begin{cases}
+   1 & (\mbox{head of }x\mbox{ is ``he''}~\wedge 
+      \mbox{{\it Agent@TR}} \in gen(y))\\
+   0 & (\mbox{otherwise})
+  \end{cases}
+\label{equ:generalized-label-feature-agent}
+\end{equation}
+
+このアプローチの利点は，一つの役割が複数の汎化ラベルを持つことを考える場
+合はもちろんの
+こと，同一フレーム中の複数の意味役割が一つの汎化ラベルに写像される場合にも，
+より自然な汎化の方法となっていることである．例え
+ば，\ref{sec:selectional-restriction}節で説明する選択制限を用いた汎
+化では，同一フレーム内の複数の役割が同じ選択制限のラベルを持つことが
+ありうるが，従来の置き換え法を用いて
+このラベルが推定されると，汎化ラベルを元の意味役割に復元でき
+ない．一方で，我々の方法は，複数の汎化指標を用いて元の意味役割を直接推
+定する方式のため，このような問題が起こらない．
+また，もう一つの利点は，異なる種類の汎化ラベルを混合する際に，それぞ
+れのラベルに対する重みが，$\Lambda$の値を通じて学習により自動的に決定
+されるという点にある．したがって，このモデルでは，我々が事前にどの汎化指標
+が効果的かどう
+かを検討する必要がなく，学習プロセスに適切な重みを選ばせればよい．
+
+我々はスコアとして，最大エントロピー法を用いて求める条件付き確率
+$P(y|f,\mathbf{x})$を利用する．
+\begin{equation}
+{\rm Score}(f,\mathbf{x},y) = P(y|f,\mathbf{x}) =
+  \frac{\exp(\sum_{i}\lambda_{i}g_i(\mathbf{x},y))}{\sum_{y\in
+  Y_f}\exp(\sum_{i}\lambda_{i}g_i(\mathbf{x},y))}
+\label{eqn:probability}
+\end{equation}
+特徴関数の集合$G$には，利用する汎化ラベルの集合$C$に含まれる全てのラベル
+と${\bf x}$の要素の可能な組に対応する関数を全て含める．
+特徴関数の最適な重み$\Lambda$は最大事後確率(MAP)推定によって
+求める．我々はLimited-memory BFGS (L-BFGS)法\cite{nocedal1980}を用い
+て学習データの対数尤度を$L_2$正則化のもとで最大化する．
+パラメータ推定には，
+classias\footnote{http://www.chokkan.org/software/classias/}を用いた．
+
+
+
+\section{FrameNetにおける複数の汎化手法}
+\label{sec:generalization-criteria-framenet}
+
+本節では，FrameNet
+における
+役割の汎化指標について説明する．
+FrameNetでは，フレーム間の階層関係が定義されているため，この構造をう
+まく利用した汎化ラベルの設計を目指す．また，役割の名前（記
+述子），項の意味型，VerbNetの主題役割を指標とした，異なる性質の汎化ラベル
+も設計する．以下では，我々の提案する汎化指標について，それぞれのどのように関数
+$gen$を定義するかを説明する．\ref{sec:experiment-in-framenet}節では，こ
+れらについての比較実験を行い，効果の詳細な分析を行う．
+なお，階層関係と記述子を利用した汎化では，FrameNetの意味役割
+ラベルを利用して粒度の細かいラベルを作成するため，その全体
+像が掴みにづらいかもしれない．その際は，実際の意味役割ラ
+ベルと階層関係のデータ\footnote{http://framenet.icsi.berkeley.edu/FrameGrapher/  ただ
+し，データはFrameNetの最新版によるものであるため，我々の利用する正確な
+データはFrameNet第$1.3$版を参照のこと．}
+を適時参照して頂きたい．
+
+
+\subsection{役割間の階層関係}
+
+この指標は，\ref{sec:framenet}で説明したフレーム階層上の七種類の有向関係を利用して，
+役割間に共通する性質を取り出す指標である．各フレームの意味役割のうちの幾つかは，
+フレーム間の親子関係を通して，他フレームの役割と有向関係で結ばれて
+いる．役割間の関係を用いた汎化指標の基本的なアイデアは，下位概念にあたる
+役割が，その上位概念にあたる役割の性質を引き継いでいる，という仮定である．
+例えば，{\it Commerce\_buy}フレームの役割{\it Buyer}は{\it Getting}フレー
+ムの役割{\it Recipient}の性質を継承しており，また，{\it Killing}フレーム
+の{\it Victim}と{\it Death}フレームの{\it Protagonist}は「死ぬもの」という個
+体の性質を持っている．
+
+\begin{figure}[t]
+\begin{minipage}{242pt}
+\begin{center}
+\includegraphics{17-4ia5f6.eps}
+\end{center}
+\caption{$gen_{hier}$を定義するアルゴリズム}
+\label{fig:hier-algorithm}
+\end{minipage}
+\hfill
+\begin{minipage}{170pt}
+\begin{center}
+\includegraphics{17-4ia5f7.eps}
+\end{center}
+\caption{階層関係を辿る方向}
+\label{fig:hier-figure}
+\end{minipage}
+\end{figure}
+
+役割間の関係を用いた汎化関数$gen_{hr}$は図\ref{fig:hier-algorithm}のアル
+ゴリズムで定義する．
+$gen_{hr}(y)$は役割$y$から階層関係を辿りながら，各ノード$z$に対応する汎
+化ラベル{\it z@HR}を収集する．
+この際，
+(A)継承，利用，観点，部分の四つの関係に関しては，親方向に階層を辿り，
+(B)起動，原因の関係については子方向に辿る．
+これは，(A)のグループでは，子孫の意味役割が祖先の性質と同じかこれを詳細化し
+た性質を持っており，
+(B)のグループでは，子孫の役割がより中立的な立場や，結果の状態を表すからである．
+先行関係は，状態とイベントの遷移系列を表す関係であり，役割の性質の包含関係を単
+純には特定できなかったため，親と子のどちらの方向に辿るかは実験結果を踏まえ
+て決定することにする（実験は\ref{sec:compare-hierarchical-relation}節を参照のこと）．
+アルゴリズムは，図\ref{fig:hier-figure}のように，一度進んだ方向から逆戻
+りする方向のラベルは出力しない．また，階層を辿る深さの影響を観察するため，深さ1の親子関係でた
+どれるラベルしか含めない$gen_{hr\_depth1}$と，子孫，先祖を全て辿る
+$gen_{hr\_all}$の二つの関数を作成した．実験ではこれらの性能差も比較する．
+
+
+\subsection{役割の記述子}
+\label{role-label}
+
+FrameNetの意味役割は各フレーム固有の役割であり，異なるフレーム間に同じ識
+別IDの役割は存在しない．しかし，それらには専門家によって付けられた
+{\it Buyer}，{\it Seller}などの人間に意味解釈可能な簡潔な名前がついている．
+我々はこの簡潔な名前を役割の{\bf 記述子}と呼ぶことにする．
+これらの記述子は，ある程度体系立てて付けられており，異なるフレームの異な
+る意味役割が共通の記述子を持つ場合も多くある．例えば，記述子{\it
+Seller}は{\it Commerce\_sell::Seller}，{\it Commerce\_buy::Seller}，{\it
+Commerce\_pay::Seller}などで共有されている．
+この記述子の汎化指標としての有効性を評価するために，これを汎
+化ラベルとして利用する．
+
+この指標による汎化関数$gen_{desc}$は，役割$y$の記述子をメンバとして
+返す関数として定義する．例えば，役割{\it Commerce\_buy::Buyer}の記述
+子ラベルを$Buyer@Desc$とすれば，その値は
+$gen_{desc}(\mbox{\it Commerce\_buy::Buyer}) = \{\mbox{\it Buyer@Desc}\}$となる．
+記述子は各役割を一つの語彙で説明しているため，この汎化指標は語彙的特
+徴が類似する役割を効果的に集めるかもしれない．また，この方法で得られた汎化ラベ
+ルは
+役割の同値類関係を表現しており，階層関係によるラベルとは異なる構造を持っている．
+例えば，図~\ref{fig:descriptor-example}の(a)，(b)
+のような階層関係がある場合，(a)の{\it Commerce\_goods-transfer::Seller}，
+{\it Commerce\_sell::Seller}，
+{\it Commerce\_buy::Seller}は階層関係，記述子どちらによっても一つのラベ
+ルに纏め上げられるが，一方，(b)の{\it
+Giving::Donor} （物の提供者），{\it Commerce\_sell::Seller} （販売物の提供者），{\it
+Commerce\_pay::Buyer} （対価の提供者）では，各役割の間に
+「提供者」という意味の類似があるが，記述子を用いた汎化の場合には，それぞ
+れの役割が異なる汎化ラベルを持つことになる．
+
+
+\subsection{意味型}
+\label{semanticType}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{17-4ia5f8.eps}
+\end{center}
+\caption{役割の階層関係と記述子による汎化の相違点}
+\label{fig:descriptor-example}
+\end{figure}
+\begin{figure}[b]
+\begin{center}
+\includegraphics{17-4ia5f9.eps}
+\end{center}
+\caption{FrameNetで役割に対して利用される意味型のリスト}
+\label{fig:semantictype-list}
+\end{figure}
+
+
+FrameNetでは，多くの役割に{\bf 意味型}と呼ばれる型を割り当て，選択制限
+に類似した情報を提供している．これは，図~\ref{fig:semantictype-list}に列挙
+したようなカテゴリから成り，意味役割を埋める句の意味的な傾向を表す．
+例えば，役割{\it Self\_motion::Area}は意味型が{\it
+Location}であり，これは，この役割が場所を意味する句で埋められる傾向にあ
+ることを表す．この情報は意味役割を句の特性の観点から粗くカテゴリ化し
+ており，特に役割候補句の語彙の特徴と結びついて役割分類に強く貢献する
+と期待できる事から，我々は意味型を汎化ラベルとして用い，その有用性を検
+証する．
+
+汎化関数$gen_{st}$は役割$y$の意味型を要素に持
+つ集合を返すように定義する．例えば，役割{\it Self\_motion::Area}の場合，
+$gen_{st}(\mbox{\it Self\_motion::Area})=\{\mbox{\it Location@ST}\}$となる．
+
+
+\subsection{VerbNetの主題役割}
+\label{sec:frameNet-verbnet}
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{17-4ia5f10.eps}
+\end{center}
+\caption{VerbNetの主題役割}
+\label{fig:thematic-role-list}
+\end{figure}
+
+VerbNetの主題役割は，図~\ref{fig:thematic-role-list}に挙げる
+ような，動詞の項に付けられた$30$種類の粗い意味分類である．
+この$30$種のラベルは，全ての動詞に対して一貫性のある，フレーム
+横断的なラベルである．我々はSemLinkを用いて
+FrameNetの意味役割をVerbNetの主題役割にマッピングし，これを
+汎化ラベルとして導入する．
+\ref{sec:verbnet}節で説明したとおり，FrameNetの意味役割とVerbNetの主題役
+割は一般に多対多の対応であるが，
+現時点のSemLinkではFrameNetの各事例に主題役割が個別に付与されて
+おらず，単純な方法で意味役割と主題役割の一対一対応を取ることが出来ない．し
+たがって，ある意味役割から主題役割への写像が複数考えられるときには，
+汎化関数$gen_{tr}$はこれらの主題役割を全て含む集合を返すことにする．
+例えば，役割{\it Getting::Theme}の場合，各事例が対応付けられる動詞クラスに応
+じて，{\it Theme@TR}，{\it Topic@TR}の二つの主題役割ラベルが考えられるため，
+$gen_{tr}(\mbox{\it Getting::Theme})=\{\mbox{\it Theme@TR}, \mbox{\it Topic@TR}\}$となる．
+
+
+\section{FrameNetにおける実験と考察}
+\label{sec:experiment-in-framenet}
+
+
+\subsection{実験設定}
+
+実験にはSemeval-2007 Shared task
+\shortciteA{baker-ellsworth-erk:2007:SemEval-2007}の訓練データ部分
+を用いる．
+このうちランダムに抜き出した$10\%$をテストデータとして用い，残りの$90\%$
+で
+訓練，開発を行う．評価は役割に関するMicro F1平均と
+Macro F1平均\shortcite{chang2008kee}で行う．
+
+役割句$x$の特徴には，
+既存研究によって有効と報告された素性\shortcite{marquez2008srl}を用いた．
+これらは，フレーム，フレーム想起単語，主辞，
+内容語，先頭／末尾単語，左右の兄弟ノードの主辞，句の統語範疇，句の位置，態，統
+語パス（有効／無向／部分），支配範疇，主辞のSupersense，想起単語と主辞の組，
+想起単語と統語範疇の組，態と句の位置の組である．単語を用いた素性には，表
+層形の他に，品詞や語幹を用いたものも使用している．
+構文解析には\shortciteA{charniak2005cfn}のreranking
+parserを用い，Supersense素性には，\shortciteA{ciaramita2006bcs}のSuper
+Sense Taggerの出力を用いる．ベースライン
+分類器では役割の汎化を用いず，元の意味役割のみを利用した分類を行い，結果
+$89.00\%$のMicro F1値を得た．
+
+
+\subsection{意味役割の分類精度}
+
+表\ref{integration}に，それぞれの汎化指標を用いた場合の役割分類のMicro
+F1とMacro F1を示す．この実験設定においてMicro F1は役割全体の分類精度と等価で
+あるが，この値は各指標で$0.5$から$1.7$の向上が見られ
+た．また，最も高い精度は，全ての汎化指標によるラベルを同時に利用した
+モデルで得られ，ベースラインに対して$19.16\%$のエラー削減を実現した．
+この結果は，異なる種類の指標が互いにそれらを補完しあうことを示すものであ
+る．
+汎化指標ごとの性能をみると，記述子による効果が最も高く，フレームの階層関係を用いた汎化
+はこれに及ばなかった．また，主題役割による結果は，
+役割の$37.61\%$しか主題役割と関連付けることが出来なかったため，比較的小
+さな向上に留まったものの，有意な上昇を示した．
+
+\begin{table}[b]
+\begin{minipage}[t]{180pt}
+\caption{各汎化指標による分類精度}
+\label{integration} 
+\input{05table01.txt}
+\end{minipage}
+\hfill
+\begin{minipage}[t]{230pt}
+\caption{低頻度役割に対する汎化の効果}
+\label{sparseness}
+\input{05table02.txt}
+\end{minipage}
+\end{table}
+
+\shortciteA{Baldewein2004}の実験では，FrameNetの階層関係は良い結果を
+得られなかったが，我々の汎化方法では有意な精度向上を確認した．また，
+我々は記述子において，従来の置き換えによる方法と，
+記述子ラベルとフレーム固有の役割ラベルを同時に利用する方法
+を比較した（表\ref{integration}の$2$行目と$3$行目）．結果として，単に元の
+役割を同時に利用する場合でも，
+汎化ラベルに単純に置き換える
+従来の方法よりも正確に役割を推定出来ることを確認した．
+また，Macro F1の値から，我々の提案する汎化指標が低頻度の役割に対
+する分類精度を効果的に向上させたことが窺える．表\ref{sparseness}では，役
+割を事例数ごとに分け，それぞれの分類精度を示した．ここでも，我々の提案す
+る汎化指標が特に事例の少ない役割の分類を助けている事が分かる．
+
+
+\subsection{記述子に関する分析}
+
+\begin{table}[t]
+\begin{minipage}[t]{145pt}
+\caption{中心性ごとの記述子の効果}
+\label{coreness} 
+\input{05table03.txt}
+\end{minipage}
+\hfill
+\begin{minipage}[t]{270pt}
+\caption{各中心性における役割及び記述子の数と事例数}
+\label{class_instances} 
+\input{05table04.txt}
+\end{minipage}
+\end{table}
+
+上述の実験では，特に記述子による汎化で顕著な向上が見られたため，この理由
+を細かく分析することにした．
+表\ref{coreness}は，役割の中心性\footnote{これ以降の実験では，coreと
+core-unexpressedを纏めてcoreに分類している．}
+ごとにそのタイプの役割だけから記述子の汎化ラベルを作成し，評価セット全体
+のMicroF1を測ったものである．結果からは，記述子が特に周辺的な役割
+の汎化に有効であることが分かる．
+表\ref{class_instances}は，それぞれの中心性に割り当てられる役割の数，及
+び役割あたりの事例数，各中心性における記述子の数，記述子あたりの事例
+数を表したものである．ここで特徴的なのは，peripheralに分類される1,924の役割は
+250という比較的小さな数の記述子に纏まっていることである．これは，フレー
+ムに意味の依存が薄い役割に同一の記述子が付けられやすいという傾向を示して
+おり，この傾向によって，記述子が特に周辺的な役割をフレーム横断的に汎化する
+良い指標になっていると考えられる．
+
+
+\subsection{役割間関係のタイプ別効果}
+\label{sec:compare-hierarchical-relation}
+
+\begin{table}[t]
+\caption{役割間関係のタイプ別の効果と辿る深さによる効果}
+\label{relation-accuracy}
+\input{05table05.txt}
+\end{table}
+
+役割間の階層関係を用いた汎化については，関係の型と階層を辿る深さによ
+る効果の違いを調べた．表\ref{relation-accuracy}はそれぞれの
+Micro F1を示したものである．タイプ別にみると，特に{\it 継承}と{\it 使用}
+でその他の関係よりも精度の向上が見られた．
+それら以外のものは，関係の出現数そのものが少なかったために，差が少なく，
+効果の違いを考察するに至らなかった．
+また，深い階層関係を持つ役割については，一代先の汎化ラベルだけを用いるより
+も，階層を伝って辿れる全てのラベルを用いて汎化する方が，より効果があるこ
+とを確認した．先行関係については，最も効果の見られた祖先を辿る方法を採用
+することにした．
+また，最も高い性能は，階層上の全ての関係を利用した場合に得られた．
+
+
+\subsection{各汎化指標の特徴分析}
+
+\begin{table}[b]
+\begin{minipage}[t]{195pt}
+\setlength{\captionwidth}{195pt}
+\hangcaption{各汎化指標の中心性別にみる適合率と再現率．cはcore，pはperipheral，eはextra-thematicを表す．}
+\label{coreness-f1}
+\input{05table06.txt}
+\end{minipage}
+\hfill
+\begin{minipage}[t]{210pt}
+\setlength{\captionwidth}{210pt}
+\hangcaption{上位1,000個の特徴関数．各タイプごとの数を表す．`fc'は固有役割，`hr'は階層関係，`de'は記述子，`st'は意味型，`tr'は主題役割を表す．}
+\label{top1000} 
+\input{05table07.txt}
+\end{minipage}
+\end{table}
+
+
+表\ref{coreness-f1}は中心性のタイプ別に見た，各汎化指標を用いたモデルの適合率，
+再現率，Micro F1である．
+coreに相当する意味役割は，汎化を利用しない場合でも$91.93\%$の分類精
+度が得られており，全ての汎化指標で比較的高い分類精度となった．
+peripheralとextra-thematicに関しては，最も簡潔な方法である記
+述子による方法がその他の指標を上回った．
+
+表\ref{top1000}には，重みの絶対値が上位$1,000$の特徴関数を，タイプ別に分
+類した．この表から，汎化指標の特徴は，記述子と意味型のグループと固有役割
+と階層関係のグループの二つのグループに分かれることが分かる． 記述
+子と意味型では，先頭単語やsupersenseなどの，
+付加詞の特徴付けを行う素性との組み合わせが高い重みを持つ．
+固有役割と階層関係では，統語パスや内容語，主辞などの，語彙的或いは構造的
+な素性と強い結びつきがある．このことは，記述子や意味型を用いた汎化が周辺
+的，或いは付加詞に対応する役割に対して有効であり， 階層関係を用いた汎化が
+coreの役割に効果的であることを示唆する．
+
+
+
+\section{PropBankにおける汎化手法}
+\label{sec:generalization-criteria-propbank}
+
+本節では，PropBankにおける汎化手法について述べる．
+我々は，従来用いられてきた指標であるARGタグ，主題役割に加えて，
+新たに三つの汎化指標を提案する．これらは，VerbNetの動詞クラス，選択
+制限，意味述語にそれぞれ基づく．
+
+ARGタグ，主題役割は，どちらも$6$種類，$30$種類の少数のラベルセット
+であり，これらを用いた意味役割の分類は，非常に粗いものだと言える．しか
+し実際には，意味役割は各動詞に応じて多様な振る舞いを見
+せるため，より細かな粒度での汎化が必要と考えられる．
+そこで我々は，より頑健な役割分類を目的として，$30$種類の主題役割をより統
+語的，意味的に詳細化された汎化ラベルへ分割し，これらの細かい粒度の汎化
+ラベルによる効果を検証することにする．
+
+なお，新たに提案する細粒度の汎化ラベルの全貌については，
+VerbNet第$2.3$版の実際のデータ\footnote{簡単にデータを閲覧可能な場所とし
+て，VerbNetプロジェクトのWebサイトがある．動詞クラスの一覧については
+http://verbs.colorado.edu/verb-index/vn/class-h.php，
+その他の情報のリストについては
+http://verbs.colorado.edu/verb-index/vn/reference.phpを参照のこと． ただ
+し，データはVerbNetの最新版に対するものであるため，我々の利用する正確な
+データはVerbNet第$2.3$版を参照頂きたい．}を，適時参照を願いたい．
+
+
+\subsection{タスク設定とモデルの拡張}
+
+以下で説明する汎化手法では，SemLinkによって得られる各アノテーションの動
+詞クラスと主題役割を利用しているため，これらについて詳しく説
+明をしておく．
+
+\ref{sec:verbnet}節で述べた通り，
+PropBankでは，SemLinkに基づくVerbNetとの事例レベルの正確なマッピングに
+より，各アノテーションの適切な主題役割と対象動詞の動詞クラスを得ることが
+出来る．そこで，本研究では，
+訓練時，評価時に，各アノテーションの意味役割と主題役割のどちらの情報も用いるこ
+とができるものとする．
+また，役割分類の入力には，対象動詞に対する正しい動詞クラスも与えるもの
+とする．
+
+
+VerbNetにおける動詞クラスは，PropBankで言うところのフレームに相当するもの
+であり，意味役割付与システムの実際の運用時には，これらのフレームや動詞ク
+ラスを自動的に判定する必要がある．
+しかし，\ref{sec:role-classification}節でも述べた通り，我々の実験において
+は，意味役割の汎化が分類精度にもたらす効果を正確に検証することを目的とし
+ているため，フレームと動詞クラスの両方を入力として正しく与える
+ことにする．
+また，このような設定にすることによって，式\ref{eqn:probability}の中の全
+役割候補$Y_f$に対して，ARGタグと主題役割の両方を一意に与えることができる
+ため，ARGタグを用いた役割分類と，主題役割を用いた分類を，同じ候補の中か
+ら最適な一つを選ぶ，という等価な問題として比較することが出来る
+（図\ref{fig:arg-thematic-mapping}）．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{17-4ia5f11.eps}
+\end{center}
+\hangcaption{フレームと動詞クラスが与えられた場合の分類問題．この設定に
+ おいては，意味役割，ARGタグ，主題役割の三つのラベル間で全て一対一対応を取
+ る事が出来るため，これらをそれぞれ独立に用いた分類モデルを考えた場合，各
+ モデルは同じ候補の中から最適な一つを選ぶ，という等価な問題に帰着される．}
+\label{fig:arg-thematic-mapping}
+\end{figure}
+
+
+以降で提案する汎化指標は，そのどれもが動詞クラスの情報を利用してラベルを
+生成するものである．したがって，汎化のための関数$gen$，$gen_{i}$についても，
+意味役割$y$と動詞クラス$v$の二つを引数に取るように拡張する．
+これに伴い，式\ref{eqn:probability}は$v$の入る形で拡張され，
+\begin{equation}
+P(y|f,v,\mathbf{x}) =
+  \frac{\exp(\sum_{i}\lambda_{i}g_i(\mathbf{x},y,v))}{\sum_{y\in
+  Y_f}\exp(\sum_{i}\lambda_{i}g_i(\mathbf{x},y,v))}
+\label{eqn:probability2}
+\end{equation}
+となり，式\ref{equ:generalized-label-feature-agent}も次のようになる．
+\begin{equation}
+ g_2(\mathbf{x},y,v) = 
+  \begin{cases}
+   1 & (\mbox{head of }x\mbox{ is ``he''}~\wedge 
+      \mbox{\it Agent@TR} \in gen(y,v))\\
+   0 & (\mbox{otherwise})
+  \end{cases}
+\end{equation} 
+
+
+\subsection{ARGタグ，主題役割}
+
+ARGタグと主題役割については，\ref{sec:define-generalization}節の式
+\ref{eqn:arg}，式\ref{eqn:thematic}で示したように，各意味役割のARGタグや主
+題役割を返すように$gen_{arg}$，$gen_{tr}$を設計する．ただし，ここでの主
+題役割は，SemLinkによって一意に与えられた正しいラベルである．
+例えば，図\ref{fig:arg-thematic-mapping}のような対応が与えられているならば，
+この事例において，各関数は以下の値を返す．
+\begin{align}
+gen_{arg}(\mbox{\it buy.01::0}, \mbox{ {\it get-13.5.1}}) & = \{\mbox{\it ARG0@ARG}\}\\
+gen_{tr}(\mbox{\it buy.01::0}, \mbox{ {\it get-13.5.1}}) & = \{\mbox{\it Agent@TR}\}
+\end{align}
+
+
+\subsection{主題役割＋動詞クラス}
+
+VerbNetは，英語の動詞を統語的，意味的に一貫性を持った$470$の階層的なク
+ラスに分類した言語資源である．
+動詞クラスには，所属する動詞の統語的振る舞いの一貫性を保証するなど
+の特徴があるため，このクラスの分類は，主題役割を適切に詳細化するための情報
+となりうる．
+例えば，主題役割{\it Patient}は，一般的に目的語や前置詞句としてしか現れな
+いが，クラスcooking-45.3の動詞では主語として現れることがある，という細か
+な情報を，動詞クラスを用いることで各主題役割に付加することが出来る．
+したがって，我々は新しい汎化関数として，対象事例における動詞クラス$v$
+と主題役割$t$の組を返すような$gen_{vc}$を定義する．
+\begin{equation}
+gen_{vc}(y,v) = \{\langle t, v\rangle@VC\}.
+\end{equation}
+特徴関数はこの二つ組によるラベルをチェックする形で定義する．
+\begin{equation}
+ g_3(\mathbf{x},y,v) = 
+  \begin{cases}
+   1 & (\mbox{head of }x\mbox{ is ``he''}~\wedge 
+   \langle\mbox{{\it Patient}},\mbox{ {\it cooking-45.3}}\rangle@VC \in gen(y,v) )\\
+   0 & (\mbox{otherwise})
+  \end{cases}
+\end{equation}
+
+
+\subsection{選択制限}
+\label{sec:selectional-restriction}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{17-4ia5f12.eps}
+\end{center}
+\caption{VerbNetにおける選択制限のカテゴリ}
+\label{fig:selectional-restriction-list}
+\end{figure}
+
+VerbNetは各動詞クラスの主題役割にそれぞれ選択制限の情報を付与している．
+FrameNetの意味型の場合と同様に，この情報は意味的な類似性のある役割をグルー
+プ化するのに役立つと期待される．
+VerbNetでは，選択制限は正負を持った$36$種類の意味カテゴリ（図~\ref{fig:selectional-restriction-list}）を用いた
+命題論理で表現される．例えば，クラス{\it give-13.1}の主題役割{\it Agent}
+の選択制限は{\it +animate} $\vee$ {\it +organization}のように与えられる．
+我々はこれらの命題を役割の汎化ラベルとして利用する．
+$gen_{sr}$は動詞クラス$v$における主題役割$t$の選択制限を返す関数として定
+義する．
+\begin{equation}
+gen_{sr}(\mbox{give.01::0},\mbox{ {\it give-13.1}}) = \{ \mbox{({\it +animate}}\vee\mbox{{\it
+ +organization})}@SR \}.
+\end{equation}
+
+
+\subsection{主題役割＋意味述語}
+
+VerbNetでは，各動詞クラスにいくつかの例文が記述されているが，これら
+の例文には，意味述語と呼ばれる述語表現の組み合わせを用いて，文の意味が表
+現されている．
+例えば，クラス{\it give-13.1-1}の例文
+``I leased the car to my friend for \$5 a month.''
+には，\\
+$has\_possession(start(E), Agent, Theme)$，$has\_possession(end(E),
+Recipient, Theme)$，\\
+$has\_possession(start(E), Recipient, Asset)$，
+$has\_possession(end(E), Agent, Asset)$，\\
+$transfer(during(E), Theme)$
+の五つの意味述語が含まれる．この種の分解された意味表現は，各フレームが持
+つ役割の意味的性質を細かい粒度で共有することを可能にする．例えば，イベン
+ト終了時に対価を持つ{\it Agent}にあたる意味役割は，
+図\ref{fig:agent-of-possessing-asset}のように，各動詞クラスの例文中から述語表現
+$s_1 = has\_possession(end(E), Agent, Asset)$を探すことでグループ化出来る
+\footnote{図\ref{fig:agent-of-possessing-asset}では分かりやすさのために
+フレーム固有の役割名で表記したが，実際には，PropBankの意味役割は動詞クラ
+スの特定によって主題役割へ写像されるため，意味述語で集められるものは意味
+役割と動詞クラスの組である．}．
+
+
+そこで我々はこの意味役割のグループをタプル$\langle {\it
+Agent},s_1\rangle$で表し，汎化ラベルとして利用する．
+ここで，ある事例における役割$y$の主題役割を$t$とすれば，
+関数$gen_{sp}$は動詞クラス$v$の例文から得られる意味述語のうち，引数に
+$t$を
+含むものを全て返す関数として定義する．例えば，{\it lease01::0}の主題役割
+が$Agent$，動詞クラスが{\it give-13.1-1}だった場合は，以下のようになる．
+\begin{align}
+gen_{\mbox{sp}}(\mbox{lease.01::0},\mbox{ {\it give-13.1-1}}) &= \{
+ \langle\mbox{{\it Agent}}, has\_possession(start(E), Agent,
+ Theme)\rangle@SP,\nonumber \\
+&\langle\mbox{{\it Agent}}, has\_possession(end(E), Agent, Asset)\rangle@SP \} 
+\end{align}
+
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{17-4ia5f13.eps}
+\end{center}
+\caption{意味述語\textit{has\_possession}(\textit{end}(\textit{E}),\textit{Agent,Asset})を持つAgentにあたる役割}
+\label{fig:agent-of-possessing-asset}
+\end{figure}
+
+
+\section{PropBankにおける比較実験}
+
+PropBankにおける実験では，二つのことを検証する．
+一つ目は，従来PropBank上での意味役割の汎化で議論されてきた
+ARGタグと主題役割の効果の違いを明らかにすることである．
+既存研究におけるARGタグと主題役割の比較では，
+意味役割付与タスク全体を通した精度比較しか行ってこなかった
+\shortcite{loper2007clr,yi-loper-palmer:2007:main,zapirain-agirre-marquez:2008:ACLMain}
+．
+しかしながら，意味役割付与は複雑な問題が絡み合うタスクなため，
+そのような比較では，最終的な精度に影響する原因がどの部分で生じたかが不明瞭
+になりがちである．特に構文解析時のエラーは，多くの複雑で不整合な統語構造を
+生むため，意味役割付与の精度に大きく影響することが知られている
+\shortcite{marquez2008srl}．
+幸い，PropBankはPennTreebankと同一のテキストに対するコーパスなため，
+PennTreebankの人手による正解構文木が利用可能である．そこで，我々はこの構
+文木を入力として利用することで，構文解析エラーの影響を無くしたより厳密な状
+況を作り，理想的な状況下での役割分類結果のエラー分析を行うことによって，
+二つの汎化指標が捉えている役割の性質の違いを正確に分析する．
+
+二つ目では，これらの指標に加え，我々の提案した新しい三つの指標について，
+それらの汎化性能を比較する．比較は，役割全体の分類精度に加えて，対象動詞
+に関する素性を除いた設定での評価と，未知動詞に対する評価の三つで行う．
+
+
+\subsection{実験設定}
+\label{sec:propbank-setting}
+
+実験にはPenn Treebank IIコーパスのWall Streed Journal部分と，それに対応するPropBankのデータを用いる．
+Wall Street Journalのうち，02-21節を訓練に，24節を開発に，23節を評価に利用する．
+この実験では，各アノテーションに対してSemLinkによって与えられる動詞クラ
+スと主題役割の情報を用いているため，
+\shortciteA{zapirain-agirre-marquez:2008:ACLMain}の方法に準じて，
+SemLink 1.1 によって主題役割に写像出来るアノテーションだけを実験セットと
+して用いる．
+その数は70,397アノテーションであり，PropBank全体の$62.34\%$にあたる．
+また，すでにフレームに独立なラベルとして定義されている{\it AM}タグは取り除き，
+フレーム固有の意味役割として定義されている{\it ARG0-5}のみの分類精度によって評
+価を行う．
+
+
+役割句$x$に対する特徴には，
+FrameNetの場合と同じく，既存研究で効果が確認された素性を用いる．
+具体的には，フレーム，対象動詞，主辞，内容語，先頭／末尾語，左右姉妹句の
+主辞，句の統語範疇，句の位置，態，統語パス，句に含まれる固有表現カテゴリ，
+統語フレーム，前置詞句の先頭語，対象動詞と主辞の組，態と統語範疇の組，統
+語フレームと前置詞句の線統語の組である．単語を用いた素性には，表層形
+の他，品詞や語幹を用いたものも併せて利用する．固有表現抽出には，
+CoNLL-2008 shared task \shortcite{surdeanu2008cst}のopen-challenge datasetに
+与えられた，意味タガー\shortcite{ciaramita2006bcs}の三つの出力結果を用いる．
+
+
+\subsection{PropBank ARG0-5と主題役割の比較}
+\label{sec:pbVsTr}
+
+ARGタグと主題役割についての比較では，まず役割全体の分類精度による評価を行った．
+表~\ref{table:moreLess}はこれらの汎化指標を個別に用いた際の分類精度を
+示す．記号*** は，汎化ラベルを用いないモデルに比べてMcNemarテストにより
+$p < 0.001$で有意であることを意味する．
+役割分類に理想的な入力が与えられた場合，役割の汎化を行わないモデルでも
+96.7\%以上の精度を実現することが可能であった．ARGタグ
+と主題役割を用いた場合には，どちらのモデルも，汎化を行わない場合に比べて
+分類精度が向上した．また，その効果は事例の少ない役割に対し
+て特に明確に確認できる．
+表~\ref{table:moreLess}における列「$>200$」と列「$<50$」は，事例数が200
+を超えるフレームと50未満のフレームに対する分類精度を表す．これらから，
+役割の汎化を行わなかった場合には，事例数50未満のフレームに対する精度が，
+200を超えるフレームに比べて約$9$ポイントと大きく低下することが分かる．一方で，
+ARGタグや主題役割は，役割をフレームに独立な少数のラベルに汎化する
+ため，事例の少ない役割をより頑健に分類することが出来る．
+
+\begin{table}[b]
+\begin{minipage}[t]{163pt}
+\caption{フレームの事例数別の分類精度}
+\label{table:moreLess} 
+\input{05table08.txt}
+\end{minipage}
+\hfill
+\begin{minipage}[t]{253pt}
+\caption{ARGタグと主題役割における分類精度の比較}
+\label{table:argF1} 
+\input{05table09.txt}
+\end{minipage}
+\end{table}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{17-4ia5f14.eps}
+\end{center}
+ \caption{訓練データ量に対する精度の変化}
+\label{fig:reduce} 
+\end{figure}
+
+\shortciteA{yi-loper-palmer:2007:main}と
+\shortciteA{zapirain-agirre-marquez:2008:ACLMain}は，
+主題役割を用いた意味役割付与はARGタグを用いる場合に比べて，
+性能が若干低下すると報告した．しかし我々の実験では，これら二つの汎化ラベ
+ルの結果に有意な差は認められなかった($p \leq 0.838$)．
+図~\ref{fig:reduce}の学習曲線を見ても，ARGタグと主題役割の曲線は近く，
+\shortciteA{yi-loper-palmer:2007:main}と
+\shortciteA{zapirain-agirre-marquez:2008:ACLMain}が指摘したような
+主題役割に対する訓練データの不足は確認出来なかった．
+また，\shortciteA{yi-loper-palmer:2007:main,loper2007clr}は，ARGタ
+グのうち特に{\it ARG2}で不整合があるとしたが，我々の実験のように，理想的な入
+力と，フレームによる選択可能なラベルの制約が与えられた場合，
+ARGタグと主題役割のどちらにおいても{\it ARG0-5}の各タグをほぼ同精度で
+分類することが出来た（表~\ref{table:argF1}）．これは
+表~\ref{table:featureDistribution}に見られる
+ように，verb+pathなどの動詞に関する組み合わせ特徴によって，各役割の動詞
+に対する個別の振る舞いを学習していることと，フレームによる選択可能なラベ
+ルの制限によって，主題役割のうち{\it Patient}や{\it Theme}などの統語的に類似する性質
+を持つ役割の混在がある程度制限されるためと思われる．
+
+\begin{table}[p]
+\caption{重みの絶対値が上位$0.1\%$にあたる特徴の分布}
+\label{table:featureDistribution}  
+\input{05table10.txt}
+\end{table}
+
+\begin{figure}[p]
+\begin{center}
+\includegraphics{17-4ia5f15.eps}
+\end{center}
+\hangcaption{主題役割で見るエラー分類．表(A)はARGタグで正
+ 解し，主題役割で間違ったもの，表(B)は逆，表(C)は両方で間違えたものを表
+ す．動詞クラスの列は，対応する種類のエラーが生じたクラスを示す．}
+\label{fig:errMap}
+\end{figure}
+
+我々は二つの汎化指標の特徴についてより詳しく分析するために，
+それぞれのモデルで生じたエラーを人手でチェックし，二つのモデルで分類結果
+の食い違った事例を分析した．
+図~\ref{fig:errMap}は，ARGタグモデルと主題役割モデルの，互
+いに一方が正解し一方が間違った事例と，双方が間違った事例について，それ
+らの正解ラベルと推定ラベルの組を分類したものである．
+表(A)はARGタグモデルで正解し，主題役割モデルで間違った
+事例であるが，
+最初の三行のエラーは，異なる動詞クラスの間で，主題役割の統語位置に不整
+合が出ることが原因である．例えば，クラスamuse-31.1，appeal-31.4の動詞について，
+{\it Cause}は主語の位置に現れる傾向にあり，{\it Experiencer}
+はその他の場所に現れる傾向があるが，クラスmarvel-31.3では逆の傾向があ
+る．また，{\it Destination}$\rightarrow${\it Theme}のケースは，一般的に
+前置詞句として現れる{\it Destination}が，動詞クラスspray-9.7，fill-9.8，
+butter-9.9，image\_impression-25.1においては目的語の位置に現れやすいこと
+が原因である．
+一方で，PropBankは各動詞に対して，主語の位置に現れやすい役割に {\it
+ARG0}を，目的語の位置に現れやすい役割に{\it ARG1}を主に割り当ててい
+るために，ARGタグにはこのような曖昧性さが起こりにくい．
+
+表(B)には逆に，主題役割モデルで正解し，ARGタグモデルで間違った事例を示す．
+最初の行は主題役割の有効性を表す良い例である．ARGタグは
+主に統語的特徴に基づいたグループであるため，{\it ARG1}が主語の位置に
+出てきた場合にこれを{\it ARG0}と間違いやすい．
+それとは対照に，主題役割はより意味的属性を考慮したグループに分割さ
+れているので，主語の位置に現れる{\it Patient}に対して，統語素性からのペナ
+ルティが小さい．その結果，{\it ARG0}を用いる場合よりもこれらの役割が比較的
+正しく分類された．
+
+また，表(C)の，ARGタグと主題役割両方のモデルで間違う事例にもいくつかの傾
+向が見られる．例えば，能格動詞が自動詞として使われるときや，{\it Theme}
+が目的語として現れにくい動詞クラスなどで多くの間違いが見られる．これらの
+改善のためには，動詞或いは動詞クラスに対してより詳細化された統語的意味的
+情報が必要だと思われる．
+表\ref{fig:errMap}からは，総じて二つの汎化ラベルが意味役割の汎
+化において異なる利点を持っていることが分かる．
+
+\begin{table}[b]
+\caption{汎化指標の混合による精度}
+\label{table:incorporate} 
+\input{05table11.txt}
+\end{table}
+
+さらに，表~\ref{table:incorporate}に見られるように，これら二つの汎化ラベ
+ルを同時に利用したモデルの結果も，二つの汎化ラベルが異なる効果をもたらし
+たことを示す結果となった．記号*** はARGタグのみを使うモデルに比べて，そ
+のモデルの精度がMcNemarテストにおいて$p < 0.001$で有意であることを示す．
+ARGタグ+主題役割のモデルはARGモデルに比べて$24.07\%$のエラー
+を削減した．このモデルにさらに元の意味役割ラベルを加えた
+固有役割+ARGタグ+主題役割モデルについても実験を行ったが，ARGタグ+主題
+役割モデルに対して性能の有意な向上は得られなかった．
+これは，既に対象動詞との組み合わせを用いたいくつかの特徴がARGタグ+主題役割モデルに含
+まれているためと思われる．
+
+
+
+\subsection{提案する汎化指標との比較実験}
+
+次に，既存の汎化手法と我々の提案する汎化手法についての比較を示す．
+この実験では，汎化性能を比較する三つの設定を用意した．設定(A)は
+\ref{sec:pbVsTr}~節で利用した\ref{sec:propbank-setting}節の設定である．設定(B)は(A)
+と同じデータセットにおいて，フレームと対象動詞に由来する全ての特徴を取り除い
+たモデルの精度を測るものである．この設定では，各汎化ラベルが動詞固有の情
+報を使わずに，汎化
+ラベルのみでどれほどの精度を実現するかを評価する．設定(C)では，
+コーパス中の低頻度動詞に関する事例を取り除くことにより人工的に未知動詞を
+作り，それらの動詞に対する意味役割の分類精度を評価する．
+この設定は，実際に未学習の動詞が表れたときに，それぞれの汎化指標
+が頑健にラベルの推定を行えるかを調べるものである．
+ここでは出現回数が$20$回以下の，1,190 の動詞に関する事例をコーパス中から
+抜き出し，この抜き出した事例を評価セットとして利用する．
+図~\ref{unseenList}は抜き出した動詞の抜粋である．この操作により実際
+に抜き出された役割の事例数は$8,809$となった．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{17-4ia5f16.eps}
+\end{center}
+\caption{隠した動詞の抜粋}
+\label{unseenList} 
+\end{figure}
+
+\begin{table}[b]
+\caption{三つの設定における各指標の精度比較}
+\label{table:unseenAcc} 
+\input{05table12.txt}
+\end{table}
+
+表~\ref{table:unseenAcc}に実験結果を示す．
+設定(A)において最も高い性能を示したのはARGタグ+主題役割モデ
+ルであり，より細かい粒度の汎化ラベルを加えたモデルは，ARGタグ+主題役割モ
+デルに及ばなかった．また，(B)，(C)の結果からは，ARGタグ+主題役割モデルが，
+ARGタグや主題役割を単独で使うモデルに比べて，大きく向上させていることが分かる．
+特に，未知動詞に対する性能を評価している設定(C)では，ARGタグや主題役割を
+個別に用いる方法では，十分な汎化の効果が得られないことが分かる．
+
+我々の提案する細粒度の汎化指標は，ARGタグや主題役割と組み合わせて利用
+することによって，(B)，(C)の分類精度を向上させることを確認した．
+特に，意味述語と動詞クラスを用いた汎化が効果的に性能を向上させた．
+また，未知動詞に関する実験である(C)において最も高い性能を示したのは，ARG
+タグ+主題役割+意味述語モデルであり，ARGタグのみを用いた場合に比べて
+$26.39$\%のエラー削減を実現した．
+これは言い換えれば，各動詞について十分な学習が出来る場合には，細
+粒度の汎化によって全体の精度を落とすことがあり，一方で，動詞個別の学習が
+不十分な場合には，異なる観点を織り交ぜた細粒度の汎化が分類精度の向上をも
+たらすということを意味する．
+
+この結果で興味深いのは，従来，意味役割付与においてあまり用いられてこなかっ
+た動詞クラスの情報が，意味役割を細かいレベルで適切に汎化し，
+意味役割分類の頑健性を向上させるということである．
+この結果は，意味役割付与問題において，役割分類の事前処理，或いは結合モデ
+ルとして，対象動詞の動詞クラスを求めることの有用性を表している．今後
+は，対象動詞に対するフレーム及び動詞クラスを特定する処理を
+含めた精度の評価が必要であろう．
+
+
+
+\section{まとめ}
+
+本稿では，FrameNet，PropBankの二つのコーパスにおいて，
+役割を適切に汎化するための複数の指標と方法を提案し，また，異なる種類の汎
+化ラベルを同時に扱うための分類モデルを導入した．汎化ラベルを意味役割の特
+徴として扱い，異なる観点，異なる粒度の集合を複合して利用することが，
+従来のラベルを置き換える方法よりも分類精度を向上させることを確認した．
+また，既存の汎化ラベル及び我々の新たな汎化ラベルについて，比較実験を通し
+て詳細な分析を与え，それぞれの性質を明らかにした．
+
+FrameNetでは，役割の階層関係，役割の記述子，句の意味型，VerbNetの主題役
+割の四種類の異なる指標を用いて，汎化ラベルを作成した．これらはそれぞれに
+分類の性能を向上させ，役割分類役割分類の疎データ問題を効果的に解消することを示した．
+最も優れた性能を見せたのは役割の記述子による方法であり，予想に反して
+FrameNetの階層関係はこれを超えることが出来なかった．
+したがって，今後，フレーム階層関係のさらなる有用な活用のため，階層関係の不足点，改善点等
+を解析していく必要があると思われる．また，各指標の性質として，記述子や意
+味型を用いた汎化ラベルは周辺的，或いは付加詞的役割を捉える特徴と結びつき
+が強く，階層関係を用いた汎化は中心的役割を捉える特徴と結びつきが強いこと
+を示した．
+全ての汎化ラベルを混合したモデルでは，全体の精度で$19.16\%$のエラー削減，
+F1 Macro平均で$7.42$の向上を示した．
+我々の実験では，より多くのフレーム間関係を利用するために，FrameNetの最新版のデータを
+利用した．その結果，既存のシステムと直接的な精度比較をすることが出来なかったが，
+我々のベースラインにおけるF1 Micro平均$89.00\%$は，
+SemEval-2007~\cite{baker-ellsworth-erk:2007:SemEval-2007}での
+\shortciteA{bejan2007usp}の$88.93\%$という値と概ね競合すると言えるため，
+意味役割の汎化により，意味役割付与システム全体の精度向上が期待出来ると言
+えるだろう\footnote{SemEval-2007の意味役割付与タスクには二グループが参加し，
+\shortciteA{bejan2007usp}は，システム全体の評価とは別に訓練データに対す
+る役割分類の精度を評価した．}．
+
+PropBankでは，既存の汎化手法であるPropBankのARGタグと主題役割の二つの汎
+化ラベルを木構造や項の位置等を与えた厳密な設定で比較し，その結果，
+ARGタグは役割の統語位置の性質をより強く捉え，主題役割は意味的側面から比
+較的位置に対する柔軟性を持つという性質の違いを明らかにした．
+また，役割分類における主なエラーの理由は，動詞ごとの特徴による統語パターン
+の曖昧性に由来することを明らかにした．
+ここでも，二つの汎化ラベルの組み合わせが役割分類の精度を向上させる
+結果となり，ARGタグのみを使う場合に比べて，$24.07\%$のエラー削減を実現し
+た．
+また，我々は，事例の少ない或いは未知の役割に対して頑健な役割分類を行うた
+めの新たな提案として，VerbNetの動詞クラス情報を用いてより詳細化された三
+つの汎化指標を導入した．新たな汎化指標は動詞クラス，選択制限，意味述語であっ
+たが，実験結果は，これらの詳細化された細粒度のラベルの導入が
+低頻度及び未知の動詞に対する精度を向上させることを示した．最も高い効果が
+得られたのは意味述語をARGタグと主題役割と共に用いた場合であり，
+ARGタグのみを用いた場合に比べて$26.39\%$のエラー削減を達成した．
+
+総じて，我々が得た結果は，意味役割の統語的，意味的特徴を異なるいくつかの観点から
+捉えて，それらを役割の特徴として混合する方法が，意味役割分類の精度を向上させ
+るというものであった．これは言い換え得れば，意味役割を異なる言語学的背景
+から説明したFrameNetとPropBankの情報を相互に利用すれば，さらなる精度と頑
+健性の向上が期待できる事を示唆している．現段階では，FrameNet，PropBank，
+VerbNetといった，異なる意味論に基づく資源の間のフレーム，及び意味役割
+の対応関係が明確ではなく，そのため，資源間の意味役割を正確に対応付ける
+ことが出来ない．そのため，今回の実験では，FrameNet，PropBankでそれ
+ぞれのコーパスに特有の情報を利用して意味役割の汎化を行っており，これら二
+つのコーパスの異なる意味論を混合した場合の評価には至っていないが，今後，
+SemLinkなどの，異なる資源の意味役割を適切に繋ぐデータが充実してくれば，
+FrameNetの意味役割をPropBankの知識を用いて推定する方法や，逆にPropBankの
+意味役割について，FrameNetで用いたような概念の階層的な汎化を同時に利用す
+る方法も，我々の分類モデルの延長上で原理的に実現可能である．この意味でも，
+資源間の意味役割の対応関係を記述するデータは，意味役割付与において重要な
+位置を占めると考えられる．また加えて，今後の研究として，低頻度や未学習の
+意味役割に対してより高い頑健性を確保するためには，FrameNetやPropBankの意
+味論が与える汎化の指標以外にも，我々が意味役割と呼ぶ意味付きの項構造がど
+のような属性の束で表現されるのかを探求していくことが，意味役割付与技術の
+向上のために重要である．
+
+
+\acknowledgment
+
+本研究の一部は，文部科学省科学研究費補助金特別
+推進研究「高度言語理解のための意味・知識処理の基盤技術
+に関する研究」の助成を受けています．記して謝意を表します．
+
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Baker, Ellsworth, \BBA\ Erk}{Baker
+  et~al.}{2007}]{baker-ellsworth-erk:2007:SemEval-2007}
+Baker, C., Ellsworth, M., \BBA\ Erk, K. \BBOP 2007\BBCP.
+\newblock \BBOQ SemEval-2007 Task 19: Frame Semantic Structure
+  Extraction.\BBCQ\
+\newblock In {\Bem Proceedings of SemEval-2007}, \mbox{\BPGS\ 99--104}.
+
+\bibitem[\protect\BCAY{Baker, Fillmore, \BBA\ Lowe}{Baker
+  et~al.}{1998}]{Baker:98}
+Baker, C.~F., Fillmore, C.~J., \BBA\ Lowe, J.~B. \BBOP 1998\BBCP.
+\newblock \BBOQ The Berkeley FrameNet project.\BBCQ\
+\newblock In {\Bem Proceedings of Coling-ACL 1998}, \mbox{\BPGS\ 86--90}.
+
+\bibitem[\protect\BCAY{Baldewein, Erk, Pad\'{o}, \BBA\ Prescher}{Baldewein
+  et~al.}{2004}]{Baldewein2004}
+Baldewein, U., Erk, K., Pad\'{o}, S., \BBA\ Prescher, D. \BBOP 2004\BBCP.
+\newblock \BBOQ Semantic role labeling with similarity based generalization
+  using {EM}-based clustering.\BBCQ\
+\newblock In {\Bem Proceedings of Senseval-3}, \mbox{\BPGS\ 64--68}.
+
+\bibitem[\protect\BCAY{Bejan \BBA\ Hathaway}{Bejan \BBA\
+  Hathaway}{2007}]{bejan2007usp}
+Bejan, C.~A.\BBACOMMA\ \BBA\ Hathaway, C. \BBOP 2007\BBCP.
+\newblock \BBOQ {UTD-SRL: A Pipeline Architecture for Extracting Frame Semantic
+  Structures}.\BBCQ\
+\newblock In {\Bem Proceedings of SemEval-2007}, \mbox{\BPGS\ 460--463}.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Chang \BBA\ Zheng}{Chang \BBA\
+  Zheng}{2008}]{chang2008kee}
+Chang, X.\BBACOMMA\ \BBA\ Zheng, Q. \BBOP 2008\BBCP.
+\newblock \BBOQ {Knowledge Element Extraction for Knowledge-Based Learning
+  Resources Organization}.\BBCQ\
+\newblock {\Bem Lecture Notes in Computer Science}, {\Bbf 4823}, \mbox{\BPGS\
+  102--113}.
+
+\bibitem[\protect\BCAY{Charniak \BBA\ Johnson}{Charniak \BBA\
+  Johnson}{2005}]{charniak2005cfn}
+Charniak, E.\BBACOMMA\ \BBA\ Johnson, M. \BBOP 2005\BBCP.
+\newblock \BBOQ {Coarse-to-fine n-best parsing and MaxEnt discriminative
+  reranking}.\BBCQ\
+\newblock In {\Bem Proceedings of ACL 2005}, \mbox{\BPGS\ 173--180}.
+
+\bibitem[\protect\BCAY{Ciaramita \BBA\ Altun}{Ciaramita \BBA\
+  Altun}{2006}]{ciaramita2006bcs}
+Ciaramita, M.\BBACOMMA\ \BBA\ Altun, Y. \BBOP 2006\BBCP.
+\newblock \BBOQ {Broad-coverage sense disambiguation and information extraction
+  with a supersense sequence tagger}.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP-2006}, \mbox{\BPGS\ 594--602}.
+
+\bibitem[\protect\BCAY{Fillmore}{Fillmore}{1976}]{fillmore1976}
+Fillmore, C.~J. \BBOP 1976\BBCP.
+\newblock \BBOQ Frame semantics and the nature of language.\BBCQ\
+\newblock {\Bem Annals of the New York Academy of Sciences: Conference on the
+  Origin and Development of Language and Speech}, {\Bbf 280}, \mbox{\BPGS\
+  20--32}.
+
+\bibitem[\protect\BCAY{Gildea \BBA\ Jurafsky}{Gildea \BBA\
+  Jurafsky}{2002}]{Gildea2002}
+Gildea, D.\BBACOMMA\ \BBA\ Jurafsky, D. \BBOP 2002\BBCP.
+\newblock \BBOQ Automatic labeling of semantic roles.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 28}  (3), \mbox{\BPGS\
+  245--288}.
+
+\bibitem[\protect\BCAY{Giuglea \BBA\ Moschitti}{Giuglea \BBA\
+  Moschitti}{2006}]{Giuglea2006}
+Giuglea, A.-M.\BBACOMMA\ \BBA\ Moschitti, A. \BBOP 2006\BBCP.
+\newblock \BBOQ Semantic role labeling via {FrameNet}, {VerbNet} and
+  {PropBank}.\BBCQ\
+\newblock In {\Bem Proceedings of the Coling-ACL 2006}, \mbox{\BPGS\ 929--936}.
+
+\bibitem[\protect\BCAY{Gordon \BBA\ Swanson}{Gordon \BBA\
+  Swanson}{2007}]{gordon-swanson:2007:ACLMain}
+Gordon, A.\BBACOMMA\ \BBA\ Swanson, R. \BBOP 2007\BBCP.
+\newblock \BBOQ Generalizing semantic role annotations across syntactically
+  similar verbs.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-2007}, \mbox{\BPGS\ 192--199}.
+
+\bibitem[\protect\BCAY{Kipper, Dang, \BBA\ Palmer}{Kipper
+  et~al.}{2000}]{kipper2000cbc}
+Kipper, K., Dang, H.~T., \BBA\ Palmer, M. \BBOP 2000\BBCP.
+\newblock \BBOQ {Class-based construction of a verb lexicon}.\BBCQ\
+\newblock In {\Bem Proceedings of AAAI-2000}, \mbox{\BPGS\ 691--696}.
+
+\bibitem[\protect\BCAY{Levin}{Levin}{1993}]{levin1993evc}
+Levin, B. \BBOP 1993\BBCP.
+\newblock {\Bem {English verb classes and alternations: A preliminary
+  investigation}}.
+\newblock The University of Chicago Press.
+
+\bibitem[\protect\BCAY{Loper, Yi, \BBA\ Palmer}{Loper
+  et~al.}{2007}]{loper2007clr}
+Loper, E., Yi, S., \BBA\ Palmer, M. \BBOP 2007\BBCP.
+\newblock \BBOQ {Combining lexical resources: Mapping between propbank and
+  verbnet}.\BBCQ\
+\newblock In {\Bem Proceedings of the 7th International Workshop on
+  Computational Semantics}, \mbox{\BPGS\ 118--128}.
+
+\bibitem[\protect\BCAY{M\`{a}rquez, Carreras, Litkowski, \BBA\
+  Stevenson}{M\`{a}rquez et~al.}{2008}]{marquez2008srl}
+M\`{a}rquez, L., Carreras, X., Litkowski, K.~C., \BBA\ Stevenson, S. \BBOP
+  2008\BBCP.
+\newblock \BBOQ {Semantic role labeling: an introduction to the special
+  issue}.\BBCQ\
+\newblock {\Bem Computational linguistics}, {\Bbf 34}  (2), \mbox{\BPGS\
+  145--159}.
+
+\bibitem[\protect\BCAY{Moschitti, Giuglea, Coppola, \BBA\ Basili}{Moschitti
+  et~al.}{2005}]{Moschitti2005}
+Moschitti, A., Giuglea, A.-M., Coppola, B., \BBA\ Basili, R. \BBOP 2005\BBCP.
+\newblock \BBOQ Hierarchical Semantic Role Labeling.\BBCQ\
+\newblock In {\Bem Proceedings of CoNLL-2005}, \mbox{\BPGS\ 201--204}.
+
+\bibitem[\protect\BCAY{Moschitti, Quarteroni, Basili, \BBA\
+  Manandhar}{Moschitti et~al.}{2007}]{moschitti2007esa}
+Moschitti, A., Quarteroni, S., Basili, R., \BBA\ Manandhar, S. \BBOP 2007\BBCP.
+\newblock \BBOQ Exploiting Syntactic and Shallow Semantic Kernels for Question
+  Answer Classification.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-07}, \mbox{\BPGS\ 776--783}.
+
+\bibitem[\protect\BCAY{Narayanan \BBA\ Harabagiu}{Narayanan \BBA\
+  Harabagiu}{2004}]{narayanan-harabagiu:2004:COLING}
+Narayanan, S.\BBACOMMA\ \BBA\ Harabagiu, S. \BBOP 2004\BBCP.
+\newblock \BBOQ Question Answering Based on Semantic Structures.\BBCQ\
+\newblock In {\Bem Proceedings of Coling-2004}, \mbox{\BPGS\ 693--701}.
+
+\bibitem[\protect\BCAY{Nocedal}{Nocedal}{1980}]{nocedal1980}
+Nocedal, J. \BBOP 1980\BBCP.
+\newblock \BBOQ Updating quasi-Newton matrices with limited storage.\BBCQ\
+\newblock {\Bem Mathematics of Computation}, {\Bbf 35}  (151), \mbox{\BPGS\
+  773--782}.
+
+\bibitem[\protect\BCAY{Palmer, Gildea, \BBA\ Kingsbury}{Palmer
+  et~al.}{2005}]{Palmer:05}
+Palmer, M., Gildea, D., \BBA\ Kingsbury, P. \BBOP 2005\BBCP.
+\newblock \BBOQ The Proposition Bank: An Annotated Corpus of Semantic
+  Roles.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 31}  (1), \mbox{\BPGS\
+  71--106}.
+
+\bibitem[\protect\BCAY{Shen \BBA\ Lapata}{Shen \BBA\
+  Lapata}{2007}]{shen-lapata:2007:EMNLP-CoNLL2007}
+Shen, D.\BBACOMMA\ \BBA\ Lapata, M. \BBOP 2007\BBCP.
+\newblock \BBOQ Using Semantic Roles to Improve Question Answering.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP-CoNLL 2007}, \mbox{\BPGS\ 12--21}.
+
+\bibitem[\protect\BCAY{Shi \BBA\ Mihalcea}{Shi \BBA\
+  Mihalcea}{2005}]{Shi2005ppt}
+Shi, L.\BBACOMMA\ \BBA\ Mihalcea, R. \BBOP 2005\BBCP.
+\newblock \BBOQ {Putting Pieces Together: Combining FrameNet, VerbNet and
+  WordNet for Robust Semantic Parsing}.\BBCQ\
+\newblock In {\Bem Proceedings of CICLing-2005}, \mbox{\BPGS\ 100--111}.
+
+\bibitem[\protect\BCAY{Surdeanu, Johansson, Meyers, M\`{a}rquez, \BBA\
+  Nivre}{Surdeanu et~al.}{2008}]{surdeanu2008cst}
+Surdeanu, M., Johansson, R., Meyers, A., M\`{a}rquez, L., \BBA\ Nivre, J. \BBOP
+  2008\BBCP.
+\newblock \BBOQ {The CoNLL-2008 Shared Task on Joint Parsing of Syntactic and
+  Semantic Dependencies}.\BBCQ\
+\newblock In {\Bem Proceedings of CoNLL--2008}, \mbox{\BPGS\ 159--177}.
+
+\bibitem[\protect\BCAY{Surdeanu, Harabagiu, Williams, \BBA\ Aarseth}{Surdeanu
+  et~al.}{2003}]{Surdeanu2003}
+Surdeanu, M., Harabagiu, S., Williams, J., \BBA\ Aarseth, P. \BBOP 2003\BBCP.
+\newblock \BBOQ Using Predicate-Argument Structures for Information
+  Extraction.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-2003}, \mbox{\BPGS\ 8--15}.
+
+\bibitem[\protect\BCAY{Yi, Loper, \BBA\ Palmer}{Yi
+  et~al.}{2007}]{yi-loper-palmer:2007:main}
+Yi, S., Loper, E., \BBA\ Palmer, M. \BBOP 2007\BBCP.
+\newblock \BBOQ Can Semantic Roles Generalize Across Genres?\BBCQ\
+\newblock In {\Bem Proceedings of HLT-NAACL 2007}, \mbox{\BPGS\ 548--555}.
+
+\bibitem[\protect\BCAY{Zapirain, Agirre, \BBA\ M\`{a}rquez}{Zapirain
+  et~al.}{2008}]{zapirain-agirre-marquez:2008:ACLMain}
+Zapirain, B., Agirre, E., \BBA\ M\`{a}rquez, L. \BBOP 2008\BBCP.
+\newblock \BBOQ Robustness and Generalization of Role Sets: {PropBank} vs.
+  {VerbNet}.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-08: HLT}, \mbox{\BPGS\ 550--558}.
+
+\end{thebibliography}
+
+\begin{biography}
+\bioauthor{松林優一郎（学生会員）}{
+2010年東京大学大学院情報理工学系研究科・コンピュータ科学専攻博士課程修了．
+情報理工学博士．同年より，国立情報学研究所・特任研究員．意味解析の研究に
+ 従事．ACL会員．
+}
+
+\bioauthor{岡崎　直観（正会員）}{
+2007年東京大学大学院情報理工学系研究科・電子情報学専攻博士課程修了．情報
+理工学博士．同年より，東京大学大学院情報理工学系研究科・特別研究員．テキ
+ストマイニングの研究に従事．情報処理学会，ACL各会員．
+}
+\bioauthor{辻井　潤一（正会員）}{
+1971年京都大学工学部，1973年同修士課程修了．同大学助手・助教授を経て，
+ 1988年英国UMIST教授，1995年より東京大学教授．マンチェスタ大学教授を兼任．
+ TM，機械翻訳などの研究に従事．工博．ACL元会長（2006年）．
+}
+
+
+\end{biography}
+
+
+\biodate
+
+
+
+\end{document}

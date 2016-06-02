@@ -1,0 +1,1238 @@
+
+
+
+
+\documentstyle[jnlpbbl,epsf,version]{jnlp_j_b5}
+\input{path.sty}
+
+\setcounter{page}{93}
+\setcounter{巻数}{7}
+\setcounter{号数}{5}
+\setcounter{年}{2000}
+\setcounter{月}{11}
+\受付{2000}{1}{6}
+\再受付{2000}{3}{30}
+\採録{2000}{3}{14}
+
+
+\title{自然言語解析のためのMSLRパーザ・ツールキット}
+\author{白井 清昭\affiref{TITECH}  \and
+  植木 正裕\affiref{KOKKEN} \and
+  橋本 泰一\affiref{TITECH} \and
+  徳永 健伸\affiref{TITECH} \and
+  田中 穂積\affiref{TITECH}}
+
+\headauthor{白井，植木，橋本，徳永，田中}
+\headtitle{自然言語解析のためのMSLRパーザ・ツールキット}
+
+\affilabel{TITECH}{東京工業大学 大学院情報理工学研究科 計算工学専攻}
+{Department of Computer Science,
+  Graduate School of Information Science and Engineering,
+  Tokyo Institute of Technology}
+\affilabel{KOKKEN}{国立国語研究所 日本語教育センター 日本語教育普及指導部 日本語教育教材開発室}
+{Teaching Materials Development Section, Department of Educational
+  Support Services, Center for Teaching Japanese as a Second Language,
+  The National Language Research Institute}
+
+\jabstract{
+本論文では，我々が現在公開している自然言語解析用ツール
+「MSLRパーザ・ツールキット」の特徴と機能について述べる．
+MSLRパーザは，一般化LR法の解析アルゴリズムを拡張し，
+日本語などの分かち書きされていない文の形態素解析と構文解析を
+同時に行うツールである．
+MSLRパーザを用いて解析を行う際には，
+まずLR表作成器を用いて，文法と接続表からLR表を作成する．
+このとき，LR表作成器は，接続表に記述された
+品詞間の接続制約を組み込んだLR表を生成する．
+このため，接続制約に違反する解析結果を受理しないLR表が
+作られるだけでなく，LR表の大きさを大幅に縮小することができる．
+次に，MSLRパーザは，作成されたLR表と辞書を用いて
+辞書引きによる単語分割と構文解析を同時に行い，
+その結果として構文木を出力する．
+さらに，MSLRパーザは，
+文中の括弧の組によって係り受けに関する部分的な制約が与えられた文を
+入力とし，その制約を満たす構文木のみを出力する機能を持つ．
+また，文脈依存性を若干反映した言語モデルのひとつである
+確率一般化LRモデル(PGLRモデル)を学習し，
+個々の構文木に対してPGLRモデルに基づく生成確率を計算し，
+解析結果の優先順位付けを行う機能も持つ．
+}
+
+\jkeywords{形態素解析，構文解析，一般化LR法，パーザ}
+
+\etitle{MSLR Parser Tool Kit --- Tools for \\ Natural Language Analysis}
+\eauthor{Kiyoaki Shirai\affiref{TITECH} \and
+  Masahiro Ueki\affiref{KOKKEN} \and
+  Taiichi Hashimoto\affiref{TITECH} \and
+  Takenobu Tokunaga\affiref{TITECH} \and
+  Hozumi Tanaka\affiref{TITECH}}
+
+\eabstract{
+In this paper, we describe a tool kit for natural language analysis, the
+MSLR parser tool kit. The `MSLR parser' is based on the generalized LR
+parsing algorithm, and integrates morphological and syntactic analysis
+of unsegmented sentences. The `LR table generator' constructs an LR
+table from a context free grammar and a connection matrix describing
+adjacency constraints between part-of-speech pairs. By incorporating
+connection matrix-based constraints into the LR table, it is possible to
+both reject any locally implausible parsing results, and reduce the size
+of the LR table. Then, using the generated LR table and a lexicon, the
+MSLR parser outputs parse trees based on morphological and syntactic
+analysis of input sentences. In addition to this, the MSLR parser
+accepts sentence inputs including partial syntactic constraints denoted
+by pairs of brackets, and suppresses the generation of any parse trees
+not satisfying those constraints. Furthermore, it can be trained
+according to the probabilistic generalized LR (PGLR) model, which is a
+mildly context sensitive language model. It can also rank parse trees in 
+order of the overall probability returned by the trained PGLR model.
+}
+
+\ekeywords{
+  morphological analysis, syntactic analysis, generalized LR method, parser}
+
+\newcommand{\lrtitem}[1]{}
+\newcommand{\lrtsh}[1]{}
+\newcommand{\lrtre}[1]{}
+\newcommand{\shact}{}
+\newcommand{\react}{}
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+
+\section{はじめに}
+\label{sec:introduction}
+
+我々は，1998年10月から
+自然言語解析用ツール「MSLRパーザ・ツールキット」を公開している~\footnote{
+  {\tt http://tanaka-www.cs.titech.ac.jp/pub/mslr/}
+  }．
+MSLRパーザ(Morphological and Syntactic LR parser)は，
+一般化LR法の解析アルゴリズムを拡張し，
+単語区切りのない言語(日本語など)を主に対象とし，
+形態素解析と構文解析を同時に行うパーザである\footnote{
+  MSLRパーザは，
+  分かち書きされた文(英語文など)を解析する機能も持っているが，
+  もともとは単語区切りのない文を解析することを目的に作られた．
+}．
+本論文では，MSLRパーザ・ツールキットの特徴と機能について述べる．
+
+MSLRパーザを用いて文を解析する場合には，以下の3つが必要になる．
+\begin{quote}
+  \begin{description}
+  \item[文法　] 
+    品詞を終端記号とする文脈自由文法．
+    主に構文解析に用いる．
+
+  \item[辞書　]
+    単語とそれに対応した品詞を列挙したデータで，
+    形態素解析の基本単位を集めたものである．
+    辞書の品詞体系は文法の品詞体系と一致していなければならない．
+
+  \item[接続表]
+    品詞間の接続制約を記述した表．
+    品詞間の接続制約とは，
+    ある2つの品詞が隣接できるか否かに関する制約である．
+  \end{description}
+\end{quote}
+本ツールキットでは，
+文法・辞書・接続表を自由に入れ換えることができる．
+すなわち，ユーザが独自に開発した文法や辞書を用いて，
+MSLRパーザによって文の解析を行うことが可能である．
+また，MSLRパーザ・ツールキットには
+日本語解析用の文法，辞書，接続表が含まれている．
+したがって，文法等を持っていないユーザでも，
+ツールキットに付属のものを用いて
+日本語文の形態素・構文解析を行うことができる．
+
+MSLRパーザはC言語で実装され，動作するOSはunixのみである．
+具体的には，以下のOSで動作することが確認されている．
+\begin{itemize}
+\item SunOS 5.6
+\item Digital Unix 4.0
+\item IRIX 6.5
+\item FreeBSD 3.3
+\item Linux 2.2.11, Linux PPC(PC-Mind 1.0.4)
+\end{itemize}
+MSLRパーザを動作させるために必要なメモリ使用量・ディスク使用量は，
+使用する文法や辞書の規模に大きく依存する．
+例えば，ツールキットに付属の日本語解析用文法(規則数1,408)と
+辞書(登録単語数241,113)を用いる場合，
+50Mbyteのメモリと10Mbyteのディスク容量を必要とする．
+
+本ツールキットを用いた形態素・構文解析の流れを
+図~\ref{fig:overview} に示す．
+MSLRパーザの解析アルゴリズムは一般化LR法に基づいているため，
+まず最初にLR表作成器を用いて，文法と接続表からLR表を作成する．
+MSLRパーザは，作成されたLR表と辞書を参照しながら
+入力文の形態素・構文解析を行い，解析結果(構文木)を出力する．
+
+\begin{figure}[htbp]
+  \begin{center}
+    \begin{epsf}
+    \epsfile{file=overview.eps,width=0.9\textwidth}
+    \end{epsf}
+    \begin{draft}
+    \atari(127,36)
+    \end{draft}
+    \caption{MSLRパーザを用いた形態素・構文解析の流れ}
+    \label{fig:overview}
+  \end{center}
+\end{figure}
+
+本ツールキットの主な特徴と機能は以下の通りである．
+\begin{itemize}
+\item
+  MSLRパーザは，形態素解析と構文解析を同時に行う．
+  まず最初に形態素解析を行い，
+  その出力をもとに構文解析を行う逐次的な方法では，
+  形態素解析の段階では文法などの構文的な制約を考慮しない場合が多く，
+  その後の構文解析の段階で不適当と判断されるような
+  無駄な解析結果も出力される．
+  これに対し，MSLRパーザは
+  形態的な情報(辞書，接続表)と構文的な情報(文法)を同時に用いて
+  解析を行うため，
+  このような無駄な解析結果を生成することはない．
+
+\item 
+  LR表作成器は，接続表に記述された品詞間の接続制約を
+  組み込んだLR表を作成する．
+  すなわち，LR表を作成する段階で品詞間の接続制約を考慮し，
+  接続制約に違反する構文木を受理しないLR表を作る．
+  さらに，品詞間の接続制約を組み込んだ場合，
+  接続制約を組み込まない場合と比べて
+  LR表の状態数・動作数を減らすことができ，
+  メモリ使用量も小さくすることができるという利点がある．
+
+\item 
+  品詞間の接続制約は，接続表という形式で記述する代わりに，
+  文法に組み込むことも可能である．
+  しかしながら，接続制約を文法に組み込んだ場合，
+  規則数が組み合わせ的に増大する．
+  このため，文法作成者の負担が大きくなり，
+  また作成されるLR表の大きさも大きくなるために望ましくない．
+  このような理由から，本ツールキットでは，
+  接続表と文法を独立に記述する枠組を採用している．
+
+\item 
+  平文を入力とした解析の他に，
+  係り受けに関する部分的な制約を加えた文を入力とした解析を行うことができる．
+  例えば，「太郎が渋谷で買った本を借りた」という文を解析する際に，
+  次のような括弧付けによる制約を付けた文が入力されたときには，
+  括弧付けと矛盾した解析結果は出力しない．
+  \begin{displaymath}
+    \tt
+    [太郎が渋谷で買った]本を借りた
+  \end{displaymath}
+  すなわち，「太郎が」が「借りた」に係る以下のような解析結果は，
+  Aの括弧付けが入力の括弧付けと矛盾(交差)しているために出力しない．
+  \begin{displaymath}
+    \tt
+    [[太郎が][_A\;[[渋谷で][買った]][[本を][借りた]]]\;{}_A]
+  \end{displaymath}
+
+  この機能は，
+  例えば前編集により係り受けに関する部分的な制約を
+  あらかじめ文に付加してから解析を行い，
+  構文的曖昧性を抑制する場合などに利用できる．
+
+\item 
+  確率一般化LRモデル~\cite{inui:98:a,sornlertlamvanich:99:a}
+  (Probabilistic Generalized LR Model，以下PGLRモデル)を
+  取り扱うことができる．
+  PGLRモデルとは，一般化LR法の枠組において
+  構文木の生成確率を与える確率モデルである．
+  PGLRモデルに基づく構文木の生成確率は，
+  統計的な意味での正しさの尺度を構文木に与えることができるので，
+  構文的な曖昧性の解消に利用することができる．
+\end{itemize}
+
+以下では，
+ここに挙げた本ツールキットの特徴と機能について詳しく説明する．
+\ref{sec:table generator} 節では品詞間の接続制約を組み込む
+LR表作成器について述べ，
+\ref{sec:parser} 節ではMSLRパーザの概略について述べる．
+最後に\ref{sec:conclusion} 節で本論文のまとめと
+MSLRパーザ・ツールキットの今後の開発方針について述べる．
+\section{LR表作成器}
+\label{sec:table generator}
+
+本節では，MSLRパーザ・ツールキットにおけるLR表作成器の機能と
+特徴について詳しく説明する．
+
+\subsection{3種類のLR表を作成する機能}
+\label{sec:table type}
+
+一般化LR法で用いられるLR表には，
+SLR (Simple LR), CLR (Canonical LR), LALR (Lookahead LR)の3種類がある．
+我々のLR表作成器は，これら3種類のLR表を作成する機能を持つ．
+
+実際の自然言語文の解析では，
+最も状態数の少ないLALRが用いられる場合が多い．
+したがって，以後LR表といえばLALRを意味するものとする．
+これらのLR表の違いの詳細については文献~\cite{aho:85:a} を
+参照していただきたい．
+
+\subsection{品詞間の接続制約を組み込む機能}
+\label{sec:table con}
+
+本ツールキットにおけるLR表作成器の最も大きな特徴は，
+LR表に品詞間の接続制約を反映させることができる点にある．
+品詞間の接続制約をLR表に反映させるということは，
+接続制約に違反する構文木を生成する動作を
+LR表からあらかじめ除去することに相当する．
+
+このことを図~\ref{fig:lalr_gra} の文法$CFG_1$ を
+例に説明する\footnote{
+  $CFG_1$ における各記号のおおまかな意味は以下の通りである．
+  S=文,
+  VP=動詞句,
+  PP=後置詞句,
+  V=動詞,
+  VS1=一段動詞語幹,
+  VS=動詞語幹,
+  VE=動詞語尾,
+  N=名詞,
+  P=助詞,
+  AX=助動詞列
+  (以上，非終端記号)．
+  vs\_1=一段動詞語幹,
+  vs\_5k=カ行五段動詞語幹,
+  vs\_5m=マ行五段動詞語幹, 
+  vs\_5w=ワ行五段動詞語幹,
+  ve\_i=動詞語尾イ,
+  ve\_ki=動詞語尾キ,
+  ve\_ma=動詞語尾マ,
+  noun=名詞,
+  postp=助詞,
+  aux=助動詞
+  (以上，終端記号(品詞))．
+}．
+$CFG_1$ において，
+書き換え規則の右側にある数字は規則番号を表わす．
+また，終端記号は品詞である．
+$CFG_1$ から通常のLR表作成アルゴリズムによって作成された
+LR表を図~\ref{fig:lalr_table} に示す．
+但し，図~\ref{fig:lalr_table} のLR表はaction部のみであり，
+goto部は省略されている．
+今，このLR表に図~\ref{fig:lalr_con} の接続表に記述された
+接続制約を反映させることを考える．
+図~\ref{fig:lalr_con} の接続表において，
+行列要素$(i,j)$ が1なら$i$ 行目の品詞$x_i$ と$j$ 列目の品詞$x_j$ が
+この順序で連接可能であることを示し，
+$(i,j)$ が0なら$x_i$ と$x_j$ が連接不可能であることを意味する．
+また，``\$''は文末を表わす特殊な品詞である．
+
+\begin{figure}[htbp]
+  \begin{center}
+
+    \begin{tabular}[t]{lc}
+      S $\rightarrow$ VP & (1) \\[-1mm]
+      VP $\rightarrow$ PP VP & (2) \\[-1mm]
+      PP $\rightarrow$ VP PP & (3) \\[-1mm]
+      VP $\rightarrow$ V AX  & (4) \\[-1mm]
+      V  $\rightarrow$ VS VE & (5) \\[-1mm]
+      V  $\rightarrow$ VS1   & (6) \\[-1mm]
+      PP $\rightarrow$ N P   & (7) \\[-1mm]
+      N $\rightarrow$ noun   & (8) \\[-1mm]
+      P $\rightarrow$ postp  & (9) \\
+    \end{tabular}
+    \hspace*{20mm}
+    \begin{tabular}[t]{lc}
+      VS1 $\rightarrow$ vs\_1 & (10) \\[-1mm]
+      VS $\rightarrow$ vs\_5k & (11) \\[-1mm]
+      VS $\rightarrow$ vs\_5m & (12) \\[-1mm]
+      VS $\rightarrow$ vs\_5w & (13) \\[-1mm]
+      VE $\rightarrow$ ve\_i  & (14) \\[-1mm]
+      VE $\rightarrow$ ve\_ki & (15) \\[-1mm]
+      VE $\rightarrow$ ve\_ma & (16) \\[-1mm]
+      AX $\rightarrow$ AX aux & (17) \\[-1mm]
+      AX $\rightarrow$ aux    & (18) \\
+    \end{tabular}
+
+    \bigskip
+
+    \caption{文法の例: $CFG_1$}
+    \label{fig:lalr_gra}
+  \end{center}
+\end{figure}
+
+\begin{figure}[htbp]
+  \footnotesize
+  \begin{center}
+\begin{tabular}{|r|cccc@{}cccccc@{}c|}\hline
+        & vs\_1 & vs\_5k        & vs\_5m        & vs\_5w        & ve\_i & ve\_ki        & ve\_ma        & aux   & noun  & postp & \$\\ \hline
+0       & sh1   & sh4   & sh3   & sh2   &       &       &       &       & sh11  &       & \\
+1       &       &       &       &       &       &       &       & re10  &       &       & \\
+2       &       &       &       &       & re13  & *re13  & *re13  &       &       &       & \\
+3       &       &       &       &       & *re12  & *re12  & re12  &       &       &       & \\
+4       &       &       &       &       & *re11  & re11  & *re11  &       &       &       & \\
+5       &       &       &       &       &       &       &       & sh13  &       &       & \\
+6       & sh1   & sh4   & sh3   & sh2   &       &       &       &       & sh11  &       & \\
+7       &       &       &       &       &       &       &       &       &       & sh16  & \\
+8       &       &       &       &       &       &       &       & re6   &       &       & \\
+9       &       &       &       &       & sh20  & sh19  & sh18  &       &       &       & \\
+10      & sh1   & sh4   & sh3   & sh2   &       &       &       &       & sh11  &       & re1\\
+11      &       &       &       &       &       &       &       &       &       & re8   & \\
+12      &       &       &       &       &       &       &       &       &       &       & acc\\
+13      & re18  & re18  & re18  & re18  &       &       &       & re18  & re18  &       & re18\\
+14      & re4   & re4   & re4   & re4   &       &       &       & sh24  & re4   &       & re4\\
+15      & re2/sh1       & re2/sh4       & re2/sh3       & re2/sh2       &       &       &       &       & re2/sh11      &       & re2\\
+16      & re9   & re9   & re9   & re9   &       &       &       &       & re9   &       & \\
+17      & re7   & re7   & re7   & re7   &       &       &       &       & re7   &       & \\
+18      &       &       &       &       &       &       &       & re16  &       &       & \\
+19      &       &       &       &       &       &       &       & re15  &       &       & \\
+20      &       &       &       &       &       &       &       & re14  &       &       & \\
+21      &       &       &       &       &       &       &       & re5   &       &       & \\
+22      & sh1   & sh4   & sh3   & sh2   &       &       &       &       & sh11  &       & \\
+23      & re3/sh1       & re3/sh4       & re3/sh3       & re3/sh2       &       &       &       &       & re3/sh11      &       & \\
+24      & re17  & re17  & re17  & re17  &       &       &       & re17  & re17  &       & re17\\
+\hline
+\end{tabular}
+
+    \caption{$CFG_1$ から生成されるLR表(action部のみ)}
+    \label{fig:lalr_table}
+  \end{center}
+\end{figure}
+
+\begin{figure}[htbp]
+  \begin{center}
+    \small
+
+\begin{tabular}{c|ccccccccccc}
+  & \makebox[6mm]{vs\_1}
+  & \makebox[6mm]{vs\_5k} & \makebox[6mm]{vs\_5m} & \makebox[6mm]{vs\_5w}
+  & \makebox[6mm]{ve\_i}  & \makebox[6mm]{ve\_ki} & \makebox[6mm]{ve\_ma}
+  & \makebox[6mm]{noun} & \makebox[6mm]{postp}
+  & \makebox[6mm]{aux} & \makebox[6mm]{\$} \\ \hline
+vs\_1  & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 1 & 0 & 1 & 1 \\
+vs\_5k & 0 & 0 & 0 & 0 & 0 & 1 & 0 & 0 & 0 & 0 & 0 \\
+vs\_5m & 0 & 0 & 0 & 0 & 0 & 0 & 1 & 0 & 0 & 0 & 0 \\
+vs\_5w & 0 & 0 & 0 & 0 & 1 & 0 & 0 & 0 & 0 & 0 & 0 \\
+ve\_i  & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 1 & 0 \\
+ve\_ki & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 1 & 0 \\
+ve\_ma & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 1 & 0 \\
+noun   & 1 & 1 & 1 & 1 & 0 & 0 & 0 & 1 & 1 & 1 & 1 \\
+postp  & 1 & 1 & 1 & 1 & 0 & 0 & 0 & 1 & 1 & 0 & 1 \\
+aux    & 1 & 1 & 1 & 1 & 0 & 0 & 0 & 1 & 1 & 1 & 1 \\
+\end{tabular}
+
+    \bigskip
+
+    \caption{接続表の例}
+    \label{fig:lalr_con}
+  \end{center}
+\end{figure}
+
+$CFG_1$ では，
+VSを構成する品詞として vs\_5k, vs\_5m, vs\_5w が，
+VEを構成する品詞として ve\_i, ve\_ki, ve\_ma があるので，
+規則(5)から，Vを構成する品詞列は
+$3 \times 3 = 9$ 通りあることがわかる．
+これに対し，図~\ref{fig:lalr_con} の接続表を考慮した場合，
+これら9通りの品詞列のうち
+``vs\_5k ve\_ki''，``vs\_5m ve\_ma''，``vs\_5w ve\_i''の
+3組だけが接続制約を満たす．
+したがって，これら以外の品詞列は受理すべきではない．
+
+ここで，図~\ref{fig:lalr_table} のLR表の
+状態$4$，先読み記号ve\_i の欄にある$\lrtre{11}$ という
+\react に着目する．
+$\lrtre{11}$ は，$CFG_1$ における規則(11)に
+対応した部分木を作ることを意味する(図~\ref{fig:re_act})．
+ところが，先読み記号がve\_i であることから，
+``vs\_5k ve\_i''という品詞列に対してこの動作を実行することになるが，
+この品詞列は図~\ref{fig:lalr_con} の接続制約に違反する．
+同様に，図~\ref{fig:lalr_table} において，
+``*''のついた動作もまた接続制約に違反する動作である．
+したがって，
+このような動作を事前にLR表から削除しておけば，
+接続制約に違反する解析結果の生成を防ぐことができる．
+
+\begin{figure}[tbp]
+  \begin{center}
+    \begin{epsf}
+    \epsfile{file=act.eps,height=28mm}
+    \end{epsf}
+    \begin{draft}
+    \atari(76,28)
+    \end{draft}
+    \caption{接続制約に違反する\react}
+    \label{fig:re_act}
+  \end{center}
+\end{figure}
+
+接続制約に違反する動作をLR表から除去する方法としては，
+まず図~\ref{fig:lalr_table} のように接続制約を考慮しないLR表を
+作成してから，接続制約に違反する動作をLR表から削除する方法が考えられる．
+しかしながら，文法の規模が大きくなると，
+接続制約を考慮しないLR表の大きさが非常に大きくなるために望ましくない．
+これに対して，本ツールキットでは，
+LR表を作成する段階で接続制約を考慮し，
+接続制約に違反する動作を除いたLR表を直接生成する方法を採用している．
+接続制約を組み込みながらLR表を作成するアルゴリズムの詳細については
+文献~\cite{li:96:f} を参照していただきたい．
+
+接続制約をLR表に組み込む主な利点としては以下の3つが挙げられる．
+\begin{enumerate}
+\item
+  接続制約を事前に組み込んだLR表を用いて解析を行った場合，
+  解析時には品詞間の連接可能性をチェックする必要がないので，
+  解析時の効率を上げることができる．
+\item 
+  接続制約に違反する構文木を生成する動作をLR表から除去することにより，
+  LR表の状態数・動作数を大幅に減らし，メモリ使用量を小さくすることができる．
+\item 
+  品詞間の接続制約は，接続表として記述してからLR表に組み込む代わりに，
+  書き換え規則の細分化によって組み込むこともできる．
+  例えば，$CFG_1$ の例では，規則(5)の代わりに，
+  図~\ref{fig:rules} に挙げる3つの規則を導入すれば，
+  接続制約を満たす品詞列のみ受理することができる．
+  \begin{figure}[tbp]
+    \begin{center}
+
+      \begin{tabular}[c]{lc}
+        V $\rightarrow$ VS VE & (5)\\
+      \end{tabular}
+      \hspace*{5mm}
+      $\Rightarrow$
+      \hspace*{5mm}
+      \begin{tabular}[c]{lc}
+        V $\rightarrow$ vs\_5k ve\_ki & (5-1)\\[-1mm]
+        V $\rightarrow$ vs\_5m ve\_ma & (5-2)\\[-1mm]
+        V $\rightarrow$ vs\_5w ve\_i  & (5-3)\\[-1mm]
+      \end{tabular}
+    
+      \medskip
+
+      \caption{接続制約を反映した文法規則}
+      \label{fig:rules}
+    \end{center}
+  \end{figure}
+  しかしながら，このように接続制約を組み込んだ文法を作成することは，
+  規則数が組み合わせ的に増大するために望ましくない．
+  品詞間の接続制約は，接続表として文法とは独立に記述し，
+  LR表を作成する段階で接続制約を組み込む方が，
+  最終的に得られるLR表の状態数・動作数も少なく，
+  メモリ使用量を小さくすることができる．
+  また，文法記述者の負担も減らすことができる．
+\end{enumerate}
+
+
+\subsection{評価実験}
+\label{sec:tblgen exam}
+
+LR表に品詞間の接続制約を組み込む効果を調べる簡単な実験を行った．
+本ツールキットに付属されている日本語解析用の文法と接続表を用いて，
+品詞間の接続制約を組み込む場合と組み込まない場合のLR表を比較した．
+使用した文法の規則数は1,408，非終端記号数は218，終端記号数は537である．
+実験に使用した計算機は
+Sun Ultra Enterprise 250 Server(主記憶2GB，CPU周波数300MHz)である．
+結果を表~\ref{tab:tblgen eval} に示す．
+
+\begin{table}[htbp]
+  \begin{center}
+    \caption{品詞間の接続制約をLR表に組み込むことの効果}
+    \label{tab:tblgen eval}
+
+    \bigskip
+
+    \begin{tabular}{c|ccc}
+      & \makebox[15mm]{CPU時間}
+      & \makebox[15mm]{状態数}
+      & \makebox[15mm]{動作数} \\ \hline
+      接続制約なし & 42.1(sec.) & 1,720 & 379,173 \\
+      接続制約あり & 45.4(sec.) & 1,670 & 197,337 \\ \hline
+    \end{tabular}
+  \end{center}
+\end{table}
+
+表~\ref{tab:tblgen eval} において，
+「CPU時間」はLR表作成に要したCPU時間を，
+「状態数」は作成されたLR表の状態の数を，
+「動作数」は作成されたLR表の動作(\shact と\react )の数を
+示している．
+この表から，品詞間の接続制約を組み込むことによって，
+状態数はほとんど変わらないが，動作数は約半分に減ることがわかる．
+したがって，LR表のために必要なメモリ使用量を大幅に縮小することができる．
+一方，「CPU時間」は，接続制約を考慮する場合としない場合とで
+それほど大きな差は見られなかった．
+一般に，接続制約を組み込む場合は，
+品詞間の連接可能性を調べながらLR表を作成するために，
+それに要する時間は長くなることが予想される．
+しかしながら，
+接続制約に違反する無駄なアイテムが生成されなくなることから，
+LR表作成に要する時間が短縮される効果も生じる．
+そのため，LR表作成時間が劇的に増大するわけではないことが
+実験的に確かめられた．
+
+
+  
+
+
+
+
+
+\section{MSLRパーザ}
+\label{sec:parser}
+
+本節では，MSLRパーザの機能と特徴について概説する．
+
+\subsection{形態素解析と構文解析を同時に行う機能}
+\label{sec:analysis}
+
+\ref{sec:introduction} 節で述べたように，
+MSLRパーザは形態素解析と構文解析を同時に行う\cite{tanaka:95:a}．
+また，形態素・構文解析結果として構文木を出力する．
+例えば，
+図~\ref{fig:lalr_gra} の文法($CFG_1$)，
+図~\ref{fig:lalr_con} の接続表，
+図~\ref{fig:parser_dic} の辞書を用いたときの
+「あいこにたのまれた」という文の解析結果(構文木)を
+図~\ref{fig:parse tree1} に示す．
+実際には，MSLRパーザは以下のような括弧付けで表現された構文木を出力する．
+
+\baselineskip=0.6\normalbaselineskip
+\begin{verbatim}
+  [<S>,[<VP>,[<PP>,[<N>,[noun,あいこ]],[<P>,[postp,に]]],[<VP>,[<V>,[<VS>,
+  [vs_5m,たの]],[<VE>,[ve_ma,ま]]],[<AX>,[<AX>,[aux,れ]],[aux,た]]]]]
+\end{verbatim}
+\baselineskip=\normalbaselineskip
+
+\noindent
+解析結果が複数ある場合には，
+その中から$N$ 個の構文木をランダムに選んで出力する．
+ただし，\ref{sec:pglr} 項で述べるPGLRモデルを用いる場合には，
+構文木の生成確率の大きい上位$N$ 個の構文木を取り出すことができる．
+また，$N$ の値は起動時のオプション指定により変更できる．
+
+\begin{figure}[tbp]
+  \begin{center}
+    \begin{tabular}{l|l}
+      単語   & \multicolumn{1}{c}{品詞} \\ \hline
+      あ     & vs\_5k, vs\_5w \\[-1mm]
+      あいこ & noun \\[-1mm]
+      い     & ve\_i \\[-1mm]
+      き     & ve\_ki \\[-1mm]
+      た     & aux \\[-1mm]
+    \end{tabular}
+    \hspace*{15mm}
+    \begin{tabular}{l|l}
+      単語   & \multicolumn{1}{c}{品詞} \\ \hline
+      たの   & vs\_5m \\[-1mm]
+      に     & postp, vs\_1 \\[-1mm]
+      の     & vs\_5m \\[-1mm]
+      ま     & ve\_ma \\[-1mm]
+      れ     & aux \\[-1mm]
+    \end{tabular}
+
+    \caption{辞書の例}
+    \label{fig:parser_dic}
+  \end{center}
+\end{figure}
+
+\begin{figure}[htbp]
+  \begin{center}
+    \begin{epsf}
+    \epsfile{file=tree1.eps,width=0.35\textwidth}
+    \end{epsf}
+    \begin{draft}
+    \atari(49,36)
+    \end{draft}
+    \caption{「あいこにたのまれた」の解析結果}
+    \label{fig:parse tree1}
+  \end{center}
+\end{figure}
+
+MSLRパーザのアルゴリズムは，
+一般化LR法の構文解析アルゴリズムを拡張したものである．
+一般化LR法が通常は品詞列を入力とするのに対して，
+MSLRパーザは文字列を入力とし，
+辞書引きによる単語分割と構文解析を同時に行う．
+以下，一般化LR法とMSLRパーザの解析アルゴリズムとの違いを簡単に説明する．
+MSLRパーザの解析アルゴリズムの詳細については
+文献~\cite{tanaka:95:a} を参照していただきたい．
+
+\begin{enumerate}
+\item
+  入力文が与えられたとき，
+  品詞と品詞の間に位置番号をつける代わりに，
+  図~\ref{fig:mslr_posit} のように入力文の文字間に位置番号をつける．
+  \begin{figure}[htb]
+    \begin{center}
+      \begin{tabular}{cc@{}c@{}c@{}c@{}c@{}c@{}c@{}c@{}c@{}c@{}c@{}c@{}c@{}c@{}c@{}c@{}c@{}c@{}c}
+        & &あ& &い& &こ& &に& &た& &の& &ま& &れ& &た   \\[-2mm]
+        {\footnotesize (位置番号)}
+        &0&  &1&  &2&  &3&  &4&  &5&  &6&  &7&  &8&  &9 \\
+      \end{tabular}
+      \phantom{位置番号}
+      
+      \bigskip
+      \caption{MSLRパーザにおける位置番号のつけ方}
+      \label{fig:mslr_posit}
+    \end{center}
+  \end{figure}
+
+
+\item 
+  解析が位置$i$ まで進んだとき，
+  位置$i$ から始まる全ての単語を辞書引きし，
+  その結果をスタックに登録する．
+  例えば，図~\ref{fig:mslr_posit} の例文を
+  図~\ref{fig:parser_dic} の辞書を用いて解析した場合，
+  位置$0$ では``(あ,vs\_5k)'',``(あ,vs\_5w)'',``(あいこ,noun)''
+  という3つの品詞付けの結果が解析スタックに登録される．
+  これらの品詞付けの結果は，
+  通常の一般化LR法における多品詞語と全く同様に取り扱われる．
+
+\item 
+  \shact を実行して先読み記号をスタックにプッシュする際には，
+  その品詞を構成する文字列の一番最後の位置まで解析スタックを延ばす．
+  例えば，位置$0$ でvs\_5k という先読み記号(品詞)を
+  プッシュする際には，
+  vs\_5k が位置$0$〜$1$に位置する単語「あ」の品詞であるので，
+  スタックの先頭を位置$1$ まで延ばす．
+  そして，位置$1$ から始まる単語の辞書引き結果をもとに
+  以後の解析を進める．
+  同様に，位置$0$ でnoun という品詞をプッシュする際には，
+  noun が位置$0$〜$3$に位置する単語「あいこ」の品詞であるので，
+  スタックの先頭を位置$3$ まで延ばす．
+  以後の解析は，位置$3$ から始まる単語の辞書引き結果を
+  もとに進められる．
+\end{enumerate}
+
+例文「あいこにたのまれた」を解析する際，
+形態素解析結果の候補としては以下の2つがある．
+\begin{quote}
+  a.~ (あいこ,noun)(に,postp)(たの,vs\_5m)(ま,ve\_ma)(れ,aux)(た,aux)\\
+  b.~ (あいこ,noun)(に,vs\_1)(た,aux)(の,vs\_5m)(ま,ve\_ma)(れ,aux)(た,aux)
+\end{quote}
+文法$CFG_1$ はb.の品詞列を受理しないが，
+形態素解析と構文解析を逐次的に行う方法では，
+形態素解析結果の候補としてa., b.ともに出力し，
+それぞれの品詞列に対して構文解析が試みられる．
+これに対し，MSLRパーザは形態素解析と構文解析を同時に行い，
+文法に記述された構文的な制約で排除される形態素解析の結果を
+早期に取り除くことができるため，解析効率がよい．
+例えば，位置$3$ まで解析が進んだとき，
+「あいこ」という文字列が図~\ref{fig:parse tree1} の点線で
+囲まれた部分木を構成することがわかっている．
+このとき，位置$3$ から始まる単語を辞書引きする際に，
+品詞列b.は受理されないという文法的な制約から，
+``(に,vs\_1)''という品詞付けが適切でないことがわかる．
+具体的には，位置$3$ におけるスタックトップの状態$7$ において，
+``vs\_1''を先読み記号とする動作が図~\ref{fig:lalr_table} のLR表に
+存在しないことから，
+``(に,vs\_1)''という辞書引き結果を含む解析はこの時点で中断される．
+したがって，誤りである形態素解析結果の候補b.を早期に取り除くことができる．
+このことは，MSLRパーザの大きな特徴の1つである．
+
+\subsection{括弧付けによる制約のついた入力文を解析する機能}
+\label{sec:brackets}
+
+MSLRパーザは括弧付けによる制約を加えた文を解析することができる．
+具体的には，MSLRパーザは次のような文字列を入力として，
+括弧付けに矛盾しない解析結果のみを出力する機能を持つ．
+\begin{center}
+  \verb|[*,太郎が渋谷で買った]本を借りた|
+\end{center}
+この例では括弧による制約はひとつしかないが，
+括弧による制約は複数あってもよい．
+また，複数の制約が入れ子になっても構わない．
+以下に例を挙げる．
+\begin{center}
+  \verb|[*,太郎が[*,渋谷で買った]][*,本を借りた]|
+\end{center}
+
+上記の入力例において，``\verb|*|''は括弧で示された範囲を支配する
+非終端記号に特に制約がないことを表わしている．
+これに対し，``\verb|*|''の位置に非終端記号を指定することにより，
+括弧に矛盾する解析結果だけでなく，
+括弧で囲まれた文字列を支配する非終端記号を限定することもできる．
+例えば，以下のような入力に対して，
+MSLRパーザは「あいこに」を支配する非終端記号が``\verb|<PP>|''となる
+解析結果のみを出力する．
+\begin{center}
+  \verb|[<PP>,あいこに]たのまれた|
+\end{center}
+
+括弧付けによる制約を取り扱う機能は，
+前編集によりあらかじめ部分的な制約を付加する際に利用することができる．
+構文解析を完全に自動で行うのではなく，
+インタラクティブに人間の知識を利用しながら半自動的に構文解析を行うことは，
+解析精度を向上させる有効な手段のひとつである．
+解析を行う前に，係り受けに関する部分的な制約をうまく人手で与えれば，
+構文的曖昧性を激的に減らすことができ，
+結果として構文解析の精度を飛躍的に向上させることが期待できる．
+
+
+\subsection{PGLRモデルを取り扱う機能}
+\label{sec:pglr}
+
+PGLRモデル~\cite{inui:98:a} は，
+一般化LR法の枠組に基づいて構文木の生成確率を与える確率モデルである．
+PGLRモデルにおける構文木の生成確率は，
+構文木を作り出す際に実行されるLR表上の動作
+(\shact もしくは\react )の実行確率の積として推定される．
+この生成確率は，
+生成される複数の構文木の中から最も正しい構文木を選択する
+構文的曖昧性解消に利用できる．
+ここで注意すべき点は，PGLRモデルによって与えられる構文木の生成確率は
+品詞を葉とする構文木の生成確率だということである．
+すなわち，単語の導出確率や単語の共起関係などの語彙的な統計情報は
+考慮されていない\footnote{
+  PGLRモデルと，PGLRモデルとは独立に学習された語彙的な統計情報を
+  組み合わせて構文解析を行う試みも行われている~\cite{sirai:98:b}．
+}．
+
+LR表の動作の実行確率には若干の文脈依存性が反映されていると考えられる．
+したがって，PGLRモデルは，
+文脈自由な言語モデルである確率文脈自由文法よりも
+推定パラメタ数は多くなるが，
+文脈依存性が考慮されたより精密なモデルを学習することが可能であり，
+構文的曖昧性解消の精度も向上することが実験的にも
+確かめられている~\cite{sornlertlamvanich:99:a}．
+
+本ツールキットでは，PGLRモデルを学習する機能，
+及びPGLRモデルによる構文木の生成確率を計算する機能を備えている．
+以下，それぞれの機能の概要について説明する．
+
+
+\subsubsection{PGLRモデルの学習について}
+\label{sec:pglr learning}
+
+PGLRモデルの学習は，LR表上の各動作の実行確率を推定することにより
+行われる．
+動作の実行確率の推定に必要なものは，
+構文木が付与された構文木付きコーパスである．
+まず，例文に付与された構文木に対して，
+構文木を生成する際に実行する
+LR表上の動作の使用回数$C(s_i,l_j,a_k)$を数え上げる．
+ここで，$s_i$ はLR表における状態を，$l_j$ は先読み記号を，
+$a_k$ は動作を表わし，
+$C(s_i,l_j,a_k)$ は，
+状態が$s_i$ で先読み記号が$l_j$ のときに動作$a_k$ が
+実行された回数を表わす．
+
+LR表上の各動作の実行確率は
+式(\ref{eq:act_prob1})(\ref{eq:act_prob2})によって推定する．
+\begin{eqnarray}
+  \label{eq:act_prob1}
+  P(l_j, a_k | s_i) =
+  \frac{C(s_i,l_j,a_k)}{\sum_{j,k} C(s_i,l_j,a_k)}
+  \;\; if \;\; s_i \in S_s \\[2mm]
+  \label{eq:act_prob2}
+  P(a_k | s_i, l_j) =
+  \frac{C(s_i,l_j,a_k)}{\sum_{k} C(s_i,l_j,a_k)}
+  \;\; if \;\; s_i \in S_r
+\end{eqnarray}
+式(\ref{eq:act_prob1})(\ref{eq:act_prob2})において，
+$S_s$ は\shact 直後に到達する状態の集合，
+$S_r$ はそれ以外の状態の集合を表わす．
+LR表における全ての状態は$S_s$ または$S_r$ のどちらか一方に必ず属する．
+図~\ref{fig:lalr_table} のLR表の例では，
+$S_s = \{0, 1, 2, 3, 4, 11, 13, 16, 18, 19, 20, 24\}$,
+$S_r = \{5, 6, 7, 8, 9, 10, 12, 14, 15, 17, 21, 22, 23 \}$ である．
+初期状態$0$ は$S_s$ に属することに注意していただきたい．
+
+式(\ref{eq:act_prob1})は，$s_i \in S_s$ のときには，
+状態$s_i$ で実行されうる全ての動作で実行確率を
+正規化することを意味する．
+言い換えれば，
+LR表における同じ行に属する動作の実行確率の和は1となる．
+例えば，図~\ref{fig:lalr_table} のLR表の状態$0$ にある
+5つの\shact は，
+これらの実行確率の和が1になるように正規化される．
+これに対して式(\ref{eq:act_prob2})は，$s_i \in S_r$ のときには，
+状態$s_i$，先読み記号$l_i$ のときに実行されうる全ての動作で
+実行確率を正規化することを意味する．
+すなわち，LR表における同じマス目に属する動作の実行確率の和は1となる．
+例えば，図~\ref{fig:lalr_table} のLR表の状態$15$，
+先読み記号vs\_1の欄にある2つの動作($\lrtre{2}と\;\lrtsh{1}$)の
+実行確率は，これらの和が1になるように正規化される．
+また，$S_r$ に属する状態の場合，
+shift/reduceコンフリクトがない限り，
+その状態に属する動作の実行確率は必ず1となる．
+
+本ツールキットにおけるPGLRモデル学習の手続きは以下の通りである．
+まず，MSLRパーザは，構文解析を行う際に，
+LR表の各動作の使用回数を出力する機能を持っている．
+さらに，
+\ref{sec:brackets} 項で述べた括弧付けによる制約を取り扱う機能を利用し，
+訓練用コーパスに付与された構文木を入力として解析を行うことにより，
+訓練用コーパス中の構文木を生成する際に使われた各動作の使用回数
+$C(s_i,l_j,a_k)$ を求めることができる．
+また本ツールキットには，
+このようにして得られた$C(s_i,l_j,a_k)$ から
+式(\ref{eq:act_prob1})(\ref{eq:act_prob2})に従って
+各動作の実行確率を推定し，
+その実行確率が付与されたLR表を作成するツールが含まれている．
+このツールは，パラメタ推定の平滑化のために，LR表に登録されている
+全ての動作の実行回数にある一定の頻度を加える機能を備えている．
+
+\subsubsection{PGLRモデルを用いた解析について}
+\label{sec:pglr analysis}
+
+MSLRパーザは，
+解析結果となる構文木とそのPGLRモデルに基づく生成確率を
+同時に出力することができる．
+また，生成確率の高い順に構文木を並べて出力することができる．
+すなわち，PGLRモデルに基づく生成確率を用いた
+解析結果の優先順位付けを行うことができる．
+
+MSLRパーザは，まず文法が受理する全ての解析結果を求め，
+それらをまとめた圧縮統語森を生成する．
+次に，この圧縮統語森を展開して個々の構文木を出力する際に，
+PGLRモデルに基づく構文木の生成確率を考慮し，
+生成確率の上位の構文木から優先して出力する．
+解析の途中で生成確率の低い部分木を除去するなどの枝刈りを
+行っていないため，
+生成確率の上位$N$ 位の構文木が必ず得られることが保証される代わりに，
+長文など構文的曖昧性が非常に多い文を解析する際にメモリ不足によって
+解析に失敗する可能性も高い．
+したがって，我々は解析途中で生成確率の低い部分木を除去して
+探索空間を絞り込む機構も必要であると考えている．
+Sornlertlamvanich はPGLRモデルを利用した効率の良い
+枝刈りのアルゴリズムを提案しているが~\cite{sornlertlamvanich:98:a}，
+現在公開しているMSLRパーザには実装されていない．
+
+\subsection{解析例}
+\label{sec:exp}
+
+本項では，
+MSLRパーザを用いた簡単な日本語文解析実験について報告する．
+実験用コーパスとして，
+ATRが作成した日本語対話コーパス~\cite{morimoto:94:a} を使用した．
+実験に用いた文法は，対話文解析用の文脈自由文法で，
+非終端記号数172，終端記号数441，規則数は860である~\cite{tanaka:97:a}．
+今回の実験では，日本語対話コーパス約20,000文のうち，
+上記の文法による構文木が付与された例文10,020文を使用した．
+辞書及び接続表は，これら10,020文から自動的に作成した．
+
+評価用テキストとして，
+単語数4〜14，15以上の文をランダムに1000文ずつ取り出し，
+それぞれSet A, Set Bとした．
+これらの評価用例文について，分かち書きされていない文字列を入力とし，
+MSLRパーザを用いて形態素・構文解析を行った．
+また，評価用テキスト以外の例文約9000文からPGLRモデルを学習し，
+そのPGLRモデルに基づく構文木の生成確率によって
+解析結果の順位付けを行った．
+使用した計算機は，\ref{sec:tblgen exam} 項の実験と同じ
+Sun Ultra Enterprise 250 Serverである．
+実験結果を表~\ref{tab:exp parser1}, \ref{tab:exp parser2} に示す．
+また，解析結果の具体例を付録~\ref{sec:appendix} に示す．
+
+\begin{table}[tbp]
+  \begin{center}
+    \caption{解析実験の結果}
+    \label{tab:exp parser1}
+    
+    \medskip
+
+    \begin{tabular}[c]{l|cc}
+                       & Set A  & Set B \\ \hline
+      平均単語数       &  8.12  & 19.6  \\ 
+      平均解析木数     & 13.1   & 15,500 \\
+      平均解析時間(ms) &  6.53  & 27.7 \\ \hline
+    \end{tabular}
+
+  \end{center}
+\end{table}
+
+\begin{table}[tbp]
+  \begin{center}
+    \caption{解析実験の結果(文正解率)}
+    \label{tab:exp parser2}
+
+    \medskip
+
+    \begin{tabular}[c]{|l|cc|cc|} \hline
+      &&&&\\[-2mm]
+      & 
+      \multicolumn{2}{c|}{【形態素解析の文正解率】} &
+      \multicolumn{2}{c|}{【構文解析の文正解率】} \\[0.5mm]
+      $n$ &
+      \makebox[15mm]{Set A} & \makebox[15mm]{Set B} &
+      \makebox[15mm]{Set A} & \makebox[15mm]{Set B} \\[0.5mm] \hline
+      1 & 88.3\% & 63.7\% & 80.1\% & 36.3\% \\[0.5mm]
+      2 & 94.4\% & 75.1\% & 90.6\% & 50.4\% \\[0.5mm]
+      3 & 96.8\% & 80.6\% & 95.0\% & 58.8\% \\[0.5mm]
+      4 & 97.6\% & 83.6\% & 96.4\% & 65.0\% \\[0.5mm]
+      5 & 98.8\% & 87.2\% & 97.6\% & 69.6\% \\ \hline
+    \end{tabular}
+  \end{center}
+\end{table}
+
+表~\ref{tab:exp parser1} において，
+「平均解析木数」は1文あたりに生成される構文木の平均であり，
+「平均解析時間」は1文の解析に要した時間(単位はミリ秒)の
+平均を表わしている．
+Set Aのような短い文の場合は7ミリ秒程度，
+Set Bのような長めの文の場合でも
+27ミリ秒程度で解析を行うことができる．
+また，表~\ref{tab:exp parser2} の【形態素解析の文正解率】は，
+PGLRモデルに基づく構文木の生成確率の上位$n$ 位の解析結果の中に，
+単語分割と品詞付けの結果がコーパスに付加されたものと一致する構文木が
+含まれる文の割合を表わしている．
+同様に【構文解析の文正解率】は，
+上位$n$ 位の解析結果の中にコーパスに付加されたものと一致する構文木が
+含まれる文の割合を示している．
+この表から，例えば生成確率の1位の構文木について，
+Set Aでは約80\%，Set Bでは約36\%の文に対して
+正しい形態素・構文解析結果が得られたことがわかる．
+今回の実験で使用したコーパスがドメインの限られたコーパスであり，
+また辞書と接続表を評価用テキストと訓練用テキストの両方を用いて
+作成したこともあり，比較的良い結果が得られている．
+
+
+\section{おわりに}
+\label{sec:conclusion}
+
+本論文では，
+我々が現在公開している自然言語解析用ツール
+「MSLRパーザ・ツールキット」の機能と特徴について述べた．
+最後に，本ツールキットの今後の開発方針について述べる．
+
+まず，複数の接続制約を同時に組み込むLR表作成器，
+さらにそれを用いて解析を行うパーザの実装を進めている．
+現在のツールでは，LR表に組み込める接続制約の数は1種類のみである．
+しかしながら，例えば音声認識と同時に構文解析を行う場合，
+品詞間の接続制約だけでなく，
+音素間の接続制約も同時に利用した方が
+効率の良い解析ができると考えられる~\cite{imai:99:a}．
+この場合，音素と品詞の2つの接続制約をLR表に組み込む必要がある．
+また，これに合わせて，MSLRパーザの解析アルゴリズムも
+変更する必要がある．
+現在，複数の制約を取り扱うLR表作成器およびMSLRパーザの
+プロトタイプは完成しているが，効率の面でまだ問題があり，
+改良を進めている．
+
+次に，よりロバストな解析ができるようにパーザを拡張することが挙げられる．
+特に，辞書にない単語(未知語)が入力文中に現われたときには，
+原則的には解析に失敗する．
+現在のMSLRパーザは，
+カタカナが続いた文字列を未知語として登録するなど，
+非常に簡単な未知語処理機能が付加されているが，
+まだ改良の余地も多い．
+また，解析に失敗した場合でも，
+部分的な解析結果を表示する機能なども追加していきたいと考えている．
+
+最後に，本ツールキットに付属の日本語解析用の文法，辞書，接続表を
+改良することが今後の課題として挙げられる．
+これらを用いて新聞記事の解析を行った場合，
+解析に成功して何らかの結果を返すことのできる
+文の割合は約85\%である．
+解析に失敗する原因としては，
+前述の未知語処理の不完全さや文法規則の不備によるものが多い．
+より多様な文を解析できるようにするためには，
+特に文法を改良していかなければならない．
+また，本ツールキットに付属の文法を用いて解析を行った場合，
+PGLRモデルを学習するための構文木付きコーパスが存在しないために，
+PGLRモデルに基づく生成確率によって解析結果に
+優先順位を付けることはできない\footnote{
+  公開されているツールでは，付属の文法を用いて解析を行った場合でも，
+  単語数最小法，文節数最小法のヒューリスティクスに基づく
+  解析結果の優先順位付けを行うことができる．
+}．
+現在，構文木付きコーパスを必要としないPGLRモデルの
+学習方法について研究をすすめている．
+
+\medskip
+
+\acknowledgment
+
+MSLRパーザ・ツールキットは多くの方の協力を得て開発されました．
+李輝氏，日本アイ・ビー・エム株式会社の綾部寿樹氏には
+初期のLR表作成器を実装していただきました．
+九州工業大学の乾健太郎助教授には，
+PGLRモデルの理論を提案していただきました．
+Sussex大学のJohn Carroll氏，
+National Electronics and Computer Technology Centerの
+Sornlertlamvanich Virach氏には，
+MSLRパーザの実装に関する貴重な助言をいただきました．
+以上の皆様を始め，本ツールキットの開発に御協力いただきました
+全ての人々に感謝いたします．
+
+MSLRパーザの辞書引きモジュールは，
+奈良先端科学技術大学院大学・松本研究室で開発された
+高速文字列検索システムSUFARYをベースに作成しています．
+SUFARYの転用を許可下さいました
+松本研究室の皆様に深く感謝いたします．
+
+本ツールキットに付属の日本語解析用の辞書は，
+日本電子化辞書研究所が作成したEDR日本語単語辞書~\cite{edr:95:a} を
+もとに構築されています．
+本辞書の公開を許可下さいました
+日本電子化辞書研究所の皆様に深く感謝いたします．
+
+
+\bibliographystyle{jnlpbbl}
+\bibliography{main}
+
+\begin{biography}
+\biotitle{略歴}
+\bioauthor{白井 清昭}{
+  1993年東京工業大学工学部情報工学科卒業．
+  1995年同大学院理工学研究科修士課程修了．
+  1998年同大学院情報理工学研究科博士課程修了．
+  同年同大学院情報理工学研究科計算工学専攻助手，現在に至る．
+  博士 (工学)．
+  統計的自然言語解析に関する研究に従事．
+  情報処理学会会員．}
+
+\bioauthor{植木 正裕}{
+  1995年東京工業大学工学部情報工学科卒業．
+  1997年同大学院情報理工学研究科修士課程修了．
+  2000年同大学院情報理工学研究科博士課程満期退学．
+  同年4月同大学院情報理工学研究科計算工学専攻技術補佐員．
+  同年7月国立国語研究所日本語教育センター研究員，現在に至る．
+  自然言語解析に関する研究に従事．
+  情報処理学会会員．
+  }
+
+\bioauthor{橋本 泰一}{
+  1997年東京工業大学工学部情報工学科卒業．
+  1999年同大学院情報理工学研究科計算工学専攻修士課程修了．
+  同年同大学院情報理工学研究科計算工学専攻博士課程進学，在学中.
+  統計的自然言語解析に関する研究に従事．
+  }
+
+\bioauthor{徳永 健伸}{
+  1983年東京工業大学工学部情報工学科卒業．
+  1985年同大学院理工学研究科修士課程修了．
+  同年(株)三菱総合研究所入社．
+  1986年東京工業大学大学院博士課程入学．
+  現在, 同大学大学院情報理工学研究科計算工学専攻助教授．
+  博士 (工学)．
+  自然言語処理, 計算言語学に関する研究に従事．
+  情報処理学会, 認知科学会, 人工知能学会, 計量国語学会, 
+  Association for Computational Linguistics, 各会員．}
+
+\bioauthor{田中 穂積}{
+  1964年東京工業大学工学部情報工学科卒業．
+  1966年同大学院理工学研究科修士課程修了．
+  同年電気試験所(現電子技術総合研究所)入所．
+  1980年東京工業大学助教授．
+  1983年東京工業大学教授．
+  現在, 同大学大学院情報理工学研究科計算工学専攻教授．
+  博士(工学)．
+  人工知能，自然言語処理に関する研究に従事．
+  情報処理学会, 電子情報通信学会，認知科学会, 人工知能学会,
+  計量国語学会, Association for Computational Linguistics, 各会員．}
+  
+
+
+\bioreceived{受付}
+\biorevised{再受付}
+\bioaccepted{採録}
+
+\end{biography}
+
+\appendix
+
+\section{MSLRパーザによる解析例}
+\label{sec:appendix}
+
+\ref{sec:exp} 項の実験で得られた解析結果の例を挙げる．
+まず，以下の例文(1),(2),(3)を解析し，
+PGLRモデルによる生成確率の最も大きい解析結果のみを表示させたときの
+MSLRパーザの出力を示す．
+\begin{enumerate}
+\item 七日までのご予約ですので八日と九日の分でございますか
+\item 十日と十一日のご予約を十一日と十二日に変更なさりたいわけですね
+\item 御社の場合には割引価格が適用されますので朝食も含めて割と良いお部屋を百九十三ドルでご提供できます
+\end{enumerate}
+
+\begin{flushleft}
+  \bf $\bullet$ MSLRパーザの出力
+\end{flushleft}
+
+{
+\footnotesize
+\begin{verbatim}
+
+reading the grammar file `atr.gra' Done
+reading LR table file `atr.prtb.set2' Done
+### 1 ###
+$TAC23034-0030-3
+七日までのご予約ですので八日と九日の分でございますか
+
+accept
+\end{verbatim}
+
+\noindent
+\discretionaries | ~!@$
+\path|[<sent>,[<cl>,[<adv-cl>,[<verb>,[<verb/ga>,[<np>,[<n-sahen>,[<mod-n>,[<pp>,[<np>,[<n-date&time>,[<n-day>,[meisi-hi,七日]]]],[<p-kaku-optn>,[p-kaku-made,まで]]],[<p-rentai>,[p-rentai-no,の]]],[<n-sahen>,[<n-sahen/ga-o>,[<prefix>,[prefix-go,ご]],[sahen-meisi/ga-o,予約]]]]],[<aux>,[<auxstem>,[auxstem-desu,で]],[<infl>,[infl-spe-su,す]]]]],[<p-conj-advcl>,[p-conj-syusi,ので]]],[<cl>,[<vaux>,[<vaux>,[<verb>,[<verb/ga>,[<np>,[<n-hutu>,[<mod-n>,[<np>,[<n-date&time>,[<mod-n>,[<np|\\
+\path|>,[<n-date&time>,[<n-day>,[meisi-hi,八日]]]],[<p-para>,[p-para-to,と]]],[<n-date&time>,[<n-day>,[meisi-hi,九日]]]]],[<p-rentai>,[p-rentai-no,の]]],[<n-hutu>,[hutu-meisi-post,分]]]],[<aux>,[aux-de,で]]]],[<aux>,[<auxstem>,[auxstem-copula-masu,ございま]],[<infl>,[infl-spe-su,す]]]],[<aux>,[aux-sfp-ka,か]]]]]] 5.716416e-23|
+
+\begin{verbatim}
+total 1314
+CPU time 0.2 sec
+  
+### 2 ###
+$TAS13004-0100-1
+十日と十一日のご予約を十一日と十二日に変更なさりたいわけですね
+
+accept
+\end{verbatim}
+
+\noindent
+\path|[<sent>,[<cl>,[<vaux>,[<verb>,[<verb/ga>,[<np>,[<vaux>,[<vaux>,[<verb>,[<verb/ga>,[<pp-o>,[<np>|\\
+\path|,[<n-sahen>,[<mod-n>,[<np>,[<n-date&time>,[<mod-n>,[<np>,[<n-date&time>,[<n-day>,[meisi-hi,十日]]]],[<p-para>,[p-para-to,と]]],[<n-date&time>,[<n-day>,[meisi-hi,十一日]]]]],[<p-rentai>,[p-rentai-no,の]]],[<n-sahen>,[<n-sahen/ga-o>,[<prefix>,[prefix-go,ご]],[sahen-meisi/ga-o,予約]]]]],[p-kaku-o,を]],[<verb/ga-o>,[<mod-v>,[<pp>,[<np>,[<n-date&time>,[<mod-n>,[<np>,[<n-date&time>,[<n-day>,[meisi-hi,十一日]]]],[<p-para>,[p-para-to,と]]],[<n-date&time>,[<n-day>,[meisi-hi,十二日]]]]],[<p-kaku-optn>,[p-kaku-ni,に]]]],[<n-sahen/ga-o>,[sahen-meisi/ga-o,変更]]]]],[<aux>,[<auxstem>,[auxstem-sahen-5-r,なさ]],[<infl>,[infl-5-ri,り]]]],[<aux>,[<auxstem>,[auxstem-wish,た]],[<infl>,[infl-adj-i,い]]]],[<np>,[<n-hutu>,[n-keisiki,わけ]]]],[<aux>,[<auxstem>,[auxstem-desu,で]],[<infl>,[infl-spe-su,す]]]]],[<aux>,[aux-sfp-ne,ね]]]]] 6.846102e-32|
+
+\begin{verbatim}
+total 2583 
+CPU time 0.3 sec
+
+### 3 ###
+$TAS12006-0080-1
+御社の場合には割引価格が適用されますので朝食も含めて割と良いお部屋を百九十三ドルでご提供できます
+
+accept
+\end{verbatim}
+
+\noindent
+\path|[<sent>,[<cl>,[<adv-cl>,[<vaux>,[<vaux>,[<vaux>,[<verb>,[<verb/o>,[<mod-v>,[<pp>,[<pp>,[<np>,[<|\\
+\path|n-hutu>,[<mod-n>,[<np>,[<n-hutu>,[hutu-meisi,御社]]],[<p-rentai>,[p-rentai-no,の]]],[<n-hutu>,[hutu-meisi,場合]]]],[<p-kaku-optn>,[p-kaku-ni,に]]],[<p-kakari>,[p-kakari-wa,は]]]],[<verb/o>,[<pp-ga>,[<np>,[<n-hutu>,[<n-sahen>,[<n-sahen/ga-o>,[sahen-meisi/ga-o,割引]]],[<n-hutu>,[hutu-meisi,価格]]]],[p-kaku-ga,が]],[<n-sahen/ga-o>,[sahen-meisi/ga-o,適用]]]]],[<aux>,[aux-suru-sa,さ]]],[<aux>,[<auxstem-deac>,[auxstem-deac-reru,れ]]]],[<aux>,[<auxstem>,[auxstem-masu,ま]],[<infl>,[infl-spe-su,す]]]],[<p-conj-advcl>,[p-conj-syusi,ので]]],[<cl>,[<adv-cl>,[<verb>,[<verb/ga-ni-o>,[<mod-v>,[<pp>,[<np>,[<n-hutu>,[hutu-meisi,朝食]]],[<p-kakari>,[p-kakari-mo,も]]]],[<verb/ga-ni-o>,[<vstem1/ga-ni-o>,[vstem-1/ga-ni-o,含め]]]]],[<p-conj-advcl>,[p-conj-renyo-te,て]]],[<cl>,[<vaux>,[<vaux>,[<verb>,[<verb/ga>,[<pp-o>,[<np>,[<n-hutu>,[<mod-n>,[<verb>,[<verb/ga>,[<mod-v>,[<advp>,[<adv>,[hukusi,割と]]]],[<verb/ga>,[adjstem/ga,良],[<infl>,[infl-adj-i,い]]]]]],[<n-hutu>,[<prefix>,[prefix-o,お]],[<n-hutu>,[hutu-meisi,部屋]]]]],[p-kaku-o,を]],[<verb/ga-o>,[<mod-v>,[<pp>,[<np>,[<n-quant>,[<n-num>,[<n-num-hyaku>,[<n-num-keta-hyaku>,[<num-suf-hyaku>,[num-hyaku,百]]],[<n-num-zyuu>,[<n-num-keta-zyuu>,[<n-num-ichi>,[num-kyuu,九]],[<num-suf-zyuu>,[num-zyuu,十]]],[<n-num-ichi>,[num-san,三]]]]],[<suffix-unit>,[suffix-doru,ドル]]]],[<p-kaku-optn>,[p-kaku-de,で]]]],[<n-sahen/ga-o>,[<prefix>,[prefix-go,ご]],[sahen-meisi/ga-o,提供]]]]],[<aux>,[<auxstem>,[auxstem-sahen-1,でき]]]],[<aux>,[<auxstem>,[auxstem-masu,ま]],[<infl>,[infl-spe-su,す]]]]]]]] 6.264841e-45|
+
+\begin{verbatim}
+total 19284 
+CPU time 0.13 sec
+\end{verbatim}
+}
+
+
+
+
+
+\noindent
+解析結果は括弧付けで表現された構文木として出力される．
+構文木の右にある数値はその構文木のPGLRモデルによる生成確率である．
+「total」は得られた解析結果の総数を，
+「CPU time」は解析に要した時間を表わす．
+
+以下，得られた解析結果を構文木の形で示す．
+但し，紙面の都合により，構造の一部を簡略している．
+
+\begin{flushleft}
+  \thicklines
+  \bf $\bullet$ 例文(1)の解析結果\\[2mm]
+  \input{extree1.tex}
+
+  \bf $\bullet$ 例文(2)の解析結果\\[2mm]
+  \input{extree2.tex}
+
+\newpage
+  \bf $\bullet$ 例文(3)の解析結果\\[2mm]
+  \input{extree3.tex}
+\end{flushleft}
+
+\newpage
+\thispagestyle{plain}
+\
+\newpage
+\thispagestyle{plain}
+\
+
+\end{document}
+

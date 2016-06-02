@@ -1,0 +1,732 @@
+
+
+
+
+\documentstyle[epsbox,jnlpbbl]{jnlp_j_b5}
+
+\setcounter{page}{63}
+\setcounter{巻数}{7}
+\setcounter{号数}{2}
+\setcounter{年}{2000}
+\setcounter{月}{4}
+\受付{1999}{10}{21}
+\再受付{1999}{12}{13}
+\採録{2000}{1}{7}
+
+\setcounter{secnumdepth}{2}
+\setlength{\parindent}{\jspaceskip}
+
+\title{最大エントロピーモデルと\\書き換え規則に基づく固有表現抽出}
+\author{内元 清貴\affiref{CRL} \and 馬 青\affiref{CRL} 
+  \and 村田 真樹\affiref{CRL} \and 小作 浩美\affiref{CRL}
+  \and 内山 将夫\affiref{CRL} \and 井佐原 均\affiref{CRL}}
+
+\headauthor{内元,馬,村田,小作,内山,井佐原}
+\headtitle{最大エントロピーモデルと書き換え規則に基づく固有表現抽出}
+
+\affilabel{CRL}{郵政省通信総合研究所}
+{Communications Research Laboratory, Ministry of Posts and Telecommunications}
+
+\jabstract{
+本論文では，ME(最大エントロピー)モデルと書き換え規則を用いて
+固有表現を抽出する手法について述べる．
+固有表現の定義はIREX固有表現抽出タスク(IREX-NE)の定義に基づくものとする．
+その定義によると，固有表現には一つあるいは複数の形態素からなるもの，
+形態素単位より短い部分文字列を含むものの2種類がある．
+複数の形態素からなる固有表現は，
+固有表現の始まり，中間，終りなどを表すラベルを40個用意し，
+各々の形態素に対し付与すべきラベルを推定することによって抽出する．
+ラベルの推定にはMEモデルを用いる．
+このMEモデルでは学習コーパスで観測される素性と
+各々の形態素に付与すべきラベルとの関係を学習する．
+ここで素性とはラベル付与の手がかりとなる情報のことであり，
+我々の場合，着目している形態素を含む前後2形態素ずつ
+合計5形態素に関する見出し語，品詞の情報のことである．
+一方，形態素単位より短い部分文字列を含む固有表現は，
+MEモデルを用いてラベルを決めた後に書き換え規則を適用することによって抽出する．
+書き換え規則は学習コーパスに対するシステムの解析結果とコーパスの
+正解データとの差異を調べることによって自動獲得することができる．
+本論文ではIREX-NE本試験に用いられたデータに対し我々の手法を適用した
+結果を示し，さらにいくつかの比較実験から
+書き換え規則と精度，素性と精度，学習コーパスの量と精度の関係を明らかにする．
+}
+
+\jkeywords{固有表現，最大エントロピー(ME)モデル，書き換え規則}
+
+\etitle{Named Entity Extraction \\Based on A Maximum Entropy Model\\
+  and Transformation Rules}
+\eauthor{Kiyotaka Uchimoto\affiref{CRL} \and Qing Ma\affiref{CRL} 
+  \and Masaki Murata\affiref{CRL} \and Hiromi Ozaku\affiref{CRL}
+  \and Masao Utiyama\affiref{CRL} \and Hitoshi Isahara\affiref{CRL}} 
+
+\eabstract{
+This paper describes a system for extracting named entities. 
+The system is based on a ME (maximum entropy) model 
+and transformation rules. 
+Eight types of named entities are defined by IREX-NE, 
+and each named entity consists of one or more morphemes, 
+or it includes a substring of a morpheme. 
+We define 40 named entity labels, which are at the beginning, 
+the middle, or the end of a named entity, 
+and extract a named entity which consists of one or more morphemes 
+by estimating the labels according to the ME model. 
+The trained ME model detects the relationship between features 
+and named entity labels assigned to morphemes. 
+The features are clues used for estimating labels. 
+We use information about lexical items and parts-of-speech 
+as features in the target morpheme. 
+We also use information 
+about lexical items and parts-of-speech in four morphemes, 
+two on the left and two on the right of the target morpheme, 
+as features. 
+After estimating the named entity labels according to the ME model, 
+we extract a named entity, which includes a substring of a morpheme, 
+by using transformation rules. 
+These rules are automatically acquired by investigating the difference 
+between named entity labels in a tagged corpus and those extracted by 
+our system from the same corpus without tags. 
+This paper also 
+evaluates the relationships between transformation rules and accuracy, 
+between features and accuracy, and between the amount of 
+training data and accuracy by conducting several comparative experiments. 
+}
+
+\ekeywords{named entity, maximum entropy (ME) model, transformation rule}
+
+\input{prepictex}
+\input{pictex}
+\input{postpictex}
+\def\q{}
+\def\p{}
+
+\begin{document}
+\thispagestyle{plain}
+\maketitle
+
+
+\vspace{-3mm}
+\section{固有表現抽出アルゴリズム}
+\label{sec:algorithm}
+
+\subsection{アルゴリズムの概要}
+\label{sec:overview}
+
+固有表現はIREX-NEの定義にしたがい，
+表~\ref{table:tag} の8種類とする．
+この節ではこの表にあげたSGMLタグを付与する方法について述べる．
+
+{\scriptsize
+\begin{table*}[htbp]
+  \begin{center}
+    \caption{固有表現のタグ}
+    \label{table:tag} 
+      \begin{tabular}[c]{|l@{ }l@{ }l|p{4.7cm}|}
+        \hline
+        & 開始位置タグ & 終了位置タグ & 例\\
+        \hline
+        固有名詞的表現 & & & \\
+        \hline
+        \p 組織名，政府組織名 & $<$ORGANIZATION$>$ & $<$/ORGANIZATION$>$ 
+        & 郵政省，ニューヨーク大学，毎日新聞，ＩＲＥＸ実行委員会\\
+        \p 人名               & $<$PERSON$>$       & $<$/PERSON$>$ 
+        & 長尾眞，グリッシュマン，若ノ花\\
+        \p 地名               & $<$LOCATION$>$     & $<$/LOCATION$>$ 
+        & 日本，神戸，井の頭線，富士山\\ 
+        \p 固有物名           & $<$ARTIFACT$>$     & $<$/ARTIFACT$>$ 
+        & ノーベル賞，ＰＬ法案，特殊相対性理論，ペンティアム２００ＭＨｚ，
+        カローラ\\
+        \hline
+        時間表現 & & & \\
+        \hline
+        \p 日付表現           & $<$DATE$>$         & $<$/DATE$>$ 
+        & ９月２８日，去年，ある秋\\
+        \p 時間表現           & $<$TIME$>$         & $<$/TIME$>$ 
+        & 午後５時２５分，未明，明け方\\
+        \hline
+        数値表現 & & & \\
+        \hline
+        \p 金額表現           & $<$MONEY$>$        & $<$/MONEY$>$ 
+        & １ドル，数十兆円，五千から六千万円\\
+        \p 割合表現           & $<$PERCENT$>$      & $<$/PERCENT$>$ 
+        & ２０％，５割，５分の１，２倍\\
+        \hline
+      \end{tabular}
+  \end{center}
+\end{table*}
+}
+
+本手法では以下の手順で固有表現を抽出する．
+\begin{enumerate}
+\item テキストを形態素解析する．
+
+  実験では形態素解析にJUMAN\cite{JUMAN3.6}を用いた．
+  例えば，``在米女性を中心に「人権を考える会」ができ，…''
+  という部分は
+  表~\ref{table:ex} の第1行のように形態素ごとに区切られ，
+  それぞれの形態素ごとに第2行，第3行のような品詞の情報が得られる．
+
+  {\small
+    \begin{table*}[htbp]
+      \begin{center}
+        \caption{MEモデルを用いたラベル付与の例}
+        \label{table:ex} 
+        \begin{tabular}[c]{|c|c||l@{ }l@{ }l@{ }l@{ }l@{ }l@{ }l}
+          \hline
+          \multicolumn{2}{|c||}{見出し語} 
+          & 在米 & 女性 & を & 中心 & に & 「 & 人権 \\
+          \hline
+          \multicolumn{2}{|c||}{品詞(大分類)} 
+          & 名詞 & 名詞 & 助詞 & 名詞 & 助詞 & 特殊 & 名詞 \\
+          \multicolumn{2}{|c||}{品詞(細分類)}
+          & 普通名詞 & 普通名詞 & 格助詞 & 普通名詞 & 格助詞 
+          & 括弧始 & 普通名詞 \\
+          \hline
+          ラベル & 1 & OTHER & OTHER & OTHER & OTHER & OTHER & PRE
+          & ORG:BEGIN \\
+          の候補 & 2 & OTHER & OTHER & OTHER & OTHER & OTHER & PRE 
+          & ART:SINGLE \\
+          & $\cdots$ & $\cdots$ & $\cdots$ & $\cdots$ & $\cdots$ & $\cdots$ 
+          & $\cdots$ & $\cdots$ \\
+          \hline
+        \end{tabular}
+
+        \vspace*{0.2cm}
+        \begin{tabular}[c]{cccl@{ }l@{ }l@{ }l@{ }l@{ }l@{ }l|c|}
+          \cline{4-11}
+          & & & を & 考える & 会 & 」 & が & でき & ，& スコア\\
+          \cline{4-11}
+          & & & 助詞 & 動詞 & 名詞 & 特殊 & 助詞 & 動詞 & 特殊 & \\
+          & & & 格助詞 & \* & 普通名詞 & 括弧終 & 格助詞 & \* & 読点 & \\
+          \cline{4-11}
+          & & & ORG:MIDDLE & ORG:MIDDLE & ORG:END & POST & OTHER 
+          & OTHER & OTHER & 0.8\\
+          & & & POST & OTHER & OTHER & OTHER & OTHER & OTHER & OTHER & 0.7\\
+           & & & $\cdots$ & $\cdots$ & $\cdots$ & $\cdots$ & $\cdots$ 
+          & $\cdots$ & $\cdots$ & $\cdots$ \\
+          \cline{4-11}
+        \end{tabular}\\
+        \vspace*{1em}
+      (表で「ORG」「ART」はそれぞれ「ORGANIZATION」「ARTIFACT」の略である．)
+      \end{center}
+    \end{table*}
+    }
+
+\item 各形態素にラベルを付与する．
+
+  ラベルとしては，以下の合計40個を用意した．
+  \begin{enumerate}
+  \item[(a)] 
+    IREX-NEで定義されている固有表現のタグに「OPTIONAL」を加えた9種類を，
+    固有表現の始まり，中間，終り，単独に分けた9$\times$4=36個．
+    例えば人名のタグの場合，
+    それぞれ「PERSON:BEGIN」「PERSON:MIDDLE」「PERSON:END」
+    「PERSON:SINGLE」を用いる．
+    このように分けたのは，複数の形態素が一つの固有表現を構成することが
+    あることを考慮するためである．
+
+    「OPTIONAL」のタグはタグ付けが判定者にも困難な場合のために
+    設けたものである．これもIREX-NEにおける定義にしたがっている．
+    固有表現の判定は人間にも難しいことが多い．
+    例えば，「東京高裁」はLOCATIONかORGANIZATIONか，
+    「日経平均株価」と言ったときの「日経」はORGANIZATIONとするべきか
+    などがそうである．このような場合，
+    それぞれ「東京高裁」，「日経」にこのタグを付与し，固有表現としては
+    抽出しない．
+    この「OPTIONAL」をラベルとして考慮したのはその性質を学習することによって，
+    例えばLOCATIONかORGANIZATIONの判定が困難なものをいずれかのタグに分類して
+    しまうのを避けることができると考えたためである．
+    
+  \item[(b)] 固有表現の前後の1形態素および固有表現に挟まれた1形態素を
+    他の形態素と区別するための3個(「PRE」「POST」「MID」)．
+    例えば，
+    ``昨日大阪と神戸で…''という部分では「大阪」と「神戸」がそれぞれ
+    地名を表す固有表現であり，その前後の形態素は次のようにラベル付けされる．
+    \begin{flushleft}
+      ``昨日(PRE)／大阪(LOCATION:SINGLE)／と(MID)／神戸(LOCATION:SINGLE)
+      ／で(POST)…''\\
+      (括弧内はそれぞれ前の形態素に付与されたラベルの候補)
+    \end{flushleft}
+    この三つのラベル「PRE」「POST」「MID」を用いたのは，
+    固有表現の前後の形態素(接辞など)は
+    固有表現を抽出する際に手がかりとなることが多いため，
+    次にあげる「OTHER」と区別する方が良いと考えたからである．
+  \item[(c)] 以上のどのラベルもつかない「OTHER」．
+  \end{enumerate}
+
+  今，一文が$n$個の形態素からなるとする．
+  手順(1)で得られた形態素解析結果を用いて，
+  個々の形態素$m_i (1\leq i\leq n)$にそれぞれ上記のラベルのいずれかを付与する．
+  形態素$m_i$に付与するラベルはコーパスから学習したMEモデルから
+  各ラベルを付与したときの尤もらしさを確率として計算しそれを基に決める．
+  詳しくは，モデルについては \ref{sec:model} 節で，
+  最適解の探索アルゴリズムについては \ref{sec:viterbi} 節で述べる．
+  
+
+\item 書き換え規則による後処理
+
+  JUMANの解析結果における形態素の境界とIREXで定義されている固有表現の境界は
+  必ずしも一致しない．このような一致しない場合に対応するために書き換え規則を
+  自動獲得し，獲得した規則を用いて後処理を行う．
+  例えば，表~\ref{table:ex} の「在米」に対しては
+  以下のような書き換え規則が適用される．
+
+  \vspace*{1em}
+
+    \begin{center}
+      \begin{tabular}[c]{l@{ }|l|}
+        \cline{2-2}
+        見出し語 & 在米 \\
+        品詞(大分類) & 名詞 \\
+        品詞(細分類) & 普通名詞 \\
+        ラベル & OTHER \\
+        \cline{2-2}
+      \end{tabular}
+      $\Rightarrow$
+      \begin{tabular}[c]{|l@{ }l|}
+        \hline
+        在 & 米 \\
+        名詞 & 名詞 \\
+        普通名詞 & 普通名詞 \\ 
+        PRE & LOCATION:SINGLE \\
+        \hline
+      \end{tabular}
+    \end{center}
+
+  \vspace*{1em}
+
+  書き換え規則の自動獲得手法については \ref{sec:post_processing} 節で述べる．
+
+\item ラベルを固有表現のタグに変換
+
+  すべてのラベルが決まったら，それぞれのラベルに対し
+  手順(2)で定義したラベルの定義にしたがって，
+  ラベルからIREX-NEで定義されたタグへと変換する．
+  抽出したい固有表現は表~\ref{table:tag} の8種類なので，
+  最後に解析結果から「OPTIONAL」のタグを取り除く．
+
+\end{enumerate}
+  例えば，表~\ref{table:ex} でスコアが最大であるラベル候補1
+  の場合，手順(3)の操作によって
+  ``在米(OTHER)''の部分が``在(PRE)米(LOCATION:SINGLE)''
+  (括弧内はそれぞれ前の形態素に付与されたラベルの候補)
+  に書き換えられる．そして，ラベルをタグに変換することによって
+  次のような出力を得る．
+
+  \begin{tabular}[c]{l}
+    ``在$<$LOCATION$>$米$</$LOCATION$>$女性を中心に\\
+    「$<$ORGANIZATION$>$人権を考える会$</$ORGANIZATION$>$」
+    ができ，''
+  \end{tabular}
+  
+\subsection{固有表現抽出に用いる確率モデル}
+\label{sec:model}
+
+この節では形態素に付与するラベルの尤もらしさを確率として計算するための
+モデルについて述べる．
+モデルとしては，ME(最大エントロピー法)に基づく確率モデルを採用する．
+まず，MEの基本について説明し，その後，MEに基づく固有表現ラベル付与確率モデル
+およびそのモデルをコーパスから統計的に学習する方法について述べる．
+
+\subsubsection{ME(最大エントロピー)モデル}
+\label{sec:me_model}
+
+一般に確率モデルでは，文脈(観測される情報のこと)とそのときに得られる出力値
+との関係は既知のデータから推定される確率分布によって表される．
+いろいろな状況に対してできるだけ正確に出力値を予測するためには
+文脈を細かく定義する必要があるが，細かくしすぎると既知のデータにおいて
+それぞれの文脈に対応する事例の数が少なくなりデータスパースネスの問題が生じる．
+
+MEモデルでは，文脈は素性と呼ばれる個々の要素によって表され，
+確率分布は素性を引数とした関数として表される．
+そして，各々の素性はトレーニングデータにおける
+確率分布のエントロピーが最大になるように重み付けされる．
+このエントロピーを最大にするという操作によって，
+既知データに観測されなかったような素性あるいは
+まれにしか観測されなかった素性については，
+それぞれの出力値に対して確率値が等確率になるように
+あるいは近付くように重み付けされる．
+このように未知のデータに対して考慮した重み付けがなされるため，
+MEモデルは比較的データスパースネスに強いとされている．
+このモデルは例えば言語現象などのように既知データにすべての現象が現れ得ない
+ような現象を扱うのに適したモデルであると言える．
+
+以上のような性質を持つMEモデルでは，
+確率分布の式は以下のように求められる．
+文脈の集合を$B$，出力値の集合を$A$とするとき，
+文脈$b (\in$$B)$で出力値$a (\in$$A)$となる事象$(a,b)$の確率分布$p(a,b)$を
+MEにより推定することを考える．
+文脈$b$は$k$個の素性$f_j (1\leq j\leq k)$の集合で表す．
+そして，文脈$b$において，素性$f_j$が観測され
+かつ出力値が$a$となるときに1を返す以下のような関数を定義する．
+{\it
+\begin{eqnarray}
+  \label{eq:f}
+  g_{j}(a,b) & = & 
+  \left\{
+    \begin{array}[c]{l}
+      1,\ {\rm if}\ exist(b,f_{j})=1 \ \& \ 出力値=a\\
+      0,\ それ以外
+    \end{array}
+  \right.
+\end{eqnarray}
+}
+これを素性関数と呼ぶ．
+ここで，$exist(b,f_j)$は，文脈$b$において素性$f_j$が観測されるか否かによって
+1あるいは0の値を返す関数とする．
+
+次に，それぞれの素性が既知のデータ中に現れた割合は
+未知のデータも含む全データ中においても変わらないとする制約を加える．
+つまり，推定するべき確率分布$p(a,b)$による素性$f_j$の期待値と，
+既知データにおける経験確率分布$\tilde{p}(a,b)$による
+素性$f_j$の期待値が等しいと仮定する．これは以下の制約式で表せる．
+
+{\it
+\begin{eqnarray}
+  \label{eq:constraint0}
+  \sum_{a\in A,b\in B}p(a,b)g_{j}(a,b) 
+  \ = \sum_{a\in A,b\in B}\tilde{p}(a,b)g_{j}(a,b)\\
+  \ for\ \forall f_{j}\ (1\leq j \leq k) \nonumber
+\end{eqnarray}
+}
+この式で，
+$p(a,b)=p(b)p(a|b)\approx\tilde{p}(b)p(a|b)$という近似を行ない以下の式を得る．
+{\it
+\begin{eqnarray}
+  \label{eq:constraint}
+  \sum_{a\in A,b\in B}\tilde{p}(b)p(a|b)g_{j}(a,b) 
+  \ = \sum_{a\in A,b\in B}\tilde{p}(a,b)g_{j}(a,b)\\
+  \ for\ \forall f_{j}\ (1\leq j \leq k) \nonumber
+\end{eqnarray}
+}
+ここで，$\tilde{p}(b)$，$\tilde{p}(a,b)$は，
+$freq(b)$，$freq(a,b)$をそれぞれ既知データにおける
+事象$b$の出現頻度，出力値$a$と事象$b$の共起頻度として
+以下のように推定する．
+{\it
+\begin{eqnarray}
+  \tilde{p}(b) & = & 
+  \frac{freq(b)}{\displaystyle\sum_{b\in B} freq(b)}\\
+  \tilde{p}(a,b) & = & 
+  \frac{freq(a,b)}{\displaystyle\sum_{a\in A,b\in B} freq(a,b)}
+\end{eqnarray}
+}
+
+次に，式(\ref{eq:constraint})の制約を満たす確率分布$p(a,b)$のうち，
+エントロピー
+{\it
+\begin{eqnarray}
+  \label{eq:entropy}
+  H(p) & = & -\sum_{a\in A,b\in B}\tilde{p}(b)p(a|b)\ log\left(p(a,b)\right)
+\end{eqnarray}
+}
+を最大にする確率分布を推定するべき確率分布とする．
+これは，式(\ref{eq:constraint})の制約を満たす確率分布のうちで
+最も一様な分布となる．
+このような確率分布は唯一存在し，以下の確率分布$p^{*}$として記述される．
+{\it
+\begin{eqnarray}
+  \label{eq:p}
+  p^{*}(a|b) & = & \frac{\prod_{j=1}^{k}\alpha_{a,j}^{g_{j}(a,b)}}
+  {\sum_{a\in A} \prod_{j=1}^{k}\alpha_{a,j}^{g_{j}(a,b)}}\\
+  & & (0\leq \alpha_{a,j}\leq \infty)\nonumber
+\end{eqnarray}
+}
+ただし，
+{\it
+\begin{eqnarray}
+  \label{eq:alpha}
+  \alpha_{a,j} & = & e^{\lambda_{a,j}}
+\end{eqnarray}
+}
+であり，$\lambda_{a,j}$は素性関数$g_{j}(a,b)$の重みである．
+この重みは文脈$b$のもとで出力値$a$となることを予測するのに
+素性$f_{j}$がどれだけ重要な役割を果たすかを表している．
+訓練集合が与えられたとき，$\lambda_{a,j}$の推定には
+Improved Iterative Scaling(IIS)アルゴリズム
+\cite{pietra95}
+などが用いられる．
+式(\ref{eq:p})の導出については文献
+\cite{Jaynes:57,Jaynes:79}
+を参照されたい．
+
+\subsubsection{固有表現ラベル付与確率モデル}
+\label{sec:named_entity_extraction_model}
+
+\ref{sec:overview} 節に，
+個々の形態素に付与すべき固有表現のラベルを定義した．
+以降では，形態素にそれぞれのラベルを付与したときの尤もらしさを表す確率を
+ラベルの付与確率と呼ぶ．
+
+一文が$n$個の形態素からなるとき，
+形態素$m_i (1\leq i\leq n)$にラベル$l_j (0\leq j\leq 39)$を
+付与するときの付与確率は，
+前節で述べたMEモデルの式（\ref{eq:p}）を用いて
+$p^{*}(l_{j}|F_{i})$で求められる．
+ここ\break
+で$F$は「見出し語：人権, 品詞(大分類)：名詞, 品詞(細分類)：普通名詞」
+などの素性の集合であり，
+個々の$m_i$ごとに異なるため$F_i$と表した．
+一文全体の付与確率は個々の確率の積で表す．
+\vspace{-2mm}
+\subsubsection{素性}
+\label{sec:features}
+
+基本的に学習コーパスから得られる形態素情報を素性として用いる．
+実験では，着目している形態素を含む前後2形態素ずつ合計5形態素に関する
+見出し語，品詞(大分類，細分類)とした．
+品詞分類はそれぞれ大分類15個，細分類48個である．
+これはJUMANのものにしたがった．
+学習コーパスに1，2回しか現れないような素性はノイズとなる可能性があるので
+それを避けるために頻度による素性選択を行なう．
+見出し語としては学習コーパス中に5回以上現れたものを用い，
+さらに式(\ref{eq:f})の素性関数としては学習コーパスに3回以上観測された
+ものを用いる．見出し語を5回以上現れたものとしたのはこれ以上少なくすると
+素性の数が増え現在のマシンパワーでは学習できなかったためである．
+素性としては他にもいろいろ考えられるが，
+今回の実験では学習コーパスから得られる情報でかつ着目している形態素の周辺の
+情報のみを用いた場合にどの程度の精度が得られるかを調べることに重きを置いた．
+
+さらに学習コーパス以外から得られる情報の有効性も調べるために
+追加実験として，固有名詞に関する辞書情報を利用し
+その辞書に登録されているかどうかを素性として利用した場合の実験も行なった．
+これについては \ref{sec:exp} 節で実験結果をあげて考察する．
+
+\subsection{ビタビアルゴリズム}
+\label{sec:viterbi}
+
+本節ではラベル付与に用いるビタビアルゴリズムについて説明する．
+このアルゴリズムは，
+スコアが一文全体で最適値となるようにラベルを付与するものである．
+
+形態素$m_i$に対し，\ref{sec:named_entity_extraction_model} 節で述べた
+ラベル$l_{j}$の付与確率$p^{*}(l_{j}|F_{i})$の一文全体における
+掛け算$\sum_{i=1}^{n} p^{*}(l_{j}|F_{i})$が最大になるように
+各ラベルを決める．
+ただし，表~\ref{table:conjunction_rule} の連接規則を満たすようにする．
+この表で，＄(文末)，＃(文頭)は便宜上設けたもので実際に付与するラベルとは
+異なる．表~\ref{table:conjunction_rule} の連接規則は人手で作成した．
+
+  \begin{table*}[htbp]
+    \begin{center}
+      \caption{連接規則}
+      \label{table:conjunction_rule} 
+      \begin{tabular}[c]{|l|p{4.3cm}|p{4.8cm}|}
+        \hline
+        ラベル & 左方に接続可能なラベル & 右方に接続可能なラベル \\
+        \hline
+        $x$ & ＃(文頭), $x$, $y$, $x$:END, $y$:END, PRE, MID 
+        & ＄(文末), $x$, $y$, $x$:BEGIN, $y$:BEGIN, POST, MID \\
+        $x$:BEGIN & ＃(文頭), $x$, $y$, $x$:END, $y$:END, PRE, MID 
+        & $x$:MIDDLE, $x$:END \\
+        $x$:MIDDLE & $x$:BEGIN, $x$:MIDDLE & $x$:MIDDLE, $x$:END \\
+        $x$:END & $x$:BEGIN, $x$:MIDDLE 
+        & ＄(文末), $x$, $y$, $x$:BEGIN,\\ & & $y$:BEGIN, POST, MID \\
+        MID & $x$, $x$:END & $x$, $x$:BEGIN \\
+        PRE & ＃(文頭), POST, OTHER & $x$, $x$:BEGIN \\
+        POST & $x$, $x$:END & ＄(文末), PRE, OTHER \\
+        OTHER & ＃(文頭), POST, OTHER & ＄(文末), PRE, OTHER \\
+        ＄(文末) & $x$, $x$:END, POST, OTHER & \\
+        ＃(文頭) & & $x$, $x$:BEGIN, PRE, OTHER\\
+        \hline
+      \end{tabular}\\
+      \vspace*{1em}
+      ($x$, $y$はIREX-NEで定義された8種類のタグおよび「OPTIONAL」に対応する．)
+    \end{center}
+  \end{table*}
+
+手順は以下の通りである．
+\begin{enumerate}
+\item 文頭の形態素$m_1$に対し各ラベル$l_{j(1)}$の付与確率
+  $p^{*}(l_{j(1)}|F_{1})$ $(0\leq j(1)\leq 39)$を計算し，
+  それぞれ各ラベルごとのスコア$S_{1}(l_{j(1)})$とする．
+  つまり，$S_{1}(l_{1}) = p^{*}(l_{1}|F_{1})$, 
+  $S_{1}(l_{2}) = p^{*}(l_{2}|F_{1})$, 
+  $\ldots$, $S_{1}(l_{39}) = p^{*}(l_{39}|F_{1})$とする．
+\item 次の形態素$m_2$に対し各ラベルの付与確率
+  $p^{*}(l_{j(2)}|F_{2})$ $(0\leq j(2)\leq 39)$を計算し，
+  それぞれ各ラベルごとのスコアを
+  \begin{eqnarray*}
+    S_{2}(l_{j(2)}) 
+    & = & \mathop{max}_{l_{j(1)}}\ 
+    p^{*}(l_{j(2)}|F_{2}) \times S_{1}(l_{j(1)}) 
+  \end{eqnarray*}
+  とする．
+  ただし，$l_{j(1)}$と$l_{j(2)}$が連接規則を満たすものに限る．
+\item さらに次の形態素$m_3$に対しても同様に各ラベルの付与確率
+  $p^{*}(l_{j(3)}|F_{3})$ $(0\leq j(3)\leq 39)$を計算し，
+  それぞれ各ラベルごとのスコアを
+  \begin{eqnarray*}
+    S_{3}(l_{j(3)}) 
+    & = & \mathop{max}_{l_{j(2)}}\ 
+    p^{*}(l_{j(3)}|F_{3}) \times S_{2}(l_{j(2)}) 
+  \end{eqnarray*}
+  とする．ただし，$l_{j(2)}$と$l_{j(3)}$が連接規則を満たすものに限る．
+\item 同様のことを文末まで繰り返し，
+  \begin{eqnarray*}
+    S_{n}(l_{j(n)}) 
+    & = & \mathop{max}_{l_{j(n-1)}}\
+    p^{*}(l_{j(n)}|F_{n}) \times S_{n-1}(l_{j(n-1)}) 
+  \end{eqnarray*}
+  のうち最大のものを選ぶと，最適解である
+  ラベルの並び$l_{j(1)}$, $l_{j(2)}$, $\ldots$, $l_{j(n)}$が得られる．
+\end{enumerate}
+
+\subsection{自動獲得した書き換え規則による後処理}
+\label{sec:post_processing}
+
+MEモデルを用いたラベル付けの処理が終った後で，
+形態素解析により得られる形態素が固有表現より長い場合に対処するため，
+予め用意しておいた書き換え規則を適用する．
+書き換え規則はBrillが品詞タグ付けに用いた\cite{Brill:95}
+のと同様の手法である誤り駆動で獲得する．
+Brillの規則獲得方法との違いはBrillがテンプレートを用いているのに対して
+我々は用いていない点である．
+我々の場合，
+書き換え規則は学習コーパスに対するシステムの解析結果とコーパスの
+正解データとの差異を調べることによって自動獲得することができる．
+差異の中から，コーパスでは同じ文字列に対応しているにもかかわらず形態素の数が
+異なる部分をすべて抽出し書き換え規則として利用する．
+ただし，前件部は同じであるが後件部が異なるような規則が複数獲得された場合は，
+最も頻度の高い規則のみを用いる．最も頻度の高い規則が複数種類ある場合，
+それらの規則はすべて捨てる．
+さらに，ここで獲得した規則を学習コーパスに対するシステムの解析結果に適用し，
+誤りとなる数が正解となる数以上であるものはすべて捨てる．
+例えば，以下のようなものが書き換え規則として獲得される．
+
+  \begin{center}
+    \begin{tabular}[c]{l@{ }|l|}
+      \multicolumn{1}{c}{} & \multicolumn{1}{c}{前件部} \\
+      \cline{2-2}
+      見出し語 & 在日 \\
+      品詞(大分類) & 名詞 \\
+      品詞(細分類) & サ変名詞 \\
+      ラベル & OTHER \\
+      \cline{2-2}
+    \end{tabular}
+    $\Rightarrow$
+    \begin{tabular}[c]{|l@{ }l|}
+      \multicolumn{2}{c}{後件部} \\
+      \hline
+      在 & 日 \\
+      名詞 & 名詞 \\
+      普通名詞 & 普通名詞 \\ 
+      PRE & LOCATION:SINGLE \\
+      \hline
+    \end{tabular}
+  \end{center}
+
+\section{まとめ}
+
+本論文ではMEモデルと書き換え規則を用いて固有表現を抽出する手法について述べた．
+IREX-NEの定義に基づくと固有表現には一つあるいは複数の形態素からなるものと
+形態素単位より短い部分文字列を含むものの2種類がある．
+前者の固有表現は，
+固有表現の始まり，中間，終りなどを表すラベルを40個用意し，
+それらのラベルを推定することによって抽出する．
+ラベルの推定にはコーパスから学習したMEモデルを用いる．
+後者の固有表現は書き換え規則を用いて抽出する．
+書き換え規則は学習コーパスに対するシステムの解析結果とコーパスの
+正解データとの差異を調べることによって自動獲得することができる．
+
+書き換え規則，素性，学習コーパスの量についての条件を変えた比較実験により，
+形態素解析により得られる形態素が固有表現より長い場合に書き換え規則が
+有効であること，
+我々が考慮した素性，つまり，着目している形態素を含む前後2形態素ずつ
+合計5形態素に関する見出し語，品詞の情報がIREX-NE本試験に用いられたテキスト
+に対して有効であることを示すことができた．
+これらは学習コーパスのみから得られる情報であったが，
+それに加えて一般に公開されている人名や組織名などの固有名詞辞書も
+利用することにより，IREX-NE本試験のデータに対する実験で，F-measure で
+85.75(限定ドメイン)，80.17(一般ドメイン)の精度を得ることができた．
+
+本手法の精度をさらに向上させるために必要であると考えているのは，
+以下の三点である．
+\begin{itemize}
+\item 素性の発見
+
+  今回は利用しなかったような情報，例えば，係り受けの情報や照応関係など
+  を素性として新たに考慮することによって，
+  ラベル推定の精度が向上することが期待される．
+  また，解析と同時に解析の過程で得られた情報を利用することも考えられる．
+  これは今後の重要な課題である．
+\item コーパス，辞書の充実
+
+  今回の実験では書き換え規則を利用したことによる誤り例を考察することで，
+  学習コーパスの誤りが精度に影響することが分かった．
+  また，辞書情報を考慮することで精度が向上することも分かった．
+  コーパス修正や辞書作成にかかるコストを考えると，
+  コーパスの誤りを自動あるいは半自動で修正する方法，
+  辞書情報を自動あるいは半自動で獲得する方法を考案する
+  必要がありそうである．
+\item 特定ドメインへのチューニング
+
+  ドメインを限定すると，そのドメインに固有の固有表現パターンに，
+  より特化した学習が可能であると考えられる．
+  今回は限定ドメインに対して特にチューニングするようなことはしなかったが，
+  限定ドメインに対しどこまでチューニングすることが可能かを調べたい．
+\end{itemize}
+
+\begin{flushleft}
+{\bf 謝辞}  
+\end{flushleft}
+
+本研究を進めるにあたって有意義なコメントを下さったニューヨーク大学の
+関根聡助教授に心から感謝の意を表する．
+また，データの利用を許可して下さった毎日新聞社に感謝する．
+
+
+
+\bibliographystyle{jnlpbbl}
+\bibliography{v07n2_04}
+
+
+\begin{biography}
+\biotitle{略歴}
+\bioauthor{内元 清貴}{
+1994年京都大学工学部卒業．
+1996年同大学院修士課程修了．
+同年郵政省通信総合研究所入所，郵政技官．
+自然言語処理の研究に従事．
+言語処理学会，情報処理学会，ACL，各会員．}
+\bioauthor{馬 青}{
+1983年北京航空航天大学自動制御学部卒業．
+1987年筑波大学大学院理工学研究科修士課程修了．
+1990年同大学院工学研究科博士課程修了．工学博士．
+1990 $\sim$ 93年株式会社小野測器勤務．
+1993年郵政省通信総合研究所入所，主任研究官． 
+人工神経回路網モデル，知識表現，自然言語処理の研究に従事． 
+日本神経回路学会，言語処理学会，電子情報通信学会，各会員．}
+\bioauthor{村田 真樹}{
+1993年京都大学工学部卒業．
+1995年同大学院修士課程修了．
+1997年同大学院博士課程修了，博士（工学）．
+同年，京都大学にて日本学術振興会リサーチ・アソシエイト．
+1998年郵政省通信総合研究所入所．研究官．
+自然言語処理，機械翻訳，情報検索の研究に従事．
+言語処理学会，情報処理学会，人工知能学会，ACL，各会員．}
+\bioauthor{小作 浩美}{
+1985年郵政省電波研究所（現通信総合研究所）入所．研究官．
+自然言語処理の研究に従事．
+言語処理学会，情報処理学会，電子情報通信学会，各会員．}
+\bioauthor{内山 将夫}{
+筑波大学第三学群情報学類卒業(1992)．
+筑波大学大学院工学研究科博士課程修了(1997)．
+信州大学工学部電気電子工学科助手(1997)．
+郵政省通信総合研究所非常勤職員(1999)．
+博士(工学)．}
+\bioauthor{井佐原 均}{
+1978年京都大学工学部電気工学第二学科卒業．
+1980年同大学院修士課程修了．博士（工学）．
+同年通商産業省電子技術総合研究所入所．
+1995年郵政省通信総合研究所
+関西支所知的機能研究室室長．自然言語処理，機械翻訳の研究に従事．
+言語処理学会，情報処理学会，人工知能学会，日本認知科学会，ACL，各会員．}
+
+\bioreceived{受付}
+\biorevised{再受付}
+\bioaccepted{採録}
+
+\end{biography}
+
+\end{document}
+

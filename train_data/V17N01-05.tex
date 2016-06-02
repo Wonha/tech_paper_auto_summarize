@@ -1,0 +1,1057 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.2}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+\newcommand{\argmax}{}
+
+
+\Volume{17}
+\Number{1}
+\Month{January}
+\Year{2010}
+
+\received{2009}{5}{16}
+\revised{2009}{7}{17}
+\rerevised{2009}{8}{25}
+\accepted{2009}{9}{27}
+
+\setcounter{page}{99}
+
+\jtitle{依存関係確率モデルを用いた統計的句アライメント}
+\jauthor{中澤　敏明\affiref{Author_1} \and 黒橋　禎夫\affiref{Author_1}}
+\jabstract{
+語順や言語構造の大きく異なる言語対間の対訳文をアライメントす
+る際に最も重要なことは，言語の構造情報を利用することと，一対多もしくは多
+対多の対応が生成できることである．本論文では両言語文の依存構造木上での単
+語や句の依存関係をモデル化した新しい句アライメント手法を提案する．依存関
+係モデルは木構造上でのreorderingモデルということができ，非局所的な語順変
+化を正確に扱うことができる．これは文を単語列として扱う既存の単語アライメ
+ント手法にはない利点である．また提案モデルはヒューリスティックなルールを
+一切用いずに，句となるべき単位の推定を自動的に行うことができる．アライメ
+ント実験では，既存の単語アライメント手法と比較して，提案手法にではアライ
+メントの精度をF値で8.5ポイント向上させることができた．
+}
+\jkeywords{機械翻訳，アライメント，木構造，依存関係確率}
+
+\etitle{Statistical Phrase Alignment Model Using Dependency Relation Probability}
+\eauthor{Toshiaki Nakazawa\affiref{Author_1} \and Sadao Kurohashi\affiref{Author_1}} 
+\eabstract{
+When aligning very different language pairs, the most
+ important needs are the use of structural information and the
+ capability of generating one-to-many or many-to-many
+ correspondences. In this paper, we propose a novel phrase alignment
+ method which models word or phrase dependency relations in dependency
+ tree structures of source and target languages. The dependency relation
+ model is a kind of tree-based reordering model, and can handle
+ non-local reorderings which sequential word-based models often cannot
+ handle properly. The model is also capable of estimating phrase
+ correspondences automatically without any heuristic rules. Experimental
+ results of alignment show that our model could achieve F-measure 8.5
+ points higher than the conventional word alignment model with
+ symmetrization algorithms.
+}
+\ekeywords{machine translation, alignment, tree structrue, dependency relation probability}
+
+\headauthor{中澤，黒橋}
+\headtitle{依存関係確率モデルを用いた統計的句アライメント}
+
+\affilabel{Author_1}{京都大学大学院情報学研究科}{Graduate School of Informatics, Kyoto University}
+
+
+
+\begin{document}
+\maketitle
+
+
+
+\section{はじめに}
+\label{Introduction}
+
+日本語と英語のように言語構造が著しく異なり，語順変化が大きな言語対におい
+て，対訳文をアライメントする際に重要なことは二つある．一つは構文解析や依
+存構造解析などの言語情報をアライメントに組み込み，語順変化を克服すること
+であり，もう一つはアライメントの手法が1対1の単語対応だけでなく，1対多や
+多対多などの句対応を生成できることである．これは一方の言語では1語で表現
+されているものが，他方では2語以上で表現されることが少なくないからである．
+しかしながら，既存のアライメント手法の多くは文を単純に単語列としてしか扱っ
+ておらず\cite{Brown93}，句対応は単語対応を行った後にヒューリスティックな
+ルールにより生成するといった方法を取っている
+\cite{koehn-och-marcu:2003:HLTNAACL}．Quirkら
+\cite{quirk-menezes-cherry:2005:ACL}やCowanら
+\cite{cowan-kuucerova-collins:2006:EMNLP}はアライメントに構造情報を統合
+しようとしたが，前述の単語列アライメントを行った後に用いるに留まっている．
+単語列アライメント手法そのものの精度が高くないため，このような方法では十
+分な精度でアライメントが行えるとは言い難い．
+
+
+一方で，アライメントの最初から構造情報を利用する手法もいくつか提案されて
+いる．Wata\-nabeら\cite{Watanabe00}やMenezesとRichardson \cite{Menezes01}は
+構文解析結果を利用したアライメント手法を提案しているが，対応の曖昧性解消
+の際にヒューリスティックなルールを用いている．Yamadaと
+Knight \cite{yamada_ACL_2001}やGildea \cite{Gildea03} は木構造を利用した確
+率的なアライメント手法を提案している．これらの手法は一方の文の木構造に対
+して葉の並べ替え，部分木の挿入・削除といった操作を行って，他方の文構造を
+再現するものであるが，構文情報の利用が逆に強い制約となってしまい，文構造
+の再現が難しいことが問題となっている．YamadaとKnight はいったん木構造を
+崩すことによって，Gildeaは部分木を複製することによってこの問題に対処して
+いる．我々はこのような木構造に対する操作は不要であり，依存構造木中の部分
+木をそのままアライメントすればよいと考えた．またCherry と
+Lin \cite{Cherry03}は原言語側の依存構造木を利用した識別モデルを提案してい
+る．しかしながらこの手法はアライメント単位が単語のみであり，一対一対応し
+か扱えないという欠点がある．phrase-based SMTでいうところの“句”はただの
+単語列に過ぎないが，NakazawaとKurohashi \cite{nakazawa:2008:AMTA} は言語
+的な句をアライメントの最小単位とし，句の依存関係に着目したモデルを提案し
+ているが，そこでは内容語は内容語のみ，機能語は機能語のみにしか対応しない
+という制約があり，また複数の機能語をひとまとまりに扱っているという問題も
+あり，これらがしばしば誤ったアライメントを生成している．
+
+
+本論文ではNakazawaとKurohashiの手法の問題点を改善し，単語や句の依存関係
+に注目した句アライメントモデルを提案する．提案手法のポイントは以下の3つ
+である．
+\begin{enumerate}
+ \item 両言語とも依存構造解析し，アライメントの最初から言語の構造情報を
+       利用する \label{point1}
+ \item アライメントの最小単位は単語だが，モデル学習時に句となるべき部分
+       を自動的に推定し，句アライメントを行う \label{point2}
+ \item 各方向（原言語$\rightarrow$目的言語と目的言語$\rightarrow$原言語）
+       の生成モデルを二つ同時に利用することにより，より高精度なアライメ
+       ントを行う \label{point3}
+\end{enumerate}
+
+本モデルは二つの依存構造木において，一方の依存構造木で直接の親子関係にあ
+る一組の対応について，他方のそれぞれの対応先の依存関係をモデル化しており，
+単語列アライメントで扱うのが困難な距離の大きな語順変化にも対応することが
+できる．言い替えれば，本モデルは木構造上でのreorderingモデルということが
+できる．また本モデルはヒューリスティックなルールを用いずに，句となるべき
+部分を自動的に推定することができる．ここでいう句とは必ずしも言語的な句で
+ある必要はなく，任意の単語のまとまりである．ただし，Phrase-based SMTにお
+ける句の定義との重要な違いは，我々は木構造を扱っており，単語列としては連
+続でなくても，木構造上で連続ならば句として扱っているという点である．
+
+また我々のモデルはIBMモデルのような各方向の生成モデルを両方向分同時に用
+いてアライメントを行う．これはアライメントの良さを両方向から判断する方が
+自然であり，Liangら\cite{liang-taskar-klein:2006:HLT-NAACL06-Main}による
+報告にもあるように，そうした方が精度よいアライメントが行えるからである．
+ただし，Liangらの手法がIBMモデルと同様に単語列を扱うものであるのに対し，
+提案手法は木構造を扱っているという重要な違いがある．またLiangらの手法で
+は部分的に双方向のモデルを結合するに留まっており，アライメントの結果とし
+ては各方向それぞれ独立に生成されるが，我々の方法ではただ一つのアライメン
+トを生成するという違いもある．
+
+最近の報告では生成モデルよりも識別モデルを用いた方がより高精度なアライメ
+ントが行えるという報告がなされているが，学習用にアライメントの正解セット
+を用意するコストがかかってしまう．そこで我々は教師なしでモデル学習が行え
+る生成モデルを用いた．モデルは2つのステップを経て学習される．Step 1では
+単語翻訳確率を学習し，Step 2では句翻訳確率と依存関係確率が推定される．さ
+らにStep 2では単語対応が句対応に拡張される．各StepはEMアルゴリズムにより
+反復的に実行される．
+
+次章では我々の提案するアライメントモデルを，IBMモデルと比較しながら定義
+する．\ref{training}章ではモデルのトレーニングについて説明し，
+\ref{result}章では提案手法の有効性を示すために行った実験の結果と結果の考
+察を述べ，最後に結論と今後の課題を述べる．
+
+
+\section{提案モデル}
+
+以降の説明においては言語対として日本語と英語を用いるが，提案モデルはこの
+言語対に特別に設計されたものではなく，言語対によらないロバストなものであ
+る．
+
+提案モデルは依存構造木上で定義されるものであるので，まず対訳文を両言語と
+も依存構造解析し，単語の依存構造木に変換する．図
+\ref{fig:word-based-alignment}の一番右に依存構造木の例を示す．単語は上か
+ら下に順に並んでおり，文のヘッドとなる単語は最も左側に位置している．アラ
+イメントの最小単位はこれら各単語であるが，モデル推定時に複数単語のかたま
+りを句として自動的に獲得する．これについては\ref{expand_step}章で詳しく
+述べる．
+
+\begin{figure}[t]
+ \begin{center}
+  \includegraphics{17-1ia6f1.eps}
+ \end{center}
+  \caption{単語列アライメントモデルと提案手法との比較}
+  \label{fig:word-based-alignment}
+\end{figure}
+
+
+\subsection{提案モデル概観}
+
+本章では，広く知られており，かつ一般的に用いられている統計的なアライメン
+ト手法であるIBMモデルと比較しながら，我々が提案するモデルについて説明す
+る．IBMモデル\cite{Brown93}では，与えられた日本語文$\mathbf{f}$と英語文
+$\mathbf{e}$からなる対訳文間の最も良いアライメント$\mathbf{\hat{a}}$ は
+以下の式により獲得される：
+\begin{equation}
+ \label{eq:best}
+\begin{aligned}[b]
+ \hat{\mathbf{a}} & = \argmax_{\mathbf{a}} p(\mathbf{a} | \mathbf{f}, \mathbf{e})\\
+   & = \argmax_{\mathbf{a}} \frac{p(\mathbf{a}, \mathbf{f} | \mathbf{e})}{p(\mathbf{f} | \mathbf{e})}\\
+   & = \argmax_{\mathbf{a}} \frac{p(\mathbf{a}, \mathbf{f} | \mathbf{e})}{\sum_\mathbf{a} p(\mathbf{a}, \mathbf{f} | \mathbf{e})} \\
+   & = \argmax_{\mathbf{a}} p(\mathbf{a}, \mathbf{f} | \mathbf{e}) \\
+   & = \argmax_{\mathbf{a}} p(\mathbf{f}|\mathbf{a}, \mathbf{e}) \cdot p(\mathbf{a}|\mathbf{e})
+\end{aligned}
+\end{equation}
+ここで，$p(\mathbf{f}|\mathbf{a}, \mathbf{e})$は{\bf 語彙確率}
+(\textit{lexicon probability})と呼ばれ，$p(\mathbf{a}|\mathbf{e})$は{\bf 
+アライメント確率}(\textit{alignment probability})と呼ばれている．
+
+
+$\mathbf{f}$が$n$語($f_1,f_2,...,f_n$)からなり，$\mathbf{e}$が$m$語
+($e_1,e_2,...,e_m$)とNULL($e_0$)からなるとする．またアライメント
+$\mathbf{a}$は$\mathbf{f}$の各単語から$\mathbf{e}$の単語への対応を表し，
+$a_j = i$ は$f_j$が$e_i$に対応していることを示すとする．このような条件の
+下，上記二つの確率は以下のように展開される：
+{\allowdisplaybreaks
+\begin{gather}
+ p(\mathbf{f}|\mathbf{a}, \mathbf{e}) = \prod_{j=1}^{J} p(f_j|e_{a_j}) 
+ \label{eq:lex} \\
+ p(\mathbf{a}|\mathbf{e}) = \prod_{i=1}^{I} p(\Delta j|e_i)
+ \label{eq:align}
+\end{gather}
+}
+ここで$\Delta j$は$e_i$に対応する$\mathbf{f}$の単語の相対位置である．式
+\ref{eq:lex}は単語翻訳確率の積であり，式\ref{eq:align}は相対位置確率の積
+となっている．ただし，ここで示した式は正確にIBMモデルを記述しているわけ
+ではなく，その意図を簡単に示したものである．また図
+\ref{fig:word-based-alignment}の左側にIBMモデルによるアライメントの例を
+示す．IBMモデルは方向性があるため，アライメントに制限がある．これを解消
+するため，両方向による結果を最後に統合して最終的なアライメントとすること
+が多い\cite{koehn-och-marcu:2003:HLTNAACL}．しかし日英のような言語構造の
+違いの大きい言語対においては，このような方法では十分な精度でのアライメン
+トは行えない．
+
+提案モデルはIBMモデルを3つの点で改善する．一つ目は式\ref{eq:lex}において，
+単語ではなく句を考慮する．二つ目は式\ref{eq:align}において，文中での単語
+の位置ではなく，依存関係を考慮する．最後に，提案モデルでは最も良いアライ
+メント$\hat{\mathbf{a}}$を求める際に，片方向のモデルだけでなく，両方向の
+モデルを同時に利用する．つまり，式\ref{eq:best}を以下のように変更する：
+\begin{equation}
+ \label{eq:best_proposed}
+\begin{aligned}[b]
+  \hat{\mathbf{a}} & = \argmax_{\mathbf{a}} p(\mathbf{a} | \mathbf{e}, \mathbf{f})^2 \\
+     & = \argmax_{\mathbf{a}} p(\mathbf{a}, \mathbf{f} | \mathbf{e}) \cdot p(\mathbf{a}, \mathbf{e} | \mathbf{f})\\
+     & = \argmax_{\mathbf{a}} p(\mathbf{f}|\mathbf{a}, \mathbf{e}) \cdot p(\mathbf{a}|\mathbf{e}) \cdot p(\mathbf{e}|\mathbf{a}, \mathbf{f}) \cdot p(\mathbf{a}|\mathbf{f})
+\end{aligned}
+\end{equation}
+
+
+我々のモデルでは句を扱っているため，上式を素直に計算できる．また式の上で
+はIBMモデルと同じ解が得られるはずであるが，それぞれの確率を近似するため，
+両方向を考慮した方がよりよい解が得られる．図
+\ref{fig:word-based-alignment}の一番右に提案モデルによるアライメント例を
+示す．従来手法のアライメントと比べると，多対多対応が自然と獲得されている
+ことがわかる．
+
+
+提案モデルはEMアルゴリズムにより学習される
+\cite{liang-taskar-klein:2006:HLT-NAACL06-Main}．目的関数として，与えら
+れたデータに対する尤度を考える：
+\begin{equation}
+\begin{aligned}[b]
+ \sum_{(\mathbf{e},\mathbf{f})} \log p(\mathbf{e}, \mathbf{f})
+   & = \sum_{(\mathbf{e},\mathbf{f})}\left(\log \sum_{\mathbf{a}} p(\mathbf{a}, \mathbf{e}, \mathbf{f})\right)\\
+   & = \sum_{(\mathbf{e},\mathbf{f})}\left(\log \sum_{\mathbf{a}} \sqrt{p(\mathbf{a}, \mathbf{e}, \mathbf{f})^2}\right)\\
+   & = \sum_{(\mathbf{e},\mathbf{f})}\left(\log \sum_{\mathbf{a}} \sqrt{p(\mathbf{a},\mathbf{e}|\mathbf{f})\cdot p(\mathbf{f})\cdot p(\mathbf{a},\mathbf{f}|\mathbf{e})\cdot p(\mathbf{e})}\right)
+\end{aligned}
+\end{equation}
+この尤度を最大化するようなパラメータ$\theta$を求める．$\theta$は各方向の
+モデルにおけるパラメータをまとめたものとする．E-stepでは現在のパラメータ
+$\theta$の下でのアライメントの事後確率を以下のように計算する：
+\begin{equation}
+\begin{aligned}[b]
+  q(\mathbf{a}; \mathbf{e},\mathbf{f}) &:= p(\mathbf{a}|\mathbf{e},\mathbf{f};\theta) \\
+    & = \frac{p(\mathbf{a}, \mathbf{e}, \mathbf{f}; \theta)}{\sum_{\mathbf{a}}p(\mathbf{a}, \mathbf{e}, \mathbf{f}; \theta)} \\[0.5em]
+    & = \frac{\sqrt{p(\mathbf{a},\mathbf{e}|\mathbf{f};\theta) \cdot p(\mathbf{f}) \cdot p(\mathbf{a},\mathbf{f}|\mathbf{e};\theta)\cdot p(\mathbf{e})}}{\sum_{\mathbf{a}}\sqrt{p(\mathbf{a},\mathbf{e}|\mathbf{f};\theta) \cdot p(\mathbf{f}) \cdot p(\mathbf{a},\mathbf{f}|\mathbf{e};\theta)\cdot p(\mathbf{e})}}
+\end{aligned}
+\end{equation}
+M-stepではパラメータの更新を行う：
+\begin{equation}
+ \theta' := \argmax_{\theta} \sum_{\mathbf{a},\mathbf{e},\mathbf{f}} q(\mathbf{a};\mathbf{e},\mathbf{f}) \log p(\mathbf{a},\mathbf{e},\mathbf{f};\theta)
+\end{equation}
+
+
+次節以降では，lexicon probabilitiyとalignment probabilitiyを定義する．
+
+
+\subsection{句翻訳確率}
+
+$\mathbf{f}$が$N$個の句($F_1,F_2,...,F_N$)からなり，$\mathbf{e}$が$M$個
+の句($E_1,E_2,...,E_M$)とNULL($E_0$)からなるとする．またアライメント
+$\mathbf{A^{fe}}$は$f$の各句から$e$の単句への対応を表し，$A_j^{fe} = i$は句$F_j$が
+句$E_i$に対応していることを示すとする．
+
+
+提案モデルでは，IBMモデルにおける単語翻訳確率$p(f_j|e_i)$の代わりに，
+{\bf 句翻訳確率}$p(F_j|E_i)$を考える．ただし，2語以上からなる句はNULL対
+応にはならないという制限を加える（その句に含まれる各単語がNULL対応になる
+ものとする）．句翻訳確率を用いて，式\ref{eq:lex}を以下のように変更する：
+\begin{equation}
+ \label{eq:lex_mod}
+ p(\mathbf{f}|\mathbf{a},\mathbf{e}) = \prod_{j=1}^{N} p(F_j|E_{A_j^{fe}})
+\end{equation}
+
+
+ここで，句$F_j$と句$E_i$が対応付いたと仮定すると，この句の対応に寄与する
+句翻訳確率は，双方向分の句翻訳確率を掛け合わせるため以下のようになる：
+\begin{equation}
+ \label{eq:phrase_alignment_prob}
+p(F_j|E_i) \cdot p(E_i|F_j)
+\end{equation}
+この確率の積を{\bf 句対応確率}と呼ぶことにする．表\ref{tab:sample_prob} 
+の上部に図\ref{fig:word-based-alignment}の例における句対応確率を示す．
+
+
+
+
+\subsection{依存関係確率}
+
+IBMモデルにおいて，単語の移動，すなわちreorderingモデルは，
+\pagebreak
+式\ref{eq:align}に示したように，一つ前の単語のアライメントとの相対位置によっ
+て定義されている．これに対し提案モデルでは，単語の文内での位置ではなく，
+依存関係を考慮する．
+
+\begin{table}[t]
+  \caption{各確率の計算例}
+  \label{tab:sample_prob}
+\input{06table01.txt}
+\end{table}
+
+
+まず$\mathbf{e}$のある単語$e_p$と，$e_p$に係る単語$e_c$について考え，そ
+れらの可能なアライメントのうち，$e_p$が句$E_P$に属し，$e_c$が句$E_C$に属
+しており，$E_C$が$E_P$に係っているものを考える．このような状況において，
+$E_P$と$E_C$の$\mathbf{f}$での対応句$F_{A_P^{ef}}$と$F_{A_C^{ef}}$の関係
+をモデル化したものが依存関係確率である．図\ref{fig:dpnd_prob}に例を示す．
+日英などのように語順の大きく異なる言語対であっても，文内の単語や句の依存
+関係は多くの場合保存され，$F_{A_C^{ef}}$が直接$F_{A_P^{ef}}$に係ることが
+多い．提案モデルはこのような傾向を考慮したものである．直接の親子関係にあ
+る2単語が属する2句の対応先の句の関係は$rel(e_p, e_c)$のように記述するこ
+とにし，これは$e_p$が属する句の対応先の句$F_{A_P^{ef}}$から，$e_c$が属す
+る句の対応先の句$F_{A_C^{ef}}$への経路として定義される．経路は以下のよう
+な表記に従って示される：
+\begin{itemize}
+ \item 子ノードへ行く場合は `c'({\it c}hild node) 
+ \item 親ノードへ行く場合は `p'({\it p}arent node) 
+ \item 2ノード以上離れている場合は，上記二つを並べて表記する 
+\end{itemize}
+例えば図\ref{fig:word-based-alignment}において，``for''から
+``photodetector''への経路は`c'となり，``the''から``for''への経路は，2ノー
+ド離れているため`p;p' となる．句同士の依存関係を記述する際には，経路上に
+ある全ての句は，2つ以上の単語からなる句も含めて，すべて1つのノードとして
+扱う．このため，図\ref{fig:word-based-alignment}において``photogate''か
+ら``the''への経路は`p;c;c;c'となる．
+
+この$rel$を用いて，式\ref{eq:align}を以下のように改善する：
+\begin{equation}
+ \label{relation_probability}
+ p(\mathbf{a}|\mathbf{e}) = \prod_{(e_p,e_c) \in D_{\mathbf{e}\mathchar`-pc}} p_{\mathbf{ef}}(rel(e_p, e_c))
+\end{equation}
+ここで$D_{\mathbf{e}\mathchar`-pc}$は$\mathbf{e}$の木構造において直接の
+親子関係にある全ての単語の組み合わせである．また
+$p_{\mathbf{ef}}(rel(e_p, e_c))$を$\mathbf{e}\rightarrow\mathbf{f}$方向
+の{\bf 依存関係確率}と呼ぶ．$p_{\mathbf{ef}}$は木構造上でのreorderingモ
+デルと考えることができる．
+
+\begin{figure}[t]
+ \begin{center}
+  \includegraphics{17-1ia6f2.eps}
+ \end{center}
+  \hangcaption{依存関係の例（親子関係にある$e_p$と$e_c$が属する句$E_P$と$E_C$
+  の対応先の句$F_{A_P^{ef}}$と$F_{A_C^{ef}}$の関係をモデル化する）}
+  \label{fig:dpnd_prob}
+\end{figure}
+
+$rel$にはいくつか特別な値がある．まず$E_C$と$E_P$が同じ場合，つまり，
+$e_c$と$e_p$が同じ句に属する場合，$rel = \mbox{`SAME'}$となる．次にNULL 
+アライメントに関してだが，これには$e_p$ がNULL対応の場合，$e_c$ がNULL対
+応の場合，両方ともNULL対応の場合の3通りがあり，それぞれ$rel$の値は`NULL\_p'，`NULL\_c'，`NULL\_b'となる．例として表\ref{tab:sample_prob} の
+下部に図\ref{fig:word-based-alignment}の例における依存関係確率を各方向そ
+れぞれ示す．
+
+一般的に，構文解析などにおいても，親ノードとの関係だけでなく，さらにその
+親のノードとの関係を考慮することは自然であり，精度の向上につながる．提案
+モデルにおいても，直接の親子関係だけでなく，さらにその親ノードとの関係も
+考慮し，以下のように定式化する：
+\begin{equation}
+ p(\mathbf{a}|\mathbf{e}) = \prod_{(e_p,e_c) \in D_{\mathbf{e}\mathchar`-pc}} p_{\mathbf{ef}\mathchar`-pc}(rel(e_p, e_c)) \cdot \prod_{(e_g,e_c) \in D_{\mathbf{e}\mathchar`-gc}} p_{\mathbf{ef}\mathchar`-gc}(rel(e_g, e_c))
+\end{equation}
+ここで$D_{\mathbf{e}\mathchar`-gc}$は$\mathbf{e}$の木構造において祖父と
+子の関係にある全ての単語の組み合わせである．
+$p_{\mathbf{ef}\mathchar`-pc}$は直接の親子関係にある2単語を見たときの依
+存関係確率であり，$p_{\mathbf{ef}\mathchar`-gc}$は親の親と子の関係にある
+2単語の場合の依存関係確率である．
+
+なお，逆方向（$\mathbf{f}$から$\mathbf{e}$）のモデル$p(\mathbf{a}|\mathbf{f})$も全く同様に定義される．
+\pagebreak
+\begin{equation}
+ p(\mathbf{a}|\mathbf{f}) = \prod_{(f_p,f_c) \in D_{\mathbf{f}\mathchar`-pc}} p_{\mathbf{fe}\mathchar`-pc}(rel(f_p, f_c)) \cdot \prod_{(f_g,f_c) \in D_{\mathbf{f}\mathchar`-gc}} p_{\mathbf{fe}\mathchar`-gc}(rel(f_g, f_c))
+\end{equation}
+
+
+
+\section{トレーニング}
+\label{training}
+
+提案モデルは2つのステップに分けて学習される．これはIBMモデルにおいて，完
+全に最適解が求まる簡単なモデルからスタートし，徐々により複雑なモデルに移
+行することに対応する．Step 1では単語翻訳確率の推定が行われ，Step 2では句
+翻訳確率と依存関係確率の推定が行われる．どちらのステップにおいてもモデル
+はEMアルゴリズムにより学習される．またステップ1においては句は扱わず，全
+て単語単位での学習となる．複数単語の塊＝句はStep 2において自動的に獲得さ
+れる．
+
+
+\subsection{Step 1}
+
+Step 1では各方向独立に，単語翻訳確率を推定する．これはIBM Model 1と全く
+同様の方法により行われる．Step 1の推定の際には対応の単位は各ノード単体，
+つまり単語のみであり，句は考慮しない．句はStep 2の推定から考慮し，句とな
+るべき候補を動的に作り出すことにより実現する．これはStep 1の段階で可能な
+句の候補全てを考慮すると，アライメント候補数が爆発し，扱えなくなるためで
+ある．
+
+
+$\mathbf{f}$から$\mathbf{e}$へのアライメントを考えると，$\mathbf{f}$の各
+単語は，他の単語に関係なく，$\mathbf{e}$の任意の単語，またはNULLに対応す
+ることができる．このことから，あるひとつの可能なアライメント$\mathbf{a}$
+の確率は以下のように計算できる：
+\begin{align}
+ \label{eq:trans_prob}
+p(\mathbf{a}, \mathbf{f}|\mathbf{e}) & = p(\mathbf{f}|\mathbf{a}, \mathbf{e}) \cdot p(\mathbf{a}|\mathbf{e}) \\
+ & = \prod_{j=1}^{J} p(f_j|e_{a_j}) \cdot C(n, m)
+\end{align}
+ここで$p(\mathbf{a}|\mathbf{e})$は全てのアライメントにおいて一定
+(uniform)であるとし，各文の単語数による関数$C(n, m)$と置く．さらに，全て
+の可能なアライメントを考慮すると，確率$p(\mathbf{f}|\mathbf{e})$は以下の
+ように計算できる．
+\begin{equation}
+ \label{eq:all_align_prob}
+ p(\mathbf{f}|\mathbf{e}) = \sum_{\mathbf{a}} p(\mathbf{a}, \mathbf{f}|\mathbf{e})
+\end{equation}
+
+単語翻訳確率の初期値として一様な確率を与えておき，式\ref{eq:trans_prob} 
+と\ref{eq:all_align_prob}を計算して，正規化したアライメント回数
+$\frac{p(\mathbf{a}, \mathbf{f}|\mathbf{e})}{p(\mathbf{f}|\mathbf{e})}$ 
+をアライメント$\mathbf{a}$内の全ての単語対応に与える．次に単語翻訳確率を
+最尤推定により求める．これを繰り返すことにより，単語翻訳確率を推定する．
+なおこの計算は効率的に行うことができ，近似することなく最適なパラメータが
+求められる．反対方向（$\mathbf{e}$ から$\mathbf{f}$へのモデル）も同様に求
+めることができる．
+
+
+
+\subsection{Step 2}
+
+Step 2では句翻訳確率と依存関係確率の両方を推定する．また$\mathbf{f}$から
+$\mathbf{e}$，$\mathbf{e}$から$\mathbf{f}$の二つのモデルを同時に用いて，
+一つの方向性のないアライメントを得る．Step 1では計算を効率化することによ
+り，近似を用いずにモデルの推定が完全に行えるが，Step 2では可能なアライメ
+ントを全て考慮することは不可能である．そこで我々は最も良いアライメントを
+探索するために，まず句翻訳確率のみから初期アライメントを生成し，その後依
+存関係確率も考慮しつつ，山登り法によってアライメントを徐々に修正するとい
+う方法をとる．
+
+さらにStep 2において新たな句候補の生成を行う．新たな句候補は山登り法によっ
+て求められた最も良いアライメントの状態から生成され，次のイタレーションか
+ら考慮される．つまり，Step 2のイタレーションが進むに連れ，より大きな句の
+対応を発見することができる．
+
+全体として，Step 2の1回のイタレーションは，E-stepでの“初期アライメント”
+の生成と“山登り法”により最適なアライメントの探索，E-stepとM-stepの間で
+の新たな句候補の生成，M-stepでのパラメータの更新の4つの要素からなる．
+
+Step 2での一回目のイタレーションでは，パラメータの初期値を以下のようにす
+る．一回目のイタレーションにおいては全ての句は1単語からなるため（2単語以
+上からなる句候補が獲得されていないため）句翻訳確率については，Step 1で求
+めた単語翻訳確率をそのまま用いる．依存関係確率は，Step 1の最後のイタレー
+ションで得られた最も良いアライメント結果において依存関係の生起回数を計数
+し，そこから求めた確率を用いる．
+
+
+\subsection*{初期アライメント(E-step)}
+\label{initial_align}
+
+依存関係確率は用いず，句翻訳確率のみから初期アライメントを生成する．全て
+の句候補同士の対応（もしくはNULL対応）に対して，句対応確率を式
+\ref{eq:phrase_alignment_prob}により計算する．これらの中から，句対応確率の
+相乗平均が高いものから順に，対応として採用する．この際，各単語は1度しか
+対応付かないようにする．つまりすでに採用されている対応と重なるような対応
+は採用しない．なお句候補の生成については後で述べる．
+
+初期アライメントが生成されたら，その状態でのアライメント確率を計算する．
+このときから依存関係確率も用い，式\ref{eq:best_proposed}のように計算する．
+
+
+
+\subsection*{山登り法(E-step)}
+
+初期アライメントの状態から，依存関係確率を考慮しながらアライメントを修正
+し，徐々に確率の高いアライメントを探索していく．修正手段としては以下の4
+種類を考える．
+
+\begin{figure}[t]
+ \begin{center}
+  \includegraphics{17-1ia6f3.eps}
+ \end{center}
+  \caption{山登り法によるアライメントの修正例}
+  \label{fig:hillclimb}
+\end{figure}
+
+\begin{description}
+ \item[Swap:] 任意の2つの対応に注目し，それらの対応を入れ替える．例えば
+	    図\ref{fig:hillclimb}の最初の操作では，``光 
+	    $\leftrightarrow$ photogate''と``フォト ゲート 
+	    $\leftrightarrow$ photodetector''の対応がそれぞれ``光 
+	    $\leftrightarrow$ photodetector''と``フォト ゲート 
+	    $\leftrightarrow$ photogate''というように対応が入れ替えられ
+	    ている．
+ \item[Extend:] 任意の1つの対応に注目し，そのいずれかの言語における句を，
+	    親または子方向に1ノード分だけ拡大する．
+ \item[Add:] NULL対応となっている原言語側及び目的言語側のノード間に，新
+	    たに対応を追加する．
+ \item[Reject:] すでにある対応を削除し，それぞれNULL対応とする．
+\end{description}
+
+図\ref{fig:hillclimb}に山登り法によるアライメント修正過程の例を示す．な
+お図\ref{fig:hillclimb}は1回以上イタレーションを行ったあとの状態である．
+修正後のアライメント確率が修正前よりも高くなる場合にのみ修正を実行し，修
+正された状態から再度修正を行っていく．確率が高くなる修正箇所がなくなるま
+で修正を繰り返し行い，最終的に得られたアライメントが，最も確率の高いアラ
+イメントとなる．なお修正の途中で得られたアライメントの状態を，確率の高い
+ものから$n$ 個保存しておき，仮想的な$n$-bestアライメントとし，パラメータ
+推定の際に利用する．
+
+
+
+
+\subsection*{新たな句候補の生成}
+\label{expand_step}
+
+山登り法により得られた最も良いアライメント結果のうち，NULL対応となった単
+語に注目する．NULL対応となった語の親，または子の単語がNULL対応でなければ，
+その単語とNULL対応の単語とをまとめたものを新たに句として獲得し，Step 2の
+次のイタレーションから探索範囲に入れる．例えば図\ref{fig:hillclimb}の最
+終状態においてNULL対応となっている“素子”は，その子の対応である“受 光 
+$\leftrightarrow$ photodetector”に含まれ，新たに“受 光 素子”という句
+を作りだし，“受 光 素子 $\leftrightarrow$ photodetector”という対応があ
+るものと考えるさらに親の対応である“に $\leftrightarrow$ for”に含まれ，
+“素子 に”という句もつくり出し，“素子 に $\leftrightarrow$ for”という
+対応があるものと考える．これらの新たに考慮される対応には，元の対応の出現
+期待値（正規化されたアライメントの確率）を分配する．例えば図
+\ref{fig:hillclimb}のアライメントの正規化された確率を0.7とすると，“受 
+光 $\leftrightarrow$ photodetector”と“受 光 素子 $\leftrightarrow$
+photodetector”にそれぞれ0.35ずつ，“に $\leftrightarrow$ for”と“素子 
+に $\leftrightarrow$ for”にも0.35ずつ出現期待値を与える．
+
+このように，NULL対応に注目することにより動的に句となるべきかたまりを獲得
+していき，モデルの構築を行う．
+
+
+
+\subsection*{モデル推定(M-step)}
+
+一般的なEMアルゴリズムにおいては，得られたn-best アライメントのそれぞれ
+のアライメント確率を正規化し，各アライメントにおけるパラメータの出現回数
+をこの正規化された確率値（出現期待値）を用いて計数する．我々もこの方法に従
+い，全ての対訳文での全てのアライメント結果を集めてパラメータの推定を行う．
+ただし，正確に全てのアライメントを数え上げることはできないため，山登り法
+の途中で得られたアライメントのうち，アライメントの確率の高いもの上位$n$ 
+個（山登りの回数が$n$に満たない場合はその全て）を用いる．パラメータ推定は
+各パラメータの出現期待値の総和を全体の回数で正規化することにより行われる．
+例えば句翻訳確率は以下のような式により推定する：
+\begin{equation}
+ \label{eq:normal}
+ p(F_j|E_i) = \frac{C(F_j, E_i)}{\sum_{k}C(F_k, E_i)},~~~ p(E_i|F_j) = \frac{C(F_j, E_i)}{\sum_{k}C(E_k, F_j)}
+\end{equation}
+ここで$C(F_j, E_i)$は$F_j$と$E_i$がアライメントされた回数である．
+
+ここまでの処理により，EMアルゴリズムのE-step，M-stepが終了し，再びE-step 
+に戻る．これを複数回繰り返すことにより，モデルのトレーニングを行う．
+
+
+
+\section{アライメント実験}
+\label{result}
+
+提案手法の有効性を示すためにアライメント実験を行った．トレーニングコーパ
+スとしてJST\footnote{http://www.jst.go.jp/}日英抄録コーパスを用いた．こ
+のコーパスは，科学技術振興機構所有の約200万件の日英抄録から，内山・井佐
+原の方法\cite{utiyama07:_japan_englis_paten_paral_corpus}により，情報通
+信研究機構\footnote{http://www.nict.go.jp/}が作成したものであり，100万対
+訳文からなる．このうち475文に人手で正解のアライメントを付与し，正解デー
+タとした．ただし，正解データにはSure($S$)アライメントのみが付与されてお
+り，Possible($P$)アライメントはない\cite{Och03}．また評価の単位は日本語，
+英語とも単語とし，適合率・再現率・F値により精度を求めた．
+
+日本語文に対しては形態素解析器JUMAN \cite{JUMAN}および依存構造解析器
+KNP \cite{kawahara-kurohashi:2006:HLT-NAACL06-Main}を用い，英語文に対して
+はTsuruokaとTsujiiのPOSタガー\cite{Tsuruoka2005}でPOSタグを付与し，MSTパー
+サ\cite{mstparser}を用いて単語の依存構造木に変換する．
+
+またStep 2のパラメータ推定の際に用いるアライメントの数は$n=10$とした．
+
+実験は2種類行った．一つ目は既存の単語列アライメント手法と比較することに
+よって提案手法の有効性を示すための実験であり，二つ目は依存構造を利用する
+ことと，単語より大きな単位である句を扱うことの効果を示すための実験である．
+全ての実験において，各単語は原形に戻した状態でトレーニングを行った．
+
+
+
+\subsection{単語列アライメント手法との比較}
+\label{exp1}
+
+\begin{table}[b]
+  \caption{アライメント実験結果（提案手法と単語列アライメント手法との比較）}
+  \label{tab:result}
+\input{06table02.txt}
+\end{table}
+
+比較実験として，単語列アライメント手法として広く利用されているIBMモデル
+を実装したアライメントツールであるGIZA++ \cite{Och03}を用いてアライメント
+を行った．各モデルのイタレーション回数などのオプションはデフォルトの設定
+をそのまま利用した．さらに各方向のアライメント結果を三つの対称化手法によ
+り統合した\cite{koehn-och-marcu:2003:HLTNAACL}．結果を表\ref{tab:result} 
+の下部3行に示す．利用した対称化手法は`intersection'，`grow-final-and'，`grow-diag-final-and'の3つである\cite{Koehn_IWSLT05}．
+
+
+一方，提案手法によるアライメント精度を表\ref{tab:result}の上部に示す．ま
+ず`Step 1'に示されているのは，Step 1のイタレーションを5回行った後に学習
+されたパラメータ（単語翻訳確率）を用いたアライメントの精度である．なおこ
+こでのアライメントは，両方向のパラメータを用いて，\ref{initial_align}章
+の初期アライメント生成手法と同様にアライメントを生成した結果である．`Step 2-X'はStep 2 の各イタレーション終了時点でのアライメント精度である．`Step 2-1'は句翻訳確率は`Step 1'のものと同じだが，それに加えて`Step 1'の
+アライメント結果から推定した依存関係確率を用いてアライメントを行っている．
+つまり，`Step 1' と`Step 2-1'とを比較することにより，依存関係確率を用い
+ることによるアライメント精度の向上が見て取れる．以後Step 2のイタレーショ
+ンを行い，その都度アライメント精度を計測した．結果として，提案手法では単
+語列アライメント手法よりもF値で4.9ポイントのアライメント精度向上を達成し
+た（Step 2-7とgrow-diag-final-andとの比較による）．適合率だけを見ると`intersection'が最もよい値を示しているが再現率が極端に低くなっている．ま
+た再現率が最も高いのは`grow-diag-final-and'であるが，同程度の再現率を示
+している提案手法の結果を見ると，適合率では大きく上回っており，総合的に見
+て提案手法は単語列アライメント手法よりも優れているということができる．な
+おF値はStep 2-7が最も高い値を示したが，Step 2-5から2-7までは大差ないこと
+と，RecallよりもPrecisionが高い方が翻訳での利用を考えた際には有利であり，
+イタレーションが進むに連れPrecisionが低下していくことを考慮して，Step
+2-5 の結果に注目することにする．
+
+次に，機能語に関する簡単なルールを人手により作成し，最終的なアライメント
+結果の修正を行った．用いたルールは以下の3つである：
+\begin{itemize}
+ \item 英語の冠詞はその係り先のノード（普通は名詞）に併合する
+ \item 日本語の助詞と英語の`be'や`have'との間に対応がある場合，それらは
+       棄却する
+ \item 日本語の‘する’，‘れる’，英語の`be'，`have'がNULLに対応している場
+       合，その係り先の動詞や形容詞のノードに併合する
+\end{itemize}
+これらのルールをStep 2-5の結果に適用することにより，F値は70.76に向上し，
+単語列アライメントよりも8.5ポイント高いF値を達成した（表\ref{tab:result} 
+のStep 2-5 + rule）．なお，以後の考察ではルールなしのStep 2-5の結果を検討
+する．
+
+
+
+
+\subsection{依存構造と句を扱うことの有効性}
+\label{exp2}
+
+依存構造木を用いることと，単語より大きな句という単位を用いることの有効性
+を示すための実験を行った．実験の条件として以下の4通りを採用した：
+\begin{itemize}
+ \item 依存構造木と句のどちらも用いる（結果の‘提案手法’）
+ \item 依存構造木のみを利用し，句は用いない
+ \item 依存構造木は利用せず，句のみを用いる
+ \item 依存構造木と句のどちらも利用しない（結果の‘ベースライン’）
+\end{itemize}
+なお依存構造木を用いない実験においては，単語の依存関係ではなく相対位置の
+情報を用いた．例えば原言語側で連続している一組の対応のそれぞれの対応先が
+前，又は後ろに何単語（もしくは句）離れているかをモデル化した．実験結果を表
+\ref{tab:effectiveness_result}に示す．全ての実験条件において，示した結果
+はStep 2で5回イタレーションを行った後のアライメント結果での評価である．
+
+\begin{table}[t]
+  \hangcaption{依存構造木および句を利用することの効果（Step 2での5回のイタレーション後のアライメント精度）}
+  \label{tab:effectiveness_result}
+\input{06table03.txt}
+\end{table}
+
+この結果から，句を扱うことは再現率の向上につながり，依存構造木を利用する
+ことは適合率の向上につながることがわかり，両方を用いることにより，適合率・
+再現率ともにバランスよく高い精度を達成することができると言える．
+
+
+
+
+\section{考察}
+
+\ref{exp1}章（表\ref{tab:result}）から，単純な単語列アライメントモデルと比
+較して，提案モデルが十分に高精度なアライメントを行えていることがわかる．
+図\ref{fig:word_align}および図\ref{fig:proposed_align}で二つの手法のアラ
+イメント結果の比較を示す．灰色に塗られたマスはアライメントの正解であり，
+黒い四角（■）がある部分が出力である．図\ref{fig:word_align}は単語列アライ
+メントの結果の例である．文内に“非 去勢 マウス”と“去勢マウス”，
+``non-castrated mice''と``castrated mice''というように，同じ語が複数回出
+現しており，アライメントに曖昧性があるが，単語列アライメントモデルはこの
+曖昧性解消に失敗している．これは文を単純な単語列として見た場合，曖昧性を
+持つ語同士が互いに近くに位置しており，さらに曖昧性解消の手がかりとなる
+“同様に $\leftrightarrow$ as”といった対応ともほぼ等距離にあるためであ
+る．一方で図\ref{fig:proposed_align}に示すように，提案モデルではこれらの
+語を正しく対応付けることができており，文を木構造で見た場合の利点が生かさ
+れている．例えば英語側の木構造において，``as''に係っているのは
+``castrated mice''ではなく``non-castrated mice''であり，同様に日本語側の
+木構造においても，“同様に”に係っているのは“去勢 マウス”ではなく“非 
+去勢 マウス”である．このような関係から，“非 去勢 マウス 
+$\leftrightarrow$ non-castrated mice”，“去勢マウス $\leftrightarrow$
+castrated mice”という正しい対応関係が獲得されている．
+
+
+\begin{figure}[t]
+ \begin{center}
+  \includegraphics{17-1ia6f4.eps}
+ \end{center}
+  \caption{単語列アライメントにおける曖昧性解消の失敗例(grow-diag-final-and)}
+  \label{fig:word_align}
+\end{figure}
+\begin{figure}[t]
+ \begin{center}
+  \includegraphics{17-1ia6f5.eps}
+ \end{center}
+  \caption{提案手法によるアライメント例（曖昧性が正しく解消されている）}
+  \label{fig:proposed_align}
+\end{figure}
+
+
+\ref{Introduction}章で述べたように，IBMモデルに代表されるような文を単純
+な単語列として扱う既存の統計的単語列アライメントモデルは，英語とフランス
+語などのように語順がほぼ同じであり，語順変化がある場合でも局所的である言
+語対においては十分頑健に働くが，語順が大きく変化する言語対においてはその
+精度に問題がある．例えば日本語と英語について考えてみると，日本語の文は
+SOVの語順であるのに対し，英語ではSVOの語順であり，このため語順の変化が大
+きくなりやすい．このような言語対においては言語の構造情報を利用することが
+自然であり，また有効であることが本実験により示されている．
+
+
+句を扱うことによる改善例としては，図\ref{fig:result_fail}において単語列
+アライメントモデルでは“受 光 素子 $\leftrightarrow$ photodetector”と
+いう句対応の獲得に失敗しているのに対し，図\ref{fig:result_good2}に示すよ
+うに提案手法では正しく獲得されている．単語レベルでの対応を後から重ね合わ
+せる手法では，どこまでが句となるべきかの境界判定ができないなどの欠点があ
+り，このような句対応を精度良く発見することは難しい．これに対し提案手法で
+はパラメータの学習と同時に句を獲得することができる上に，木構造を利用して
+いるため，単語列としては連続であっても意味上不連続であり，句となるべきで
+はないといった境界判定が自然に行える．
+
+\begin{figure}[b]
+ \begin{center}
+  \includegraphics{17-1ia6f6.eps}
+ \end{center}
+  \caption{単語列アライメントにおける句対応獲得の失敗例(grow-diag-final-and)}
+  \label{fig:result_fail}
+\end{figure}
+\begin{figure}[b]
+ \begin{center}
+  \includegraphics{17-1ia6f7.eps}
+ \end{center}
+  \caption{提案手法によるアライメント例（句が正しく獲得されている）}
+  \label{fig:result_good2}
+\end{figure}
+
+表\ref{tab:phrase_dist}に，得られた対応を大きさごとに計数した結果を示す
+（単語列アライメント手法はgrow-diag-final-and，提案手法はStep 2の5回目の
+イタレーションの結果）．なお提案手法ではイタレーションが進むにつれて，1ずつ
+句の大きさが大きくなる．このため，5回目のイタレーションにおいては日英の
+句の合計が6の対応が最大となる．結果を見ると，単語列アライメント手法に比
+べて提案手法では得られた対応の個数がサイズがより大きなものへとシフトして
+いることが見て取れ，より大きなサイズの対応が獲得されていることがわかる．
+これが再現率の向上に大きく貢献しているといえる．
+
+\begin{table}[b]
+  \caption{得られた対応の大きさの分布}
+  \label{tab:phrase_dist}
+\input{06table04.txt}
+\end{table}
+\begin{figure}[b]
+ \begin{center}
+  \includegraphics{17-1ia6f8.eps}
+ \end{center}
+  \caption{NULL対応ノード数と平均フレーズサイズの推移}
+  \label{fig:phrase-size}
+\end{figure}
+
+
+さらにイタレーションごとの各言語のNULL対応ノード数と，平均フレーズサイズ
+の推移を図\ref{fig:phrase-size}に示す．平均フレーズサイズは，例えばある
+一つの対応に含まれる日本語の単語が$j$語，英語の単語が$i$語ならば
+$(i+j)/2$とした．ある程度までは平均フレーズサイズは上昇するが，6回目程度
+からはそれほど大きくは変化しておらず，アライメントが安定していることがわ
+かる．
+
+翻訳での利用を考えた場合，適合率は高ければ高いほどもちろん翻訳の精度が向
+上すると考えられる．しかしながら再現率が低いと，例えばPhrase-based
+SMT \cite{koehn-och-marcu:2003:HLTNAACL}やHiero \cite{chiang:2005:ACL}など
+においてはフレーズテーブルのサイズが大きくなりすぎるという問題が起こり，
+用例ベース翻訳システム\cite{Nakazawa:2008:NTCIR7}においては利用可能な用
+例の数が減ってしまうなど，再現率もおざなりにはできない．一方で再現率のみ
+が高く，適合率が低くてもやはり質の良い翻訳は行えない．つまり両者のバラン
+スを取り，どちらも向上させることが，翻訳の質の向上につながるはずであり，
+\ref{exp2}章で示したように，提案手法はこの観点からも有効であると言える．
+実際に提案手法によるアライメントによって翻訳精度が向上するかの調査は今後
+の課題である．
+
+
+提案手法におけるアライメント誤りの要因で最も大きいものは，構文解析の誤り
+によるものである．提案手法は構文解析結果に強く依存しており，構文解析が誤っ
+ていると容易にアライメントの誤りにつながってしまう．長期的には各言語の構
+文解析の精度が向上していくことも十分期待できるが，構文解析結果を修正しつ
+つアライメントすることも考えられる\cite{fraser-wang-schutze:2009:EACL}．
+
+また山登り法によるアライメントの探索の際に局所解に陥ってしまうという問題
+もしばしば見受けられた．これはほとんどの場合，一方の言語で1文内に同じ語
+や句が複数回出現しているが，他方では省略されて1度しか出現していないなど，
+出現回数に差がある場合に起こる．初期アライメント生成時には周りのノードと
+の関係は一切見ていないため，このような省略がある場合にはどちらが正しい対
+応かを判断することができないため，ランダムにどちらかが選ばれる．このとき
+運悪く誤った方を選択してしまい，さらにその周囲に誤った対応がいくつかある
+と，お互いに足を引っ張り合い，局所解に陥ってしまう．このように，提案手法
+では必ずしも最もよいアライメントが得られるとは限らない．この問題を解決す
+るためには，山登り法の初期値を複数用意しておき，探索を複数回行うといった
+方法を取ったり，アライメントの探索アルゴリズムをよりよいものに改良する必
+要があり，例えばBelief Propagationを利用する
+\cite{cromieres-kurohashi:2009:EACL}ことなどが考えられる．
+
+さらに，機能語をどのように扱うかといった難しい問題も残されている．機能語
+は明確に対応する語を持たないことがしばしばある．例えば日本語における格助
+詞などや英語における冠詞などはその典型的な例である．このような語に対して
+は，アライメントの正解の基準と出力とが整合的でない場合が多く，これがアラ
+イメント精度の向上の障害になってしまう．\ref{exp1}章の最後に示したように，
+提案手法では簡単なルールを用いるだけで大幅な精度の向上を達成できる．これ
+は木構造を利用していることの利点であるといえる．
+
+
+\section{結論}
+
+本稿では依存関係確率モデルを用いた統計的句アライメント手法を提案した．提
+案モデルは木構造上でのreorderingモデルということができ，シンプルなモデル
+ながらも言語構造の違いを柔軟に吸収し，精度の高いアライメントを実現できた．
+実験結果から，語順の大きく異なる言語対に対しては既存の単語列アライメント
+手法では十分な精度を達成することは困難であり，構文解析などの言語情報を利
+用することが自然であり，高い効果を示すことが証明された．今回は日本語と英
+語間のアライメント実験のみしか行わなかったが，同様に語順に大きな違いのあ
+る日本語と中国語間での実験などを行い，提案手法が言語対によらずロバストな
+手法であることを示す必要がある．
+
+
+考察にも述べたとおり，提案手法は依存構造解析に大きく依存しており，依存構
+造解析誤りが容易にアライメントの誤りにつながってしまう．両言語の解析結果
+を照らしあわせて，文構造を修正しつつアライメントすることも可能なはずであ
+り，現在検討中である．これが実現できれば，依存構造解析とアライメント双方
+の精度向上が可能となると考える．
+
+アライメントの精度のみを評価したが，この結果が翻訳の精度にどのように影響
+するかを調査することは今後の課題である．
+
+
+
+
+
+
+
+
+\bibliographystyle{jnlpbbl_1.4}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Brown, Pietra, Pietra, \BBA\ Mercer}{Brown
+  et~al.}{1993}]{Brown93}
+Brown, P.~F., Pietra, S. A.~D., Pietra, V. J.~D., \BBA\ Mercer, R.~L. \BBOP
+  1993\BBCP.
+\newblock \BBOQ The Mathematics of Statistical Machine Translation: Parameter
+  Estimation.\BBCQ\
+\newblock {\Bem Association for Computational Linguistics}, {\Bbf 19}  (2),
+  \mbox{\BPGS\ 263--312}.
+
+\bibitem[\protect\BCAY{Cherry \BBA\ Lin}{Cherry \BBA\ Lin}{2003}]{Cherry03}
+Cherry, C.\BBACOMMA\ \BBA\ Lin, D. \BBOP 2003\BBCP.
+\newblock \BBOQ A Probability Model to Improve Word Alignment.\BBCQ\
+\newblock In {\Bem Proceedings of the 41st Annual Meeting of the Association of
+  Computational Linguistics}, \mbox{\BPGS\ 88--95}.
+
+\bibitem[\protect\BCAY{Chiang}{Chiang}{2005}]{chiang:2005:ACL}
+Chiang, D. \BBOP 2005\BBCP.
+\newblock \BBOQ A Hierarchical Phrase-Based Model for Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 43rd Annual Meeting of the Association
+  for Computational Linguistics (ACL'05)}, \mbox{\BPGS\ 263--270}.
+
+\bibitem[\protect\BCAY{Cowan, Ku\u{c}erov\'{a}, \BBA\ Collins}{Cowan
+  et~al.}{2006}]{cowan-kuucerova-collins:2006:EMNLP}
+Cowan, B., Ku\u{c}erov\'{a}, I., \BBA\ Collins, M. \BBOP 2006\BBCP.
+\newblock \BBOQ A Discriminative Model for Tree-to-Tree Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 2006 Conference on {EMNLP}}, \mbox{\BPGS\
+  232--241}\ Sydney, Australia. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Cromier\`{e}s \BBA\ Kurohashi}{Cromier\`{e}s \BBA\
+  Kurohashi}{2009}]{cromieres-kurohashi:2009:EACL}
+Cromier\`{e}s, F.\BBACOMMA\ \BBA\ Kurohashi, S. \BBOP 2009\BBCP.
+\newblock \BBOQ An Alignment Algorithm Using Belief Propagation and a
+  Structure-Based Distortion Model.\BBCQ\
+\newblock In {\Bem Proceedings of the 12th Conference of the European Chapter
+  of the ACL (EACL 2009)}, \mbox{\BPGS\ 166--174}\ Athens, Greece. Association
+  for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Fraser, Wang, \BBA\ Sch\"{u}tze}{Fraser
+  et~al.}{2009}]{fraser-wang-schutze:2009:EACL}
+Fraser, A., Wang, R., \BBA\ Sch\"{u}tze, H. \BBOP 2009\BBCP.
+\newblock \BBOQ Rich Bitext Projection Features for Parse Reranking.\BBCQ\
+\newblock In {\Bem Proceedings of the 12th Conference of the European Chapter
+  of the ACL (EACL 2009)}, \mbox{\BPGS\ 282--290}\ Athens, Greece. Association
+  for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Gildea}{Gildea}{2003}]{Gildea03}
+Gildea, D. \BBOP 2003\BBCP.
+\newblock \BBOQ Loosely Tree-based Alignment for Machine Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 41st Annual Meeting on {ACL}},
+  \mbox{\BPGS\ 80--87}.
+
+\bibitem[\protect\BCAY{Kawahara \BBA\ Kurohashi}{Kawahara \BBA\
+  Kurohashi}{2006}]{kawahara-kurohashi:2006:HLT-NAACL06-Main}
+Kawahara, D.\BBACOMMA\ \BBA\ Kurohashi, S. \BBOP 2006\BBCP.
+\newblock \BBOQ A Fully-Lexicalized Probabilistic Model for Japanese Syntactic
+  and Case Structure Analysis.\BBCQ\
+\newblock In {\Bem Proceedings of the Human Language Technology Conference of
+  the NAACL, Main Conference}, \mbox{\BPGS\ 176--183}. New York City, USA.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Koehn, Axelrod, Mayne, Callison-Burch, Osborne, \BBA\
+  Talbot}{Koehn et~al.}{2005}]{Koehn_IWSLT05}
+Koehn, P., Axelrod, A., Mayne, A.~B., Callison-Burch, C., Osborne, M., \BBA\
+  Talbot, D. \BBOP 2005\BBCP.
+\newblock \BBOQ Edinburgh System Description for the 2005 IWSLT Speech
+  Translation Evaluation.\BBCQ\
+\newblock In {\Bem Proceedings of International Workshop on Spoken Language
+  Translation 2005 (IWSLT'05)}.
+
+\bibitem[\protect\BCAY{Koehn, Och, \BBA\ Marcu}{Koehn
+  et~al.}{2003}]{koehn-och-marcu:2003:HLTNAACL}
+Koehn, P., Och, F.~J., \BBA\ Marcu, D. \BBOP 2003\BBCP.
+\newblock \BBOQ Statistical Phrase-Based Translation.\BBCQ\
+\newblock In {\Bem HLT-NAACL 2003: Main Proceedings}, \mbox{\BPGS\ 127--133}.
+
+\bibitem[\protect\BCAY{Kurohashi, Nakamura, Matsumoto, \BBA\ Nagao}{Kurohashi
+  et~al.}{1994}]{JUMAN}
+Kurohashi, S., Nakamura, T., Matsumoto, Y., \BBA\ Nagao, M. \BBOP 1994\BBCP.
+\newblock \BBOQ Improvements of {J}apanese Morphological Analyzer
+  {JUMAN}.\BBCQ\
+\newblock In {\Bem Proceedings of The International Workshop on Sharable
+  Natural Language}, \mbox{\BPGS\ 22--28}.
+
+\bibitem[\protect\BCAY{Liang, Taskar, \BBA\ Klein}{Liang
+  et~al.}{2006}]{liang-taskar-klein:2006:HLT-NAACL06-Main}
+Liang, P., Taskar, B., \BBA\ Klein, D. \BBOP 2006\BBCP.
+\newblock \BBOQ Alignment by Agreement.\BBCQ\
+\newblock In {\Bem Proceedings of the Human Language Technology Conference of
+  the NAACL, Main Conference}, \mbox{\BPGS\ 104--111}. New York City, USA.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{McDonald, Pereira, Ribarov, \BBA\ Hajic}{McDonald
+  et~al.}{2005}]{mstparser}
+McDonald, R., Pereira, F., Ribarov, K., \BBA\ Hajic, J. \BBOP 2005\BBCP.
+\newblock \BBOQ Non-Projective Dependency Parsing using Spanning Tree
+  Algorithms.\BBCQ\
+\newblock In {\Bem Proceedings of Human Language Technology Conference and
+  Conference on Empirical Methods in Natural Language Processing}, \mbox{\BPGS\
+  523--530}. Vancouver, British Columbia, Canada. Association for Computational
+  Linguistics.
+
+\bibitem[\protect\BCAY{Menezes \BBA\ Richardson}{Menezes \BBA\
+  Richardson}{2001}]{Menezes01}
+Menezes, A.\BBACOMMA\ \BBA\ Richardson, S.~D. \BBOP 2001\BBCP.
+\newblock \BBOQ A Best-first Alignment Algorithm for Automatic Extraction of
+  Transfer Mappings from Bilingual Corpora.\BBCQ\
+\newblock In {\Bem Proceedings of the 39th Annual Meeting of the Association
+  for Computational Linguistics (ACL) Workshop on Data-Driven Machine
+  Translation}, \mbox{\BPGS\ 39--46}.
+
+\bibitem[\protect\BCAY{Nakazawa \BBA\ Kurohashi}{Nakazawa \BBA\
+  Kurohashi}{2008a}]{Nakazawa:2008:NTCIR7}
+Nakazawa, T.\BBACOMMA\ \BBA\ Kurohashi, S. \BBOP 2008a\BBCP.
+\newblock \BBOQ Kyoto-U: Syntactical EBMT System for NTCIR-7 Patent Translation
+  Task.\BBCQ\
+\newblock In {\Bem Proceedings of HLT/EMNLP 2005}, \mbox{\BPGS\ 467--474}.
+
+\bibitem[\protect\BCAY{Nakazawa \BBA\ Kurohashi}{Nakazawa \BBA\
+  Kurohashi}{2008b}]{nakazawa:2008:AMTA}
+Nakazawa, T.\BBACOMMA\ \BBA\ Kurohashi, S. \BBOP 2008b\BBCP.
+\newblock \BBOQ Linguistically-motivated Tree-based Probabilistic Phrase
+  Alignment.\BBCQ\
+\newblock In {\Bem Proceedings of the Eighth Conference of the Association for
+  Machine Translation in the Americas (AMTA2008)}.
+
+\bibitem[\protect\BCAY{Och \BBA\ Ney}{Och \BBA\ Ney}{2003}]{Och03}
+Och, F.~J.\BBACOMMA\ \BBA\ Ney, H. \BBOP 2003\BBCP.
+\newblock \BBOQ A Systematic Comparison of Various Statistical Alignment
+  Models.\BBCQ\
+\newblock {\Bem Association for Computational Linguistics}, {\Bbf 29}  (1),
+  \mbox{\BPGS\ 19--51}.
+
+\bibitem[\protect\BCAY{Quirk, Menezes, \BBA\ Cherry}{Quirk
+  et~al.}{2005}]{quirk-menezes-cherry:2005:ACL}
+Quirk, C., Menezes, A., \BBA\ Cherry, C. \BBOP 2005\BBCP.
+\newblock \BBOQ Dependency Treelet Translation: Syntactically Informed Phrasal
+  {SMT}.\BBCQ\
+\newblock In {\Bem Proceedings of the 43rd Annual Meeting of the Association
+  for Computational Linguistics (ACL'05)}, \mbox{\BPGS\ 271--279}.
+
+\bibitem[\protect\BCAY{Tsuruoka \BBA\ Tsujii}{Tsuruoka \BBA\
+  Tsujii}{2005}]{Tsuruoka2005}
+Tsuruoka, Y.\BBACOMMA\ \BBA\ Tsujii, J. \BBOP 2005\BBCP.
+\newblock \BBOQ Bidirectional Inference with the Easiest-First Strategy for
+  Tagging Sequence Data.\BBCQ\
+\newblock In {\Bem Proceedings of HLT/EMNLP 2005}, \mbox{\BPGS\ 467--474}.
+
+\bibitem[\protect\BCAY{Utiyama \BBA\ Isahara}{Utiyama \BBA\
+  Isahara}{2007}]{utiyama07:_japan_englis_paten_paral_corpus}
+Utiyama, M.\BBACOMMA\ \BBA\ Isahara, H. \BBOP 2007\BBCP.
+\newblock \BBOQ A Japanese-English Patent Parallel Corpus.\BBCQ\
+\newblock In {\Bem MT summit XI}, \mbox{\BPGS\ 475--482}.
+
+\bibitem[\protect\BCAY{Watanabe, Kurohashi, \BBA\ Aramaki}{Watanabe
+  et~al.}{2000}]{Watanabe00}
+Watanabe, H., Kurohashi, S., \BBA\ Aramaki, E. \BBOP 2000\BBCP.
+\newblock \BBOQ Finding Structural Correspondences from Bilingual Parsed Corpus
+  for Corpus-based Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 18th International Conference on
+  Computational Linguistics}, \mbox{\BPGS\ 906--912}.
+
+\bibitem[\protect\BCAY{Yamada \BBA\ Knight}{Yamada \BBA\
+  Knight}{2001}]{yamada_ACL_2001}
+Yamada, K.\BBACOMMA\ \BBA\ Knight, K. \BBOP 2001\BBCP.
+\newblock \BBOQ A Syntax-based Statistical Translation Model.\BBCQ\
+\newblock In {\Bem Proceedings of 39th Annual Meeting of the {ACL}},
+  \mbox{\BPGS\ 523--530}.
+
+\end{thebibliography}
+
+\begin{biography}
+\bioauthor{中澤　敏明}{2005 年東京大学工学部電子情報工学科卒業．2007 年同
+大学院修士課程修了．2007 年京都大学大学院博士後期課程入学．機械翻訳の研
+究に従事．}
+
+\bioauthor{黒橋　禎夫}{1994年京都大学大学院工学研究科電気工学第二専攻博士
+課程修了．博士（工学）．2006年，京都大学大学院情報学研究科教授，現在に至
+る．}
+
+\end{biography}
+
+
+
+\biodate
+
+
+
+\end{document}

@@ -1,0 +1,486 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+\usepackage{bm}
+\usepackage[TABTOPCAP]{subfigure}
+
+\Volume{19}
+\Number{3}
+\Month{September}
+\Year{2012}
+
+\received{2011}{12}{2}
+\revised{2012}{3}{6}
+\accepted{2012}{5}{14}
+
+\setcounter{page}{121}
+
+\jtitle{テキストの表層情報と潜在情報を利用した適合性フィードバック}
+\jauthor{原島　　純\affiref{Author} \and 黒橋　禎夫\affiref{Author}}
+\jabstract{
+適合性フィードバックの手法の多くは，テキストに表層的に出現する単語の情報
+だけを用いて検索結果をリランキングしている．これに対し，本稿では，テキス
+トに表層的に出現する単語の情報だけでなく，テキストに潜在的に現れうる単語
+の情報も利用する適合性フィードバックの手法を提案する．提案手法では，まず
+検索結果に対して Latent Dirichlet Allocation (LDA) を実行し，各文書に潜在
+する単語の分布を推定する．ユーザからフィードバックが得られたら，これに対
+しても LDA を実行し，フィードバックに潜在する単語の分布を推定する．そして，
+表層的な単語の分布と潜在的な単語の分布の両方を用いてフィードバックと検索
+結果中の各文書との類似度を算出し，これに基づいて検索結果をリランキングす
+る．実験の結果，$2$文書（合計$3,589$単語）から成るフィードバックが与えら
+れたとき，提案手法が初期検索結果の Precision at $10$ (P@10) を$27.6\%$改
+善することが示された．また，提案手法が，フィードバックが少ない状況でも，
+初期検索結果のランキング精度を改善する特性を持つことが示された（e.g.,
+フィードバックに$57$単語しか含まれていなくても，P@10 で$5.3\%$の改善が見
+られた）．
+}
+\jkeywords{情報検索，適合性フィードバック，LDA}
+
+\etitle{Relevance Feedback using Surface \\
+	and Latent Information in Texts}
+\eauthor{Jun Harashima\affiref{Author} \and Sadao Kurohashi\affiref{Author}} 
+\eabstract{
+Most of the previous relevance feedback methods re-rank search results
+using only the information of surface words in texts. In this paper, we
+present a novel method that uses not only the information of surface
+words, but also that of latent words that are highly probable from the
+texts. In the proposed method, we infer the latent word distribution in
+each document in the search results using latent Dirichlet allocation
+(LDA). When user feedback is given, we also infer the latent word
+distribution in the feedback using LDA. We calculate the similarities
+between the user feedback and each document in the search results using
+both the surface and latent word distributions, and then, we re-rank the
+search results based on the similarities. Evaluation results show that
+when user feedback that consists of two documents ($3,589$ words) is
+given, our method improves the initial search results by $27.6\%$ in
+precision at $10$ (P@10). Additionally, it proves that our method has
+the advantage of performing well even when only a small amount of user
+feedback is available (e.g., improvement of $5.3\%$ in P@10 was achieved
+even when user feedback constituted only $57$ words).
+}
+\ekeywords{Information Retrieval, Relevance Feedback, Latent Dirichlet Allocation}
+
+\headauthor{原島，黒橋}
+\headtitle{テキストの表層情報と潜在情報を利用した適合性フィードバック}
+
+\affilabel{Author}{京都大学大学院情報学研究科}{Graduate School of Informatics, Kyoto University}
+
+
+
+\begin{document}
+\maketitle
+
+\section{言語モデルに基づくランキング} \label{sec:lm_approaches}
+
+本章では，言語モデルに基づくランキングアルゴリズムについて概説する．ここ
+で紹介する技術は，\ref{sec:proposed_method}章で説明する提案手法の基礎をな
+している．
+
+
+\subsection{概要}
+
+言語モデルに基づくランキングアルゴリズムは，三つのタイプに分類できる．す
+なわち，クエリの尤度に基づく方法 \cite{Ponte1998}，文書の尤度に基づく方法
+\cite{Lavrenko2001}，カルバック・ライブラー情報量に基づく方法
+\cite{Lafferty2001}の三つである．
+
+クエリの尤度に基づく方法では，文書セット中の各文書$\bm{d}_{h} \ (h = 1,
+\dots, H)$について，$\bm{d}_{h}$を表す言語モデル$P_{\bm{d}_{h}}(\cdot)$を
+構築する．ユーザによってクエリ$\bm{q}$が入力されたら，各文書$\bm{d}_{h}$
+について，$P_{\bm{d}_{h}}(\cdot)$がクエリを生成する確率
+$P_{\bm{d}_{h}}(\bm{q})$を計算する．そして，$P_{\bm{d}_{h}}(\bm{q})$が高
+い順に各文書をランキングする．
+
+文書の尤度に基づく方法は，クエリの尤度に基づく方法と逆のアプローチを採る．
+すなわち，クエリ$\bm{q}$を表す言語モデル$P_{\bm{q}}(\cdot)$を構築し，文書
+セット中の各文書$\bm{d}_{h}$について，$P_{\bm{q}}(\bm{d}_{h})$を計算する．
+そして，$P_{\bm{q}}(\bm{d}_{h})$が高い順に各文書をランキングする．
+
+カルバック・ライブラー情報量に基づく方法では，$P_{\bm{q}}(\cdot)$と
+$P_{\bm{d}_{h}}(\cdot)$の両方を構築する．そして，各文書$\bm{d}_{h}$につい
+て，$P_{\bm{q}}(\cdot)$と$P_{\bm{d}_{h}}(\cdot)$のカルバック・ライブラー
+情報量$KL(P_{\bm{q}}(\cdot)||P_{\bm{d}_{h}}(\cdot))$を計算し，これが小さ
+い順に各文書をランキングする．
+
+
+
+\subsection{言語モデルの構築方法} \label{ssec:lm_construction}
+
+クエリや文書を表す言語モデル\footnote{以降，本稿では，クエリを表す言語モ
+デルをクエリモデルと呼ぶ．また，文書を表す言語モデルを文書モデルと呼
+ぶ．}は，Maximum Likelihood Estimation (MLE) や DIRichlet smoothed
+estimation (DIR) \cite{Zhai2004} などの方法を用いて構築する．
+
+MLE では，テキスト$\bm{t}$（$\bm{t}$はクエリや文書）における単語$w$の生起
+確率$P^{MLE}_{\bm{t}}(w)$を次式によって算出する．
+\begin{equation}
+ P^{MLE}_{\bm{t}}(w)
+ =
+ \frac{tf(w,\bm{t})}{|\bm{t}|}
+ \label{equ:mle}
+\end{equation}
+ただし，$tf(w,\bm{t})$は$\bm{t}$における$w$の出現頻度を表す．また，
+$|\bm{t}|$は，$\bm{t}$に含まれる単語数を表す．
+
+一方，DIR では，$\bm{t}$における$w$の生起確率$P^{DIR}_{\bm{t}}(w)$を次式
+によって算出する．
+\begin{equation}
+ P^{DIR}_{\bm{t}}(w)
+ =
+ \frac
+ {tf(w,\bm{t}) + \mu P^{MLE}_{\bm{D}_{all}}(w)}
+ {|\bm{t}| + \mu}
+ \label{equ:dir}
+\end{equation}
+ただし，$\bm{D}_{all}$は文書セットを表す．また，$\mu$はスムージングパラメー
+タを表す．DIR では，MLE と異なり，$\bm{D}_{all}$における$w$の出現頻度が加
+味されており，スムージングが行われている．
+
+
+
+\subsection{代表的な適合性フィードバックの手法}
+
+言語モデルに基づくランキングアルゴリズムに対する代表的な適合性フィードバッ
+クの手法として，Zhai らの手法 \cite{Zhai2001} がある．Zhai らの手法では，
+フィードバックとして与えられた文書集合$\bm{F} = (\bm{f}_{1}, \dots,
+\bm{f}_{G})$に対して，$\bm{F}$を表す言語モデル
+$P_{\bm{F}}(\cdot)$ を構築する\footnote{以降，本稿では，フィードバックを
+表す言語モデルをフィードバックモデルと呼ぶ．}．次に，$P_{\bm{F}}(\cdot)$
+と$P_{\bm{q}}(\cdot)$（初期検索結果を得るために使用したクエリモデル）を足
+し合わせ，新しいクエリモデルを構築する．そして，新しいクエリモデルを用い
+て，初期検索結果のランキングを修正する．
+
+Zhai らの手法は，言語モデルに基づくランキングアルゴリズムに対する基本的な
+適合性フィードバックの手法として重要である．しかし，彼らの手法では，テキ
+ストに表層的に存在する単語の情報しか用いられていない．これに対し，提案手
+法では，テキストに潜在的に現れうる単語の分布を推定し，この情報も用いて適
+合性フィードバックを行う．
+
+
+\section{LDA} \label{sec:lda}
+
+本章では LDA \cite{Blei2003}について解説する．LDA は，提案手法において，
+各単語がテキストに潜在的に現れうる確率を推定するために用いられる．
+
+
+\subsection{概要}
+
+LDA は文書の生成モデルの一つである．LDA では，文書は複数のトピックから生
+成されると仮定する．また，文書中の各単語は，各トピックが持つ単語の分布か
+ら生成されると仮定する．ある文書における各トピックの混合比$\bm{\theta} =
+(\theta_{1}, \dots, \theta_{K})$は，$(K - 1)$単体中の一点を取る．ただし，
+単体中のある一点が選択される確率は，Dirichlet 分布によって決められるとす
+る．
+
+以上の生成過程をまとめると，LDA における文書$\bm{d}$の生成確率は，次のよ
+うにして計算される．
+\begin{equation}
+ P(\bm{d}|\bm{\alpha},\bm{\beta}_{1}, \dots, \bm{\beta}_{K})
+ = \int
+ P(\bm{\theta}|\bm{\alpha})
+ \Biggl(
+ \prod_{j=1}^{J}
+ \biggl(
+ \sum_{k=1}^{K}
+ P(w_{j}|z_{k},\bm{\beta}_{k}) \ P(z_{k}|\bm{\theta})
+ \biggr)
+ ^{tf(w_{j},\bm{d})}
+ \Biggr)
+ d\bm{\theta}
+ \label{equ:lda}
+\end{equation}
+ただし，$P(\bm{\theta}|\bm{\alpha})$は，Dirichlet 分布から得られる
+$\bm{\theta}$の生成確率である．$\bm{\alpha} = (\alpha_{1}, \dots,
+\alpha_{K})$は正の実数から構成される$K$次元ベクトルで，Dirichlet 分布のパ
+ラメータを表す．また，$P(w_{j}|z_{k},\bm{\beta}_{k})$と
+$P(z_{k}|\bm{\theta})$は，多項分布から得られる$w_{j}$と$z_{k}$の生成確率
+である．$z_{k}$ $(k = 1, \dots, K)$はトピックを，$\bm{\beta}_{k}$は
+$z_{k}$が持つ単語の分布を表す．$J$は LDA で考慮する語彙数を表す．
+
+
+
+\subsection{パラメータの推定方法} \label{ssec:parameter_estimation}
+
+LDA では，変分ベイズ法やギブスサンプリングなどを用いてパラメータを推定す
+る \cite{Blei2003,Griffiths2004}．ギブスサンプリングを用いれば，より厳密
+な推定結果が得られる．実装も容易なため，一般的にはギブスサンプリングが用
+いられることが多い．しかし，ギブスサンプリングには推定に時間を要するとい
+う欠点がある．一方，変分ベイズ法は，厳密な推定結果は得られないが，高速に
+動作する．即時性が要求される検索というタスクの性質を考慮し，提案手法では
+変分ベイズ法を用いる．以下，変分ベイズ法による推定方法について説明する．
+
+まず，訓練データ中の各文書$\bm{d}_{i}$ $(i = 1, \dots, I)$について，変分
+パラメータ$\bm{\gamma}_{i} = (\gamma_{i1}, \dots, \gamma_{iK})$と
+$\bm{\phi}_{i} = (\bm{\phi}_{i1}, \dots, \bm{\phi}_{iJ})$を導入する．ただ
+し，$\bm{\phi}_{ij} = (\phi_{ij1}, \dots, \phi_{ijK})$である．そして，式
+(\ref{equ:phi})と式(\ref{equ:gamma})を交互に計算し，これらの値を更新する．
+\begin{align}
+\phi_{ijk}
+ & \propto \beta_{kj} \exp\biggl( \Psi(\gamma_{ik}) -
+ \Psi\Bigl(\sum\limits_{k'=1}^{K} \gamma_{ik'}\Bigr)\biggr)
+ \label{equ:phi}
+ \\
+\gamma_{ik}
+ & = \alpha_{k} + \sum\limits_{j=1}^{J} \phi_{ijk} \ tf(w_{j},\bm{d}_{i})
+ \label{equ:gamma}
+\end{align}
+ただし，$\Psi$はディガンマ関数を表す．
+
+次に，更新された$\bm{\gamma}_{i}$と$\bm{\phi}_{i}$を用いて，$\alpha_{k}$
+と$\bm{\beta}_{k}$を更新する．$\alpha_{k}$と$\bm{\beta}_{k}$の更新には，
+ニュートン-ラフソン法や固定点反復法を用いる\cite{Blei2003,Minka2000}．こ
+こでは固定点反復法による$\alpha_{k}$と$\bm{\beta}_{k}$の更新式を示す．更
+新式は次の通りである．
+\begin{align}
+ \beta_{kj}
+  & \propto \sum\limits_{i=1}^{I} \phi_{ijk} \  tf(w_{j},\bm{d}_{i})
+ \label{equ:beta}
+ \\
+\alpha_{k}
+ & = \frac
+ { \sum_{i=1}^{I} \{ \Psi(\alpha_{k} + n_{ik})  - \Psi(\alpha_{k}) \} }
+ { \sum_{i=1}^{I} \{ \Psi(\alpha_{0} + |\bm{d}_{i}|) - \Psi(\alpha_{0}) \} } \ \alpha_{k}^{old}
+ \label{equ:alpha}
+\end{align}
+ただし，$n_{ik} = \sum_{j=1}^{J} \phi_{ijk}\ tf(w_{j},\bm{d}_{i})$，
+$\alpha_{0} = \sum_{k'=1}^{K} \alpha_{k'}$とする．また，
+$\alpha_{k}^{old}$ は更新前の$\alpha_{k}$を表すものとする．
+
+以降，$\bm{\gamma}_{i}$と$\bm{\phi}_{i}$の更新と，$\alpha_{k}$と
+$\bm{\beta}_{k}$の更新を繰り返すことで，各パラメータの値を推定することが
+できる．$\alpha_{k}$と$\bm{\beta}_{k}$の値が推定されれば，式
+(\ref{equ:lda}) を用いて，文書$\bm{d}_{i}$の生成確率を求めることができる．
+また，$\bm{\gamma}_{i}$の値が推定されれば，次式を用いて，文書
+$\bm{d}_{i}$ における単語$w_{j}$の生起確率$P^{LDA}_{\bm{d}_{i}}(w_{j})$を
+求めることができる．
+\begin{equation}
+ P^{LDA}_{\bm{d}_{i}}(w_{j})
+ \simeq
+ \sum_{k = 1}^{K}
+ \frac{\beta_{kj} \gamma_{ik}}{\sum_{k' = 1}^{K} \gamma_{ik'}}
+ \label{equ:pwd}
+\end{equation}
+ここで，$\gamma_{ik}/\sum_{k'=1}^{K} \gamma_{ik'}$は，$\bm{d}_{i}$に潜在
+するトピックの分布に相当する．これに基づいて$\bm{\beta}_{kj}$を足し合わせ
+ることで，$w_{j}$が$\bm{d}_{i}$に潜在的に現れうる確率を求めることができる．
+
+
+
+\subsection{未知テキストに対する適用} \label{ssec:inference}
+
+LDA は Probabilistic Latent Semantic Analysis (PLSA) \cite{Hofmann1999}を
+ベイズ的に拡張したモデルと位置付けられる．PLSA に対する LDA の長所として，
+LDA は未知テキスト（訓練データ中に含まれないテキスト）に関する確率も推定
+できるという点が挙げられる．未知テキスト$\bm{t}$ にLDA を適用するときは，
+$\bm{t}$に対して変分パラメータ$\bm{\gamma}_{t}$と$\bm{\phi}_{t}$を導入し，
+式$(\ref{equ:phi})$と式$(\ref{equ:gamma})$を用いてこれらの値を推定する．
+ただし，$\alpha_{k}$と$\bm{\beta}_{k}$には，訓練データによって推定された
+値を用いる．$\bm{\gamma}_{t}$が推定されれば，式$(\ref{equ:pwd})$ を用いて，
+未知テキスト$\bm{t}$における単語$w_{j}$の生成確率
+$P_{\bm{t}}^{LDA}(w_{j})$を求めることができる．提案手法では，LDA のこの長
+所を利用して，各単語がフィードバックに潜在的に現れうる確率を求めている．
+
+
+
+\subsection{情報検索におけるLDAの利用}
+
+LDA は，自然言語処理や画像処理，音声認識など，様々な分野で利用されている
+\cite{Blei2003,Fei-Fei2005,Heidel2007}．情報検索の分野では，例えば Wei ら
+が，クエリの尤度に基づくランキング手法に LDA を利用している
+\cite{Wei2006}．また，Yi らは文書の尤度に基づくランキング手法に，Zhou ら
+はカルバック・ライブラー情報量に基づくランキング手法に LDA を利用している
+\cite{Yi2009,Zhou2009}．これらの研究は，LDA を用いて各文書の文書モデルを
+構築し，それぞれのスコア（e.g., クエリの尤度）に基づいてクエリに対する検
+索結果を取得するものである．本研究では，さらに，ユーザからフィードバック
+が得られる問題（i.e., 適合性フィードバックの問題）に焦点を当てる．我々は，
+フィードバックに対しても LDA を用いてその言語モデルを構築し，構築された
+フィードバックモデルを用いて検索結果を修正する．
+
+
+
+\section{提案手法} \label{sec:proposed_method}
+
+本章では，提案手法の概要と，提案手法を構成する各ステップについて詳説する．
+
+
+
+\subsection{概要}
+
+提案手法では，テキストに表層的に存在する単語の情報だけでなく，テキストに
+潜在的に現れうる単語の情報も利用して，検索結果をリランキングする．表層情
+報だけでなく潜在情報も考慮することで，表層的なレベルだけでなく潜在的なレ
+ベルでもフィードバックと類似する文書を検索結果の上位にリランキングする．
+
+図\ref{fig:proposed_method}に提案手法の概要を示す．以降，本稿では，テキス
+ト$\bm{t}$の表層情報と潜在情報の両方を含む言語モデルを
+$P^{HYB}_{\bm{t}}(\cdot)$と表す（HYB は hybrid を表す）．まず，ユーザによっ
+て入力されたクエリ$\bm{q}$に対して，その初期検索結果$\bm{D}_{\bm{q}} =
+(\bm{d}_{1}, \dots, \bm{d}_{I})$を取得する(\textbf{Step 1})．次に，LDA を
+用いて，$\bm{D}_{\bm{q}}$中の各文書$\bm{d}_{i}$ $(i = 1, \dots, I)$につ
+いて，$\bm{d}_{i}$に潜在的に現れうる単語の分布を推定する．そして，
+$\bm{d}_{i}$の表層的な単語の分布と潜在的な単語の分布の両方を考慮した言語
+モデル$P^{HYB}_{\bm{d}_{i}}(\cdot)$を構築する(\textbf{Step 2})．ユーザか
+らフィードバック$\bm{F} = (\bm{f}_{1}, \dots, \bm{f}_{G})$が得られたら，
+$\bm{F}$に対しても LDA を実行し，$\bm{F}$に潜在的に現れうる単語の分布を推
+定する．そして，検索結果中の各文書と同様，$\bm{F}$ に対しても，$\bm{F}$の
+表層的な単語の分布と潜在的な単語の分布の両方を考慮した言語モデル
+$P^{HYB}_{\bm{F}}(\cdot)$を構築する(\textbf{Step 3})．最後に，構築された
+フィードバックモデル$P^{HYB}_{\bm{F}}(\cdot)$と，初期検索結果
+$\bm{D}_{\bm{q}}$を得るために使用したクエリモデル
+$P^{MLE}_{\bm{q}}(\cdot)$を混合し，新しいクエリモデル
+$P^{NEW}_{\bm{q}}(\cdot)$を構築する．そして，検索結果中の各文書
+$\bm{d}_{i}$について，文書モデル$P^{HYB}_{\bm{d}_{i}}(\cdot)$と新しいクエ
+リモデル$P^{NEW}_{\bm{q}}(\cdot)$との類似度を算出し，これに基づいて
+$\bm{D}_{\bm{q}}$をリランキングする (\textbf{Step 4})．次節以降では，各ス
+テップについて詳説する．
+
+\begin{figure}[t]
+ \begin{center}
+  \includegraphics{19-3ia942f1.eps}
+ \end{center}
+  \caption{提案手法の概要}
+  \label{fig:proposed_method}
+\end{figure}
+
+なお，提案手法とはそもそもの検索モデルが異なるが，テキストの潜在情報を利
+用するため，Latent Semantic Analysis (LSA) を用いることも考えられる．すな
+わち，各文書をベクトルで表現し，文書セットに対して LSA を実行する．そして，
+LSA の実行結果を用いて各ベクトルを低次元の意味的空間に射影することで，各
+文書に潜在的に現れうる単語の情報を利用することができる．しかし，この方法
+では，今述べた通り，文書セット全体に対して LSA を実行する必要がある．文書
+セットは時に数千万〜数億文書にも及ぶため，LSA の実行には膨大な時間を要す
+る．さらに，もし文書セットに対する文書の追加や削除があれば，LSA を実行し
+なおさなければならない．一方，提案手法では，検索結果中の各文書に対する
+$P^{LDA}_{\bm{d}_{i}}(\cdot)$やフィードバックに対する
+$P^{LDA}_{\bm{F}}(\cdot)$を構築するため，検索結果に対して LDA を実行する
+必要がある（\ref{ssec:hdm_construction}節及び\ref{ssec:hfm_construction}
+節で後述）．しかし，検索結果は文書セットより明らかに規模が小さく，これに
+要する時間は問題にならない（\ref{ssec:computation_time}節で後述）．このよ
+うに，LSA に基づく手法と提案手法の間には，ベースとする検索モデルや効率の
+面で大きな違いがある．
+
+
+
+\subsection{初期検索結果の取得} \label{ssec:initial_resuls_acquisition}
+
+提案手法では，カルバック・ライブラー情報量に基づいて \cite{Lafferty2001}，
+各文書をランキングする．まず，文書セット$\bm{D}_{all}$中の各文書
+$\bm{d}_{h}$ $(h = 1, \dots, H)$について，DIR に基づく文書モデル
+$P^{DIR}_{\bm{d}_{h}}(\cdot)$をあらかじめ構築しておく．ユーザからクエリ
+$\bm{q}$が与えられると，$\bm{q}$に対してMLE に基づくクエリモデル
+$P^{MLE}_{\bm{q}}(\cdot)$を構築する．そして，$\bm{D}_{all}$中の$\bm{q}$を
+含む各文書について，$P^{MLE}_{\bm{q}}(\cdot)$と
+$P^{DIR}_{\bm{d}_{h}}(\cdot)$ のカルバック・ライブラー情報量を計算する．
+すなわち，クエリ$\bm{q}$に対する文書$\bm{d}_{h}$の重要度は，次式のように
+定義される．
+\begin{equation}
+ initial\_score(\bm{d}_{h},\bm{q})
+ =
+ - KL(P^{MLE}_{\bm{q}}(\cdot)||P^{DIR}_{\bm{d}_{h}}(\cdot))
+ \label{equ:initial_score}
+\end{equation}
+この重要度に従って各文書をランキングし，$\bm{q}$に対する初期検索結果
+$\bm{D_{q}}$を得る．
+
+クエリモデルの構築に MLE を用いたのは，言語モデルに基づくランキングに関す
+る先行研究 (e.g., \cite{Zhai2001}) に倣ってのことである．なお，クエリモデ
+ルの構築に MLE を用いた場合，カルバック・ライブラー情報量に基づくランキン
+グは，クエリの尤度に基づくランキング \cite{Ponte1998}と等価になる．
+
+
+
+\subsection{文書モデル$P^{HYB}_{\bm{d}_{i}}(\cdot)$の構築}
+\label{ssec:hdm_construction}
+
+$\bm{D}_{\bm{q}}$中の各文書$\bm{d}_{i}$ $(i = 1, \dots, I)$について，
+$\bm{d}_{i}$の表層情報と潜在情報の両方を含む言語モデル
+$P^{HYB}_{\bm{d}_{i}}(\cdot)$を構築する．まず，各文書$\bm{d}_{i}$について，
+LDA を用いて，$\bm{d}_{i}$の潜在情報を含む言語モデル
+$P^{LDA}_{\bm{d}_{i}}(\cdot)$を構築する．具体的な手順は次の通りである．ま
+ず，$\bm{D}_{\bm{q}}$に対して LDA を実行し，$\bm{D}_{\bm{q}}$に対する
+LDA のパラメータ$\alpha_{k}$と$\bm{\beta}_{k}$ $(k = 1, \dots, K)$，
+$\bm{\gamma}_{i}$ $(i = 1, \dots, I)$を推定する
+（\ref{ssec:parameter_estimation}節参照）．次に，各文書について，推定され
+た各パラメータ及び式(\ref{equ:pwd})を用いて$P^{LDA}_{\bm{d}_{i}}(\cdot)$
+を構築する．$P^{LDA}_{\bm{d}_{i}}(\cdot)$は，$\bm{d}_{i}$に潜在するトピッ
+クの分布を基に構築されており，各単語が$\bm{d}_{i}$に潜在的に現れうる確率
+の分布になる（式(\ref{equ:pwd})参照）．
+
+次に，構築された$P^{LDA}_{\bm{d}_{i}}(\cdot)$と
+$P^{DIR}_{\bm{d}_{i}}(\cdot)$を次式によって混合し，
+$P^{HYB}_{\bm{d}_{i}}(\cdot)$を構築する．
+\begin{equation}
+ P^{HYB}_{\bm{d_{i}}}(w)
+ = (1 - a) P^{DIR}_{\bm{d_{i}}}(w) + a P^{LDA}_{\bm{d_{i}}}(w)
+ \label{equ:hdm}
+\end{equation}
+ただし，$0 \le a \le 1$とする．$P^{DIR}_{\bm{d}_{i}}(\cdot)$は，各文書の
+表層的な単語の分布を基に構築される（式(\ref{equ:dir})参照）．
+$P^{DIR}_{\bm{d}_{i}}(\cdot)$と$P^{LDA}_{\bm{d}_{i}}(\cdot)$を混合するこ
+とで，$\bm{d}_{i}$の表層情報と潜在情報の両方を含む言語モデルを構築するこ
+とができる．
+
+
+
+\subsection{フィードバックモデル$P^{HYB}_{\bm{F}}(\cdot)$の構築}
+\label{ssec:hfm_construction}
+
+フィードバック$\bm{F}$が得られたら，$\bm{F}$に対しても，$\bm{F}$の表層情
+報と潜在情報の両方を含む言語モデル$P^{HYB}_{\bm{F}}(\cdot)$を構築する．ま
+ず，LDA を用いて，$\bm{F}$の潜在情報を含む言語モデル
+$P^{LDA}_{\bm{F}}(\cdot)$を構築する．具体的な手順は次の通りである．まず，
+Step 2 で訓練された LDA を$\bm{F}$に適用し，$\bm{F}$に対する変分パラメー
+タ$\bm{\gamma}_{\bm{F}}$ を推定する（\ref{ssec:inference}節参照）．次に，
+推定された$\bm{\gamma}_{\bm{F}}$と式(\ref{equ:pwd})を用いて
+$P^{LDA}_{\bm{F}}(\cdot)$を構築する．$P^{LDA}_{\bm{F}}(\cdot)$は，
+$P^{LDA}_{\bm{d}_{i}}(\cdot)$と同様，各単語が$\bm{F}$に潜在的に現れうる確
+率の分布になる．
+
+次に，構築された$P_{\bm{F}}^{LDA}(\cdot)$と$P^{DIR}_{\bm{F}}(\cdot)$を次
+式によって混合し，$P^{HYB}_{\bm{F}}(\cdot)$を構築する．
+\begin{equation}
+ P^{HYB}_{\bm{F}}(w)
+ = (1 - a) P^{DIR}_{\bm{F}}(w) + a P^{LDA}_{\bm{F}}(w)
+ \label{equ:hfm}
+\end{equation}
+ただし，$P^{DIR}_{\bm{F}}(\cdot)$は式(\ref{equ:dir})を用いて構築する．
+$P_{\bm{F}}^{DIR}(\cdot)$と$P^{LDA}_{\bm{d}_{i}}(\cdot)$を混合することで，
+$\bm{F}$の表層情報と潜在情報の両方を含む言語モデルを構築することができる．
+
+
+
+\subsection{リランキング}
+
+$\bm{D}_{\bm{q}}$をリランキングするため，まず新しいクエリモデルを構築する．
+新しいクエリモデル$P^{NEW}_{\bm{q}}(\cdot)$は，$\bm{D}_{\bm{q}}$を得るた
+めに使用したクエリモデル$P^{MLE}_{\bm{q}}(\cdot)$と，Step 3 で構築した
+フィードバックモデル$P^{HYB}_{\bm{F}}(\cdot)$を次式のようにして混合し，構
+築する．
+\begin{equation}
+ P^{NEW}_{\bm{q}}(w)
+ = (1 - b) P^{MLE}_{\bm{q}}(w) + b P^{HYB}_{\bm{F}}(w)
+ \label{equ:nqm}
+\end{equation}
+ただし，$0 \le b \le 1$とする．
+
+最後に，$\bm{D}_{\bm{q}}$中の各文書$\bm{d}_{i}$について，
+$P^{HYB}_{\bm{d}_{i}}(\cdot)$と$P^{NEW}_{\bm{q}}(\cdot)$のカルバック・ラ
+イブラー情報量を算出する．すなわち，クエリ$\bm{q}$とフィードバック
+$\bm{F}$が与えられた下での文書$\bm{d}_{i}$の重要度を次式のように定義する．
+\begin{eqnarray}
+ re\mathchar`-ranking\_score(\bm{d}_{i},\bm{q},\bm{F})
+ =
+ - KL(P^{NEW}_{\bm{q}}(\cdot)||P^{HYB}_{\bm{d}_{i}}(\cdot)) \nonumber
+\end{eqnarray}
+この重要度に従って各文書をリランキングすることで，検索結果のランキングを
+修正する．
+
+
+
+\end{document}

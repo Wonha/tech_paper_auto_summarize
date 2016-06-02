@@ -1,0 +1,928 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+
+
+\usepackage{slashbox}
+\makeatletter
+\newcommand{\figref}[1]{}
+\newcommand{\tblref}[1]{}
+\newcommand{\secref}[1]{}
+\newcommand{\chapref}[1]{}
+\newcommand{\exref}[1]{}
+
+\newcommand{\tblrefB}[1]{}
+\newcommand{\secrefB}[1]{}
+
+\newcommand{\newcite}[1]{}
+\usepackage{url}
+\urlstyle{rm}
+
+\usepackage{multirow}
+
+\usepackage{footnote}
+
+
+\newcounter{enumsentencecounter} 
+\setcounter{enumsentencecounter}{0} 
+\newcommand{\enumsentence}[2]{}
+
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+
+
+
+
+
+\Volume{21}
+\Number{1}
+\Month{March}
+\Year{2014}
+
+\received{2013}{7}{5}
+\revised{2013}{9}{16}
+\rerevised{2013}{10}{13}
+\accepted{2013}{10}{27}
+
+\setcounter{page}{3}
+
+\jtitle{述語と項の位置関係ごとの候補比較による日本語述語項構造解析}
+\jauthor{林部　祐太\affiref{Author_1} \and 小町　　守\affiref{Author_2} \and 松本　裕治\affiref{Author_1}\vspace*{0.5\Cvs}}
+\jabstract{
+一般に，項は述語に近いところにあるという特性がある．
+そのため，
+従来の述語項構造解析の研究では，
+候補を述語との位置関係でグループ分けし，
+あらかじめ求めておいたグループ間の
+優先順序に従って正解項を探索してきた．
+しかしながら，その方法には
+異なるグループに属する候補同士の比較ができないという問題がある．
+そこで我々は，異なるグループごとに最尤候補を選出し，
+それらの中から最終的な出力を決めるモデルを提案する．
+このモデルは
+優先度の高いグループに属する候補以外も参照することによって最終的な決定を行うことができ，
+全体的な最適化が可能である．
+実験では，提案手法は優先順序に従う解析よりも精度が向上することを確認した．
+}
+\jkeywords{述語項構造解析，項と述語の位置関係，探索先行分類型モデル\vspace*{1\Cvs}}
+
+
+\etitle{Japanese Predicate Argument Structure Analysis by Comparing Candidates in Different Positional Relations between Predicate and Arguments}
+\eauthor{Yuta Hayashibe\affiref{Author_1} \and Mamoru Komachi\affiref{Author_2} \and Yuji Matsumoto\affiref{Author_1}\vspace*{0.5\Cvs}} 
+\eabstract{
+In general, arguments are located near the predicate.
+A previous study has exploited this characteristic to group candidates by positional relations
+between a predicate and its candidate arguments and then searched for the final candidate using a predetermined priority list of the groups.
+However, in such an analysis, candidates in different groups cannot be compared.
+Therefore, we propose a Japanese predicate 
+\linebreak
+argument structure analysis model that gathers the most likely candidates from all the groups and then selects the final candidate amongst them.
+We can account for candidates with less priority before making a final decision to perform global optimization.
+Experimental results show that our model outperforms deterministic models. 
+}
+\ekeywords{predicate argument structure analysis, positional relations between predicates and arguments, selection-then-classification model}
+
+
+\headauthor{林部・小町・松本}
+\headtitle{述語と項の位置関係ごとの候補比較による日本語述語項構造解析}
+
+\affilabel{Author_1}{奈良先端科学技術大学院大学}{Nara Institute of Science and Technology}
+\affilabel{Author_2}{首都大学東京}{Tokyo Metropolitan University}
+
+
+\begin{document}
+\maketitle
+
+
+\section{述語と項の位置関係ごとの候補比較による日本語述語項構造解析}
+\label{sec:sca}
+
+先行研究では，
+優先順位の低い位置関係にある候補は参照されずに，解析が行われていた．
+この方法は，
+優先順位の高い位置関係にある項の同定の性能は上げることができるが，
+優先順位の低い位置関係にある候補の再現率は下げてしまうという問題点がある．
+また，
+優先順位の低い位置関係にある候補も参照してから最終的な決定を行った方が，
+全体的な解析性能が向上すると考える．
+
+
+
+
+そこで我々は，
+\emph{探索}と\emph{トーナメント}の
+2つのフェーズからなる，
+位置関係ごとに最尤候補を求めてから最終的な出力を決めるモデルを提案する．
+                これは，「探索」・「分類」という2つのフェーズを持つ
+                探索先行分類型モデル\cite{Iida:2005:TALIP}
+                に着想を得て，
+                後半の分類フェーズをトーナメント式に置き換えたものである．
+なお，このモデルは格ごとに解析器を学習・使用する．
+
+
+\subsection{項構造解析における探索先行トーナメントモデル}
+
+\subsubsection{探索}
+
+はじめのフェーズでは
+任意の項同定モデルを用いて
+INTRA\_D, INTRA\_Z, INTERの最尤候補を選出する．
+それぞれ異なる素性やモデルを用いてもよい．
+モデルには，
+述語と探索対象の候補を入力として与え，
+探索対象の候補の中の1つを出力させる．
+
+
+\subsubsection{トーナメント}
+
+次のフェーズでは
+探索フェーズで得られた
+3つの最尤候補を入力とし，
+そのうちの1つか
+``NO-ARG''を出力する．
+これにより，
+最尤候補のうちどれが正解項であるか，
+もしくは項を持たないかを判断する．
+
+このフェーズは
+\figref{fig:anap-tournament-model}に示したように
+(a)から(c)の3つの2値分類モデルで構成される．
+なお，予備実験にて異なる順序を試したが，
+文内最尤候補同士を(a)にて直接比較できる
+この順序の性能が最も高かった．
+
+\begin{itemize}
+	  \setlength{\parskip}{0cm} 
+	    \setlength{\itemsep}{0cm} 
+\item[(a) ] INTRA\_DとINTRA\_Zを比較して，よりその述語の項らしい方を選ぶ
+
+\item[(b) ] INTERと(a)で選出された候補を比較して，よりその述語の項らしい方を選ぶ
+
+\item[(c) ] (b)で選出された候補と``NO-ARG''を比較して，よりその述語の項らしい方を選ぶ
+
+\end{itemize}
+
+
+(a)から(c)の分類器の学習事例には，
+Algorithm \ref{alg:train}で示すように
+探索フェーズで得られた
+最尤候補を用いる．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{21-1ia1f1.eps}
+\end{center}
+\caption{トーナメントフェーズでの，位置関係が異なる候補からの項の同定}
+\label{fig:anap-tournament-model}
+\end{figure}
+
+
+
+\subsection{提案手法の関連研究}
+提案手法は2つのモデルを参考にしている．
+
+1つ目は
+名詞句の照応解析における
+\emph{探索先行分類型モデル(selection-then-classification model)} \cite{Iida:2005:TALIP}である．
+このモデルは最初に，
+最尤先行詞を求める
+（彼らはこれを``探索''と呼んだ）．
+次に，その最尤先行詞を用いて，名詞句が実際に照応詞であるかどうかを判定する
+（彼らはこれを``分類''と呼んだ）．
+このモデルの利点は，
+照応性を持たない名詞句も学習事例の生成に使えることである．
+彼らは実験で，
+最尤先行詞を用いて照応性判定を行ったほうが，
+最尤先行詞を用いない場合よりも
+高い性能が出ること確かめた．
+提案手法も，
+位置関係ごとに最尤候補を求めた後，
+どの候補が実際に項であるのかを判定する．
+最尤候補の探索を先に行なうことで，
+位置関係ごとの最尤候補を学習事例の生成に用いることができる．
+
+
+2つ目はゼロ照応解析における
+\emph{トーナメントモデル} \cite{Iida:2004:IPSJ}である．
+そのモデルは，
+全ての先行詞候補（実際には先行する全ての名詞句）のペアに対して，
+どちらがより先行詞らしいかの
+2値分類を繰り返す．
+トーナメントモデルの利点は候補間の関係性の素性を使うことができる点である．
+提案手法のトーナメントフェーズでも同様に，
+トーナメントモデルを用いて，
+位置関係ごとに選出された最尤候補のペアから
+どちらが正解項らしいかの2値分類を繰り返し，
+候補間の比較を行うことができる．
+
+
+
+\begin{algorithm}[p]
+\caption{分類器(a) classifier\_a, (b) classifier\_b, (c) classifier\_c の学習事例の作成アルゴリズム}\label{alg:train}
+\begin{algorithmic}
+\Procedure{train}{predicate, gold\_argument, candidates}
+\State gold\_argument\_type $\leftarrow$ getArgumentType(predicate, gold\_argument)\\
+\Comment{正解項の位置関係を取得する}
+\\
+\State \Comment{位置関係ごとに最尤候補を取得する}
+\State most\_likely\_candidate\_INTRA\_D $\leftarrow$ getMostLikelyCandidate(predicate, candidates, INTRA\_D)
+\State most\_likely\_candidate\_INTRA\_Z $\leftarrow$ getMostLikelyCandidate(predicate, candidates, INTRA\_Z)
+\State most\_likely\_candidate\_INTER $\leftarrow$ getMostLikelyCandidate(predicate, candidates, INTER)
+\\
+\If{gold\_argument\_type = NO\_ARG}
+	\State MakeExample(classifier\_c, NO\_ARG, predicate, most\_likely\_candidate\_INTRA\_D)
+	\State MakeExample(classifier\_c, NO\_ARG, predicate, most\_likely\_candidate\_INTRA\_Z)
+	\State MakeExample(classifier\_c, NO\_ARG, predicate, most\_likely\_candidate\_INTER)
+	\State \textbf{return}
+\EndIf
+\\
+\State MakeExample(classifier\_c, HAVE\_ARG, predicate, gold\_argument)
+\If{gold\_argument\_type = INTRA\_D}
+	\State MakeExample(classifier\_a, INTRA\_D, predicate, gold\_argument, \\
+		\hspace*{88pt}most\_likely\_candidate\_INTRA\_Z)
+	\State MakeExample(classifier\_b, INTRA, predicate, gold\_argument, most\_likely\_candidate\_INTER)
+\ElsIf{gold\_argument\_type = INTRA\_Z}
+	\State MakeExample(classifier\_a, INTRA\_Z, predicate, gold\_argument, \\
+		\hspace*{88pt}most\_likely\_candidate\_INTRA\_D)
+	\State MakeExample(classifier\_b, INTRA, predicate, gold\_argument, most\_likely\_candidate\_INTER)
+\ElsIf{gold\_argument\_type = INTER}
+	\State MakeExample(classifier\_b, INTER, predicate, gold\_argument, most\_likely\_candidate\_INTRA\_D)
+	\State MakeExample(classifier\_b, INTER, predicate, gold\_argument, most\_likely\_candidate\_INTRA\_Z)
+\EndIf
+\State \textbf{return}
+\EndProcedure
+\\
+\Procedure{MakeExample}{classifier, label, predicate, candidate1, candidate2} \\
+\Comment{candidate2は省略できる}
+\State 項候補candidate1, candidate2が照応関係にあれば事例は作成しない．
+\State 述語predicateと項候補candidate1, candidate2に対して，
+	素性集合$F$を取得する．
+\State 学習器classifierに対して，$F$を用いて，labelをラベルとする学習事例を1つ作成する．
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+
+\section{評価実験} \label{experiment}
+
+\subsection{実験データセット}
+
+評価実験には
+NAISTテキストコーパス1.4$\beta$ \cite{Iida:2010:JNLP}を用いた．
+これは京都大学テキストコーパス3.0\footnote{\url{http://nlp.ist.i.kyoto-u.ac.jp/nl-resource/corpus/KyotoCorpus3.0.tar.gz}}
+を基にしており，
+述語項構造，事態性名詞の項構造，共参照に関する情報が
+約40,000文の新聞記事にわたって付与されている．
+なお，アノテーションの誤りのため6記事
+\footnote{除外した文書ID :
+951230038, 951225057, 950106156, 950106034, 951221047, 950106211
+}を除外した．
+このコーパスの記事を
+\tblref{tbl:corpus-statics}で示すように
+学習・開発（パラメータチューニング）・評価のために3分割した．
+これは，\newcite{Taira:2008:EMNLP}や\newcite{Yoshikawa:2013:JNLP}と同じ分割方法である．
+\tblref{tbl:corpus-arg-dist}に項の分布の統計情報を示す\footnote{SAME\_BSは項と述語が同一文節であることを示す．}．
+
+\begin{table}[b]
+\caption{NAISTテキストコーパスの統計情報}
+\label{tbl:corpus-statics}
+\input{01table02.tex}
+\end{table}
+\begin{table}[b]
+\caption{NAISTテキストコーパスにおける項の分布}
+\label{tbl:corpus-arg-dist}
+\input{01table03.tex}
+\end{table}
+
+
+\subsection{実験設定}
+                実験では，MeCab0.996・IPADIC-2.7.0-20070801で解析して得られた形態素情報，
+                京都大学テキストコーパス3.0で付与されている文節情報，
+                CaboCha0.66で解析して得られた係り受け関係を用いた．
+項の候補は文節単位で抽出した．
+解析は文頭から文末の順で行い，述語を含む文以降からは項候補を抽出しない．
+なお，ある述語の格についての解析結果は
+同じ述語の他の格についての解析に影響を及ぼさない．
+
+
+本稿では項同定に焦点を絞るため，
+述語同定タスクには取り組まない．
+言い換えると，どれが述語であるかはあらかじめシステムに与えておく．
+述語には軽動詞「する」や複合動詞も含む．
+
+
+
+最尤候補同定には，
+トーナメントモデル\cite{Iida:2004:IPSJ}を用いた．
+その際，
+最尤候補の探索範囲ごとに異なるモデルを作成し，
+モデルの学習方法も\cite{Iida:2004:IPSJ}に従った．
+例えば，提案手法は
+探索フェーズでは
+INTRA\_D, INTRA\_Z, INTERの最尤候補を同定するが，
+それぞれ異なる合計3つの解析モデルを最尤候補同定に
+用いる．
+
+
+\subsection{分類器と素性}
+\label{sec:feature}
+
+探索フェーズ・トーナメントフェーズで用いる分類器には，
+Support Vector Machine \cite{Cortes:1995:ML}を線形カーネルで用いた．
+具体的には
+LIBLINEAR1.93\footnote{\url{http://www.csie.ntu.edu.tw/~cjlin/liblinear/}}の実装を用い，
+開発データを用いたパラメータチューニングを行った．
+
+素性には\citeA{Imamura:2009:ACL}で用いられたものとほぼ同一の素性を用いた．
+
+\begin{itemize}
+\item 述語・項候補の
+主辞・機能語・その他の語
+の出現形・形態素情報
+\item 述語が受け身の助動詞を含むときはその原形
+\item 係り受け木上の述語と項候補の関係
+\footnote{\citeA{Imamura:2009:ACL}では，どのような素性表現に落とし込んだかは詳述されていない．}\\
+係り受け木上の
+項候補ノード$N_a$と
+述語ノード$N_p$からそれぞれROOT方向に辿っていくときに
+初めて交叉するノードを$N_c$とし，
+$N_a$から$N_c$までの道のりに含むノード列を$A_{a \cdots c}$，
+$N_p$から$N_c$までの道のりに含むノード列を$A_{p \cdots c}$とする．
+また，$N_c$から木のROOTまでの道のりに含むノード列を$A_{c_1, c_2, \cdots c_r}$とする．
+本実験では，ノード列の文字列表現として，
+\begin{itemize}
+\item 主辞の原形
+\item 主辞の品詞
+\item 機能語の原形
+\item 機能語の品詞
+\item 機能語の原形$+$機能語の品詞
+\end{itemize}
+の5通りを用いた．
+$A_{a \cdots c}$の文字列表現を$S_{a \cdots c}$，
+$A_{p \cdots c}$の文字列表現を$S_{p \cdots c}$とし，
+それらの連結を
+$S_{a \cdots c} + S_{p \cdots c}$とする．
+
+素性には，
+$S_{a \cdots c} + S_{p \cdots c}$，
+$S_{a \cdots c} + S_{p \cdots c} + S_{c_1}$，
+$S_{a \cdots c} + S_{p \cdots c} + S_{c_1, c_2}$，
+$\cdots$
+$S_{a \cdots c} + S_{p \cdots c} + S_{c_1, c_2, \cdots, c_r}$
+の$r+1$個の文字列を用いた．
+つまり．
+述語と項候補の関係を
+$5(r+1)$個の文字列で表現した．
+\item 係り受け木上の2つの項候補の関係\\
+上と同様の素性表現を行った．
+\item 述語と項候補・2つの項候補間の距離（文節単位・文単位ともに）
+\item 「述語・項候補の主辞・助詞」のコーパス中の共起スコア
+\footnote{\citeA{Imamura:2009:ACL}では，これに相当するものとして，Good Turingスムージングを施した共起確率を用いている．計算はNAISTテキストコーパス相当部分を除いた1991〜2002年の毎日新聞を用いた．}\\
+動詞と項の共起のモデル化は
+\cite{Fujita:2004:IPSJ}に従った．
+名詞$n$が格助詞$c$を介して動詞$v$に係っているときの共起確率
+$P(\langle v, c, n\rangle )$を推定するため，
+$\langle v, c, n\rangle$を
+$\langle v, c\rangle$と$n$の共起とみなす．
+
+共起尺度には自己相互情報量\cite{Hindle:1990:ACL}を用いた．
+\[
+PMI(\langle v, c\rangle , n) = \log \frac{P(\langle v, c, n \rangle)}{P(\langle v, c\rangle ) P(n)}
+\]
+なお，スムージングは行わなかった．
+自己相互情報量の算出には次の2つのコーパスを用い，
+2つの値をそれぞれ二値素性として\footnote{値が$x$以下のときのみ発火する素性．実際には，$x$を$-4$から$4$まで$0.1$刻みで変化させた素性を用いた．}用いた．\\[0.5\Cvs]
+\textbf{NEWS:}
+1995年を除く1991年から2003年までの毎日新聞約1,800万文．
+MeCab0.98\footnote{\url{https://code.google.com/p/mecab/}}で形態素解析を行い
+CaboCha0.60pre4\footnote{\url{https://code.google.com/p/cabocha/}}で係り受け解析を行った．
+辞書はNAIST Japanese Dictionary 0.6.3\footnote{\url{http://sourceforge.jp/projects/naist-jdic/}}を用いた．
+約2,700万対の$\langle$動詞, 格助詞, 名詞$\rangle$の組を抽出した\footnote{動詞が約3万種，名詞が約32万種で，ユニーク数は約700万組．}．\\[0.5\Cvs]
+\textbf{WEB:}
+\newcite{Kawahara:2006:LREC}がウェブから収集した日本語約5億文．
+JUMAN\footnote{\url{http://nlp.ist.i.kyoto-u.ac.jp/index.php?JUMAN}}で形態素解析を行い，
+KNP\footnote{\url{http://nlp.ist.i.kyoto-u.ac.jp/index.php?KNP}}で係り受け解析を行なっている．
+KNPの項構造解析結果から約53億対の$\langle$述語, 格助詞, 項$\rangle$の組を抽出した
+\footnote{動詞が約8億種，項が約2.8億種で，ユニーク数は約1.6億組．}．
+
+\item 項候補が以前の項構造解析で項となったか否かを示す2値情報
+\item 項候補の主辞のSalient Reference List \cite{Nariyama:2002:TMI}における順位
+\end{itemize}
+
+
+\subsection{比較対象}
+
+先行研究では，
+我々のものと異なる素性や機械学習の手法を使っており実験設定が異なる．
+そのため，
+ベースラインモデルとしてIIDA2005，
+比較対象モデルとしてIIDA2007・IIDA2007$+$・PPR$-$
+を実装し，
+位置関係ごとに最尤候補を求めてから最終的な出力を決める
+提案モデルPPR (Preferences based on Positional Relations)と比較する．
+
+\subsubsection{IIDA2005} 
+
+位置関係に関わらずに，全ての候補の中から最尤の候補を
+探索フェーズで1つ選出した後，
+トーナメントフェーズでそれが項としてふさわしいか否かを判断するモデル．
+\cite{Iida:2005:TALIP}の
+探索先行分類型モデルである．
+
+全ての候補の中から1つを選ぶという点で
+\cite{Imamura:2009:ACL}とほぼ同等のモデルである．
+彼らのモデルと異なる主な点は，
+最尤候補同定と照応性判定を異なるモデルで行う点と，
+最尤候補同定時に2候補間の関係性も素性として用いる点である．
+
+このベースラインモデルと
+その他のモデルと比較することで，
+項の位置関係によって探索の優先順序をつけることの効果や，
+位置関係ごとに最尤候補同定モデルを作り最尤候補同士の比較を陽に行う効果を調べる．
+
+
+\subsubsection{IIDA2007} 
+
+文内最尤候補を選出した後，
+分類器が項としてふさわしいと判断すれば
+それを項として出力し，
+そうでなければ同様に文間候補の探索を行うモデル．
+\secref{iida-bact}で述べた
+\cite{Iida:2007:TALIP}の
+文内候補を優先的に探索するモデルである．
+
+彼らのモデルと異なる主な点は，
+最尤候補同定や候補の適格性判定を行う分類器に
+BACTではなくSVMを用いる点である．
+
+
+
+IIDA2005と比較することで，
+文内候補を優先的に探索することの効果を調べる．
+
+\subsubsection{IIDA2007$+$} 
+
+INTRA\_Dの探索後，最尤候補が項としてふさわしいかどうかの判断（適格性判定）を行う．
+適格であればそれを出力し終了する．
+非適格であればINTRA\_Zの探索を行い，同様に適格性判定を行う．
+それも非適格であればINTERの探索を行い，
+適格であればそれを出力し，
+非適格であれば項は無いと判断する．
+IIDA2005とIIDA2007の自然な拡張で，
+述語から統語的な距離の近いものを優先的に探索する．
+
+
+IIDA2007と比較することで，
+文内候補を細かくINTRA\_DとINTRA\_Zに分けて優先順序をつけることの効果を調べる．
+
+
+\subsubsection{PPR$-$}
+
+このモデルは，提案モデルとほぼ同じモデルであるが，
+INTRA\_DとINTRA\_Zを区別せずに，
+位置関係がINTRAとINTERの2グループであると仮定する．
+\figref{fig:anap-tournament-model}の(b)と(c)で示すように
+トーナメントフェーズは2つの2値分類モデルからなる．
+分類器(c)は
+INTRA とINTERの候補のどちらが最尤候補であるかを判断する．
+
+
+PPRと比較することで，
+文内の項の位置関係を細かくINTRA\_DとINTRA\_Zに分けて
+最尤候補同定モデルを作り，
+最尤候補同士の比較を行うことの効果を調べる．
+
+
+\subsubsection{比較対象とする先行研究}
+
+NAISTテキストコーパスを使い，全ての項の位置関係で実験を行なっている
+\cite{Taira:2008:EMNLP}と\cite{Imamura:2009:ACL}
+との比較も行う．
+ただし，本実験とは微妙に実験設定が異なるため，厳密な比較はできないことに注意してほしい．
+
+\citeA{Taira:2008:EMNLP}の実験では
+ 19,501個の述語をテストに，
+  49,527個を学習に，
+  11,023個を開発に使っている．
+また学習では
+京都大学テキストコーパス4.0で付与されている
+係り受け情報と形態素情報を用いていているが，
+テストでは独自の係り受け解析器を用いている．
+
+\citeA{Imamura:2009:ACL}の実験では，
+ 25,500個の述語をテストに，
+  67,145個を学習に，
+  13,594個を開発に使っている．
+我々は京都大学テキストコーパス3.0を用いたが，
+\citeA{Imamura:2009:ACL}は
+京都大学テキストコーパス4.0で付与されている
+係り受け情報と形態素情報を
+学習とテストに用いている．
+
+
+\subsubsection{その他の先行研究}
+
+\citeA{Sasano:IPSJ:2011}は，
+提案システムは表層格の解析を行うことから，
+受け身・使役形である述語は評価から除外しており，
+本稿では比較対象としない．
+
+\citeA{Yoshikawa:2013:JNLP}は，
+文間項は解析対象としていないため，
+本稿では比較対象としない．
+
+\cite{Watanabe:JSAI:2010}は
+述語語義と項の意味役割の依存関係を考慮しながら，
+双方を同時に学習，解析を行う構造予測モデルを提案している．
+しかし，本稿とは異なるデータセットを用いていることから，比較対象とはしない．
+
+\subsection{評価尺度}
+
+Precision, Recall, F値で
+位置関係ごとに評価を行う．
+
+システムが出力した
+位置関係が$T$であるもののうち，
+正しく同定できているものの数を$tp_{(T)}$，
+できていないものの数を$fp_{(T)}$，
+システムに同定されなかった項のうち位置関係が$T$であるものの数を$fn_{(T)}$とすると，
+\[
+Precision = \frac{ tp_{(T)} }{ tp_{(T)} + fp_{(T)} }, \quad
+Recall = \frac{ tp_{(T)} }{ tp_{(T)} + fn_{(T)} }, \quad
+F = \frac{2 \cdot Precision \cdot Recall}{Precision + Recall}
+\label{as}
+\]
+と定義できる．
+
+また，システム全体(ALL)の
+$tp, fp, fn$と
+Precision, Recall, F値も，
+同様に定義できる．
+
+
+
+
+\section{議論}
+
+\tblref{tbl:result-ga}, \ref{tbl:result-wo}, \ref{tbl:result-ni}にガ格・ヲ格・ニ格の実験結果を示す．
+$P$, $R$, $F$, $A_M$はそれぞれPrecision, Recall, F値,
+F値のマクロ平均（INTRA\_D, INTRA\_Z, INTERのF値の算術平均）を示す．
+
+
+\begin{table}[tb]
+\caption{ガ格の述語項構造解析の比較}
+\label{tbl:result-ga}
+\input{01table04.tex}
+\end{table}
+\begin{table}[tb]
+\caption{ヲ格の述語項構造解析の比較}
+\label{tbl:result-wo}
+\input{01table05.tex}
+\end{table}
+\begin{table}[tb]
+\caption{ニ格の述語項構造解析の比較}
+\label{tbl:result-ni}
+\input{01table06.tex}
+\end{table}
+
+ALLのF値に関して，
+PPR$-$とPPRがIIDA2007と比較して有意差があるかどうかの検定を
+Takamuraによるスクリプト\footnote{\url{http://www.lr.pi.titech.ac.jp/~takamura/pubs/randtest_fm.pl}}を用いて
+Approximate Randomization Test \cite{Chinchor:1993:CL}を
+行った
+\footnote{このTestを行うためには
+システムの出力によらずに事例の正解ラベルを定める必要があるため，
+「項あり」のときにシステムが誤った出力した場合は，$fp$ではなく，$fn$として扱った．}．
+0.05水準で有意であったものに，記号$^{*}$を付記した．
+
+
+\subsection{決定的に項を同定していくモデルの比較}
+\label{sec:discussion-determin}
+IIDA2005, IIDA2007, IIDA2007+のALLのF値を比較することで，システム全体の性能について論じる．
+
+\subsubsection{ガ格の性能}
+
+ALLの性能を比較すると，
+ガ格の性能は
+IIDA2007$>$IIDA2005$>$IIDA2007+
+である．
+
+IIDA2007とIIDA2005の性能を比較すると，
+PrecisionはIIDA2007の方が高く，RecallはIIDA2005の方が高い．
+探索範囲を文内に限定することで，Precisionが上がることが分かる．
+IIDA2007のINTERのRecallは減少しているが，
+文間項よりも文内項の方が3倍以上多いため，
+システム全体の性能としては
+向上することが分かる．
+
+IIDA2005とIIDA2007+の性能を比較すると，
+INTRA\_Dを優先的に探索することで，INTRA\_DのPrecisionが上昇し，F値も上昇することが分かる．
+INTRA\_ZのPrecisionも上昇するが，Recallは悪化し，
+INTRA\_Zの分量が相当数あるため，全体としては性能が悪化することが分かる．
+
+
+\subsubsection{ヲ格の性能}
+
+ガ格と同様であるが，INTRA\_Zの数は比較的少ないため
+INTRA\_Dを優先的に探索しても，精度はガ格ほど悪化しない．
+
+
+
+\subsubsection{ニ格の性能}
+
+ニ格の性能は
+ガ格・ヲ格とは異なり，
+IIDA2007+$\simeq$IIDA2007$>$IIDA2005
+である．
+
+この傾向は項の分布が影響している．
+ニ格は\tblref{tbl:corpus-arg-dist}によると
+全ての項のうち，
+全体の90\%以上がINTRA\_Dである．
+このため，INTRA\_Dの探索を優先し，INTRA\_DのRecallを上昇させることで，
+全体としての性能を上昇させることができる．
+
+
+
+\subsection{提案手法の効果}
+
+決定的な解析では優先度の低い位置関係にある候補の再現率とF値が低下するため，
+優先順序をつけるほどマクロ平均は下がっていく．
+しかし，提案手法は全ての位置関係について最尤候補を比較するので，
+マクロ平均を大きく下げずにマイクロ平均（ALLのF値）も向上させることができている．
+
+
+PPRとPPR$-$のいずれも，IIDA2005・IIDA2007・IIDA2007$+$より性能が向上している．
+そのため，
+トーナメントフェーズで最尤候補を陽に比較する
+提案モデルは，
+決定的に項を同定していくモデルよりも効果があるといえる．
+
+また，
+PPRはPPR$-$と比較して，
+ガ格・ニ格では性能はほとんど変わないが，
+ヲ格では
+INTRA\_DのPrecisionが向上したため，
+全体の性能も向上していることが分かる．
+そのため，文内項もINTRA\_DとINTRA\_Zで，
+最尤候補の同定モデルを分けて陽に比較することで，
+さらに性能を向上することがあると分かる．
+
+
+\subsection{先行研究との比較}
+\label{result:prevwork}
+
+ガ格において，
+提案手法は
+\citeA{Taira:2008:EMNLP}と\citeA{Imamura:2009:ACL}の性能を上回っている．
+\citeA{Imamura:2009:ACL}は候補同士の比較をせず，
+\citeA{Taira:2008:EMNLP}は優先順序を用いた決定的な解析を行なっており，
+それらが，提案手法と比べて性能が低い原因であると考える．
+ヲ格では，
+提案手法は
+\citeA{Taira:2008:EMNLP}の性能を上回っており，
+\citeA{Imamura:2009:ACL}とも同程度の性能を達成している．
+
+
+
+
+しかしながら，ニ格では，
+\citeA{Taira:2008:EMNLP}
+が最も性能が高い．
+\citeA{Imamura:2009:ACL}も，
+ガ格・ヲ格では\citeA{Taira:2008:EMNLP}を上回る性能を発揮しているのにも関わらず， 
+ニ格では\citeA{Taira:2008:EMNLP}よりも性能が低い．
+この理由として，ニ格は
+INTRA\_Dが最も多く，
+他の格の解析結果に依存することが挙げられる．
+一般に，1つの述語に対して異なる格で項を共有することはない．
+しかし，提案手法も
+\citeA{Imamura:2009:ACL}も各格で独立に解析を行なっており，
+他の格の解析結果の利用ができない．
+一方，
+\citeA{Taira:2008:EMNLP}は
+「項を含む文節が述語を含む文節に,他の格の項を介して係っている」という関係をモデル化(ga\_c, wo\_c, ni\_c)し，
+他の格の解析結果を利用して
+同時に解析を行なっている．
+そのため，INTRA\_Dの解析性能が高いと考えられる．
+
+
+\section{事例分析}
+
+\subsection{成功事例}
+
+\subsubsection{特定の位置関係を優先する決定的な解析モデル(IIDA)では解析できず，提案モデル(PPR)で解析できた事例}
+
+
+\begin{table}[b]
+\caption{IIDA2007（各セル左側）・PPR$-$（同中央）・PPR（同右側）のガ格の誤り事例のConfusion Matrix}
+\label{tbl:confusion-matrix-ga}
+\input{01table07.tex}
+\end{table}
+
+位置関係の優先順序を用いる
+決定的な解析モデルの中で，全体的な性能が最も高い
+IIDA2007と，
+優先順位を持たない提案モデル(PPR$-$・PPR)を比較すると，
+INTERのPrecisionが少し低下しているが，
+Recallは上昇し，F値も上昇している．
+ガ格の解析にて，
+IIDA2007・PPR$-$・PPRが解析に誤った事例の内訳を
+\tblref{tbl:confusion-matrix-ga}に
+Confusion Matrixで示した．
+PPR$-$やPPRでは，誤ってINTERを出力した事例が増えており
+（3列目を参照），
+一方で，
+誤って「項なし」と判断した事例が減って
+いることが分かる（4列目を参照）．
+IIDA2007は文間の候補を参照せずに，文内最尤候補が項らしいか否かを判定しなければならないが，
+PPR$-$やPPRは
+文内最尤候補と文間最尤候補を比較した上で，項として何が適切かを判断できるため，
+INTERのRecallを上昇させることができたと考える．
+そして，これが全体の性能に影響している．
+
+
+\subsubsection{2種類の最尤候補を用いるモデル(PPR$-$)では解析できず，3種類の最尤候補を用いる提案モデル(PPR)で解析できた事例}
+
+PPR$-$とPPRを比較すると，
+ガ格は
+INTRA\_DとINTRA\_Zの
+PrecisionとF値が上昇しており，
+ヲ格は
+INTRA\_DのPrecisionとF値が，
+上昇している．
+
+
+
+PPRは
+INTRA\_Dの最尤候補同定モデルと
+INTRA\_Zの最尤候補同定モデルの
+2つの異なるモデルで
+INTRA\_DとINTRA\_Zの最尤候補を選んでから，
+陽にINTRA\_DのINTRA\_Zのどちらが項らしいかを比較することで，
+正解項を同定しやすくなっていると考えられる．
+これは，特に（候補数が増加する）長い文の中にある文内項の同定に効果があった．
+
+
+\enumsentence{
+一九五二年以来の不平等が続いている「日米航空協定」の平等化を実現するため、
+\underline{「政府}$_{ガ}$が米側に、米航空会社の新規路線開設を今後\underline{認め}ない強硬\underline{方針}を通告していたことが、十三日明らかになった。
+}{ex-ok2}
+
+「認める」のガ格に対して，
+PPR$-$では誤って「方針」を項として出力したが，
+PPRは正しく「政府」を出力した．
+
+
+\subsection{誤り分析}
+
+項構造解析に失敗した事例を分析したところ，
+誤り理由の上位3つは次のものであった．
+
+1つ目は，談話の理解が必要な場合である．
+
+以下の文で，「絡みつく」のニ格は「ユリカモメ」である．
+しかし，
+システムは
+ニ格は項なしと判断してしまった．
+
+\enumsentence{
+       東京・上野の不忍池で、無残な姿の鳥が目立つ。
+       片足が切れたユリカモメ。
+       釣り糸を引っ掛けて取れなくなって、そのうちに足を切断してしまうケースが多い。
+
+       竹ぐしが右の首に突き刺さった\underline{ユリカモメ}$_{ニ}$も。
+       くしが十センチほど体の外にのぞく。
+       水面に浮かんだ\underline{ゴム}$_{ガ}$が\underline{絡み付き}、もがくうちに首まで入ってしまったらしい。
+}{error-1}
+
+「ユリカモメ」が話題の中心であることが捉えられなかったことが
+解析に失敗した理由として考えられる．
+今回の実験で，談話を捉えるために，
+Salient Reference Listを用いたが，
+「絡み付く」の解析時に「ユリカモメ」はListには無いため，うまくいかない．
+これを解析するためには，
+「ユリカモメは負傷している」
+「絡み付くは負傷に関する述語である」
+という知識のもとで，
+「ユリカモメが絡み付くのニ格である」という
+推論が必要となる．
+その知識を本文中から取得するには，
+「鳥」や2回出てくる「ユリカモメ」が照応関係にあるという知識も必要となることから，
+固有表現解析や共参照解析などと
+推論を用いた述語項構造解析を同時に行うことで
+互いに精度を高めあうことができると考える．
+
+
+
+2つ目は，格フレームなどの情報を使った格の同時解析が必要な場合である．
+次の文の「書く」のニ格は「日記」・ヲ格は「矛盾」とアノテートされているが，
+システムはニ格は「項なし」・ヲ格は「日記」と判断した．
+
+\enumsentence{
+\underline{日記}$_{ニ}$には、小説の読後感や将来への夢、希望などをつづるようになり、
+高校生になると、大学受験のこと、沖縄における政治の\underline{矛盾}$_{ヲ}$なども\underline{書く}ようになった。
+}{error-2}
+
+一般に，「書く」のニ格に「日記」が来ることは少ない．
+しかし，
+京都大学格フレーム\cite{Kawahara:2005:NLP}\footnote{\url{http://www.gsk.or.jp/catalog/GSK2008-B/catalog.html}}
+のような
+格フレーム辞書を用いれば，
+「書く」は「日記」をニ格にとりうることがわかる．
+\tblref{tbl:kaku-case}に
+京都大学格フレームにおける「書く」の第1格フレームと第3格フレームを示した．
+この表は，それぞれの格フレームを構成する格が
+どのような項をどのくらい取るのかを，
+WEBコーパス内の頻度付きで表している．
+\tblref{tbl:kaku-case}より，
+ヲ格に``補文''（ここでは「沖縄における政治の矛盾」）をとれば，
+「問い」をニ格にとりうる，とわかる．
+
+
+\begin{table}[b]
+\caption{京都大学格フレームにおける「書く」の第1・第3格フレーム}
+\label{tbl:kaku-case}
+\input{01table08.tex}
+\end{table}
+
+
+3つ目は，一般の述語とは異なる扱いをすべき述語の場合である．
+NAISTテキストコーパスでは
+名詞述語
+『名詞句$+$コピュラ「だ」』
+も述語としてアノテーションされている．
+
+\enumsentence{
+\underline{欧州連合}$_{ガ}$
+が十五カ国に拡大して初の交渉となる。
+昨年は欧州市場での乗用車の売れ行き回復を受け、規制枠を若干上方修正したが、
+今年については「昨年の新車登録台数集
+計を踏まえて対応したい」と\underline{慎重姿勢だ}。
+}{ex-c}
+
+しかしながら，
+名詞述語の振る舞いは他の述語とは明らかに異なり，
+同一の素性・モデルで項を同定するのは難しい．
+そのため，他の述語の解析モデルと分けるべきであると考える．
+
+実際に，PPRを，名詞述語とそれ以外の述語で
+単純に解析モデルを分けて学習・テストしたところ，
+\tblref{tbl:result-copula-ga}に示したように\footnote{「全ての述語」は「名詞述語」と「その他の述語」からなる．}
+ガ格のALLのF値が77.59から77.75と0.16ポイント上昇した．
+
+
+大きな上昇がみられなかったのは，
+項と名詞述語の意味的関係を既存の素性ではうまく捉えられないためだと考える．
+名詞述語文の働きは様々で，
+「ラッセルは哲学者だ」のように
+ある事物がどのような範疇に属するのかを述べたり，
+「この部屋の温度は19度だ」のように
+記述を満たす値がどれなのかを述べたり
+する\cite{Imada:2010:DThesis}．
+このような関係は\secref{sec:feature}での素性では捉えられない．
+そのため，
+京都大学名詞格フレーム\cite{Sasano:2005:JNLP}
+や
+日本語語彙大系\cite{goitaikei}などの
+名詞間の関係を捉える知識を用いる必要があると考える．
+
+\begin{table}[t]
+\caption{名詞述語とそれ以外の述語とでモデルを分けた場合のガ格の性能の比較}
+\label{tbl:result-copula-ga}
+\input{01table09.tex}
+\end{table}
+
+
+
+
+
+また，動詞にも一般動詞とは異なる振る舞いをする
+動詞「なる」の解析誤りも多かった．
+
+
+\enumsentence{
+山花氏らにとっては、社会党が離脱を認めるか\underline{どうか}$_{ガ}$が、最初の\underline{関門}$_{ニ}$と\underline{なる}。
+}{error-naru1}
+
+\enumsentence{
+\underline{長さ}$_{ガ}$ \underline{\mbox{40 メートル}}$_{ニ}$にも\underline{なる}3 両編成の大型トラック、ロードトレインに便乗して大乾燥地帯を行く蛭子。
+}{error-naru2}
+
+\enumsentence{
+福井市の中心から足羽川を上流へ十キロたどると、\underline{そこ}$_{ガ}$はもうひなびた農村の\underline{たたずまい}$_{ニ}$と\underline{なる}。
+}{error-naru3}
+
+これらの事例の「なる」自体には意味はあまり持たず，
+ニ格が名詞述語相当の意味を持っているとも言える．
+そのため，名詞述語同様，解析モデルを分けるべきであると考える．
+
+
+\end{document}
+

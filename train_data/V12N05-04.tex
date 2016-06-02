@@ -1,0 +1,1255 @@
+\documentstyle[epsbox,jnlpbbl]{jnlp_j}
+
+\setcounter{page}{3}
+\setcounter{巻数}{2}
+\setcounter{号数}{3}
+\setcounter{年}{1995}
+\setcounter{月}{7}
+\受付{1995}{5}{6}
+\再受付{1995}{7}{8}
+\採録{1995}{9}{10}
+
+\newcommand{\CPNP}{}
+\newcommand{\BPNP}{}
+\newcommand{\MTNP}{}
+\newcommand{\JNP}{}
+\newcommand{\CPNPC}{}
+\newcommand{\C}{}
+\newcommand{\N}{}
+
+\newcounter{condcounter}
+\newenvironment{COND}{}{}
+
+\newcounter{sentcounter}
+\newenvironment{SENT}{}{}
+
+\newenvironment{SENT2}{}{}
+
+\setcounter{secnumdepth}{2}
+
+\title{構文的曖昧性を持つ英語固有表現とその対訳表現の獲得}
+
+\author{吉見 毅彦\affiref{Ryukoku}\affiref{NICT} \and 
+九津見 毅\affiref{SHARP} \and  小谷 克則\affiref{NICT} \and 
+佐田 いち子\affiref{SHARP} \and 井佐原 均\affiref{NICT}}
+
+\headauthor{吉見，九津見，小谷，佐田，井佐原}
+\headtitle{構文的曖昧性を持つ英語固有表現とその対訳表現の獲得}
+
+\affilabel{Ryukoku}{龍谷大学}{Ryukoku University}
+\affilabel{SHARP}{シャープ(株)}{SHARP Corporation}
+\affilabel{NICT}{情報通信研究機構}{National Institute of Information and 
+Communications Technology}
+
+\jabstract{本稿では，前置詞句や等位構造を持つ英語固有表現とそれに対応す
+る日本語表現を対訳コーパスから抽出する方法を提案する．
+提案方法では，
+(1) 意味的類似性と音韻的類似性の二つの観点から英語固有表現と日本語表現の
+対を評価し，二種類の類似度を統合して全体としての類似度を求める処理と，
+(2) 前置詞句の係り先や等位構造の範囲が不適格である英語固有表現の抽出を抑
+制する処理を行なう．
+読売新聞とThe Daily Yomiuriの対訳コーパスを用いて実験を行ない，提案方法
+の性能と上記のような処理を行なわないベースラインの性能を比較したところ，
+提案方法で得られたF値0.678がベースラインでのF値0.583を上回り，
+提案方法の有効性が示された．} 
+
+\jkeywords{固有表現，構文的曖昧性，前置詞句，等位構造，句アライメント} 
+
+\etitle{Acquisition of Translation Knowledge \\
+of Syntactically Ambiguous Named Entity}
+
+\eauthor{Takehiko Yoshimi\affiref{Ryukoku}\affiref{NICT} \and 
+Takeshi Kutsumi\affiref{SHARP} \and Katsunori Kotani\affiref{NICT} \and 
+Ichiko Sata\affiref{SHARP} \and Hitoshi Isahara\affiref{NICT}} 
+
+\eabstract{This paper proposes a method of extracting a bilingual pair 
+of a syntactically ambiguous named entity and its counterpart from a 
+sentence-aligned English-Japanese parallel corpus.
+This method computes the degree of semantic and phonetic similarities
+between an English named entity and its translation candidate,  
+and calculates the overall score of the pair as the weighted sum of the 
+two kinds of scores.
+It avoids extracting English named entities with wrong prepositional 
+phrase attachment and/or wrong scope of coordination. 
+In an experiment using a parallel corpus of Yomiuri Shimbun and The Daily 
+Yomiuri, the proposed method has achieved the F-value of 0.678, which 
+surpasses 0.583 marked by a baseline method.}
+
+\ekeywords{Named Entity, Syntactic Ambiguity, Prepositiona Phrase, 
+Coordination, Phrase Alignment}
+
+\begin{document}
+
+\maketitle
+
+\section{はじめに}
+\label{sec:intro}
+
+機械翻訳システムなどで利用される対訳辞書に登録すべき表現を対訳コーパスか
+ら自動的に獲得する方法の処理対象は，固有表現と非固有表現に分けて考えるこ
+とができる．
+固有表現と非固有表現を比べた場合，固有表現は，既存の辞書に登録されていな
+いものが比較的多く，辞書未登録表現が機械翻訳システムなどの品質低下の大き
+な原因の一つになっていることなどを考慮すると，優先的に獲得すべき対象であ
+る．
+このようなことから，我々は，英日機械翻訳システムの対訳辞書に登録すべき
+英語固有表現とそれに対応する日本語表現との対を対訳コーパスから獲得する
+方法の研究を行なっている．
+
+固有表現とその対訳を獲得することを目的とした研究は，単一言語内での
+固有表現の認識を目的とした研究に比べるとあまり多くないが，文献
+\cite{Al-Onaizan02,Huang02,Huang03,Moore03}
+などに見られる．
+これらの従来研究では，抽出対象の英語固有表現は前置修飾句のみを伴う
+{\BPNP}に限定されており，前置詞句を伴う名詞句や等位構造を持つ名詞句につ
+いての議論は行なわれていない．
+しかし，実際には，``the U.N. International Conference on Population and 
+Development''
+のように前置詞句による後置修飾と等位構造の両方または一方を持つ固有表現も
+少なくない． 
+
+そこで本稿では，前置詞句と等位構造の両方または一方を持つ英語の固有名詞句
+を抽出することを目指す．
+このような英語の固有名詞句には様々な複雑さを持つものがあるが，
+できるだけ長い固有名詞句を登録することにする．
+このような方針をとると副作用が生じる恐れもあるが，翻訳品質が向上することが
+多いというこれまでのシステム開発の経験に基づいて，最も長い名詞句を抽出対
+象とする．
+以下では，このような英語の固有名詞句を単に{\CPNP}と呼ぶ．
+{\CPNP}を処理対象にすると，前置修飾のみを伴う{\BPNP}を処理対象としていた
+ときには生じなかった課題として，
+前置詞句の係り先や等位構造の範囲が誤っている英語固有表現を抽出しないよ
+うにすることが必要になる．
+例えば次の英文(E\ref{SENT:pp_ok0})に現れる``Japanese Embassy in Moscow''
+という表現は意味的に適格で一つの{\CPNP}であるが， 
+英文(E\ref{SENT:pp_ng0})に現れる``the United States 
+into World War II''は意味的に不適格で一つの{\CPNP}ではない．
+\begin{SENT}
+\sentE
+The ministry quickly instructed the Japanese Embassy in Moscow to 
+$\ldots$ .
+\label{SENT:pp_ok0}
+\end{SENT}
+\begin{SENT}
+\sentE
+The attack on Pearl Harbor was the trigger that drew the United States 
+into World War II.
+\label{SENT:pp_ng0}
+\end{SENT}
+従って，英文から抽出される表現の意味的適格性を判断し，適格な表現について
+はその対訳と共に出力し，不適格な表現については何も出力しないようにする必
+要がある．
+本稿ではこのような課題に対する一つの解決策を示す．
+なお，本稿での意味的に不適格な表現とは，前置詞句の係り先や等位構造の範
+囲が誤っている表現を指す．
+
+{\CPNP}は句レベルの表現であるため，提案方法は一般の句アライメント手法
+\cite{Meyers96,Watanabe00,Menezes01,Imamura02,Aramaki03}
+の一種であると捉えることもできる．
+しかし，一般の句アライメント手法では構文解析により生成した構文木(二次元
+構造)の照合によって句レベルの表現とその対訳を獲得するのに対して，
+提案方法では文献\cite{Kitamura97}などの方法と同様に構文解析を行なわずに
+単語列(一次元構造)の照合によって{\CPNP}とその対訳を獲得する点で両者は異
+なる．
+すなわち，本稿の目的は，これまであまり扱われてこなかった，複雑な構造を持
+つ{\CPNP}とその対訳をコーパスから抽出するという課題において，構文解析系
+に代わる手段を導入することによってどの程度の性能が得られるかを検証するこ
+とにある．
+
+
+\section{{\CPNP}と{\JNP}の対応付け}
+\label{sec:outline}
+
+一般に英語での名詞句が日本語での名詞句に対応するとは限らないが，本稿で
+対象とするような{\CPNP}は日本語の名詞句に対応することが多いと考えられる．
+このため，名詞句同士が対応するものと仮定する．
+本稿で提案する方法による{\CPNP}と{\JNP}の対応付け処理の概要は次の通りで
+ある．
+\begin{enumerate}
+\item \label{enum:eng}
+対訳コーパスの英文部分から{\CPNP}を抽出する．
+{\CPNP}の抽出方法の詳細については\ref{sec:eng_np}\,節で述べる． 
+\item \label{enum:mt}
+抽出された{\CPNP}を機械翻訳システムで翻訳し，その結果に対して形態素解析
+を行なう．
+翻訳には，シャープ(株)の英日翻訳支援ソフトウェア「翻訳これ一本」の開発段
+階のバージョンを用いた． 
+このバージョンによる翻訳品質は市販バージョンによるものとほぼ同等である．
+また，形態素解析には「茶筌」
+\footnote{http://chasen.aist-nara.ac.jp/chasen/}
+を利用した．
+\item \label{enum:jpn}
+対訳コーパスの和文部分を形態素解析し，解析結果に基づいて{\JNP}を抽出する．
+{\JNP}の抽出方法の詳細については\ref{sec:jpn_np}\,節で述べる． 
+\item \label{enum:align}
+処理(\ref{enum:eng})と(\ref{enum:mt})によって得られる{\CPNP}の機械翻訳結
+果(以下では{\MTNP}と呼ぶ)と処理(\ref{enum:jpn})で得られる{\JNP}を照合
+して，{\CPNP}に対応する{\JNP}を決定する．
+照合では，意味的類似性と音韻的類似性の二つの観点から{\MTNP}と{\JNP}の対
+を評価し，さらに二種類の類似度を統合して全体としての類似度を求める．
+照合方法の詳細については\ref{sec:alignment:align}\,節で述べる． 
+\end{enumerate}
+
+\ref{sec:intro}\,節で述べたように，前置詞句や等位構造を持つ名詞句を処理
+対象にすると意味的に不適格な表現の抽出を抑制することが必要になる．
+意味的不適格表現の抽出抑制は，{\CPNP}を抽出する処理(\ref{enum:eng})の段
+階か{\MTNP}と{\JNP}を照合する処理(\ref{enum:align})の段階で行なえると考えら
+れるが，本稿では照合処理(\ref{enum:align})で行なう．
+
+{\CPNP}と{\JNP}の対応付け処理を実現するために，読売新聞とThe 
+Daily Yomiuriの対訳コーパス\cite{Uchiyama03}の1989年から1996年7月中旬ま
+での記事のうち内山らの文対応スコアの上位三万文対を資料として用いた．
+以下では，この資料を訓練データと呼ぶ．
+
+
+\section{{\CPNP}の抽出}
+\label{sec:eng_np}
+
+\ref{sec:outline}\,節で述べたように，
+{\CPNP}が意味的に適格か否かの判定は{\MTNP}と{\JNP}の照合処理に委ねる．
+従って，{\CPNP}の抽出処理では構文的に不適格な{\CPNP}を抽出しないようにす
+ることに重点を置く．
+このような方針に基づき，構文解析を行なわずに英文から{\CPNP}を抽出するため
+の条件を定めた
+\footnote{これらの条件に基づく処理では構文的または意味的に不適格な名詞句
+が抽出されうるため，{\CPNP}は厳密には{\CPNP}候補と呼ぶべきであるが，便宜
+上{\CPNP}と呼ぶことにする．}． 
+主な条件は次の通りである．
+\begin{COND}
+\cond \label{cond:np}
+{\CPNP}$ComplexNP$は前修飾句のみを伴う{\BPNP}$BaseNP$を前置詞$P$か等位接
+続詞$C$でつないだ単語列であり，$P$か$C$を一つ以上含む．
+記号`$+$'は一回以上の繰り返しを意味する．
+\begin{eqnarray*}
+ComplexNP &=& BaseNP\ ((P|C)\ BaseNP)^+
+\end{eqnarray*}
+\cond \label{cond:bnp}
+{\BPNP}$BaseNP$は大文字始まり語か数字から成る単語列である．
+$BaseNP$の先頭は小文字始まりの定/不定冠詞であってもよい．
+\cond \label{cond:comma}
+等位接続詞$C$はandかコンマのいずれかである．
+{\CPNP}$ComplexNP$にコンマが含まれている場合，コンマより後方にandが存在
+しなければならない．
+\cond \label{cond:poss}
+{\CPNP}$ComplexNP$の末尾の語は属格名詞ではない．
+\cond \label{cond:adv}
+{\CPNP}$ComplexNP$が文頭に現れている場合，$ComplexNP$の先頭の語の品詞は
+前置詞，接続詞，副詞のいずれでもない．
+\cond \label{cond:length}
+{\CPNP}$ComplexNP$は条件\ref{cond:np}\,ないし\ref{cond:adv}\,を満たす単語
+列のうち最も長いものである．
+\end{COND}
+
+条件\ref{cond:bnp}\,では大文字始まり語の品詞は問わない．
+従って，本稿の{\CPNP}抽出処理では構文解析だけでなく形態解析も不要である．
+
+条件\ref{cond:comma}\,は，{\CPNP}が{\BPNP}を等位接続詞でつないだも
+のであり，コンマが等位接続詞として働いている場合，{\CPNP}中の最後の等
+位接続詞はandであることが多いという経験則に基づく．
+条件\ref{cond:comma}\,により，例えば次の英文(E\ref{SENT:comma})から
+``Moscow in April, The Yomiuri Shimbun''が{\CPNP}として抽出されるのを
+防ぐことができる．
+\begin{SENT}
+\sentE
+The Russian government has decided to sign $\ldots$ in Moscow in April, 
+The Yomiuri Shimbun learned on Wednesday. 
+\label{SENT:comma}
+\end{SENT}
+
+条件\ref{cond:poss}\,を設けた理由は，{\CPNP}の末尾の語が属格名詞である場
+合，属格名詞が修飾する主辞を{\CPNP}の構成要素として正しく抽出できないこ
+とが多いためである
+\footnote{``the House of Representatives' counterpart''のような群属格
+の場合は，条件\ref{cond:poss}\,を満たす必要はない．}．
+条件\ref{cond:poss}\,により，例えば``IBM and the U.S.'s big three auto 
+manufacturers''における``IBM and the U.S.'s''の部分が抽出されるのを防ぐ
+ことができる．
+ただし，{\CPNP}の末尾の語が属格名詞でない場合にはこのような誤りを防ぐこ
+とはできず，例えば``the Self-Defense Forces and U.S. forces''から
+``the Self-Defense Forces and U.S.''の部分が誤って抽出されてしまう．
+
+条件\ref{cond:adv}\,は，例えば次の英文(E\ref{SENT:adv})から``Hopefully 
+Japan and the EC''ではなく``Japan and the EC''を抽出するために設定したも
+のである．
+\begin{SENT}
+\sentE
+Hopefully Japan and the EC will strengthen their relationship even further.
+\label{SENT:adv}
+\end{SENT}
+この判定は当該語と前置詞，接続詞，副詞の一覧表との照合によって行なう．
+なお，副詞の一覧表に登録されている語のうちEast, West, North, Southなど
+15語は，例えば``West Germany, Britain and Italy''のように，これらが名詞
+または形容詞として機能している{\CPNP}が訓練データにおいて比較的多く見
+られたので，副詞の一覧表から削除した．
+
+条件\ref{cond:length}\,は，\ref{sec:intro}\,節で述べたように，
+英日機械翻訳システムの対訳辞書にできるだけ長い英語固有表現を登録すると翻
+訳品質が向上することが多いという経験に基づいて設定したものである．
+しかし，抽出対象を最長の単語列に限定することは，対応付け漏れが生じる原因
+の一つとなる．
+この点に関しては\ref{sec:experiment:error}\,節で検証する．
+
+
+\section{{\JNP}の抽出}
+\label{sec:jpn_np}
+
+{\JNP}抽出処理では，用言による連体修飾を含まない名詞句を{\CPNP}に対応す
+る対訳候補として抽出する．
+これは，訓練データにおいて{\CPNP}に対応する{\JNP}が用言による連体修飾を
+含んでいる割合が1.4\%と非常に少なかったためである．
+
+構文解析を行なわずに和文から{\JNP}$JNP$を抽出するための主な条件は次の通
+りである．
+\begin{COND}
+\cond \label{cond:jnp}
+{\JNP}$JNP$は{\N}$JN$であるかまたは$JN$を付属語$F$でつないだ単語列で
+ある．
+記号`*'は零回以上の繰り返しを意味する．
+\begin{eqnarray*}
+JNP &=& (JN\ F)^*\ JN
+\end{eqnarray*}
+\cond \label{cond:jn}
+{\N}$JN$は次の条件を満たす単語列のうち最も長いものである．
+\begin{enumerate}
+\item
+$JN$の構成要素は
+名詞-一般，名詞-副詞可能，名詞-サ変接続，名詞-形容動詞語幹，
+名詞-ナイ形容詞語幹，名詞-固有名詞，名詞-代名詞，名詞-数，
+名詞-接尾，名詞-非自立(「の」を除く)，名詞-接続詞的，  
+未知語，接頭詞-名詞接続，接頭詞-数接続，
+記号-アルファベット
+のいずれかの「茶筌」品詞を持つ語である．
+\item
+$JN$の先頭は名詞-接尾，名詞-非自立
+以外の構成要素である．
+\item
+$JN$の末尾は名詞-接続詞的，接頭詞-名詞接続，接頭詞-数接続
+以外の構成要素である．
+\item
+名詞に「する」か「できる」が後接している場合と，
+名詞-形容動詞語幹に助動詞-特殊・ダが後接している場合，
+当該名詞は$JN$の構成要素ではない．
+\end{enumerate}
+\cond \label{cond:joshi}
+$JN$をつなぐ付属語$F$は次のいずれかである．
+\begin{enumerate}
+\item
+助詞-並立助詞(「と」や「や」など)．
+\item
+助詞または名詞-非自立-副詞可能の連続であり
+末尾が助詞-連体化「の」であるもの(「との間の」や「のための」など)．
+\item
+助詞-格助詞-連語のうち末尾がウ段の平仮名か「た」であるもの(「とい
+う」，「に関する」，「に対する」，「といった」など)．
+\item 
+記号-読点．
+\item
+記号-一般のうち「・」と「＝」．
+\item
+接続詞．
+記号-読点が接続詞に前接または後接していてもよい．
+\item
+条件\ref{cond:jn_exception}\,により挿入される特殊記号．
+\end{enumerate}
+\cond \label{cond:jn_exception}
+条件\ref{cond:jn}\,を満たす単語列にあらかじめ指定した語が含まれている場合，
+付属語$F$として機能する特殊記号が当該語の直前に挿入される．
+\cond \label{cond:jlength}
+$JNP$は条件\ref{cond:jnp}\,ないし\ref{cond:jn_exception}\,を満たすあらゆる
+長さの単語列である．
+\end{COND}
+
+条件\ref{cond:jlength}\,により，{\CPNP}の場合と異なり，条件を満たす
+最長の単語列だけではなく，その部分単語列も抽出される．
+例えば次の和文(J\ref{SENT:bank})からは
+最長の単語列「厚生年金保険法と国民年金法の改正案」の他に，
+「厚生年金保険法と国民年金法」，「国民年金法の改正案」，「厚生年金保険法」，
+「国民年金法」，「改正案」が{\JNP}として抽出される．
+\begin{SENT2}
+\sentE
+The bills to revise the Welfare Pension Insurance Law and the National 
+Pension Law are expected to be submitted to $\ldots$ .
+\sentJ
+$\ldots$ 厚生年金保険法と国民年金法の改正案を提出する．
+\label{SENT:bank}
+\end{SENT2}
+
+条件\ref{cond:jn}\,によれば{\N}は最長のものだけが抽出されるが，
+条件\ref{cond:jn_exception}\,は条件\ref{cond:jn}\,に対する例外条件であり，
+{\N}を分割して得られる部分単語列を{\JNP}として抽出するためのものであ
+る．
+分割箇所は，訓練データを観察した結果に基づいて，一部の名詞-サ変接続や
+名詞-接尾(「間」，「内」，「向け」など)のところとする．
+例えば次の和文(J\ref{SENT:create})の場合，
+条件\ref{cond:jn_exception}\,によりサ変名詞「創設」の直前に特殊記号が挿
+入される．
+\begin{SENT2}
+\sentE
+Israel, Jordan, the United States and the European Union are keen on 
+creating a Middle East and North Africa Development Bank, $\ldots$ .
+\sentJ
+$\ldots$ 中東・北アフリカ開発銀行創設には，イスラエルやヨルダン，
+米国，欧州連合が積極的だ．
+\label{SENT:create}
+\end{SENT2}
+このため，「中東・北アフリカ開発銀行創設」は「中東・北アフリカ開発銀行」
+と「創設」の間に付属語(例えば助詞「の」)が存在するかのように処理される．
+従って，「中東・北アフリカ開発銀行創設」の他に「中東・北アフリカ開発銀
+行」と「創設」が{\JNP}として抽出される
+\footnote{「・」を付属語として扱うので，実際には「北アフリカ開発銀行創設」，
+「中東」，「北アフリカ開発銀行」も抽出される．}．
+このように，条件\ref{cond:jn_exception}\,により日本語{\N}全体だけ
+ではなくその部分単語列も{\CPNP}に対応する候補として抽出することができる．
+英文(E\ref{SENT:create})から抽出される{\CPNP}の一つは
+``a Middle East and North Africa Development Bank''であるが，和文
+(J\ref{SENT:create})から抽出された{\JNP}の中にはこの{\CPNP}に対応する
+「中東・北アフリカ開発銀行」が含まれている． 
+
+
+\section{{\MTNP}と{\JNP}の照合}
+\label{sec:alignment:align}
+
+照合処理では，
+(1) 意味的類似性と音韻的類似性の二つの観点から{\MTNP}と{\JNP}の対を評価
+し，二種類の類似度を統合して全体としての類似度を求め，さらに，
+(2) {\CPNP}の意味的適格性を判断し，適格な場合にのみ{\JNP}との対応付けを
+行なう． 
+
+
+\subsection{意味的類似性の評価：文字単位での比較}
+\label{sec:alignment:align:sem}
+
+二つの日本語文字列を照合して両者の類似度を求める方法は，照合を単語単位で
+行なう方法\cite{Sumita91,TanakaH99}と 
+文字単位で行なう方法\cite{Sato92}に分けられる．
+このうち後者の方法には，日本語の文字は一文字でもある程度の意味を表わす
+表意文字であるため，シソーラスなしでも類義語の照合が近似的に行なえると
+いう利点がある\cite{Sato92}．  
+この利点を考慮して，{\MTNP}と{\JNP}の照合を文字単位で行なう． 
+なお，照合の対象は{\MTNP}と{\JNP}のそれぞれの{\N}の部分とし，付属語
+部分は対象外とする．
+
+{\MTNP}と{\JNP}の意味的類似性を表わす尺度として
+ジャッカード係数\cite{Romesburg92}
+を用いる
+\footnote{ジャッカード係数を対訳獲得に利用した研究としては文献
+\cite{Kaji01}などがある．}．
+ジャッカード係数は，この場合，{\MTNP}の{\N}部分と{\JNP}の
+{\N}部分の両方に現れる文字の数を，少なくとも一方に現れる文字の数で割
+った値であると定義できる．
+すなわち，{\MTNP}の{\N}部分に現れる文字の集合(文字の出現順序を考慮せ
+ず，文字の重複を許す)を$X$，{\JNP}の{\N}部分に現れる文字の集合を$Y$
+とし，さらに，$X$と$Y$の両方に現れる文字の集合$U$としたとき，
+{\MTNP}と{\JNP}の対に対する意味的類似度$S_{sem}$は次の式(\ref{eq:jaccard})
+で求められる．
+\begin{equation}
+S_{sem} = \frac{|U|}{|X| + |Y| - |U|}
+\label{eq:jaccard}
+\end{equation}
+
+ある英文から抽出される``The Headquarters of the Struggle 
+against Consumption Tax Raise''という{\CPNP}を実験に用いた
+機械翻訳システム
+で翻訳すると「消費税上昇に対する奮闘の本部」というMT訳が得られる．
+このMT訳において{\N}部分は「消費税上昇」，「奮闘」，「本部」であり，文字
+数は9文字である．
+他方，この英文に対応する和文から抽出される「消費税率引き上げ反対運動推進
+本部」という{\JNP}は{\N}のみから構成されており，文字数は16文字である．
+このとき，{\MTNP}の{\N}を構成する文字の集合と
+{\JNP}の{\N}を構成する文字の集合の両方に現れる文字は「消」，「費」，
+「税」，「上」，「本」，「部」の6文字である．
+従って，{\MTNP}「消費税上昇に対する奮闘の本部」と
+{\JNP}「消費税率引き上げ反対運動推進本部」の意味的類似度として，
+$S_{sem} = 6/(9+16-6) = 0.316$という値が与えられる．
+この値を，{\CPNP}``The Headquarters of the Struggle against 
+Consumption Tax Raise''と{\JNP}「消費税率引き上げ反対運動推進本部」
+との間の意味的類似度と解釈する．
+
+
+\subsection{意味的類似性の評価：文字種を考慮した比較}
+\label{sec:alignment:align:sem_chartype}
+
+\ref{sec:alignment:align:sem}\,節で述べた文字単位の照合では，すべての
+文字種(漢字，平仮名，片仮名，英字，数字，記号など)を同等に扱っている．
+このような文字種の違いを考慮しない処理では，
+漢字以外の文字同士が不適切に適合してしまうことがある． 
+例えば，ある英文から抽出される
+{\CPNP}``Kasumigaseki Station of the Teito Rapid Transit Authority''の
+MT訳は「帝都高速度交通営団のKasumigasekiステーション」となり，
+この英文に対応する和文からは「営団地下鉄・霞ヶ関駅」や
+「アタッシェケース」などの{\JNP}が抽出される． 
+この場合，「帝都高速度交通営団のKasumigasekiステーション」と
+「営団地下鉄・霞ヶ関駅」の間の意味的類似度のほうが
+「帝都高速度交通営団のKasumigasekiステーション」
+と「アタッシェケース」の間の意味的類似度よりも高くなることが望ましい．
+しかし，実際には次のように後者の意味的類似度のほうが逆に高くなってしまう．
+正しい対応付けである
+「帝都高速度交通営団のKasumigasekiステーション」と「営団地下鉄・霞ヶ関駅」
+の{\N}の間に共通する文字は「営」と「団」であるので，式
+(\ref{eq:jaccard})によってこれらの間の意味的類似度$S_{sem}$は
+$2/(27+9-2) = 0.059$となる． 
+他方，
+「帝都高速度交通営団のKasumigasekiステーション」と「アタッシェケース」
+の{\N}の間に共通する文字は「シ」，「ー」，「ス」であるので，
+意味的類似度$S_{sem}$は$3/(27+8-3) = 0.094$となる
+\footnote{類似度が比較的低いので閾値による制限でこの対応付けを出力しない
+ようにすることもできるが，正しくない対応付けに正しい対応付けよりも高い
+類似度が与えられることは望ましくない．}． 
+
+このような事例を観察すると，漢字は一文字でも意味を持つことが多いが，それ
+以外の字種の文字はそうではないことから，漢字と非漢字を同等に扱うのは適切
+ではないことが分かる．
+このような問題への対策として，文字種により重み付けを行なう方法がこれまで
+に示されている\cite{Baldwin01}．
+これに対して本稿では，照合の際，文字種により照合単位を変化させる
+\footnote{テキスト全文検索の高速化を目的として，文字種により文字列の長さ
+を変化させる方法が文献\cite{Fukushima97,Matsui97}に示されている．}．
+具体的には，漢字の照合は文字単位とし，非漢字の照合は同一文字種の
+最長文字列単位(ただし単語境界は越えない)とする． 
+
+非漢字の場合は同一文字種の最長文字列単位で一致しなければならないという条
+件を設けるが，類似度の計算ではジャッカード係数の求め方は漢字の場合も非漢
+字の場合も同じとする．
+すなわち，{\MTNP}の{\N}部分に現れる文字の集合を$X$，
+{\JNP}の{\N}部分に現れる文字の集合を$Y$とし，
+さらに，$X$と$Y$から同一文字種の最長文字列単位で互いに一致しない非漢字を
+削除した文字の集合をそれぞれ$X^\prime$，$Y^\prime$とし，
+$X^\prime$の$Y^\prime$の両方に現れる文字の集合$U^\prime$としたとき，
+{\MTNP}と{\JNP}の対に対する文字種を考慮した意味的類似度$S_{sem}^\prime$
+を次の式(\ref{eq:jaccard_chartype})で求める．
+\begin{equation}
+S_{sem}^\prime = \frac{|U^\prime|}{|X| + |Y| - |U^\prime|}
+\label{eq:jaccard_chartype}
+\end{equation}
+例えば``the Asian Games in Hiroshima''という
+{\MTNP}「広島のアジア競技大会」と{\JNP}「広島アジア大会」において片仮名表
+現「アジア」は最長文字列単位で一致する．
+従って，$X$と$Y$から「ア」，「ジ」，「ア」を削除する必要はないので，
+$X^\prime$と$Y^\prime$はそれぞれ$X$と$Y$と同じ集合となり，
+式(\ref{eq:jaccard_chartype})による意味的類似度
+$S_{sem}^\prime$は$7/(9+7-7) = 0.778$となる．
+これは，式(\ref{eq:jaccard})によって求めた場合の意味的類似度と変わらない．
+他方，上記の「帝都高速度交通営団のKasumigasekiステーション」と
+「アタッシェケース」の場合は，$X$から「Kasumigasekiステーション」を構成
+する文字が削除されるので，$X^\prime$の要素は
+「帝」，「都」，「高」，「速」，「度」，「交」，「通」，「営」，「団」と
+なり，$Y$からは「アタッシェケース」を構成する文字が削除されるので，
+$Y^\prime$は空集合となる．
+このため，$X^\prime$と$Y^\prime$に共通する文字は存在しなくなり，
+式(\ref{eq:jaccard_chartype})による意味的類似度
+$S_{sem}^\prime$は$0$となる．
+このように文字種を考慮した処理を行なうことによって，漢字以外の文字が
+短すぎる単位で適合することを防ぐことができる．
+
+
+\subsection{音韻的類似性の評価}
+\label{sec:alignment:align:pho}
+
+意味的類似性は，{\CPNP}の構成要素が機械翻訳システムの辞書に登録されてお
+り，そのMT訳が得られる場合には有効であるが，辞書に登録されていない場合に
+は有効に働かない．
+特に，本稿で対象にしている{\CPNP}の構成要素は辞書に登録されていないこと
+も少なくないと予想される．
+このような場合，翻字(transliteration)が有効である
+\cite{Al-Onaizan02,Virga03,Yoshimi04}．
+
+読売新聞とThe Daily Yomiuriのように日本に関する事柄について述べた記事と
+その対訳記事が多く含まれるコーパスを処理対象とする場合，日本に関する
+{\CPNP}には日本語をローマ字表記した語が多く含まれる可能性が高い．
+このことに着目して，音韻的類似性の評価としてローマ字読みの照合を行なう．
+{\MTNP}に現れる辞書未登録語の読みは五十音表との照合によって得る．
+{\MTNP}中の辞書未登録語以外の読みと{\JNP}の読みは「茶筌」によって得るこ
+とができる． 
+
+{\MTNP}と{\JNP}の音韻的類似度も意味的類似度の場合と同じく
+ジャッカード係数で測定する．
+ただし，音韻的類似度の場合は文字単位ではなく単語単位で照合を行なう．
+すなわち，{\MTNP}の{\N}部分の読みの集合を$X$，
+{\JNP}の{\N}部分の読みの集合を$Y$とし，
+さらに，$X$と$Y$の両方に現れる読みの集合を$U$として，
+音韻的類似度$S_{pho}$を式(\ref{eq:jaccard})と同様の式で求める．
+
+\ref{sec:alignment:align:sem_chartype}\,節で述べたように，
+{\CPNP}``Kasumigaseki Station of the Teito Rapid Transit Authority''に
+対応付けたい{\JNP}は「営団地下鉄・霞ヶ関駅」である．
+しかし，
+実験に用いた機械翻訳システムの辞書に``Kasumigaseki''が登録されていないため，
+この{\JNP}と{\CPNP}のMT訳
+「帝都高速度交通営団のKasumigasekiステーション」との意味的類似度は
+$0.059$と低くなる．
+五十音表との照合及び「茶筌」によって{\MTNP}の読みとして，
+「テイト」，「コウソクド」，「コウツウ」，「エイダン」，「カスミガセキ」，
+「ステーション」が得られる．
+また，「茶筌」によって{\JNP}の読みとして，
+「エイダン」，「チカテツ」，「カスミガセキ」，「エキ」が得られる．
+従って，{\MTNP}の読みと{\JNP}の読みの両方に現れる読みは
+「エイダン」と「カスミガセキ」となり，
+「帝都高速度交通営団のKasumigasekiステーション」と「営団地下鉄・霞ヶ関駅」
+の間の音韻的類似度$S_{pho}$は$2/(6+4-2) = 0.250$となる． 
+
+
+\subsection{意味的類似性の評価と音韻的類似性の評価の統合}
+\label{sec:alignment:align:integ}
+
+提案方法では，{\MTNP}に辞書未登録語が含まれている場合，次の式
+(\ref{eq:weight})のような加重和計算式に基づいて，
+文字種を考慮した意味的類似度
+$S^\prime_{sem}$と音韻的類似度$S_{pho}$を組み合わせて{\MTNP}と{\JNP}の間
+の総合類似度$S$を求める． 
+{\MTNP}に辞書未登録語が含まれていない場合には，
+文字種を考慮した意味的類似度
+$S^\prime_{sem}$を総合類似度$S$とする．
+\begin{equation}
+S = \left\{
+\begin{array}{lp{0.31\columnwidth}}
+(1-\alpha) \times S^\prime_{sem} + \alpha \times S_{pho} & 
+{\MTNP}に辞書未登録語が含まれている場合． \\
+S^\prime_{sem} & 含まれていない場合．
+\end{array}
+\right.
+\label{eq:weight}
+\end{equation}
+$\alpha$は意味的類似性に対して音韻的類似性を重視する度合いを表わすが，
+現在のところ両者を同等に扱うために0.5としている
+\footnote{予備実験で最良の結果が得られるように調整した値ではない．}．
+
+そして，総合類似度$S$が閾値$th$以上である{\CPNP}と{\JNP}の対を出力する．
+
+
+\subsection{意味的不適格表現の抽出抑制}
+\label{sec:alignment:align:pp}
+
+\ref{sec:eng_np}\,節で述べた処理によって抽出される{\CPNP}には本来
+{\CPNP}の構成要素を修飾しない前置詞句が含まれている可能性がある．
+このような前置詞句を含む{\CPNP}は，意味的に不適格であるため，どの{\JNP}と
+も対応付けられてはならない．
+\ref{sec:intro}\,節で述べたように，次の英文(E\ref{SENT:pp_ng})から抽出さ
+れる``the United States into World War II''は意味的に不適格である．
+\begin{SENT2}
+\sentE
+The attack on Pearl Harbor was the trigger that drew the United States 
+into World War II.
+\sentJ
+真珠湾攻撃は，米国が第二次世界大戦に介入するきっかけを作った転換点でもあ
+った．
+\label{SENT:pp_ng}
+\end{SENT2}
+しかし，\ref{sec:alignment:align:sem}\,ないし
+\ref{sec:alignment:align:integ}\,節の処理では，ある{\CPNP}に意味的に
+不適格な前置詞句が含まれているか否かを識別することは困難であり，このよう
+な例の場合に不適切な対応付けが行なわれてしまう． 
+すなわち，``the United States into World War II''のMT訳は
+「第二次世界大戦への米国」({\N}部分の文字数は9文字)となり，
+上記の和文(J\ref{SENT:pp_ng})から抽出される{\JNP}「第二次世界大戦」との
+間で「第二次世界大戦」の7文字が共有されるので，意味的類似度
+$S_{sem}$は$7/(9+7-7) = 0.778$と
+いう比較的高い値となり，不適切な対応付けが得られてしまう．
+そこで，この点に対処するために新たな処理を導入する．
+
+ある{\CPNP}が意味的に不適格であり本来一つの名詞句を構成しないならば，
+この{\CPNP}に対応する日本語表現は，一つの{\JNP}という表現形式ではなく，
+他の表現形式になりやすいと考えられる
+\footnote{この作業仮説は，文献
+\cite{Utsuro92,Kinoshita93}
+などに示されている考えに近い．}．
+この作業仮説によれば，{\CPNP}が意味的に適格であるか否かは，{\MTNP}に対応
+する一つの{\JNP}が存在するか否かによって判定することができる．
+
+この判定は訓練データを観察した結果に基づいて設定した次の
+条件\ref{cond:pp}\,に基づいて行ない，{\MTNP}と{\JNP}が
+条件\ref{cond:pp}\,が満たされる場合に限り{\MTNP}に対応する
+一つの{\JNP}が存在するとみなすことにする．
+\begin{COND}
+\cond \label{cond:pp}
+{\MTNP}を構成するある{\N}$MTN_i (i = 1, 2, \ldots, n)$と{\JNP}の間の
+総合類似度$S_i$が閾値$th$以上である場合，$MTN_i$は{\CPNP}と{\JNP}の対応
+に関与すると呼ぶ．
+{\MTNP}を構成する$n$個の全{\N}のうち$m$個の{\N}が{\CPNP}と{\JNP}の対応に
+関与しているとき，関与率$m/n$が閾値$th_{part}$を超えなければならない．
+\end{COND}
+条件\ref{cond:pp}\,による判定では，{\MTNP}全体と{\JNP}との総合類似度を求
+める処理(\ref{sec:alignment:align:sem}\,ないし
+\ref{sec:alignment:align:integ}\,節の処理)を{\MTNP}の構成要素
+と{\JNP}との間に適用している．
+閾値$th_{part}$は，予備実験において閾値を1から0.1まで0.1刻みで変化させて
+処理を行ない最良の結果が得られたときの値0.5に設定している．
+
+意味的に不適格な{\CPNP}``the United States into World War II''のMT訳
+「第二次世界大戦への米国」と{\JNP}「第二次世界大戦」に対して
+条件\ref{cond:pp}\,による判定を行なうと，
+「第二次世界大戦への米国」を構成する{\N}のうち「米国」は
+「第二次世界大戦への米国」と「第二次世界大戦」の対応付けに関与していない
+ため関与率は$1/2$となり閾値$th_{part}$を超えないので，
+``the United States into World War II''と「第二次世界大戦」の対応付けは
+棄却される．
+
+これに対して，次の英文(E\ref{SENT:pp_ok})において意味的に適格な
+{\CPNP}``the Diplomatic and Consular Missions in Kuwait''のMT訳
+「クウェートにおける外交上の，そして領事のミッション」を構成する四つの
+{\N}のうち「ミッション」以外の「クウェート」，「外交上」，「領事」の三
+つは{\MTNP}「クウェートにおける外交上の，そして領事のミッション」と
+{\JNP}「在クウェート外交領事使節団」の対応に関与している
+\footnote{{\JNP}「在クウェート外交領事使節団」と
+{\CPNP}``the Diplomatic and Consular Missions in Kuwait''のMT訳を構成す
+る{\N}「クウェート」，「外交上」，「領事」との総合類似度はそれぞれ，
+0.385，0.143，0.154である．}
+ので，対応への関与率は3/4となり閾値$th_{part}$を超える．
+このため，``the Diplomatic and Consular Missions in Kuwait''は意味的に適
+格な{\CPNP}であると判定される．
+\begin{SENT2}
+\sentE
+They strongly request Iraq to remove the obstacles which prevent the 
+Diplomatic and Consular Missions in Kuwait from executing their 
+functions, $\ldots$ .
+\sentJ
+双方は，イラクに対し，在クウェート外交領事使節団が活動を遂行する上での障
+害を除去し， $\ldots$ 強く求める．
+\label{SENT:pp_ok}
+\end{SENT2}
+
+なお，この処理は，前置詞句の係り先が誤っている表現が抽出されるのを抑制す
+るだけでなく，等位構造の範囲が誤っている表現の抽出の抑制や，
+{\CPNP}に正しく対応する{\JNP}が和文中に存在しない場合
+\footnote{{\CPNP}に対応する表現が和文では省略されている場合や
+英文と和文の対応付けが誤っている場合など．}
+の対応付け誤りの抑制にも有効である．
+
+
+\section{評価実験}
+\label{sec:experiment}
+
+
+\subsection{実験方法}
+\label{sec:experiment:method}
+
+評価実験には，読売新聞とThe Daily Yomiuriの対訳コーパスのうち1996年7月中
+旬から2001年までの記事のうち文対応スコアの上位三万文対を用いた．
+この三万文対に対して対応付け処理を行ない，
+各{\CPNP}について，総合類似度$S$が閾値$th=0.1$以上であり，かつ
+条件\ref{cond:pp}\,を満たすものが存在する場合には，
+そのうち総合類似度が最も高い{\JNP}を出力し，存在しない場合には何も出力し
+ないようにした．
+総合類似度の閾値は，予備実験において閾値を1から0.1まで0.1刻みで変化させて
+処理を行ない最良の結果が得られたときの値である．
+
+得られたデータから200文対を標本抽出し，この200文対から人手で正解データを
+作成し，提案方法による対応付け結果と比較した．
+正解，対応付け漏れ，対応付け誤りの件数をそれぞれ$C$，$M$，$N$とするとき，
+提案方法の性能を評価する指標として次の式で計算される
+再現率，適合率，F値を用いた．
+\begin{eqnarray*}
+再現率 &=& \frac{C}{C+M} \\\\
+適合率 &=& \frac{C}{C+N} \\\\
+\mbox{F}値 &=& \frac{2 \times 再現率 \times 適合率}{適合率 + 再現率} 
+\end{eqnarray*}
+
+
+\subsection{実験結果}
+\label{sec:experiment:result}
+
+提案方法は，文字種を考慮した文字単位の照合
+(\ref{sec:alignment:align:sem_chartype}\,節)，
+ローマ字読みの照合(\ref{sec:alignment:align:pho}\,節)，
+{\MTNP}を構成する各{\N}の関与を考慮した照合
+(\ref{sec:alignment:align:pp}\,節)の三つの処理によって対応付けを行なう． 
+これに対して，文字種を考慮しない文字単位の照合だけで対応付けを行なう方法
+をベースラインする．
+提案方法とベースラインのそれぞれで対応付けを行なった場合の評価結果を
+表\ref{tab:result}\,に示す．
+表\ref{tab:result}\,によれば，
+提案方法のF値は0.678であり，ベースラインのF値0.583から0.095向上している．
+提案方法とベースラインの再現率，適合率を比べると，
+再現率はベースラインのほうが0.101高いが適合率は提案手法のほうが0.271高く，
+提案方法では再現率の低下を抑えつつ適合率の向上が実現できている．
+我々は，対応付け漏れを抑えることよりも対応付け誤りを抑えることを重視して
+いるため，この結果により所期の目標が達成されていると考える．
+\begin{table}[htbp]
+\caption{提案方法とベースラインの評価結果}
+\label{tab:result}
+\begin{center}
+\begin{tabular}{|l||r|r|r|r|r|r|r|}\hline
+ & \multicolumn{1}{c|}{正解} & \multicolumn{1}{c|}{誤り} &  
+\multicolumn{1}{c|}{漏れ} & \multicolumn{1}{c|}{適合率} & 
+\multicolumn{1}{c|}{再現率} & \multicolumn{1}{c|}{F値} \\\hline\hline
+ベースライン & 113 & 116 & 46 & 0.493 & 0.711 & 0.583 \\
+提案方法     &  97 &  30 & 62 & 0.764 & 0.610 & 0.678 \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\ref{sec:alignment:align:pp}\,節で述べたように，関与率の閾値は予備実験の
+結果に基づいて0.5に設定した．
+表\ref{tab:result}\,は，この設定で評価実験を行なった場合の結果であるが，
+評価実験においても閾値を0.1刻みに変化させて性能の変化を観察した．
+その結果を表\ref{tab:threshold}\,に示す．
+表\ref{tab:threshold}\,によれば，予備実験の場合と異なり，閾値が0.6の場合
+に最もよいF値が得られており，閾値を0.5とした場合のF値は，閾値を0.7とし
+た場合に次いで第三位である．
+\begin{table}[htbp]
+\caption{評価実験における性能と関与率の閾値との関係}
+\label{tab:threshold}
+\begin{center}
+\begin{tabular}{|r||r|r|r|}\hline
+\multicolumn{1}{|c||}{閾値} & \multicolumn{1}{c|}{適合率} & 
+\multicolumn{1}{c|}{再現率} & \multicolumn{1}{c|}{F値} \\\hline\hline
+0.3 & 0.521 & 0.698 & 0.597 \\
+0.4 & 0.752 & 0.610 & 0.674 \\
+0.5 & 0.764 & 0.610 & 0.678 \\
+0.6 & 0.821 & 0.604 & 0.696 \\
+0.7 & 0.817 & 0.591 & 0.686 \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+
+\subsection{各処理の効果}
+\label{sec:experiment:each}
+
+提案した各処理が性能の向上にどの程度寄与しているかを調べた．
+その結果を表\ref{tab:cond-effect}\,に示す．
+表\ref{tab:cond-effect}\,において，処理欄の記号`$+$'はその処理を導入
+して対応付けを行なったことを意味し，記号`$-$'はその処理なしで行なったこと
+を意味する．
+どの処理も導入していない(a)がベースラインの性能であり，すべての処理を導
+入した(h)が提案方法の性能である．
+\begin{table}[htbp]
+\caption{導入した処理ごとの性能の比較}
+\label{tab:cond-effect}
+\begin{center}
+\begin{tabular}{|c|c|c|c||r|r|r|r|r|r|}\hline
+& \multicolumn{3}{|c||}{処理} & & & & & & \\\cline{2-4}
+& 文字種 & 読み & 関与率 & \multicolumn{1}{c|}{\raisebox{1.5ex}[0pt]{正解}} & 
+\multicolumn{1}{c|}{\raisebox{1.5ex}[0pt]{誤り}} &  
+\multicolumn{1}{c|}{\raisebox{1.5ex}[0pt]{漏れ}} & 
+\multicolumn{1}{c|}{\raisebox{1.5ex}[0pt]{適合率}} & 
+\multicolumn{1}{c|}{\raisebox{1.5ex}[0pt]{再現率}} & 
+\multicolumn{1}{c|}{\raisebox{1.5ex}[0pt]{F値}} \\\hline\hline
+(a) & $-$ & $-$ & $-$ & 113 & 116 & 46 & 0.493 & 0.711 & 0.583 \\
+(b) & $-$ & $-$ & $+$ &  97 &  35 & 62 & 0.735 & 0.610 & 0.667 \\
+(c) & $-$ & $+$ & $-$ & 114 & 116 & 45 & 0.496 & 0.717 & 0.586 \\
+(d) & $-$ & $+$ & $+$ &  98 &  32 & 61 & 0.754 & 0.616 & 0.678 \\
+(e) & $+$ & $-$ & $-$ & 111 & 112 & 48 & 0.498 & 0.698 & 0.581 \\
+(f) & $+$ & $-$ & $+$ &  96 &  32 & 63 & 0.750 & 0.604 & 0.669 \\
+(g) & $+$ & $+$ & $-$ & 112 & 112 & 47 & 0.500 & 0.704 & 0.585 \\
+(h) & $+$ & $+$ & $+$ &  97 &  30 & 62 & 0.764 & 0.610 & 0.678 \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+(a)と(b)を比べると，{\N}の関与を考慮した処理を導入することによって，
+対応付け漏れが16件増えているが，対応付け誤りが81件と大幅に減っていること
+が分かる．
+このことから，
+(1) 英文から抽出された{\CPNP}が
+意味的に不適格である場合や，
+(2) 英文から抽出された{\CPNP}が
+意味的に
+適格であるが正解が和文中に存在しない場合にこの{\CPNP}に何らかの{\JNP}が
+対応付けられる誤りを抑制することに関して{\N}の関与を考慮した処理が有効に
+働いているといえる．
+
+読みの類似度を考慮した処理が性能向上に寄与する度合いは，(a)と(c)を比べて
+分かるように，ベースラインで対応付け漏れであったものが正解になった1件だ
+けであるので，非常に低いようにみえる．
+\ref{sec:alignment:align:integ}\,節で述べたように，この処理が機能するの
+は{\MTNP}に辞書未登録語が含まれている場合である．
+正解データ中の{\CPNP}のうちそのMT訳に辞書未登録語が含まれるものは20件
+存在した．
+この20件のうちベースラインで正解が得られなかったものは8件であった．
+このうち1件が読みの類似度を考慮した処理によって改善されたことになる．
+
+(a)と(e)を比べると，
+文字種を考慮した処理を導入することによって，対応付け誤りが4件減っている．
+この処理の目的は漢字以外の文字が短すぎる単位で適合することを防ぐことであ
+るが，解消された4件の対応付け誤りで期待した効果が得られている．
+他方で，正解が2件減り対応付け漏れが2件増えているが，これは，ベースライン
+で正解であった2件が文字種を考慮した処理では対応付け漏れになったものであ
+った．
+今回の実験では英字と数字を同一文字種とみなし英数字は最長文字列単位で一致
+しなければならないという設定にした．
+このため，``the Group of Seven''という{\CPNP}のMT訳「７のグループ」と
+{\JNP}「Ｇ７」との対応付けが得られなくなっていた．
+
+複数の処理を同時に導入することによってF値がどのように変化したかを見る．
+読みの類似度を考慮した処理と{\N}の関与を考慮した処理を同時に導入した
+(d)のF値0.678は，前者の処理だけを導入した(c)のF値0.586よりも高く，かつ
+後者の処理だけを導入した(b)のF値0.667よりも高い．
+文字種を考慮した処理と{\N}の関与を考慮した処理を同時に導入した(f)の
+F値0.669も，これらの処理を個別に導入した(e)と(b)のF値0.581，0.667を 
+上回る．
+文字種を考慮した処理と読みの類似度を考慮した処理を同時に導入した(g)の
+F値0.585は，読みの類似度を考慮した処理を同時に導入した場合(c)のF値0.586
+よりも若干低くなっているが，文字種を考慮した処理だけを導入した場合(e)の
+F値0.581よりも高い．
+三種類の処理をすべて導入した提案方法(h)のF値が最も高い．
+以上のことから，文字種を考慮した処理と読みの類似度を考慮した処理を同時に
+導入した場合に若干の副作用が見られるが，概ね，これらの処理は互いの効果を
+抑制していないといえる．
+
+
+\subsection{失敗原因の分析}
+\label{sec:experiment:error}
+
+提案手法で生じた62件の対応付け漏れと30件の対応付け誤りについて，
+{\CPNP}の抽出，{\JNP}の抽出，{\MTNP}と{\JNP}の照合のうちどの処理に原因が
+あるのかを調査した．
+その結果を表\ref{tab:cause_of_failure}\,に示す．
+表\ref{tab:cause_of_failure}\,を見ると，対応付け漏れの場合も対応付け誤り
+の場合も，{\MTNP}と{\JNP}の照合の際に生じる失敗が他の処理で生じる失敗に
+比べて多いことが分かる．
+\begin{table}[htbp]
+\caption{失敗原因の分類}
+\label{tab:cause_of_failure}
+\begin{center}
+\begin{tabular}{|l||r|r|}\hline
+\multicolumn{1}{|c||}{失敗原因の処理} & \multicolumn{1}{c|}{漏れ} 
+& \multicolumn{1}{c|}{誤り} \\\hline\hline
+{\CPNP}の抽出		& 14 &  6 \\
+{\JNP}の抽出		& 14 & 10 \\
+{\MTNP}と{\JNP}の照合	& 34 & 14 \\\hline
+合計			& 62 & 30 \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+対応付け漏れのうち{\CPNP}の抽出に原因がある14件を細かく分類すると，
+条件\ref{cond:length}\,に関するものが最も多く9件であり，
+条件\ref{cond:comma}\,に関するものが3件であり，
+条件\ref{cond:poss}\,に関するものと条件\ref{cond:adv}\,に関するものがそ
+れぞれ1件ずつであった．
+条件\ref{cond:length}\,により最長の単語列だけを抽出していることが原因で
+抽出できなかったもの9件のうち4件には抽出された最長の単語列に
+月名などの時間表現が含まれていた．
+例えば次の英文(E\ref{SENT:time})から条件\ref{cond:np}\,ないし
+\ref{cond:adv}\,を満たす単語列のうち最も長いものを抽出すると，
+``July through August''を含む``July through August in Sendai, 
+Sapporo and Kyoto''が抽出される．
+\begin{SENT2}
+\sentE
+More classes are scheduled to be held from July through August in Sendai, 
+Sapporo and Kyoto.
+\sentJ
+７月から８月にかけては仙台，札幌，京都で開く予定だ．
+\label{SENT:time}
+\end{SENT2}
+``$P\ BaseNP$''という前置詞句において，$P$がof以外の前置詞であり，かつ
+{\BPNP}$BaseNP$が月名などの時間表現であるとき，この前置詞句は副詞的に働
+きやすい．
+また，このような時間表現は，of以外の前置詞句による修飾を受けにくく，新た
+な固有名詞句を作り出す生産性は低い． 
+これらの点から，``$BaseNP_1\ P\ BaseNP_2$''という表現において，
+$BaseNP_1$か$BaseNP_2$が時間表現であり，かつ$P$がof以外の前置詞であると
+き，この表現が意味的に適格な一つの{\CPNP}を構成することは少ないと考えら
+れる． 
+従って，時間表現は抽出する単語列に含めないという抽出条件を設けることで，
+ある程度の改善が期待できる．
+
+対応付け漏れのうち{\JNP}の抽出に原因がある14件のうち11件は，
+条件\ref{cond:jn}\,と条件\ref{cond:jn_exception}\,に関するものであった．
+例えば``the House of Representatives''と「衆院選」が対応付けられ，「衆
+院」との対応付けが得られていなかった．
+正しい対応付けを得るためには，条件\ref{cond:jn_exception}\,により「衆院」
+と「選」を分離する必要がある．
+残りの3件は，例えば``the Japanese Society for History Textbook Reform''
+と「新しい歴史教科書をつくる会」との対応付けが得られないような場合であり，
+抽出する{\JNP}の構成要素として用言を認めていないことが原因であった．
+
+対応付け漏れのうち{\MTNP}と{\JNP}の照合に原因がある34件のうち27件が
+条件\ref{cond:pp}\,によって{\JNP}の抽出が抑制されてしまったものであり，
+残りの7件が総合類似度が閾値を超えなかったものである．
+条件\ref{cond:pp}\,により{\JNP}の抽出が抑制された27件のうち20件は，
+{\CPNP}のMT訳と{\JNP}との差異が大きいために関与率が閾値を超えなかったも
+のである．
+例えば``Japan and France''という{\CPNP}に対して「日仏」という{\JNP}を対
+応付ける必要があるが，実験に用いた機械翻訳システムによる``Japan and 
+France''のMT訳は「日本，及び，フランス」となるため，「仏」と「フランス」
+の照合に失敗する．
+27件のうちの残りの7件は，実験に用いた機械翻訳システムの辞書に登録されて
+いない単語が含まれていたために，関与率が閾値を超えなかったものである．
+
+対応付け誤りのうち{\CPNP}の抽出に原因がある6件を細かく分けると，
+条件\ref{cond:length}\,に関するものが3件であり，
+条件\ref{cond:comma}\,に関するもの，
+条件\ref{cond:poss}\,に関するもの，
+条件\ref{cond:adv}\,に関するものがそれぞれ1件ずつであった．
+
+{\JNP}の抽出に原因がある10件はすべて，
+``the House of Representatives''が「衆院選」に対応付けられるというように，
+条件\ref{cond:jn}\,と条件\ref{cond:jn_exception}\,に関するものであった．
+
+{\MTNP}と{\JNP}の照合に原因がある14件は主に条件\ref{cond:pp}\,に関連する
+ものであった．
+例えば``the Italian Embassy for 22''に「イタリア大使館」という{\JNP}が
+対応付けられるという誤りが生じていたが，
+関与率により抽出が抑制されなければならない．
+しかし，実験に用いた機械翻訳システムで``the Italian Embassy for 22''を翻
+訳すると「22のイタリアの大使館」というMT訳が得られるため，このMT訳を構成
+する三つの名詞のうち「イタリア」と「大使館」の二つが対応に関与しているこ
+とになるので，関与率が2/3となり閾値を超えていた
+\footnote{``the Italian Embassy for 22''のMT訳が「22のイタリアの大使館」
+ではなく「22のイタリア大使館」となっていれば，関与率は1/2となるので，
+条件\ref{cond:pp}\, により誤った抽出を抑えることができる．}．
+
+ 
+\subsection{構文解析系を利用した場合との比較}
+\label{sec:experiment:parser}
+
+提案方法の性能を，{\CPNP}の抽出に構文解析系を利用した場合の性能と比較する．
+両者の違いは，
+(1) {\CPNP}を単語列から抽出するか，実験に用いた機械翻訳システムの構文解
+析系により生成した構文解析木から抽出するかという点と，
+(2) 意味的不適格表現の抽出抑制を，{\MTNP}を構成する各{\N}の関与を考慮し
+た処理で行なうか，構文解析系で行なうかという点である．
+なお，利用した構文解析系の性能評価として，前置詞付加の曖昧性解消の精度を
+本稿の実験とは別に評価したところ，正解率は82\%であった．
+
+構文解析系を利用した場合の性能を表\ref{tab:parser}\,に示す．
+表\ref{tab:parser}\,において，
+(a)がベースラインの性能，(h)が提案方法の性能，(p1)ないし(p4)が
+構文解析系を利用した場合の性能である．
+(h)と(p1)ないし(p4)を比べると，対応付け誤り件数において比較的大きな差が
+あることが分かる．
+対応付け誤りの多くは，{\CPNP}の抽出において意味的に不適格なものが抽出さ
+れ，それに{\JNP}が対応付けられることによって生じる．
+表\ref{tab:parser}\,の実験結果によれば，
+本稿で対象としたような{\CPNP}とその対訳を獲得することを目的とした場合，
+この問題に対しては，構文解析(単一言語内での処理)で対処するよりも，
+{\MTNP}を構成する各{\N}の関与を考慮した照合(二言語間での処理)で対処す
+るほうが望ましいことを示している．
+\begin{table}[htbp]
+\caption{構文解析系を利用した場合の性能との比較}
+\label{tab:parser}
+\begin{center}
+\begin{tabular}{|c|c|c|c||r|r|r|r|r|r|}\hline
+& \multicolumn{3}{|c||}{処理} & & & & & & \\\cline{2-4}
+& 文字種 & 読み & 関与率 & \multicolumn{1}{c|}{\raisebox{1.5ex}[0pt]{正解}} & 
+\multicolumn{1}{c|}{\raisebox{1.5ex}[0pt]{誤り}} &  
+\multicolumn{1}{c|}{\raisebox{1.5ex}[0pt]{漏れ}} & 
+\multicolumn{1}{c|}{\raisebox{1.5ex}[0pt]{適合率}} & 
+\multicolumn{1}{c|}{\raisebox{1.5ex}[0pt]{再現率}} & 
+\multicolumn{1}{c|}{\raisebox{1.5ex}[0pt]{F値}} \\\hline\hline
+(a)  & $-$ & $-$ & $-$ & 113 & 116 & 46 & 0.493 & 0.711 & 0.583 \\
+(p1) & $-$ & $-$ & $-$ &  92 &  55 & 67 & 0.626 & 0.579 & 0.601 \\
+(p2) & $-$ & $+$ & $-$ &  92 &  56 & 67 & 0.622 & 0.579 & 0.599 \\
+(p3) & $+$ & $-$ & $-$ &  91 &  56 & 68 & 0.619 & 0.572 & 0.595 \\
+(p4) & $+$ & $+$ & $-$ &  91 &  57 & 68 & 0.615 & 0.572 & 0.593 \\
+(h)  & $+$ & $+$ & $+$ &  97 &  30 & 62 & 0.764 & 0.610 & 0.678 \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+
+\section{おわりに}
+
+本稿では，従来あまり対象とされてこなかった前置詞句や等位構造を持つ英語固
+有表現とそれに対応する日本語表現を対訳コーパスから抽出する方法を示した．
+提案方法では，文字種を考慮した処理，ローマ字読みを考慮した処理，
+名詞句の構成要素の関与を考慮した処理によって英語固有表現と日本語表現の
+照合を行なった．
+読売新聞とThe Daily Yomiuriの対訳コーパスを用いた実験では，これら三種類
+の処理を行なうことによって適合率0.764，再現率0.610，F値0.678という
+結果が得られた．
+この結果はこれらの処理を行なわない場合の結果や構文解析系を利用した場合の
+結果を上回るものである．
+
+本稿で対象とした{\CPNP}は大文字始まり語か数字の連続が前置詞または接続詞
+で結合された単語列であるが，今後の課題としては
+``GSDF troops from the Chubu area''(陸自中部方面隊)
+のように小文字始まり語を含む単語列も対象にしていく必要がある．
+
+\acknowledgment
+本稿に対して建設的で有益なコメントを頂いた査読者の方に感謝いたします． 
+
+\bibliographystyle{jnlpbbl}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Al-Onaizan \BBA\ Knight}{Al-Onaizan \BBA\
+  Knight}{2002}]{Al-Onaizan02}
+Al-Onaizan, Y.\BBACOMMA\  \BBA\ Knight, K. \BBOP 2002\BBCP.
+\newblock \BBOQ {Translating Named Entities Using Monolingual and Bilingual
+  Resources}\BBCQ\
+\newblock In {\Bem Proceedings of the 40th Annual Meeting of the Association
+  for Computational Linguistics (ACL)}, \BPGS\ 400--408.
+
+\bibitem[\protect\BCAY{荒牧英治\JBA 黒橋禎夫\JBA 佐藤理史\JBA
+  渡辺日出雄}{荒牧英治\Jetal }{2003}]{Aramaki03}
+荒牧英治\JBA 黒橋禎夫\JBA 佐藤理史\JBA  渡辺日出雄 \BBOP 2003\BBCP\
+\newblock \Jem{自然言語処理}, {\Bbf 10}  (5), 75--92.
+
+\bibitem[\protect\BCAY{Baldwin}{Baldwin}{2001}]{Baldwin01}
+Baldwin, T. \BBOP 2001\BBCP.
+\newblock {\Bem {Making Lexical Sense of Japanese-English Machine Translation:
+  A Disambiguation Extravaganza}}.
+\newblock {Doctoral Dissertation}, Department of Computer Science, Tokyo
+  Institute of Technology.
+\newblock Technical Report TR01-0003.
+
+\bibitem[\protect\BCAY{福島俊一\JBA 赤峯亨}{福島俊一\JBA
+  赤峯亨}{1997}]{Fukushima97}
+福島俊一\JBA  赤峯亨 \BBOP 1997\BBCP\
+\newblock \Jem{情報処理}, {\Bbf 38}  (4), 334--335.
+
+\bibitem[\protect\BCAY{Huang \BBA\ Vogel}{Huang \BBA\ Vogel}{2002}]{Huang02}
+Huang, F.\BBACOMMA\  \BBA\ Vogel, S. \BBOP 2002\BBCP.
+\newblock \BBOQ {Improved Named Entity Translation and Bilingual Named Entity
+  Extraction}\BBCQ\
+\newblock In {\Bem Proceedings of the 4th IEEE International Conference on
+  Multimodal Interfaces (ICMI)}, \BPGS\ 253--258.
+
+\bibitem[\protect\BCAY{Huang\JBA Vogel \BBA\ Waibel}{Huang
+  et~al.}{2003}]{Huang03}
+Huang, F.\JBA Vogel, S.\JBA  \BBA\ Waibel, A. \BBOP 2003\BBCP.
+\newblock \BBOQ {Automatic Extraction of Named Entity Translingual Equivalence
+  Based on Multi-feature Cost Minimization}\BBCQ\
+\newblock In {\Bem Proceedings of the ACL Workshop on Multilingual and
+  Mixed-language Named Entity Recognition}, \BPGS\ 9--16.
+
+\bibitem[\protect\BCAY{今村賢治}{今村賢治}{2002}]{Imamura02}
+今村賢治 \BBOP 2002\BBCP\
+\newblock \Jem{自然言語処理}, {\Bbf 9}  (5), 23--42.
+
+\bibitem[\protect\BCAY{梶博行\JBA 相薗敏子}{梶博行\JBA 相薗敏子}{2001}]{Kaji01}
+梶博行\JBA  相薗敏子 \BBOP 2001\BBCP\
+\newblock \Jem{情報処理学会論文誌}, {\Bbf 42}  (9), 2248--2258.
+
+\bibitem[\protect\BCAY{Kinoshita\JBA Shimazu \BBA\ Hirakawa}{Kinoshita
+  et~al.}{1993}]{Kinoshita93}
+Kinoshita, S.\JBA Shimazu, M.\JBA  \BBA\ Hirakawa, H. \BBOP 1993\BBCP.
+\newblock \BBOQ {Better Translation with Knowledge Extracted from Source
+  Text}\BBCQ\
+\newblock In {\Bem Proceedings of the 5th International Conference on
+  Theoretical and Methodological Issues in Machine Translation (TMI)}, \BPGS\
+  240--251.
+
+\bibitem[\protect\BCAY{北村美穂子\JBA 松本祐治}{北村美穂子\JBA
+  松本祐治}{1997}]{Kitamura97}
+北村美穂子\JBA  松本祐治 \BBOP 1997\BBCP\
+\newblock \Jem{情報処理学会論文誌}, {\Bbf 38}  (4), 727--736.
+
+\bibitem[\protect\BCAY{松井くにお\JBA 難波功\JBA 井形伸之}{松井くにお\Jetal
+  }{1997}]{Matsui97}
+松井くにお\JBA 難波功\JBA  井形伸之 \BBOP 1997\BBCP\
+\newblock 研究報告{DD}7-3, 情報処理学会.
+
+\bibitem[\protect\BCAY{Menezes \BBA\ Richardson}{Menezes \BBA\
+  Richardson}{2001}]{Menezes01}
+Menezes, A.\BBACOMMA\  \BBA\ Richardson, S. \BBOP 2001\BBCP.
+\newblock \BBOQ {A Best-First Alignment Algorithm for Automatic Extraction of
+  Transfer Mappings from Bilingual Corpora}\BBCQ\
+\newblock In {\Bem Proceedings of the ACL 2001 Workshop on Data-Driven Methods
+  in Machine Translation}, \BPGS\ 39--46.
+
+\bibitem[\protect\BCAY{Meyers\JBA Yangarber \BBA\ Grishman}{Meyers
+  et~al.}{1996}]{Meyers96}
+Meyers, A.\JBA Yangarber, R.\JBA  \BBA\ Grishman, R. \BBOP 1996\BBCP.
+\newblock \BBOQ {Alignment of Shared Forests for Bilingual Corpora}\BBCQ\
+\newblock In {\Bem Proceedings of the 16th International Conference on
+  Computational Linguistics (COLING)}, \BPGS\ 460--465.
+
+\bibitem[\protect\BCAY{Moore}{Moore}{2003}]{Moore03}
+Moore, R. \BBOP 2003\BBCP.
+\newblock \BBOQ {Learning Translations of Named-Entity Phrases from Parallel
+  Corpora}\BBCQ\
+\newblock In {\Bem Proceedings of the 10th Conference of the European Chapter
+  of the Association for Computational Linguistics (EACL)}, \BPGS\ 259--266.
+
+\bibitem[\protect\BCAY{Romesburg}{Romesburg}{1992}]{Romesburg92}
+Romesburg, H.~C. \BBOP 1992\BBCP.
+\newblock \Jem{実例クラスター分析}.
+\newblock 内田老鶴圃, 東京.
+\newblock 西田英郎，佐藤嗣二 訳.
+
+\bibitem[\protect\BCAY{Sato}{Sato}{1992}]{Sato92}
+Sato, S. \BBOP 1992\BBCP.
+\newblock \BBOQ {CTM: An Example-Based Translation Aid System}\BBCQ\
+\newblock In {\Bem Proceedings of the 14th International Conference on
+  Computational Linguistics (COLING)}, \BPGS\ 1259--1263.
+
+\bibitem[\protect\BCAY{隅田英一郎\JBA 堤豊}{隅田英一郎\JBA
+  堤豊}{1991}]{Sumita91}
+隅田英一郎\JBA  堤豊 \BBOP 1991\BBCP.
+\newblock \JBOQ 翻訳支援のための類似用例の実用的検索法\JBCQ\
+\newblock \Jem{電子情報通信学会論文誌}, {\Bbf J74-D2}  (10), 1437--1447.
+
+\bibitem[\protect\BCAY{Tanaka\JBA Kumano\JBA Uratani \BBA\ Ehara}{Tanaka
+  et~al.}{1999}]{TanakaH99}
+Tanaka, H.\JBA Kumano, T.\JBA Uratani, N.\JBA  \BBA\ Ehara, T. \BBOP 1999\BBCP\
+\newblock \Jem{自然言語処理}, {\Bbf 6}  (5), 93--116.
+
+\bibitem[\protect\BCAY{内山将夫\JBA 井佐原均}{内山将夫\JBA
+  井佐原均}{2003}]{Uchiyama03}
+内山将夫\JBA  井佐原均 \BBOP 2003\BBCP.
+\newblock \JBOQ 日英新聞の記事および文を対応付けるための高信頼性尺度\JBCQ\
+\newblock \Jem{自然言語処理}, {\Bbf 10}  (4), 201--220.
+
+\bibitem[\protect\BCAY{宇津呂武仁\JBA 松本裕治\JBA 長尾眞}{宇津呂武仁\Jetal
+  }{1992}]{Utsuro92}
+宇津呂武仁\JBA 松本裕治\JBA  長尾眞 \BBOP 1992\BBCP.
+\newblock \JBOQ 日英対訳文間の素性構造照合による統語的曖昧性の解消\JBCQ\
+\newblock \Jem{情報処理学会論文誌}, {\Bbf 33}  (12), 1555--1564.
+
+\bibitem[\protect\BCAY{Virga \BBA\ Khudanpur}{Virga \BBA\
+  Khudanpur}{2003}]{Virga03}
+Virga, P.\BBACOMMA\  \BBA\ Khudanpur, S. \BBOP 2003\BBCP.
+\newblock \BBOQ {Transliteration of Proper Names in Cross-Lingual Information
+  Retrieval}\BBCQ\
+\newblock In {\Bem Proceedings of the ACL Workshop on Multilingual and
+  Mixed-language Named Entity Recognition}, \BPGS\ 57--64.
+
+\bibitem[\protect\BCAY{Watanabe\JBA Kurohashi \BBA\ Aramaki}{Watanabe
+  et~al.}{2000}]{Watanabe00}
+Watanabe, H.\JBA Kurohashi, S.\JBA  \BBA\ Aramaki, E. \BBOP 2000\BBCP.
+\newblock \BBOQ {Finding Structural Correspondences from Bilingual Parsed
+  Corpus for Corpus-based Translation}\BBCQ\
+\newblock In {\Bem Proceedings of the 18th International Conference on
+  Computational Linguistics (COLING)}, \BPGS\ 906--912.
+
+\bibitem[\protect\BCAY{吉見毅彦\JBA 九津見毅\JBA 小谷克則\JBA 佐田いち子\JBA
+  井佐原均}{吉見毅彦\Jetal }{2004}]{Yoshimi04}
+吉見毅彦\JBA 九津見毅\JBA 小谷克則\JBA 佐田いち子\JBA  井佐原均 \BBOP
+  2004\BBCP.
+\newblock \JBOQ 複合語の内部情報・外部情報を統合的に利用した訳語対の抽出\JBCQ\
+\newblock \Jem{自然言語処理}, {\Bbf 11}  (4), 89--103.
+
+\end{thebibliography}
+
+
+\begin{biography}
+\biotitle{略歴}
+\bioauthor{吉見毅彦}
+{1987年電気通信大学大学院計算機科学専攻修士課程修了．
+1999年神戸大学大学院自然科学研究科博士課程修了．
+(財)計量計画研究所(非常勤)，シャープ(株)を経て，
+2003年より龍谷大学理工学部情報メディア学科勤務．
+2004年より情報通信研究機構専攻研究員を兼任．}
+\bioauthor{九津見毅}
+{1965年生まれ．
+1990年，大阪大学大学院工学研究科修士課程修了(精密工学—計算機制御)．
+同年，シャープ株式会社に入社．
+以来，英日機械翻訳システムの翻訳エンジンプログラムの開発に従事．}
+\bioauthor{小谷克則}
+{1974年生まれ．
+2002年より情報通信研究機構特別研究員．
+2004年，関西外国語大学より英語学博士取得．}
+\bioauthor{佐田いち子}
+{1984年北九州大学文学部英文学科卒業．
+同年シャープ(株) に入社．
+現在，同社情報通信事業本部情報商品開発センター技術企画室副参事．
+1985年より機械翻訳システムの研究開発に従事．}
+\bioauthor{井佐原均}
+{1978年京都大学工学部卒業．
+1980年同大学院修士課程修了．
+博士(工学)．
+同年通商産業省電子技術総合研究所入所．
+1995年郵政省通信総合研究所関西支所知的機能研究室室長．
+2001年情報通信研究機構(旧：通信総合研究所)けいはんな情報通信融合研究セン
+ター自然言語グループリーダー．
+自然言語処理，機械翻訳の研究に従事．
+言語処理学会，情報処理学会，人工知能学会，日本認知科学会，ACL，各会員．}
+
+\bioreceived{受付}
+\biorevised{再受付}
+\bioaccepted{採録}
+\end{biography}
+
+\end{document}

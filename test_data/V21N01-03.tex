@@ -1,0 +1,1216 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+\usepackage{url}
+\usepackage{graphicx}
+\usepackage{amsfonts}
+\usepackage{mathtools}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+
+\newcommand{\vect}[1]{}
+\def\argmax{}
+
+
+\Volume{21}
+\Number{1}
+\Month{March}
+\Year{2014}
+
+\received{2013}{9}{30}
+\revised{2013}{12}{8}
+\accepted{2013}{12}{27}
+
+\setcounter{page}{41}
+
+\jtitle{階層的複数ラベル文書分類におけるラベル間依存の利用}
+\jauthor{村脇　有吾\affiref{GUKyushu}}
+\jabstract{
+階層的複数ラベル文書分類においては，あらかじめ定義されたラベル階層の利用
+が中心的な課題となる．
+本稿では，複数の出力ラベル間の依存関係という，従来研究が用いてこなかった
+手がかりを利用する手法を提案する．
+これを実現するために，まずはこのタスクを構造推定問題として定式化し，
+複数のラベルを同時に出力する大域モデルと，動的計画法による厳密解の探索手
+法を提案する．
+次に，ラベル間依存を表現する枝分かれ特徴量を導入する．
+実験では，ラベル間依存の特徴量の導入により，精度の向上とともに，モデルの
+大きさの削減が確認された．
+}
+\jkeywords{文書分類，構造推定問題，木，動的計画法，オンライン学習}
+
+\etitle{Exploiting Inter-label Dependencies in Hierarchical Multi-Label Document Classification}
+\eauthor{Yugo Murawaki\affiref{GUKyushu}} 
+\eabstract{
+The main challenge in hierarchical multi-label document classification
+is the means by which hierarchically organized labels are leveraged.
+In this paper, we propose to exploit dependencies among multiple labels
+to be output, which has not been considered in previous studies.
+To accomplish this, we first formalize the task as a structured
+prediction problem and propose (1) a global model that jointly outputs
+multiple labels and (2) a decoding algorithm that finds an exact
+solution with dynamic programming.
+We then introduce features that capture inter-label dependencies.
+Experiments show that these features improve performance while reducing
+the model size.
+}
+\ekeywords{document classification, structured prediction problem, tree, dynamic \break programming, online learning}
+
+\headauthor{村脇}
+\headtitle{階層的複数ラベル文書分類におけるラベル間依存の利用}
+
+\affilabel{GUKyushu}{九州大学大学院システム情報科学研究院}{Graduate School of Information Science and Electrical Engineering, Kyushu
+University}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに} \label{sec:introduction}
+
+電子化されたテキストが利用可能になるとともに，階層的文書分類の自動化が試
+みられてきた．
+階層的分類の対象となる文書集合の例としては，特許\footnote{
+	http://www.wipo.int/classifications/en/}，
+医療オントロジー\footnote{
+	http://www.nlm.nih.gov/mesh/}，
+Yahoo!やOpen Directory Project\footnote{http://www.dmoz.org/}のよ
+うなウェブディレクトリが挙げられる．
+文書に付与すべきラベルは，タスクによって，各文書に1個とする場合と，複数
+とする場合があるが，本稿では複数ラベル分類に取り組む．
+
+階層的分類における興味の中心は，あらかじめ定義されたラベル階層をどのよう
+に自動分類に利用するかである．
+そもそも，大量のデータを階層的に組織化するという営みは，科学以前から人類
+が広く行なってきた．
+例えば，伝統社会における生物の分類もその一例である．
+そこでは分類の数に上限があることが知られており，その制限は人間の記憶容量
+に起因する可能性が指摘されている\cite{Berlin1992}．
+階層が人間の制約の産物だとすると，そのような制約を持たない計算機にとって，
+階層は不要ではないかと思われるかもしれない．
+
+階層的分類におけるラベル階層の利用という観点から既存手法を整理すると，ま
+ず，非階層型と階層型に分けられる．
+非階層型はラベル階層を利用しない手法であり，各ラベル候補について，入力文
+書が所属するか否かを独立に分類する．
+
+ラベル階層を利用する階層型は，さらに2種類に分類できる．
+一つはラベル階層を候補の枝刈りに用いる手法（枝刈り型）である．
+典型的には，階層を上から下にたどりながら局所的な分類を繰り返す
+\cite{Montejo2006,Qiu2009full,Wang2011IJCNLPfull}．
+枝刈りにより分類の実行速度をあげることができるため，ラベル階層が巨大な場
+合に有効である．
+しかし，局所的な分類を繰り返すことで誤り伝播が起きるため，精度が低下しが
+ちという欠点が知られている\cite{Bennett2009}．
+もう一つの手法はパラメータ共有型である．
+この手法では，ラベル階層上で近いラベル同士は似通っているので，それらを独
+立に分類するのではなく，分類器のパラメータをラベル階層に応じて部分的に共
+有させる\cite{Qiu2009full}．
+これにより分類精度の向上を期待する．
+
+これらの既存手法は，いずれも複数ラベル分類というタスクの特徴を活かしてい
+ない．
+複数ラベル分類では，最適な候補を1個採用すればよい単一ラベル分類と異なり，
+ラベルをいくつ採用するかの加減が人間作業者にとっても難しい．
+我々は，人間作業者が出力ラベル数を加減する際，ラベル階層を参照しているの
+ではないかと推測する．
+例えば，科学技術文献を分類する際，ある入力文書が林業における環境問題を扱っ
+ていたとする．
+この文書に対して，「林業政策」と「林業一般」という2個のラベルは，それぞ
+れ単独でみると，いずれもふさわしそうである．
+しかし，両者を採用するのは内容的に冗長であり，よりふさわしい「林業政策」
+だけを採用するといった判断を人間作業者はしているかもしれない．
+一方，別のラベル「環境問題」は「林業政策」と内容的に競合せず，両方を採用
+するのが適切を判断できる．
+この2つの異なる判断は，ラベル階層に対応している．
+「林業政策」と「林業一般」は最下位層において兄弟関係にある一方，「林業政
+策」と「環境問題」はそれぞれ「農林水産」と「環境工学」という異なる大分類
+に属している．
+
+このように，我々は，出力すべき複数ラベルの間にはラベル階層に基づく依存関
+係があると仮定する．
+そして，計算機に人間作業者の癖を模倣させることによって，（それが真に良い
+分類であるかは別として）人間作業者の分類を正解としたときの精度が向上する
+ことを期待する．
+
+本稿では，このような期待に基づき，ラベル間依存を利用する具体的な手法を提
+案する．
+まずは階層型複数ラベル文書分類を構造推定問題として定式化し，複数のラベル
+を同時に出力する大域モデルと，動的計画法による厳密解の探索手法を提案する．
+次に，ラベル間依存を表現する枝分かれ特徴量を導入する．
+この特徴量は動的計画法による探索が維持できるように設計されている．
+実験では，ラベル間依存の特徴量の導入により，精度の向上とともに，モデルの
+大きさの削減が確認された．
+
+本稿では，\ref{sec:task}節で問題を定義したうえで，
+\ref{sec:proposed}節で提案手法を説明する．
+\ref{sec:experiments}節で実験結果を報告する．
+\ref{sec:related-work}節で関連研究に言及し，\ref{sec:conclusion}節でまと
+めと今後の課題を述べる．
+
+
+
+\section{問題設定}
+\label{sec:task}
+
+階層型複数ラベル文書分類では，与えられた文書に対して，それをもっともよく
+表すラベルの集合$\mathcal{M} \subset \mathcal{L}$を返す．
+ここで，$\mathcal{L}$はあらかじめ定義されたラベルの集合である．
+$\mathcal{L}$は図\ref{fig:tree}のように木構造で組織化されているとする
+\footnote{
+いくつかの既存研究では，有向非循環グラフ (directed acyclic graph, DAG)
+を扱っている\cite{Labrou1999,LSHTC3}．
+有向非循環グラフでは，木と異なり，ノードが一般に複数の親を持ち得る．
+有向非循環グラフへの対応は今後の課題とし，本稿では木構造に対象をしぼる．}．
+また，付与対象のラベルは葉のみであり，内部ノードはラベルとならないとする．
+図\ref{fig:tree}の場合，$\mathrm{AA}$，$\mathrm{AB}$，$\mathrm{BA}$およ
+び$\mathrm{BB}$がラベル候補となる．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-1ia3f1.eps}
+\end{center}
+ \caption{ラベル階層の例（灰色の葉のみが付与対象のラベル）}
+ \label{fig:tree}
+\end{figure}
+
+いくつかの記法を整理しておく．
+$\mathrm{leaves}(c)$は，$c$の子孫である葉の集合を返す．
+例えば，$\mathrm{leaves}(\mathrm{A})=\{\mathrm{AA},\mathrm{AB}\}$．
+ただし，$c$自身が葉の場合は，$\mathrm{leaves}(c) = \{ c \}$．
+$p \rightarrow c$は親$p$から子$c$への辺を表す．
+$\mathrm{path}(c)$は$\mathrm{ROOT}$と$c$を結ぶ辺の集合を返す．
+例えば，
+$\mathrm{path}(\mathrm{AB})=\{ \mathrm{ROOT} \rightarrow \mathrm{A}, \mathrm{A} \rightarrow \mathrm{AB} \}$．
+また，$\mathrm{tree}(\mathcal{M})=\bigcup_{l \in \mathcal{M}}
+\mathrm{path}(l)$ とする．
+これは$\mathcal{M}$を被覆する最小の部分木に対応する．
+例えば，$\mathrm{tree}(\{\mathrm{AA},\mathrm{AB}\})=\{ \mathrm{ROOT} \rightarrow \mathrm{A}, \mathrm{A} \rightarrow \mathrm{AA}, \mathrm{A} \rightarrow \mathrm{AB} \}$．
+
+文書 $x$ は$\phi(x)$により特徴量ベクトルに変換される．
+特徴量として，例えば，文書分類タスクで一般な単語かばん (bag-of-words) 手
+法を用いることができる．
+
+本タスクは教師あり設定であり，訓練データ
+$\mathcal{T} = \{ ( x_i, \mathcal{M}_i ) \}_{i=1}^T$
+が与えられる．
+$\mathcal{T}$を用いてモデルを訓練し，これとは別のテストデータによって性
+能を評価する．
+
+
+
+\section{提案手法} \label{sec:proposed}
+
+\subsection{大域モデル} 
+
+ラベル間依存を利用するための準備として，入力文書$x$に対して出力ラベル集
+合$\mathcal{M}$を同時に推定する大域モデルを提案する．
+具体的には，階層的複数ラベル文書分類を構造推定問題とみなし，$\mathcal{M}$が
+作る部分木に対してスコアを定義する．
+\[
+ \mathrm{score}^{\mathrm{global}}(x, \mathcal{M}) = \vect{w}^{\mathrm{global}} \cdot \Phi^{\mathrm{global}}(x, \mathrm{tree}(\mathcal{M}))
+\]
+$\vect{w}^{\mathrm{global}}$は重みベクトルであり，訓練データを用いて学習
+すべきパラメータである．
+$\vect{w}^{\mathrm{global}}$は，辺に対応する局所的な重みベクトルを連結す
+ることにより構成される．
+例えば，図\ref{fig:tree}の場合は
+\[
+ \vect{w}^{\mathrm{global}} =\vect{w}_{\mathrm{ROOT} \rightarrow \mathrm{A}}
+ \oplus \vect{w}_{\mathrm{ROOT} \rightarrow \mathrm{B}}
+\oplus \vect{w}_{\mathrm{A} \rightarrow \mathrm{AA}}
+\oplus \vect{w}_{\mathrm{A} \rightarrow \mathrm{AB}}
+\oplus \vect{w}_{\mathrm{B} \rightarrow \mathrm{BA}}
+\oplus \vect{w}_{\mathrm{B} \rightarrow \mathrm{BB}} 
+\]
+となる．
+特徴関数$\Phi^{\mathrm{global}}$は，文書$x$と
+$\mathrm{tree}(\mathcal{M})$を入力とし，
+$\vect{w}^{\mathrm{global}}$と同次元のベクトルを返す．
+具体的には，各$p \rightarrow c \in \mathrm{tree}(\mathcal{M})$に対応する部
+分ベクトルに$\phi(x)$を，残りの要素に$0$を入れた特徴量ベクトルを返す．
+したがって，$\mathrm{score}^{\mathrm{global}}(x, \mathcal{M})$は以下のよう
+に書き換えられる．
+\[
+ \mathrm{score}^{\mathrm{global}}(x, \mathcal{M})
+  = \sum_{p \rightarrow c \in \mathrm{tree}(\mathcal{M})}
+  \vect{w}_{p \rightarrow c} \cdot \phi(x)
+\]
+この定式化により，$\vect{w}^{\mathrm{global}}$が与えられた時，
+部分木のスコアを最大化する$\mathcal{M}$を探す問題となる．
+\[
+ \argmax_{\mathcal{M}} \quad \mathrm{score}^{\mathrm{global}}(x, \mathcal{M})
+\]
+
+
+\subsection{動的計画法による解探索}
+
+
+\begin{algorithm}[t]
+\caption{
+$\mbox{\sc maxtree}(x, p)$ }
+\label{alg:bu-search}
+\DeclarePairedDelimiter\norm{\lVert}{\rVert}
+\renewcommand{\algorithmicrequire}{}
+\renewcommand{\algorithmicensure}{}
+\algsetup{indent=1.2em}
+\setlength{\baselineskip}{11pt}
+\begin{algorithmic}[1]
+\REQUIRE 文書$x$, 木のノード$p$
+\ENSURE ラベル集合 $\mathcal{M}$, スコア$s$
+\STATE $\mathcal{U} \leftarrow \{\}$
+\FORALL{$p$ の各子 $c$ }
+  \IF{$c$ が葉}
+    \STATE $\mathcal{U} \leftarrow \mathcal{U} \cup \{ (\{ c \}, \vect{w}_{p \rightarrow c} \cdot \phi(x)) \}$
+  \ELSE
+    \STATE $(\mathcal{M}^\prime, s^\prime)  \leftarrow \mbox{\sc maxtree}(x, c)$
+    \STATE $\mathcal{U} \leftarrow \mathcal{U} \cup \{ (\mathcal{M}^\prime, s^\prime + \vect{w}_{p \rightarrow c} \cdot \phi(x)) \}$
+  \ENDIF
+\ENDFOR
+\STATE $\mathcal{R} \leftarrow \{ (\mathcal{M}^\prime,s^\prime) \in \mathcal{U} | s^\prime > 0 \}$
+\IF{$\mathcal{R}$ が空}
+  \STATE $\mathcal{R} \leftarrow \{(\mathcal{M}^\prime,s^\prime)\}$ ただし，$(\mathcal{M}^\prime,s^\prime)$は $\mathcal{U}$のなかで$s^\prime$が最大のもの
+\ENDIF
+\STATE $\mathcal{M} \leftarrow \bigcup_{(\mathcal{M}^\prime,s^\prime) \in \mathcal{R}} \mathcal{M}^\prime$
+\STATE $s \leftarrow \sum_{(\mathcal{M}^\prime,s^\prime) \in \mathcal{R}} s^\prime$
+\RETURN $(\mathcal{M}, s)$
+\end{algorithmic}
+\end{algorithm}
+
+
+大域モデルの，現在のパラメータ$\vect{w}^{\mathrm{global}}$のもとでの厳密
+解は，動的計画法により効率的に求められる．
+Algorithm~\ref{alg:bu-search}に動的計画法の擬似コードを示す．
+$\mbox{\sc maxtree}(x, p)$は，$p$を根とする部分木の集合から，スコアが最
+大のものを再帰的に探索する．
+したがって，我々が呼び出すのは$\mbox{\sc maxtree}(x, \mathrm{ROOT})$であ
+る．
+子$c$は，(1) $c$を根とするスコア最大の部分木を作るラベル集合，および (2)
+そのスコアとひも付けされている．
+ただし，葉のスコアは0である．
+$p$から見た$c$のスコアは，$c$の部分木のスコアと辺$p \rightarrow c$
+のスコアの和である（3--8行目）．
+
+$p$の部分木のスコアを最大にするには，正のスコアを持つ$c$をすべて採用すれ
+ばよい（10行目）．
+いずれの子も正のスコアを持たない場合は，最大のスコアを持つ子を1個採用す
+る（11--13行目）．
+採用された子の集合により，$p$のラベル集合とスコアが決定される（14--15行
+目）．
+
+このアルゴリズムの拡張としては，上位$N$個の候補集合を出すというものが考
+えられる．
+木に対する動的計画法としては，構文解析\cite{McDonald2005full}よりもはる
+かに簡単なため，上位$N$個への拡張\cite{Collins2005}もさほど難しくない．
+
+
+\subsection{ラベル間依存の利用}
+\label{sec:proposed-branch}
+
+以上の準備により，ラベル間依存を利用する条件が整った．
+ラベル間依存の捕捉は，大域モデルに対する特徴量の追加により実現される．
+具体的には，あるノードがいくつの子を採用しやすいかを制御する枝分かれ特徴
+量を導入する．
+
+枝分かれ特徴量は$\phi^{\mathrm{BF}}(p, k)$により表される．
+ここで $p$ は根あるいは内部ノードであり，$k$は$p$が採用する子の数である．
+ただし，あらゆる$k$の値に対して特徴量を設けると疎になるため，ある $R$ に
+ついて，$R + 1$個 ($1, \cdots, R$ もしくは $>R$) の特徴量に限定
+する．
+さらに，ノードごとの特徴量だけでなく，すべての根あるいは内部のノードが共
+有する$R + 1$個の特徴量も設ける．
+つまり，追加される特徴量は$(I + 1) (R + 1)$個であり，各ノードに対して2個
+の特徴量が発火する．
+ここで，$I$はラベル階層における根および内部ノードの個数とする．
+
+
+\begin{algorithm}[t]
+\caption{
+枝分かれ特徴量を組み込むための修正（Algorithm \ref{alg:bu-search}の10--15行目を以下で置き換える）}
+\label{alg:bu-branch}
+\DeclarePairedDelimiter\norm{\lVert}{\rVert}
+\renewcommand{\algorithmicrequire}{}
+\renewcommand{\algorithmicensure}{}
+\algsetup{indent=1.2em}
+\setlength{\baselineskip}{11pt}
+\begin{algorithmic}[1] \setcounter{ALC@line}{9}
+\STATE $r \leftarrow \mathcal{U}$ を $s$ により降順にソートした配列
+\STATE $ \mathcal{R}^\prime \leftarrow \{\} $, \quad $s^\prime \leftarrow 0$, \quad $\mathcal{M}^\prime \leftarrow \{\}$
+\FOR{$k = 1 .. \mbox{size of $r$}$}
+  \STATE $(\mathcal{M}, s) \leftarrow r[k]$
+  \STATE $s^\prime \leftarrow s^\prime + s$, \quad $\mathcal{M}^\prime \leftarrow \mathcal{M}^\prime \cup \mathcal{M}$
+  \STATE $\mathcal{R}^\prime \leftarrow \mathcal{R}^\prime \cup \{(\mathcal{M}^\prime, s^\prime +
+ \vect{w}^{\mathrm{BF}} \cdot \phi^{\mathrm{BF}}(p, k)) \}$
+\ENDFOR
+\STATE $(\mathcal{M}, s) \leftarrow $ $\mathcal{R}^\prime$ のなかでスコア$s$が
+ 最大の要素
+\end{algorithmic}
+\end{algorithm}
+
+
+この枝分かれ特徴量は，動的計画法による厳密解探索が維持できるように設計さ
+れている．
+この特徴量を組み込むには，Algorithm~\ref{alg:bu-search}の10--15行目を
+Algorithm~\ref{alg:bu-branch}で置き換えればよい．
+枝分かれ特徴量のスコア
+$\vect{w}^{\mathrm{BF}} \cdot \phi^{\mathrm{BF}}(p, k)$
+は$k$のみに依存する．
+そこで，まずは採用する子の数$k$によって候補をグループ分けし，各グループ
+のなかでスコアが最大の候補を選ぶ（12--16行目）．
+最後に，異なるグループ同士を比較し，スコアが最大となる候補を採用する（17
+行目）．
+グループ内でスコアが最大の候補を選ぶには，子をスコア順に並べ，上
+位$k$個を採用すれば良い．
+候補のスコアは，$p$から見た各子のスコアと枝分かれ特徴量のスコアの和とな
+る（15行目）．
+
+
+枝分かれ特徴量の導入により，ラベルの採否の判断が，ラベル同士の相対的な比
+較によって行われるようになる．
+\ref{sec:introduction}節で触れた，「林業政策」と「環境問題」というラベ
+ルが付与された文書を再び例に挙げる．
+この文書に対して「林業一般」というラベルはそれほど不適切には見えないが，
+枝分かれ特徴量を持たないモデルは，「林業一般」を付与{\bf しない}理由を，
+$\phi(x)$に対応する重みですべて説明しなければならない．
+\ref{sec:discussion}節で示すように，枝分かれ特徴量の重みは，一般に，負の
+値を持ち，ペナルティとして働く．
+また，子の数が増えるにつれてペナルティが増えるように学習される．
+したがって，子を2個採用するとよりペナルティがかかるので，
+「林業一般」に対応する重みを無理に引き下げることなく，
+相対的により適切な「林業政策」のみを採用することが可能となる．
+
+
+\subsection{大域訓練}
+
+大域モデルの訓練手法をここでは大域訓練と呼ぶ．
+本稿では，パーセプトロン系のオンライン学習アルゴリズムを採用する．
+具体的には，構造推定問題に対するPassive-Aggressiveアルゴリズム
+\cite{Crammer2006}を用いる．
+Passive-Aggressiveを採用した理由としては，実装の簡便さ，バッチ学習と異な
+り，大量の訓練データに容易に対応可能なオンライン学習であること，次節で述
+べるように並列分散化が容易に実現できることが挙げられる．
+ただし，これは提案手法がパーセプトロン系アルゴリズムでしか実現できないこ
+とを意味せず，構造化SVM~\cite{Tsochantaridis:ICML2004}を含む他の構造学習
+アルゴリズムの導入も検討に値する．
+
+\begin{algorithm}[t]
+\caption{
+大域訓練のためのPassive-Aggressiveアルゴリズム（PA-I，予測ベース更新）}
+\label{alg:pa-global}
+\DeclarePairedDelimiter\norm{\lVert}{\rVert}
+\renewcommand{\algorithmicrequire}{}
+\renewcommand{\algorithmicensure}{}
+\algsetup{indent=1.2em}
+\setlength{\baselineskip}{11pt}
+\begin{algorithmic}[1]
+\REQUIRE 訓練データ $\mathcal{T} = \{ ( x_i, \mathcal{M}_i ) \}_{i=1}^T$
+\ENSURE 重みベクトル $\vect{w}^{\mathrm{global}}$
+\STATE $\vect{w}^{\mathrm{global}} \leftarrow \vect{0}$
+\FOR{$n = 1..N$}
+  \STATE $\mathcal{T}$ をシャッフル
+  \FORALL{$(x, \mathcal{M}) \in \mathcal{T}$}
+    \STATE $\hat{\mathcal{M}} \leftarrow \argmax_{\mathcal{M}} \, \mathrm{score}^{\mathrm{global}}(x, \mathcal{M}) $
+    \STATE $\rho \leftarrow 1 - 2 |\mathcal{M} \cap \hat{\mathcal{M}}| / (|\mathcal{M}| + |\hat{\mathcal{M}}|)$
+    \IF{$\rho > 0$}
+        \STATE $l \leftarrow \mathrm{score}^{\mathrm{global}}(x, \hat{\mathcal{M}}) - \mathrm{score}^{\mathrm{global}}(x, \mathcal{M}) + \sqrt{\rho}$
+        \STATE $\tau \leftarrow \min \{ C, \frac{l}{\norm{\Phi^{\mathrm{global}} (x, \mathrm{tree}(\mathcal{M})) - \Phi^{\mathrm{global}} (x, \mathrm{tree}(\hat{\mathcal{M}}))}^2} \}$
+        \STATE $\vect{w}^{\mathrm{global}} \leftarrow \vect{w}^{\mathrm{global}} + \tau (\Phi^{\mathrm{global}} (x, \mathrm{tree}(\mathcal{M})) - \Phi^{\mathrm{global}} (x, \mathrm{tree}(\hat{\mathcal{M}})))$
+    \ENDIF
+  \ENDFOR
+\ENDFOR
+\end{algorithmic}
+\end{algorithm}
+
+大域モデルの場合の擬似コードを Algorithm~\ref{alg:pa-global}に示す．
+ここで，$N$は訓練の反復数を表し，パラメータ$C$は$1.0$とする．
+現在のパラメータにおける厳密解は上述の動的計画法により求まる（5行目）．
+予測を誤った場合，正解ラベル集合を出力する方向に重みを更新する（10行目）．
+ここで，コスト$\rho$はモデル予測の誤り度合いを表し，重みの更新幅を変化さ
+せる．
+$\rho$は，正解ラベル集合とシステムの出力の一致の度合いに基づいている．
+
+
+
+\subsection{大域訓練の並列分散化}
+\label{sec:proposed-parallel}
+
+大域訓練には学習が非常に遅いという欠点がある．
+ラベル集合の分類はラベル1個の2値分類とは比較にならないほど遅い．
+しかも，大域訓練はモデルを一枚岩とするため，モデルを局所分類器に分割して
+並列化することができない．
+
+そこで，繰り返しパラメータ混ぜ合わせ法~\cite{McDonald2010full}を用いて並
+列分散化を行う．
+基本的な考えは，モデルを分割する代わりに，訓練データを分割することで並列
+化を行うというものである．
+別々の訓練データ断片から学習されたモデル群を繰り返し混ぜ合わせることで収
+束性を保証している．
+
+Algorithm~\ref{alg:ipm}に繰り返しパラメータ混ぜ合わせ法の擬似コードを
+示す．
+ここで$N^\prime$は繰り返しパラメータ混ぜ合わせ法の反復数，
+$S$は訓練データの分割数を表す．
+繰り返しパラメータ混ぜ合わせ法では，断片ごとに並列に訓練を行う．
+各反復の最後に，並列に訓練された複数のモデルを平均化する．
+次の反復では，この平均化されたモデルを初期値として用いる．
+
+繰り返しパラメータ混ぜ合わせ法はパーセプトロン向けに提案されたものである．
+しかし，\cite{McDonald2010full}が言及している通り，Passive-Aggressiveア
+ルゴリズムに対しても収束性を証明することができる．
+
+\begin{algorithm}[t]
+\caption{
+繰り返しパラメータ混ぜ合わせ法による大域訓練}
+\label{alg:ipm}
+\DeclarePairedDelimiter\norm{\lVert}{\rVert}
+\renewcommand{\algorithmicrequire}{}
+\renewcommand{\algorithmicensure}{}
+\algsetup{indent=1.2em}
+\setlength{\baselineskip}{11pt}
+\begin{algorithmic}[1]
+\REQUIRE 訓練データ $\mathcal{T} = \{ ( x_i, \mathcal{M}_i ) \}_{i=1}^T$
+\ENSURE 重みベクトル $\vect{w}^{\mathrm{global}}$
+\STATE  $\mathcal{T}$ を $\mathcal{T}_1, \cdots \mathcal{T}_S$ に分割
+\STATE $\vect{w}^{\mathrm{global}} \leftarrow \vect{0}$
+\FOR{$n = 1..N^\prime$}
+  \FOR{$s = 1..S$}
+    \STATE $\vect{w}_s^{\mathrm{global}} \leftarrow$ 非同期的に Algorithm
+ \ref{alg:pa-global}を呼び出す．ただしいくつかの修正を加える．
+ $\mathcal{T}$を$\mathcal{T}_s$で置き換える．$\vect{w}^{\mathrm{global}}$
+ を$\vect{0}$ではなく$\vect{w}^{\mathrm{global}}$で初期化する．反復数を$N=1$とする．
+  \ENDFOR
+  \STATE 非同期処理の終了を待つ
+  \STATE $\vect{w}^{\mathrm{global}} \leftarrow \frac{1}{S} \sum_{s=1}^S \vect{w}_s^{\mathrm{global}}$
+\ENDFOR
+\end{algorithmic}
+\end{algorithm}
+\begin{figure}[t]
+\begin{center}
+\includegraphics{21-1ia3f2.eps}
+\end{center}
+\caption{JSTPlusの文書例}
+\label{fig:jstplus-example}
+\end{figure}
+
+
+
+\section{実験}
+\label{sec:experiments}
+
+\subsection{データ}
+
+評価データとして
+JSTPlus\footnote{http://jdream3.com/service/jdream.html}を用いる．
+JSTPlusは科学技術振興機構が作成している科学技術文献のデータベースである．
+各文書は，標題，抄録，著者一覧，ジャーナル名，分類コード一覧や，その他数
+多くの項目からなる．
+文書例を図\ref{fig:jstplus-example}に示す．
+実験では，標題と抄録を文書分類に用いるテキストとし，分類コードを付与すべ
+きラベルとみなす．
+また，2010年の文献のうち，日本語の標題と日本語の抄録の両方を含むものを実
+験の対象とした．
+その結果，455,311件の文書を得た．
+これを409,892件の訓練データと45,419件の評価データに分割した．
+
+
+
+ラベル（分類コード）は3,209個からなり，これは4,030個の辺に対応する．
+ラベル階層は，根を除いて，最大で5階層となっている．
+ただし，いくつかの辺は中間層を飛ばす（例えば，第2層のノードの子が第4層に
+ある場合がある）．
+各文書は平均で1.85個のラベルが付与されている（分散は0.85）．
+文書ごとの最大ラベル数は9である．
+
+文書の特徴関数 $\phi(x)$には以下の2種類の特徴量を用いる．
+\begin{enumerate}
+ \item ジャーナル名．2値特徴量で，各文書につき1個の特徴量が発火する．
+ \item 標題と抄録中の内容語．値は頻度．ただし，標題中の内容語の頻度は2倍する．
+\end{enumerate}
+内容語抽出には，形態素解析器
+JUMAN\footnote{http://nlp.ist.i.kyoto-u.ac.jp/index.php?JUMAN}およ
+び構文解析器
+KNP\footnote{http://nlp.ist.i.kyoto-u.ac.jp/index.php?KNP}を用いた．
+まずJUMANによって各文を単語列に分割し，次にKNPが持つ規則を使って内容語に
+タグ付けした．
+各文書は平均で380文字を含んでいた．
+これは内容語としては120語に相当する．
+
+
+\subsection{モデル設定}
+\label{sec:experiments-model}
+
+大域訓練で訓練された大域モデル ({\bf GM-GT})について，枝分かれ特徴量
+({\bf BF}) を用いた場合と用いなかった場合を比較する．
+大域モデルの繰り返しパラメータ混ぜ合わせ法については，訓練データを10個の
+断片に分割し，反復数は$N^\prime=10$とする．
+枝分かれ特徴量について，$R=3$とする．
+
+その他の比較対象として，従来研究を参考にして以下のモデルを用いる．
+
+
+\subsubsection{非階層型}
+\label{sec:experiments-model-flat}
+
+非階層型 ({\bf FLAT}) はラベル階層を無視し，各ラベル$l$を文書$x$に付与すべきか否
+かを独立に決定する．
+そのために各$l$に対して2値分類器を用意する．
+分類器の実装手法としては，ナイーブベイズ，ロジスティック回帰，サポートベ
+クタマシンなどが用いられてきたが，本稿では，提案手法との比較のために
+Passive-Aggressiveアルゴリズム~\cite{Crammer2006}を用いる．
+
+ラベル$l$に対する2値分類器は重みベクトル$\vect{w}_{l}$を持つ．
+スコア$\vect{w}_{l} \cdot \phi(x)$が正のとき，$l$を$x$に付与する．
+ただし，文書に対して最低1個のラベルを付与する．
+そのために，いずれのラベルも正のスコアを取らない場合は，一番高いスコアを
+持つラベルを1個採用する．
+
+$\vect{w}_l$を訓練するために，元の訓練データ
+$\mathcal{T}$を以下のようにして$\mathcal{T}_l$に変換する．
+\[
+\mathcal{T}_l = \left\{ ( x_i, y_i ) \left|
+\begin{array}{l@{\hspace{0em}}l}
+y_i = +1 &\quad  \mbox{if $l \in \mathcal{M}_i$} \\
+y_i = -1 &\quad \mbox{otherwise}
+\end{array}
+\right. \right\}_{i=1}^T 
+\]
+各文書はラベル$l$を持つとき正例，そうでなければ負例となる．
+擬似コードを Algorithm~\ref{alg:pa-binary}に示す．
+ここで，パラメータ$C$は$1.0$とする．
+訓練の反復数は$N=10$とする．
+なお，各2値分類器は独立なので，訓練は容易に並列化できる．
+
+\begin{algorithm}[t]
+\caption{
+2値分類器に対するPassive-Aggressiveアルゴリズム (PA-I)}
+\label{alg:pa-binary}
+\DeclarePairedDelimiter\norm{\lVert}{\rVert}
+\renewcommand{\algorithmicrequire}{}
+\renewcommand{\algorithmicensure}{}
+\algsetup{indent=1.2em}
+\setlength{\baselineskip}{11pt}
+\begin{algorithmic}[1]
+\REQUIRE 訓練データ $\mathcal{T}_l = \{ ( x_i, y_i ) \}_{i=1}^T$
+\ENSURE 重みベクトル $\vect{w}_l$
+\STATE $\vect{w}_l \leftarrow \vect{0}$
+\FOR{$n = 1..N$}
+  \STATE $\mathcal{T}_l$ をシャッフル
+  \FORALL{$(x, y) \in \mathcal{T}_l$}
+    \STATE $l \leftarrow \max \{ 0, 1 - y (\vect{w}_{l} \cdot \phi(x)) \}$
+    \IF{$l > 0$}
+        \STATE $\tau \leftarrow \min \{ C, \frac{l}{\norm{\phi(x)}^2} \}$
+        \STATE $\vect{w}_l \leftarrow \vect{w}_l + \tau y \phi(x)$
+    \ENDIF
+  \ENDFOR
+\ENDFOR
+\end{algorithmic}
+\end{algorithm}
+
+
+\subsubsection{枝刈り型}
+\label{sec:experiments-model-ls}
+
+枝刈り型 ({\bf PRUNE}) はラベル階層を利用する手法であり，ラベル階層に対
+応する2値分類器の集合を持つ
+\cite{Montejo2006,Wang2011IJCNLPfull,Sasaki2012}\footnote{ラベル階層に対
+応する2値分類器の集合を使う他の手法としては，\cite{Punera2008}が階層上の
+等調回帰により，局所分類器の出力を後処理している．}．
+各2値分類器はラベル階層上の辺$p \rightarrow c$とひも付けされ，
+重み$\vect{w}_{p \rightarrow c}$を持つ．
+$\vect{w}_{p \rightarrow c} \cdot \phi(x) > 0$は，$x$を$p$の
+いずれかの子孫に割り当てるべきであることを表す．
+これらの2値分類器も並列に訓練できる．
+パラメータ$C$の値，訓練の反復数は非階層型と同じとする．
+
+枝刈り型には誤り伝播\cite{Bennett2009}とよばれる問題が知られている．
+すなわち，階層上位の分類器による誤りから回復する手段がないため，累積的に
+誤りが作用する．
+誤り伝播を軽減するために様々な手法が提案されているが，煩雑さを避けるため，
+本稿では，Algorithm~\ref{alg:td-search}に示す単純な実装を採用する．
+各ノード$p$において，局所分類器が正のスコアを返す子すべてを採用する
+（4--7行目）．
+ただし，いずれの子も正のスコアを得ない場合は，一番高いスコアを得た子を1
+つ採用する（8--10行目）．
+この操作を葉に到達するまで繰り返す．
+
+
+
+2値分類器の訓練データ$\mathcal{T}_{p \rightarrow c}$の構築方法としては，
+以下の2種類を試す．
+\paragraph{ALL} \hspace{1zw}
+全訓練データを利用する\cite{Punera2008}．
+\[
+\mathcal{T}_{p \rightarrow c} = \left\{
+ ( x_i, y_i ) \left|
+\begin{array}{ll}
+ y_i = +1 & \mbox{if $\exists l \in \mathcal{M}_i, l \in \mathrm{leaves}(c)$} \\
+ y_i = -1 & \mbox{otherwise}
+\end{array}
+ \right. \right\}_{i=1}^T 
+\]
+各文書は$c$のいずれかの子孫のラベルが割り当てられていれば正例，そうでな
+ければ負例となる．
+\paragraph{SIB} \hspace{1zw}
+正例は{\bf ALL}と同じだが，負例を$c$の兄弟の子孫が割り当てられている場合
+に限定する．
+\[
+\mathcal{T}_{p \rightarrow c} = \left\{
+ ( x, y ) \left|
+\begin{array}{ll}
+ y = +1 & \mbox{if $\exists l \in \mathcal{M}$}, l \in \mathrm{leaves}(c) \\
+ y = -1 & \mbox{if $\exists l \in \mathcal{M}$},  l \in \mathrm{leaves}(p) 
+   \, \mbox{かつ} \, l \notin \mathrm{leaves}(c) 
+\end{array}
+\right. \right\}
+\]
+こうすることで，全体として小さなモデルが学習される．
+なぜなら，数の多い階層下位の分類器に与えられる訓練データが小さくなるから
+である．
+従来研究では{\bf SIB}を採用する場合が多い\cite{Liu2005,Wang2011IJCNLPfull,Sasaki2012}．
+
+\begin{algorithm}[t]
+\caption{枝刈り型探索}
+\label{alg:td-search}
+\DeclarePairedDelimiter\norm{\lVert}{\rVert}
+\renewcommand{\algorithmicrequire}{}
+\renewcommand{\algorithmicensure}{}
+\algsetup{indent=1.2em}
+\setlength{\baselineskip}{11pt}
+\begin{algorithmic}[1]
+\REQUIRE 文書 $x$
+\ENSURE ラベル集合 $\mathcal{M}$
+\STATE $q \leftarrow [\mathrm{ROOT}]$, \, $\mathcal{M} \leftarrow \{\}$
+\WHILE{$q$ が空でない}
+  \STATE $p \leftarrow$ $q$ の最初の要素を取り出す, \, $\vect{t} \leftarrow \{\}$
+  \FORALL{ $p$ の子である$c$}
+    \STATE $\vect{t} \leftarrow \vect{t} \cup \{(c, \vect{w}_{p \rightarrow c} \cdot \phi(x))\}$
+  \ENDFOR
+  \STATE $\mathcal{U} \leftarrow \{(c,s) \in \vect{t} | s > 0 \}$
+  \IF{$\mathcal{U}$ が空}
+    \STATE $\mathcal{U} \leftarrow \{(c,s)\}$, ただし$c$は$p$の子のなかで一
+ 番高いスコア$s$を持つ
+  \ENDIF
+  \FORALL{$(c,s) \in \mathcal{U} $}
+    \IF{$c$ が葉}
+      \STATE $\mathcal{M} \leftarrow \mathcal{M} \cup \{c\}$
+    \ELSE
+      \STATE $c$ を $q$ に追加
+    \ENDIF
+  \ENDFOR
+\ENDWHILE
+\end{algorithmic}
+\end{algorithm}
+
+
+\subsection{評価尺度}
+\label{sec:experiments-measures}
+
+複数ラベル分類に対する評価尺度は数多く存在するが，大きく2種類に整理でき
+る．
+1つは，文書を単位とした評価尺度で，しばしば用例ベースの尺度とよばれる
+\cite{Godbole2004,Tsoumakas2010full}．
+文書単位の尺度として，適合率 (EBP)，再現率 (EBR) およびF値 (EBF) が以下
+のように定義される．
+{\allowdisplaybreaks
+\begin{gather*}
+ \mathrm{EBP} = \frac{1}{T} \sum_{i=1}^T
+  \frac{|\mathcal{M}_i \cap \hat{\mathcal{M}}_i|}{|\hat{\mathcal{M}}_i|} \\
+ \mathrm{EBR} = \frac{1}{T} \sum_{i=1}^T
+  \frac{|\mathcal{M}_i \cap \hat{\mathcal{M}}_i|}{|\mathcal{M}_i|} \\
+ \mathrm{EBF} = \frac{1}{T} \sum_{i=1}^T
+  \frac{2 |\mathcal{M}_i \cap \hat{\mathcal{M}}_i|}{|\hat{\mathcal{M}}_i| + |\mathcal{M}_i|}
+\end{gather*}
+}
+ここで$T$はテストデータ中の文書数，$\mathcal{M}_i$は$i$番目の文書の正解ラベ
+ル集合，$\hat{\mathcal{M}}_i$はそれに対応するシステムの出力とする．
+
+もう一つは，ラベルを単位とした評価尺度で，通常の適合率，再現率およびF値
+が用いられる．
+ただし，複数のラベルの集計方法としてマクロ平均とマイクロ平均がある\cite{Tsoumakas2010full}．
+そのため合計で，LBMaP，LBMaR，LBMaF，LBMiP，LBMiRおよびLBMiFの6種類の尺
+度を用いる．
+
+最後に階層的な評価も行う\cite{Kiritchenko2005}．
+これは，出力ラベルがラベル階層上において正解と近いときに「部分点」を与え
+るものである．
+今回のように循環がない木構造を仮定した場合，適合率 (hP) および再現率
+(hR) は以下のように定義される．
+\begin{gather*}
+ \mathrm{hP} =
+\frac{\sum_{i=1}^T |\mathrm{tree}(\mathcal{M}_i) \cap \mathrm{tree}(\hat{\mathcal{M}}_i)|}
+  {\sum_{i=1}^T |\mathrm{tree}(\hat{\mathcal{M}}_i)|} \\
+   \mathrm{hR} =
+\frac{\sum_{i=1}^T |\mathrm{tree}(\mathcal{M}_i) \cap \mathrm{tree}(\hat{\mathcal{M}}_i)|}
+  {\sum_{i=1}^T |\mathrm{tree}(\mathcal{M}_i)|}
+\end{gather*}
+F値 (hF) はhPとhRの調和平均として定義される．
+
+
+\begin{table}[b]
+  \caption{モデルの比較結果}
+  \label{tb:experiments-summary}
+\input{03table01.tex}
+\end{table}
+
+
+\subsection{結果}
+
+各種モデルの精度比較を表\ref{tb:experiments-summary}に示す．
+枝分かれ特徴量を組み込んだ大域モデル ({\bf GM-GT-BF}) が7種類の尺度で最高精
+度を得た．
+枝分かれ特徴量なしのモデル ({\bf GM-GT}) と比較すると，EBP，LBMaR以外の尺度
+で{\bf GM-GT-BF}が上回り，すべてのF値を改善した．
+この改善は統計的に有意 ($p < 0.01$) であった．
+
+大域モデルを非階層型 ({\bf FLAT}) と比較すると，適合率の改善が著しい一方，
+再現率に大きな差は見られない．
+2種類の枝刈り型 ({\bf PRUNE}) を比較すると，兄弟のみで訓練する場合 ({\bf
+SIB}) の方が全体的にやや良い精度が得られた．
+しかし，多くの尺度で非階層型に敗れており，従来研究の結果を再現する形となっ
+ている．
+
+誤り例を見ると，誤って採用したラベル，誤って採用しなかったラベルのいずれ
+も，正解ラベルから離れて人間として改めて判断すると，必ずしも誤りとは言い
+切れない場合が少なくなかった．
+特に，該当文書にとって周辺的な話題を表すラベルをどこまで採用べきかを判断
+するのが難しかった．
+なお，モデル間の分類結果の差分からは，明確な誤り，改善の傾向をつかむのは
+困難であった．
+
+時間はテストデータの分類に要した時間であり，モデルの読み込み時間は含まな
+い\footnote{
+実験では8コアIntel Xeon 2.70~GHz CPUの1コア，64~GBのメモリを用い，実装
+にはPerlを用いた．}．
+予想される通り，枝刈り型が圧倒的に速い．
+{\bf GM-GT-BF}は{\bf PRUNE-ALL}と比較して約60倍の時間を要した．
+しかし，{\bf FLAT}と比較すると，階層を利用するにも関わらず，約18\%の増加
+にとどまっている．
+これは，{\bf GM-GT-BF}のモデルの大きさが{\bf FLAT}よりも約16\%小さいこと
+で説明できるかもしれない．
+
+モデルの大きさは重みベクトル中で，絶対値が$10^{-7}$より大きい要素の数と
+する．
+大きさは{\bf PRUNE-SIB}が最小で，{\bf PRUNE-ALL}が最大となった．
+{\bf GM-GT-BF}が{\bf GM-GT}よりも大きさを約9\%削減したことは特筆に
+値する．
+訓練に用いたPassive-Aggressiveアルゴリズムには重みを0につぶそうとする仕
+組みがないことから，大きさが削減された理由は，学習過程で{\bf
+GM-GT-BF}が{\bf GM-GT}よりも予測を誤る回数が少なかったからと考えられる．
+このように，より小さなモデルでより高い精度が得られたことは，出力すべき複
+数ラベルの間にはラベル階層に基づく依存関係があるという我々の仮定を支持す
+るものと考える．
+
+
+\subsection{議論}
+\label{sec:discussion}
+
+大域モデルの重み$\vect{w}^{\mathrm{global}}$自体は，大域訓練 ({\bf GT})
+だけでなく，枝刈り型で用いた2値分類器群を連結することによっても構成でき
+る ({\bf LT})．
+大域モデルの性質をさらに調べるために，こうしたモデルとの比較も行った．
+
+
+
+表\ref{tb:experiments-dp}に大域モデルの訓練方法の比較結果を示す．
+訓練データとして{\bf SIB}を用いた場合，極端に多くの候補を出力するように
+なり，その結果，極端に低い適合率と高い再現率を得た．
+{\bf SIB}という限定されたデータで訓練された局所的な分類器に対して，大域
+モデルが未知の文書の分類を行わせたため，このような不安定な振る舞いとなっ
+た．
+一方，訓練データとして{\bf ALL}を用いた場合，枝刈り型 ({\bf PRUNE-ALL})
+から精度を大幅に向上させ，大域訓練とくらべても遜色のない精度が得られた．
+モデルの大きさや分類速度において大域訓練に劣りはするものの，大域モデルの最
+適化を行わずにこのような高精度が得られたことは興味深い．
+これは，訓練手法に改善の余地があることを示唆する．
+本稿では10並列による繰り返しパラメータ混ぜ合わせ法を用いたが，今後の最適
+化技術の発展が期待される．
+
+
+\begin{table}[b]
+\vspace*{-1\Cvs}
+  \caption{大域モデルの訓練方法の比較}
+  \label{tb:experiments-dp}
+\input{03table02.tex}
+\end{table}
+\begin{table}[b]
+  \caption{訓練データにおける精度}
+  \label{tb:experiments-training}
+\input{03table03.tex}
+\end{table}
+
+
+表\ref{tb:experiments-training}に訓練データに対する精度を示す．
+訓練データに対しては非階層型 ({\bf FLAT}) が一番高い精度を示し，{\bf
+ALL}により局所訓練された大域モデル ({\bf GM-LT-ALL}) がそれに続いた．
+大域訓練を行った場合 ({\bf GM-GT-BF}) との比較から，局所訓練が過学習をも
+たらしているとみられる．
+
+また，局所訓練と大域モデルの組み合わせにより，枝刈り型探索が誤りの主要因
+であることが確認できた．
+すなわち，{\bf PRUNE-ALL}を訓練データに適用したところ，33\%の文書につい
+て，{\bf PRUNE-ALL}が出力したラベル集合よりも，正解ラベル集合の方が大域
+モデルにおいて高いスコアを持っていた．
+言い換えると，正しく探索を行えば犯さない誤りであった．
+ただし，この高い数値には過学習の影響も含まれており，同じ操作をテストデー
+タに適用した場合は，割合は14\%に下がった\footnote{
+ラベル階層が大規模で厳密解探索が難しいといった理由で，
+枝刈り型探索を Algorithm \ref{alg:pa-global}の訓練に用いる場合，探索誤りから生じる「非侵
+害」問題に対処しなければならない．
+すなわち，モデル予測$\hat{\mathcal{M}}$が正解$\mathcal{M}$よりも低いスコアを持
+つ場合，重みベクトルの更新が無効となってしまう．
+この問題に対処するための手法がいくつか提案されてい
+る~\cite{Collins2004full,Huang2012full}．}．
+
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-1ia3f3.eps}
+\end{center}
+\caption{辺ごとのモデルの大きさとスコアの比較}
+\label{fig:size-score-comp}
+\end{figure}
+
+
+より詳細にモデルを調べるために，辺に分解した結果を示す．
+図\ref{fig:size-score-comp}は{\bf GT-BF}，{\bf LT-ALL}，{\bf LT-SIB}の比
+較である．
+    図(a)から(c) は辺に対応
+する局所ベクトルの大きさを示す．
+ここで，大きさの定義は表\ref{tb:experiments-summary}と同じである．
+辺を子の階層によって集約し，大きさを平均した結果を示す．
+一般に，上位階層ほど多数の有効な重みベクトルが必要となることが確認できる．
+{\bf GT-BF}は{\bf LT-ALL}よりも大きさが小さいが，辺ごとの大きさの比率は
+似通っている．
+{\bf LT-SIB}と比較すると，{\bf GT-BF}は上位階層では小さいが，下位階層で
+は大きな有効重みベクトルを持つ．
+{\bf LT-SIB}では兄弟からの識別のみを考慮していたが，大域学習ではすべての
+辺が適切なスコアを返す必要があるため，有効重みベクトルがより大きくなった
+とみられる．
+
+    図(d)から(f) は，各辺
+が得たスコアの絶対値の平均を表す．
+ここで，スコアは，テストデータに対するモデル出力から計算されたものである．
+これにより，どの階層の辺が強くモデル出力に影響しているかが推測できる．
+この結果から，上位階層ほど大きな影響を持つことがわかる．
+しかし，{\bf GT-BF}は他とくらべて上位階層の影響が小さい．
+すなわち，{\bf GT-BF}においては下位階層の辺が相対的に重要な役割を果たし
+ている．
+
+枝分かれ特徴量に対応する重みを図\ref{fig:br-heatmap}にヒートマップとして
+ 示す．
+各要素の値は，親ノードに与えられた重み（ノードごとの重みと共有された重み
+ の和）を平均したものである．
+平均化された値はすべて負となり，子の数が増えるにつれてペナルティが単調増
+ 加した．
+異なる階層間の重みの比較は，それらが重みベクトルの他の部分の値に依存する
+ ため難しい．
+しかし，下位ノードほど子の数に応じた重みの落差が大きいという結果は，階層
+上近いラベル候補同士ほど強い競合関係にあるという我々の仮説を支持している
+ようにみえる．
+
+最後に，訓練データおよび評価データの正解ラベルについて，正解ラベルを被覆
+する最小の部分木を作り，親が採用する子の数を調べた．
+採用した子の数が複数である割合は，根で34.9\%，第1層で10.1\%，第2層で
+4.6\%，第3層で1.5\%，第4層で0.6\%であり，下位ノードほど強い競合関係にあ
+ることが確認できた．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{21-1ia3f4.eps}
+\end{center}
+ \caption{枝分かれ特徴量のヒートマップ表現}
+ \label{fig:br-heatmap}
+\end{figure}
+
+
+\section{関連研究}
+\label{sec:related-work}
+
+階層型文書分類において，枝刈り型が非階層型にしばしば敗れることが報告され
+ており，誤り伝播を軽減するために様々な手法が提案されてきた．
+\cite{Sasaki2012}は枝刈り探索時の枝刈り基準を緩め，最後に候補の枝刈りを
+行う．
+すなわち，Algorithm~\ref{alg:td-search}の7行目の閾値を$0$から
+$-0.2$などに引き下げて，より多くの候補を採用する．
+最後に，各候補について，根から葉までのパスの（シグモイド関数で変換された）
+局所スコアの和を取り，これに閾値を設定することによって出力ラベルを絞り込
+む．
+S-cut~\cite{Montejo2006,Wang2011IJCNLPfull}は，一律の閾値を用いるのでは
+なく，局所分類器ごとに閾値を設定する手法である．
+R-cutは上位$r$個の候補を採用する手法で，選び方には大域的手法
+\cite{Liu2005,Montejo2006}と局所的手法\cite{Wang2011IJCNLPfull}がある．
+\cite{Wang2011IJCNLPfull}は採用されたラベル候補をメタ分類器にかけ，最終
+的な出力を決定する．
+メタ分類器の特徴量としては，根から葉までの局所スコアやその累積などを用い
+る．
+本稿ではこれらを総称して後付け補正とよぶ．
+後付け補正では，いずれもモデルあるいは探索が本質的に不完全であることを想
+定し，追加のパラメータによる補正を行なっている．
+そうしたパラメータは，人手で設定するか，あるいは訓練データとは別に開発デー
+タを用意して推定しなければならず煩雑である．
+一方，提案手法には後付け補正は不要であり，モデル自体の改善に専念できる．
+
+ラベル階層を下から上へ探索しながら候補を探すという点で，提案手法と似た手
+法が\cite{Bennett2009}により提案されている．
+しかし，彼らの手法では，大域モデルも大域訓練も用いられていない．
+代わりに，階層下位の分類器のスコアが上位の分類器のメタ特徴量として用いら
+れている．
+分類器の訓練は局所的に行われ，煩雑な交差確認を必要とする．
+
+本稿ではあらかじめ定義されたラベル階層を利用した．
+そうした手がかりがない場合にラベル間依存を捉えるための手法も研究されてい
+る．
+\cite{Ghamrawi:CIKM2005full,Miyao:COLING2008full}は，出力すべきラベル集
+合中のラベルペアを特徴量に組み込んでいる．
+本稿のようにラベル階層が利用できる場合は，それをもとに限られた数のラベル
+同士の関係を考慮すればすむ．
+一方，ラベル階層がない場合は，モデルはすべてのラベルペアを考慮する必要が
+あり，訓練および解探索に大きな計算コストを要する．
+こうしたモデルの検証は，ラベルの異なり数が数十程度のデータセットを用いて行
+われてきた．
+ラベルの異なり数が大きな場合について，
+\cite{Tai:2012full}は，ラベル集合を低次元の直交座標系に写像し，この空間上
+で非階層型の分類器を学習する手法を提案している．予測時には，分類器の出力
+を元の空間へ写像するという自明でない復号が必要となる．
+\cite{Bi:ICML2011}は，ラベル階層を組み込むために，木あるいは有向非循環グ
+ラフの制約を満たすような復号手法を提案している．
+
+
+\section{おわりに}
+\label{sec:conclusion}
+
+本稿では，階層型複数ラベル文書分類を構造推定問題として定式化し，動的計画
+法による厳密解探索方法，大域訓練，ラベル間依存をとらえる枝分かれ特徴量を
+提案した．
+枝分かれ特徴量はモデルの大きさを削減するとともに精度の向上をもたらした．
+この結果は，人間作業者が複数のラベル候補から出力を選択する際，ラベル階層
+に基づいて，競合する候補の相対的な重要性を考慮していることを示唆する．
+
+今後の方向性としては，枝分かれ特徴量以外によってラベル間依存をとらえる方
+法を探究するというものが考えられる．
+例えば，「〜その他」や「〜一般」といったラベルは，他のラベルとの関係にお
+いて特殊な振る舞いをすると予想される．
+また，本稿では葉のみが付与対象ラベルという問題設定を行ったが，従来研究に
+は内部ノードも付与対象である場合を扱ったものがある~\cite{Liu2005}．
+こうした内部ノードの振る舞いも特殊である．
+内部ノードを採用するとき，その子孫へのラベル付与を行わないことが多い．
+さらに，木構造から有向非循環グラフへの提案手法の一般化も課題である．
+
+
+
+\acknowledgment
+
+本研究で評価実験に用いたJSTPlusは，共同研究を通じて，独立行政法人科学技
+術振興機構に提供していただきました．深く感謝いたします．
+本研究は一部JST CRESTの支援を受けました．
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Bennett \BBA\ Nguyen}{Bennett \BBA\
+  Nguyen}{2009}]{Bennett2009}
+Bennett, P.~N.\BBACOMMA\ \BBA\ Nguyen, N. \BBOP 2009\BBCP.
+\newblock \BBOQ Refined Experts: Improving Classification in Large
+  Taxonomies.\BBCQ\
+\newblock In {\Bem Proceedings of the 32nd International ACM SIGIR Conference
+  on Research and Development in Information Retrieval (SIGIR '09)},
+  \mbox{\BPGS\ 11--18}.
+
+\bibitem[\protect\BCAY{Berlin}{Berlin}{1992}]{Berlin1992}
+Berlin, B. \BBOP 1992\BBCP.
+\newblock {\Bem Ethnobiological Classification: Principles of Categorization of
+  Plants and Animals in Traditional Societies}.
+\newblock Princeton University Press.
+
+\bibitem[\protect\BCAY{Bi \BBA\ Kwok}{Bi \BBA\ Kwok}{2011}]{Bi:ICML2011}
+Bi, W.\BBACOMMA\ \BBA\ Kwok, J. \BBOP 2011\BBCP.
+\newblock \BBOQ Multi-Label Classification on Tree- and {DAG}-Structured
+  Hierarchies.\BBCQ\
+\newblock In {\Bem Proceedings of the 28th International Conference on Machine
+  Learning (ICML-11)}, \mbox{\BPGS\ 17--24}.
+
+\bibitem[\protect\BCAY{Collins \BBA\ Koo}{Collins \BBA\
+  Koo}{2005}]{Collins2005}
+Collins, M.\BBACOMMA\ \BBA\ Koo, T. \BBOP 2005\BBCP.
+\newblock \BBOQ Discriminative Reranking for Natural Language Parsing.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 31}  (1), \mbox{\BPGS\
+  25--70}.
+
+\bibitem[\protect\BCAY{Collins \BBA\ Roark}{Collins \BBA\
+  Roark}{2004}]{Collins2004full}
+Collins, M.\BBACOMMA\ \BBA\ Roark, B. \BBOP 2004\BBCP.
+\newblock \BBOQ Incremental Parsing with the {P}erceptron Algorithm.\BBCQ\
+\newblock In {\Bem Proceedings of the 42nd Meeting of the Association for
+  Computational Linguistics (ACL'04), Main Volume}, \mbox{\BPGS\ 111--118}.
+
+\bibitem[\protect\BCAY{Crammer, Dekel, Keshet, Shalev-Shwartz, \BBA\
+  Singer}{Crammer et~al.}{2006}]{Crammer2006}
+Crammer, K., Dekel, O., Keshet, J., Shalev-Shwartz, S., \BBA\ Singer, Y. \BBOP
+  2006\BBCP.
+\newblock \BBOQ Online Passive-Aggressive Algorithms.\BBCQ\
+\newblock {\Bem Journal of Machine Learning Research}, {\Bbf 7}, \mbox{\BPGS\
+  551--585}.
+
+\bibitem[\protect\BCAY{Ghamrawi \BBA\ McCallum}{Ghamrawi \BBA\
+  McCallum}{2005}]{Ghamrawi:CIKM2005full}
+Ghamrawi, N.\BBACOMMA\ \BBA\ McCallum, A. \BBOP 2005\BBCP.
+\newblock \BBOQ Collective Multi-label Classification.\BBCQ\
+\newblock In {\Bem CIKM '05: Proceedings of the 14th ACM International
+  Conference on Information and Knowledge Management}, \mbox{\BPGS\ 195--200}.
+
+\bibitem[\protect\BCAY{Godbole \BBA\ Sarawagi}{Godbole \BBA\
+  Sarawagi}{2004}]{Godbole2004}
+Godbole, S.\BBACOMMA\ \BBA\ Sarawagi, S. \BBOP 2004\BBCP.
+\newblock \BBOQ Discriminative Methods for Multi-labeled Classification.\BBCQ\
+\newblock In Dai, H., Srikant, R., \BBA\ Zhang, C.\BEDS, {\Bem Advances in
+  Knowledge Discovery and Data Mining}, \lowercase{\BVOL}\ 3056 of {\Bem
+  Lecture Notes in Computer Science}, \mbox{\BPGS\ 22--30}. Springer Berlin
+  Heidelberg.
+
+\bibitem[\protect\BCAY{Huang, Fayong, \BBA\ Guo}{Huang
+  et~al.}{2012}]{Huang2012full}
+Huang, L., Fayong, S., \BBA\ Guo, Y. \BBOP 2012\BBCP.
+\newblock \BBOQ Structured {P}erceptron with Inexact Search.\BBCQ\
+\newblock In {\Bem Proceedings of the 2012 Conference of the North American
+  Chapter of the Association for Computational Linguistics: Human Language
+  Technologies}, \mbox{\BPGS\ 142--151}.
+
+\bibitem[\protect\BCAY{Kiritchenko}{Kiritchenko}{2005}]{Kiritchenko2005}
+Kiritchenko, S. \BBOP 2005\BBCP.
+\newblock {\Bem Hierarchical Text Categorization and Its Application to
+  Bioinformatics}.
+\newblock Ph.D.\ thesis, University of Ottawa.
+
+\bibitem[\protect\BCAY{Labrou \BBA\ Finin}{Labrou \BBA\
+  Finin}{1999}]{Labrou1999}
+Labrou, Y.\BBACOMMA\ \BBA\ Finin, T. \BBOP 1999\BBCP.
+\newblock \BBOQ Yahoo! as an Ontology: Using {Y}ahoo! Categories to Describe
+  Documents.\BBCQ\
+\newblock In {\Bem Proceedings of the Eighth International Conference on
+  Information and Knowledge Management (CIKM '99)}, \mbox{\BPGS\ 180--187}.
+
+\bibitem[\protect\BCAY{Liu, Yang, Wan, Zeng, Chen, \BBA\ Ma}{Liu
+  et~al.}{2005}]{Liu2005}
+Liu, T.-Y., Yang, Y., Wan, H., Zeng, H.-J., Chen, Z., \BBA\ Ma, W.-Y. \BBOP
+  2005\BBCP.
+\newblock \BBOQ Support Vector Machines Classification with a Very Large-scale
+  Taxonomy.\BBCQ\
+\newblock {\Bem SIGKDD Explorations Newsletter}, {\Bbf 7}  (1), \mbox{\BPGS\
+  36--43}.
+
+\bibitem[\protect\BCAY{LSHTC3}{LSHTC3}{2012}]{LSHTC3}
+LSHTC3\BED\ \BBOP 2012\BBCP.
+\newblock {\Bem ECML/PKDD-2012 Discovery Challenge Workshop on Large-Scale
+  Hierarchical Text Classification}.
+
+\bibitem[\protect\BCAY{McDonald, Crammer, \BBA\ Pereira}{McDonald
+  et~al.}{2005}]{McDonald2005full}
+McDonald, R., Crammer, K., \BBA\ Pereira, F. \BBOP 2005\BBCP.
+\newblock \BBOQ Online Large-Margin Training of Dependency Parsers.\BBCQ\
+\newblock In {\Bem Proceedings of the 43rd Annual Meeting of the Association
+  for Computational Linguistics (ACL'05)}, \mbox{\BPGS\ 91--98}.
+
+\bibitem[\protect\BCAY{McDonald, Hall, \BBA\ Mann}{McDonald
+  et~al.}{2010}]{McDonald2010full}
+McDonald, R., Hall, K., \BBA\ Mann, G. \BBOP 2010\BBCP.
+\newblock \BBOQ Distributed Training Strategies for the Structured
+  {P}erceptron.\BBCQ\
+\newblock In {\Bem Human Language Technologies: The 2010 Annual Conference of
+  the North American Chapter of the Association for Computational Linguistics},
+  \mbox{\BPGS\ 456--464}.
+
+\bibitem[\protect\BCAY{Miyao \BBA\ Tsujii}{Miyao \BBA\
+  Tsujii}{2008}]{Miyao:COLING2008full}
+Miyao, Y.\BBACOMMA\ \BBA\ Tsujii, J. \BBOP 2008\BBCP.
+\newblock \BBOQ Exact Inference for Multi-label Classification using Sparse
+  Graphical Models.\BBCQ\
+\newblock In {\Bem Coling 2008: Companion volume: Posters}, \mbox{\BPGS\
+  63--66}.
+
+\bibitem[\protect\BCAY{Montejo-R{\'a}ez \BBA\
+  Ure{\~n}a-L{\'o}pez}{Montejo-R{\'a}ez \BBA\
+  Ure{\~n}a-L{\'o}pez}{2006}]{Montejo2006}
+Montejo-R{\'a}ez, A.\BBACOMMA\ \BBA\ Ure{\~n}a-L{\'o}pez, L.~A. \BBOP
+  2006\BBCP.
+\newblock \BBOQ Selection Strategies for Multi-label Text Categorization.\BBCQ\
+\newblock In {\Bem Advances in Natural Language Processing}, \mbox{\BPGS\
+  585--592}. Springer.
+
+\bibitem[\protect\BCAY{Punera \BBA\ Ghosh}{Punera \BBA\
+  Ghosh}{2008}]{Punera2008}
+Punera, K.\BBACOMMA\ \BBA\ Ghosh, J. \BBOP 2008\BBCP.
+\newblock \BBOQ Enhanced Hierarchical Classification via Isotonic
+  Smoothing.\BBCQ\
+\newblock In {\Bem Proceedings of the 17th International Conference on World
+  Wide Web (WWW '08)}, \mbox{\BPGS\ 151--160}.
+
+\bibitem[\protect\BCAY{Qiu, Gao, \BBA\ Huang}{Qiu et~al.}{2009}]{Qiu2009full}
+Qiu, X., Gao, W., \BBA\ Huang, X. \BBOP 2009\BBCP.
+\newblock \BBOQ Hierarchical Multi-Label Text Categorization with Global Margin
+  Maximization.\BBCQ\
+\newblock In {\Bem Proceedings of the ACL-IJCNLP 2009 Conference Short Papers},
+  \mbox{\BPGS\ 165--168}.
+
+\bibitem[\protect\BCAY{Sasaki \BBA\ Weissenbacher}{Sasaki \BBA\
+  Weissenbacher}{2012}]{Sasaki2012}
+Sasaki, Y.\BBACOMMA\ \BBA\ Weissenbacher, D. \BBOP 2012\BBCP.
+\newblock \BBOQ {TTI'S} System for the {LSHTC}3 Challenge.\BBCQ\
+\newblock In {\Bem ECML/PKDD-2012 Discovery Challenge Workshop on Large-Scale
+  Hierarchical Text Classification}.
+
+\bibitem[\protect\BCAY{Tai \BBA\ Lin}{Tai \BBA\ Lin}{2010}]{Tai:2012full}
+Tai, F.\BBACOMMA\ \BBA\ Lin, H.-T. \BBOP 2010\BBCP.
+\newblock \BBOQ Multi-label Classification with Principal Label Space
+  Transformation.\BBCQ\
+\newblock In {\Bem Proceedings of the 2nd International Workshop on Learning
+  from Multi-Label Data}, \mbox{\BPGS\ 45--52}.
+
+\bibitem[\protect\BCAY{Tsochantaridis, Hofmann, Joachims, \BBA\
+  Altun}{Tsochantaridis et~al.}{2004}]{Tsochantaridis:ICML2004}
+Tsochantaridis, I., Hofmann, T., Joachims, T., \BBA\ Altun, Y. \BBOP 2004\BBCP.
+\newblock \BBOQ {S}upport {V}ector {M}achine Learning for Interdependent and
+  Structured Output Spaces.\BBCQ\
+\newblock In {\Bem Proceedings of the Twenty-first International Conference on
+  Machine Learning (ICML '04)}, \mbox{\BPGS\ 104--113}.
+
+\bibitem[\protect\BCAY{Tsoumakas, Katakis, \BBA\ Vlahavas}{Tsoumakas
+  et~al.}{2010}]{Tsoumakas2010full}
+Tsoumakas, G., Katakis, I., \BBA\ Vlahavas, I. \BBOP 2010\BBCP.
+\newblock \BBOQ Mining Multi-label Data.\BBCQ\
+\newblock In Maimon, O.\BBACOMMA\ \BBA\ Rokach, L.\BEDS, {\Bem Data Mining and
+  Knowledge Discovery Handbook}, \mbox{\BPGS\ 667--685}. Springer.
+
+\bibitem[\protect\BCAY{Wang, Zhao, \BBA\ Lu}{Wang
+  et~al.}{2011}]{Wang2011IJCNLPfull}
+Wang, X.-L., Zhao, H., \BBA\ Lu, B.-L. \BBOP 2011\BBCP.
+\newblock \BBOQ Enhance Top-down Method with Meta-Classification for Very
+  Large-scale Hierarchical Classification.\BBCQ\
+\newblock In {\Bem Proceedings of 5th International Joint Conference on Natural
+  Language Processing}, \mbox{\BPGS\ 1089--1097}.
+
+\end{thebibliography}
+
+\begin{biography}
+\bioauthor{村脇　有吾}{
+2006年京都大学工学部情報学科卒業．2008年京都大学大学院情報学研究科修士課程
+修了．2011年，同博士後期課程修了．博士（情報学）．同年京都大学学術情報
+メディアセンター特定助教．2013年，九州大学大学院システム情報科学研究院
+助教，現在に至る．計算言語学，自然言語処理の研究に従事．
+}
+\end{biography}
+
+
+\biodate
+
+
+
+\end{document}

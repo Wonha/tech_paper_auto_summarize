@@ -1,0 +1,1405 @@
+
+
+
+
+\documentclass[jnlpbbl]{jnlp_j}
+
+\usepackage{amssymb}
+\usepackage[dvips]{graphicx}
+
+\setcounter{page}{1}
+\setcounter{巻数}{0}
+\setcounter{号数}{0}
+\setcounter{年}{0}
+\setcounter{月}{0}
+\受付{1995}{5}{6}
+\再受付{1995}{7}{8}
+\採録{1995}{9}{10}
+
+
+\setcounter{secnumdepth}{2}
+
+\title{Webと携帯端末向けの新聞記事の \\対応コーパスからの文末言い換え抽出}
+\author{岩越守孝 \affiref{TDU} \and 増田英孝 \affiref{TDU} \and 中川裕志 \affiref{UT}}
+
+\headauthor{岩越守孝・増田英孝・中川裕志}
+\headtitle{Webと携帯端末向け記事の対応コーパスからの文末言い換え抽出}
+
+\affilabel{TDU}{東京電機大学工学部}
+{School of Engineering, Tokyo Denki University}
+\affilabel{UT}{東京大学情報基盤センター}
+{Information Technology Center, The University of Tokyo}
+
+\jabstract{
+本研究では、数十文字程度の長さで携帯端末向けに配信されている
+新聞記事と数百文字程度の長さのWeb新聞記事の両者を約3年に渡って収集した。
+こうして収集したコーパスから文末表現の縮約などの言い換え表現の抽出
+を機械的に行った。
+まず、Webから収集した携帯向け新聞記事とWeb新聞記事からなるコーパスに対
+して記事単位の対応付けを行い、次に文単位の対応付けを行った。
+次に携帯向け記事文の文末の表現を形態素解析を用いて抽出し、その文に対応す
+るWeb新聞記事の文を集める。
+そしてWeb新聞記事の文の文末から形態素ごとに言い換え先表現を抽出し、
+それに対して頻度等を用いた得点付け、および必要な名詞を欠落させてしまう不
+適切な言い換えの除去を行うことにより言い換え表現の抽出精度向上を図った。
+}
+
+\jkeywords{言い換え，携帯端末，Web，文末表現}
+
+\etitle{Extraction of Paraphrasing Pattern by Aligned \\
+ Corpora of Web and Mobile Terminal News Articles}
+\eauthor{Moritaka Iwakoshi \affiref{TDU} \and Hidetaka Masuda \affiref{TDU} \and Hiroshi Nakagawa \affiref{UT}} 
+
+\eabstract{
+We have collected both Web news-paper articles of several hundreds of
+characters, for three years  and their counter parts distributed for
+mobile terminals,
+which consist of fifty to a hundred characters.
+Then, we extracted a number of candidates of paraphrases of the final
+part of sentences from them automatically.
+At first we have aligned these two types of corpus first at article
+level, then at sentence level.
+Next, we extract the final part of mobile article sentences using
+morphological analyzer, and collect their counterpart expressions of
+Web article sentences.
+Finally, we extracted the candidates of morpheme sequence from the
+final part of Web article sentence, then we propose the combination of
+two methods for
+them in order to improve the extraction accuracy of the sets: 1)
+ranking based on frequency, branching factor and length of string, and
+2) filtering to remove inappropriate expressions which eliminate
+semantically indispensable nouns.
+}
+
+\ekeywords{Paraphrase, Mobile terminal, Web, Sentence final part}
+
+
+\begin{document}
+\maketitle
+
+\newpage
+
+
+\section{はじめに} \label{sec:hajime}
+
+最近、種々の応用を睨んで言い換えの研究がさかんになっている
+\cite{inui02,acl03}。
+例えば、語彙的言い換えの研究\cite{yamamoto02}は種々の応用に役立つ。
+また、機械翻訳の前処理や評価\cite{kanayama03}、情報検索、質問応答、情報
+抽出の柔軟性を上げること\cite{Fabio03,Shinyama03}、年少者
+や初心者向けの教科書やマニュアルを読みやすくする、などは直接的に役立つ応
+用である。
+似た研究としては聾唖者に理解し易いテキスト言い換えもある
+\cite{inui-acl03}。また、非母国語話者が理解しやすいように簡易な言い方に
+言い換えることも有意義である。こういった目的のためには、国語辞典を用いた
+用言の言い換え\cite{kaji03}や普通名詞の言い換え\cite{fujita00}などが役立
+つ。
+
+一方、要約も言い換えの応用分野として有力である。
+従来の文書要約は重要文の抽出が主体であった\cite{mani01}。
+しかし、抽出した文をさらに短縮することを目指す場合には言い換えが役立つ。
+例えば、 
+\begin{description}
+\item[例文 1:] \hspace{2em}本法案が衆議院本会議で審議が始まった。\\
+を
+\item[例文 2:] \hspace{2em}本法案、衆議院本会議で審議。
+\end{description}
+というような言い換えが考えられる。
+実際にこの例文2のような短縮された表現はテレビの字幕あるいは列車の字幕ニュー
+スなどでよく見かける。
+このような応用は文書表示を行う端末の多様化からみても有用さが増して
+くる。
+Webページは従来からパソコンの大画面への表示を想定して作られていた。
+しかし、携帯電話やPDAの普及により100文字程度の小画面への表示を念頭におく
+テキストも増加している。
+このような画面へ表示するコンパクトなテキストは多くの場合短縮された表現で
+ある。
+このような短縮を自動的に行うために言い換え表現を収集することは意義深い。
+
+新聞記事の場合、重要な文は記事の先頭に現れることが多いという性質を利用
+して抽出できるが、画面が小さく表示文字数に限りがあること、短い時間で読
+むことができることなどを考慮すると、さらに縮約が要請される。
+後に詳しく述べるが、よく使われるのは、上記の例文2に見られる体言止めのよ
+うな文末の短縮表現である。
+また、「国会で審議へ」という文末の助詞止めも多く使われる。
+このような縮約した文末表現は従来から字幕放送で用いられている。
+しかし、通常の書き言葉の文末である終止形を体言止めや助詞止めに変換する
+規則は、これまでほとんど手作りであった\cite{ando01}。
+
+
+このような文短縮を目的とした言い換え表現を言語の実際の使用例から自動収集
+するための言語資源としてWebに配信されている新聞記事と、これに対応した内
+容を携帯電話向けに発信している新聞記事に注目する。
+これらは毎日数十記事発信され、長期間にわたって蓄積すれば大量の言語資源と
+なる。
+すなわち、同じ内容が数十文字程度で構成された携帯端末向けの新聞記事と数百
+文字程度で構成されているWeb新聞記事が対応付けられれば、ある言語表現とそ
+の短縮表現の対応データとして使える。
+この対応付けコーパスを用いれば、多様な文末表現の縮約のための言い換え表現
+を機械的な手法で抽出することが可能になる。
+ここで留意しなければならないのは、この研究で目的としている言い換えは
+「Web記事の文 $\rightarrow$　携帯端末向け記事の文」という方向性を持つ点
+である。
+実際には、書き手がこの方向で作業しているかどうかは不明である。
+しかし、縮約のような言い換えによって短縮された記事を作ることは技術的に
+可能であっても、その逆方向の言い換えは困難である。
+よって、この方向性を前提として研究を進める。
+なお、以下では必要に応じて、言い換え操作の対象になるWeb記事の文からの抽
+出表現を「言い換え元表現」、対応する携帯端末向け記事の文からの抽出表現を
+「言い換え先表現」と呼ぶ。
+
+さて\cite{inui02}は言い換えの研究にいくつかの問題を提起している。
+それらに対して、この研究ではいかなる解決策を採っているかをまとめることに
+よって、本論文の構成を述べる。\\
+
+\noindent \textbf{言い換え事例をどのように集めるか}\\
+この問題に対しては、1)Web上から得られる言い換え表現獲得のための言語資源
+としてWeb新聞記事と携帯端末向けの新聞記事を用いること、2)この両記事コー
+パスを文単位で対応付ける方法の提案と実験的評価、を行って対処している。
+具体的には\ref{sec:taiou}節において、研究で使用した記事データについて、
+およびWeb記事と携帯記事の対応付け、さらにそこから文単位での対応付けを行
+う方法について述べる。
+このような対応付けコーパスを用いる言い換え事例収集は多くの研究
+\cite{braz01,sekine01}があるが、本研究での新規性のひとつは対象としている
+言語資源にある。
+\\
+
+\noindent \textbf{どの表現を言い換えるか}\\
+この問題は、これまでの言い換え研究の中心課題のひとつであった。
+特に類似した表現の対をコーパスから探し出すことは重要なテーマで、多くの研
+究\cite{murata01,torisawa01,terada01}がなされた。
+我々の場合、\ref{sec:chushutu}節において述べるように、対応付けられた文からな
+るコーパスを利用してWeb記事文の文末を縮約する携帯端末向け文の文末の言い
+換え表現を獲得することに的を絞っている。
+よって、言い換えるべき場所はWeb記事文の文末のうち、本論文で述べる方法で
+抽出した言い換えにおける言い換え元の表現が出現した場合と限定できる。
+\\
+
+\noindent \textbf{可能な言い換えの網羅的生成と、生成された候補の評価}\\
+\cite{inui02}では、この問題は上の問題の一部と位置付けられているが、本研
+究では網羅性の確保はその困難さから諦めた。
+代わりに文末表現に限定し、どのような範囲の形態素列を切り出せば正しい言い換
+え表現を抽出できるかという問題に絞って扱う。
+\ref{sub:webbunmatsu}節で言い換え表現の抽出について説明し、
+その抽出結果に\ref{sub:junni}節で説明する得点付けを行うことによって正し
+い言い換え表現を取得する。
+\ref{sub:filter}節では、その結果の言い換え表現のうち必要な名詞を削りすぎ
+た不適切な言い換えを除去するフィルタリングについて述べる。
+これらの\ref{sec:chushutu}節に提案する手法の実験評価を\ref{sec:hyouka}
+節で述べる。
+\\
+
+\noindent \textbf{意味の差、およびその計算法}\\
+この問題はこの論文では人手での評価に頼った。今後の課題である。
+\\
+
+\noindent \textbf{言い換え知識の共有}\\
+本論文で述べた言い換え知識は文末表現の縮約に役立つが、これを大きくの研究
+者、技術者に共有する枠組みについても今後の課題である。
+
+
+\section{対象とする新聞記事データとその対応付け} \label{sec:taiou}
+
+\subsection{対応付けの概要}
+
+文縮約のための言い換え規則を機械的に取り出すためには同一内容の長短2文が
+大量に必要となる。
+そこで本研究では、\cite{oomori03} の手法を利用してWeb から長期にわたっ
+て収集したコーパスを用いる。
+このコーパスは、インターネット上に配信されていて、パソコンでの閲覧用に
+作成されている新聞記事(以下、Web記事と呼ぶ)と携帯端末向けに
+作成されている新聞記事(以下、携帯記事と呼ぶ)の間で同じ内容のものを
+自動的に対応付けたものである。
+さらに言い換え表現抽出のために、その携帯記事中の文(以下、携帯文と呼ぶ)に対
+しそれに対応付けられた新聞記事中から同一内容を持った文(以下、Web文と呼
+ぶ)を対応付ける\cite{sato04}。
+
+本節以下の実験では2001年4月26日から2003年11月30日までに収集し
+たWeb記事と携帯記事から得た48075組の記事から抽出した合計72203組の対応文
+を用いた。
+Web記事は通常、数百文字で構成されているのに対して、携帯記事は50文字程度
+で構成されている。また携帯記事は体言止めや文末が助詞で終わる文が
+多いのが特徴として挙げられる。携帯記事の文末品詞の
+割合を表\ref{bunsu}に示す。
+
+\begin{table}[htbp]
+\begin{center}
+\caption{携帯記事の文末品詞の割合}
+\label{bunsu}
+\begin{tabular}{|r|r|r|r|} 
+\hline
+\multicolumn{2}{|r|}{品詞} & 頻度[個] & 頻度 \slash 合計[\%] \\
+\hline \hline
+名詞 & サ変接続 & 28687 & 39.7  \\
+\cline{2-4} & その他 & 11796 & 16.3  \\
+\hline
+\multicolumn{2}{|r|}{助詞} & 13397 & 18.6  \\
+\hline
+\multicolumn{2}{|r|}{動詞} & 11988 & 16.6  \\
+\hline
+\multicolumn{2}{|r|}{助動詞} & 5589 & 7.7  \\
+\hline
+\multicolumn{2}{|r|}{その他} & 746 & 1.1  \\
+\hline \hline
+\multicolumn{2}{|r|}{合計} & 72203 & 100.00 \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+
+\subsection{記事単位での対応付け}\label{sub:kiji-taiou}
+
+新聞記事の対応付けの方法は以下のようになる。
+
+収集した記事群で1日単位にWeb記事と携帯記事の対応付けを行う。
+まず、両記事群を「茶筅」\cite{chasen}で形態素解析する。
+この結果に対して、携帯記事$i$中の名詞とWeb記事$j$中の名詞を調べ、次式の
+ようにこの両者の記事の類似度$Sim(i,j)$を計算する。
+ここで$M(i)$は携帯記事$i$中の名詞の集合、$Wt(j)$をWeb記事$j$の見出し中
+の名詞の集合、$Wb(j)$をWeb記事の本文中の名詞集合とする。
+なお、携帯記事には見出しは付いていない。
+
+\begin{eqnarray}
+Sim(i,j) = 3 \times |\mbox{$Wt(j) \cap M(i)$}| + |\mbox{$Wb(j) \cap M(i)$}|
+\end{eqnarray}
+
+2001年5月10日から同8月10日まで毎月10日と20日に収集した605記事について
+$Sim$の値と人手でつけた対応付けの正解率の関係を図\ref{art-align}に示した。
+
+\begin{figure}[htb]
+\begin{center}
+\includegraphics[width=90mm]{img/art-align.eps}
+\caption{$Sim$の値と記事単位の対応付けの精度}
+\label{art-align}
+\end{center}
+\end{figure}
+
+この図より、
+$Sim$の値が35以上の場合を正しく対応が付いたとすることにより、現在までの実験
+で481記事が正しく対応した。すなわち、約80\%の携帯記事を100\%の精度で対
+応付けができた。
+そこで、この方法、すなわち$Sim \geqq 35$の条件を満たす記事対を取り出すことに
+より、約3年分の記事対応付けコーパスを作成した。
+
+
+\subsection{文単位での対応付け}\label{sub:bun-taiou}
+
+記事単位で対応付けられたコーパスにおいて携帯記事を基準としてWeb記事か
+ら対応文の抽出を行う。これも以下に示すように対応した記事対において共起
+した名詞の頻度によって行った。具体的アルゴリズムを以下に示す。 \\
+
+\noindent\textbf{文対応付けアルゴリズム}\\
+\begin{description}
+\item[Step:1] $i=1$\\
+	   携帯記事の第$i$文を形態素解析し、第$i$文に含まれる全名詞を
+抽出し、
+	   この集合を$Ms(i)$とする。
+\item[Step:2] $j=1$
+\item[Step:3] Web記事の第$j$文を形態素解析し、第$j$文に含まれる全名詞を抽出
+	   し、この集合を$Ws(j)$とする。\\
+	   $S(j)$ = \textbar\mbox{$Ms(i) \cap Ws(j)$}\textbar\\
+	   を求める。
+\item[Step:4] $j=j+1$\\
+	   Web記事の最後の文になるまでStep:3、Step:4を繰り返す。
+\item[Step:5] $S(j)$がもっとも高いWeb記事の文を携帯記事第$i$文の対応文と
+	   する。なお、一致した名詞の数が同数の文が複数あった場合は、記
+	   事の先頭に近いものを対応文として選ぶ。
+\item[Step:6] $i=i+1$\\
+	   携帯記事に残った文があればStep:1に戻る\\
+\end{description} 
+
+\textbf{Step:5}で名詞一致数が同数の場合に記事先頭に近いものを選ぶのは、
+新聞記事の場合は先頭に近い文が重要な情報を担うからである。つまり、携帯文
+に対応する文のうち、より重要な情報を含む文を選択しようという指針を採った。
+以上の方法で抽出した対応文対のうち、以後、携帯記事から抽出した文を携帯文、
+Web記事から抽出した文をWeb文と呼ぶ。
+
+ここまでに述べた方法で抽出したデータのうち、2001年の約一年分の対応記事コー
+パスの43171組の対応文についての詳細を表\ref{kousei}に示す。
+携帯記事のほとんどが二文で構成されていることから、
+使用した対応付けコーパスの記事数の約二倍の対応文が抽出される。また携帯文
+は一文が数十文字程度であるのに対して、Web文はそれよりも長い構成になって
+いるので、二文の携帯文に対して、Web文が一文で抽出される場合もある。これ
+は携帯記事が二文で構成されているときのみ現れる。
+
+
+\begin{table*}[htb]
+\caption{記事の構成文数と対応文の抽出状況}
+\label{kousei}
+\begin{center}
+\begin{tabular}{|r|r|r|} \hline
+携帯記事 & 抽出した時 & 抽出した \\の構成 &の状態 & 対応文 \\ & (携帯文対Web文) &  \\\hline\hline
+1文 & 1対1 & 1801 \\\hline
+2文 & 2対1 & 9606 \\\cline{2-3}
+ & 1対1 & 29732 \\\hline
+3文 & 1対1 & 2028 \\\hline
+
+4文 & 1対1 & 4 \\\hline\hline
+\multicolumn{2}{|c|}{合計} & 43171 \\\hline
+\end{tabular}
+\end{center}
+\end{table*}
+
+次に今回、抽出した対応文からランダムで500組を
+抽出し対応付けの精度を求めた。
+
+\begin{eqnarray}
+\mbox{精度}  = \frac{\mbox{抽出した対応付け正解文数}}{\mbox{抽出した全文数}}
+\end{eqnarray}
+
+対応付けの正解・不正解は人手で行っており、対応付けられている
+場合は正解、対応付けられていない場合は不正解として2人で行った。
+2人の判断が異なった場合には3人目が判断して、多数決で正解・不正解
+を判断する。この方法により評価を行った精度は92.8\%であった。
+この精度は対応付けそのものとしては必ずしも十分ではないが、次節で述べる言
+い換え表現抽出では、さらに頻度などに基づく言い換え表現の重み付けなども行っ
+ているため、100\%の精度は必須とは言えない。
+よって、この方法によって得られた対応文のデータによって、言い換え元表現と
+言い換え先表現抽出の実験を進めることにした。
+
+
+\section{言い換え表現の抽出}\label{sec:chushutu}
+
+\subsection{言い換え抽出の枠組}
+本節では、\ref{sub:bun-taiou}節で述べた方法で抽出した携帯文とWeb文を用
+いて、
+言い換え先表現と言い換え元表現の対を抽出する方法について述べる。例えば、\\
+\begin{description}
+\item[携帯文:]コンピュータウィルス感染防止に有力な方法が\underline{判明}。
+\item[Web文:]コンピュータウィルス感染防止に有力な方法があることが、
+研究所の調査で\underline{分かった}。\\
+\end{description}
+
+という対応文があったとする。
+このとき文末に注目すると
+携帯文では\underline{判明}で終わっているのに対して、Web文では\underline
+{分かった}で文が終わっている。
+文の内容から要約の際は\underline{判明}を言い換え先表現に、
+\underline{分かった}を言い換え元表現に使えることが、人間が見れば容易に判
+断できる。
+このような携帯文の文末にある言い換え先表現に対する言い換え元表現をWeb文
+から自動的に抽出するのは、概略、以下のような方法になる。\\
+
+\begin{description}
+\item[Step:1] \ref{sub:bun-taiou}節で作成された対応文から
+	   同じ言い換え先表現を文末に持つ携帯文とWeb文の関連付けする。
+	   この詳細は\ref{sub:kouho}節で述べる。
+
+\item[Step:2] Step:1で関連付けられたWeb文から言い換え元表現の候補を抽出
+	   する。
+	   この詳細は\ref{sub:webbunmatsu}節で述べる。
+
+\item[Step:3] 抽出された言い換え先表現の候補それぞれに対し、
+	   語彙の分岐数、出現頻度、文字列長から正しい言い換え元表現が高
+	   得点になるような得点付けを行い、順位付けする。
+	   この詳細は\ref{sub:junni}節で述べる。
+
+\item[Step:4] Step:3の結果に対して、精度の向上を図るため、言い換え元表現
+	   として不適切な表現を削除する。
+	   この詳細は\ref{sub:filter}節で述べる。
+\\
+\end{description} 
+
+
+すなわち、この処理では、\textbf{言い換え先である携帯文文末の表現をまず決め、それに対応する複数のWeb文の言い換え元表現を推定する} という問題を解くことになる。
+
+
+\subsection{言い換え先表現および対応するWeb文集合の抽出}\label{sub:kouho}
+
+まず言い換え先表現の抽出方法について説明する。
+言い換え先表現の抽出のために携帯文を形態素解析し、文末にある１形態素を取
+り出す。
+これによりサ変接続の名詞であれば「会談」や「表明」といった表現が抽出される。
+しかし、これだけでは助詞や助動詞、動詞の場合は「も」や「た」、「示す」といった
+言い換え表現として使用が難しい表現や、意味の範囲が広すぎるために言い換え表
+現の抽出が困難な表現が抽出されてしまう。
+その問題はさらに文頭方向にある形態素を続けて抽出することにより解消で
+きる。
+その結果、「可能性も」や「述べた」、「認識示す」といった言い換え先表現
+が取り出され、言い換え元表現の抽出も容易になる。
+
+次に図\ref{buntaiou}に抽出した言い換え先表現に対する対応文集合を作成す
+る流れを示す。
+まず図の左側の枠内にあるように、抽出した言い換え先表現に対しその言い換
+え先表現を文末に持つ携帯文を集める。
+そして図の右側の枠内にあるように、集めた携帯文に対応するWeb文を集め、
+それをWeb文集合とする。
+そのときのWeb文集合の要素数を以下「対応文数」と呼ぶ。
+\ref{sub:webbunmatsu}節以降で説明する言い換え元表現の抽出は、ここで作成
+されたWeb文集合の文末から抽出することになる。
+
+
+\begin{figure}[htb]
+\begin{center}
+\includegraphics[width=110mm]{img/buntaiou.eps}
+\caption{言い換え先表現の抽出と対応文集合}
+\label{buntaiou}
+\end{center}
+\end{figure}
+
+この方法により、言い換え先表現として4617表現を抽出した。
+抽出した言い換え先表現のうち頻度が上位30位までの表現を表
+\ref{kouho_space}に示す。
+動詞終止形、助詞、形容詞語幹(「高」「安」)、
+など様々だが、一番多いのはサ変接続名詞であり60\%を占める18個である。
+文末のサ変名詞はいわゆる体言止めであり、この表にも示されるように頻度が高
+く、結果として適用される頻度も高いと推測される。
+
+\begin{table}[htb]
+\caption{言い換え先表現の例}
+\label{kouho_space}
+\begin{center}
+\begin{tabular}{|r|r||r|r||r|r|} \hline
+抽出表現 & 対応文数 & 抽出表現 & 対応文数 & 抽出表現 & 対応文数  \\\hline\hline
+高 & 1780    & ている & 505  & 協議 & 315   \\\hline
+安 & 1668    & 判明 & 422    & 可能性も & 310  \\\hline
+発表 & 1118  & 方針 & 408    & 要請 & 292 \\\hline
+逮捕 & 967   & 見通し & 402  & れた & 286 \\\hline
+」と & 933   & ため & 399    & 発言 & 282 \\\hline
+会談 & 788   & 強調 & 378    & 指摘 & 270 \\\hline
+表明 & 735   & 合意 & 341    & 」 & 264 \\\hline
+死亡 & 629   & 開始 & 329    & 確認 & 261 \\\hline
+決定 & 538   & 検討 & 328    & 予定 & 254 \\\hline
+いた & 513   & 批判 & 317    & みられる & 247 \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+ここで頻度が高かった「高」と「安」であるが、これはほぼ全てが経済の記事
+からであり、
+「円高」「円安」などが元となっている。さらに対応するWeb文では「円高・ドル安と
+なった」「円安・ドル高となった」という表現が固定的に用いられている。
+その特殊性から正解となる言い換え元表現が少なく、例を挙げての説明が困難と
+なるため、以下の説明の際は頻度が次に多い「発表」を用いる。
+
+\subsection{言い換え元表現候補の抽出}\label{sub:webbunmatsu}
+
+\ref{sub:kouho}節で作成されたデータを用い、言い換え先表現に対応す
+る言い換え元表現をWeb文集合の各文の文末から抽出する。
+言い換え元表現の抽出にはWeb文を形態素解析し、文末から文頭方向に向かって1
+形態素ずつ増やしながら表現を抽出する。
+言い換え元表現が含まれる長さとして十分な15形態素までを使用する。
+ここでは単純に形態素区切りで表現を取り出すため、言い換え元表現に適さ
+ない表現も数多く抽出されるが、\ref{sub:junni}節で述べる得点付けや
+\ref{sub:filter}節で述べるフィルタリングによって排除を試みる。
+この時点で抽出された言い換え表現の例を表\ref{iikae-chushutu}に示す。
+
+\begin{table}[htb]
+\caption{言い換え先表現が「発表」時の言い換え元表現の候補の例}
+\label{iikae-chushutu}
+\begin{center}
+\begin{tabular}{|r|r|} \hline
+た                        & れた \\\hline
+した                      & された \\\hline
+発表した                  & 指定された \\\hline
+を発表した                & が指定された \\\hline
+結果を発表した            & 公表された \\\hline
+調査結果を発表した        & から公表された \\\hline
+の調査結果を発表した      & 発表された \\\hline
+費の調査結果を発表した    & 日発表された \\\hline
+医療費の調査結果を発表した& が発表された \\\hline
+
+\end{tabular}
+\end{center}
+\end{table}
+
+\subsection{分岐数、頻度、文字列長に基づく言い換え元候補の順位付け}\label{sub:junni}
+
+\ref{sub:webbunmatsu}節で抽出された言い換え元表現には言い換えとして適
+切な
+表現と言い換えとして不適切な表現が含まれていることになる。
+そこで、抽出された表現に対して正解が上位に集中することを目的とした順位付
+けを行う。
+
+順位付けを行うにあたってまず、ある言い換え先表現に対応するWeb文集合にお
+いて、集合全体としてWeb文の文末が持つ特徴を説明する。
+図\ref{rev-bunki}にWeb文集合中のWeb文の文末から文頭方向への語の分岐の様
+子の例を示す。
+図から前方に向かって形態素が分岐していることが分かる。
+まず、一番右側にWeb文の一番文末の形態素となる「た」や「する」がくる。
+さらに1つ前方にある形態素を繋げると「した」や「だった」や「発表する」が
+抽出できる。
+例えば、「を発表した」に続く形態素は「結果」「表明」「コメント」
+など111種類ある。
+ここで、ある表現から１つ前方の形態素の種類数をその形態素の分岐数と呼ぶ。
+さらに図\ref{happyo-bunki}に図\ref{rev-bunki}で示した内容の一部分の分岐
+数と頻度の関係を示した。
+このグラフからは「発表した」までは分岐数が小さく、「を発表した」で分岐数が
+大きく、さらに「結果を発表した」となるとまた小さくなることが分かる。
+これは、(a)固定された表現の内部では部分形態素列を長く与えれば与えるほど、
+直前あるいは直後の形態素が絞り込まれること、(b)ひとたび固定的な表現が終
+わると、その前後にはいかなる表現も現れることができるようになること、に
+対応している。
+よって分岐数が大きい形態素までの形態素列がよい言い換え元の候補である
+と考えることができる。
+さらに良く使われる表現ほどその表現は固定的な言い回しで、言い換え先表現と
+深くかかわっている可能性が高いと考えられる。
+
+\begin{figure}[htb]
+\begin{center}
+\includegraphics{img/back.eps}
+\caption{言い換え先表現が「発表」時のWeb文を文末からみた様子}
+\label{rev-bunki}
+\end{center}
+\end{figure}
+
+\begin{figure}[htb]
+\begin{center}
+\includegraphics[width=100mm]{img/happyo-bunki.eps}
+\caption{言い換え先表現が「発表」時のWeb文を文末からみた分岐数と頻度の関係}
+\label{happyo-bunki}
+\end{center}
+\end{figure}
+
+以上の特徴を踏まえ、言い換えのよさを示す評価関数の構成要素として以下
+を用いる。
+
+\begin{description}
+\item[分岐数:] 分岐数の大小が言い換え表現句としての切れ目の可能性の大小
+	   を表すと考えられるので評価関数の構成要素として用いる。
+\item[頻度:] 良く使われる表現は安定していることを示すので、他の要因と組
+	   み合わせて用いることは有益である。
+\item[文字列長:] ここでいう文字列長は形態素数ではなく文字数である。
+	   言い換え元表現は短過ぎるならば言い回しにならず、長過ぎるなら
+	   ば文脈に依存した表現になってしまう。
+	   長過ぎもせず、短すぎもせず、適度な長さの表現を抽出したい。
+	   そのため評価関数ではlog( 文字列長 $-$ 1 )を用いる。
+	   $\log$により長い文字列に対して得点の抑制を、文字列長 $-$ 1に
+	   より1〜2文字の表現の排除をする効果がある。
+	   さて、長さに形態素数を使うという選択肢もある。
+	   しかし、もし形態素数を文字列長の代わりに使うと、十分に長くて
+	   意味のある形態素(例えば固有表現)が長さ=1で排除されてしまいか
+	   ねない。
+	   これを避けるために文字数を用いた。
+\end{description} 
+
+\noindent
+上記の各要素を\\
+$a = $分岐数\\
+$b = $頻度\\
+$c = \log($文字列長$ - 1)$
+\\\\
+と定義し、評価関数を
+$a, b, c, a \times b, a \times c, b\times c, a\times b\times c$
+の7種類を用いて比較実験を行った。
+対応文数の多かった100位までの言い換え元表現の候補のスコアが1位の表現を人
+手で評価し、評価関数の違いによる正しい表現の割合を表\ref{score7}に示す。
+この結果から、評価関数$a \times b \times c$を用いた方法が最も精度が高いこと
+がわかる。
+よって、評価関数$a \times b \times c$を用いた得点付けのデータを用いる。
+
+\begin{table}[htb]
+\caption{計算手法の違いによる精度の違い}
+\label{score7}
+\begin{center}
+\begin{tabular}{|r||r|r|r|r|r|r|r|} \hline
+評価関数  & $a$  & $b$ & $c$ & $a \times b$ & $a \times c$ & $b \times c$ &
+ $a \times b \times c$ \\\hline\hline
+正解の割合&18\%&5\%&0\%& 12\% & 46\% & 65\% &  71\%   \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+さらに言い換え元表現として正しい表現が得点が高くなり、高順位になることを示
+すために、図\ref{happyo-bunpu}に言い換え先が「発表」の場合に$a \times b
+\times c$の方法で得点付けをした場合の言い換え元の正しい表現の分布グラフ
+を示す。
+このグラフから、多くの正しい言い換え元表現が高順位に集中しているこ
+とがわかる。
+低い順位にいくつか正しい言い換え元表現がきているが、これは表現
+の頻度が少なかったために得点が低くなったことが原因である。
+
+\begin{figure}[htb]
+\begin{center}
+\includegraphics[width=100mm]{img/happyo-bunpu.eps}
+\caption{言い換え先表現が「発表」の場合の正しい表現の分布}
+\label{happyo-bunpu}
+\end{center}
+\end{figure}
+
+
+\subsection{フィルタリングによる不適切な言い換え元表現の削除}\label{sub:filter}
+
+言い換え元表現として抽出した表現の中には文の意味として
+欠落してはならない語を含んでいることがあるため、
+その語を言い換えによって削除してしまうと意味が通らない文になっ
+てしまう可能性がある。
+このような不適切な言い換え元表現は前節の得点付けによって順位が下位になる
+場合は採用されないが、
+収集した記事中でよく使われる表現であれば言い換え元表現として不適切な
+表現も上位になってしまう。
+そのような言い換え元表現を削除するためのフィルタリングを行う。
+そのアルゴリズムは次のようになる。
+\\
+
+\noindent\textbf{フィルタリングアルゴリズム}\\
+\noindent
+$n$を言い換え元表現の数とし、
+言い換え元表現の集合を$\{x_1,x_2,$…$,x_n\}$，
+言い換え元表現を$x_i = S_{1} S_{2}$…$S_{m}$ ($S_{k}$は形態素)，
+言い換え先表現を$y$，
+携帯文を$M_{1} $…$ M_{j} \/y$ ($M_{l}$は形態素,\/ $y$は言い換え先表現)，
+$C$を名詞
+とすると、\\
+
+for($i$ = 1 , $n$) \{\\
+\hspace{2em}if ( $C \in \{M_{1},$…$, M_{j}\} \wedge C \in \{S_{1},$…$, S_{m}\} \wedge C \notin y$)\\
+\hspace{2em}$then$ $x_i$を言い換え元表現集合から除く\\
+\indent\}\\
+
+なぜなら名詞$C$は携帯文に含まれるが、言い換え先表現$y$には含まれない。
+つまり$C$は携帯文にとって必須の意味を担う。
+よって$C$を含む言い換え元表現$x_i$を$C$を含まない言い換え先表現$y$に省略
+することはできない。
+
+具体例を図\ref{filter-img}に示す。
+ここで$C$は「声明」となり、削除対象となる言い換え元表現$x_i$は「声明
+を発表した」となる。
+なお、$y$は「発表」である。
+Web文にも携帯文にも「声明」という語が含まれ、文の内容として必須の語であ
+ることがわかる。
+よって「声明」という意味を削除する「声明を発表した」は「発表」の言い換え元表現
+として正しくないと考えられるため、言い換え元表現の候補から削除する。
+
+\begin{figure}[htb]
+\begin{center}
+\includegraphics[width=110mm]{img/filter-img.eps}
+\caption{フィルタリング処理の具体例}
+\label{filter-img}
+\end{center}
+\end{figure}
+
+フィルタリングによって\ref{sub:junni}節で得られたデータがどのように変化
+するかを表\ref{filter-henka}に示す。
+表中でアンダーラインが引かれているものがフィルタリングに
+よって削除された表現である。
+この表から、言い換え元表現として用いるには不適切な表現が削除でき
+ていることが分かる。
+
+\begin{table}[htb]
+\caption{フィルタリングによる言い換え元表現の削除の例\\
+(言い換え先：「発表」)}
+\label{filter-henka}
+\begin{center}
+\begin{tabular}{|r|r|} \hline
+を発表した             & を明らかにした \\\hline
+と発表した             & \underline{ことを明らかにした} \\\hline
+発表した               & \underline{たことを明らかにした} \\\hline
+すると発表した         & \underline{調査結果を発表した} \\\hline
+たと発表した           & 明らかにした \\\hline
+したと発表した         & \underline{策を発表した} \\\hline
+\underline{結果を発表した}& となった \\\hline
+\underline{声明を発表した}& したことを明らかにした \\\hline
+\underline{計画を発表した}& \underline{する声明を発表した} \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+
+\section{抽出された言い換え元表現の評価}\label{sec:hyouka}
+
+提案した手法で抽出した言い換えの全体に対しての数量的評価を
+\ref{subsec:suuryou}節で述べる。
+\ref{subsec:rei}節では抽出した言い換えの典型例についての考察を行う。
+
+\subsection{数量的評価} \label{subsec:suuryou} 
+
+まず言い換え元表現と言い換え先表現の長さについて述べる。
+\ref{sub:kouho}節で述べた方法で抽出した言い換え先表現4617個を対象にし
+たときの言い換え先表現の平均文字数は2.6 文字、標準偏差は1.1 で、正しい
+言い換え元表現の平均文字列長は5.7 文字、標準偏差は3.2 であった。 
+さらに言い換え表現先と言い換え元表現の文字列長の差の平均は3.0 文字で標
+準偏差は2.2 であった。
+
+また、表\ref{hyougen-rei}に言い換え先表現の品詞ごとに抽出例をあげる。
+「ている」や「している」といった言い換え元表現として用いることができない表
+現が出現しているが、この様な表現を削除することは今後の課題である。
+
+\begin{table}[htb]
+\caption{言い換え元表現の抽出例}
+\label{hyougen-rei}
+\begin{center}
+\begin{tabular}{|r|r|r|r|} \hline
+会談(名詞) & 可能性も(助詞) & と語る(動詞) & 述べた(助動詞) \\\hline\hline
+と会談した & ている & を示した & と述べた \\\hline
+会談した   & 可能性がある & と語った & 述べた \\\hline
+で会談した & 可能性もある & と述べた & を示した \\\hline
+について意見交換した & している & 語った & を述べた \\\hline
+と相次いで会談した & 可能性が出てきた & 考えを示した & を明らかにした \\\hline
+
+\end{tabular}
+\end{center}
+\end{table}
+
+次に言い換え元表現の抽出精度について示す。
+まず精度の評価方法について説明する。
+精度は人手により評価を行っている。3人が言い換え元表現について、
+新聞記事のニュースであることは勘案せずに
+正否を判定し、2名以上が正しいと判断した場合を正解、それ以外は不正解としている。
+なお、グラフはそのままのデータでは見難いため10〜50件で平均をとって表示
+している。
+
+図\ref{1-all}は全品詞を対応文数の多い順に並べ、それぞれの言い換え元表現
+の得点付け順位が1位になった表現について人手で評価を行ったものである。
+なお、全体の傾向を把握するために、縦軸の精度を対数とした場合のデータへの
+当てはめ近似曲線を実線で示した。
+図\ref{hikaku-all}には\ref{sub:filter}節で行ったフィルタリングの有効性に
+ついての評価を示す。
+図\ref{hikaku-all}は全品詞でフィルタリング前後の精度の対数曲線での近似のみを示
+したものである。
+全体では精度が12\%向上し、特に対応文数が少ない部分ではかなりの精度向上が
+見られる。
+
+\begin{figure}[htbp]
+ \begin{minipage}{0.5\hsize}
+  \begin{center}
+   \includegraphics[width=70mm]{img/1-all.eps}
+  \end{center}
+  \caption{全品詞のフィルタリング前の精度}
+  \label{1-all}
+ \end{minipage}
+ \begin{minipage}{0.5\hsize}
+  \begin{center}
+   \includegraphics[width=70mm]{img/hikaku-all.eps}
+  \end{center}
+  \caption{全品詞のフィルタリング前後の精度の比較}
+  \label{hikaku-all}
+ \end{minipage}
+\end{figure}
+
+上記評価方法とは別に以下に述べる評価方法を用いた場合におけるフィルタリング前
+後の評価を図\ref{1-3-all}から図\ref{1-3-filter-jodoushi}に示す。
+この評価方法は各言い換え先表現のWeb文集合における対応文数が10件になるま
+での部分で、言い換え元表現の得点付けによる順位が3位までの正否を判定し、
+全品詞を対象にした場合、名詞、助詞、動詞、助動詞を別々に対象にした場合
+について、
+その平均をとったものである。
+
+この図からは、フィルタリングが品詞にかかわらず精度の向上に効果がある
+ことがわかる。
+対応文数が10件までということもあり比較的正解となる言い換え元表現が抽出さ
+れているため前の全品詞の得点付けが1位の場合のデータ程ではないが、フィル
+タリングにより全品詞において4\%程度の精度が向上がみられる。
+
+今回用いた言い換え元表現の抽出方法では携帯文の文末にくる表現とWeb文
+の文末にくる表現が同一内容である必要がある。
+携帯文の文末が名詞の場合は、抽出した言い換え先表現と言い換え元表現が
+同一内容の表現がくることが多いため図\ref{1-3-filter-meishi}のように高い
+精度を得られたが、
+携帯文の文末が助詞や助動詞の場合では言い換え先表現と同一内容の抽出すべき
+言い換え元表現は文末よりかなり前にあることが多いという特徴がある。
+そのため、図\ref{1-3-filter-joshi}や図\ref{1-3-filter-jodoushi}のように
+どのような順位でも精度が低いという結果が
+得られた。
+この問題の解決は今後の課題となる。
+
+\begin{figure}[htbp]
+ \begin{minipage}{0.5\hsize}
+  \begin{center}
+   \includegraphics[width=70mm]{img/1-3-all.eps}
+  \end{center}
+  \caption{全品詞のフィルタリング前の精度}
+  \label{1-3-all}
+ \end{minipage}
+ \begin{minipage}{0.5\hsize}
+  \begin{center}
+   \includegraphics[width=70mm]{img/1-3-filter-all.eps}
+  \end{center}
+  \caption{全品詞のフィルタリング後の精度}
+  \label{1-3-filter-all}
+ \end{minipage}
+\end{figure}
+
+\begin{figure}[htbp]
+ \begin{minipage}{0.5\hsize}
+  \begin{center}
+   \includegraphics[width=70mm]{img/1-3-meishi.eps}
+  \end{center}
+  \caption{名詞のフィルタリング前の精度}
+  \label{1-3-meishi}
+ \end{minipage}
+ \begin{minipage}{0.5\hsize}
+  \begin{center}
+   \includegraphics[width=70mm]{img/1-3-filter-meishi.eps}
+  \end{center}
+  \caption{名詞のフィルタリング後の精度}
+  \label{1-3-filter-meishi}
+ \end{minipage}
+\end{figure}
+
+\begin{figure}[htbp]
+ \begin{minipage}{0.5\hsize}
+  \begin{center}
+   \includegraphics[width=70mm]{img/1-3-joshi.eps}
+  \end{center}
+  \caption{助詞のフィルタリング前の精度}
+  \label{1-3-joshi}
+ \end{minipage}
+ \begin{minipage}{0.5\hsize}
+  \begin{center}
+   \includegraphics[width=70mm]{img/1-3-filter-joshi.eps}
+  \end{center}
+  \caption{助詞のフィルタリング後の精度}
+  \label{1-3-filter-joshi}
+ \end{minipage}
+\end{figure}
+
+\begin{figure}[htbp]
+ \begin{minipage}{0.5\hsize}
+  \begin{center}
+   \includegraphics[width=70mm]{img/1-3-doushi.eps}
+  \end{center}
+  \caption{動詞のフィルタリング前の精度}
+  \label{1-3-doushi}
+ \end{minipage}
+ \begin{minipage}{0.5\hsize}
+  \begin{center}
+   \includegraphics[width=70mm]{img/1-3-filter-doushi.eps}
+  \end{center}
+  \caption{動詞のフィルタリング後の精度}
+  \label{1-3-filter-doushi}
+ \end{minipage}
+\end{figure}
+
+\begin{figure}[htbp]
+ \begin{minipage}{0.5\hsize}
+  \begin{center}
+   \includegraphics[width=70mm]{img/1-3-jodoushi.eps}
+  \end{center}
+  \caption{助動詞のフィルタリング前の精度}
+  \label{1-3-jodoushi}
+ \end{minipage}
+ \begin{minipage}{0.5\hsize}
+  \begin{center}
+   \includegraphics[width=70mm]{img/1-3-filter-jodoushi.eps}
+  \end{center}
+  \caption{助動詞のフィルタリング後の精度}
+  \label{1-3-filter-jodoushi}
+ \end{minipage}
+\end{figure}
+
+最後に「精度」と「対応文数」の関係について図\ref{hindo-seido}に示す。
+用いるデータは図\ref{1-all}と同じ全品詞を対応文数の多い順に並べ、それぞ
+れの言い換え元表現の得点付け順位が1位になった表現について人手で評価
+したものである。
+この図からは、言い換え先表現に対する対応文数が少ないと精度が低く、対応文
+数が増えるにつれ対数関数的に精度が向上していくことが分かる。
+つまり、この手法で正解となる表現のより高い抽出精度を求めるならば、精度は
+対応文数に対し指数関数的な数のコーパスを集めなければならないというこ
+とであり、これには相当な困難が伴う。
+よって、今後は構文構造や意味内容を利用する精密な手法を用いることによる言
+い換え表現抽出を行う必要がある。
+
+\begin{figure}[htbp]
+ \begin{center}
+  \includegraphics[width=70mm]{img/hindo-seido2.eps}
+ \end{center}
+ \caption{対応文数と精度の関連}
+ \label{hindo-seido}
+\end{figure}
+
+
+\subsection{言い換え例についての考察} \label{subsec:rei} 
+
+言い換え先表現の各々に対応する言い換え先表現についての言語学的考察は興
+味深いものである。
+しかし、\ref{sub:kouho}節で述べた方法で抽出した言い換え先表現
+4617個全体を対象にすると、各言い換え先表現に対して多い場合は100種以上、
+少ない場合でも10種近い言い換え元表現が抽出されているため膨大な労力が必
+要である。
+よって相当に長期にわたる研究が必要であるので、別の機会に譲りたい。
+しかし、典型的な例について言語学的な考察をしておくことは、抽出された言
+い換え先、言い換え元の性質を窺う上で意味がある。
+よって、この節では、抽出した全言い換えのうちの相当数を観察した結果、筆
+者が得た典型的な言い換えパターンについての例示と考察を行うことにする。
+なお、以下の例では「言い換え先表現 $\leftarrow$ 言い換え元表現 (言い換
+え先表現に対する表\ref{score7} の
+$a \times b \times c$による順位)」という形式で言い換えを記述する。
+
+\subsubsection*{(1) 文末用言の省略による体言止め、など}
+
+以下に例を示す。\\
+
+\begin{tabular}{llcl}
+(1-a) & 発表 & $\leftarrow$ & 発表した(3位) \\
+(1-b) & 見通し & $\leftarrow$ & 見通しだ（1位）\\ 
+(1-c) & 見通し & $\leftarrow$ & 見通しを明らかにした（6位） \\
+(1-d) & 見通し & $\leftarrow$ & 見通しを示した(17位) \\
+(1-e) & 高 & $\leftarrow$ & 高で取引を終了した(18位) \\
+(1-f) & 事故 & $\leftarrow$ & 事故となった(3位) \\ 
+\end{tabular}
+\\
+
+文末用言の省略の結果、体言止めになる場合では、(1-a)に見られる「した」
+（＝「する」の過去形）を省略してサ変名詞のみを残して体言止めにする場合
+が多い。(1-b)の場合は「である」の言い切りの形である「だ」の省略だが、
+これも同じようなタイプである。(1-c)(1-d)は形式的用言である「する」や
+「だ」のような機能語的な用言の省略ではなく、内容語を伴う用言句「明らか
+にした」「示した」の省略である。これは形式的には導けない言い換えであり、
+今回のようなコーパスからの抽出データを用いて明らかになった言い換えであ
+る。ニュースの文の言い換えとしては普遍性を持つと予想できるが、その適用
+範囲についてはより深い考察を必要とする。(1-e)はニュース特有の言い換え
+で、株価や為替レートについての報告となる。これは、株価、為替などの分野
+でしか成立しない言い換えである。(1-f)はサ変ではない名詞「事故」の場合
+である。この場合はこの例に見られる「となる」のほかに「になる」などいく
+つかの典型的用言が省略候補になると予想されるが、それを網羅的に調べるこ
+とは大規模データを用いての実験となるため今後の課題である。
+
+文末の用言句が省略されても体言止めになるとは限らない。例えば次のような
+例がある。
+\\
+
+\begin{tabular}{llcl}
+(1-g) & 盗まれる  & $\leftarrow$ &  が盗まれていた(1位) \\
+(1-i) & 盗まれる  & $\leftarrow$ &  が盗まれていたことが分かった(2位) 
+\end{tabular}
+\\
+
+(1-g)は「いた」という完了を表す動詞接尾辞の省略であり、これは文法的に
+は大きな変化だが、大方の意味は保存されている。(1-i)は「いたことが分かっ
+た」という部分の省略である。この部分は「こと」で体言化し、それ
+によって客観化（言語学的には命題化）を行った後、記者ないし記者が直接取
+材した人の判断である「分かった」が連接している。文を日本語学で使われる
+$\mbox{命題} + \mbox{モダリティ}$ という構造で捉えると、
+命題の部分だけを単独で取り出す
+という言い換えである。ニュース記事が少ない文字数で事実、すなわち言語学的
+には命題、を伝えるものと考えれば、その言い換えの構造は理解しやすいもので
+あろうし、ニュース記事の言い換えとしては普遍性を持つ。この問題について
+は、後に助詞止めのところでもう一度議論する。
+
+\subsubsection*{(2) 引用の「」と」の言い換え}
+
+文末用言の省略の結果、体言止めになる場合は、引用を表す「」と」で終
+わる例が多数観察された。以下に例を示す。
+\\
+
+\begin{tabular}{llcl}
+(2-a) & 」と  & $\leftarrow$ &  と述べた(1位) \\
+(2-b) & 」と  & $\leftarrow$ &  との認識を示した(3位) \\
+(2-c) & 」と  & $\leftarrow$ &  と語った（4位）\\
+(2-d) & 」と  & $\leftarrow$ &  と報じた(34位) \\
+(2-e) & 」と  & $\leftarrow$ &  という(8位)
+\end{tabular}
+\\
+
+引用や報告を表すこれらの言い換えが組織的に抽出できたことは、本論文で説
+明したコーパスの効果である。ただし、(2-e)の「という」は今日では実際上
+「と言う」ではなく固定した表現のように扱われることが多く、必ずしも
+「いう」の省略でなく、語彙的な言い換えとみなすべきかもしれない。これら
+はニュース記事であれば正しい縮約と考えられるが、(2-a)から(2-d)につい
+ては、もう少し深い言語学的考察を(5)で述べる。
+
+\subsubsection*{(3)助詞の省略など文法構造上の言い換え}
+
+文末用言に加え、用言の左方の助詞を省略する場合もある。以下に例を示す。
+\\
+
+\begin{tabular}{llcl}
+(3-a) & 発表　 & $\leftarrow$ &  を発表した(1位) \\
+(3-b) & 発表　 & $\leftarrow$ &  に発表した(7位)
+\end{tabular}
+\\
+
+用言の直前の助詞を省略した場合もある。具体的には(3-a)だと「移転計画を
+発表した」を「移転計画発表」、(3-b)だと「午後に発表した」を「午後発表」
+という言い換えになる。しかし、この言い換えは不自然な言い換えになること
+がある。例えば。「XX誌に発表した」を「XX誌発表」というのは不自然で
+ある。このような例は正解としなかった。さらに
+\\
+
+\begin{tabular}{llcl}
+(3-c) & 発表　 & $\leftarrow$ &  と発表した(2位)
+\end{tabular}
+\\
+
+という「と」を省略する場合は特に不自然さが大きい。例えば、「移転すると
+発表した」を言い換えた「移転する発表」
+は非文である。ただし、「移転計画と発表した」を「移転計画発表」とする言
+い換えは若干不自然な程度である。現象的にはかなり複雑だけに、厳密な言語
+学的分析は今後の研究を待たなければならない。
+
+\subsubsection*{(4)意味の類似した語彙ないし言い回しでの言い換え}
+
+言い換えの研究でしばしば対象になるものに語彙的な言い換えがある。この範
+疇に入る言い換えとしては、まず同じ意味を持つ単語への言い換えがある。次
+に用言の言い換えの例を示す。ただしこの例では、一つの言い換え先「発表」
+に対する複数の言い換え元をまとめて $\leftarrow$ の右側に「、」で区切っ
+て示す。
+\\
+
+\begin{tabular}{llcl}
+(4-a) & 発表 &  $\leftarrow$ & 公表した(10位)、分かった(16位)、まとめた
+(24位)、\\
+ & & & 示した(43位)、述べた(58位）、表明した(60位) \\
+\end{tabular}
+\\
+
+このような同じ意味を持つ表現がコーパスから機械的に得られ、本提案の言い
+換え抽出の有効性を示している。しかし、このような言い換えは多数得られて
+いるわけではない。というのは、文末に使われる用言の種類は相当に限定され
+ているからである。上記のような同義あるいは類義の用言を網羅的に求めるた
+めには、文末以外の部分からの言い換え抽出が必要であるが、これは本論文の
+範囲を超える研究テーマである。また、サ変名詞以外の体言は、そもそも文末
+に出現することが少なく、ほとんど言い換えは得られていない。本研究の方法
+論的限界といえる。
+
+一方、ニュース記事の言い換えという点で特徴的な例を示そう。(1-e)の例で
+示した株価、為替のニュースに現れる「高」あるいは「安」であるが、以下の
+ような言い換え元表現が求まっている。
+\\
+
+\begin{tabular}{llcl}
+(4-b) & 高  & $\leftarrow$ &  高で取引を終了した(18位) \\
+(4-c) & 高  & $\leftarrow$ &  で取引を終えた(2位) \\
+(4-d) & 高  & $\leftarrow$ &  高・ドル安となった(5位) \\ 
+(4-e) & 高  & $\leftarrow$ &  高の８４２４円５１銭で取引を終えた(43位) \\
+(4-f) & 高  & $\leftarrow$ &  反発して取引を終えた(24位) \\
+(4-g) & 高  & $\leftarrow$ &  続伸して取引を終えた(25位) \\
+(4-h) & 安  & $\leftarrow$ &   安・ドル高となった(7位) \\
+(4-i) & 安  & $\leftarrow$ &   割り込んで取引を終えた(34位) \\
+(4-j) & 安  & $\leftarrow$ &   反落して取引を終えた(43位)
+\end{tabular}
+\\
+
+(4-b)は言い換え元の「で取引を終了した」が省略されているが、これを省略
+してもよいのは、為替、株価のニュースという背景が読み手にも分かっている
+からである。(4-c)は、言い換え元が「高で取引を終えた」か「安で取引を終
+えた」であるのかという情報を無視して「高」とするため誤った言い換えであ
+る。このような言い換えも候補に出てきてしまうのが、提案手法の限界である。
+
+(4-d)は興味深い。原文では「円高・ドル安となった」なのだが「円高・ドル安」
+が為替としては同じ情報の繰り返しであるが慣用化している。ところが、短縮
+すると「円高」にだけ焦点を当て、「高」と言い換えられる。これは、「円」を
+通常使用する日本人を対象にした文章だからであろう。
+(4-h)の「円安・ドル高」に
+ついての言い換えも同様である。このように言い換えは、前後の文章という狭
+義の文脈だけではなく、文化、国家などを含んで考えなければならないため、
+扱いが難しいことがわかる。
+(4-e)は、言い換え元では
+「XX円YY銭高の8424円51銭で取引を終えた」という構造なので (4-e) で言い
+換えれば「XX円YY銭高」となり新聞記事としては許容できるが、明らかに情報
+は欠落している。よって、一般的な
+言い換えとしては不適切である。
+今後、言い換
+え先、元ともに数値まで含めた言い換え抽出の方法を検討する必要があるこ
+とが分かった。(4-f)、(4-g)、(4-i)、(4-j)は、深い意味解釈をした上での言
+い換えである。このような言い換えが抽出できたのは、ここで使っている携帯
+記事とWeb記事のコーパスが言い換え対象以外の部分を用いて対応付けされ
+ていること、対象の言い換えを文末に限定したことの2点によって、抽出が可
+能になったと考えられる。
+しかし、これらもまた新聞記事ニュースでだけ成立する言い換えである。
+
+上記の「高」「安」は典型的な意味的言い換えが行われていたが、それ以外でも、
+内容を解釈した上で言い換える例がある。例えば次のようなものである。
+\\
+
+\begin{tabular}{llcl}
+(4-k) & 事故　 & $\leftarrow$ &  行方不明になっている(17位) \\
+(4-l) & 事故　 & $\leftarrow$ &  で止まっていた大型トレーラーに追突(28位) \\
+(4-m) & 盗まれる  & $\leftarrow$ &  窃盗事件として捜査を始めた(92位) 
+\end{tabular}
+\\
+
+このような言い換えも普遍的に正しいものではないが、高い圧縮率の要約とみ
+なすことはできる。実際、抽出された言い換え元表現のうち、この例のような長
+めの表現のうち正しいと判断できるものは、相当な情報の損失を伴う高い圧縮
+率の要約という性格を持つ。
+
+\subsubsection*{(5)助詞止め}
+
+言い換え先が「焦点に」のような助詞止めの場合は、言語的には複雑である。
+まず典型的な例を示そう。　
+
+「」と」についての要約は既に一部述べたが、言い換え元表現に存在した認識
+や引用という記者あるいは記者が直接取材した人の持った事実認識を表すモダリ
+ティの表現が省略されたものが多い。この言い換えは新聞ニュース記事であれ
+ば成立する言い換えである。以下はそのような例である。「認識を示した」
+「報じた」は少々長い表現であるが、判断や伝聞のモダリティを表すと考えら
+れる。
+\\
+
+\begin{tabular}{llcl}
+(5-a) & 」と　 & $\leftarrow$ &  との認識を示した(3位) \\
+(5-b) & 」と　 & $\leftarrow$ &  と報じた(34位)
+\end{tabular}
+\\
+
+一方、記者らの事実認識を示すモダリティではなく、記者の取材した事実関係
+そのものの中で、登場人物が行った言語行動を省略した以下のような例もある。
+\\
+
+\begin{tabular}{llcl}
+(5-c) & 」と　 & $\leftarrow$ &  を言い渡した(10位) \\
+(5-d) & 」と　 & $\leftarrow$ &  求めた(21位) \\
+(5-e) & 」と　 & $\leftarrow$ &  をけん制した(39位)
+\end{tabular}
+\\
+
+これらは引用符の前に書かれた内容から、「言い渡す」「求める」「けん制す
+る」という言語行動が十分に予想できるからこその省略である。その意味では
+普遍性のある言い換えではない。
+\\
+
+\begin{tabular}{llcl}
+(5-f) & 会談へ　 & $\leftarrow$ &  と会談することが決まった(4位) \\
+(5-g) & 焦点に　 & $\leftarrow$ &  焦点となる(1位)
+\end{tabular}
+\\
+
+これらの例は、「へ」や「に」のような方向性を表す助詞は、確定的になった
+将来の事柄を表す例である。より詳しく調査分析すれば、言語学的には興味深
+い観察が得られるが、この論文の範囲を越える研究テーマと考える。
+
+さて、終助詞「か」は元来が疑問などのモダリティを意味するだけに言い換え
+元に興味深いものが多い。
+\\
+
+\begin{tabular}{llcl}
+(5-h) & 狙いか  & $\leftarrow$ &  狙いがあるとみられる(2位) \\
+(5-i) & 原因か　 & $\leftarrow$ &  が原因とみられる(2位) \\
+(5-j) & 犯行か  & $\leftarrow$ &  の犯行とみている(3位)
+\end{tabular}
+\\
+
+(5-h)と(5-i)は言い換え元表現に記者自身の判断が記載されているが、それが
+「か」という終助詞に凝縮していると考えられる。また、(5-j)は、言い換え
+元表現において記者ではなく警察などの判断を表している。しかし、警察の判
+断まで含めたモダリティも「犯行」という事実があれば、「か」という終助詞
+に凝縮することができることを示している。よって、これらの言い換えもまた
+ニュースであることに依存して成立するタイプであるといえよう。このような、
+命題にモダリティが後接する日本語の基本構造に基づく助詞への言い換えは、
+言語学の課題としては興味深いし、大きなテーマであるが、詳細に踏み込むこ
+とは、この論文の範囲を越えると考える。
+
+以上、本論文で述べた携帯記事とWeb記事の対応付けコーパスを用いて抽出
+された言い換え先と言い換え元表現のうち筆者が典型例と考えるものについて若干の
+分析を試みてきた。しかし、この分析自体は、大きなテーマであり、本格的な
+分析は、本論文で述べたような言い換え抽出結果を用いて言語学的に精密に行
+うことが望まれる。
+さらに、ここまで述べてきた分析において問題になったのは、言い換えが新聞
+記事ニュースとしてなら許容されるが、一般的ではないという場合が多数抽出
+されたことである。このような場合は、既に述べたように、言い換えよりは、
+要約あるいは縮約という性質を持つ。要約や縮約の正しさは、informative、
+indicativeの区別に見られるように、目的依存性があるため、正解の決め方が
+難しい。この論文では、普遍性のある言い換えを正解と考えているが、要約あ
+るいは縮約としての評価も必要であることが明らかになってきている。しかし、
+そのことは大きな研究テーマであるため、今後の課題としたい。
+
+\section{おわりに}
+
+本論文では携帯端末向け新聞記事とWeb新聞記事の対応付けコーパスから文末表
+現に関する言い換え表現の抽出方法を示した。
+まず、記事対応になっているデータから文単位での対応付けを行った。
+そしてそこから言い換え元表現の抽出を形態素単位で行い、それに対して分岐数、
+頻度、文字列長による得点付けし、
+さらに言い換え表現を要約に適用した時に必要な意味が削除されることを防ぐた
+めのフィルタリングを行うことにより言い換え表現抽出の精度向上を行った。
+
+今回作成した携帯端末向け新聞記事とWeb 新聞記事の対応付けコーパスを用い
+ることを想定すると、以下のような課題が残っている。
+
+\subsubsection*{(1) 抽出された言い換え表現を用いた文縮約を試みることおよびその評価}
+
+言い換え元表現と言い換え先表現の組から機械的に言い換えを生成することが
+できる。文
+字列の単純マッチングを用いて、「〜を明らかにした。」を「〜表明。」へ、
+「〜を決めた。」
+を「〜決定。」へと言い換えることができる。実際、我々はこのようなシステ
+ムを試作したが、この方法から分かるように予測された結果以上のものは得ら
+れない。したがって、抽出した言い換えを言語的に分析して一般化したルール
+を作成することができれば、「を$M($ 名詞サ変接続) する方針。$=> M$ へ。」と
+いうルールで、「〜審議経過を開示する方針。」を「〜審議経過開示へ。」と
+いう適用範囲の広い言い換えが可能になると予想される。しかし、言語的分析
+は、人間が行うにしても、機械学習を利用するにしても、それ自体が大きなテー
+マであるため、今後の課題としたい。
+
+\subsubsection*{(2) 名詞以外での言い換え表現の精度の向上}
+
+\subsubsection*{(3) 精度向上を目的としたフィルタリング規則の追加}
+
+\subsubsection*{(4) 文末以外に現れる表現の言い換え抽出の検討}
+
+通常、言い換え抽出においては、\cite{inui02} で述べられ、また
+本論文第\ref{sec:hajime}節でも述べたように、言い換え候補をコーパスから
+網羅性良く抽出することが大きな課題である。
+提案手法の場合は、携帯端末向け新聞記事と
+Web 新聞記事の対応付けコーパス双方の文末表現に限定したことによって、こ
+の問題を回避した。しかし、文末以外に現れる表現の言い換えを抽出しようと
+した場合は、たちどころにこの網羅性の良い言い換え候補抽出を解決しなけれ
+ばならない。これに関しては多くの研究成果があるが、文末言い換えに限定し
+て機能する本論文での提案とは根本的に異なる方法論が必要となる。したがっ
+て、本論文で紹介したコーパスを用いるにしても、新たな研究テーマとして検
+討する必要があるため、将来的な研究課題となる。
+\\
+
+
+\acknowledgment
+ 
+本研究の初期の段階で尽力いただいた佐藤大君(東京電機大学大学院、現在、
+富士電機情報サービス株式会社勤務) に深く感謝いたします。
+なお、本研究の一部は、科学研究費補助金　特定領域研究「情報学」、課題番号
+16016215の補助を受けて行われました。
+
+
+\bibliographystyle{jnlpbbl}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Brazilay \BBA\ McKeown}{Brazilay \BBA\
+  McKeown}{2001}]{braz01}
+Brazilay, R.\BBACOMMA\  \BBA\ McKeown, K. \BBOP 2001\BBCP.
+\newblock \BBOQ Extracting paraphrases from a parallel corpus\BBCQ\
+\newblock {\Bem Proceedings of ACL-EACL 2001}, 50--57.
+
+\bibitem[\protect\BCAY{Inui \BBA\ Hermjakob}{Inui \BBA\
+  Hermjakob}{2003}]{acl03}
+Inui, K.\BBACOMMA\  \BBA\ Hermjakob, U.\BEDS\ \BBOP 2003\BBCP.
+\newblock {\Bem Proceedings of the Second International Workhop on
+  Paraphrasing}. ACL2003.
+
+\bibitem[\protect\BCAY{Inui, Fujita, Takahashi, Iida, \BBA\ Iwakura}{Inui
+  et~al.}{2003}]{inui-acl03}
+Inui, K., Fujita, A., Takahashi, T., Iida, R., \BBA\ Iwakura, T. \BBOP
+  2003\BBCP.
+\newblock \BBOQ Text Simplification for Reading Assistance: A Project
+  Note\BBCQ\
+\newblock {\Bem Proceedings of The Second International Workshop on
+  Paraphrasing: Paraphrase Acquisition and Applications, Workshop of ACL03},
+  9--16.
+
+\bibitem[\protect\BCAY{Kanayama}{Kanayama}{2003}]{kanayama03}
+Kanayama, H. \BBOP 2003\BBCP.
+\newblock \BBOQ Paraphrasing Rules for Automatic Evaluation of Translation into
+  Japanese\BBCQ\
+\newblock {\Bem Proceedings of The Second International Workshop on
+  Paraphrasing: Paraphrase Acquisition and Applications, Workshop of ACL03},
+  88--93.
+
+\bibitem[\protect\BCAY{Mani}{Mani}{2001}]{mani01}
+Mani, I. \BBOP 2001\BBCP.
+\newblock \BBOQ Automatic Summarization\BBCQ\
+\newblock {\Bem John Benjamins}.
+
+\bibitem[\protect\BCAY{Murata \BBA\ Isahara}{Murata \BBA\
+  Isahara}{2001}]{murata01}
+Murata, M.\BBACOMMA\  \BBA\ Isahara, H. \BBOP 2001\BBCP.
+\newblock \BBOQ Universal model for paraphrasing - using transformation based
+  on a defined criteria\BBCQ\
+\newblock {\Bem Proceedings of Workshop on Automatic Paraphrasing: Theories and
+  Applications, NLPRS2001}, 47--54.
+
+\bibitem[\protect\BCAY{Rinaldi, Dowdall, Kaljurand, Hess, \BBA\ Molla}{Rinaldi
+  et~al.}{2003}]{Fabio03}
+Rinaldi, F., Dowdall, J., Kaljurand, K., Hess, M., \BBA\ Molla, D. \BBOP
+  2003\BBCP.
+\newblock \BBOQ Exploiting Paraphrases in a Question Answering System\BBCQ\
+\newblock {\Bem Proceedings of The Second International Workshop on
+  Paraphrasing: Paraphrase Acquisition and Applications, Workshop of ACL03},
+  25--32.
+
+\bibitem[\protect\BCAY{Shinyama \BBA\ Sekine}{Shinyama \BBA\
+  Sekine}{2003}]{Shinyama03}
+Shinyama, Y.\BBACOMMA\  \BBA\ Sekine, S. \BBOP 2003\BBCP.
+\newblock \BBOQ Paraphrase Acquistion for Information Extraction\BBCQ\
+\newblock {\Bem Proceedings of The Second International Workshop on
+  Paraphrasing: Paraphrase Acquisition and Applications, Workshop of ACL03},
+  65--71.
+
+\bibitem[\protect\BCAY{Terada \BBA\ Tokunaga}{Terada \BBA\
+  Tokunaga}{2001}]{terada01}
+Terada, T.\BBACOMMA\  \BBA\ Tokunaga, T. \BBOP 2001\BBCP.
+\newblock \BBOQ Automatic disabbreviation by using context information\BBCQ\
+\newblock {\Bem Proceedings of Workshop on Automatic Paraphrasing: Theories and
+  Applications, NLPRS2001}, 21--28.
+
+\bibitem[\protect\BCAY{Torisawa}{Torisawa}{2001}]{torisawa01}
+Torisawa, K. \BBOP 2001\BBCP.
+\newblock \BBOQ A nearly unsupervised learning method for automatic
+  paraphrasing of Japanese noun phrases\BBCQ\
+\newblock {\Bem Proceedings of Workshop on Automatic Paraphrasing: Theories and
+  Applications, NLPRS2001}, 63--72.
+
+\bibitem[\protect\BCAY{Yamamoto}{Yamamoto}{2002}]{yamamoto02}
+Yamamoto, K. \BBOP 2002\BBCP.
+\newblock \BBOQ Acquisition of Lexical Paraphrases from Texts\BBCQ\
+\newblock {\Bem Proceedings of Computerm2 Workshop of COLING2002}, 22--28.
+
+\bibitem[\protect\BCAY{安藤彰男 今井亨ほか}{安藤彰男\JBA
+  今井亨ほか}{2001}]{ando01}
+安藤彰男\BBACOMMA\  今井亨ほか \BBOP 2001\BBCP.
+\newblock \JBOQ 音声認識を利用した放送用ニュース字幕制作システム\JBCQ\
+\newblock \Jem{電子情報通信学会論文誌}, \Bbf{84-D-II}, 877--887.
+
+\bibitem[\protect\BCAY{乾健太郎}{乾健太郎}{2002}]{inui02}
+乾健太郎 \BBOP 2002\BBCP.
+\newblock \JBOQ 言語表現を言い換える技術\JBCQ\
+\newblock \Jem{言語処理学会第8回年次大会チュートリアル}, 1--22.
+
+\bibitem[\protect\BCAY{関根聡}{関根聡}{2001}]{sekine01}
+関根聡 \BBOP 2001\BBCP.
+\newblock \JBOQ 複数の新聞を使用した言い換え表現の自動抽出\JBCQ\
+\newblock
+  \Jem{言語処理学会第7回大会ワークショップ「言い換え/パラフレーズの自動化」}.
+
+\bibitem[\protect\BCAY{佐藤大, 岩越守孝, 増田英孝, 中川裕志}{佐藤大\Jetal
+  }{2004}]{sato04}
+佐藤大, 岩越守孝, 増田英孝, 中川裕志 \BBOP 2004\BBCP.
+\newblock \JBOQ
+  Webと携帯端末向けの新聞記事の対応コーパスからの言い換え抽出\JBCQ\
+\newblock \Jem{情報処理学会自然言語処理研究会}, \Bbf{159}, 193--200.
+
+\bibitem[\protect\BCAY{松本裕治, 北内啓, 平野善隆, 松田寛}{松本裕治\Jetal
+  }{2002}]{chasen}
+松本裕治, 北内啓, 平野善隆, 松田寛 \BBOP 2002\BBCP.
+\newblock \JBOQ 形態素解析システム「茶筌」version 2.2.9使用説明書\JBCQ\
+\newblock \Jem{奈良先端科学技術大学院大学松本研究室}.
+
+\bibitem[\protect\BCAY{大森岳史, 増田英孝, 中川裕志}{大森岳史\Jetal
+  }{2003}]{oomori03}
+大森岳史, 増田英孝, 中川裕志 \BBOP 2003\BBCP.
+\newblock \JBOQ Web新聞記事の要約とその携帯端末向け記事による評価\JBCQ\
+\newblock \Jem{情報処理学会自然言語処理研究会}, \Bbf{153}, 1--8.
+
+\bibitem[\protect\BCAY{鍛冶伸裕, 川原大輔, 黒橋禎夫, 佐藤理史}{鍛冶伸裕\Jetal
+  }{2003}]{kaji03}
+鍛冶伸裕, 川原大輔, 黒橋禎夫, 佐藤理史 \BBOP 2003\BBCP.
+\newblock \JBOQ 格フレームに基づく用言の言い換え\JBCQ\
+\newblock \Jem{自然言語処理}, {\Bbf 10}  (4), 64--81.
+
+\bibitem[\protect\BCAY{藤田篤, 乾健太郎, 乾裕子}{藤田篤\Jetal
+  }{2000}]{fujita00}
+藤田篤, 乾健太郎, 乾裕子 \BBOP 2000\BBCP.
+\newblock \JBOQ 名詞言い換えコーパスの作成環境\JBCQ\
+\newblock \Jem{電子情報通信学会思考と言語研究会予稿集}, 53--60.
+
+\end{thebibliography}
+ \begin{biography}
+ \biotitle{略歴}
+ \bioauthor{岩越守孝}{
+ 2003年東京電機大学工学部電気工学科卒業．
+ 2005年同大学院工学研究科情報通信工学専攻修士課程修了．
+現在、キヤノン株式会社に勤務．
+本論文は在学中の成果をまとめたものである．
+ }
+
+ \bioauthor{増田 英孝}{
+ 1995年東京電機大学大学院博士後期課程修了．博士(工学)．
+ 東京電機大学工学部助手，講師を経て，同助教授．
+ Web情報検索、Webマイニングなどの研究に従事．
+ }
+ 
+ \bioauthor{中川裕志}{
+ 1975年東京大学工学部卒業．
+ 1980年同大学院博士課程修了．工学博士．横浜国立大学工学部講師，
+ 助教授，教授を経て，1999年より東京大学情報基盤センター教授．
+ 言語処理学会長(2004.6 - 現在)，
+ ACL Executive Committee (2002 - 2004) ．
+ 計算言語学、Webテキストマイニング、情報検索、情報抽出などの研究に従事．}
+ 
+ \bioreceived{受付}
+ \biorevised{再受付}
+ \bioaccepted{採録}
+ 
+ \end{biography}
+
+\end{document}

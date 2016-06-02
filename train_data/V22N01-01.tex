@@ -1,0 +1,1174 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{amsmath}
+\usepackage{array}
+
+
+\Volume{22}
+\Number{1}
+\Month{March}
+\Year{2015}
+
+\received{2014}{6}{26}
+\revised{2014}{9}{30}
+\accepted{2014}{11}{7}
+
+\setcounter{page}{3}
+
+\jtitle{対話解析のためのゼロ代名詞照応解析付き述語項構造解析}
+\jauthor{今村　賢治\affiref{NTT}\affiref{NICT} \and 東中竜一郎\affiref{NTT} \and 泉　　朋子\affiref{NTT}}
+\jabstract{
+本稿では，日本語を対象とした対話用述語項構造解析を提案する．従来，述語
+項構造解析は，主に新聞記事を対象に研究されてきた．新聞と対話ではさまざ
+まな違いが存在するが，本稿ではこれを包括的に扱うため，対話用述語項構造
+解析器の構築を，新聞から対話への一種のドメイン適応とみなす．具体的には，
+対話では省略や代名詞化が新聞記事に比べて頻繁に現れるため，ゼロ代名詞照
+応機能付きの述語項構造解析をベースとし，これを対話に適応させる．パラメー
+タ適応と，訓練コーパスがカバーしきれない語彙知識を大規模平文コーパスか
+ら自動獲得することにより，新聞記事用のものに比べ，対話に対して高精度な
+述語項構造解析を実現した．
+}
+\jkeywords{述語項構造解析，ゼロ代名詞照応，対話，ドメイン適応，係り受け言語モデル}
+
+\etitle{Predicate-Argument Structure Analysis and Zero-Anaphora Resolution for Dialogue Analysis}
+\eauthor{Kenji Imamura\affiref{NTT}\affiref{NICT} \and Ryuichiro Higashinaka\affiref{NTT} \and Tomoko Izumi\affiref{NTT}} 
+\eabstract{
+This paper presents a predicate-argument structure (PAS) analysis for
+dialogue systems in Japanese.  Conventional PAS analyses have been
+applied to newspaper articles; however, there are differences between
+newspapers and dialogues.  Therefore, to comprehensively deal with
+these differences, we constructed a PAS analyzer for dialogues as a
+type of domain adaptation from newspapers.  Because pronominalization
+and ellipses frequently appear in dialogues, we utilized a strategy
+that simultaneously resolves zero-anaphora and adapts our PAS analyzer
+to dialogues.  By incorporating parameter adaptation and automatically
+acquiring knowledge from large text corpora, we performed a PAS
+analysis that is specific to dialogues.  Our PAS analyzer has a higher
+accuracy compared with the analyzer for newspaper articles.}
+\ekeywords{Predicate-Argument Structure Analysis, Zero-anaphora Resolution, Dialogue, Domain Adaptation, Dependency Language Models}
+
+\headauthor{今村，東中，泉}
+\headtitle{対話解析のためのゼロ代名詞照応解析付き述語項構造解析}
+
+\affilabel{NTT}{日本電信電話株式会社，NTTメディアインテリジェンス研究所}{NTT Media Intelligence Laboratories, NTT Corporation}
+\affilabel{NICT}{現在，独立行政法人情報通信研究機構}{Presently with National Institute of Information and Communications Technology}
+
+
+
+\begin{document}
+\maketitle
+
+\section{はじめに}
+
+述語項構造解析(predicate-argument structure analysis)は，文から述語とそ
+の格要素（述語項構造）を抽出する解析タスクである．述語項構造は，「誰が
+何をどうした」を表現しているため，この解析は，文の意味解析に位置付け
+られる重要技術の一つとなっている．従来の述語項構造解析技術は，コーパス
+が新聞記事であるなどの理由で，書き言葉で多く研究されてきた
+\cite{carreras-marquez:2004:CONLL,carreras-marquez:2005:CoNLL,Matsubayashi:PredArgsData2014j}
+．
+
+一方，近年のスマートフォンの普及に伴い，Apple社のSiri，NTTドコモ社のしゃ
+べってコンシェルなど，音声による人とコンピュータの対話システムが，身近
+に使われ始めている．人・コンピュータの対話システムを構築するためには，
+人間の発話を理解し，システム発話とともに管理する必要があるが，述語項構
+造は，対話理解・管理に対しても有効なデータ形式であると考えられる．しか
+し，新聞記事と対話では，発話人数，口語の利用，文脈など，さまざまな違い
+があるため，既存の新聞記事をベースとした述語項構造解析を対話の解析に利
+用した際の問題は不明である．たとえば，以下の対話例を考える．
+
+\vspace{1\Cvs}
+\begin{center}
+\begin{tabular}{|lp{60mm}|}
+\hline
+A: & $\left[\mathit{iPad}\right]_{\text{ガ}}$ が\textbf{ほしい}な． \\
+B: & いつ $\phi_{\text{ガ}} \phi_{\text{ヲ}}$ \textbf{買う}の?\\
+\hline
+\end{tabular}
+\end{center}
+\vspace{1\Cvs}
+
+\noindent
+この例では，最初の発話から，述語が「ほしい」，そのガ格が「iPad」である
+述語項構造が抽出される．2番目の発話では，述語が「買う」であることはわか
+るが，ガ格，ヲ格が省略されているため，述語項構造を得るためには，ガ格が
+発話者A，ヲ格が「iPad」であることも併せて解析する必要がある．このように，
+対話では省略がごく自然に出現する（これをゼロ代名詞と呼ぶ）ため，日本語
+の対話の述語項構造解析には，ゼロ代名詞照応解析処理も必要となる．
+
+本稿では，人とコンピュータの対話システム実現のため，従来に比べ対話を高
+精度に解析する述語項構造解析を提案する．本稿で対象とするタスクは，以下
+の2点をともに解決するものである．
+\begin{enumerate}
+\item 日本語で必須格と言われているガ格，ヲ格，ニ格に対して，述語能動形
+の項を決定する．
+\item ゼロ代名詞照応解析を行い，文や発話内では項が省略されている場合で
+も，先行した文脈から項を決定する．
+\end{enumerate}
+
+本稿の提案骨子は，対話のための述語項構造解析器の構築を，新聞から対話へ
+のドメイン適応とみなすことである．具体的には，新聞記事用に提案されたゼ
+ロ代名詞照応機能付き述語項構造解析を，話題を限定しない雑談対話に適応さ
+せる．そして，対話と新聞のさまざまな違いを，個々の違いを意識することな
+く，ドメイン適応の枠組みで包括的に吸収することを目指す．
+\citeA{Marquez:SRLSurvay2008,Pradhan:SRLAdaptation2008}は，意味役
+割付与のドメイン適応に必要な要素として，未知語対策とパラメータ分布の違
+いの吸収を挙げている．本稿でも，未知語およびパラメータ分布の観点から対
+話に適応させる．そして，新聞記事用より対話に対して高精度な述語項構造解
+析を提案する．我々の知る限り，ゼロ代名詞を多く含む対話を，高精度に解析
+する述語項構造解析器は初である．
+
+以下，第\ref{sec-related-work}章では，英語意味役割付与，日本語述語項構
+造解析の関連研究について述べる．\ref{sec-char-dialogs}章では，我々が作
+成した対話の述語項構造データと新聞の述語項構造データを比較し，対話の特
+徴について述べる．第\ref{sec-basic-strategy}章では，今回ベースとした述
+語項構造解析方式の概要を述べ，第\ref{sec-adaptation}章では，これを対話
+用に適応させる．実験を通じた評価は\ref{sec-experiments}章で述べ，第
+\ref{sec-conclusion} 章でまとめる．
+
+
+\section{関連研究}
+\label{sec-related-work}
+
+近年の日本語の述語項構造解析は，教師あり学習をベースにしている．これは，
+英語の意味役割付与の考え方を参考にし，日本語の問題に当てはめたものであ
+る．英語の意味役割付与も，近年は意味役割として，述語とその項（格要素ご
+との名詞句）に関する情報を付与しており，述語項構造解析と非常に似たタ
+スクとなっている．
+
+\subsection{英語の意味役割付与}
+
+英語の意味役割付与は，\citeA{Gildea:PredArgs2002}が教師あり学習を
+用いた方式を提案して以来，コーパスが整備されてきた．国際ワークショップ
+CoNLL-2004, 2005で行われた共有タスク
+\cite{carreras-marquez:2004:CONLL,carreras-marquez:2005:CoNLL}では，
+PropBank \cite{Palmer:PropBank2005}を元にした評価が行われた．
+PropBank は，文に対して，述語とその項を注釈付けしたコーパスで，文自体は，
+Penn Treebank（元記事はWall Street Journal）から取られているため，ここ
+で行われた評価も新聞記事に対するものである（このあたりの経緯は，
+\citeA{Marquez:SRLSurvay2008}が整理している）．
+
+OntoNotes \cite{hovy-EtAl:2006:HLT-NAACL06-Short} は，ニュース記事，
+ニュース放送，放送における対話など，複数のジャンルを含んだコーパスであ
+る．付与された情報には，意味役割も含んでいるが，現在は共参照解析のデー
+タとして使用されるに留まり\cite{conll2012-shared-task}，対話解析へ
+の適用はこれから期待されるところである．
+
+意味役割付与は，タスク指向対話の意味理解にも利用される場合がある
+\cite{Tur:UnderstandingSRL2005,coppola-moschitti-riccardi:2009:NAACLHLT09-Short}
+．\citeA{Tur:UnderstandingSRL2005}は，電話のコールセンタにおけるユー
+ザとオペレータとの対話において，述語と項の対を素性としたコールタイプ分
+類器を構築している．ここで，述語・項の対は，ユーザ発話をPropBank ベース
+の意味役割付与器で解析することで得ている．彼らの実験は，素性として用い
+る場合は新聞記事用の意味役割付与器でも効果があることを示したが，本稿で
+は，対話における述語項構造解析自体の精度向上を狙っている．
+\citeA{coppola-moschitti-riccardi:2009:NAACLHLT09-Short}は，同じく
+コールセンタ対話に対して，
+FrameNet \cite{RuppenhoferEtAl2006:ExtTeoryAndPractice}に準拠する意
+味役割付与を行っている．彼らは，コールセンタ対話を解析するため，分野依
+存の意味フレームをFrameNetに追加して，スロット（フレーム要素）の穴埋め
+を行っている．コールセンタ対話のように，意味役割が非常に限定される場合
+は，フレーム追加で対応できるが，タスクを限定しない雑談対話の場合は，分
+野依存フレームの追加は困難である．
+
+なお，述語だけでなく，事態性名詞（例えば，動詞`\textit{decide}'に対する
+事態性名詞`\textit{decision}'）に対する意味役割付与の研究もある
+\cite{jiang-ng:2006:EMNLP,Gerber:NomPredArgs2012,laparra-rigau:2013:ACL2013}
+．事態性名詞の場合，英語でも格要素を省略して表現することがあるため（た
+とえば，``\textit{the decision}''の対象格は省略されている），日本語の
+ゼロ代名詞と同様の問題を解決する必要がある．
+
+
+\subsection{日本語の述語項構造解析}
+
+日本語では，奈良先端大が，述語項構造と照応データを新聞記事に付与した
+NAISTテキストコーパス\footnote{http://cl.naist.jp/nldata/corpus/}
+を公開している\cite{iida-EtAl:2007:LAW,Iida:NAISTCorpus2010j}．
+NAIST テキストコーパスは，毎日新聞の記事に対して，日本語で必須格と言わ
+れているガヲニ格の名詞句を，各述語に付与したものである．名詞句は，述語
+能動形の格に対して付与されている．また，名詞句は述語と同じ文内に限らず，
+ゼロ代名詞化されている場合は，先行詞までさかのぼって付与されている．
+
+述語項構造解析も，上記コーパスを利用したものが多く提案されている
+\cite{Komachi:PredArgs2007,taira-fujita-nagata:2008:EMNLP,imamura-saito-izumi:2009:Short,Yoshikawa:PredArgs2013j,Hayashibe:PredArgs2014j}．日本語の場合，ゼロ代名詞が存在するため，述語項構造解析時に，
+文をまたがるゼロ代名詞照応も解釈する
+場合がある（たとえば
+\cite{taira-fujita-nagata:2008:EMNLP,imamura-saito-izumi:2009:Short,Hayashibe:PredArgs2014j}）．
+
+新聞記事以外を対象とした述語項構造解析研究には，以下のものがある．
+\citeA{Hangyo:ZeroAnaphra2014j}は，ブログなどを含むWebテキストを対
+象に，特に一人称・二人称表現に焦点を当てた照応解析法を提案している．彼
+らは同時に述語項構造解析も行っており，本稿のタスクと類似している．彼ら
+はWebテキストを解析するにあたり，外界照応（記事内に項の実体が存在しない）
+を著書（一人称），読者（二人称），その他の人，その他に分けるという拡張
+を行っている．本稿でも，NAISTテキストコーパス（バージョン1.5）の分類に
+従い，外界照応を一人称，二人称，その他に分け，項の推定を行う．また，
+\citeA{Taira:PredArgs2014j} は，ビジネスメールを対象とした述語項構
+造解析を試みている．彼らは新聞記事用の述語項構造解析器をそのままビジネ
+スメール解析に適用したが，一人称・二人称外界照応は，ほとんど解析できな
+かったと報告している．
+
+英語，日本語いずれも，現状の意味役割付与，述語項構造解析は新聞記事のよ
+うな正書法に則って記述されたテキストやWebテキスト，メールを対象としてい
+る．非常に限定されたタスクを扱うコールセンタ対話の例はあるが，タスクを
+限定しない雑談対話を解析した際の精度や問題点については不明である．
+
+
+\section{雑談対話の特徴}
+\label{sec-char-dialogs}
+
+まず我々は，2名の参加者による雑談対話を収集し，その対話に述語項構造デー
+タの付与を行った．雑談対話は，参加者が自由なテーマ（話題）を設定し，キー
+ボード対話形式で収集した．したがって，音声対話に含まれるような相槌や言
+い直しは少ない．参加者の話題は，食事，旅行，趣味，テレビ・ラジオなどで
+ある．述語項構造アノテーションは，NAISTテキストコーパス
+\cite{iida-EtAl:2007:LAW,Iida:NAISTCorpus2010j}に準拠する形で行っ
+た．雑談対話と，その述語項構造解析アノテーションの例を図
+\ref{fig-chat-dialog}に示す
+\footnote{対話中に一人称・二人称代名詞が陽に出現する場合，アノテータに
+対してexo1/exo2との区別は指示しなかった．しかし，
+述語と同一発話内ではその代名詞を項に使う場合が多く，異なる発
+話の場合，出現した代名詞をゼロ代名詞照応先とするのではなく
+外界照応 (exo1/exo2) とする傾向が高かった．}．
+
+\begin{figure}[b]
+\input{01fig01.txt}
+\caption{雑談対話とその述語項構造アノテーションの例}
+\label{fig-chat-dialog}
+\par\small
+太字は述語，$[ ]$は文内の項，$( )$は文間の項または外界照応を表す．\\ 
+また，\texttt{exo1}，\texttt{exo2}，\texttt{exog}はそれぞれ一人称／二人称ゼロ代名詞，それ以外の外界照応を表す．
+\end{figure}
+\begin{table}[b]
+\caption{コーパスサイズ}
+\label{tbl-corpus-size}
+\input{01table01.txt}
+\end{table}
+
+今回作成した雑談対話コーパスと，NAISTコーパス
+\footnote{NAIST コーパスはバージョン1.5を用い，文節化の前処理を行った上
+で使用した．1 文節に複数の述語が含まれている場合は，前方に出現した述
+語のみを対象とした．} の統計量を表\ref{tbl-corpus-size}に示す．対話コー
+パスは，NAISTコーパスの約1/10のサイズである．また，1文/発話の長さ（形
+態素数）は，雑談対話コーパスはNAISTコーパスの1/3程度と短い． NAISTコー
+パスは，訓練，開発，テストに3分割したのに対し，対話コーパスは訓練とテス
+トの2分割とした．
+
+対話の特徴を分析するため，この 2 つのコーパスの比較を行った．表
+\ref{tbl-arg-distrib}は，訓練セットにおける項の分布を示したものである．
+各項は，述語との位置関係や文法関係などにより問題の難しさが異なるため，
+以下の6タイプに分類した．最初の2つ（係受および文内ゼロ）は述語と項が同
+じ文に存在する場合である．
+
+\begin{table}[t]
+\caption{訓練セットにおける項の分布}
+\label{tbl-arg-distrib}
+\input{01table02.txt}
+\end{table}
+
+\begin{itemize}
+\item \textbf{係受:} 述語と項が直接の係り受け関係にある場合
+\item \textbf{文内ゼロ:} 述語と項が同じ文（発話）内にあるが，直接の
+係り受け関係がない場合
+\item \textbf{文間ゼロ:} 述語と項が異なる文にある場合
+\item \textbf{exo1/exo2/exog:} 項が記事（対話）内に存在しない外界照応．そ
+れぞれ，一人称ゼロ代名詞，二人称ゼロ代名詞，それ以外（一般）を表す．
+\end{itemize}
+
+これを見ると，対話ではすべての格で，係受タイプの項が減少している．それ
+以外のタイプについては，ガ格と，ヲ格ニ格で傾向が異なっている．
+ガ格では，文内ゼロ代名詞も対話の場合に減少し，減少分は一人称・二人称外
+界照応 (exo1, exo2) に割り当てられている．つまり，ガ格では，文内の項が
+減少し，ゼロ代名詞が新聞に比べて頻発する．ただし，その先行詞は一人称・
+二人称代名詞である可能性が高いと言うことができる．
+ヲ格ニ格では，係受タイプの項の減少分は，文間ゼロ代名詞またはその他の外
+界照応(exog)に割り振られている．つまり，新聞記事では，大部分は述語と同
+じ文内に現れていたヲ格ニ格の項が，対話では別の発話に現れることが多くな
+り，1文に閉じない照応解析が重要となる．
+
+
+
+\section{ゼロ代名詞照応付き述語項構造解析}
+\label{sec-basic-strategy}
+
+\subsection{基本方式}
+\label{sec-architecture}
+
+本稿でベースとする述語項構造解析は，
+\citeA{imamura-saito-izumi:2009:Short} の方法である．これは，新聞
+記事を対象とした方法であるが，文内に存在する項，文間の項，外界照応を同
+時に解析できるという特徴があるため，対話の解析にも適していると判断した．
+
+処理は，記事（対話）全体を入力とし，各文（発話）ごとに以下のステップを
+実行する．
+\pagebreak
+
+\begin{enumerate}
+\item 入力文を形態素・構文解析する．構文解析時には，同時に文節とその主
+辞を特定しておく．なお，今回は対話コーパスに関しては，形態素解析器
+MeCab \cite{kudo-yamamoto-matsumoto:2004:EMNLP}
+，構文解析器CaboCha \cite{Kudo:Cabocha2002}
+で形態素・文節係り受け・主辞情報を自動付与した．NAISTコー
+パスに関しては，NAISTコーパス1.5付属のIPA体系の形態素・構
+文情報を利用した
+\footnote{NAISTコーパス1.5は，IPA体系の形態素，文節，主辞情報を含んだ形
+で配布されている．京都大学テキストコーパス4.0
+（http://nlp.ist.i.kyoto-u.ac.jp/index.php?京都大学テキストコーパス）と，
+毎日新聞1995年版記事データを合成することで，係り受け情報を含む完全な
+NAISTコーパスが構成できるようになっている．}．
+\item 文から述語文節を特定する．今回は評価のため，コーパスの正解述語を
+用いたが，対話システム組み込みの際には，主辞が動詞，形容詞，形容動詞，
+名詞＋助動詞「だ」の文節を述語文節とし，品詞パターンで決定する．
+\item 対象述語の存在する文，およびそれより前方の文から，項の候補となる
+文節を取得する．文節の内容語部を候補名詞句とする．具体的には，以下の
+文節が候補となる．
+
+\begin{itemize}
+  \item 対象述語の文に含まれる，内容語部が名詞句であるすべ
+  ての文節を文内の候補とする．その際，述語文節との係り受け関係は考慮し
+  ない．
+  \item 対象述語より前方の文から，文脈的に項の候補となりうる文節を加え
+  ，文間の候補とする．詳細は\ref{sec-context-processing}
+  節で述べる．
+  \item 記事内に実体を持たない疑似候補として，外界照応 (exo1, exo2,
+  exog) と，任意格のため格を必要としない (NULL) を特殊名詞句として加え
+  る．
+\end{itemize}
+\item 述語文節，項の候補名詞句，両者の関係を素性化し，ガ，ヲ，ニ格独立
+に，候補からもっとも各格にふさわしい名詞句を選択器で選択する
+（図\ref{fig-struct}）．
+\end{enumerate}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-1ia1f2.eps}
+\end{center}
+\caption{項選択の例}
+\label{fig-struct}
+\end{figure}
+
+本稿では，\citeA{imamura-saito-izumi:2009:Short}の方式から，若干の
+変更を行っている．変更点は以下のとおりである．
+
+\begin{itemize}
+\item \citeA{imamura-saito-izumi:2009:Short}では，特殊名詞句は1種
+類（NULLのみ）であったが，本稿では4種類 (NULL, exo1, exo2, exog) に拡
+張した．\citeA{Hangyo:ZeroAnaphra2014j}は，外界照応を含む一人称，
+二人称ゼロ代名詞（論文では著者・読者表現）の照応解析を行うことで，そ
+れ以外のゼロ代名詞の照応解析精度も向上したと報告している．本稿でも，
+特殊名詞句の種別を増やすこととする．
+\item 素性が異なる．本稿では，\ref{sec-features}節で述べる素性を使用し
+たが，これは\citeA{imamura-saito-izumi:2009:Short}の基本素性を拡
+張，追加したものである．また，文脈を考慮する素性（文献ではSRLOrder，
+Used）は使用せず，簡略化した．これは，文脈管理を外部モジュールに任
+せるためで，詳細は\ref{sec-context-processing}で述べる．
+\item 係り受け言語モデル（\ref{sec-dependency-lm}節参照）を1種類から3種
+類に拡張した．
+\end{itemize}
+
+
+\subsection{選択器のモデル}
+\label{sec-selector-models}
+
+選択器のモデルは，最大エントロピー分類に基づく．具体的には，選択器は記
+事内の述語$v$ごとに，候補名詞句集合$\textbf{N}$から，以下の式を満たす名
+詞句$\hat{n}$を選択する．
+\begin{align}
+\hat{n} & = \mathop{\rm argmax}_{n_j \in \textbf{N}} P(d(n_j)=1 | X_j; M_c) \\
+P(d(n_j)=1|X_j;M_c) & = \frac{1}{Z_{c}(X)} 
+\exp \sum_{k} \{ \lambda_{ck} f_k(d(n_j)=1,X_j) \} \\
+Z_{c}(X) & = \sum_{n_j \in \textbf{N}} \exp \sum_k \{\lambda_{ck} f_k(d(n_j)=1,X_j) \} 
+	\label{eqn-normalizer}\\
+X_j & = \langle n_j, v, A \rangle
+\end{align}
+
+ただし，$n$は1つの候補名詞句，$\textbf{N}$は候補名詞句集合，$d(n_j)$は，
+名詞句$n_j$ が項となったときのみ1となる関数，$M_c$は格$c$（ガ，ヲ，ニの
+いずれか）のモデルである．また，$f_k(d(n_j)=1, X_j)$は素性関数，
+$\lambda_{ck}$は格毎の素性関数の重み，$v$,$A$はそれぞれ述語，および形態
+素・構文解析済みの記事全体である．
+
+訓練時には，ある述語の候補名詞句集合ごとに，正解の名詞句と，それ以外の
+すべての候補名詞句との事後確率差を大きくするように学習する．具体的には，
+以下の損失関数を最小化するモデル$M_c$を，格ごとに学習する．
+\begin{align}
+\ell_{c} & =
+- \sum_{i} \log P(d(n_i)=1|X_i;M_c) 
++ \frac{1}{2C} \sum_{k} ||\lambda_{ck}||^{2}
+\label{eqn-loss-function}
+\end{align}
+ただし，$n_i$は，訓練セットの$i$番目の述語に対する正解名詞句，$X_i$は，
+訓練セットの$i$番目の正解名詞句，述語，記事の組$\langle n_i, v_i, A_i
+\rangle$，$C$は過学習を制御するためのハイパーパラメータで，開発セットに
+おける精度が最高になるように，あらかじめ設定しておく．式
+(\ref{eqn-normalizer})で，述語の候補名詞句集合毎に正規化を行っているた
+め，(\ref{eqn-loss-function})式では，候補名詞句集合から，正解名詞句が選
+ばれた時に確率1.0，それ以外の名詞句では確率0.0 に近づくようにモデルが学
+習される．
+
+
+\subsection{素性}
+\label{sec-features}
+
+選択器で使用する素性に関しては，英語の意味役割付与に関する研究（たとえ
+ば\citeA{Gildea:PredArgs2002}）と同様に，(1)述語に関する素性，
+(2)名詞句に関する素性，(3)両者の関係に関する素性を使用する．詳細を表
+\ref{tbl-feature-list}に示す．
+
+\begin{table}[b]
+\caption{素性テンプレート一覧}
+\label{tbl-feature-list}
+\input{01table03.txt}
+\end{table}
+
+二値の素性関数は，テンプレートの引数が完全一致したときのみ1，それ以外で
+は0を返す関数である．たとえばPred素性において，主辞形態素の見出しが1万
+種類あったとすると，1万の二値関数が定義され，主辞形態素の見出しと一致し
+た関数だけが1を返す．実数値の素性関数は，テンプレートの引数に応じた実数
+を返す． なお，これらは名詞句の選択用モデルの素性であるので，名詞句
+Nounと，すべての二値素性を組み合わせた素性も使用している．
+
+本稿で特徴的な素性は，大規模データから自動構築した必須格情報Frameと係り
+受け言語モデル（3種類）であるが，これらについては
+\ref{sec-large-resources}節で述べる．
+
+
+\subsection{文脈処理}
+\label{sec-context-processing}
+
+本稿では，人とコンピュータの対話システム実現のための解析器を想定してい
+る．この対話システムは，ユーザとシステムが交互に発話するもので，システ
+ムに組み込まれた対話管理部が両者の発話履歴や，現在話されている話題（焦
+点）を管理する．述語項構造解析部はユーザ発話を解析し，発話生成部がシ
+ステム発話を生成するというものである．
+
+従来の述語項構造解析器も，現在の解析対象文より以前の文を文脈として利用
+し，ゼロ代名詞照応解析に利用している．
+\citeA{imamura-saito-izumi:2009:Short}は，解析器内部で以前の文や話
+題（焦点）の管理（これを文脈管理と呼ぶ）を行っていた．
+しかし，述語項構造解析器内部で文脈管理を行うより，対話システムの対話管
+理部が文脈管理を行った方が，ユーザ発話とシステム発話を協調的に管理でき
+る可能性が高い．本稿ではこのように考え，文脈管理は外部モジュールの担当
+と位置付ける．そして評価用に，新聞記事と対話で同じ文脈管理方法を使用す
+る．
+なお，本稿の方式は，選択器に与える文間の候補名詞句を取捨選択することに
+よって文脈の制御を行っているので，候補名詞句を外部モジュールから陽に与
+えることで，文脈管理方法を変更することができる．
+
+今回使用した文脈管理方法は，具体的には以下のとおりである．
+
+\begin{itemize}
+\item 対象述語の発話より以前の発話をさかのぼり，他の述語を含む発話（こ
+れを有効発話と呼ぶ）を見つける．これは，述語を含まない発話を無視するた
+めである．
+\item 有効発話と対象述語の発話の間に出現した全名詞句と，有効発話の述語
+で項として使われた名詞句（有効発話内の場合もあれば，それ以前の発話の
+名詞句の場合もある）を候補として加える．項として使われた名詞句は，
+その後も繰り返し使われることが多く，これに制限することで，効率的に候
+補を削減することができるという観察結果に基づく
+\cite{imamura-saito-izumi:2009:Short}．また，項として使われてい
+る限り，さかのぼる文数に制限がないため，広い文脈を見ることができる．
+\end{itemize}
+
+
+\section{雑談対話への適応}
+\label{sec-adaptation}
+
+前節で述べた方法は，対話，新聞記事に共通の処理である．これを対話解析に
+適したものにするため，パラメータの適応，および大規模コーパスから自動獲
+得した知識の適用を行う．
+
+\subsection{モデルパラメータの適応}
+
+NAISTコーパスと対話コーパスの項分布の差異は，選択器のモデルパラメータを
+ドメイン適応することで調整する．本稿では，モデルパラメータの適応手法と
+して，素性空間拡張法\cite{daumeiii:2007:ACLMain}を用いる．これは，
+素性空間を3倍に拡張することで，ソースドメインデータをターゲットドメイン
+の事前分布とみなすのと同じ効果を得る方法である．
+
+具体的には，以下の手順で選択器のモデルを学習・適用する．
+
+\begin{enumerate}
+\item まず，素性空間を共通，ソース，ターゲットの 3 つに分割する．
+\item NAISTコーパスをソースドメインデータ，対話コーパスをターゲットドメ
+インデータとみなし，NAISTコーパスから得られた素性を共通とソース空間に
+コピーして配置する．対話コーパスから得られた素性は共通とターゲット空
+間にコピーして配置する．
+\item 拡張された素性空間上で，通常通りパラメータ推定を行う．結果，ソー
+ス・ターゲットデータ間で無矛盾な素性は，共通空間のパラメータが強調さ
+れ（絶対値が大きくなる），ドメインに依存する素性は，ソースまたはター
+ゲット空間のパラメータが強調される．
+\item 選択器が項を選択する際は，ターゲット空間と共通空間の素性だけ用い
+る．この空間のパラメータは，ターゲットドメインに最適化されているだけ
+でなく，ソースドメインデータだけに現れた共通空間の素性も利用して，項
+選択ができる．
+\end{enumerate}
+
+
+\subsection{大規模コーパスからの知識獲得}
+\label{sec-large-resources}
+
+本稿では，訓練コーパスに含まれない未知語への対策として，大規模コーパス
+から自動獲得した2種類の知識を利用する．どちらも大規模平文コーパスを自動
+解析して，集計やフィルタリングをすることで獲得する
+\cite{Kawahara:CaseFrame2005j,sasano-kawahara-kurohashi:2008:PAPERS,sasano-EtAl:2013:EMNLP}
+．当然誤りも含むが，新出語に対しても，ある程度の確かさで情報を与えるこ
+とができる．これらを選択器の素性として使い，モデルを学習することにより，
+情報の信頼度に応じたパラメータが学習される．
+
+
+\subsubsection{必須格情報（Frame素性）}
+\label{sec-case-lex}
+
+格フレームは，述語の必須格と，その格を埋める名詞句の種類（通常は意味ク
+  ラス）を保持するフレーム形式の情報で，述語項構造解析や意味役割付与の
+重要な手がかりとなる．本稿で使う必須格情報は，格フレームのうち，格が必
+要か否か（必須格か任意格か）だけについて情報を与える辞書である．
+
+本稿の必須格情報は，大規模平文テキストコーパスから，以下の方法で自動構
+築する．これは，(1)項が述語と直接係り受け関係にある場合，述語に対する項
+の格は，項の名詞句に付随する格助詞と一致することが多い，(2)必須格なら，
+その格の出現率は他の述語より平均的に高い\footnote{ゼロ代名詞化されている場合は，項が述語と同じ文に
+現れないため，必須格であっても，出現率は100\%にはならない．そのため，
+出現した/しないという二値では，必須格性は判断できないと考えた．}，と
+いう仮定をもとにしている．
+
+\begin{itemize}
+\item まず，本稿の述語項構造解析と同様（\ref{sec-architecture}節参照）
+に，平文を形態素・構文解析し，品詞パターンで述語文節とその主辞を特定す
+る\footnote{ただし，受身・使役の助動詞が述語文節に含まれる場合は，別述語
+として扱うように，助動詞と合成した述語を新たに生成した．}．
+\item 述語文節に直接係る文節を取得し，機能語部に格助詞を持つ文節だけを
+残す．もし，そのような文節が1つ以上あるなら，その述語を集計対象として，
+述語頻度，格助詞の出現頻度を集計する．
+\item 述語に関しては，高頻度述語から順番に，最終的な辞書サイズを考慮し
+て選択する．個々の格に関しては，以下の条件をすべて満たす格を，必須格
+とみなす．
+  \begin{itemize}
+  \item $\langle \text{述語}v, \text{格}c \rangle$が，対数尤度比検
+  定において，危険率0.1\%以下で有意に多く共起していること（$p \leq
+  0.001$; $\text{対数尤度比} \geq 10.83$）．
+  \item 各述語における格$c$の出現率が，全述語における格の出現率（平均）
+  より10\%以上高いこと．
+  \end{itemize}
+\end{itemize}
+
+以上の方法で，2種類の必須格情報辞書を作成した．一つは，ブログ約1年分
+（約23億文．以下Blogコーパスと呼ぶ）から，48万述語の情報を獲得した（こ
+れをBlog辞書と呼ぶ）．もう一つは新聞記事12年分（約770万文．以下Newsコー
+パスと呼ぶ）から約20 万述語の情報を獲得した（同News辞書）．
+
+\begin{table}[b]
+\caption{必須格辞書の述語カバー率と精度（対話コーパス訓練セットで測定した場合）}
+\label{tbl-oci-dict}
+\input{01table04.txt}
+\end{table}
+
+表\ref{tbl-oci-dict}は，雑談対話コーパス訓練セットの正解述語項構造と必
+須格情報辞書を比較し，必須格情報辞書の述語カバー率と格毎の精度を算出し
+たものである．述語カバー率は，対話コーパスに出現した述語が必須格情報辞
+書に含まれている場合，カバーしたと判断した．結果，Blog辞書で98.5\%，
+News辞書で96.4\%で，ほぼ等しかった．また，格毎の精度は，正解の述語項構
+造に格が付与されているか否かと，必須格情報上の必須格性が一致しているか
+どうかを測定したもので，Blog辞書，News辞書でほぼ同じ傾向を示している．
+格毎に見ると，ガ格の精度が低いが，これは，雑談対話コーパスでは，ほぼす
+べての述語に対してガ格が付与されている（つまり，ガ格が必須）にも関わら
+ず，BlogコーパスやNewsコーパスではそれがゼロ代名詞化されているため，自
+動獲得では必須格とは判断できなかったためである．ヲ格の全体精度は91\% 以
+上と，格によっては高い精度を持つ辞書となっている．
+
+
+
+\subsubsection{係り受け言語モデル}
+\label{sec-dependency-lm}
+
+係り受け言語モデル(language model; LM)は，三つ組$\langle \text{述語}
+v, \text{格}c, \text{名詞句}n \rangle$の共起のしやすさを表現するモ
+デルである．頻出表現に高いスコアを与えることによって，出現する単語間に
+意味的関連が存在することを表現する意図がある．ここでは，述語$v$, 格
+$c$, 名詞句$n$ それぞれの生成確率をn-gram モデルで算出し，選択器の識別
+モデルで全体最適化を行う．具体的には，以下の実数値を算出し，表
+\ref{tbl-feature-list}の係り受け言語モデル素性の素性関数値として使用す
+る．その結果，選択器は，候補名詞句集合から，頻出表現に含まれる名詞句
+$n$を優先して選択することになる． なお，未知語を表す特殊単語
+\texttt{<unk>}を含む確率で補正してる理由は，対数確率（{$-\infty$〜
+$0.0$}の範囲）を正の値に補正するためである．
+
+\begin{itemize}
+\item $\log P(n | c, v) - \log P(\texttt{<unk>} | c, v)$
+\item $\log P(v | c, n) - \log P(v | c, \texttt{<unk>})$
+\item $\log P(c | n) - \log P(c | \texttt{<unk>})$
+\end{itemize}
+
+本稿の係り受け言語モデルは，
+\citeA{imamura-saito-izumi:2009:Short}が 1 種類（{$\log P(n|c,v)$}
+  相当）のみ使用していたのに対し，識別モデルが互いに依存しあう素性を含
+めることができるという特徴を利用し，3 種類に拡張している．また，述語
+$v$から見た格$c$の生成確率 ({$\log P(c|v)$}) は，述語ごとに格を必要とす
+る度合であり，必須格情報と重なるため，係り受け言語モデルからは除外した．
+
+3種類の係り受け言語モデルは，\ref{sec-case-lex}節で抽出した述語，格，名
+詞句を集計し，SRILM \cite{Stolcke:SRILM2011}でバックオフモデルを構
+築した．
+
+係り受け言語モデルも，Blogコーパス，Newsコーパスからそれぞれ作成した．
+これを，それぞれBlog言語モデル，News言語モデルと呼ぶ．言語モデルのカバー
+率を，雑談対話コーパス訓練セットに出現する三つ組が係り受け言語モデルの
+元になった三つ組に含まれるかどうかで測定すると，Blog 言語モデルの場合，
+76.4\%をカバーしていた．一方，Newsの言語モデルの場合，カバー率は38.3\%
+だった．News言語モデルに比べ，Blog言語モデルは対話コーパスに出現する係
+り受けの三つ組のカバレッジが高い\footnote{バックオフモデルの場合，モデル中に三つ組が存在しなく
+ても，二つ組を組み合わせるなどして，素性関数としては何らかの値を返すこ
+とができる．}．
+
+
+\section{実験}
+\label{sec-experiments}
+
+本節では，表\ref{tbl-corpus-size}に示したコーパスを用い，対話における述
+語項構造解析の精度を，パラメータ適応，大規模コーパスから自動獲得した知
+識の効果という観点から評価する．評価はすべて雑談対話コーパステストセッ
+トで行う．評価指標には，項の適合率，再現率から算出したF値を用いる．
+
+
+\subsection{実験1: パラメータ適応の効果}
+\label{sec-exp-parameter-adaptation}
+
+まず，パラメータ適応の効果を測定するため，訓練方法を変えた3方式の比較
+を行った．表\ref{tbl-result-dialog}の(a)，(b)，(c)カラムがその結果で，
+それぞれ(a)素性空間拡張によるドメイン適応を行った場合（適応．提案法），
+(b) NAISTコーパスだけで訓練した場合（NAIST訓練．従来の新聞記事用解析に
+相当），(c)対話コーパスだけで訓練した場合（対話訓練）を表す．
+
+\begin{table}[b]
+\caption{対話テストセットにおける方式・必須格情報・係り受け言語モデルごとのF値}
+\label{tbl-result-dialog}
+\input{01table05.txt}
+\par\vspace{8pt}\small
+表中の太字は，全方式のうち，F値最高を指す．また，記号 $\heartsuit$, $\diamondsuit$, $\spadesuit$, $\clubsuit$ は，(a)
+と，それぞれ(b) (c) (d) (e)の比較で，有意によかったものを表す．有意差検定は，ブートストラップ再サンプリング法（1,000回測定）を使用し，危険率を
+5\%とした．
+\end{table}
+
+まず，(a)適応と(b) NAIST訓練を比較すると，多くの場合，適応の方が有意に精
+度がよいという結果になった（$\heartsuit$記号が有意差ありを表す）．特に
+合計の精度では，すべての格で適応が有意に勝っている．タイプ別の精度を見
+ると，特徴的なのは，ガ格の一人称，二人称外界照応 (exo1, exo2) である．
+これらはガ格の項のうちの約28\% を占めているが，exo1で70.2\%，exo2で
+46.8\%のF値で解析可能となった．他にも，ヲ格ニ格の文間ゼロ，exogなど，
+NAIST訓練ではほとんど解析できなかったタイプの項が解析できるようになった．
+
+(a)適応と(c)対話訓練を比較すると（$\diamondsuit$参照），雑談対話コーパ
+スは訓練セットのサイズが小さいにも関わらず，両者の精度が近くなった．適
+応の合計精度が有意に良かったのは，ニ格のみである．これには2つの理由が考
+えられる．
+
+\begin{itemize}
+\item 対話コーパス量が十分であり，NAISTコーパスの影響をほとんど受けな
+い場合．
+\item 適応がNAISTコーパスの知識を活かしきっていない場合．言い換えると，
+NAISTコーパスに出現する言語現象と，対話に出現する言語現象に重なりが少
+ないため，NAISTコーパスが影響しない場合．
+\end{itemize}
+
+前者の場合，コーパスサイズに対する学習曲線が今回のデータ量で飽和してい
+ることで検証できる．本稿で作成した対話コーパスはNAISTコーパスの約1/10の
+訓練セットであるため，学習曲線は描かなかった．後者の場合，対話コーパス
+サイズを大きくすると，述語項構造解析の精度も向上する．今後，さらに対話
+コーパスを作成し，検証する必要がある．
+
+
+\subsection{実験2: 自動獲得知識の比較}
+
+表\ref{tbl-result-dialog}の(a) (d) (e)は，提案方法（適応）の評価結果
+である．ただし，必須格情報および係り受け言語モデルは，それぞれ
+(a) $\langle$Blog, Blog$\rangle$，(d) $\langle$News, Blog$\rangle$，
+(e) $\langle$Blog, News$\rangle$に変えて評価している．
+
+まず，必須格情報辞書を(a) Blogから(d) Newsに変えた場合を比較すると
+（$\spadesuit$参照），両者の間で有意差があったのは，ヲ格の文内ゼロのみ
+で，ほぼすべての場合で有意差はなかった．
+
+一方，係り受け言語モデルを(a) Blogから(e) Newsに変更すると（$\clubsuit$
+参照），若干精度に差が出た．特に，文法関係より意味関係を重視する文内・
+文間ゼロでは，有意に精度が悪化したものが多く（ガ格の文間ゼロ，ヲ格の文
+内・文間ゼロ，ニ格の文内ゼロ），その結果，合計の精度でも，ヲ格は約3ポ
+イント低下した．ゼロ代名詞照応のように，述語と項の間に文法的な関係が弱
+い場合，意味的関連性を共起から判断する係り受け言語モデルが相対的に重要
+となる．そのため，係り受け言語モデルの違いが精度に影響しやすい．
+
+図\ref{fig-coverages}は，適応方式において，それぞれ必須格情報辞書の述語
+カバー率，係り受け言語モデルの三つ組$\langle \textrm{述語}v,
+\textrm{格}c, \textrm{名詞句}n \rangle$のカバー率を意図的に変化させて，
+述語項構造解析のF値を測定したグラフである．必須格情報，係り受け言語モデ
+ルともに，Blogコーパスから作成したものを利用した．必須格情報のカバー率
+は高頻度述語から順番に，雑談対話コーパス訓練セットの述語のカバー率が指
+定した割合になるまで選択した．係り受け言語モデルの三つ組は，同じく雑談
+対話コーパス訓練セット上での三つ組カバー率が指定した割合になるまで，ラ
+ンダムに選択した\footnote{係り受け言語モデルは，確率モデルであるため，
+三つ組の頻度を基準に取捨選択すると，確率分布が変化する．確率分布を変
+えずにカバー率を変えるため，ランダム選択とした．}．グラフに示したF値
+は，格の合計である．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{22-1ia1f3.eps}
+\end{center}
+\caption{自動獲得知識のカバレッジと述語項構造解析精度}
+\label{fig-coverages}
+\end{figure}
+
+図\ref{fig-coverages}(a)をみると，必須格情報については，格の種類にかか
+わらず，述語カバー率を変えてもほぼ同じ精度となった．この理由を分析した
+ところ，テストセットに出現する大部分の述語は，訓練セットに出現したため
+であった．実際，雑談対話テストセットに出現する5,333述語のうち，4,442 
+述語（83.3\%）は雑談対話コーパス訓練セット，またはNAISTコーパス訓練セッ
+トに出現していた．つまり，訓練セットだけでテストセッ
+トの大部分をカバーできており，それ以外の述語しか，必須格情報が有効に作
+用しなかったため，カバー率の影響がほとんど出なかったと考えられる．
+
+一方，係り受け言語モデルの三つ組は，雑談対話テストセットに出現した
+5,056組（外界照応\texttt{exo1}, \texttt{exo2}, \texttt{exog}は除く）の
+うち，訓練セットがカバーしたのは1,063組（21.0\%）であっ
+た．そのため，図\ref{fig-coverages}(b)のように，係り受け言語モデルのカ
+バー率を上げると，述語項構造解析の精度も向上した．ただし，ガ格に関して
+は，自動獲得元コーパスにおいてもガ格がゼロ代名詞化され，自動獲得精度が
+十分ではなかったため，カバー率を上げても述語項構造解析精度は向上しなかっ
+た．
+
+まとめると，自動獲得した知識は，訓練コーパスのカバレッジが高い部分では
+効果がほとんどなく，低い部分を補完するのに有効である．そのため，雑談対
+話のように幅広い話題を対象とする対話には適している．
+
+
+\subsection{雑談対話コーパスを使用せずに適応する場合}
+
+ドメイン適応のシチュエーションとして，新聞記事コーパスしか存在しない状
+況で，述語項構造解析器を対話に適応させなければならない場合が考えられる．
+本節では，NAISTテキストコーパスと自動獲得知識だけでモデルを学習し，自動
+獲得知識がどの程度有効か，検証する．
+
+表\ref{tbl-effect-of-knowledge}は，NAISTコーパス訓練セットでモデルを学
+習し，雑談対話コーパステストセットでF値を測定した結果である．ただし，自
+動獲得知識の組み合わせ{$\langle \text{必須格情報}, \text{係り受け言語モデル} \rangle$}は，(b){$\langle \text{Blog}, \text{Blog}
+\rangle$}，(b-1){$\langle \text{なし}, \text{Blog}\rangle$}，
+(b-2){$\langle \text{Blog}, \text{なし} \rangle$}，(b-3){$\langle
+\text{なし}, \text{なし}\rangle$}に変えている．(b)は，表
+\ref{tbl-result-dialog}の再掲である．
+
+\begin{table}[b]
+\caption{NAIST訓練における自動獲得知識の効果（自動獲得知識はBlog）}
+\label{tbl-effect-of-knowledge}
+\input{01table06.txt}
+\par\vspace{8pt}\small
+表中の記号 $\dag$, $\S$, $\ddag$は，(b)と，それぞれ(b-1) (b-2) (b-3)との比較で，有意によかったものを表す．有意差検定は，ブートストラップ再サ
+ンプリング法（1,000回測定）を使用し，危険率を5\%とした．なお．(b)は，表\ref{tbl-result-dialog}の再掲である．
+\end{table}
+
+これを見ると，多くの場合で(b){$\langle \text{Blog},
+\text{Blog}\rangle$}が有意に勝っており，自動獲得知識が有効に作用して
+いると言ってよい．
+
+しかし，これらはすべてNAIST訓練の結果であり，ほとんど（またはまったく）
+解析できなかったタイプの項（たとえば，ガ格のexo1, exo2，ヲ格の文間ゼロ，
+  ニ格の文内・文間ゼロ）は，必須格情報辞書，係り受け言語モデルをどのよ
+うに変えようとも，ほとんど解析できない状況には変わりはなかった．
+
+本稿の提案方式である表\ref{tbl-result-dialog}の(a)適応は，NAIST 訓練で
+は解析できなかったタイプの項も解析できるようにする効果があった．自動獲
+得した知識は，すでに解析できるタイプの項の精度改善には効果があるが，対
+話で新たに出現したタイプの項を解析する効果はない．したがって，たとえ少
+量でも対話の述語項構造データを作成し，適応させることが望ましい．
+
+
+\subsection{対話解析例}
+\label{sec-err-analysis}
+
+図\ref{fig-analysis-example}は，旅行に関する雑談対話の一部について，正
+解述語項構造，(a)適応方式，(b) NAIST訓練方式，(b-3) NAIST 訓練（ただし，
+  必須格情報辞書，係り受け言語モデルなし）の出力を並べて表示したもので
+ある．発話ごとに差異を分析すると，以下の特徴が得られた．
+
+\begin{figure}[p]
+\input{01fig04.txt}
+\caption{対話例と，正解述語項構造および述語項構造解析結果（*は解析誤りを表す）}
+\label{fig-analysis-example}
+\end{figure}
+
+\begin{itemize}
+\item 発話番号1で，正解がexogになっているのは，アノテータは，
+「話した」のは発話者ABの両方であると判断したためである．本発話の解釈に
+よっては，exo1でも誤りではないと思われる．
+\item 発話番号2のガ格の正解はexo2である．しかし，(a)適応は，
+exo1を選択した．日本語の場合，一人称・二人称は，文末表現（この例では
+「下さい」）に特徴が現れるが，選択器にSuffix素性があるにも関わらず，正
+しく選択できなかった．
+\item 発話番号3のガ格の正解はexo1である．(a)適応は正しく選択したが，
+(b)(b-3) NAIST訓練は，一人称／二人称の外界照応をほとんど選択しないため，
+発話番号1に現れた「私」を選択した．
+しかし，発話番号1の「私」は発話者Aを示しており，発話番号3のexo1（発話者
+  B）とは異なる．もし文間ゼロタイプの項を割り当てるとすると，発話番号2
+の「あなた」が正解となる．本稿では，外界照応と人称代名詞を別に扱ってい
+るが，本来は共参照解析を導入して，exo1/exo2と「私」「あなた」が同一実体
+であることを認識すべきである．その際，発話者がどちらなのか意識して，同
+一性を判断する必要がある．\\
+発話番号6にも同様な現象が現れているが，ガ格正解exo2に相当する表現が発話
+番号2「あなた」まで遡らなければならないため，(b)(b-3) NAIST訓練では，
+exogとなった．
+\item 発話番号3のニ格の正解は「海外旅行」だが，(b-3) NAIST訓
+練（自動獲得知識なし）では，NULLと誤った．「海外旅行にはまる」は，
+NAISTコーパス訓練セットには出現せず，係り受け言語モデルの三つ組に出現
+する表現だったため，係り受け言語モデルなしのNAIST訓練では解析に失敗し
+た．
+\item 発話番号5のニ格の正解は，「スペインとポルトガル」であ
+るべきだが，本稿の方式は文節を単位に処理するため，2文節以上にまたがる
+名詞句は，主辞だけを付与する仕様である．\\
+また，発話番号4のガ格の正解は，直前発話（発話番号3）全体と考えることも
+できる．しかし，文節単位に格要素を割り当てるため，アノテータはもっとも
+近い表現「海外旅行」を正解として割り当てた．
+\item 発話番号6において，(a)適応は，ニ格「ポルトガル」を前
+文から正しく補完した．なお，「ポルトガルに行く」は，NAISTコーパス訓練
+セットには存在しないが，係り受け言語モデルの三つ組には存在する表現であ
+る．
+\end{itemize}
+
+
+\section{まとめ}
+\label{sec-conclusion}
+
+本稿では，対話解析のための述語項構造解析を提案した．われわれはこれを新
+聞から対話への一種のドメイン適応とみなし，従来新聞記事で研究されていた
+述語項構造解析を，対話に適用した．対話と新聞記事では項の分布が異なるた
+め，素性空間拡張法を用いて，モデルパラメータを適応させた．また訓練コー
+パスに現れない未知語を補完するため，大規模平文データから，必須格情報，
+係り受け言語モデルを自動獲得し，項選択器のモデルに適用した．
+
+結果，少量でも対話コーパスを訓練に加えることで，新聞記事のコーパスだけ
+では解析できなかったタイプ（ガ格の一人称・二人称ゼロ代名詞や，文間ゼロ
+  代名詞，外界照応）も解析可能となった．ただし，パラメータ適応自体の効
+果は限定的であった．また，自動獲得知識の有効性は，訓練セットがテストセッ
+トをどの程度カバーしているかに依存する．必須格情報は，テストセットに出
+現する述語の大部分が訓練セットに出現していたため，必須格情報のカバレッ
+ジの影響はほとんどなかった．一方係り受け言語モデルでは，テストセットに
+出現する述語，格，名詞句の三つ組の21\%しか訓練セットでカバーしていなかっ
+たため，カバレッジの高いモデルの精度が向上した．特に，ヲ格ニ格に関して
+は，三つ組カバレッジが高い方が，ゼロ代名詞照応解析精度の向上に寄与する
+ことを確認した．
+
+なお，必須格情報および係り受け言語モデルは，格フレームの選択選好とみな
+すこともできる．格フレームは，大規模コーパスから自動獲得したものが存在
+するので\cite{Kawahara:CaseFrame2005j}，これを利用する方法もある．
+両者の比較は，今後検討してゆきたい．
+
+今回は，パラメータ分布の差異，語彙のカバレッジに着目したが，新聞と対話
+では，他にもさまざまな違いがあると考えられる．たとえば，話者交替は対話
+特有の現象であるが，それが述語項構造やゼロ代名詞にどう影響するかなどは，
+本稿では扱わなかった．また，われわれは文脈管理に，対話システムの発話管
+理機能を利用することを考えているが，対話システムとしての有効性評価も実
+施する予定である．
+
+\acknowledgment
+
+本論文の一部は，the 25th International Conference on Computational
+Linguistics (COLING 2014)で発表したものである
+\cite{imamura-higashinaka-izumi:2014:Coling}．
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Carreras \BBA\ M{\`{a}}rquez}{Carreras \BBA\
+  M{\`{a}}rquez}{2004}]{carreras-marquez:2004:CONLL}
+Carreras, X.\BBACOMMA\ \BBA\ M{\`{a}}rquez, L. \BBOP 2004\BBCP.
+\newblock \BBOQ Introduction to the CoNLL-2004 Shared Task: Semantic Role
+  Labeling.\BBCQ\
+\newblock In {\Bem HLT-NAACL 2004 Workshop: 8th Conference on Computational
+  Natural Language Learning (CoNLL-2004)}, \mbox{\BPGS\ 89--97}, Boston,
+  Massachusetts, USA.
+
+\bibitem[\protect\BCAY{Carreras \BBA\ M{\`{a}}rquez}{Carreras \BBA\
+  M{\`{a}}rquez}{2005}]{carreras-marquez:2005:CoNLL}
+Carreras, X.\BBACOMMA\ \BBA\ M{\`{a}}rquez, L. \BBOP 2005\BBCP.
+\newblock \BBOQ Introduction to the {CoNLL}-2005 Shared Task: Semantic Role
+  Labeling.\BBCQ\
+\newblock In {\Bem Proceedings of the 9th Conference on Computational Natural
+  Language Learning (CoNLL-2005)}, \mbox{\BPGS\ 152--164}, Ann Arbor, Michigan,
+  USA.
+
+\bibitem[\protect\BCAY{Coppola, Moschitti, \BBA\ Riccardi}{Coppola
+  et~al.}{2009}]{coppola-moschitti-riccardi:2009:NAACLHLT09-Short}
+Coppola, B., Moschitti, A., \BBA\ Riccardi, G. \BBOP 2009\BBCP.
+\newblock \BBOQ Shallow Semantic Parsing for Spoken Language
+  Understanding.\BBCQ\
+\newblock In {\Bem Proceedings of Human Language Technologies: The 2009 Annual
+  Conference of the North American Chapter of the Association for Computational
+  Linguistics, Companion Volume: Short Papers}, \mbox{\BPGS\ 85--88}, Boulder,
+  Colorado, USA.
+
+\bibitem[\protect\BCAY{Daum\'{e}}{Daum\'{e}}{2007}]{daumeiii:2007:ACLMain}
+Daum\'{e}, III, H. \BBOP 2007\BBCP.
+\newblock \BBOQ Frustratingly Easy Domain Adaptation.\BBCQ\
+\newblock In {\Bem Proceedings of the 45th Annual Meeting of the Association of
+  Computational Linguistics}, \mbox{\BPGS\ 256--263}, Prague, Czech Republic.
+
+\bibitem[\protect\BCAY{Gerber \BBA\ Chai}{Gerber \BBA\
+  Chai}{2012}]{Gerber:NomPredArgs2012}
+Gerber, M.\BBACOMMA\ \BBA\ Chai, J.~Y. \BBOP 2012\BBCP.
+\newblock \BBOQ Semantic Role Labeling of Implicit Arguments for Nominal
+  Predicates.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 38}  (4), \mbox{\BPGS\
+  755--798}.
+
+\bibitem[\protect\BCAY{Gildea \BBA\ Jurafsky}{Gildea \BBA\
+  Jurafsky}{2002}]{Gildea:PredArgs2002}
+Gildea, D.\BBACOMMA\ \BBA\ Jurafsky, D. \BBOP 2002\BBCP.
+\newblock \BBOQ Automatic Labeling of Semantic Roles.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 28}  (3), \mbox{\BPGS\
+  245--288}.
+
+\bibitem[\protect\BCAY{萩行\JBA 河原\JBA 黒橋}{萩行 \Jetal
+  }{2014}]{Hangyo:ZeroAnaphra2014j}
+萩行正嗣\JBA 河原大輔\JBA 黒橋禎夫 \BBOP 2014\BBCP.
+\newblock 外界照応および著者・読者表現を考慮した日本語ゼロ照応解析.\
+\newblock \Jem{自然言語処理}, {\Bbf 21}  (3), \mbox{\BPGS\ 563--600}.
+
+\bibitem[\protect\BCAY{林部\JBA 小町\JBA 松本}{林部 \Jetal
+  }{2014}]{Hayashibe:PredArgs2014j}
+林部祐太\JBA 小町守\JBA 松本裕治 \BBOP 2014\BBCP.
+\newblock 述語と項の位置関係ごとの候補比較による日本語述語項構造解析.\
+\newblock \Jem{自然言語処理}, {\Bbf 21}  (1), \mbox{\BPGS\ 3--25}.
+
+\bibitem[\protect\BCAY{Hovy, Marcus, Palmer, Ramshaw, \BBA\ Weischedel}{Hovy
+  et~al.}{2006}]{hovy-EtAl:2006:HLT-NAACL06-Short}
+Hovy, E., Marcus, M., Palmer, M., Ramshaw, L., \BBA\ Weischedel, R. \BBOP
+  2006\BBCP.
+\newblock \BBOQ OntoNotes: The 90\% Solution.\BBCQ\
+\newblock In {\Bem Proceedings of the Human Language Technology Conference of
+  the NAACL, Companion Volume: Short Papers}, \mbox{\BPGS\ 57--60}, New York,
+  USA.
+
+\bibitem[\protect\BCAY{飯田\JBA 小町\JBA 井之上\JBA 乾\JBA 松本}{飯田 \Jetal
+  }{2010}]{Iida:NAISTCorpus2010j}
+飯田龍\JBA 小町守\JBA 井之上直也\JBA 乾健太郎\JBA 松本裕治 \BBOP 2010\BBCP.
+\newblock 述語項構造と照応関係のアノテーション：NAIST
+  テキストコーパス構築の経験から.\
+\newblock \Jem{自然言語処理}, {\Bbf 17}  (2), \mbox{\BPGS\ 25--50}.
+
+\bibitem[\protect\BCAY{Iida, Komachi, Inui, \BBA\ Matsumoto}{Iida
+  et~al.}{2007}]{iida-EtAl:2007:LAW}
+Iida, R., Komachi, M., Inui, K., \BBA\ Matsumoto, Y. \BBOP 2007\BBCP.
+\newblock \BBOQ Annotating a Japanese Text Corpus with Predicate-Argument and
+  Coreference Relations.\BBCQ\
+\newblock In {\Bem Proceedings of the Linguistic Annotation Workshop},
+  \mbox{\BPGS\ 132--139}, Prague, Czech Republic.
+
+\bibitem[\protect\BCAY{Imamura, Higashinaka, \BBA\ Izumi}{Imamura
+  et~al.}{2014}]{imamura-higashinaka-izumi:2014:Coling}
+Imamura, K., Higashinaka, R., \BBA\ Izumi, T. \BBOP 2014\BBCP.
+\newblock \BBOQ Predicate-Argument Structure Analysis with Zero-Anaphora
+  Resolution for Dialogue Systems.\BBCQ\
+\newblock In {\Bem Proceedings of COLING 2014, the 25th International
+  Conference on Computational Linguistics: Technical Papers}, \mbox{\BPGS\
+  806--815}, Dublin, Ireland.
+
+\bibitem[\protect\BCAY{Imamura, Saito, \BBA\ Izumi}{Imamura
+  et~al.}{2009}]{imamura-saito-izumi:2009:Short}
+Imamura, K., Saito, K., \BBA\ Izumi, T. \BBOP 2009\BBCP.
+\newblock \BBOQ Discriminative Approach to Predicate-Argument Structure
+  Analysis with Zero-Anaphora Resolution.\BBCQ\
+\newblock In {\Bem Proceedings of the ACL-IJCNLP 2009 Conference Short Papers},
+  \mbox{\BPGS\ 85--88}, Singapore.
+
+\bibitem[\protect\BCAY{Jiang \BBA\ Ng}{Jiang \BBA\
+  Ng}{2006}]{jiang-ng:2006:EMNLP}
+Jiang, Z.~P.\BBACOMMA\ \BBA\ Ng, H.~T. \BBOP 2006\BBCP.
+\newblock \BBOQ Semantic Role Labeling of NomBank: A Maximum Entropy
+  Approach.\BBCQ\
+\newblock In {\Bem Proceedings of the 2006 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 138--145}, Sydney, Australia.
+
+\bibitem[\protect\BCAY{河原\JBA 黒橋}{河原\JBA
+  黒橋}{2005}]{Kawahara:CaseFrame2005j}
+河原大輔\JBA 黒橋禎夫 \BBOP 2005\BBCP.
+\newblock 格フレーム辞書の漸次的自動構築.\
+\newblock \Jem{自然言語処理}, {\Bbf 12}  (2), \mbox{\BPGS\ 109--131}.
+
+\bibitem[\protect\BCAY{Komachi, Iida, Inui, \BBA\ Matsumoto}{Komachi
+  et~al.}{2007}]{Komachi:PredArgs2007}
+Komachi, M., Iida, R., Inui, K., \BBA\ Matsumoto, Y. \BBOP 2007\BBCP.
+\newblock \BBOQ Learning-Based Argument Structure Analysis of Event-Nouns in
+  Japanese.\BBCQ\
+\newblock In {\Bem Proceedings of the Conference of the Pacific Association for
+  Computational Linguistics (PACLING)}, \mbox{\BPGS\ 208--215}, Melbourne,
+  Australia.
+
+\bibitem[\protect\BCAY{Kudo \BBA\ Matsumoto}{Kudo \BBA\
+  Matsumoto}{2002}]{Kudo:Cabocha2002}
+Kudo, T.\BBACOMMA\ \BBA\ Matsumoto, Y. \BBOP 2002\BBCP.
+\newblock \BBOQ Japanese Dependency Analysis using Cascaded Chunking.\BBCQ\
+\newblock In {\Bem CoNLL 2002: Proceedings of the 6th Conference on Natural
+  Language Learning 2002 (COLING 2002 Post-Conference Workshops)}, \mbox{\BPGS\
+  63--69}, Taipei, Taiwan.
+
+\bibitem[\protect\BCAY{Kudo, Yamamoto, \BBA\ Matsumoto}{Kudo
+  et~al.}{2004}]{kudo-yamamoto-matsumoto:2004:EMNLP}
+Kudo, T., Yamamoto, K., \BBA\ Matsumoto, Y. \BBOP 2004\BBCP.
+\newblock \BBOQ Applying Conditional Random Fields to Japanese Morphological
+  Analysis.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP 2004}, \mbox{\BPGS\ 230--237},
+  Barcelona, Spain.
+
+\bibitem[\protect\BCAY{Laparra \BBA\ Rigau}{Laparra \BBA\
+  Rigau}{2013}]{laparra-rigau:2013:ACL2013}
+Laparra, E.\BBACOMMA\ \BBA\ Rigau, G. \BBOP 2013\BBCP.
+\newblock \BBOQ ImpAr: A Deterministic Algorithm for Implicit Semantic Role
+  Labelling.\BBCQ\
+\newblock In {\Bem Proceedings of the 51st Annual Meeting of the Association
+  for Computational Linguistics (Volume 1: Long Papers)}, \mbox{\BPGS\
+  1180--1189}, Sofia, Bulgaria.
+
+\bibitem[\protect\BCAY{M\`arquez, Carreras, Litkowski, \BBA\
+  Stevenson}{M\`arquez et~al.}{2008}]{Marquez:SRLSurvay2008}
+M\`arquez, L., Carreras, X., Litkowski, K.~C., \BBA\ Stevenson, S. \BBOP
+  2008\BBCP.
+\newblock \BBOQ Semantic Role Labeling: An Introduction to the Special
+  Issue.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 34}  (2), \mbox{\BPGS\
+  145--159}.
+
+\bibitem[\protect\BCAY{松林\JBA 飯田\JBA 笹野\JBA 横野\JBA 松吉\JBA 藤田\JBA
+  宮尾\JBA 乾}{松林 \Jetal }{2014}]{Matsubayashi:PredArgsData2014j}
+松林優一郎\JBA 飯田龍\JBA 笹野遼平\JBA 横野光\JBA 松吉俊\JBA 藤田篤\JBA
+  宮尾祐介\JBA 乾健太郎 \BBOP 2014\BBCP.
+\newblock 日本語文章に対する述語項構造アノテーション仕様の考察.\
+\newblock \Jem{自然言語処理}, {\Bbf 21}  (2), \mbox{\BPGS\ 333--377}.
+
+\bibitem[\protect\BCAY{Palmer, Gildia, \BBA\ Kingsbury}{Palmer
+  et~al.}{2005}]{Palmer:PropBank2005}
+Palmer, M., Gildia, D., \BBA\ Kingsbury, P. \BBOP 2005\BBCP.
+\newblock \BBOQ The Proposition Bank: An Annotated Corpus of Semantic
+  Roles.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 31}  (1), \mbox{\BPGS\
+  71--105}.
+
+\bibitem[\protect\BCAY{Pradhan, Moschitti, \BBA\ Xue}{Pradhan
+  et~al.}{2012}]{conll2012-shared-task}
+Pradhan, S., Moschitti, A., \BBA\ Xue, N.\BEDS\ \BBOP 2012\BBCP.
+\newblock {\Bem Joint Conference on EMNLP and CoNLL: Proceeding of the Shared
+  Task: Modeling Multilingual Unrestricted Coreference in Onto Notes}, Jeju,
+  Korea.
+
+\bibitem[\protect\BCAY{Pradhan, Ward, \BBA\ Martin}{Pradhan
+  et~al.}{2008}]{Pradhan:SRLAdaptation2008}
+Pradhan, S.~S., Ward, W., \BBA\ Martin, J.~H. \BBOP 2008\BBCP.
+\newblock \BBOQ Towards Robust Semantic Role Labeling.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 34}  (2), \mbox{\BPGS\
+  289--310}.
+
+\bibitem[\protect\BCAY{Ruppenhofer, Ellsworth, Petruck, Johnson, \BBA\
+  Scheffczyk}{Ruppenhofer
+  et~al.}{2006}]{RuppenhoferEtAl2006:ExtTeoryAndPractice}
+Ruppenhofer, J., Ellsworth, M., Petruck, M.~R., Johnson, C.~R., \BBA\
+  Scheffczyk, J. \BBOP 2006\BBCP.
+\newblock {\Bem FrameNet II: Extended Theory and Practice}.
+\newblock International Computer Science Institute, Berkeley, California.
+\newblock Distributed with the FrameNet data.
+
+\bibitem[\protect\BCAY{Sasano, Kawahara, \BBA\ Kurohashi}{Sasano
+  et~al.}{2008}]{sasano-kawahara-kurohashi:2008:PAPERS}
+Sasano, R., Kawahara, D., \BBA\ Kurohashi, S. \BBOP 2008\BBCP.
+\newblock \BBOQ A Fully-Lexicalized Probabilistic Model for Japanese Zero
+  Anaphora Resolution.\BBCQ\
+\newblock In {\Bem Proceedings of the 22nd International Conference on
+  Computational Linguistics (COLING 2008)}, \mbox{\BPGS\ 769--776}, Manchester,
+  UK.
+
+\bibitem[\protect\BCAY{Sasano, Kawahara, Kurohashi, \BBA\ Okumura}{Sasano
+  et~al.}{2013}]{sasano-EtAl:2013:EMNLP}
+Sasano, R., Kawahara, D., Kurohashi, S., \BBA\ Okumura, M. \BBOP 2013\BBCP.
+\newblock \BBOQ Automatic Knowledge Acquisition for Case Alternation between
+  the Passive and Active Voices in Japanese.\BBCQ\
+\newblock In {\Bem Proceedings of the 2013 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 1213--1223}, Seattle, Washington,
+  USA.
+
+\bibitem[\protect\BCAY{Stolcke, Zheng, Wang, \BBA\ Abrash}{Stolcke
+  et~al.}{2011}]{Stolcke:SRILM2011}
+Stolcke, A., Zheng, J., Wang, W., \BBA\ Abrash, V. \BBOP 2011\BBCP.
+\newblock \BBOQ SRILM at Sixteen: Update and Outlook.\BBCQ\
+\newblock In {\Bem Proceedings of IEEE Automatic Speech Recognition and
+  Understanding Workshop (ASRU 2011)}, Waikoloa, Hawaii, USA.
+
+\bibitem[\protect\BCAY{Taira, Fujita, \BBA\ Nagata}{Taira
+  et~al.}{2008}]{taira-fujita-nagata:2008:EMNLP}
+Taira, H., Fujita, S., \BBA\ Nagata, M. \BBOP 2008\BBCP.
+\newblock \BBOQ A Japanese Predicate Argument Structure Analysis using Decision
+  Lists.\BBCQ\
+\newblock In {\Bem Proceedings of the 2008 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 523--532}, Honolulu, Hawaii, USA.
+
+\bibitem[\protect\BCAY{平\JBA 田中\JBA 藤田\JBA 永田}{平 \Jetal
+  }{2014}]{Taira:PredArgs2014j}
+平博順\JBA 田中貴秋\JBA 藤田早苗\JBA 永田昌明 \BBOP 2014\BBCP.
+\newblock ビジネスメールに対する日本語述語項構造解析の検討.\
+\newblock \Jem{言語処理学会第 20 回年次大会発表論文集}, \mbox{\BPGS\
+  1019--1022}, 札幌.
+
+\bibitem[\protect\BCAY{Tur, Hakkani-T{\"{u}}r, \BBA\ Chotimongkol}{Tur
+  et~al.}{2005}]{Tur:UnderstandingSRL2005}
+Tur, G., Hakkani-T{\"{u}}r, D., \BBA\ Chotimongkol, A. \BBOP 2005\BBCP.
+\newblock \BBOQ Semi-Supervised Learning for Spoken Language Understanding
+  Using Semantic Role Labeling.\BBCQ\
+\newblock In {\Bem Proceedings of Automatic Speech Recognition and
+  Understanding Workshop (ASRU 2005)}, \mbox{\BPGS\ 232--237}, San Juan, Puerto
+  Rico.
+
+\bibitem[\protect\BCAY{吉川\JBA 浅原\JBA 松本}{吉川 \Jetal
+  }{2013}]{Yoshikawa:PredArgs2013j}
+吉川克正\JBA 浅原正幸\JBA 松本裕治 \BBOP 2013\BBCP.
+\newblock Markov Logic による日本語述語項構造解析.\
+\newblock \Jem{自然言語処理}, {\Bbf 20}  (2), \mbox{\BPGS\ 251--271}.
+
+\end{thebibliography}
+
+\begin{biography}
+
+\bioauthor{今村　賢治}{
+1985年千葉大学工学部電気工学科卒業．
+同年〜2014年日本電信電話株式会社．
+1995年〜1998年NTTソフトウェア株式会社．
+2000年〜2006年ATR音声言語コミュニケーション研究所．
+2014年より株式会社 ATR-Trek所属として，独立行政法人情報通信研究機構(NICT)へ出向．
+現在NICT先進的音声翻訳研究開発推進センター専門研究員．
+主として自然言語処理技術の研究・開発に従事．博士（工学）．
+電子情報通信学会，情報処理学会，言語処理学会，ACL各会員．}
+
+\bioauthor{東中竜一郎}{
+1999年に慶應義塾大学環境情報学部卒業，
+2001年に同大学大学院政策・メディア研究科修士課程，
+2008年に博士課程修了．博士（学術）．
+2001年に日本電信電話株式会社入社．
+現在，NTT メディアインテリジェンス研究所にて勤務．
+音声言語メディアプロジェクトにて，質問応答システム・音声対話システムの研究に従事．
+言語処理学会，人工知能学会，情報処理学会，電子情報通信学会，各会員．
+2004年から2006年にかけて，英国シェフィールド大学客員研究員．}
+
+\bioauthor{泉　　朋子}{
+2005年北海道教育大学国際理解教育課程卒業，
+2007年ボストン大学大学院人文科学部応用言語学科修了，
+2008年日本電信電話株式会社入社．
+2014年京都大学大学院情報学研究科博士後期課程修了．博士（情報学）．
+現在，NTTメディアインテリジェンス研究所研究員，自然言語処理研究開発に従事．
+言語処理学会会員．}
+
+
+
+
+\end{biography}
+
+
+\biodate
+
+
+\end{document}

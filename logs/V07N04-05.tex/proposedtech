@@ -1,0 +1,492 @@
+\documentstyle[epsbox,jnlpbbl,version]{jnlp_j}
+
+\def\atari(#1,#2,#3){}
+
+
+\setcounter{page}{099}
+\setcounter{巻数}{7}
+\setcounter{号数}{4}
+\setcounter{年}{2000}
+\setcounter{月}{10}
+\受付{1999}{12}{6}
+\再受付{2000}{1}{17}
+\再々受付{2000}{3}{3}
+\採録{2000}{6}{30}
+
+\newenvironment{RULE}[1]{}{}
+
+\newenvironment{LIST}{}{}
+
+\newcounter{sentcounter}
+\newenvironment{SENT}{}{}
+
+\newenvironment{SENT3}{}{}
+
+\newcounter{corpuscounter}
+\newenvironment{CORPUS}{}{}
+
+
+\title{頑健な英日機械翻訳システム実現のための\\原文自動前編集}
+\author{吉見 毅彦\affiref{SHARP} \and 佐田 いち子\affiref{SHARP}
+\and 福持 陽士\affiref{SHARP}}
+
+\headauthor{吉見, 佐田, 福持}
+\headtitle{頑健な英日機械翻訳システム実現のための原文自動前編集}
+
+\affilabel{SHARP}{シャープ(株) 情報システム事業本部}
+{Information Systems Group, SHARP Corporation}
+
+\jabstract{本稿では，従来の機械翻訳システムの構文解析能力を越える倒置や
+挿入などを含む文に対して頑健な処理を実現するための一手法として，形態素解
+析と簡単な構文解析によって得られる情報に基づいて原文を書き換える自動前編
+集手法を示す．
+原文書き換え系を既存システムに追加することによって，
+1) より品質の高い翻訳がシステムの既存部分にほとんど変更を加えることなく
+得られるようになるだけでなく，
+2) 構文解析の負担が減少するためシステム全体としての効率化が実現できる．
+実際，提案手法を我々の英日機械翻訳システムPower E/Jに組み込み，新聞
+記事を対象として実験を行なったところ，
+1) 書き換え規則が適用された330文の78.8\%にあたる260文の翻訳品質が改善さ
+れ，
+2) 書き換えを行なった場合の翻訳速度は行なわない場合の速度の1.12倍にな
+った．}
+
+\jkeywords{原文書き換え，自動前編集，不適格文，頑健性，機械翻訳}
+
+\etitle{Automatic Preediting of English Sentences \\
+for a Robust English-to-Japanese MT System}
+\eauthor{Takehiko Yoshimi\affiref{SHARP} \and
+Ichiko Sata\affiref{SHARP} \and
+Yoji Fukumochi\affiref{SHARP}} 
+
+\eabstract{As a means of allowing for robust processing of such linguistic 
+phenomena as inversion, ellipsis, parenthesis and emphasis, which are liable to
+prevent a syntactic parser from generating appropriate syntactic structures,
+this paper shows a method of automatically preediting sentences, based on 
+information obtained by morpholexical and simple syntactic analysis.
+Addition of a preediting module to the existing system
+makes it possible
+1) to generate better translations, which would not otherwise be generated,
+with little or no changes to the existing parts of the system, and
+2) to reduce the load of syntactic analysis, thus enhancing the efficiency 
+of the whole system.
+We have incorporated the proposed method into our English-to-Japanese
+machine translation system Power E/J, and carried out an experiment with 
+sentences in news wire articles.
+The incorporation of the preediting module has satisfactorily 
+1) improved the quality of translations for the 260 sentences out of 
+rewritten 330 ones (78.8\%), and
+2) marked up the speed of 1.12 times as fast as the system without the 
+module.}
+
+\ekeywords{Rewriting, Automatic Preediting, Ill-formedness, Robustness,
+Machine Translation}
+
+\begin{document}
+\maketitle
+
+\section{書き換え対象文}
+\label{sec:object}
+
+我々の従来システムにとっての不適格現象には様々なものがあるがそれらをすべ
+て一度に扱うことは容易ではない．
+このため本研究では，出現頻度が高い現象や翻訳品質の改善度が大きい現象を含
+む文を書き換え対象として優先的に選ぶことにする．
+書き換え対象を選定するために，
+英文法書の例文や新聞記事\cite{Lewis97}を我々のシステムで処理し，
+構文解析に失敗した文のうち558文についてその原因を分析した．
+構文解析に失敗する現象は595箇所で見られた．
+このうち238箇所は，綴り誤りなどの絶対的不適格現象や，辞書や形態素解析
+系の不備によるものであった．
+残り357箇所のうち108箇所が省略現象によるもの，61箇所が倒置によるもの，41
+箇所が挿入語句によるものであった．
+また，特殊構文を含まないが文が長いために構文解析に失敗する文が26文存在し
+た．
+
+この分析結果に基づいて，表\ref{tab:illformedness}\,に示すパターンへ対処
+することを目的とした
+\footnote{表\ref{tab:illformedness}\,は対象とするパターンの概略であり，
+実際の書き換え規則の適用条件部にはより厳密な条件を記述している．
+また，強調構文は構文解析に失敗するわけではないが重要な構文であるので，
+書き換え対象に含めた．}．
+表\ref{tab:illformedness}\,のパターンで，構文解析に失敗した558文に現れた
+すべての倒置，省略，挿入を網羅しているわけではない．
+パターン7ないし10は，複雑で長い部分を動詞の後方に置くための前置詞句の前
+置であるが，ここでは倒置とみなす．
+表\ref{tab:illformedness}\,において，上付き記号?は任意項を，\{\ \}は選択
+項をそれぞれ表し，斜字体の語句は省略されている語句を意味する．
+\begin{table}[htbp]
+\caption{書き換え対象パターン}
+\label{tab:illformedness}
+\begin{center}
+\begin{tabular}{|c||r|l|}\hline
+分類&\multicolumn{1}{c}{\#}&\multicolumn{1}{|c|}{パターン}\\\hline\hline
+&  1.& [$副詞句^?$\ \{分詞$|$形容詞\}\ $前置詞句^?$\ $助動詞^?$\ be動詞] \\
+&  2.& [$副詞句^?$\ 前置詞句\ $助動詞^?$\ be動詞] \\
+&  3.& [\{nor$|$neither\}\ 助動詞\ 名詞句\ 原形動詞] \\
+&  4.& [\{nor$|$neither\}\ have\ 名詞句\ 過去分詞] \\
+&  5.& [\{nor$|$neither\}\ be動詞\ 名詞句] \\
+\multicolumn{1}{|c||}{\raisebox{1.5ex}[0pt]{倒置}}
+&  6.& [should$\langle$文頭$\rangle$] \\
+&  7.& [関係代名詞\ 前置詞句\ 動詞] \\
+&  8.& [名詞句\ 前置詞句$\langle$意味標識:TIME$\rangle$\ 動詞] \\
+&  9.& [助動詞\ 前置詞句\ 原形動詞] \\
+& 10.& [have\ 前置詞句\ to\ 原形動詞] \\\hline
+& 11.& [so\ 形容詞\ {\it that}\ 代名詞] \\
+& 12.& [say\ {\it that}\ $\cdots$\ and\ that\ $\cdots$] \\
+\multicolumn{1}{|c||}{\raisebox{1.5ex}[0pt]{省略}}
+& 13.& [say\ {\it that}\ there\ 動詞] \\
+& 14.& [\{double$|$twice\}\ that\ {\it figure}] \\\hline
+& 15.& [,\ \{all$|$most$|$much$|$$\cdots$\}\ of\ \{it$|$them\}\ $\cdots$\ \{,$|$.\}] \\
+& 16.& [,\ but\ not\ 動詞\ $\cdots$\ ,] \\
+\multicolumn{1}{|c||}{\raisebox{1.5ex}[0pt]{挿入}}
+& 17.& [名詞句\ and\ 名詞句\ ,\ 名詞句\ ,\ 動詞] \\
+& 18.& [名詞句\ ,\ \{which$|$who\}\ $\cdots$\ ,\ 動詞] \\\hline
+強調& 19.& [it\ be動詞\ $\mbox{not}^?$\ 名詞句\ \{which$|$who\}] \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+表\ref{tab:illformedness}\,のパターンは我々の従来システムにとっての不適
+格現象であり，他のシステムの中には適切に処理できるものも存在すると考えら
+れる．
+しかし，例えば日本電子工業振興協会の自然言語処理技術委員会で編集され
+た翻訳品質評価用テストセット\cite{NihonDenshiKogyoShinkoKyokai95}で取り
+扱いが重要な特殊構文として取り上げられているように，これらを適切に処理す
+ることは一般の機械翻訳システムにとっても重要な課題である．
+また，これらの現象のうち，倒置，省略，挿入は，英日機械翻訳システムの一般
+利用者が日々接することが多いテキストの一つである英字新聞記事に比較的頻繁
+に現れる表現である\cite{Uenoda78,Horiuchi79,Tomita94}ため，これらを適切
+に処理する必要性は高い．
+
+本節では，これらの現象\cite{Egawa64,Yasui82,Greenbaum90}を含む文をどのよ
+うに書き換えれば翻訳品質が改善されるかを検討する．
+以降，従来システムとは我々の従来システムを指す．
+
+\subsection{倒置}
+\label{sec:object:inversion}
+
+倒置のうち分詞を中心とする叙述部の倒置や否定表現が冒頭に置かれた文におけ
+る倒置などを扱う．
+例えば文(E\ref{SENT:inversion_whatis})は過去分詞が文頭に現れているために，
+構文解析に失敗し(J\ref{SENT:inversion_whatis})のような出力しか得られない
+\footnote{記号◇で構文解析が失敗したことを表し，記号‖で区切られた区間が
+部分的な構造にまとめられたことを表す．}．
+しかし，文(E\ref{SENT:inversion_whatis})の先頭に``what is''という語句
+を追加して文(E\ref{SENT:inversion_whatis}')のように書き換えると，従来シ
+ステムにとって適格文となり文(J\ref{SENT:inversion_whatis}')のような翻訳
+が得られる．
+\begin{SENT}
+\sentE Affiliated is the parent company of Globe Newspaper Co.
+\sentJ ◇加入した‖Globe Newspaper Coの親会社である。
+\sentNewE What is affiliated is the parent company of Globe Newspaper Co.
+\sentNewJ 合併されるものは、Globe Newspaper Coの親会社である。
+\label{SENT:inversion_whatis}
+\end{SENT}
+
+文(E\ref{SENT:inversion_neither})に見られるように，否定の副詞``neither''
+が冒頭に置かれた節では主語と助動詞の倒置が生じる．
+このような節に対しては，``neither''を``and also''に書き換えて，助動詞
+``have''を否定形にし主語の後方に移動する．
+このような処理の実現には，助動詞の移動先を決定しなければならないため，主
+語になる名詞句この場合`` the government regulators''を認識する必要がある．
+このため，書き換え規則の適用条件部には簡単な構文構造を認識するための手続
+きも記述する．この手続きに関しては
+\ref{sec:preedit:ruleformat:condition}\,節で述べる．
+
+\begin{SENT}
+\sentE Neither have the government regulators indicated that there will 
+be a problem.
+\sentJ ◇どちらも、政府取締官を示された状態にしない‖そこのそれは、問題
+であろう
+\sentNewE And also the government regulators have not indicated 
+that there will be a problem.
+\sentNewJ そしてまた、政府取締官は、問題があるであろうことを示さなかった。
+\label{SENT:inversion_neither}
+\end{SENT}
+
+\subsection{省略}
+\label{sec:object:ellipsis}
+
+接続詞の省略など構文的知識に依存する省略のいくつかを扱う．
+文(E\ref{SENT:ellipsis_saythat})は，二つの被伝達節が``and''で連結されて
+いるが，一つ目の被伝達節を導く``that''が明示されていない．
+これが原因で構文解析に失敗するが，``said''の直後に``that''を補えば
+構文解析の失敗は避けられるようになる．
+\begin{SENT}
+\sentE Sprinkel said the fall of the dollar had substantially restored 
+U.S. cost competitiveness and that the deterioration of the U.S. trade 
+balance appeared to have abated. 
+\sentJ ◇Sprinkelによれば、ドルの低下は、米国のコスト競争、及び、それを
+大幅に回復した‖米国の貿易収支の悪化は、減少したために、現れた。
+\sentNewE Sprinkel said that the fall of the dollar had substantially 
+restored U.S. cost competitiveness and that the deterioration of the U.S. 
+trade balance appeared to have abated.
+\sentNewJ Sprinkelは、ドルの低下が米国のコスト競争を大幅に回復したという
+こと、そして、米国の貿易収支の悪化が減少したように思われるということを言
+った。 
+\label{SENT:ellipsis_saythat}
+\end{SENT}
+
+また，文(E\ref{SENT:ellipsis_sothat})で``so''と相関関係にある``that''が
+省略されていることは，``so''の直後の形容詞に代名詞が後続していることを手
+がかりにすれば検出できる．
+\begin{SENT}
+\sentE The 2.5 pct discount rate is so low it is politically impossible 
+to cut it further. 
+\sentJ 2.5パーセント割引率は、そのようにそれが政治上まで不可能である安値
+が更にそれを切ったことである。
+\sentNewE The 2.5 pct discount rate is so low that it is politically
+impossible to cut it further.
+\sentNewJ 2.5パーセント割引率は、更にそれを切ることが政治上不可能である
+ほど低い。
+\label{SENT:ellipsis_sothat}
+\end{SENT}
+
+\subsection{挿入}
+\label{sec:object:parenthesis}
+
+挿入句は文中の他の語句と特に構文的な関係を持つことなく現れ，コンマやダッ
+シュや括弧などで区切られる．
+括弧で囲まれた挿入句を発見することは比較的容易であるが，コンマで囲まれて
+いる場合にはコンマの他の用法との区別を行なう必要があり，挿入句の正確な認
+識は容易ではない\cite{TakedaNoriko95}．
+しかし，コンマだけでなくその前後の語句も手がかりとし，
+表\ref{tab:illformedness}\,のようなパターンとして捉えれば，
+挿入句の発見はより正確に行なえる．
+例えば文(E\ref{SENT:parenthesis_someofthem})において，一つ目のコンマの直
+後に存在する
+``some of them''
+のような特徴的な語句や二つ目のコンマの直後に存在する(助)動詞に着目すれば
+よい．
+このような手がかりに基づいて認識した挿入句を括弧で囲めば，既存の構文解
+析系による処理が成功するようになる．
+ただし，文(E\ref{SENT:parenthesis_someofthem})は挿入だけでなくbe動詞の
+省略も含んでいるため，``them''の直後に``are''を補う必要がある．
+\begin{SENT}
+\sentE Their separate proposals, some of them conflicting, will be woven
+by House Democratic leaders into a final trade bill for a vote by the 
+full House in late April.
+\sentJ ◇それらの個別の提案、‖いくらかの‖それら‖対立する、‖下院の民
+主党のリーダーによって4月下旬の下院本会議による投票のための最終の貿易手
+形に織られるであろう。
+\sentNewE Their separate proposals ( some of them are conflicting )
+ will be woven by House Democratic leaders into a final trade bill for 
+a vote by the full House in late April.
+\sentNewJ それらの個別の提案(それらのうちのいくらかが対立している)は、下
+院の民主党のリーダーによって4月下旬の下院本会議による投票のための最終の
+貿易手形に組み立てられるであろう。
+\label{SENT:parenthesis_someofthem}
+\end{SENT}
+
+\subsection{強調}
+\label{sec:object:emphasis}
+
+強調のための言語的手段には，\ref{sec:object:inversion}\,節で述べた倒置文
+の他に感嘆文や修辞疑問文や分裂文などがある．
+このうち従来システムでは文(E\ref{SENT:emphasis})のような分裂文を適切に
+処理することができないが，これを文(E\ref{SENT:emphasis}')のように書き換
+えれば翻訳が改善される．
+文(E\ref{SENT:emphasis}')は，文(E\ref{SENT:emphasis})に対して，
+``it''を削除し，
+``which''を``what''に置換し，
+焦点の名詞句とその直前のbe動詞を``which''節の後方へ移動する
+という三操作を行なうことによって得られる．
+\begin{SENT}
+\sentE However, he added that in the end, it was market forces which 
+prevailed.
+\sentJ しかしながら、彼は、結局それが普及していた市場諸力であるとつけ加
+えた。
+\sentNewE However, he added that in the end, what prevailed was market 
+forces. 
+\sentNewJ しかしながら、彼は、結局普及していたものが市場諸力であるとつけ
+加えた。
+\label{SENT:emphasis}
+\end{SENT}
+
+\section{原文書き換え系}
+\label{sec:preedit}
+
+\subsection{原文書き換えの枠組}
+\label{sec:preedit:flow}
+
+本節で述べる原文書き換え系を組み込んだ機械翻訳システムにおけ
+る解析の流れを図\ref{fig:flow}\,に示す．
+このシステムでは，形態素解析終了後に書き換えを実行した後，書き換えた部分
+の形態素解析を行ない，入力文全体の形態素解析結果を構文解析系に送る．
+一度目の書き換え結果に対して全体を覆う構文構造が生成できず構文解析に失敗
+した場合，処理の制御は原文書き換え系に戻る．
+再度書き換えを行なう場合には，各書き換え規則に記述されている規則の信頼
+度(後述)に従って，一度目の書き換えでは用いなかった規則を新たに適用した
+り，逆に一度目の処理で行なった書き換えを取り消したりする
+\footnote{二度目の構文解析に失敗した場合には，断片的な構文構造を
+解析結果とする．}．
+\begin{figure}[htbp]
+\begin{center}
+    \begin{epsf}
+\fbox{\epsfile{file=flow32.eps,width=0.65\columnwidth}}	
+    \end{epsf}
+    \begin{draft}
+    \atari(264.46587,49.13538,1pt)
+    \end{draft}
+\end{center}
+\caption{解析の流れ}
+\label{fig:flow}
+\end{figure}
+
+原文書き換え系での処理は，形態素解析結果に対して先頭から順に書き換え規則
+の適用条件との照合を行なっていき，適用条件が満たされる部分を順次書き換え
+ていく．
+
+\subsection{書き換え規則の形式}
+\label{sec:preedit:ruleformat}
+
+書き換え規則には，次に示すように，適用条件と書き換え操作の他，制御情報
+として適用抑制規則集合と信頼度を記述することができる．
+\[ (\,識別番号，適用条件，書き換え操作，適用抑制規則集合，信頼度\,) \]
+
+\subsubsection{適用条件部}
+\label{sec:preedit:ruleformat:condition}
+
+適用条件は，ある指定された属性を持つ語句がある位置あるいは区間に存在する
+かどうかを調べる手続きの論理積，論理和の形で表現される．
+入力文中での書き換え対象候補の出現位置は次のように表す．
+まず着目語の出現位置を変数$p$で表し，$p+n$で着目語の$n$語後方(文末側)の
+語を，$p-n$で着目語の$n$語前方(文頭側)の語を指す．
+コンマや終止符なども語とみなす．
+特別な記号として文末の語を指すドル記号\$を用いる．
+この他，コンマが書き換え対象を発見するための重要な手がかりとなることが多
+い\cite{Jones94}ため，$\mbox{com\_fwd\_}m$で着目語の後方に存在する$m$番
+目のコンマを指し，$\mbox{com\_bwd\_}m$で前方の$m$番目のコンマを指すこと
+にする．
+例えばword\_class(com\_fwd\_$1+2$, noun)という手続きは，着目語に最も近い
+後方のコンマの二語後方に，語種(品詞)候補として名詞を持つ語が存在するとき
+真を返し，存在しないとき偽を返す．
+
+適用条件部に記述する手続きは主に語の形態素語彙属性を調べるものである
+が，特別な手続きとして，入力文のある部分を節や名詞句と解釈できるかという
+構文的な属性を調べる手続きを記述する．
+ただし，簡単な構文解析しか行なわない方針であることから，節の認識は次の
+ような手順で行なう．
+\begin{quote}
+処理対象の先頭から順に述語になり得る定形動詞を探していく．
+もし見つかれば，その述語候補と人称・数が一致する名詞を主辞とする名詞句が
+その前方に存在するかどうかを調べる．
+もしそのような名詞句が存在すれば，それを主語とみなし，節が存在するものと
+する．
+\end{quote}
+ここで，名詞句を認識する手続きは次のような簡単な構造を検出するものであ
+る．
+上付き記号?と+はそれぞれ一回以下，一回以上の出現を意味する．
+\begin{eqnarray*}
+名詞句  &=& 名詞句0\ (前置詞\ 名詞句0)^? \\
+名詞句0 &=& (副詞^?\ \{形容詞|過去分詞|現在分詞\})^?\ \mbox{名詞}^+
+\end{eqnarray*}
+
+\subsubsection{操作部}
+\label{sec:preedit:ruleformat:action}
+
+書き換え操作には，語句の追加・削除・置換・移動，文の分割，前編集記号の付
+加がある．
+前編集記号の付加は，語の形態素語彙属性を指定したり，節や句の範囲や従属先を指
+定したりするためのものである．
+語句の語彙属性や従属先の指定によって解釈の曖昧性が減るため，解析の品質と
+速度の向上が期待できる．
+
+\subsubsection{適用抑制規則集合}
+
+ある規則$R$に与えられている適用抑制規則集合は$R$の適用を抑える他の規
+則に関するメタ条件を表し，規則$R$はその適用抑制規則集合に記述されてい
+る識別番号の規則が既に適用されている場合には適用されない．
+規則$R$の適用抑制規則集合には，$R$の書き換え対象と重複する部分を書き換
+えようとする規則だけでなく，書き換え対象が$R$のものと重複しない規則を
+含めてもよい．
+
+\subsubsection{信頼度}
+
+規則には，その信頼性が高く規則の適用によって翻訳品質が向上すること
+がほぼ確実な規則もあれば，信頼性があまり高くない規則もある．
+信頼度は，このようなことを考慮して，信頼性があまり高くない規則による悪
+影響を抑えるために設定したものである．
+各規則には，その信頼性に応じてA，B，Cのいずれかの信頼度を与える．
+信頼度Aの規則は最初の構文解析の前に適用し，構文解析に失敗してもこの規
+則による書き換えは取り消さない．
+規則に信頼度Aを与えるのは，この規則を適用しないと構文解析に失敗するこ
+とがほぼ確実であり，たとえこの規則によって書き換えた表現の構文解析に失
+敗して断片的な構文構造しか得られなかったとしても，この規則を適用しない
+場合の(断片的な)構文構造から生成される翻訳よりも高い品質の翻訳が生成さ
+れると期待される場合である．
+信頼度Bの規則は最初の構文解析の前に適用するが，最初の構文解析に失敗し
+た場合，この規則による書き換えは取り消す．
+信頼度Cの規則は最初の構文解析の前には適用せず，最初の構文解析に失敗し
+た場合に初めて適用する．
+各規則にどの信頼度を与えるかは実験を繰り返して経験的に決定する．
+
+\subsection{書き換え規則の例}
+\label{sec:preedit:example}
+
+書き換え規則の例として，挿入と省略を含む文(E\ref{SENT:parenthesis_someofthem})
+に対処するための規則と分裂文(E\ref{SENT:emphasis})に対処するための規則を
+図\ref{fig:rule_ex}\,に示す．
+図\ref{fig:rule_ex}\,の最初の規則が挿入と省略のための規則であり，二つ目
+が分裂文のための規則である．
+ただし，これらは，理解を容易にするため実際の規則を簡単化したものである．
+
+最初の規則の適用条件が満たされるのは，
+現在着目している位置に``some of them''が存在し，
+着目語の直前がコンマであり，
+着目語に最も近い後方のコンマの直後に動詞が存在し，
+二つのコンマに挟まれた区間に``some of them''を主語とする述語が存在しないとき
+である．
+このとき，コンマを括弧に書き換え，``some of them''の直後にbe動詞``are''
+を挿入する．
+
+二つ目の規則は，
+現在着目している位置に代名詞``it''が存在し，
+着目語の直後がbe動詞の肯定形あるいは否定形であり，
+その直後に名詞句が存在し，
+その名詞句の直後に``which''が存在するときに適用する．
+\begin{figure}[tbhp]
+\begin{RULE}{0.9\textwidth}
+\begin{verbatim}
+(/* 識別番号 */
+ 36,
+ /* 適用条件 */
+ (word(p, p+2, "some of them") == TRUE &&
+  word(p-1, ",") == TRUE &&
+  word_class(com_fwd_1+1, verb) == TRUE &&
+  subject_predicate(com_bwd_1+1, com_fwd_1-1) == FALSE),
+ /* 書き換え操作 */
+ (substitute(com_bwd_1, "("),
+  substitute(com_fwd_1, ")"),
+  insert(p+2, "are")),
+ /* 適用抑制規則集合 */
+ (),
+ /* 信頼度 */
+ A
+)
+
+(/* 識別番号 */
+ 42,
+ /* 適用条件 */
+ (word(p, "it") == TRUE &&
+  word_class(p+1, be) == TRUE &&
+  (noun_phrase(p+2, q) == TRUE ||
+   word(p+2, "not") == TRUE && noun_phrase(p+3, q) == TRUE) &&
+  word(q+1, "which") == TRUE),
+ /* 書き換え操作 */
+ (remove(p),
+  substitute(q+1, "what"),
+  move(p+1, q, $-1)),
+ /* 適用抑制規則集合 */
+ (),
+ /* 信頼度 */
+ B
+)
+\end{verbatim}
+\end{RULE}
+\caption{書き換え規則の例}
+\label{fig:rule_ex}
+\end{figure}
+
+\end{document}

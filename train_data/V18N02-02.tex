@@ -1,0 +1,1016 @@
+    \documentclass[japanese]{jnlp_JS2.0}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath,amssymb}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+\usepackage{url}
+\usepackage{theorem}
+
+\newif\ifFINAL
+\FINALtrue
+
+\setlength{\theorempreskipamount}{1zw}
+
+\newtheorem{definition}{}
+\newtheorem{property}{}
+
+
+\Volume{18}
+\Number{2}
+\Month{June}
+\Year{2011}
+
+\received{2010}{5}{31}
+\revised{2010}{9}{25}
+\accepted{2010}{11}{17}
+
+\setcounter{page}{89}
+
+\jtitle{集合間類似度に対する簡潔かつ高速な\\
+	類似文字列検索アルゴリズム}
+\jauthor{岡崎　直観\affiref{Author_1} \and 辻井　潤一\affiref{Author_2}}
+\jabstract{
+本論文では，コサイン係数，ダイス係数，ジャッカード係数，オーバーラップ係数に対し，簡潔かつ高速な類似文字列検索アルゴリズムを提案する．本論文では，文字列を任意の特徴（tri-gram など）の集合で表現し，類似文字列検索における必要十分条件及び必要条件を導出する．そして，類似文字列検索が転置リストにおける $\tau$ オーバーラップ問題として正確に解けることを示す．次に，$\tau$ オーバーラップ問題の効率的な解法として，CPMerge アルゴリズムを提案する．CPMerge は，検索クエリ文字列中のシグニチャと呼ばれる特徴と，解候補が枝刈りできる条件に着目し，$\tau$ オーバーラップ問題の解候補を絞り込む．さらに，CPMerge アルゴリズムの実装上の工夫について言及する．英語の人名，日本語の単語，生命医学分野の固有表現の 3 つの大規模文字列データセットを用い，類似文字列検索の性能を評価する．実験では，類似文字列検索の最近の手法である Locality Sensitive Hashing や DivideSkip 等と提案手法を比較し，提案手法が全てのデータセットにおいて，最も高速かつ正確に文字列を検索できることを実証する．また，提案手法による類似文字列検索が高速になる要因について，分析を行う．なお，提案手法をライブラリとして実装したものは，SimString としてオープンソースライセンスで公開している．
+}
+\jkeywords{類似文字列検索，集合間類似度，転置リスト，$\tau$オーバーラップ問題}
+
+\etitle{A Simple and Fast Algorithm for Approximate \\ String Matching with Set Similarity}
+\eauthor{Naoaki Okazaki\affiref{Author_1} \and Jun'ichi Tsujii\affiref{Author_2}} 
+\eabstract{
+This paper presents a simple and fast algorithm for approximate string matching in which string similarity is computed by set similarity measures including cosine, Dice, Jaccard, or overlap coefficient. In this study, strings are represented by unordered sets of arbitrary features (e.g., tri-grams). Deriving necessary and sufficient conditions for approximate string, we show that approximate string matching is exactly solvable by $\tau$-overlap join. We propose CPMerge algorithm that solves $\tau$-overlap join efficiently by making use of signatures in query features and a pruning condition. In addition, we describe implementation considerations of the algorithm. We measure the query performance of approximate string matching by using three large-scaled datasets with English person names, Japanese unigrams, and biomedical entity/concept names. The experimental results demonstrate that the proposed method outperforms state-of-the-art methods including Locality Sensitive Hashing and DivideSkip on all the datasets. We also analyze the behavior of the proposed method on the datasets. We distribute SimString, a library implementation of the proposed method, in an open-source license.
+}
+\ekeywords{approximate string matching, set similarity, inverted list, $t$-overlap join}
+
+\headauthor{岡崎，辻井}
+\headtitle{集合間類似度に対する簡潔かつ高速な類似文字列検索アルゴリズム}
+
+\affilabel{Author_1}{東北大学大学院情報科学研究科}{Graduate School of Information Sciences, Tohoku University}
+\affilabel{Author_2}{マイクロソフトリサーチアジア}{Microsoft Research Asia}
+
+
+\begin{document}
+\maketitle
+
+\section{はじめに}
+
+知的で高度な言語処理を実現するには，辞書，シソーラス，コーパスなどの言語資源の整備・構築が欠かせない．
+一方，実際のテキストに対して，言語資源を活用するときにボトルネックとなるのが，表層表現が実テキストと言語資源では一致しない問題である．
+例えば，「スパゲティー」には，「スパゲッティ」「スパゲティ」「スパゲッテー」などの異表記があるが，完全一致の文字列マッチングでは，これらの異表記から言語資源に含まれるエントリ（例えば「スパゲティー」）を引き出すことができない．
+ウェブなどの大規模かつ統制されていないテキストには，大量の異表記や表記誤りが含まれると考えられ，これらの実テキストに対して言語処理を頑健に適用するには，言語資源とテキストを柔軟にマッチングさせる技術が必要である．
+
+文字列を標準的な表記に変換してからマッチングさせる手法として，ステミング~\cite{Porter:80}，レマタイゼーション~\cite{Okazaki:08,Jongejan:09}，スペル訂正~\cite{Brill:00,Ahmad:05,Li:06,Chen:07}，人名表記の照合~\cite{Takahashi:95}，カタカナ異表記の生成及び統一~\cite{獅々堀:94}，等が代表的である．
+これらの研究に共通するのは，与えられた文字列から標準形に変換するための文字列書き換え規則を，人手，マイニング，もしくは機械学習で獲得していることである．
+これらの研究では，語幹やカタカナ異表記など，異表記のタイプに特化した文字列書き換え規則を獲得することに，重点が置かれる．
+
+本論文では，より一般的なタスク設定として，与えられた文字列に似ている文字列を，データベースの中から見つけ出すタスク（{\bf 類似文字列検索}）を考える．
+本論文では，「文字列の集合$V$の中で，検索クエリ文字列$x$と類似度が$\alpha$以上の文字列を全て見つけ出す操作」を，類似文字列検索と定義する．
+この操作は，$V$の部分集合$\mathcal{Y}_{x, \alpha}$を求める問題として記述できる．
+\begin{equation}
+ \mathcal{Y}_{x, \alpha} = \{y \in V \bigm| {\rm sim}(x, y) \geq \alpha \}
+ \label{equ:approximate-string-retrieval}
+\end{equation}
+ただし，${\rm sim}(x, y)$は文字列$x$と$y$の類似度を与える関数（{\bf 類似度関数}）である．
+この問題の単純な解法は，検索クエリ文字列$x$が与えられる度に，文字列の類似度を総当たりで$|V|$回計算することである．
+文字列集合の要素数$|V|$が小さいときには，総当たりで解を求めることも可能だが，文字列集合が膨大（例えば数百万オーダー以上の要素数）になると，実用的な時間で解けなくなる．
+本論文では，自然言語処理でよく用いられる類似度関数であるコサイン係数，ジャッカード係数，ダイス係数，オーバーラップ係数に対して，式\ref{equ:approximate-string-retrieval}の簡潔かつ高速なアルゴリズムを提案する．
+本論文の貢献は，以下の 2 点に集約される．
+\begin{enumerate}
+\item まず，類似文字列検索における必要十分条件及び必要条件を導出し，式\ref{equ:approximate-string-retrieval}が転置リストにおける{\bf $\tau$オーバーラップ問題}~\cite{Sarawagi:04}として正確に解けることを示す．
+次に，$\tau$オーバーラップ問題の効率的な解法として，{\bf CPMerge}アルゴリズムを提案する．
+このアルゴリズムは，$\tau$オーバーラップ問題の解となり得る文字列の数をできるだけコンパクトに保つ特徴がある．
+提案手法の実装は非常に容易であり，
+C++で実装したライブラリ\footnote{SimString: http://www.chokkan.org/software/simstring/}
+を公開している．
+
+\item 提案手法の優位性を示すため，英語の人名，日本語の単語，生命医学分野の固有表現を文字列データとして，類似文字列検索の性能を評価する．
+実験では，類似文字列検索の最近の手法であるLocality Sensitive Hashing (LSH)~\cite{Andoni:08}，SkipMerge, DivideSkip~\cite{Li:08}等と提案手法を比較する．
+実験結果では，提案手法が全てのデータセットにおいて，最も高速かつ正確に文字列を検索できることが示される．
+\end{enumerate}
+
+本論文の構成は以下の通りである．
+次節では，類似文字列検索の必要十分条件，必要条件を導出し，式\ref{equ:approximate-string-retrieval}が$\tau$オーバーラップ問題として正確に解けることを示す．
+第\ref{sec:method}節では，本論文が提案するデータ構造，及び$\tau$オーバーラップ問題の効率的なアルゴリズムを説明する．
+第\ref{sec:evaluation}節で，評価実験とその結果を報告する．
+第\ref{sec:related-work}節では，類似文字列検索の関連研究をまとめる．
+第\ref{sec:conclusion}節で，本論文の結論を述べる．
+
+
+
+\section{類似文字列検索の定式化}
+\label{sec:formalization}
+
+本研究では，文字列は{\bf 特徴}の集合で表現されると仮定する．
+文字列の特徴の捉え方は，提案手法に依らず任意であるが，本論文では一貫して文字tri-gramを具体例として用いる．
+例えば，文字列$x = \mbox{「スパゲッティー」}$は，9要素の文字tri-gramから構成される集合$X$で表現される．
+\begin{equation}
+X = \{\mbox{\texttt{`＄＄ス'}}, \mbox{\texttt{`＄スパ'}}, \mbox{\texttt{`スパゲ'}}, \mbox{\texttt{`ゲッテ'}}, \mbox{\texttt{`ッティ'}}, \mbox{\texttt{`ティー'}}, \mbox{\texttt{`ィー＄'}}, \mbox{\texttt{`ー＄＄'}} \}
+\end{equation}
+ここで，文字列の先頭と末尾に\texttt{`＄'}を挿入し，文字列の開始と終了を表現している\footnote{この例では，先頭と末尾を表す記号\texttt{`＄'}を付加したが，これも提案手法に依らず任意である．}．
+一般に，文字数が$|x|$の文字列$x$を文字$n$-gramの集合$X$で表現したとき，$|X| = |x| + n - 1$という関係が成り立つ．
+本論文では，文字列を小文字の変数（$x$など）で表し，文字列を特徴の集合に変換したものを{\bf 特徴集合}と呼び，対応する大文字の変数（$X$など）で表す．
+$|x|$を文字列$x$の{\bf 長さ}，$|X|$を文字列$x$の{\bf サイズ}と呼び，これらを区別する．
+
+なお，特徴に頻度などの重みが付くときは，特徴の識別子を分割することで，重み付きの集合を模擬する．
+例えば，文字列「トラトラトラ」を文字tri-gramで表現するとき，\texttt{`トラト'}と\texttt{`ラトラ'}が 2 回ずつ出現する．
+これを集合で表現するには，tri-gramの末尾に出現回数を表す番号を付加すれば良い．
+これにより「トラトラトラ」は，\{\mbox{\texttt{`＄＄ト'\#1}}, \mbox{\texttt{`＄トラ'\#1}}, \mbox{\texttt{`トラト'\#1}}, \mbox{\texttt{`ラトラ'\#1}}, \mbox{\texttt{`トラト'\#2}}, \mbox{\texttt{`ラトラ'\#2}}, \mbox{\texttt{`トラ＄'\#1}}, \mbox{\texttt{`ラ＄＄'\#1}} \}という集合で表現できる．
+特徴に出現回数を付与することは実用上重要であるが，説明が冗長になるため，以降では省略する．
+
+本論文では，ダイス係数，ジャッカード係数，コサイン係数，オーバーラップ係数など，集合間のオーバーラップに基づく類似度（集合間類似度）に対して，類似文字列検索アルゴリズムを導出する．
+文字列の特徴と類似度関数は，類似文字列検索の精度を左右するので，アプリケーションに応じて慎重に選択する必要がある．
+しかし，どのくらいの精度の類似度関数が必要になるかはアプリケーション依存であるため，文字列の特徴や類似度関数の選び方は本論文の対象外とし，与えられた特徴空間と類似度関数に対して，出来るだけ効率よく$\mathcal{Y}_{x, \alpha}$を求めるアルゴリズムを提案することに注力する．
+精細な類似度が必要な場合は，適当な類似度関数に対して緩い閾値$\alpha$を用い，提案手法で再現率が高くなるように類似文字列を検索し，関連研究（第\ref{sec:related-work}節）で紹介する手法などで精査することで，適合率を改善すればよい．
+
+さて，文字列$x$と$y$を，それぞれ特徴集合$X$と$Y$で表すとき，$x$と$y$のコサイン係数は，
+\begin{equation}
+ {\rm cosine}(X, Y) = \frac{|X \cap Y|}{\sqrt{|X||Y|}} ．
+ \label{equ:cosine}
+\end{equation}
+この定義式を式\ref{equ:approximate-string-retrieval}に代入すると，類似文字列のための必要十分条件が得られる．
+\begin{equation}
+ \left\lceil \alpha \sqrt{|X||Y|} \right\rceil \leq |X \cap Y| \leq \min\{|X|, |Y|\} 
+ \label{equ:match-condition}
+\end{equation}
+ここで，$\lceil v \rceil$は$v$の整数値への切り上げを表す．
+また，式\ref{equ:match-condition}には，$|X \cap Y|$の上限値$\min\{|X|, |Y|\}$を不等式として組み込んだ．
+式\ref{equ:match-condition}は，特徴集合$X$と$Y$のコサイン係数が$\alpha$以上になるためには，少なくても$\left\lceil \alpha \sqrt{|X||Y|} \right\rceil$個の要素を共通に持つ必要があることを示している．
+必要十分条件において，$|X \cap Y|$が取るべき最小の値を，$X$と$Y$の{\bf 最小オーバーラップ数}と呼び，以降{\bf この数を$\tau$で表す}．
+$\tau$は，$|X|$，$|Y|$，$\alpha$に依存して計算される値である．
+
+ところで，式\ref{equ:match-condition}において$|X \cap Y|$を無視すると，$|X|$と$|Y|$に関する不等式を得る．
+\begin{equation}
+ \alpha \sqrt{|X||Y|} \leq \min\{|X|, |Y|\} .
+\end{equation}
+この不等式を$|Y|$について解くと，類似文字列の必要条件が得られる．
+\begin{equation}
+ \left\lceil \alpha^2 |X| \right\rceil \leq |Y| \leq \left\lfloor \frac{|X|}{\alpha^2} \right\rfloor
+ \label{equ:necessary-condition}
+\end{equation}
+ここで，$\lfloor v \rfloor$は$v$の整数値への切り捨てを表す．
+この不等式は，$X$に対して類似文字列検索を行う際の，$Y$に関する探索範囲を表現している．
+言い換えれば，特徴集合の要素数がこの範囲外の文字列は，無視できる．
+
+なお，同様の導出は，ダイス係数，ジャッカード係数，オーバーラップ係数などの類似度関数に対しても可能である．
+表\ref{tbl:conditions}に，それぞれの類似度関数の条件式をまとめた．
+これらの条件式の大元の出典は不明であるが，本論文で導出した条件式は，いくつかの先行研究でも用いられている~\cite{Sarawagi:04,Li:08,Xiao:08b}．
+
+\begin{table}[t]
+\caption{集合間類似度を用いた類似文字列検索における$|Y|$の必要条件，及び$|X \cap Y|$の必要十分条件}
+\label{tbl:conditions}
+\input{02table01.txt}
+\end{table}
+
+ここで，導出した不等式の利用例を説明する．
+検索クエリ文字列$x = \mbox{「スパゲティー」}$とし，コサイン類似度の閾値$\alpha = 0.7$で類似文字列検索を行う．
+また，文字列の特徴を文字tri-gramで表現することとする（したがって，$|X| = 6 + 3 - 1 = 8$である）．
+式\ref{equ:necessary-condition}から，$Y$の要素数に関する探索範囲は$4 \leq |Y| \leq 16$である．
+この範囲内で，例えば$|Y| = 9$となる文字列を考慮しているとき，式\ref{equ:match-condition}から，類似文字列の必要十分条件，$6 \leq |X \cap Y|$が得られる．
+この必要十分条件は，$X$のtri-gramのうち，少なくても6個は$Y$にも出現しなければならないことを表す．
+例えば，$y = \mbox{「スパゲッティー」}$を考えると，$|X \cap Y| = 6$である．
+したがって，$y$は類似文字列検索の解の 1 つである．
+実際，$x$と$y$のコサイン類似度は，$6 / \sqrt{8 \times 9} = 0.707$ ($\geq \alpha$) である．
+
+以上のことをまとめると，種々の類似度関数を用いた類似文字列検索は，次のような一般的な手順で実装することができる．
+\begin{enumerate}
+    \item 与えられた検索文字列$X$と類似度閾値$\alpha$から，$|Y|$の範囲を求める
+    \item その範囲内で，$|X \cap Y|$の条件を満たす$Y$を見つける
+\end{enumerate}
+次節では，これらの手順を効率良く実装するデータ構造とアルゴリズムを議論する．
+
+
+
+\section{データ構造とアルゴリズム}
+\label{sec:method}
+
+\subsection{データ構造}
+\label{sec:data-structure}
+
+前節までの議論により，類似文字列検索は次の部分問題を解くことに帰着される．
+
+\begin{definition}[$\tau$オーバーラップ問題]
+検索クエリ文字列の特徴集合$X$が与えられたとき，その特徴を$\tau$個以上共有する文字列$Y$を全て見つける．
+\end{definition}
+
+ここで，$\tau$は$X$と$Y$の最小オーバーラップ数で，コサイン係数を類似度関数として用いる場合は，$\tau = \left\lceil \alpha \sqrt{|X||Y|} \right\rceil$である．
+この部分問題を効率的に解くため，特徴をキーとして，その特徴を含む文字列のリストを値とする連想配列（転置インデックス）を構築する．
+式\ref{equ:match-condition}から，探索すべき文字列のサイズ$|Y|$の範囲が絞り込まれること，式\ref{equ:necessary-condition}から，$|Y|$に依存して最小オーバーラップ数$\tau$が決まることを考慮し，文字列のサイズ$l$毎に転置インデックス$D_l$を構築する．
+また，アルゴリズムを効率よく実行するため，文字列をユニークな文字列識別番号 (SID) で表現し，転置リストは特徴を含む文字列のSIDを昇順に並べたものを格納することとする．
+図\ref{fig:data-structure}に，データ構造の実現例を示した．
+例えば，\texttt{`＄＄ス'}を特徴に持つ文字列のSIDは，\#267, \#452, \#743, \#2389, ... であり，「スパゲッティー」のSIDは\#452である．
+図\ref{fig:data-structure}では，文字列のサイズ毎にハッシュ表を構築しているが，SQLなどの関係データベースを用いても，同様のデータ構造が実現できる．
+
+\begin{figure}[b]
+    \begin{center}
+\includegraphics{18-2ia2f1.eps}
+    \end{center}
+    \caption{複数の転置インデックスで構築された類似文字列検索のためのデータ構造}
+\label{fig:data-structure}
+\end{figure}
+
+図\ref{alg:approximate-string-matching}に，類似文字列検索の擬似コードを示す．
+文字列のサイズ$l$毎に構成された転置インデックスの配列$D = \{D_l\}$に対して，検索文字列$x$，類似度閾値$\alpha$が与えられると，この擬似コードは$x$との類似度が$\alpha$以上の文字列のSIDのリスト$R$を返す．
+1〜3 行目で，クエリ文字列$x$を特徴集合$X$に変換し，考慮すべき文字列のサイズの範囲を表\ref{tbl:conditions}から求める．
+探索範囲内のそれぞれの長さ$l \in [n, N]$に対し（5 行目），最小オーバーラップ数$\tau$を求め（6 行目），{\tt overlap\_join}関数で$\tau$オーバーラップ問題を解き，解集合$R$を更新する（7 行目）．
+
+
+\subsection{$\tau$オーバーラップ問題のアルゴリズム}
+
+\ref{sec:data-structure}節では，特徴をキーとして，その特徴を含む文字列 (SID) のリストを返す転置インデックスを構築した．
+特徴$q$の転置リストに含まれている文字列は，特徴$q$を含むことが保証されている．
+したがって，特徴$q \in X$に対応する$|X|$個の転置リストの中で，ある文字列$y$が$c$個の転置リスト 2 回出現するならば，$|X \cap Y| = c$である．
+ゆえに，転置リスト上において$\tau$回以上出現するSIDを見つけることで，$\tau$オーバーラップ問題を解くことができる．
+図\ref{alg:t-overlap-naive}に，このアイディアに基づく$\tau$オーバーラップ問題の解法（{\bf AllScanアルゴリズム}）を示した．
+4 行目の関数$\mbox{\tt get}(d, q)$は，転置インデックス$d$の中で特徴$q$に対応する転置リスト（SIDのリスト）を返す関数である．
+この擬似コードは，転置インデックス$d$，特徴集合$X$，最小オーバーラップ数$\tau$を受け取り，SIDの出現頻度，すなわち$|X \cap Y|$を連想配列$M$に格納し，その値が$\tau$に到達したSIDをリスト$R$に入れて返すものである．
+表\ref{tbl:spaghetti-solutions}は，検索クエリ文字列$x = \mbox{「スパゲティー」}$に対して，Web日本語Nグラムコーパスのユニグラムの中で，文字数が 7（つまり$|Y| = 9$）の文字列を実際に検索するとき，$|X \cap Y|$の高い文字列10件を示したものである（文字列の特徴はtri-gramで表現）．
+コサイン係数が0.7以上の文字列を探すには，$\tau = \left\lceil \alpha \sqrt{|X||Y|} \right\rceil = 6$であるから，類似文字列検索の解は「スパッゲティー」「スパゲティーニ」「スパゲティー・」「スパゲッティー」の 4 つである．
+
+\begin{figure}[t]
+\begin{minipage}{0.45\textwidth}
+\begin{center}
+\includegraphics{18-2ia2f2.eps}
+\end{center}
+\caption{類似文字列検索のアルゴリズム．}
+\label{alg:approximate-string-matching}
+\vspace{22pt}
+\end{minipage}
+\hfill
+\begin{minipage}{0.45\textwidth}
+\begin{center}
+\includegraphics{18-2ia2f3.eps}
+\end{center}
+\caption{AllScanアルゴリズム．}
+\label{alg:t-overlap-naive}
+\end{minipage}
+\end{figure}
+
+
+AllScanアルゴリズムの実装は簡単であるが，検索に用いる特徴が数多くの文字列に出現するとき，走査するSIDの数が非常に大きくなるという欠点がある．
+例えば，\texttt{`ティー'}（「ティー」を含む）や\texttt{`ー＄＄'}（「ー」で終わる）などの文字tri-gramは，日本語の多くの語で出現するため，転置リストが大きくなる傾向にある．
+表\ref{tbl:spaghetti-stat}に，Web日本語Nグラムコーパスにおいて，「スパゲティー」の各tri-gramの転置リストのサイズ（すなわち，各tri-gramを含む文字列の数）を示した．
+この表によると，AllScanアルゴリズムは30,584種類，35,964個のSIDを走査することになるが，その中でたった4個 (0.013\%) しか解にならない．
+
+走査すべきSIDの数を減らすため，$\tau$オーバーラップ問題に関する次の性質に着目する~\cite{Arasu:06,Chaudhuri:06}．
+\newpage
+\begin{property}
+    要素数が$k$の集合$X$と，要素数が任意の集合$Y$がある．
+    要素数が$(k - \tau + 1)$となる任意の部分集合$Z \subseteq X$を考える．
+    もし，$|X \cap Y| \geq \tau$ならば，$Z \cap Y \neq \phi$である．
+\label{prop:signature}
+\end{property}
+この性質は，その対偶を考えれば明白である．
+すなわち，$Z \cap Y = \phi$ならば，$Z$の定義から$|X \setminus Z| = k - (k - \tau + 1) = \tau - 1$であるので，$|X \cap Y| = |\{(X \setminus Z) \cup Z\} \cap Y| = |(X \setminus Z) \cap Y| + |Z \cap Y| \leq \tau - 1$．ゆえに，$|X \cap Y| < \tau$が示される\footnote{二項演算子$\setminus$は差集合を表す．つまり$A \setminus B$は集合$A$から集合$B$に属する要素を間引いて得られる集合である．}．
+
+\begin{table}[t]
+\begin{minipage}[t]{0.45\textwidth}
+\setlength{\captionwidth}{\textwidth}
+\hangcaption{検索文字列$x=\text{「スパゲティー」}$に対し，Web日本語Nグラムコーパス中で$|X \cap Y|$の大きい文字列（$|Y|=9$のとき）}
+\label{tbl:spaghetti-solutions}
+\input{02table02.txt}
+\end{minipage}
+\hfill
+\begin{minipage}[t]{0.45\textwidth}
+\setlength{\captionwidth}{\textwidth}
+\hangcaption{Web日本語Nグラムコーパス中で，検索文字列$x=\text{「スパゲティー」}$の各tri-gramを含む文字列の数（$|Y|=9$のとき）}
+\label{tbl:spaghetti-stat}
+\input{02table03.txt}
+\end{minipage}
+\end{table}
+
+性質\ref{prop:signature}の利用例を，先の類似文字列検索を用いて説明する．
+検索クエリ文字列$x = 「スパゲ\linebreak ティー」$に対し，$|Y| = 9$かつ，$\tau = 6 \leq |X \cap Y|$という条件を満たす文字列$y$を検索している．
+検索される文字列$y$が$|X \cap Y| \geq 6$を満たすならば，特徴集合$X$中の任意の$(8 - 6 + 1) = 3$要素で構成された任意の部分集合$Z \subset X$に対し，$Z \cap Y \neq \phi$である．
+言い換えれば，特徴集合$X$中の任意の3要素を選ぶと，対応する転置リストに，類似文字列検索の解が（あるとすれば）必ず含まれている．
+この性質を用いると，類似文字列検索の解の候補を絞り込むことができる．
+解候補を生成するために用いる要素は，シグニチャ~\cite{Arasu:06}と呼ばれる．
+
+では，検索文字列の特徴集合の中で，どの要素をシグニチャとして採用すれば良いのだろうか？　
+シグニチャの特徴数は性質\ref{prop:signature}から決定されるが，その選び方は任意である．
+したがって，転置リストのサイズが小さい特徴をシグニチャとして採用すれば，解候補生成時に走査するSIDの数を減らすことができる．
+すなわち，文字列データベース中で稀に出現するtri-gramを優先的にシグニチャとして採用し，解の候補を絞り込めばよい．
+表\ref{tbl:spaghetti-stat}の例では，「パゲテ」「ゲティ」「スパゲ」をシグニチャとして選択することになる．
+
+シグニチャによる解候補生成を採用したアルゴリズムを，図\ref{alg:t-overlap-cpmerge}に示す．
+性質\ref{prop:signature}より，特徴集合$X$を，要素数$(|X| - \tau + 1)$のシグニチャ$S$と，残り$L$ $(= X \setminus S)$に分解する．
+このアルゴリズムは，2 から 7 行目で類似文字列検索の解候補をシグニチャ$S$から獲得し，8 行目から21行目で解候補の検証と枝刈りを$L$で行う．
+このアルゴリズムは，解候補の生成と枝刈りをしながら転置リストをマージしていくので，{\bf CPMergeアルゴリズム}と命名した．
+
+\begin{figure}[b]
+\begin{minipage}{187pt}
+\includegraphics{18-2ia2f4.eps}
+\caption{CPMergeアルゴリズム}
+\label{alg:t-overlap-cpmerge}
+\vspace{74pt}
+\end{minipage}
+\hfill
+\begin{minipage}{231pt}
+\includegraphics{18-2ia2f5.eps}
+\caption{CPMerge-optの擬似コード}
+\label{alg:t-overlap-cpmerge-post}
+\end{minipage}
+\end{figure}
+
+1 行目で，検索文字列の特徴集合の要素を，転置リストのサイズ（要素数）の昇順に並び替える．
+このとき，$X[k]$の転置リストの内容をすべてメモリに読み込まなくても，$|\mbox{\tt get}(d, X[k])|$の値を取得し，$X$の要素を並び替えられるようにしておくことは，実用上重要である（この理由は\ref{sect:cpmerge-stat}節で明らかになる）．
+特徴集合$X$の要素を並び替えたとき，稀な特徴の順番に$X[0], \ldots , X[|X|-1]$とアクセスできるものとする．
+シグニチャ$S$として採用されるのは，$X[0], \ldots , X[|X| - \tau + 1]$である．
+アルゴリズムの 2 から 7 行目では，シグニチャの特徴を持つ文字列をデータベース$d$から検索し，その転置リストにおける出現回数を連想配列$M$に記録する．
+
+先の例と同じ類似文字列検索（$x = \mbox{「スパゲティー」}$，$|Y| = 9$，$\tau = 6 \leq |X \cap Y|$）に対して，CPMergeアルゴリズムの動作例を表\ref{tbl:spaghetti-process}に示した．
+候補生成フェーズでは，「パゲテ」「ゲティ」「スパゲ」のtri-gramを含む文字列を検索し，検索された文字列を解候補とするとともに，該当する箇所に「○」を記している．
+シグニチャから獲得される解候補の数は32で，AllScanアルゴリズムと比べると，解候補数を0.105\%まで絞り込んだことになる．
+アルゴリズムの 9 行目から21行目では，それぞれの候補文字列が，残りの特徴$L$を持っているかどうかを調べる．
+それぞれの解候補$i \in M$が（10行目），特徴$X[k]$を持っているかどうかを，転置リスト$\mbox{\tt get}(d, X[k])$上における二分探索で調べ（11行目），転置リストが$i$を含んでいれば，頻度カウンタをインクリメントする（12行目）．
+もし，頻度カウントが$\tau$に到達したら（14行目），$i$を結果リスト$R$に追加し（15行目），候補$M$から削除する（16行目）．
+もし，頻度カウントが$\tau$に到達していない場合は，以下の性質を利用して枝刈りの可能性を調べる．
+\begin{property}
+要素数が$g$の集合$X$と，要素数が任意の集合$Y$がある．
+要素数が$h$のある部分集合$Z \subseteq X$を考える．
+もし，$|Z \cap Y| = \theta$ならば，$|X \cap Y| \leq \theta + g - h$である．
+\end{property}
+$Z$の定義により$|X \setminus Z| = g - h$であるから，$|(X \setminus Z) \cap Y| \leq g - h$．したがって，この性質は$|X \cap Y|$の上限値が$(\theta + g - h)$になることを表現している．
+図\ref{alg:t-overlap-cpmerge}のアルゴリズムでは，$\theta = M[i]$，$g = |X|$，$h = (k + 1)$とおき，$|X \cap Y|$の上限値を$(M[i] - |X| - k - 1)$と計算し，この値が$\tau$を下回っているならば（17行目），候補$i$を枝刈りする（18行目）．
+
+\begin{table}[p]
+\hangcaption{Web日本語Nグラムコーパスにおいて，検索文字列$x=\text{「スパゲティー」}$に対し，$6 \leq |X \cap Y|$となる文字列$y$を見つける際の，候補生成と検証プロセスの実行例（$|Y|=9$の場合）}
+\label{tbl:spaghetti-process}
+\input{02table04.txt}
+\end{table}
+
+表\ref{tbl:spaghetti-process}は，検証フェーズ ($3 \leq k \leq 7$) の動作例も示している．
+$k = 3$では，32個の候補文字列のそれぞれに対して，414個のSIDを含む転置リスト上で二分探索を行い，「＄スパ」というtri-gramを含むかどうか調べている．
+候補文字列が特徴を含む場合は「○」，含まない場合は「×」が記される．
+もし，候補文字列が「＄スパ」というtri-gramを含んでおらず，これまでの出現頻度が1回だった場合は，今後$4 \leq k \ \leq 7$の全ての転置リストに出現しても，出現頻度の最大値は5に留まる．
+つまり，$|X \cap Y| < 6$となることが確定しているので，「アニスパゲス」「イカスバゲティ」などの文字列は，$k = 3$において枝刈りする．
+表\ref{tbl:spaghetti-process}では，枝刈りされる候補に「{\bf ×.}」を記している．
+枝刈りにより，$k = 3$において15個の解候補が枝刈りされ，候補は17文字列に減る．
+$k = 4, 5$でも同様の処理を行い，解の候補はそれぞれ 8 個，5 個まで絞り込まれる．
+$k = 6$では，「スパゲティー・」と「スパゲティーニ」の出現回数が6に到達するので，
+    候補集合から解集合に移動させる（\scalebox{1.7}{$\boldsymbol{\circ}$}\textbf{.}で表示）．
+$k = 7$では，「スパゲッティー」と「スパッゲティー」の出現回数が6に到達し，全ての候補の検証が終了したことになる．
+
+CPMergeアルゴリズムにおいて，$X[k]$の転置リストを処理した後に残る解候補の数を$C_k$，$X[k]$の転置リストの要素数を$P_k = |\mbox{\tt get}(d, X[k])|$とする．
+CPMergeの検証フェーズでは，それぞれの候補に対して二分探索を行うため，9 行目の各$k$に対して，10〜20行目の計算量は$O(C_{k-1} \log P_k)$である．
+$X[k]$の並び順の定義から，$k$が大きくなると$P_k$も増加するが，枝刈りが有効に働けば，$C_k$が小さくなる．
+表\ref{tbl:spaghetti-process}の例では，各$k$に対して$C_{k-1} \log P_k$の値は，193 ($k = 3$)，115 ($k = 4$)，57.5 ($k = 5$)，45.1 ($k = 6$)，20.2 ($k = 7$) であり，9〜21行目のループが進むにつれて，計算量の見積りが減少する．
+検索クエリ文字列やデータベースの文字列集合のtri-gramの分布により，$C_k$や$P_k$の傾向が異なるので，計算量の見積りを一般的に行うことは難しい．
+そこで，第\ref{sec:evaluation}節では，CPMergeアルゴリズムが実際のデータセットに対して動作する際の，解の候補数，転置リストに含まれるSIDの数などの統計情報を報告する．
+
+
+
+\subsection{実装上の工夫}
+
+図\ref{alg:t-overlap-cpmerge}のアルゴリズムでは，SIDをキーとして頻度を格納する連想配列$M$を用いていた．
+実は，転置リストが整列済みのSIDで構成されるという性質を利用すれば，情報検索における転置リストのマージ~\cite{IR}と同様に，連想配列をリスト構造（可変長配列）で代用できる．
+主要なプログラミング言語では連想配列を容易に扱えるが，アクセスのコストがリスト構造よりも大きいので，連想配列をリスト構造で置き換えることで，検索処理の高速化が期待できる．
+
+図\ref{alg:t-overlap-cpmerge-post}は，図\ref{alg:t-overlap-cpmerge}から連想配列を排除し，リスト構造のみでCPMergeアルゴリズムを実装するもの (CPMerge-opt) である．
+図\ref{alg:t-overlap-cpmerge-post}の 2〜21行目は，図\ref{alg:t-overlap-cpmerge}の 2〜7 行目に対応し，解の候補生成を行う．
+2 行目では，解候補の頻度を計測する変数$M$を初期化しているが，その型は連想配列 ($\{\ \}$) から，可変長配列 ($[\ ]$) に変更されている．
+CPMerge-optでは，$M$の要素は$(\mbox{\rm SID}, \mbox{頻度})$のタプルであり，要素はSIDの昇順に並べる．
+3〜21行目の基本的な流れは，$(k-1)$における解候補リスト$M$と，$P = \mbox{\tt get}(d, X[k])$の転置リストを，先頭から順に比較していき，一時変数$W$に$k$における解候補リストを作成する．
+最後に，$M$を$W$で上書きし（20行目），$k+1$のステップへと進む．
+各$k$において，$W$を空のリストで初期化し（4 行目），$M$と$P$でこれから処理する要素の位置（インデックス）を管理する変数$m$と$p$を，それぞれ$0$で初期化する（6 行目）．
+7 行目から19行目までは，$M$と$P$の全ての要素を処理し終わるまで，以下の処理を繰り返す．
+\begin{enumerate}
+ \item もし転置リスト$P$のSID ($P[p]$) が，$(k-1)$における解候補リスト$M$に含まれていない場合（8 行目），$P[p]$を新しい候補として$W$に登録し（9 行目），$p$をインクリメントする（10行目）．
+ \item もし，$(k-1)$における解候補リスト$M$中のSID ($M[m].{\rm id}$) が，転置リスト$P$に含まれていない場合（11行目），$M[m]$を$W$にそのまま追加し（12行目），$m$をインクリメントする（13行目）．
+ \item それ以外の場合，すなわち転置リスト$P$の要素$P[p]$と解候補リスト$M$中の$M[m].{\rm id}$が等しい場合（14行目），$M[m]$の頻度をインクリメントしたものを$W$に追加し（15行目），$p$と$m$の両方をインクリメントする（16行目）．
+\end{enumerate}
+
+図\ref{alg:t-overlap-cpmerge-post}の22〜36行目は，図\ref{alg:t-overlap-cpmerge}の 8〜21行目に対応し，解の候補の検証と枝刈りを行っている．
+CPMerge-optでは，$(k-1)$における解候補リスト$M$に対して，転置リスト$\mbox{\tt get}(d, X[k])$で検証を行い，枝刈りされなかった候補を一時変数$W$に待避し，$k$における処理が終わったら$M$を$W$で上書きしている．
+図\ref{alg:t-overlap-cpmerge}と図\ref{alg:t-overlap-cpmerge-post}のその他の箇所は，ほとんど同じである．
+
+
+
+\section{実験}
+\label{sec:evaluation}
+
+\subsection{比較したシステム}
+
+本節では，大規模な文字列データセットに対して，種々の類似文字列検索アルゴリズムの性能を比較し，提案手法の有用性を示す．
+実験に用いたシステムは，以下の通りである．
+なお，先行研究の詳細については，\ref{sec:related-work}節を参照されたい．
+\begin{itemize}
+	\item {\bf 提案手法}：$\tau$オーバーラップ問題をCPMerge（図\ref{alg:t-overlap-cpmerge}）で解くもの
+	\item {\bf 提案手法-opt}: CPMergeを図\ref{alg:t-overlap-cpmerge-post}の擬似コードで高速化したもの
+	\item {\bf 総当たり法}：検索クエリが与えられる毎に，データベース内の全ての文字列と類似度を計算し，閾値以上の文字列を見つけ出す方法
+	\item {\bf AllScan}: $\tau$オーバーラップ問題をAllScanアルゴリズム（図\ref{alg:t-overlap-naive}）で解くもの
+	\item {\bf Signature}: $\tau$オーバーラップ問題をCPMerge（図\ref{alg:t-overlap-cpmerge}）で解くが，解候補の枝刈りを行わないもの（図\ref{alg:t-overlap-cpmerge}の17〜18行目を削除）
+	\item {\bf SkipMerge}: $\tau$オーバーラップ問題をSkipMergeアルゴリズム~\cite{Li:08}で解く
+	\item {\bf DivideSkip}: $\tau$オーバーラップ問題をDivideSkipアルゴリズム~\cite{Li:08}で解く\footnote{今回の実験では，パラメータ$\mu \in \{0.01, 0.02, 0.04, 0.1, 0.2, 0.4, 1, 2, 4, 10, 20, 40, 100\}$を試し，最も検索レスポンスが速かった$\mu = 40$を採用した．}
+	\item {\bf MergeOpt}: $\tau$オーバーラップ問題をMergeOptアルゴリズム~\cite{Sarawagi:04}で解く．ただし，MergeOptは重み付きの類似度を用いた類似文字列検索アルゴリズムであり，本論文と実験設定を揃えるため，次のような修正を行った．(1) 文字列の特徴の重みはすべて等しいこととする．(2) 提案手法と同様に，転置リストはサイズの昇順でソートする．(3) 転置リストを候補生成用$S$と検証用$L$に分割するときは，提案手法と同様に$S$をシグニチャの転置リストとする．
+	\item {\bf Locality Sensitive Hashing (LSH)}~\cite{Andoni:08,Ravichandran:06}:
+	文字列のtri-gramを特徴とし，64ビットの局所鋭敏ハッシュ (LSH) 値を計算する関数を$h(x)$とする．2 つのハッシュ値$v_1$と$v_2$の，ビット単位でのハミング距離（ビットの異なり数）を，${\rm hdist}(v_1, v_2)$と書く．
+	このシステムは，クエリ文字列$x$が与えられると，そのハッシュ値$h(x)$とのハミング距離が$\delta$以内の文字列を$V$から探し，解候補となる文字列集合$C$ ($|C| \ll |V|$) を求める．
+	\begin{equation}
+		C = \{y \in V \bigm| {\rm hdist}\left(h(x), h(y)\right) \leq \delta \} \label{equ:LSH-candidate}
+	\end{equation}
+	解候補のそれぞれの文字列$y \in C$に対して，実際に$x$との類似度を計算し，閾値以上の文字列を解とする．
+
+	式\ref{equ:LSH-candidate}の正確な解を求めることは難しいため，Ravichandranら~\cite{Ravichandran:06}の手順を参考に，近似解を求める．
+	基本的なアイディアは，データベース中の文字列のハッシュ値のビット列を並び替え，検索クエリの（ビット列を並び替えられた）ハッシュ値の近傍を探すという試行を繰り返せば，式\ref{equ:LSH-candidate}の近似解が求まるというものである．
+	ある文字列のハッシュ値$h(y)$のビット列を，置換$\sigma_p$で並び替えたものを$\sigma_p(h(y))$で表し，そのような置換をランダムに$P$種類用意し，$\Sigma = \{\sigma_p\}$とする．
+	置換$\sigma_p$を用いて，データベースに含まれている全ての文字列$y \in V$のハッシュ値のビット列を並び替え，辞書順にソートしたハッシュ値リストを$a_p$とする．
+	置換を$P$種類別々に適用すると，ハッシュ値のリストも$P$種類作られる．
+
+	すると，$a_p$の中でクエリの（置換が適用された）ハッシュ値$\sigma_p(h(x))$に近い要素を二分探索で求め，その近傍の$W$個の文字列の中でハミング距離が$\delta$以内のものを見つけ出すことで，式\ref{equ:LSH-candidate}を近似的に求めることができる．
+	この処理を，準備しておいた$P$個の置換と，対応する$P$個のハッシュ値リストに対して行い，式\ref{equ:LSH-candidate}の近似解の精度を向上させる．
+	
+	LSHは，類似文字列検索の解の近似解を高速に求める手法であるため，検索漏れ（類似文字列が検索されない状況）が生じることがある．
+	LSHでは，ハミング距離の閾値 ($\delta$)，並び替えハッシュ値リストの数 ($P$)，近傍探索の幅 ($W$) の 3 つのパラメータで検索速度と再現率のトレードオフを調整する．
+	今回の実験では，実験的に$\delta = 24$，$P = 24$と決定し\footnote{パラメータ$P$は，並び替えたハッシュ値リストが全てメモリ上に載るようにするため，$24$と決定した．パラメータ$\delta$として，$\delta \in \{8, 16, 24\}$を試し，検索速度と再現率のバランスが良かった$24$を採用した．}，$W$を$W \in \{16, 32, 64\}$と変えながら性能を測定した．
+\end{itemize}
+
+総当たり法とLSH以外のすべてのシステムは，図\ref{alg:approximate-string-matching}の実装を共有しており，$\tau$オーバーラップ問題の解法が性能差となって現れる．
+ハッシュ・データベースとしては，
+CDB++\footnote{http://www.chokkan.org/software/cdbpp/}
+を用い，提案手法をC++で実装したライブラリとして，
+SimString\footnote{http://www.chokkan.org/software/simstring/}
+を公開している．
+すべての実験は，Intel Xeon 5140 CPU (2.33~GHz) と8~GBの主記憶を搭載したDebian GNU/Linux 4.0のアプリケーション・サーバー上で行った．
+転置インデックスはファイル上に構築し，実験時には必要に応じて主記憶に読み込んでいる．
+
+
+
+\subsection{実験に用いたデータセット}
+
+実験に用いたデータセットは，以下の 3 つである．
+\begin{itemize}
+	\item {\bf IMDB}:
+	IMDBデータベース\footnote{ftp://ftp.fu-berlin.de/misc/movies/database/}のファイル\texttt{actors.list.gz}から抜き出した
+\pagebreak
+	すべての俳優名（1,098,022文字列，18~MB）．
+	1 つの文字列当たりの文字tri-gramの特徴数は17.2，
+	データセット全体における文字tri-gramの種類数は42,180である．
+	SimString
+	は，このデータセットから83~MBのインデックスファイル群を，56.6秒で構築した．
+	\item {\bf 日本語ユニグラム}：Web日本語Nグラム第1版\footnote{http://www.gsk.or.jp/catalog/GSK2007-C/catalog.html}に収録されている単語ユニグラム\linebreak
+	（2,565,424文字列，49~MB）．
+	1 つの文字列当たりの文字tri-gramの特徴数は20.8，
+	データセット全体における文字tri-gramの種類数は137,675である\footnote{実験では日本語の文字列をUTF-8で表現し，UTF-8の 1 バイトを 1 文字とみなしてtri-gramを作っている．}．
+	SimString
+は，このデータセットから220~Mのインデックスファイル群を，134.0秒で構築した．
+	\item {\bf UMLS}:
+	Unified Medical Language System (UMLS)\footnote{http://www.nlm.nih.gov/research/umls/} に収録されている生命医学分野の英語の概念や記述（5,216,323文字列，212~MB）．
+	評価に用いる文字列は，UMLS Release 2009AA (April 6, 2009) の\texttt{MRCONSO.RRF.aa.gz}及び\texttt{MRCONSO.RRF.ab.gz}というファイルに含まれる全ての英語の概念名である．
+	一つの文字列当たりの文字tri-gramの特徴数は43.6，
+	データセット全体における文字tri-gramの種類数は171,596である．
+	SimString
+	は，このデータセットから1.1~GBのインデックスファイル群を，1216.8秒で構築した．
+\end{itemize}
+
+それぞれのデータセットにおいて，1,000個の文字列をランダムに選び，テスト用のクエリ文字列とした．
+完全には一致しない文字列で検索する状況をシミュレートするため，1,000個の文字列のうち，1/3の文字列はそのまま，1/3の文字列には 1 文字をランダムな文字に置換，残りの1/3の文字列には 2 文字をランダムな文字に置換している．
+
+
+
+\subsection{1 クエリあたりの平均レスポンス時間}
+
+\begin{figure}[b]
+\vspace{-1\baselineskip}
+    \begin{center}
+\includegraphics{18-2ia2f6.eps}
+    \end{center}
+    \caption{1 クエリ当たりの平均レスポンス時間（横軸はデータセットのサイズ）}
+\label{fig:query-time}
+\end{figure}
+
+図\ref{fig:query-time}に，各データセットでコサイン係数が0.7以上の類似文字列を検索するときの，1 クエリあたりの平均レスポンス時間を示した．
+グラフの横軸は，データベースに登録する文字列の数 ($|V|$) で，データセット全体の10\%から100\%まで変化させた．
+また，表\ref{tbl:response}に，各データセットをすべて (100\%) 利用したときのシステム性能として，検索の再現率 (Recall)，1 クエリあたりの平均レスポンス時間 (Mean)，1 クエリに対する最遅レスポンス時間 (Max) をまとめた．
+実験したシステムの中ではLSH ($W=16$) が最も高速に文字列を検索でき，データサイズが100\%の時の平均レスポンス時間は，0.53~ms (IMDB)，1.61~ms（日本語ユニグラム），2.11~ms (UMLS) であった．
+また，平均レスポンス時間に対して最遅レスポンス時間がどのくらい遅くなるのかに着目すると，LSHは入力クエリの影響を受けにくいことが分かる\footnote{LSH (W=16) に関しては，最遅レスポンス時間が平均レスポンス時間と比べてかなり遅くなっているが，これは 1 クエリ当たりの処理時間が非常に短いため，実行時間の測定値の誤差が出やすくなるためと考えられる．}．
+これは，LSHでは探索範囲が$\delta$，$P$，$W$などのパラメータで一定に保たれるからである．
+一方，LSH以外の手法（総当たり法を除く）は，クエリ文字列に応じて$|Y|$の探索範囲が変化し，さらに，クエリ文字列に応じて転置リストのサイズが異なる（つまり，処理すべきSIDの数が変化する）ため，レスポンス時間のばらつきが大きくなる．
+
+
+\begin{table}[b]
+\hangcaption{各データセットを100\%利用したときのシステムの性能（Recall: 再現率，Mean: 平均レスポンス時間[ms/query]，Max: 最遅レスポンス時間[ms/query]）．総当たり法に対しては，平均レスポンス時間のみを掲載した．}
+\label{tbl:response}
+\input{02table05.txt}
+\end{table}
+
+しかし，LSH ($W=16$) は検索漏れが非常に多い．
+総当たり法で検索される類似文字列を正解とみなし，そのどのくらいをカバーできているか（再現率）を測定すると，LSH ($W=16$) の再現率は，15.4\% (IMDB)，7.5\%（日本語ユニグラム），4.0\% (UMLS) であった．
+これは，式\ref{equ:LSH-candidate}の近似解の精度が悪いためである．
+LSHの再現率を改善するには，周辺探索の幅 ($W$) を大きくすればよいが，レスポンス時間を犠牲にしなければならない．
+例えば，LSH ($W=64$) では，再現率は25.8\% (IMDB)，15.4\%（日本語ユニグラム），11.1\% (UMLS) に改善されるが，レスポンス時間は29.72~ms (IMDB9，38.07~ms（日本語ユニグラム），79.73~ms (UMLS) まで遅くなる．
+これに対し，提案手法では調整するパラメータもなく，正確な解（100\%の再現率）が保証されている．
+したがって，類似文字列検索の再現率を重視する場合は，提案手法の方が優れている．
+
+提案手法-optは，正確な解が得られるシステムの中で最もレスポンスが速く，データサイズが100\%の時の平均レスポンス時間は，1.07~ms (IMDB)，26.99~ms（日本語ユニグラム），20.37~ms (UMLS) であった．
+提案手法と提案手法-optを比較すると，図\ref{alg:t-overlap-cpmerge-post}の実装上の工夫を利用することで，レスポンス時間が1.7〜2.1倍高速になった．
+そこで，以降の説明では単に「提案手法」というと，図\ref{alg:t-overlap-cpmerge-post}の工夫を適用した「提案手法-opt」を指すこととする．
+
+総当たり法のレスポンス時間は図\ref{fig:query-time}にプロットできないくらい遅く，32.8~s (IMDB)，92.7~s （日本語ユニグラム），416.3~s (UMLS) であった．
+提案手法は，総当たり法よりも3,400〜20,000倍高速に動作し，類似文字列検索を実用的な速度で実現している．
+提案手法は，AllScanアルゴリズムよりもかなり高速に動作し，検索速度は65.3倍 (IMDB)，24.8倍（日本語ユニグラム），19.2倍 (UMLS) 高速であった．
+提案手法とSignatureシステムを比較すると，提案手法の方がSignatureよりも115.9倍 (IMDB)，237.0倍（日本語ユニグラム），2323倍 (UMLS) 高速であった．
+Signatureシステムと提案手法の差は，解候補の枝刈り（図\ref{alg:t-overlap-cpmerge}の17〜18行目）のみであるが，この処理を省くと大幅にレスポンスが低下し，AllScanアルゴリズムよりも遅くなる．
+これらのシステムの比較から，$\tau$オーバーラップ問題を解く際に解候補を絞り込んでおくこと，二分探索の回数を減らすために解候補の枝刈りをすることが，非常に重要であることが伺える．
+先行研究であるMergeOpt，SkipMerge，DivideSkipは，各転置リストの先頭（SIDの小さい方）からSIDを優先順位付きキューに挿入するアルゴリズムを採用しており，$\tau$オーバーラップ問題の解き方が提案手法と全く異なる．
+このため，レスポンス時間の差の要因を分析することは難しいが，提案手法はMergeOptよりも6.47〜9.68倍，SkipMergeよりも5.14〜6.15倍，DivideSkipよりも11.1〜24.1倍高速であった．
+
+IMDBデータセットにおいて，提案手法が検索に最も時間を要したクエリ文字列は，``Morales, Michael (VIII)''で，11.8~ms を要した．以下，``Reiner, Robert (I)'' (9.2~ms)，``Dore, Michael (I)'' (9.2~ms)，``Dow, Christopher (III)'' (8.6~ms)，``Cain, William (II)'' (8.0~ms) と続く．
+これらのクエリが遅いのは，データセット中に似ている文字列（例えば``Morales, Michael (III)''や``Morales, Rafael (VIII)''など）が多く，$\tau$-オーバーラップ問題を解くときに多くの解候補を抱えるためである．
+例えば，``Morales, Michael (VIII)''というクエリに対し，データセット中の72,375個の文字列が解候補となり，最終的に解になったのは42文字列であった．
+一方，提案手法とSkipMergeアルゴリズムのレスポンス時間の差を計算したとき，提案手法の改善が最も顕著に表れたクエリの上位 3 件は，``Morales, Michael (VIII)'' ($-44.4$~ms)，``Pittman, Robert (III)'' ($-39.0$~ms)，``Richards, Jon (VII)'' ($-36.6$~ms) であった．
+ここでも，``Morales, Michael (VIII)''というクエリが登場し，その他の 2 つのクエリも解候補が非常に多い（40,000個以上）ことから，データセット中にクエリ文字列と似ている文字列が多く存在するとき，提案手法の優位性が際立つと考えられる．
+
+逆に，提案手法がSkipMergeアルゴリズムよりも遅くなったクエリは無かったものの，改善が全く見られなかったクエリとして，``Zhao,lSh@nqiu'' ($\pm 0$~ms)，``Peral9a,dStacy'' ($\pm 0$~ms)，``Sen]g[renqing'' ($\pm 0$~ms) などが見つかった．
+これらのクエリは，元々``Zhao, Shenqiu'', ``Peralta, Stacy'', ``Senggerenqing'' の文字列にノイズが加わったものと考えられるが，転置リストに含まれる文字列の種類数が非常に少なく，それぞれ3個，108個，18個であった．
+したがって，転置リストにおいて処理すべき文字列の数が圧倒的に少ないため，アルゴリズム間の差が出にくくなったと考えられる．
+このような場合でも，提案手法はSkipMergeアルゴリズムよりも遅くならず，同程度のレスポンス時間を出していた．
+
+\begin{figure}[b]
+    \begin{center}
+\includegraphics{18-2ia2f7.eps}
+    \end{center}
+    \caption{1 クエリ当たりの平均レスポンス時間（横軸は類似度閾値）}
+\label{fig:query-time-sim}
+\end{figure}
+
+図\ref{fig:query-time-sim}は，異なる類似度関数と閾値を用いたときの，提案手法のレスポンス時間を示している．
+類似度の閾値を低く設定すると，類似文字列検索の解となる文字列の数$|\mathcal{Y}|$が大きくなるので，提案手法のレスポンス時間が遅くなる．
+類似度関数の良さはタスク依存で決めることであるが，同じ閾値を用いた場合はジャッカード係数が最も速く，ダイス係数とコサイン係数が同程度，オーバーラップ係数が最も遅いという傾向が見られる．
+この傾向は，類似度関数の性質（どの程度文字列を類似していると見なすか）によって，類似文字列検索の解の数が異なることから説明できる．
+例えば，日本語ユニグラムコーパスにおいて閾値0.7で類似文字列検索を行った場合，ジャッカード係数，ダイス係数，コサイン係数，オーバーラップ係数が返す解文字列数の平均は，それぞれ，1.2個，14.8個，16.2個，1036.4個であった．
+したがって，類似文字列検索では，最も多い解を返すオーバーラップ係数が遅く，最も少ない解を返すジャッカード係数が速くなる．
+また，表\ref{tbl:conditions}の必要条件から求まる$|Y|$の探索範囲が，ジャッカード係数では最も狭く\footnote{$0 \leq \alpha \leq 1$であるから，$|Y|$の探索範囲の下限に関して，$\alpha^2|X| \leq \alpha |X|$，$\frac{\alpha}{2 - \alpha}|X| \leq \alpha |X|$が成立する．$|Y|$の探索範囲の上限に関しても，$|X|/\alpha \leq |X|/\alpha^2$，$|X|/\alpha \leq \frac{2 - \alpha}{\alpha}|X|$であり，ダイス係数やコサイン係数よりもジャッカード係数の方が，同じ閾値$\alpha$を用いたとき，$|Y|$の探索範囲が狭くなる．}，オーバーラップ係数では$|Y|$の探索範囲に制約が付かないことから，類似度関数による検索速度の違いを推察できる．
+
+
+\subsection{提案手法の動作統計}
+\label{sect:cpmerge-stat}
+
+\begin{table}[b]
+\caption{提案手法が各データセットで類似文字列検索を行うときの動作統計}
+\label{tbl:stats}
+\input{02table06.txt}
+\end{table}
+
+表\ref{tbl:stats}は，提案手法が各データセットにおいて類似文字列検索を行うときの，様々な統計情報をまとめたものである（類似度にコサイン係数を用い，閾値は0.7とした）．
+この表の見方をIMDBデータセットで説明すると，提案手法はサイズが8.74から34.06までの文字列を検索対象とし，1 クエリあたり4.63文字列を解として返した．
+提案手法の候補生成フェーズでは，平均4.6個の転置リストに含まれる279.7個のSIDを走査し，232.5個の解候補を得た．
+提案手法の候補検証フェーズでは，平均4.3個の転置リストに対して二分探索を行い，7,561.8個のSIDが二分探索の対象となった．
+これに対し，AllScanアルゴリズムは，17.7個の転置リストに含まれる16,155.1個のSIDを走査しなければならず，平均4.63個の解を求めるのに，9,788.7個の文字列を候補として考慮する必要があった．
+
+この表は，提案手法の 3 つの特筆すべき特徴を表している．
+\begin{itemize}
+\item 提案手法はAllScanアルゴリズムと比較すると，走査するSIDの数を格段に減らしている．
+例えば，IMDBデータセットにおいて解候補を得るために，AllScanアルゴリズムは16,155.1個のSIDを走査する必要があったが，提案手法は279.7個のSIDを走査するだけで済んだ．
+別の言い方をすれば，提案手法はAllScanアルゴリズムと比較すると，1.1\%〜3.5\%の文字列を走査すれば，解候補が得られることを示している．
+\item 提案手法はAllScanアルゴリズムと比較すると，解候補の数を9,788.7から232.5に減らしている．
+すなわち，解候補の数は提案手法により1.2\%〜6.6\%まで削減された．
+\item 提案手法はAllScanアルゴリズムと比較すると，主記憶上に展開すべき転置リストの数を減らすことができる．
+提案手法は，$\tau$オーバーラップ問題を解くために，8.9 (IMDB)，18.8（日本語ユニグラム），31.7 (UMLS) 個の転置リストを使っている\footnote{これらの値は，4.6 + 4.3，7.0 + 11.8，14.3 + 17.4 として計算される．}．
+AllScanアルゴリズムが用いる転置リストの数と比べると，提案手法は50.3\% (IMDB)，53.6\%（日本語ユニグラム），51.9\% (UMLS) の転置リストしかアクセスしないことを意味する．
+これは，図\ref{alg:t-overlap-cpmerge}のアルゴリズムで，$k \approx 0.5 |X|$付近で解候補の検証・枝刈りが完了し，解の候補が0になっているからである．
+提案手法では，$k$が大きくなるにつれ，転置リストのサイズが大きくなるが，サイズの大きい転置リストをメモリ上に展開することなく，$\tau$オーバーラップ問題を解けるのは，提案手法の大きなアドバンテージである．
+\end{itemize}
+
+
+
+\section{関連研究}
+\label{sec:related-work}
+
+類似文字列検索は，データベースやデータマイニングの分野で，盛んに研究が行われている．
+その中で最も多い研究は，文字列の編集距離を距離尺度として用いるものである．
+Gravanoら~\cite{Gravano:01}は，$n$-gram\footnote{データベースの分野では$q$-gramと呼ばれることが多い．}で文字列のインデックスを作り，オーバーラップの個数，位置，文字列のサイズなどで編集距離の制約を満たす解を絞り込む方法を提案した．
+Kimら~\cite{Kim:05}は，$n$-gramが出現した場所をインデックスに効率よく格納するため，2 階層の$n$-gramインデックスを提案した．
+Liら~\cite{Li:07}は，クエリの処理速度を向上させるため，可変長の$n$を用いた$n$-gramインデックスを用いた．
+Leeら~\cite{Lee:07}は，ワイルドカードを含む$n$-gramでインデックスを作り，編集距離制約の類似文字列を効率よく検索する手法を考案した．
+Xiaoら~\cite{Xiao:08}は，検索クエリとマッチングできなかった$n$-gramを活用する，Ed-Joinアルゴリズムを提案した．
+
+文字列を$n$-gramなどで表現することなく，編集距離に基づく類似文字列検索を実現する方式も，いくつか提案されている．
+Bocekら~\cite{Bocek:07}は，データベースに文字列を格納するときに，元の文字列に近い複数の隣接文字列を格納するアプローチ（隣接文字列生成）として，Fast Similarity Search (FastSS) を提案した．
+Wangら~\cite{Wang:09}は，隣接文字列生成手法を改善するため，文字列を分割したり，接頭辞で枝刈りを行う方法を紹介した．
+Huynhら~\cite{Huynh:06}は，圧縮された接尾辞配列上で類似文字列検索を行うアルゴリズムを提案した．
+Liuら~\cite{Liu:08}は，文字列をトライに格納し，類似文字列検索を行う枠組みを提案した．
+これまでに紹介した研究は，編集距離を類似度関数として採用した場合に特化している．
+
+Chaudhuriら~\cite{Chaudhuri:06}は，編集距離とジャッカード係数に対する類似文字列検索に向けて，SSJoin演算を提案した．
+このアルゴリズムは，検索クエリ文字列からシグニチャを作成し，シグニチャの特徴を含む全ての文字列を解候補として検索し，編集距離やジャッカード係数の制約を満たす文字列を選び出すものである．
+Chaudhuriらは，関係データベースの等結合 (equi-join) を用いてSSJoin演算を実装する方法を示した．
+本論文では，SSJoin演算を関係データベース上で実装していないが，これは第\ref{sec:evaluation}節のSignatureシステムと同等である．
+
+Sarawagiら~\cite{Sarawagi:04}は，$\tau$オーバーラップ問題を解くアルゴリズムとして，MergeOptを提案した．
+このアルゴリズムは，転置リストを$S$と$L$という 2 つのグループに分け，$S$で解の候補生成を行い，$L$で解の検証を行う．
+提案手法と異なる点は，$S$で解の候補生成を行うときにヒープを用いる点，$L$で解の検証を行うときに，枝刈りを行わない点である．
+Liら~\cite{Li:08}は，Sarawagiらの手法を改良し，SkipMergeとDivideSkipというアルゴリズムを提案した．
+SkipMergeアルゴリズムは，全ての転置リストの先頭から順にSIDをヒープに挿入し，ヒープの先頭から同じSIDの要素を取り出したとき，取り出された個数が$\tau$を超えたら，そのSIDを解とするものである．
+ただし，ヒープに転置リストからSIDを挿入するときに，$\tau$オーバーラップ問題の解となり得ない要素をスキップするメカニズムが組み込まれており，転置リスト中の全てのSIDをヒープに挿入しなくても，$\tau$オーバーラップ問題が解けるように工夫されている．
+DivideSkipアルゴリズムは，MergeOptアルゴリズムと同様，転置リストを$S$と$L$という 2 つのグループに分け，SkipMergeアルゴリズムを$S$に適用して解の候補生成を行い，$L$で解の検証を行うものである．
+しかしながら，DivideSkipアルゴリズムでは解の枝刈り方法については，述べられていない．
+これらの手法と提案手法を解析的に比較するのは難しいが，第\ref{sec:evaluation}節では，SkipMergeとDivideSkipアルゴリズムによる類似文字列検索の性能を測定し，提案手法の方が高速に検索できることを実験的に示した．
+
+続いて，提案手法とMergeOpt，SkipMerge，DivideSkipを空間計算量に関して比較する．
+ここに挙げた全てのアルゴリズムは，転置リスト上で二分探索を行うため，特殊な工夫をしない限り，転置リストの内容を主記憶に読み込む必要がある．
+最悪の場合を考えると，どのアルゴリズムも与えられたクエリ文字列に対して，最もサイズの大きい転置リストを主記憶に読み込む必要が生じる\footnote{細かい議論になるが，SkipMergeとDivideSkipでは複数の転置リスト上で並行して二分探索を行うため，特殊な工夫を施さない限り，複数の転置リストを同時に主記憶に読み込む必要が生じる．}．
+これに加え，各アルゴリズムとも解文字列の候補を主記憶上に保持しておく必要がある．
+MergeOpt，SkipMerge，DivideSkipアルゴリズムは，解候補をヒープに格納するアルゴリズムであり，ヒープに格納される解候補の数は，クエリに対する転置リストの数（すなわち，クエリの特徴集合$X$の要素数$|X|$）を超えない．
+これに対し，提案手法は，いったん解候補の列挙を行うため，おおよそ$\mbox{（転置リストの平均要素数）} \times (|X| - \tau + 1)$程度の解候補を主記憶に保持することになる．
+したがって，提案手法はMergeOpt，SkipMerge，DivideSkipアルゴリズムよりも空間計算量が大きくなる．
+表\ref{tbl:stats}には，提案手法の各データセットにおける解候補数（\# 候補）が示されている．
+これによると，途中で保持した解候補数は数百〜数千程度のオーダーであり，提案手法の空間計算量は実用上は問題にならないと考えられる．
+
+最後に，類似文字列検索に近いタスクとして，類似文字列照合との関係を説明する．
+このタスクでは，与えられた 2 つの文字列の表記が近いかどうかを精密に検出するため，文字列の類似度関数を改良したり~\cite{Winkler:99,Cohen:03}，機械学習で獲得するアプローチ~\cite{Bergsma:07,Davis:07,Tsuruoka:07,Aramaki:08}が取られる．
+これらの研究成果を用いると，2 つの文字列の類似性を高精度に判別できるが，判別する 2 つの文字列があらかじめ与えられることを前提としている．
+このような精細な類似度で類似文字列検索を行いたい場合は，適当な類似度関数に対して緩い閾値$\alpha$を用い，提案手法で類似文字列の候補を獲得してから，類似文字列照合を適用すればよい．
+
+
+
+\section{まとめ}
+\label{sec:conclusion}
+
+本論文では，コサイン係数，ダイス係数，ジャッカード係数，オーバーラップ係数を用いた類似文字列検索のための，新しいアルゴリズムを提案した．
+類似文字列検索を，$\tau$オーバーラップ問題に帰着させ，その簡潔かつ高速なアルゴリズムとしてCPMergeを提案した．
+このアルゴリズムは，$\tau$オーバーラップ問題の解候補をできるだけコンパクトに保ち，解を効率よく求めるものである．
+英語の人名，日本語の単語，生命医学分野の固有表現を文字列データとして，類似文字列検索の性能を評価した．
+CPMergeアルゴリズムは非常にシンプルであるが，類似文字列検索の最近の手法であるLocality Sensitive Hashing (LSH)~\cite{Andoni:08}やDivideSkip~\cite{Li:08}と比べ，高速かつ正確に文字列を検索できることを実証した．
+自然言語処理を実テキストに適用するときの基礎的な技術として，本研究の成果が活用されることを期待している．
+
+CPMergeアルゴリズムが従来手法（例えばMergeSkip）に対して特に有利なのは，全ての転置リストを主記憶に読み込まなくても，類似文字列検索の解を求めることができる点である．
+表\ref{tbl:stats}に示した通り，CPMergeアルゴリズムはクエリに対して約50\%の転置リストを読み込むだけで，類似文字列検索の解を求めることができた（コサイン類似度で閾値が0.7の場合）．
+提案手法と従来手法は，アルゴリズム中で二分探索を用いるため，転置リスト上におけるランダムアクセスを，（暗黙的に）仮定している．
+したがって，読み込む転置リストの数を減らすことができるという提案手法の特徴は，転置リストを圧縮する際に有利であると考えられる．
+転置リストの圧縮に関する最近の研究成果~\cite{Behm:09,Yan:09}を参考に，圧縮された転置リストを用いた類似文字列検索を今後検討したいと考えている．
+
+
+
+\acknowledgment
+
+本研究は，岡崎が東京大学大学院情報学環，辻井が東京大学大学院情報学環，マンチェスター大学，英国国立テキストマイニングセンターに所属していた際に進められたものである．
+本研究の一部は，科学技術振興調整費・重要課題解決型研究等の推進「日中・中日言語処理技術の開発研究」，文部科学省科学研究費補助金特別推進研究「高度言語理解のための意味・知識処理の基盤技術に関する研究」の助成を受けたものである．
+本論文に関して，大変有益かつ丁寧なコメントを頂いた査読者の方々に，感謝の意を表する．
+
+
+
+
+\section*{付録：その他の類似度関数の条件式の導出}
+
+\subsection*{ダイス関数の場合}
+
+ダイス関数の定義は，
+\begin{equation}
+ \rm{dice}(X, Y) = \frac{2|X \cap Y|}{|X| + |Y|}
+\end{equation}
+この関数の値が$\alpha$以上となる必要十分条件は，
+\begin{align}
+ \alpha \leq& \frac{2|X \cap Y|}{|X| + |Y|} \\
+ \frac{1}{2} \alpha (|X| + |Y|) \leq& |X \cap Y| \leq \max\{|X|, |Y|\} \label{equ:NS-dice}
+\end{align}
+$|X \cap Y|$は整数であることに注意すると，必要十分条件が得られる．
+\begin{equation}
+ \left\lceil \frac{1}{2} \alpha (|X| + |Y|) \right\rceil \leq |X \cap Y| \leq \max \left\{|X|, |Y|\right\}
+\end{equation}
+式\ref{equ:NS-dice}において，$|X \cap Y|$の項を削除すると，
+\begin{equation}
+ \frac{1}{2} \alpha (|X| + |Y|) \leq \max \left\{|X|, |Y|\right\}
+\end{equation}
+$|X| < |Y|$のとき，$|Y|$について解くと，
+\begin{equation}
+ \frac{\alpha}{2 - \alpha} |X| \leq |Y|
+\end{equation}
+$|X| \leq |Y|$のとき，$|Y|$について解くと，
+\begin{equation}
+ |Y| \leq \frac{2 - \alpha}{\alpha} |X|
+\end{equation}
+これらをまとめ，$|Y|$が整数であることに注意すると，$|Y|$の必要条件が得られる．
+\begin{equation}
+ \left\lceil \frac{\alpha}{2 - \alpha} |X| \right\rceil \leq |Y| \leq \left\lfloor \frac{2 - \alpha}{\alpha} |X| \right\rfloor
+\end{equation}
+
+
+
+\subsection*{ジャッカード関数の場合}
+
+ジャッカード関数の定義は，
+\begin{equation}
+ \rm{jaccard}(X, Y) = \frac{|X \cap Y|}{|X \cup Y|} = \frac{|X \cap Y|}{|X| + |Y| - |X \cap Y|}
+\end{equation}
+この関数の値が$\alpha$以上となる必要十分条件は，
+\begin{align}
+ \alpha \leq& \frac{|X \cap Y|}{|X| + |Y| - |X \cap Y|} \\
+ \frac{\alpha}{1 + \alpha} \left(|X| + |Y| \right) \leq& |X \cap Y| \leq \max\{|X|, |Y|\} \label{equ:NS-jaccard}
+\end{align}
+$|X \cap Y|$は整数であることに注意すると，必要十分条件が得られる．
+\begin{equation}
+ \left\lceil \frac{\alpha}{1 + \alpha} \left(|X| + |Y| \right) \right\rceil \leq |X \cap Y| \leq \max \left\{|X|, |Y|\right\}
+\end{equation}
+式\ref{equ:NS-jaccard}において，$|X \cap Y|$の項を削除すると，
+\begin{equation}
+ \frac{\alpha}{1 + \alpha} \left(|X| + |Y| \right) \leq \max \left\{|X|, |Y|\right\}
+\end{equation}
+$|X| < |Y|$のとき，$|Y|$について解くと，
+\begin{equation}
+ \alpha |X| \leq |Y|
+\end{equation}
+$|X| \leq |Y|$のとき，$|Y|$について解くと，
+\begin{equation}
+ |Y| \leq \frac{|X|}{\alpha}
+\end{equation}
+これらをまとめ，$|Y|$が整数であることに注意すると，$|Y|$の必要条件が得られる．
+\begin{equation}
+ \left\lceil \alpha |X| \right\rceil \leq |Y| \leq \left\lfloor \frac{|X|}{\alpha} \right\rfloor
+\end{equation}
+
+
+\subsection*{オーバーラップ関数の場合}
+
+オーバーラップ関数の定義は，
+\begin{equation}
+ \rm{overlap}(X, Y) = \frac{|X \cap Y|}{\min\{|X|, |Y|\}}
+\end{equation}
+この関数の値が$\alpha$以上となる必要十分条件は，
+\begin{align}
+ \alpha \leq& \frac{|X \cap Y|}{\min\{|X|, |Y|\}} \\
+ \alpha \min\{|X|, |Y|\} \leq& |X \cap Y| \leq \max\{|X|, |Y|\} \label{equ:NS-overlap}
+\end{align}
+$|X \cap Y|$は整数であることに注意すると，必要十分条件が得られる．
+\begin{equation}
+ \left\lceil \alpha \min\{|X|, |Y|\} \right\rceil \leq |X \cap Y| \leq \max \left\{|X|, |Y|\right\}
+\end{equation}
+式\ref{equ:NS-overlap}において，$|X \cap Y|$の項を削除すると，
+\begin{equation}
+ \alpha \min\{|X|, |Y|\} \leq \max\{|X|, |Y|\} \label{equ:N-overlap}
+\end{equation}
+ここで，$\min\{|X|, |Y|\} \leq \max\{|X|, |Y|\}$，$0 \leq \alpha \leq 1$であるから，式\ref{equ:N-overlap}は$Y$や$\alpha$の選び方に依らず，常に成立する．
+従って，オーバーラップ関数を用いた類似文字列検索では，$|Y|$に関する必要条件はない．
+
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Ahmad \BBA\ Kondrak}{Ahmad \BBA\
+  Kondrak}{2005}]{Ahmad:05}
+Ahmad, F.\BBACOMMA\ \BBA\ Kondrak, G. \BBOP 2005\BBCP.
+\newblock \BBOQ Learning a Spelling Error Model from Search Query Logs.\BBCQ\
+\newblock In {\Bem Proceedings of the conference on Human Language Technology
+  and Empirical Methods in Natural Language Processing (HLT-EMNLP 2005)},
+  \mbox{\BPGS\ 955--962}.
+
+\bibitem[\protect\BCAY{Andoni \BBA\ Indyk}{Andoni \BBA\
+  Indyk}{2008}]{Andoni:08}
+Andoni, A.\BBACOMMA\ \BBA\ Indyk, P. \BBOP 2008\BBCP.
+\newblock \BBOQ Near-optimal hashing algorithms for approximate nearest
+  neighbor in high dimensions.\BBCQ\
+\newblock {\Bem Communications of the ACM}, {\Bbf 51}  (1), \mbox{\BPGS\
+  117--122}.
+
+\bibitem[\protect\BCAY{Aramaki, Imai, Miyo, \BBA\ Ohe}{Aramaki
+  et~al.}{2008}]{Aramaki:08}
+Aramaki, E., Imai, T., Miyo, K., \BBA\ Ohe, K. \BBOP 2008\BBCP.
+\newblock \BBOQ Orthographic Disambiguation Incorporating Transliterated
+  Probability.\BBCQ\
+\newblock In {\Bem IJCNLP 2008: Proceedings of the Third International Joint
+  Conference on Natural Language Processing}, \mbox{\BPGS\ 48--55}.
+
+\bibitem[\protect\BCAY{Arasu, Ganti, \BBA\ Kaushik}{Arasu
+  et~al.}{2006}]{Arasu:06}
+Arasu, A., Ganti, V., \BBA\ Kaushik, R. \BBOP 2006\BBCP.
+\newblock \BBOQ Efficient Exact Set-Similarity Joins.\BBCQ\
+\newblock In {\Bem VLDB '06: Proceedings of the 32nd International Conference
+  on Very Large Data Bases}, \mbox{\BPGS\ 918--929}.
+
+\bibitem[\protect\BCAY{Behm, Ji, Li, \BBA\ Lu}{Behm et~al.}{2009}]{Behm:09}
+Behm, A., Ji, S., Li, C., \BBA\ Lu, J. \BBOP 2009\BBCP.
+\newblock \BBOQ Space-Constrained Gram-Based Indexing for Efficient Approximate
+  String Search.\BBCQ\
+\newblock In {\Bem ICDE '09: Proceedings of the 2009 IEEE International
+  Conference on Data Engineering}, \mbox{\BPGS\ 604--615}.
+
+\bibitem[\protect\BCAY{Bergsma \BBA\ Kondrak}{Bergsma \BBA\
+  Kondrak}{2007}]{Bergsma:07}
+Bergsma, S.\BBACOMMA\ \BBA\ Kondrak, G. \BBOP 2007\BBCP.
+\newblock \BBOQ Alignment-Based Discriminative String Similarity.\BBCQ\
+\newblock In {\Bem Proceedings of the 45th Annual Meeting of the Association of
+  Computational Linguistics (ACL 2007)}, \mbox{\BPGS\ 656--663}.
+
+\bibitem[\protect\BCAY{Bocek, Hunt, \BBA\ Stiller}{Bocek
+  et~al.}{2007}]{Bocek:07}
+Bocek, T., Hunt, E., \BBA\ Stiller, B. \BBOP 2007\BBCP.
+\newblock \BBOQ Fast Similarity Search in Large Dictionaries.\BBCQ\
+\newblock \BTR\ ifi-2007.02, Deportment of Informatics (IFI), University of
+  Zurich.
+
+\bibitem[\protect\BCAY{Brill \BBA\ Moore}{Brill \BBA\ Moore}{2000}]{Brill:00}
+Brill, E.\BBACOMMA\ \BBA\ Moore, R.~C. \BBOP 2000\BBCP.
+\newblock \BBOQ An Improved Error Model for Noisy Channel Spelling
+  Correction.\BBCQ\
+\newblock In {\Bem Proceedings of the 38th Annual Meeting on the Association
+  for Computational Linguistics (ACL 2000)}, \mbox{\BPGS\ 286--293}.
+
+\bibitem[\protect\BCAY{Chaudhuri, Ganti, \BBA\ Kaushik}{Chaudhuri
+  et~al.}{2006}]{Chaudhuri:06}
+Chaudhuri, S., Ganti, V., \BBA\ Kaushik, R. \BBOP 2006\BBCP.
+\newblock \BBOQ A Primitive Operator for Similarity Joins in Data
+  Cleaning.\BBCQ\
+\newblock In {\Bem ICDE '06: Proceedings of the 22nd International Conference
+  on Data Engineering}, \mbox{\BPGS\ 5--16}.
+
+\bibitem[\protect\BCAY{Chen, Li, \BBA\ Zhou}{Chen et~al.}{2007}]{Chen:07}
+Chen, Q., Li, M., \BBA\ Zhou, M. \BBOP 2007\BBCP.
+\newblock \BBOQ Improving Query Spelling Correction Using Web Search
+  Results.\BBCQ\
+\newblock In {\Bem Proceedings of the Joint Conference on Empirical Methods in
+  Natural Language Processing and Computational Natural Language Learning
+  (EMNLP-CoNLL 2007)}, \mbox{\BPGS\ 181--189}.
+
+\bibitem[\protect\BCAY{Cohen, Ravikumar, \BBA\ Fienberg}{Cohen
+  et~al.}{2003}]{Cohen:03}
+Cohen, W.~W., Ravikumar, P., \BBA\ Fienberg, S.~E. \BBOP 2003\BBCP.
+\newblock \BBOQ A Comparison of String Distance Metrics for Name-Matching
+  Tasks.\BBCQ\
+\newblock In {\Bem Proceedings of the IJCAI-2003 Workshop on Information
+  Integration on the Web (IIWeb-03)}, \mbox{\BPGS\ 73--78}.
+
+\bibitem[\protect\BCAY{Davis, Kulis, Jain, Sra, \BBA\ Dhillon}{Davis
+  et~al.}{2007}]{Davis:07}
+Davis, J.~V., Kulis, B., Jain, P., Sra, S., \BBA\ Dhillon, I.~S. \BBOP
+  2007\BBCP.
+\newblock \BBOQ Information-Theoretic Metric Learning.\BBCQ\
+\newblock In {\Bem ICML '07: Proceedings of the 24th International Conference
+  on Machine Learning}, \mbox{\BPGS\ 209--216}.
+
+\bibitem[\protect\BCAY{Gravano, Ipeirotis, Jagadish, Koudas, Muthukrishnan,
+  \BBA\ Srivastava}{Gravano et~al.}{2001}]{Gravano:01}
+Gravano, L., Ipeirotis, P.~G., Jagadish, H.~V., Koudas, N., Muthukrishnan, S.,
+  \BBA\ Srivastava, D. \BBOP 2001\BBCP.
+\newblock \BBOQ Approximate String Joins in a Database (Almost) for Free.\BBCQ\
+\newblock In {\Bem VLDB '01: Proceedings of the 27th International Conference
+  on Very Large Data Bases}, \mbox{\BPGS\ 491--500}.
+
+\bibitem[\protect\BCAY{Huynh, Hon, Lam, \BBA\ Sung}{Huynh
+  et~al.}{2006}]{Huynh:06}
+Huynh, T. N.~D., Hon, W.-K., Lam, T.-W., \BBA\ Sung, W.-K. \BBOP 2006\BBCP.
+\newblock \BBOQ Approximate string matching using compressed suffix
+  arrays.\BBCQ\
+\newblock {\Bem Theoretical Computer Science}, {\Bbf 352}  (1-3), \mbox{\BPGS\
+  240--249}.
+
+\bibitem[\protect\BCAY{Jongejan \BBA\ Dalianis}{Jongejan \BBA\
+  Dalianis}{2009}]{Jongejan:09}
+Jongejan, B.\BBACOMMA\ \BBA\ Dalianis, H. \BBOP 2009\BBCP.
+\newblock \BBOQ Automatic Training of Lemmatization Rules that Handle
+  Morphological Changes in pre-, in- and Suffixes Alike.\BBCQ\
+\newblock In {\Bem ACL-IJCNLP '09: Proceedings of the Joint Conference of the
+  47th Annual Meeting of the ACL and the 4th International Joint Conference on
+  Natural Language Processing of the AFNLP: Volume 1}, \mbox{\BPGS\ 145--153}.
+
+\bibitem[\protect\BCAY{Kim, Whang, Lee, \BBA\ Lee}{Kim et~al.}{2005}]{Kim:05}
+Kim, M.-S., Whang, K.-Y., Lee, J.-G., \BBA\ Lee, M.-J. \BBOP 2005\BBCP.
+\newblock \BBOQ {n-Gram/2L}: a Space and Time Efficient Two-Level n-Gram
+  Inverted Index Structure.\BBCQ\
+\newblock In {\Bem VLDB '05: Proceedings of the 31st International Conference
+  on Very Large Data Bases}, \mbox{\BPGS\ 325--336}.
+
+\bibitem[\protect\BCAY{Lee, Ng, \BBA\ Shim}{Lee et~al.}{2007}]{Lee:07}
+Lee, H., Ng, R.~T., \BBA\ Shim, K. \BBOP 2007\BBCP.
+\newblock \BBOQ Extending q-Grams to Estimate Selectivity of String Matching
+  with Low Edit Distance.\BBCQ\
+\newblock In {\Bem VLDB '07: Proceedings of the 33rd International Conference
+  on Very Large Data Bases}, \mbox{\BPGS\ 195--206}.
+
+\bibitem[\protect\BCAY{Li, Lu, \BBA\ Lu}{Li et~al.}{2008}]{Li:08}
+Li, C., Lu, J., \BBA\ Lu, Y. \BBOP 2008\BBCP.
+\newblock \BBOQ Efficient Merging and Filtering Algorithms for Approximate
+  String Searches.\BBCQ\
+\newblock In {\Bem ICDE '08: Proceedings of the 2008 IEEE 24th International
+  Conference on Data Engineering}, \mbox{\BPGS\ 257--266}.
+
+\bibitem[\protect\BCAY{Li, Wang, \BBA\ Yang}{Li et~al.}{2007}]{Li:07}
+Li, C., Wang, B., \BBA\ Yang, X. \BBOP 2007\BBCP.
+\newblock \BBOQ VGRAM: Improving Performance of Approximate Queries on String
+  Collections using Variable-Length Grams.\BBCQ\
+\newblock In {\Bem VLDB '07: Proceedings of the 33rd International Conference
+  on Very Large Data Bases}, \mbox{\BPGS\ 303--314}.
+
+\bibitem[\protect\BCAY{Li, Zhang, Zhu, \BBA\ Zhou}{Li et~al.}{2006}]{Li:06}
+Li, M., Zhang, Y., Zhu, M., \BBA\ Zhou, M. \BBOP 2006\BBCP.
+\newblock \BBOQ Exploring Distributional Similarity based Models for Query
+  Spelling Correction.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on
+  Computational Linguistics and the 44th Annual Meeting of the Association for
+  Computational Linguistics (Coling-ACL 2006)}, \mbox{\BPGS\ 1025--1032}.
+
+\bibitem[\protect\BCAY{Liu, Li, Feng, \BBA\ Zhou}{Liu et~al.}{2008}]{Liu:08}
+Liu, X., Li, G., Feng, J., \BBA\ Zhou, L. \BBOP 2008\BBCP.
+\newblock \BBOQ Effective Indices for Efficient Approximate String Search and
+  Similarity Join.\BBCQ\
+\newblock In {\Bem WAIM '08: Proceedings of the 2008 The Ninth International
+  Conference on Web-Age Information Management}, \mbox{\BPGS\ 127--134}.
+
+\bibitem[\protect\BCAY{Manning, Raghavan, \BBA\ Sch\"{u}tze}{Manning
+  et~al.}{2008}]{IR}
+Manning, C.~D., Raghavan, P., \BBA\ Sch\"{u}tze, H. \BBOP 2008\BBCP.
+\newblock {\Bem Introduction to Information Retrieval}.
+\newblock Cambridge University Press.
+
+\bibitem[\protect\BCAY{Okazaki, Tsuruoka, Ananiadou, \BBA\ Tsujii}{Okazaki
+  et~al.}{2008}]{Okazaki:08}
+Okazaki, N., Tsuruoka, Y., Ananiadou, S., \BBA\ Tsujii, J. \BBOP 2008\BBCP.
+\newblock \BBOQ A Discriminative Candidate Generator for String
+  Transformations.\BBCQ\
+\newblock In {\Bem EMNLP '08: Proceedings of the Conference on Empirical
+  Methods in Natural Language Processing}, \mbox{\BPGS\ 447--456}.
+
+\bibitem[\protect\BCAY{Porter}{Porter}{1980}]{Porter:80}
+Porter, M.~F. \BBOP 1980\BBCP.
+\newblock \BBOQ An algorithm for suffix stripping.\BBCQ\
+\newblock {\Bem Program}, {\Bbf 14}  (3), \mbox{\BPGS\ 130--137}.
+
+\bibitem[\protect\BCAY{Ravichandran, Pantel, \BBA\ Hovy}{Ravichandran
+  et~al.}{2005}]{Ravichandran:06}
+Ravichandran, D., Pantel, P., \BBA\ Hovy, E. \BBOP 2005\BBCP.
+\newblock \BBOQ Randomized Algorithms and NLP: Using Locality Sensitive Hash
+  Function for High Speed Noun Clustering.\BBCQ\
+\newblock In {\Bem ACL '05: Proceedings of the 43rd Annual Meeting on
+  Association for Computational Linguistics}, \mbox{\BPGS\ 622--629}.
+
+\bibitem[\protect\BCAY{Sarawagi \BBA\ Kirpal}{Sarawagi \BBA\
+  Kirpal}{2004}]{Sarawagi:04}
+Sarawagi, S.\BBACOMMA\ \BBA\ Kirpal, A. \BBOP 2004\BBCP.
+\newblock \BBOQ Efficient Set Joins on Similarity Predicates.\BBCQ\
+\newblock In {\Bem SIGMOD '04: Proceedings of the 2004 ACM SIGMOD international
+  conference on Management of data}, \mbox{\BPGS\ 743--754}.
+
+\bibitem[\protect\BCAY{獅々堀\JBA 津田\JBA 青江}{獅々堀 \Jetal
+  }{1994}]{獅々堀:94}
+獅々堀正幹\JBA 津田和彦\JBA 青江順一 \BBOP 1994\BBCP.
+\newblock 片仮名異表記の生成および統一手法.\
+\newblock \Jem{電子情報通信学会論文誌. D-II, 情報・システム, II-情報処理},
+  {\Bbf 77}  (2), \mbox{\BPGS\ 380--387}.
+
+\bibitem[\protect\BCAY{高橋\JBA 梅村}{高橋\JBA 梅村}{1995}]{Takahashi:95}
+高橋克巳\JBA 梅村恭司 \BBOP 1995\BBCP.
+\newblock 人名のかな表記のゆれに基づく近似文字列照合法.\
+\newblock \Jem{情報処理学会論文誌}, {\Bbf 36}  (8), \mbox{\BPGS\ 1906--1915}.
+
+\bibitem[\protect\BCAY{Tsuruoka, McNaught, Tsuji, \BBA\ Ananiadou}{Tsuruoka
+  et~al.}{2007}]{Tsuruoka:07}
+Tsuruoka, Y., McNaught, J., Tsuji, J., \BBA\ Ananiadou, S. \BBOP 2007\BBCP.
+\newblock \BBOQ Learning string similarity measures for gene/protein name
+  dictionary look-up using logistic regression.\BBCQ\
+\newblock {\Bem Bioinformatics}, {\Bbf 23}  (29), \mbox{\BPGS\ 2768--2774}.
+
+\bibitem[\protect\BCAY{Wang, Xiao, Lin, \BBA\ Zhang}{Wang
+  et~al.}{2009}]{Wang:09}
+Wang, W., Xiao, C., Lin, X., \BBA\ Zhang, C. \BBOP 2009\BBCP.
+\newblock \BBOQ Efficient Approximate Entity Extraction with Edit Distance
+  Constraints.\BBCQ\
+\newblock In {\Bem SIGMOD '09: Proceedings of the 35th SIGMOD International
+  Conference on Management of Data}, \mbox{\BPGS\ 759--770}.
+
+\bibitem[\protect\BCAY{Winkler}{Winkler}{1999}]{Winkler:99}
+Winkler, W.~E. \BBOP 1999\BBCP.
+\newblock \BBOQ The state of record linkage and current research
+  problems.\BBCQ\
+\newblock \BTR\ R99/04, Statistics of Income Division, Internal Revenue Service
+  Publication.
+
+\bibitem[\protect\BCAY{Xiao, Wang, \BBA\ Lin}{Xiao et~al.}{2008a}]{Xiao:08}
+Xiao, C., Wang, W., \BBA\ Lin, X. \BBOP 2008a\BBCP.
+\newblock \BBOQ {Ed-Join}: An Efficient Algorithm for Similarity Joins with
+  Edit Distance Constraints.\BBCQ\
+\newblock In {\Bem VLDB '08: Proceedings of the 34th International Conference
+  on Very Large Data Bases}, \mbox{\BPGS\ 933--944}.
+
+\bibitem[\protect\BCAY{Xiao, Wang, Lin, \BBA\ Yu}{Xiao
+  et~al.}{2008b}]{Xiao:08b}
+Xiao, C., Wang, W., Lin, X., \BBA\ Yu, J.~X. \BBOP 2008b\BBCP.
+\newblock \BBOQ Efficient Similarity Joins for Near Duplicate Detection.\BBCQ\
+\newblock In {\Bem WWW '08: Proceeding of the 17th International Conference on
+  World Wide Web}, \mbox{\BPGS\ 131--140}.
+
+\bibitem[\protect\BCAY{Yan, Ding, \BBA\ Suel}{Yan et~al.}{2009}]{Yan:09}
+Yan, H., Ding, S., \BBA\ Suel, T. \BBOP 2009\BBCP.
+\newblock \BBOQ Inverted Index Compression and Query Processing with Optimized
+  Document Ordering.\BBCQ\
+\newblock In {\Bem WWW '09: Proceedings of the 18th International Conference on
+  World Wide Web}, \mbox{\BPGS\ 401--410}.
+
+\end{thebibliography}
+
+\begin{biography}
+\bioauthor{岡崎　直観}{
+2007年東京大学大学院情報理工学系研究科・電子情報学専攻博士課程修了．同年，東京大学大学院情報理工学系研究科・特別研究員．2011年より，東北大学大学院情報科学研究科准教授．自然言語処理，テキストマイニングの研究に従事．情報理工学博士．情報処理学会，人工知能学会，ACL各会員．
+}
+\bioauthor{辻井　潤一}{
+1971年京都大学工学部，1973年同修士課程修了．同大学助手・助教授を経て，1988年英国UMIST教授，1995年東京大学教授．マンチェスタ大学教授を兼任．2011年，東京大学，マンチェスタ大学を退職．同年より，マイクロソフトリサーチアジア研究員 (Principal Researcher), 国立情報学研究所客員教授，マンチェスタ大学客員教授．TM，機械翻訳などの研究に従事．工博．ACL元会長．
+}
+
+\end{biography}
+
+
+\biodate
+
+
+\end{document}

@@ -1,0 +1,841 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+\newcommand{\pmi}{}
+
+\usepackage{algorithm}
+\usepackage{algorithmicx}
+\usepackage{algpseudocode}
+
+
+\Volume{20}
+\Number{2}
+\Month{June}
+\Year{2013}
+
+\received{2012}{12}{6}
+\revised{2013}{2}{13}
+\accepted{2013}{3}{22}
+
+\setcounter{page}{273}
+
+\jtitle{カテゴリ間の兄弟関係を活用した集合拡張}
+\jauthor{高瀬　　翔\affiref{Author_1} \and 岡崎　直観\affiref{Author_1}\affiref{Author_2} \and 乾　健太郎\affiref{Author_1}}
+\jabstract{
+集合拡張手法の多くはシードインスタンスだけを手掛かりに新たなインスタンスを取得するものであり，対象が複数のカテゴリであっても，各カテゴリのインスタンスの収集を独立に行う．
+しかし，複数カテゴリを対象にした集合拡張ではカテゴリ間の関係など，シードインスタンスとは別の事前知識も利用できる．
+本研究ではこのようなカテゴリ間の関係，特に兄弟関係を事前知識として活用した集合拡張手法を提案する．
+さらに，Wikipediaから半自動で抽出したインスタンスと兄弟関係を事前知識として実験を行い，兄弟関係が集合拡張に有用であることを示す．
+}
+\jkeywords{知識獲得，集合拡張，ブートストラッピング，意味ドリフト}
+
+\etitle{Set Expansion Using Sibling Relationships Between Semantic Categories}
+\eauthor{Sho Takase\affiref{Author_1} \and Naoaki Okazaki\affiref{Author_1}\affiref{Author_2} \and Kentaro Inui\affiref{Author_1}} 
+\eabstract{
+Most set expansion algorithms are assumed to independently acquire new instances of each of the different semantic categories even when instances of multiple semantic categories are seeded.
+However, in the setting of set expansion with multiple semantic categories, we might leverage other types of prior knowledge about semantic categories.
+In this paper, we present a method of set expansion in case ontological information related to target semantic categories is available.
+Specifically, the proposed method uses sibling relationships between semantic categories as an additional type of prior knowledge.
+We demonstrate the effectiveness of using sibling relationships in set expansion on a dataset in which instances and sibling relationships are extracted from Wikipedia in a semi-automatic manner.
+}
+\ekeywords{Knowledge acquisition, Set expansion, Bootstrapping, Semantic drift}
+
+\headauthor{高瀬，岡崎，乾}
+\headtitle{カテゴリ間の兄弟関係を活用した集合拡張}
+
+\affilabel{Author_1}{東北大学}{Tohoku University}
+\affilabel{Author_2}{独立行政法人科学技術振興機構さきがけ}{PRESTO (Precursory Research for Embryonic Science and Technology)}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+\label{introduction}
+
+自然言語の理解に向けて，常識的知識の獲得が重要である．
+特に意味カテゴリに属する固有表現のリストは，質問応答~\cite{Wang:2009:ASI:1687878.1687941}，情報抽出~\cite{Mintz:2009:DSR:1690219.1690287}，語義曖昧性解消~\cite{Pantel:2002:DWS:775047.775138}，文書分類~\cite{Pantel:2009:WDS:1699571.1699635}，クエリ補完~\cite{Cao:2008:CQS:1401890.1401995}など様々なタスクで有用である．
+固有表現リストを人手で構築すると多大なコストがかかるうえ，新しい実体や概念に対応できないため，固有表現リストを（半）自動的に獲得する方法が研究されてきた．
+
+集合拡張はある意味カテゴリに属する既知の固有表現の集合を入力とし，その意味カテゴリの未知の固有表現を獲得するタスクである．
+例えば「プリウス」，「レクサス」，「インサイト」という自動車カテゴリの固有表現から，「カローラ」，「シビック」，「フィット」のように自動車カテゴリに属する固有表現を新たに獲得する．
+なお本論文では，意味カテゴリに属する固有表現をその意味カテゴリの\textbf{インスタンス}と呼び，特に入力として与えるインスタンスを\textbf{シードインスタンス}と呼ぶ．
+
+
+集合拡張には通常，ブートストラッピング手法を用いる~\cite{Hearst:1992:AAH:992133.992154,Yarowsky95unsupervisedword,Abney:2004:UYA:1105596.1105600,pantel04,pantel-pennacchiotti:2006:COLACL}．
+ブートストラッピング手法とはシードインスタンスを用いて新たなインスタンスを反復的に獲得する手法である．
+ブートストラッピング手法では，まず，コーパス中でシードインスタンスと頻繁に共起するパターンを獲得する．
+例えば自動車カテゴリについて「プリウス」や「レクサス」のようなシードインスタンスから「トヨタのX」や「ハイブリッド車のX」（Xは名詞句を代入する変数）のようなパターンが得られる．
+次にこれらのパターンと頻繁に共起するインスタンス，すなわち，パターンの変数X部分に多く現れる名詞句を獲得する．
+例えば「トヨタのX」というパターンからトヨタの自動車製品を表す語が得られる．
+次に新たに得られたインスタンスをシードインスタンスに加え，再びパターンの獲得を行う．
+ブートストラッピング手法はこのようにパターンの獲得とインスタンスの獲得を繰り返し行うことにより，少数のシードインスタンスから大規模なインスタンス集合を獲得する．
+
+しかしブートストラッピング手法はシードインスタンス集合とは無関係なインスタンスを獲得してしまう場合もある．
+これは対象とする意味カテゴリのインスタンス以外とも共起するパターンによって引き起こされる．
+例えば「プリウス」や「レクサス」といったシードインスタンスから「新型のX」というパターンを獲得したとすると，このパターンを用いることにより，「iPad」や「ThinkPad」のようなシードとは無関係なインスタンスを抽出してしまう．
+ブートストラッピング手法において，対象とする意味カテゴリとは無関係なインスタンスを獲得してしまう現象を意味ドリフトと呼ぶ~\cite{Curran_minimisingsemantic}．
+意味ドリフトはブートストラッピング手法において非常に重大な問題である．
+
+ブートストラッピング手法は意味カテゴリに関する事前知識をシードインスタンスという形で受け取っている．
+しかしながら，シードインスタンスのみで意味カテゴリを正確に表現することは難しく，意味ドリフトが引き起こされる．
+一方，事前知識として，Wikipediaにおける意味カテゴリ間の上位下位・兄弟関係に見られるように，シードインスタンス以外の知識を得られる場合がある．
+例えば人カテゴリに属するインスタンスは男優と女優カテゴリに同時に属することはできないという知識や，自動車と自動二輪カテゴリという2つの異なったカテゴリが共通の特徴（例：乗り物，ガソリン式，陸上）と異なる特徴（例：タイヤの数，窓の有無）を持つというような知識が入手できる．
+近年，テキストに非明示的な情報を推論するため，\textbf{Machine Reading project}~\cite{Etzioni:06}に見られるように大規模なテキストコーパスを利用し，ありとあらゆる種類の語彙知識を獲得しようとする研究が盛んである．
+意味カテゴリのインスタンスの収集においても，Carlsonら~\cite{Carlson10towardan}のように，複数のカテゴリを対象として同時に収集を行う需要が高まっている．
+このような場合には，シードインスタンス以外に，意味カテゴリ間の関係も事前知識として利用できると考えられる．
+
+本研究では，複数の意味カテゴリを対象とした集合拡張において，事前知識として意味カテゴリ間の兄弟関係を活用する手法を提案する．
+評価実験では，Wikipediaから抽出したインスタンスと兄弟関係を事前知識として集合拡張を行い，兄弟関係の知識が有用であることを示す．
+
+本論文の構成は以下の通りである．
+2節では本研究のベースライン手法であるEspressoアルゴリズムを概説する．
+また，この節では意味ドリフト問題とその対処法に関する先行研究を紹介する．
+3節では意味カテゴリの兄弟関係を追加の事前知識として活用する手法を提案する．
+4節では提案手法の効果を実験で検証し，考察を行う．
+最後に5節で本論文の結論を述べる．
+
+
+\section{関連研究}
+
+\subsection{Espressoアルゴリズム}
+\label{Espresso}
+
+Espresso~\cite{pantel-pennacchiotti:2006:COLACL}は，パターンの取得とインスタンスの取得の2つのステップを反復する集合拡張アルゴリズムである．
+パターンの取得とインスタンスの取得は共に，コーパスからの候補の抽出と，候補のランキングという同じ手順にもとづいている．
+候補の抽出では既に獲得したインスタンスと共起するパターン，既に獲得したパターンと共起するインスタンスを抽出する．
+候補のランキングでは候補インスタンス／パターンのスコアを計算し，上位$N$個の候補を採用する．
+Espressoアルゴリズムでは候補パターン$p$のスコア$r_\pi(p)$と候補インスタンス$i$のスコア$r_\iota(i)$を，それぞれ式~(\ref{eq:score1})と式~(\ref{eq:score2})で計算する．
+\begin{gather}
+r_\pi(p) = \frac{1}{|I|} \sum_{i \in I}\frac{\pmi (i,p)}{\max \pmi}r_\iota(i)
+	\label{eq:score1} \\
+r_\iota(i) = \frac{1}{|P|} \sum_{p \in P}\frac{\pmi (i,p)} \max \pmi r_\pi(p)
+	\label{eq:score2} \\
+\pmi (i,p) = \log_2 \left(\frac{|i,p|}{|i,*||*,p|} \times \text{discounting factor}\right)
+	\label{eq:pmi} \\
+\text{discounting factor} = \frac{|i,p|}{|i,p| + 1} \times \left(\frac{\min \left(|i,*|,|*,p|\right)}{\min \left(|i,*|,|*,p|\right) + 1}\right) 
+	\label{eq:discounting}
+\end{gather}
+
+$P$と$I$は各カテゴリにおけるパターンとインスタンスの集合である．
+$|P|$と$|I|$はそれぞれ集合$P$と$I$に含まれるパターンとインスタンスの数である．
+$|i, *|$と$|*, p|$はインスタンス$i$とパターン$p$のコーパス中での出現頻度であり，$|i, p|$はインスタンス$i$とパターン$p$の共起頻度である．
+すなわち，式~(\ref{eq:pmi})における右辺第1項はインスタンス$i$とパターン$p$の自己相互情報量である．
+自己相互情報量は単語間の相関の指標として一般的であるが，めったに出現しない単語に対して値が大きくなってしまうという問題がある．
+これに対処するため，PantelとRavichandranは式~(\ref{eq:discounting})に示されるdiscounting factorを導入した~\cite{pantel04}．
+また，max pmiはカテゴリ内のすべてのインスタンスとパターンのpmiの最大値である．
+なお，初期値としてシードインスタンスのスコアは1.0とする．
+
+Espressoアルゴリズムの動作を説明する．
+始めに，シードインスタンスと共起するパターンを候補として抽出する．
+次に，式~(\ref{eq:score1})で候補パターンのスコアを計算し，上位$N$個のパターンを獲得することで，対象とする意味カテゴリに対応するパターンを獲得する．
+インスタンスの獲得については，獲得したパターンと式~(\ref{eq:score2})を用い，上記の手順をパターンとインスタンスを逆にして行うことで達成する．
+すなわち，獲得したパターンと共起するインスタンスを候補として抽出し，式~(\ref{eq:score2})で高スコアのパターンとよく共起するインスタンスを獲得する．
+
+
+
+\subsection{意味ドリフト}
+
+ブートストラッピング手法においてシードとは無関係なインスタンスを獲得してしまい，対象とするカテゴリから逸脱してしまう現象を意味ドリフトと呼ぶ~\cite{Curran_minimisingsemantic}．
+例として，「プリウス」や「レクサス」をシードインスタンスとして持つ自動車カテゴリについて考える．
+Espressoアルゴリズムは何回か反復を行うと「Xの性能」や「新型のX」など多くのカテゴリのインスタンスと共起するパターン
+（\textbf{ジェネリック・パターン}）
+を得る．
+これらのパターンを用いてインスタンスの収集を行うと，「iPad」や「ThinkPad」のようなインスタンスが抽出され得る．
+これらは対象とする意味カテゴリの特徴を備えておらず，シードが表そうとしている意味カテゴリとは無関係なインスタンスである．
+しかしながら，これらの間違ったインスタンスを獲得してしまうことで，アルゴリズムの取得するパターンは元々の想定からかけ離れたものになってしまう．
+
+また意味ドリフトは多義性のある語によっても引き起こされる．
+例えば自動車メーカーのシードとして「サターン」や「スバル」を与えた場合，ブートストラッピング手法は「木星」や「天王星」のような星カテゴリに属するインスタンスを獲得してしまう．
+これは「サターン」や「スバル」に多義性があり，自動車メーカーだけでなく天体（惑星や恒星）も表す語だからである．
+
+小町ら~\cite{mamoru_komachi:2010}はEspressoアルゴリズムをグラフ解析の観点から分析することで，ブートストラッピング手法において，意味ドリフトが本質的には回避できない問題であることを示した．
+
+
+\subsection{g-Espressoアルゴリズム}
+
+小町ら~\cite{mamoru_komachi:2010}はEspressoアルゴリズムをグラフ解析として定式化し，さらに意味ドリフトへの対処として，グラフカーネルの適用を提案した．
+彼らはまず，Espressoアルゴリズムを行列計算によって定式化した．
+なお，ここではEspressoアルゴリズムにおける，毎回の反復において上位$N$個の候補を獲得する，というステップが省略されており，全パターンと全インスタンスにスコアを付与する形になっている．
+インスタンスとパターンの共起行列を$M$とし，その$(p,i)$要素$[M]_{pi}$は式~(\ref{eq:pmi})のpmiを用いて，
+\begin{equation}
+[M]_{pi} = \frac{\pmi (i,p)}{\max \pmi}
+\end{equation}
+とする．
+また，シードインスタンスに対応する位置の要素は1，それ以外の要素は0である，$|I|$次元のベクトルをシードベクトル $\boldsymbol{i_{0}}$とする．
+
+このとき，$n$回目の反復におけるパターンへのスコアの付与は，$\boldsymbol{p_{n}} = M \boldsymbol{i_{n}}$を計算した後に $\boldsymbol{p_{n}} \gets \boldsymbol{p_{n}}/|I|$として正規化する操作に対応する．同様に，インスタンスへのスコアの付与は，$\boldsymbol{i_{n+1}} = M^{T} \boldsymbol{p_{n}}$を計算した後に$\boldsymbol{i_{n+1}} \gets \boldsymbol{i_{n+1}}/|P|$として正規化する操作に対応する．
+したがって，$n$回目の反復後に得られるインスタンスのスコアベクトル $\boldsymbol{i_{n}}$は，式~(\ref{eq:graph_instance})と書ける．
+\begin{gather}
+ \boldsymbol{i_{n}} = A^{n} \boldsymbol{i_{0}}
+	\label{eq:graph_instance} \\
+ A = \frac{1}{|I||P|}M^{T}M
+\end{gather}
+$I$をノード集合，$A$を隣接行列とした重み付き無向グラフ$G$を考えると，反復におけるインスタンスのスコアの更新は，シードインスタンスのスコアがグラフ上を伝播していく過程と見なすことができる．
+よって，グラフカーネルによりこの過程を形式化することが可能である．
+
+小町ら~\cite{mamoru_komachi:2010}はジェネリック・パターンの影響を減らし，意味ドリフトを抑制するために，正則化ラプラシアンカーネル~\cite{b155}を用いた．
+まず，グラフ$G$のラプラシアン$L$を式~(\ref{eq:laplacian})によって求める．
+\begin{gather}
+L = D - A
+	\label{eq:laplacian}\\
+[D]_{i,i} = \sum_{j}^{}[A]_{ij}
+\end{gather}
+次に，正則化ラプラシアンカーネルを式~(\ref{eq:reg_lap})で計算する．
+\begin{equation}
+R_{\beta}(A) = A\sum_{n=0}^{\infty}\beta^{n}(-L)^{n} = (I + \beta L)^{-1}
+	\label{eq:reg_lap}
+\end{equation}
+正則化ラプラシアンカーネルはそれぞれのノードに対し，次数に応じて接するエッジの重みを減ずる．
+このため，ジェネリック・パターンの影響を低く抑えることができる．
+萩原ら~\cite{masato_hagiwara:2011}はこのグラフ理論によって再定式化したEspressoアルゴリズムをg-Espressoと呼び，集合拡張において意味ドリフトを抑制する効果があることを示した．
+
+
+
+\subsection{意味ドリフトへの対処}
+
+意味ドリフトの影響を軽減するために，小町ら~\cite{mamoru_komachi:2010}や萩原ら~\cite{masato_hagiwara:2011}の手法に加え，シードインスタンス集合の洗練~\cite{Vyas:2009:HEC:1645953.1645984}，分類器の使用~\cite{Bellare_lightlysupervisedattribute,Sadamitsu:2011:ESE:2002736.2002876,Pennacchiotti:2011:ABT:2018936.2018955}，人間の判断の導入~\cite{Vyas:2009:SES:1620754.1620796}，意味カテゴリ間の関係の活用~\cite{Curran_minimisingsemantic,carlson-wsdm}など様々な手法が提案されている．
+
+Vyasらはブートストラッピング手法におけるシードインスタンスの影響を調査した~\cite{Vyas:2009:HEC:1645953.1645984}．
+その結果，専門家でない人の選んだシードインスタンス集合はランダムに選択したものよりも結果が悪くなる可能性があることを示した．
+また彼らは，人手で作成されたシードインスタンス集合を洗練し，集合拡張の性能を向上させる手法を提案した．
+
+Bellareらはブートストラッピング手法のランキング時にスコア関数の代わりに分類器を使用する手法を提案した~\cite{Bellare_lightlysupervisedattribute}．
+分類器を用いる手法はインスタンスのランキング時にパターン以外の素性を使うためである．
+SadamitsuらはBellareらの手法~\cite{Bellare_lightlysupervisedattribute}を拡張し，Latent Dirichlet Allocation (LDA) から推定されるトピック情報を素性として使用する手法を提案した~\cite{Sadamitsu:2011:ESE:2002736.2002876}．
+彼らはまた，意味的に近いカテゴリの情報を与え，LDAのトピックの粒度を調整する手法も提案している~\cite{Sadamitsu:2012:PACLIC26}．
+PennacchiottiとPantelは分類器のためのトレーニングデータを自動で収集する手法を提案した~\cite{Pennacchiotti:2011:ABT:2018936.2018955}．
+しかしながら，これらの研究は複数の意味カテゴリに対して同時に集合拡張を行うことを想定しておらず，
+\ref{introduction}節で説明したような，意味カテゴリ間の関係知識の利用を考慮していない．
+
+VyasとPantelは意味ドリフトの原因となったパターンを検出し，それを削除する手法を提案した~\cite{Vyas:2009:SES:1620754.1620796}．
+彼らは意味ドリフトを防ぐため，ブートストラッピング手法の反復に人間の正否判定を取り入れた．
+彼らの手法では，人手によって誤りインスタンスが発見された場合，その誤りインスタンスとそれを獲得する原因となったパターンを除去する．
+また，同様の誤りを防ぐため，誤りインスタンスと類似した文脈ベクトルを持つインスタンスも除去する．
+彼らもカテゴリ間の関係のような事前知識は使用していない．
+
+Curranらはブートストラッピング手法にカテゴリ間の排他制約を導入した，Mutual Exclusion Bootstrappingという手法を提案した~\cite{Curran_minimisingsemantic}．
+Mutual Exclusion Bootstrappingは，インスタンスやパターンの属するカテゴリはただ1つであるという制約を取り入れたものである．
+複数のカテゴリに出現するインスタンスやパターンには曖昧性があり，意味ドリフトの原因になると考えられる．
+そこで，曖昧性のあるインスタンスやパターンを除去することにより，彼らの手法は高い精度を達成した．
+
+同じく排他関係を使用する手法としてCarlsonらはCoupled Pattern Learner (CPL) アルゴリズムを提案した~\cite{carlson-wsdm}．
+CPLアルゴリズムは意味カテゴリのインスタンス（例：自動車カテゴリのインスタンス）と関係インスタンス（例：CEO-of-Companyという関係に対する (Larry Page, Google) やCompany-acquired-Companyに対する (Google, Youtube) ）を同時に収集する手法である．
+CPLアルゴリズムはこれらのインスタンスを取得するために，カテゴリ間の排他関係とカテゴリ間の意味的関係（例：CEOカテゴリのインスタンスは会社カテゴリに属するインスタンスのうちいずれかのCEOである）を使用する．
+しかしながら，カテゴリ間の意味的関係は関係インスタンスの取得にしか用いられておらず，意味カテゴリのインスタンスについては複数カテゴリに対する排他制約という事前知識しか用いていない．
+
+
+Curranら~\cite{Curran_minimisingsemantic}とCarlsonら~\cite{carlson-wsdm}はどちらも事前知識としてシードインスタンスだけではなくカテゴリ間の排他関係も利用している．
+しかし，意味カテゴリ間には上位下位や兄弟関係など排他関係以外の関係も存在する．
+兄弟関係は共通の特徴を持つべきであるカテゴリについての知識であり，排他関係という，インスタンスが同時に属さないカテゴリに関する知識とは別種のものである．
+兄弟関係についての知識はWikipediaのような既存のリソースから容易に取得することができるため，事前知識として利用しやすい．
+本研究では，既存のリソースから入手できるカテゴリ間の兄弟関係に関する知識を事前知識として集合拡張に導入し，その有用性を検証する．
+
+
+
+\section{提案手法}
+
+\subsection{兄弟カテゴリのパターンによるフィルタリング}
+
+本節では，意味カテゴリ間の兄弟関係を事前知識として活用する手法を提案する．
+以降では，兄弟関係にあるカテゴリの集合を\textbf{兄弟グループ}と呼ぶこととする．
+例えば，自動車と自動二輪のカテゴリは兄弟関係にあるため，同一の兄弟グループに属する．
+本研究では，同一の兄弟グループに含まれるインスタンスは共通の特徴を保有していると仮定する．
+例えば，自動車と自動二輪の兄弟グループに含まれるインスタンスは「乗り物」や「ガソリン式」という特徴を持ち，「乗る」や「燃費」などの語と係り受け関係を持ちやすい．
+この兄弟グループに共通の特徴を持っていないインスタンスは，正しいインスタンスである可能性が低いと考えられる．
+そのため，提案手法は兄弟グループのシードインスタンス集合を利用して兄弟グループに共通の特徴を取得し，グループ内の候補インスタンスがこの共通の特徴を保有しているか否かを検証することで，誤ったインスタンスの獲得を防ぐ．
+
+
+同一の兄弟グループに属する自動車と自動二輪カテゴリについて，提案手法を用いて集合拡張の際の誤りインスタンスを除去する例を図~\ref{fig:overview}に示す．
+提案手法はまず，この兄弟グループのインスタンスに共通の特徴として，「乗る」や「燃費」という表現と係り受け関係を持ちやすいという知識を得る．
+既存のブートストラッピング手法では，自動車カテゴリにおいて「新型のX」というパターンを獲得してしまった場合，シードや兄弟グループとは無関係のインスタンスである「iPad」を除去することができない．
+これに対して，提案手法では候補インスタンスが「乗る」や「燃費」と係り受け関係にある文節に出現しているかを，インスタンスの獲得（厳密には候補のランキング）の前に検証することによって，「iPad」のような誤りインスタンスを取り除くことができる．
+この結果，提案手法は「カムリ」のような兄弟グループに共通する特徴を持つインスタンスのみを獲得する．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{20-2ia9f1.eps}
+\end{center}
+\caption{兄弟関係を活用した集合拡張}
+\label{fig:overview}
+\end{figure}
+
+ここで，兄弟グループに共通の特徴が，対象とする意味カテゴリ以外も包含してしまうと，意味ドリフトが発生してしまう．
+これを防ぐために，兄弟グループ間は排他関係にあるとし，兄弟グループに共通の特徴は対象としている兄弟グループに固有の特徴とする．
+
+本研究では兄弟グループに共通の特徴は「乗る」や「燃費」などの表現によって表されると仮定する．
+このような表現を\textbf{フィルタパターン}と呼ぶ．
+提案手法では，候補インスタンスがフィルタパターンと共起しているか，すなわち，候補インスタンスがフィルタパターンと係り受け関係にある文節に出現しているかの検証を行うことで，インスタンスが兄弟グループに共通の特徴を保有しているかを確認する．
+この確認はインスタンスの獲得の直前に行い，候補インスタンスの抽出法については，既存の手法を用いる．
+すなわち，提案手法はEspressoアルゴリズムやg-Espressoなどの既存手法と組み合わせて利用することができる．
+
+
+\subsection{Espressoアルゴリズムをベースとした手法}\label{proposed_espresso}
+
+\begin{algorithm}[t]
+\caption{Espressoアルゴリズムをベースとした提案手法のアルゴリズム}
+\label{alg1}
+\input{09algo01.txt}
+\end{algorithm}
+
+
+Espressoアルゴリズムを利用し，図~\ref{fig:overview}のアイディアをアルゴリズムとして記述したものがAlgorithm~\ref{alg1}である．
+このアルゴリズムは入力として対象とするカテゴリの集合$C$，$S_{1}$から$S_{T}$までの兄弟グループ，それぞれのカテゴリ$c \in C$に対応するシードインスタンス集合$I_{c}$，反復の回数$L$，
+コーパス$W$を受け取る．
+兄弟グループはそれぞれ$C$の部分集合であり，また，互いに素である．
+まず，\ref{st_sibp_extract}行目から\ref{end_sibp_extract}行目において各兄弟集合$S_{j}$に対するフィルタパターン$F_{S_{j}}$を選択する．
+次に\ref{espresso}行目において兄弟グループ$S_{j}$内の各カテゴリ$c$のインスタンスを関数\Call{Espresso\_Exclusion}{}を用いて取得する．
+\Call{Espresso\_Exclusion}{}は要素のそれぞれがインスタンス$i$，カテゴリ$c$，スコア$s$のタプル，すなわち $(i, c, s)$ からなるリスト$R$を返す．
+この関数において，インスタンスの抽出とスコアの計算は，~\ref{Espresso}節で説明したEspressoアルゴリズムに，兄弟グループのカテゴリ間でパターンに対する排他制約を導入した手法を用いて行う．
+
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{20-2ia9f2.eps}
+\end{center}
+ \caption{文節間の係り受け関係の例}
+ \label{eg:sentence}
+\end{figure}
+
+本研究ではパターンはインスタンスと係り受け関係にある文節と定義する．
+例えば，「プリウス」というインスタンスと図~\ref{eg:sentence}に示す文が与えられたとする（図~\ref{eg:sentence}では文を文節で区切り，係り受け関係を文節間の矢印で表現している）．
+このとき，プリウスと同じ意味クラスに属するインスタンスを取得するためのパターンとして，
+
+
+
+\begin{quote}
+\begin{itemize}
+\item X$\longrightarrow$販売を
+\item X$\longleftarrow$新型
+\end{itemize}
+\end{quote}
+を得る．
+ここで，係り受け関係の向きについて，インスタンスを含む文節が別の文節に係るときを「$\to$」で，別の文節がインスタンスを含む文節に係るときを「$\gets$」で表している．
+関数\Call{Espresso\_Exclusion}{}では，「X$\to$販売を」や「X$\gets$新型」のように，係り受け関係の向きも含めた表現形式をパターンとする．
+
+次に$R$に含まれる候補インスタンス$i$が兄弟グループに共通の特徴を持つか否かの検証を，関数\Call{Filter}{}によって行う（\ref{filter}行目）．
+関数\Call{Filter}{}は\ref{st_func_fil}行目から\ref{end_func_fil}行目に書かれている通りであり，$R$に含まれる$i$がそれぞれフィルタパターン$f$と共起しているかどうかを検証する．
+この関数はフィルタパターンと共起しているインスタンスをそのスコアとともにリストとして返す．
+言い換えれば，この関数はフィルタパターンの集合$F$によって表される兄弟グループに共通の特徴を保有していないインスタンスを除去している．
+
+兄弟グループ内でのドリフトを防ぐため，提案手法は兄弟グループのカテゴリ間に排他制約を導入している．
+パターンやインスタンスが兄弟グループ内の複数のカテゴリで出現している場合，提案手法はそれらが属するべき最適なカテゴリをただ1つ決定する．
+提案手法ではこの決定をランキングの結果をもとに行う．
+例えば自動車と自動二輪カテゴリにおいて「X→マフラー」というパターンが出現していたとする．
+ランキングの結果，もしこのパターンが自動車カテゴリでは13位であり自動二輪カテゴリでは4位だったとすると，このパターンは自動二輪カテゴリにのみ属するものとする．
+すでに説明したように，Algorithm~\ref{alg1}において関数\Call{Espresso\_Exclusion}{}はパターンに対する排他制約が導入されているものであるとしており，
+インスタンスに対する排他制約は\ref{exclusive}行目から\ref{end_exclusive}行目に実装されている．
+
+提案手法ではスコア$s$を元に，\ref{exclusive}行目から\ref{end_exclusive}行目での排他制約を適用しながら，反復数（$l$回目）に応じて上位$N \times l$個のインスタンスを獲得する．
+すべてのカテゴリについて新たなインスタンスの取得が終わった後，次の反復へと進む．
+入力として与えた回数だけ反復した後，アルゴリズムはそれぞれのカテゴリ$c \in C$に対応するインスタンス集合$I'_{c}$を出力する．
+
+
+\subsection{g-Espressoをベースとした手法}
+\label{sec:g_espresso}
+
+正則化ラプラシアンカーネルを利用したg-Espressoによるインスタンスの抽出と，フィルタパターンによる候補インスタンスの特徴の検証を組み合わせた手法を，アルゴリズムとして記述したものがAlgorithm~\ref{proposed_g_espresso}である．
+このアルゴリズムはAlgorithm~\ref{alg1}の入力から反復回数$L$を除いたものを入力として受け取る．
+
+\begin{algorithm}[b]
+\caption{g-Espressoをベースとした提案手法のアルゴリズム}
+\label{proposed_g_espresso}
+\begin{algorithmic}[1]
+\input{09algo02.txt}
+\end{algorithm}
+
+Algorithm~\ref{proposed_g_espresso}はAlgorithm~\ref{alg1}と同様，まず各兄弟集合$S_{j}$に対するフィルタパターン$F_{S_{j}}$を選択する．
+次に兄弟グループ$S_{j}$内の各カテゴリ$c$について，候補インスタンス集合$I_{v_{c}}$とパターンの集合$P_{v_{c}}$を関数\Call{Espresso}{}によって，抽出する~（\ref{espresso4g}行目）．
+関数\Call{Espresso}{}は\ref{Espresso}節において説明したEspressoアルゴリズムによって，パターンとインスタンスのスコアを計算し，上位$N_{pattern}$個のパターンと上位$N_{instance}$個のインスタンスを返す関数である．
+なお，ここでのパターンも\ref{proposed_espresso}節での関数\Call{Espresso\_Exclusion}{}で用いたものと同様，「X$\to$発表した」のような係り受け関係の向きも含めたものとする．
+g-Espressoは対象とするカテゴリ毎に，コーパス中の全パターンと全インスタンスを対象とした計算を行うため，ウェブページなどの大規模コーパスや，複数の意味カテゴリを対象とした場合には計算量が膨大になってしまう．
+計算量を抑えるため，萩原ら~\cite{masato_hagiwara:2011}はブートストラッピング手法によって計算対象を制限し，その後グラフカーネルを適用する手法を用いた．
+本手法でも同様に，Espressoアルゴリズムによってシードインスタンス集合と相関の高いパターン／インスタンスを$P_{v_{c}}$，$I_{v_{c}}$として抽出し，g-Espressoへの入力とする．
+なお，今回は萩原ら~\cite{masato_hagiwara:2011}を参考に$N_{pattern}=2,000$とし，$N_{instance}=2,000 \times |S_{j}|$とした．
+
+次に候補インスタンス集合$I_{v_{c}}$に含まれるインスタンスが兄弟グループに共通の特徴を持つか否かの検証を，Algorithm~\ref{alg1}における関数\Call{Filter}{}を用いて行う~（\ref{filter_g}行目）．
+次に$P_{v_{c}}$と関数\Call{Filter}{}の返した$I_{v_{c}}$を対象とし，g-Espressoによってインスタンスのスコアを計算する．
+これは関数\Call{g-Espresso}{}を用いて行う~（\ref{g_espresso}行目）．
+関数\Call{g-Espresso}{}は要素のそれぞれがインスタンス$i$，カテゴリ$c$，スコア$s$のタプルからなるリスト$R$を返す．
+
+最後にAlgorithm~\ref{alg1}と同様に，兄弟グループのカテゴリ間での排他制約を考慮しつつ，各カテゴリについて，スコアの上位$N_{all}$個のインスタンスを獲得し~（\ref{exclusive_g}行目から~\ref{end_exclusive_g}行目），$I'_{c}$として出力する．
+
+
+
+\subsection{フィルタパターンの獲得}
+
+既に説明したように，提案手法はインスタンスが兄弟グループに共通の特徴を持っているか否かをフィルタパターンを用いて判定する．
+この節ではフィルタパターンの獲得方法について述べる．
+
+フィルタパターンの獲得は候補の抽出とランキングの2つのステップからなる．
+候補の抽出では，兄弟グループのシードインスタンスと共起しているパターンを集める．
+例えば，自動車と自動二輪カテゴリからなる兄弟グループに対し，自動車か自動二輪カテゴリに含まれるシードインスタンスと共起しているパターンを抽出する．
+
+
+フィルタパターンは兄弟グループの特定のカテゴリのインスタンスを取得するためのものではなく，兄弟グループに無関係のインスタンスを除去するためのものであるため，兄弟グループに共通の特徴をとらえていることが望ましい．
+しかし，インスタンスとの係り受け関係の向きや，助詞や副詞など構成する語を厳密に指定する形式にしてしまうと，正解インスタンスまで取り除いてしまう可能性もある\footnote{フィルタパターンにおいて係り受け関係の向きを指定すると，指定しないものよりも精度が悪くなる．このことは~\ref{discussion}節において，実験的に明らかにする．}．
+このため，フィルタパターンは係り先，係り元といった係り受け関係の向きを考慮せず，さらに名詞と動詞に限定する．
+すなわち，フィルタパターンはEspressoアルゴリズムやg-Espressoで用いたパターンとは異なり，「乗る」や「エンジン」，「愛車」などの，インスタンスと係り受け関係にある文節に出現する名詞や動詞とする~\footnote{実際に獲得された各兄弟グループのフィルタパターンについては，表~\ref{tab:table2}に示してある．}．
+
+候補のランキングでは，抽出された候補の中からフィルタパターンとして最適なものを選択する．
+兄弟グループに含まれる意味カテゴリのインスタンスが獲得されるには，フィルタパターンと共起する必要がある．
+そのため，兄弟グループに属するインスタンスとできるだけ多く共起するようなフィルタパターンが適している．
+また，フィルタパターンによって，インスタンスが兄弟グループに共通の特徴を保有しているかどうかを検証するため，兄弟グループ内のカテゴリに均等に出現するようなフィルタパターンが適している．
+この2つの要素をそれぞれ網羅性と平等性として定式化し，これにもとづいてフィルタパターンの選択を行う．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{20-2ia9f3.eps}
+\end{center}
+ \caption{フィルタパターンとして望ましい性質}
+ \label{fig:properties_filter_pattern}
+\end{figure}
+
+フィルタパターンは兄弟グループに属する正しいインスタンスを網羅するようなものであることが望ましい．
+そのため，兄弟グループ中の多くのシードインスタンスと共起しているパターンが適している．
+例として，自動車と自動二輪カテゴリのフィルタパターンについて考える（図~\ref{fig:properties_filter_pattern}）．
+図~\ref{fig:properties_filter_pattern}において，パターンは斜体で表されている．
+また，パターンの下の四角で覆われた枠内の文字はシードインスタンスであり，特にパターンと共起しているものは太字で示してある．
+この図の (a) において，パターン「乗る」は「マイナーチェンジ」よりも多くのシードインスタンスと共起しているため，よりフィルタパターンに適していると考える．
+この要素を網羅性と呼び，$\mathit{Coverage}$という指標で測定する．
+ある兄弟グループ$S_{j}$に属するパターン$f$の$\mathit{Coverage}$は次の式~(\ref{recall})を用いて計算する．
+\begin{gather}
+\mathit{Coverage}(S_{j}, f) = \frac{\sum_{c \in S_{j}} \sum_{i \in I_{c}}\mathit{cooccur}(f, i)}{\sum_{c \in S_{j}}|I_{c}|}
+	\label{recall} \\
+\mathit{cooccur}(f, i) = \left \{ \begin{array}{ll}
+1 & \text{$i$と$f$が共起している場合} \\
+0 & \text{それ以外} \\
+\end{array} \right.
+\end{gather}
+$I_{c}$はカテゴリ$c$のシードインスタンス集合であり，$|I_{c}|$はカテゴリ$c$のシードインスタンスの数である．
+$\mathit{cooccur}(f, i)$はインスタンス$i$がパターン$f$と共起しているか否かを表しており，共起しているなら1を，していなければ0を返す関数である．
+よって，$\sum_{i \in I_{c}} \mathit{cooccur}(f, i)$はカテゴリ$c$に属し，かつパターン$f$と共起しているシードインスタンスの数を表す．
+
+さらに，フィルタパターンはインスタンスが兄弟グループに共通の特徴を保有しているかどうかを検証するためのものであるため，特定のカテゴリに偏って出現しているパターンは不適当である．
+したがって，パターンは兄弟グループ内のカテゴリのうち，2つ以上で出現していなければならないとする．
+図~\ref{fig:properties_filter_pattern}の (b) において，「エンジン」というパターンは自動車と自動二輪の両方のカテゴリのインスタンスと共起しているが，「トヨタ」は自動車カテゴリのみでしか出現していない．
+このため「トヨタ」はフィルタパターンとしては不適当とし，候補から除去する．
+また，図~\ref{fig:properties_filter_pattern}の (b) では「乗る」というパターンは両方のカテゴリのインスタンスと均等に共起しているため，「エンジン」よりもフィルタパターンとして適している．
+この，パターンが兄弟グループ内のそれぞれのカテゴリのインスタンスと，どれだけ均等に共起するかという要素を平等性と呼ぶ．
+兄弟グループ内のあるカテゴリのインスタンスとパターンが共起するとき，パターンがそのカテゴリに出現したと定義すれば，平等性は兄弟グループ内での，パターンがどのカテゴリに出現するかの分散の大きさと言える．
+このため，平等性は情報量 ($\mathit{Entropy}$) を用いて測定できる．
+ある兄弟グループ$S_{j}$に属するパターン$f$の$Entropy$は次の式~(\ref{entropy})を用いて計算する．
+\begin{gather}
+\mathit{Entropy}(S_{j}, f) = - \sum_{c \in S_{j}} P_c(f) \log_{|C|} P_c(f)
+	\label{entropy}\\
+P_c(f) = \frac{\sum_{i \in I_{c}}\mathit{cooccur}(f, i)}{\sum_{c \in S_{j}}\sum_{i \in I_{c}}\mathit{cooccur}(f, i)}
+\end{gather}
+$|C|$はパターン$f$の出現しているカテゴリの数である．
+もしパターン$f$が兄弟グループ内のそれぞれのカテゴリのインスタンスと均等に共起したとすると，$\mathit{Entropy}(S_{j}, f)$は最も高い値 (1.0) となる．
+
+網羅性と平等性の両方の観点において優れているパターンを獲得するため，パターン$f$のスコアを次の式~(\ref{equ:filtering-score})を用いて計算する．
+\begin{equation}
+\mathit{Score}(S_{j}, f) = \mathit{Entropy}(S_{j}, f) \times Coverage(S_{j}, f) 
+	\label{equ:filtering-score}
+\end{equation}
+各兄弟グループ$S_{j}$の候補パターン$f$について$\mathit{Score}(S_{j}, f)$を計算し，
+兄弟グループに共通の特徴を特に表していると考えられる，
+上位15個を兄弟グループのフィルタパターンとして獲得する．
+なお，兄弟グループが他の兄弟グループへ意味ドリフトしてしまうことを防ぐため，兄弟グループ間は排他関係にあるとする．
+そのため，複数の兄弟グループで候補となっているフィルタパターンについては，属する兄弟グループをただ1つ決めなければならない．
+この決定はフィルタパターンの出現頻度にもとづいて行う．
+すなわち，兄弟グループ内のシードインスタンスとの共起頻度の和をフィルタパターンの兄弟グループ内での出現頻度とし，これが最大である兄弟グループにのみフィルタパターンは属するとする．
+これにより，それぞれの兄弟グループに固有のフィルタパターンが得られる．
+このフィルタパターンを用いることで，兄弟グループに共通の特徴を持たない，無関係なインスタンスを除去できる．
+
+
+
+\section{実験}
+
+\subsection{実験設定}
+
+本節では集合拡張において，カテゴリ間の兄弟関係を事前知識として使用することの効果を実験的に検証する．
+実験ではEspressoアルゴリズム~\cite{pantel-pennacchiotti:2006:COLACL}，Espressoアルゴリズムにカテゴリ間の排他制約を加えたもの（Espresso + 排他制約），Espressoアルゴリズムにカテゴリ間の排他制約と兄弟関係を事前知識として加えたもの（提案手法（ベース：Espresso））のブートストラッピング手法と，g-Espressoアルゴリズム~\cite{masato_hagiwara:2011}，g-Espressoアルゴリズムにカテゴリ間の排他制約と兄弟関係を事前知識として加えたもの（提案手法（ベース：g-Espresso））のグラフカーネルを用いた手法について比較を行う．
+グラフカーネルを用いた手法における，正則化ラプラシアンカーネルの拡散パラメータは萩原ら~\cite{masato_hagiwara:2011}と同様，$\beta = 5.0 \times 10^{-4}$とした．
+ブートストラッピング手法では反復毎に，各カテゴリのインスタンスとパターンの獲得数を15個ずつ増加（すなわち$N=15$）させた．
+
+集合拡張は未知のインスタンスを取得するタスクであるため，再現率を正確に測定することは難しい．
+そのため，各手法の比較は，同じ数のインスタンスを取得した際の適合率を比べることによって行う．
+さらに，各手法の出力した正解インスタンスの集合を正解セットと考え，再現率を疑似的に計算し，比較する．
+なお，獲得インスタンスの正否は3人の評価者によって判定する．
+
+\ref{introduction}節で説明したように，近年では，全てのカテゴリのインスタンスを収集する需要が高まっている．
+このため実験では，Carlsonら~\cite{Carlson10towardan}のように，様々な種類のカテゴリを対象とする．
+代表的なカテゴリをまんべんなく対象とするため，関根の拡張固有表現階層のリスト\footnote{https://sites.google.com/site/extendednamedentityhierarchy/}とWikipediaを参考に，人手で41個のカテゴリを実験対象として選択した．
+対象カテゴリは表~\ref{tab:table2}に示した通りであり，この表に示した全てのカテゴリについて，同時に集合拡張を行う．
+なお，表~\ref{tab:table2}ではカテゴリを兄弟グループが同一のものでまとめてあり，兄弟グループ間は罫線によって区切られている．
+兄弟グループは同じ上位カテゴリを持つカテゴリの集合となるよう，Wikipediaを参考に人手で作成した．
+各カテゴリはただ1つの兄弟グループに属するものとし，各兄弟グループは2つ以上のカテゴリを含む．
+
+シードインスタンスについてはWikipediaから自動でインスタンスを抽出するツール~\cite{SUMIDA08.618}を利用し，各カテゴリ毎に15個ずつ用意した．
+なお，自動で抽出した結果には誤りも含まれているため，人手によって誤りインスタンスを除去している．
+
+実験には1億1千万の日本語ウェブページをコーパスとして用いた．
+ウェブページ中の文は日本語係り受け解析器であるKNP~\cite{And94knparser}を用いて係り受け構造を解析した．
+また，計算時間を削減するため，出現頻度が2回以下であるパターンとインスタンスは除去している．
+
+
+\subsection{結果}
+\label{discussion}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{20-2ia9f4.eps}
+\end{center}
+ \caption{各手法における取得インスタンス数とその適合率}
+ \label{fig:figure3}
+\end{figure}
+
+ブートストラッピングの反復を10回行った際の，各手法における全カテゴリでの獲得インスタンス数とその適合率を図~\ref{fig:figure3}に示す．
+グラフカーネルを用いた手法では，ブートストラッピングと同数のインスタンスを獲得した際の適合率を示している．
+また，提案手法ではフィルタパターンにおいて係り受け関係の方向を指定しないとしていたが，この効果を確認するため，フィルタパターンにおいて係り受け関係の方向を指定した手法での結果も記した．
+この図より，Espresso + 排他制約はEspressoよりも適合率が上昇していることがわかる．
+Espresso + 排他制約の適合率はEspressoと比べると，4,305個のインスタンスを獲得したときに最も上昇し，2.4\%高い．
+また，10回の反復後，すなわち6,765個のインスタンスを獲得したときには1.3\%上昇している．
+提案手法（ベース：Espresso）はEspresso + 排他制約よりもさらに適合率が上がっており，Espressoと比べると，4,305個のインスタンスを獲得したときには4.4\%上昇し，6,765個のインスタンスを獲得したときには2.1\%上がっている．
+さらに，g-Espressoと提案手法（ベース：g-Espresso）を比較しても，提案手法の適合率が上昇していることがわかる．
+提案手法（ベース：g-Espresso）の適合率はg-Espressoと比べ，3,690個のインスタンスを獲得したときに最も上昇し，6.1\%高い．
+この結果から，カテゴリ間の兄弟関係についての事前知識は意味ドリフトの抑制に寄与し，集合拡張の精度を向上させることがわかる．
+
+
+また図~\ref{fig:figure3}より，フィルタパターンにおいて係り受け関係の方向を指定した手法では，Espressoよりも適合率が上昇するが，提案手法（フィルタパターンにおいて係り受け関係の方向を指定しない場合）よりは適合率が低いことがわかる．
+したがって，フィルタパターンにおいて係り受け関係の方向まで指定することは厳しすぎる制約であり，フィルタパターンを用いて兄弟グループの共通性を検証する際には，係り受け関係の方向を指定する必要はないことがわかる．
+
+
+小町ら~\cite{mamoru_komachi:2010}や萩原ら~\cite{masato_hagiwara:2011}はグラフカーネルを用いることにより，意味ドリフトが抑制できることを示した．
+しかし，図~\ref{fig:figure3}において，グラフカーネルを用いた手法であるg-Espressoの適合率はEspressoより低い．
+これは，~\ref{sec:g_espresso}節で説明したように，グラフカーネルを適用するパターンと候補インスタンスを制限しているためであると考えられる．
+例えば，ヨーロッパの国カテゴリについて，「ドイツ」というシードインスタンスから「X$\to$サッカー選手一覧」，「X$\to$キーパーは」というパターンが抽出されるため，「強豪」や「代表」のような，対象とする意味カテゴリとは無関係なインスタンスのスコアが高くなってしまう．
+この問題について萩原ら~\cite{masato_hagiwara:2011}は，グラフの範囲を広げることで解消できるとしたが，複数の意味カテゴリを対象にした集合拡張では，計算量を抑えるためにグラフはできるだけ小さくせねばならず，避けられない問題であると考えられる．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{20-2ia9f5.eps}
+\end{center}
+ \caption{各手法における適合率と再現率}
+ \label{fig:graph_pr_curve}
+\end{figure}
+
+再現率を疑似的に計算するため，反復を10回行った（すなわち各カテゴリで165個のインスタンスを獲得した）ときの，各手法で獲得した正解インスタンスの和集合を正解セットとして，反復毎\footnote{グラフカーネルを用いた手法では，各カテゴリでの獲得インスタンスを15個ずつ増やした}の適合率と再現率を計算した．
+この結果を図~\ref{fig:graph_pr_curve}に示した．
+図~\ref{fig:graph_pr_curve}より，提案手法（ベース：Espresso）はEspresso，Espresso + 排他制約よりも性能が良く，また，提案手法（ベース：g-Espresso）はg-Espressoよりも性能が良いことがわかる．
+これより，提案手法は再現率を保ったまま，適合率を上昇させることが可能であると言える．
+
+\begin{table}[b]
+  \caption{神社と寺カテゴリにおける各手法の獲得インスタンスの上位15個}
+ \label{tab:table1}
+\input{09table01.txt}
+\end{table}
+
+適合率，再現率共に高いブートストラッピング手法に着目し，さらに詳しい分析を行う．
+まず，各手法における取得インスタンスの傾向を調べる．
+同じ兄弟グループに属する神社と寺カテゴリについて，各手法で反復を5回行った際の，獲得インスタンスのうち上位15個を表~\ref{tab:table1}に示す．
+なお，表~\ref{tab:table1}ではインスタンスを正解と誤りに分けて記している．
+表~\ref{tab:table1}によると，EspressoとEspresso + 排他制約は多くの誤りインスタンスを獲得しているが，誤りの傾向には違いがある．
+Espressoは「八幡宮」や「太宰府天満宮」，「浅草寺」など，いくつかのインスタンスを神社と寺カテゴリの両方に属するものとしてしまっている．
+これに対して，Espresso + 排他制約はインスタンスが複数カテゴリに所属しないように，インスタンスの属するただ1つのカテゴリを選択しており，Espressoのような誤りは発生していない．
+すなわち，排他制約は意味ドリフトを緩和する効果があることがわかる．
+しかしながら，Espresso + 排他制約は寺カテゴリにおいて，「袋屋醤油店」や「あだしのまゆ村」など，対象カテゴリとは無関係のインスタンスを多く獲得してしまっている．
+提案手法は兄弟グループの共通性についての知識を利用することにより，このような誤りインスタンスを除去することに成功している．
+この結果から，兄弟関係は集合拡張に対して，有用な情報であることがわかる．
+
+
+\newcommand{\ThreeLine}[3]{}
+\begin{table}[p]
+  \caption{反復を5回行った際の各カテゴリにおける各手法の適合率}
+ \label{tab:table2}
+\input{09table02.txt}
+\end{table}
+
+反復を5回行った際の，各カテゴリにおける各手法の獲得インスタンスの適合率を表~\ref{tab:table2}に記す．
+また表~\ref{tab:table2}には提案手法の適合率の，Espressoからの上昇率も示した．
+さらに，それぞれの兄弟グループでのフィルタパターンのうち，上位3つをそのスコアとともに記した．
+表~\ref{tab:table2}より，提案手法とEspresso + 排他制約は多くのカテゴリにおいてEspressoよりも適合率が上昇していることがわかる．
+この結果は，カテゴリ間の排他関係と兄弟関係は集合拡張の精度を向上させることを示している．
+しかしながら，いくつかのカテゴリにおいては適合率が下がっており，兄弟関係の知識が有効に働いていないようである．
+この原因は以下の2つに分類されると考えられる．
+
+\begin{enumerate}
+\item フィルタパターンのスコアが低い\label{case1}
+\item ベースラインでの適合率が高い\label{case2}
+\end{enumerate}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{20-2ia9f6.eps}
+\end{center}
+ \caption{各兄弟グループで取得したフィルタパターンのスコアの最大値と適合率の上昇率}
+ \label{fig:figure5}
+\end{figure}
+
+(\ref{case1})の場合は自動車メーカーと医薬品メーカー，美術館と劇場など，兄弟グループのカテゴリすべてで適合率が下がっている．
+例えば，自動車メーカーと医薬品メーカーカテゴリについては，Espressoと比べ，適合率がそれぞれ14.44\%，2.22\%下がっている．
+この2つのカテゴリを含む兄弟グループでは，最もスコアの高いフィルタパターンでさえスコアが0.1837とかなり低い．
+各兄弟グループで取得したフィルタパターンのスコアの最大値と，その兄弟グループの適合率のEspressoからの上昇率を図~\ref{fig:figure5}に記した．
+さらに図~\ref{fig:figure5}には一次近似曲線を引き，スコアと上昇率の相関を示した．
+この図より，取得したフィルタパターンのスコアの最大値が低いほど上昇率が下がり，スコアが0.6以下の場合にはEspressoよりも精度が悪くなることがわかる．
+フィルタパターンのスコアとは，兄弟グループの共通性を表したパターンをフィルタパターンとして取得できるよう，兄弟グループのシードインスタンスを用いて計算されたものである．
+つまり，取得したフィルタパターンのスコアが低いということは，提案手法がフィルタパターンに必要な要素である，網羅性と平等性を持つパターンを見つけられなかったことを示唆している．
+網羅性と平等性を持つパターンを獲得できなかった原因は，自動車メーカーと医薬品メーカーなど共通性の少ないカテゴリを兄弟グループとしてしまったためであると考えられる．
+兄弟グループの選択による提案手法への影響については，今後調査していきたい．
+
+
+映画監督やコメディアンカテゴリは~(\ref{case2})にあてはまる．
+(\ref{case2})の場合，Espressoにおいて意味ドリフトは起こっていないにもかかわらず，提案手法はフィルタを適用し，正解インスタンスを削除してしまっている．
+言い換えれば，提案手法は誤りインスタンスよりも正解インスタンスを多く除去してしまっている．
+この原因としては，フィルタパターンはシードインスタンスによってのみ決定されるため，ブートストラッピングの反復中に新たに抽出したインスタンスによってもたらされる，兄弟グループの共通性を扱えていない可能性がある．
+これに対処するために，ブートストラッピングの反復中にフィルタパターンを更新することが必要であると考えられる．
+しかし，新たに獲得したインスタンスを用いてフィルタパターンを更新した場合，意味ドリフトを抑制する効果が失われてしまうことも考えられるため，更新は慎重に行わなければならない．
+フィルタパターンの更新方法については今後の課題である．
+
+
+\section{まとめ}
+
+本論文では，ブートストラッピングにおいて，カテゴリ間の兄弟関係を事前知識として利用する手法を提案し，兄弟関係が集合拡張に対して有用な知識であることを示した．
+実験では，提案手法はベースラインであるEspressoアルゴリズムと比べ，適合率を最大で4.4\%向上させた．
+
+しかしながら，\ref{discussion}節において述べた通り，提案手法にはいくつかの副作用もある．
+この副作用の原因は，共通性の少ない兄弟グループの設計と，フィルタパターンを更新しないためであると考えられる．
+これらの要因への対処は今後の課題である．
+また，本研究ではカテゴリ間の兄弟関係がカテゴリのインスタンスを収集する際に有用な情報であることを示したが，今後は，この手法を関係インスタンスの取得に拡張していきたい．
+すなわち，関係（例：{\it is-president-of}や{\it is-citizen-of}）間にある含意関係や因果関係を利用して，関係インスタンスを獲得する手法を構築したい．
+
+
+
+
+\acknowledgment
+本研究は，文部科学省科研費 (23240018)，文部科学 省科研費 (23700159)，および JST 戦略的創造研究推進事業さきがけの一環として行われた．
+
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Abney}{Abney}{2004}]{Abney:2004:UYA:1105596.1105600}
+Abney, S. \BBOP 2004\BBCP.
+\newblock \BBOQ Understanding the Yarowsky Algorithm.\BBCQ\
+\newblock {\Bem Comput. Linguist.}, {\Bbf 30}  (3), \mbox{\BPGS\ 365--395}.
+
+\bibitem[\protect\BCAY{Bellare, Talukdar, Kumaran, Pereira, Liberman, Mccallum,
+  \BBA\ Dredze}{Bellare et~al.}{2007}]{Bellare_lightlysupervisedattribute}
+Bellare, K., Talukdar, P.~P., Kumaran, G., Pereira, O., Liberman, M., Mccallum,
+  A., \BBA\ Dredze, M. \BBOP 2007\BBCP.
+\newblock \BBOQ Lightly-Supervised Attribute Extraction.\BBCQ\
+\newblock In {\Bem Proceedings of the Advances in Neural Information Proceeding
+  Systems Workshop on Machine Learning for Web Search}, \mbox{\BPGS\ 1--7}.
+
+\bibitem[\protect\BCAY{Cao, Jiang, Pei, He, Liao, Chen, \BBA\ Li}{Cao
+  et~al.}{2008}]{Cao:2008:CQS:1401890.1401995}
+Cao, H., Jiang, D., Pei, J., He, Q., Liao, Z., Chen, E., \BBA\ Li, H. \BBOP
+  2008\BBCP.
+\newblock \BBOQ Context-Aware Query Suggestion by Mining Click-Through and
+  Session Data.\BBCQ\
+\newblock In {\Bem Proceedings of the 14th ACM SIGKDD International Conference
+  on Knowledge Discovery and Data Mining}, \mbox{\BPGS\ 875--883}.
+
+\bibitem[\protect\BCAY{Carlson, Betteridge, Kisiel, Settles, {Hruschka Jr.},
+  \BBA\ Mitchell}{Carlson et~al.}{2010a}]{Carlson10towardan}
+Carlson, A., Betteridge, J., Kisiel, B., Settles, B., {Hruschka Jr.}, E.~R.,
+  \BBA\ Mitchell, T.~M. \BBOP 2010a\BBCP.
+\newblock \BBOQ Toward an architecture for never-ending language
+  learning.\BBCQ\
+\newblock In {\Bem Proceedings of the 24th AAAI Conference on Artificial
+  Intelligence}, \mbox{\BPGS\ 1306--1313}.
+
+\bibitem[\protect\BCAY{Carlson, Betteridge, Wang, {Hruschka Jr.}, \BBA\
+  Mitchell}{Carlson et~al.}{2010b}]{carlson-wsdm}
+Carlson, A., Betteridge, J., Wang, R.~C., {Hruschka Jr.}, E.~R., \BBA\
+  Mitchell, T.~M. \BBOP 2010b\BBCP.
+\newblock \BBOQ Coupled Semi-Supervised Learning for Information
+  Extraction.\BBCQ\
+\newblock In {\Bem Proceedings of the 3rd ACM International Conference on Web
+  Search and Data Mining}, \mbox{\BPGS\ 101--110}.
+
+\bibitem[\protect\BCAY{Curran, Murphy, \BBA\ Scholz}{Curran
+  et~al.}{2007}]{Curran_minimisingsemantic}
+Curran, J.~R., Murphy, T., \BBA\ Scholz, B. \BBOP 2007\BBCP.
+\newblock \BBOQ Minimising semantic drift with Mutual Exclusion
+  Bootstrapping.\BBCQ\
+\newblock In {\Bem Proceedings of the 10th Conference of the Pacific
+  Association for Computational Linguistics}, \mbox{\BPGS\ 172--180}.
+
+\bibitem[\protect\BCAY{Etzioni, Banko, \BBA\ Cafarella}{Etzioni
+  et~al.}{2006}]{Etzioni:06}
+Etzioni, O., Banko, M., \BBA\ Cafarella, M.~J. \BBOP 2006\BBCP.
+\newblock \BBOQ Machine Reading.\BBCQ\
+\newblock In {\Bem Proceedings of The 21st National Conference on Artificial
+  Intelligence and the Eighteenth Innovative Applications of Artificial
+  Intelligence Conference}, \mbox{\BPGS\ 1517--1519}.
+
+\bibitem[\protect\BCAY{萩原\JBA 小川\JBA 外山}{萩原 \Jetal
+  }{2011}]{masato_hagiwara:2011}
+萩原正人\JBA 小川泰弘\JBA 外山勝彦 \BBOP 2011\BBCP.
+\newblock グラフカーネルを用いた非分かち書き文からの漸次的語彙知識獲得.\
+\newblock \Jem{人工知能学会論文誌}, {\Bbf 26}  (3), \mbox{\BPGS\ 440--450}.
+
+\bibitem[\protect\BCAY{Hearst}{Hearst}{1992}]{Hearst:1992:AAH:992133.992154}
+Hearst, M.~A. \BBOP 1992\BBCP.
+\newblock \BBOQ Automatic Acquisition of Hyponyms from Large Text
+  Corpora.\BBCQ\
+\newblock In {\Bem Proceedings of the 14th Conference on Computational
+  Linguistics}, \mbox{\BPGS\ 539--545}.
+
+\bibitem[\protect\BCAY{小町\JBA 工藤\JBA 新保\JBA 松本}{小町 \Jetal
+  }{2010}]{mamoru_komachi:2010}
+小町守\JBA 工藤拓\JBA 新保仁\JBA 松本裕治 \BBOP 2010\BBCP.
+\newblock
+  Espresso型ブートストラッピング法における意味ドリフトのグラフ理論に基づく分析
+.\
+\newblock \Jem{人工知能学会論文誌}, {\Bbf 25}  (2), \mbox{\BPGS\ 233--242}.
+
+\bibitem[\protect\BCAY{Kurohashi \BBA\ Nagao}{Kurohashi \BBA\
+  Nagao}{1994}]{And94knparser}
+Kurohashi, S.\BBACOMMA\ \BBA\ Nagao, M. \BBOP 1994\BBCP.
+\newblock \BBOQ KN Parser: Japanese Dependency/Case Structure Analyzer.\BBCQ\
+\newblock In {\Bem Proceedings of the Workshop on Sharable Natural Language
+  Resources}, \mbox{\BPGS\ 48--55}.
+
+\bibitem[\protect\BCAY{Mintz, Bills, Snow, \BBA\ Jurafsky}{Mintz
+  et~al.}{2009}]{Mintz:2009:DSR:1690219.1690287}
+Mintz, M., Bills, S., Snow, R., \BBA\ Jurafsky, D. \BBOP 2009\BBCP.
+\newblock \BBOQ Distant supervision for relation extraction without labeled
+  data.\BBCQ\
+\newblock In {\Bem Proceedings of the Joint Conference of the 47th Annual
+  Meeting of the Association for Computational Linguistics and the 4th
+  International Joint Conference on Natural Language Processing of the AFNLP},
+  \mbox{\BPGS\ 1003--1011}.
+
+\bibitem[\protect\BCAY{Pantel, Crestan, Borkovsky, Popescu, \BBA\ Vyas}{Pantel
+  et~al.}{2009}]{Pantel:2009:WDS:1699571.1699635}
+Pantel, P., Crestan, E., Borkovsky, A., Popescu, A.-M., \BBA\ Vyas, V. \BBOP
+  2009\BBCP.
+\newblock \BBOQ Web-scale distributional similarity and entity set
+  expansion.\BBCQ\
+\newblock In {\Bem Proceedings of the 2009 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 938--947}.
+
+\bibitem[\protect\BCAY{Pantel \BBA\ Lin}{Pantel \BBA\
+  Lin}{2002}]{Pantel:2002:DWS:775047.775138}
+Pantel, P.\BBACOMMA\ \BBA\ Lin, D. \BBOP 2002\BBCP.
+\newblock \BBOQ Discovering word senses from text.\BBCQ\
+\newblock In {\Bem Proceedings of the 8th ACM SIGKDD International Conference
+  on Knowledge Discovery and Data Mining}, \mbox{\BPGS\ 613--619}.
+
+\bibitem[\protect\BCAY{Pantel \BBA\ Pennacchiotti}{Pantel \BBA\
+  Pennacchiotti}{2006}]{pantel-pennacchiotti:2006:COLACL}
+Pantel, P.\BBACOMMA\ \BBA\ Pennacchiotti, M. \BBOP 2006\BBCP.
+\newblock \BBOQ Espresso: Leveraging Generic Patterns for Automatically
+  Harvesting Semantic Relations.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on
+  Computational Linguistics and 44th Annual Meeting of the Association for
+  Computational Linguistics}, \mbox{\BPGS\ 113--120}.
+
+\bibitem[\protect\BCAY{Pantel \BBA\ Ravichandran}{Pantel \BBA\
+  Ravichandran}{2004}]{pantel04}
+Pantel, P.\BBACOMMA\ \BBA\ Ravichandran, D. \BBOP 2004\BBCP.
+\newblock \BBOQ Automatically Labeling Semantic Classes.\BBCQ\
+\newblock In {\Bem Proceedings of the 2004 Human Language Technology Conference
+  of the North American chapter of the Association for Computational
+  Linguistics}, \mbox{\BPGS\ 321--328}.
+
+\bibitem[\protect\BCAY{Pennacchiotti \BBA\ Pantel}{Pennacchiotti \BBA\
+  Pantel}{2011}]{Pennacchiotti:2011:ABT:2018936.2018955}
+Pennacchiotti, M.\BBACOMMA\ \BBA\ Pantel, P. \BBOP 2011\BBCP.
+\newblock \BBOQ Automatically Building Training Examples for Entity
+  Extraction.\BBCQ\
+\newblock In {\Bem Proceedings of the 15th Conference on Computational Natural
+  Language Learning}, \mbox{\BPGS\ 163--171}.
+
+\bibitem[\protect\BCAY{Sadamitsu, Saito, Imamura, \BBA\ Kikui}{Sadamitsu
+  et~al.}{2011}]{Sadamitsu:2011:ESE:2002736.2002876}
+Sadamitsu, K., Saito, K., Imamura, K., \BBA\ Kikui, G. \BBOP 2011\BBCP.
+\newblock \BBOQ Entity Set Expansion using Topic information.\BBCQ\
+\newblock In {\Bem Proceedings of the 49th Annual Meeting of the Association
+  for Computational Linguistics: Human Language Technologies}, \mbox{\BPGS\
+  726--731}.
+
+\bibitem[\protect\BCAY{Sadamitsu, Saito, Imamura, \BBA\ Matsuo}{Sadamitsu
+  et~al.}{2012}]{Sadamitsu:2012:PACLIC26}
+Sadamitsu, K., Saito, K., Imamura, K., \BBA\ Matsuo, Y. \BBOP 2012\BBCP.
+\newblock \BBOQ Entity Set Expansion using Interactive Topic Information.\BBCQ\
+\newblock In {\Bem Proceedings of the 26th Pacific Asia Conference on Language,
+  Information and Computation}, \mbox{\BPGS\ 114--122}.
+
+\bibitem[\protect\BCAY{Smola \BBA\ Kondor}{Smola \BBA\ Kondor}{2003}]{b155}
+Smola, A.~J.\BBACOMMA\ \BBA\ Kondor, R. \BBOP 2003\BBCP.
+\newblock \BBOQ Kernels and Regularization on Graphs.\BBCQ\
+\newblock In {\Bem Proceedings of the Conference on Learning Theory and Kernel
+  Machines}, \mbox{\BPGS\ 144--158}.
+
+\bibitem[\protect\BCAY{Sumida, Yoshinaga, \BBA\ Torisawa}{Sumida
+  et~al.}{2008}]{SUMIDA08.618}
+Sumida, A., Yoshinaga, N., \BBA\ Torisawa, K. \BBOP 2008\BBCP.
+\newblock \BBOQ Boosting Precision and Recall of Hyponymy Relation Acquisition
+  from Hierarchical Layouts in Wikipedia.\BBCQ\
+\newblock In {\Bem Proceedings of the 6th International Conference on Language
+  Resources and Evaluation}, \mbox{\BPGS\ 2462--2469}.
+
+\bibitem[\protect\BCAY{Vyas \BBA\ Pantel}{Vyas \BBA\
+  Pantel}{2009}]{Vyas:2009:SES:1620754.1620796}
+Vyas, V.\BBACOMMA\ \BBA\ Pantel, P. \BBOP 2009\BBCP.
+\newblock \BBOQ Semi-Automatic Entity Set Refinement.\BBCQ\
+\newblock In {\Bem Proceedings of the 2009 Human Language Technologies
+  Conference of the North American Chapter of the Association for Computational
+  Linguistics}, \mbox{\BPGS\ 290--298}.
+
+\bibitem[\protect\BCAY{Vyas, Pantel, \BBA\ Crestan}{Vyas
+  et~al.}{2009}]{Vyas:2009:HEC:1645953.1645984}
+Vyas, V., Pantel, P., \BBA\ Crestan, E. \BBOP 2009\BBCP.
+\newblock \BBOQ Helping Editors Choose Better Seed Sets for Entity Set
+  Expansion.\BBCQ\
+\newblock In {\Bem Proceedings of the 18th ACM Conference on Information and
+  Knowledge Management}, \mbox{\BPGS\ 225--234}.
+
+\bibitem[\protect\BCAY{Wang \BBA\ Cohen}{Wang \BBA\
+  Cohen}{2009}]{Wang:2009:ASI:1687878.1687941}
+Wang, R.~C.\BBACOMMA\ \BBA\ Cohen, W.~W. \BBOP 2009\BBCP.
+\newblock \BBOQ Automatic Set Instance Extraction using the Web.\BBCQ\
+\newblock In {\Bem Proceedings of the Joint Conference of the 47th Annual
+  Meeting of the Association for Computational Linguistics and the 4th
+  International Joint Conference on Natural Language Processing of the AFNLP},
+  \mbox{\BPGS\ 441--449}.
+
+\bibitem[\protect\BCAY{Yarowsky}{Yarowsky}{1995}]{Yarowsky95unsupervisedword}
+Yarowsky, D. \BBOP 1995\BBCP.
+\newblock \BBOQ Unsupervised Word Sense Disambiguation Rivaling Supervised
+  Methods.\BBCQ\
+\newblock In {\Bem Proceedings of the 33rd Annual Meeting of the Association
+  for Computational Linguistics}, \mbox{\BPGS\ 189--196}.
+
+\end{thebibliography}
+
+\begin{biography}
+\bioauthor{高瀬　　翔}{
+2012年東北大学工学部情報知能システム総合学科卒業．同年，同大学大学院情報科学研究科博士前期課程に進学，現在に至る．自然言語処理の研究に従事．
+}
+\bioauthor{岡崎　直観}{
+2007年東京大学大学院情報理工学系研究科・電子情報学専攻博士課程修了．同大学院情報理工学系研究科・特別研究員を経て，2011年より東北大学大学院情報科学研究科准教授．自然言語処理，テキストマイニングの研究に従事．情報理工学博士．情報処理学会，人工知能学会，ACL 各会員．
+}
+\bioauthor{乾　健太郎}{
+1995年東京工業大学大学院情報理工工学研究科博士課程修了．同研究科助手，九州工業大学助教授，奈良先端科学技術大学院大学助教授を経て，2010年より東北大学大学情報科学研究科教授，現在に至る．博士（工学）．自然言語処理の研究に従事．情報処理学会，人工知能学会，ACL，AAAI各会員．
+}
+
+\end{biography}
+
+\biodate
+
+
+
+
+
+
+
+\end{document}

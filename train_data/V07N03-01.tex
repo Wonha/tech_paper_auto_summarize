@@ -1,0 +1,1288 @@
+
+
+
+\documentstyle[epsf,jnlpbbl_old,draft]{jnlp_j_b5}
+
+
+\setcounter{page}{3}
+\setcounter{巻数}{7}
+\setcounter{号数}{3}
+\setcounter{年}{2000}
+\setcounter{月}{7}
+\受付{1999}{4}{16}
+\再受付{1999}{8}{16}
+\採録{2000}{3}{27}
+
+\setcounter{secnumdepth}{2}
+
+\title{痕跡処理のためのGLR法の拡張}
+\author{五百川 明\affiref{NUST} \and 宮崎 正弘\affiref{NUST}}
+
+\headauthor{五百川, 宮崎}
+\headtitle{痕跡処理のためのGLR法の拡張}
+
+\affilabel{NUST}{新潟大学大学院自然科学研究科}
+{Graduate School of Science and Technology, Niigata University}
+
+\jabstract{
+本論文では，GLR法に基づく痕跡処理の手法を示す．痕跡という考え方は，チョ
+ムスキーの痕跡理論で導入されたものである．痕跡とは，文の構成素がその文
+中の別の位置に移動することによって生じた欠落部分に残されると考えられる
+ものである．構文解析において，解析系が文に含まれる痕跡を検出し，その部
+分に対応する構成素を補完することができると，痕跡のための特別な文法規則
+を用意する必要がなくなり，文法規則の数が抑えられる．これによって，文法
+全体の見通しが良くなり，文法記述者の負担が軽減する．GLR法は効率の良い
+構文解析法として知られるが，痕跡処理については考慮されていない．本論文
+では，GLR法に基づいて痕跡処理を実現しようとするときに問題となる点を明
+らかにし，それに対する解決方法を示す．主たる問題は，ある文法規則中の
+痕跡の記述が，その痕跡とは関係のない文法規則に基づく解析に影響を与え，
+誤った痕跡検出を引き起す，というものである．本論文で示す手法では，この
+問題を状態の構成を工夫することで解決する．}
+
+\jkeywords{構文解析，GLR法，痕跡処理}
+
+\etitle{Gap Handling Extension of \\ GLR Parsing Method}
+\eauthor{Akira Iyokawa \affiref{NUST} \and Masahiro Miyazaki \affiref{NUST}}
+
+\eabstract{
+We propose an approach to gap handling, which is based on GLR parsing
+method. The idea of gaps has been introduced in Noam Chomsky's
+transformational grammar. A gap occurs in a sentence when a
+constituent of the sentence transfers to another position of the
+sentence. In cases where a parser finds a gap in a sentence and
+fills it with the corresponding constituent, it is easier to write and
+maintain grammar because additional grammar rules for gaps are
+needless. GLR parsing method has no gap handling, although it is known
+as an efficient parsing method. We make it clear what prevents GLR
+parsing method from handling gaps, and give a solution to gap handling
+in GLR parsing method. The main problem is that a gap described in a
+grammar rule has bad effect on parsing with other grammar rules (LR
+items) in the same state. We solve this problem by splitting a state
+into more than one state. }
+
+\ekeywords{Parsing, GLR, Trace, Gap}
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+
+本論文では，GLR法\cite{Tomita1987}に基づく痕跡処理の手法を示す．痕跡と
+いう考え方は，チョムスキーの痕跡理論で導入されたものである．痕跡とは，
+文の構成素がその文中の別の位置に移動することによって生じた欠落部分に残
+されると考えられるものである．例えば，``A child who has a toy
+smiles.''という文では，`a child'がwhoの直後(右隣り) から現在の位置に移
+動することによって生じた欠落部分に痕跡が存在する． 痕跡を{\it t}で表すと，
+この文は``A child who {\it t} has a toy smiles.''となる．構文解析において，
+解析系が文に含まれる痕跡を検出し，その部分に対応する構成素を補完するこ
+とができると，痕跡のための特別な文法規則を用意する必要がなくなり，文法
+規則の数が抑えられる．これによって，文法全体の見通しが良くなり，文法記
+述者の負担が軽減する\cite{Konno1986}．GLR法は効率の良い構文解析法とし
+て知られるが，痕跡処理については考慮されていない．本論文では，GLR法に
+基づいて痕跡処理を実現しようとするときに問題となる点を明らかにし，それ
+に対する解決方法を示す．
+
+これまでに，痕跡を扱うための文法の枠組みが提案されるとともに，それらを
+用いた痕跡処理の手法が示されている\cite[など]
+{Pereira1981,Konno1986,Hayashi1988,Tokunaga1990,Haruno1992}．これらの
+うち痕跡の扱いに関する初期の考え方として，ATNGのHOLD機構
+\cite{Wanner1978}，PereiraによるXGのXリスト\cite{Pereira1981}が知られ
+ている．本論文で示す手法では，XGでのXリストの考え方と基本的に同じもの
+を用いる．
+
+
+\section{GLR法}
+
+本章では，本論文で示す手法の基となるGLR法\cite{Tomita1987}について簡単
+に述べる．
+
+GLR法では，次に示す項の集合によって解析系の{\bf 状態}というものが定義
+される．そして，解析系がLR構文解析表\footnote{LR構文解析系は，LR構文解
+析表の構成方法によって，SLR(simple LR)，正準LR(canonical LR)，
+LALR(lookahead LR)の3つに分けられる\cite{Aho1986}．ここではSLRに基づ
+いて説明をおこなうが，本論文で示す手法は正準LR，LALRに対しても有効であ
+る．}に従ってある状態 から他の状態へと遷移することで解析が
+進められる．
+
+項とは，文法規則に解析経過を示すドット記号`・'を付加したものである．ドッ
+ト記号は文法規則の右辺に付加され，その左側のカテゴリは既に解析済みであ
+り，その右隣りのカテゴリがその後の解析の対象となることを示す．$[s \to
+np \cdot vp]$ は項の一例であるが，これは「現時点までにカテゴリnpの解析
+が終了し，次にカテゴリvpの解析を開始する．」ということを示す．
+
+状態を構成する項の集合は，与えられたCFGに文法規則$[S' \to S]$を
+加えて得られる文法から，次に示す関数CLOSUREおよびGOTOによって求められ
+る．ここで，$S$は開始記号を表す．
+
+\subsubsection*{関数CLOSURE}
+
+関数CLOSUREは，与えられた項の集合$I$から，次の手順で$I$の閉包
+CLOSURE($I$)を求める．
+
+\begin{enumerate}
+\item 与えられた項の集合$I$に含まれる，すべての項をその閉包
+  CLOSURE($I$)に加える．
+\item 項$[A \to \alpha \cdot B \beta]$がCLOSURE($I$)に含まれ，文法規則$B
+  \to \gamma$が存在するとき，項$[B \to \cdot \gamma]$がCLOSURE($I$)に含
+  まれていなければ，これをCLOSURE($I$)に加える．加えるべき項がなくなる
+  まで，これを繰り返す．
+\end{enumerate}
+
+ここで，$A$，$B$は非終端カテゴリを，$\alpha$，$\beta$，$\gamma$は非終
+端カテゴリおよび品詞\footnote{GLR法を自然言語の解析に用いる場合，通常，
+先読みした語の品詞などを先読み情報として使用する．品詞は，文法規則によ
+る導出において，終端カテゴリ(語)の一つ手前のカテゴリとなる．}からなるカ
+テゴリ列を表す．
+
+\subsubsection*{関数GOTO}
+
+関数GOTOは，与えられた項の集合$I$から，文法カテゴリ$X$に対する新たな項
+の集合GOTO($I$，$X$)を求める．得られるGOTO($I$，$X$)は，$I$に含まれる
+項$[A \to \alpha \cdot X \beta]$に対する項$[A \to \alpha X \cdot
+\beta]$をすべて集めたものの閉包である．ここで，$A$は非終端カテゴリを，
+$\alpha$，$\beta$は非終端カテゴリおよび品詞からなるカテゴリ列を表す．
+
+\ 
+
+状態を構成する項の集合を求める手順は次の通りである．
+
+\begin{enumerate}
+\item 項の集合族(つまり，集合の集合)を$C$とし，その初期値を
+  $\{$CLOSURE$(\{[S' \to \cdot S]\})\}$とする．
+\item $C$に含まれる各項の集合$I$および各文法カテゴリ$X$に対して，
+  GOTO($I$，$X$)を求める．これが空でなく，かつ$C$に含まれていなければ，
+  これを$C$に加える．加えるべき項の集合がなくなるまで，これを繰り返す．
+\end{enumerate}
+
+これによって得られた$C$に含まれる項の集合$I_{i}$が状態$i$を構成
+する．
+
+GLR法での解析系の動作例を次に示す．ここでは図\ref{fig:cfg}に示すCFGを
+用いる．このCFGからは図\ref{fig:states}に示す各状態が構成される．
+例文として``A child smiles.''を使用する．なお，aの品詞はdet，childはn，
+smilesはviとする．解析系は状態0から解析を開始し，先読み情報とLR 
+構文解析表に従って解析を進めていく．まずaを先読し，その品詞であるdetを
+先読み情報として得る．これによって解析系は状態3に遷移する． 次に
+childを先読みし，その品詞であるnを得る．これによって状態7に遷移
+する．次にsmilesを先読みし，その品詞であるviを得る．ここで文法規則$[np
+\to det\ n]$による還元をおこない，一時的に状態0に遷移したのち
+状態2に遷移する．そして，先読み情報であるviに従って状態5に
+遷移する．次に，文の終了を表す右端記号を先読みする．ここで文法規則$[vp
+\to vi]$による還元をおこない，一時的に状態2に遷移したのち状
+態4に遷移する．さらに文法規則$[s \to np\ vp]$による還元をおこない，一
+時的に状態0に遷移したのち状態1に遷移する．ここで解析系は解
+析を終了する．
+
+\newlength{\mpw}
+\setlength{\mpw}{3cm}
+
+\begin{figure}[htbp]
+  \begin{minipage}[b]{\mpw}
+    \begin{center}
+      \begin{tabular}[h]{l}
+        s $\to$ np\ vp\\
+        np $\to$ det\ n\\
+        vp $\to$ vi\\
+        vp $\to$ vt\ np
+      \end{tabular}
+      \caption{簡単な英文を\\解析するため\\のCFG}
+      \label{fig:cfg}
+    \end{center}
+  \end{minipage}
+  \hspace{5mm}
+  \begin{minipage}[b]{10.5cm}
+    \begin{center}
+      {\small
+        \begin{tabular}[h]{lll}
+          \begin{minipage}[t]{\mpw}
+            I$_{0}$: \\
+            　\{[S' $\to$ $\cdot$ s] \\
+            　[s $\to$ $\cdot$ np\ vp] \\ 
+            　[np $\to$ $\cdot$ det\ n]\} \vspace*{\baselineskip}
+          \end{minipage} &
+          \begin{minipage}[t]{\mpw}
+            I$_{3}$ = GOTO(I$_{0}$, det) \\
+            　= GOTO(I$_{6}$, det): \\
+            　\{[np $\to$ det $\cdot$ n]\}
+          \end{minipage} &
+          \begin{minipage}[t]{\mpw}
+            I$_{6}$ = GOTO(I$_{2}$, vt): \\
+            　\{[vp $\to$ vt $\cdot$ np] \\ 
+            　[np $\to$ $\cdot$ det\ n]\}
+          \end{minipage} \\
+          \begin{minipage}[t]{\mpw}
+            I$_{1}$ = GOTO(I$_{0}$, s): \\
+            　\{[S' $\to$ s $\cdot$]\} \vspace*{\baselineskip}
+          \end{minipage} &
+          \begin{minipage}[t]{\mpw}
+            I$_{4}$ = GOTO(I$_{2}$, vp): \\
+            　\{[s $\to$ np\ vp $\cdot$]\}
+          \end{minipage} &
+          \begin{minipage}[t]{\mpw}
+            I$_{7}$ = GOTO(I$_{3}$, n): \\ 
+            　\{[np $\to$ det\ n$\cdot$]\}
+          \end{minipage} \\
+          \begin{minipage}[t]{\mpw}
+            I$_{2}$ = GOTO(I$_{0}$, np): \\
+            　\{[s $\to$ np $\cdot$ vp] \\ 
+            　[vp $\to$ $\cdot$ vi] \\ 
+            　[vp $\to$ $\cdot$ vt\ np]\}
+          \end{minipage} &
+          \begin{minipage}[t]{\mpw}
+            I$_{5}$ = GOTO(I$_{2}$, vi): \\
+            　\{[vp $\to$ vi $\cdot$]\}
+          \end{minipage} &
+          \begin{minipage}[t]{\mpw}
+            I$_{8}$ = GOTO(I$_{6}$, np): \\
+            　\{[vp $\to$ vt\ np$\cdot$]\}
+          \end{minipage}
+        \end{tabular}
+        }
+      \caption{図\ref{fig:cfg}のCFGから求められる，\\状態を構成する項の
+        集合}
+      \label{fig:states}
+    \end{center}
+  \end{minipage}
+\end{figure}
+
+\section{文法記述形式}
+
+本論文で示す手法では，文法記述形式として今野らによる
+XGS\cite{Konno1986}を用いる．これは，GLR法で用いられるCFGそのままでは
+痕跡を扱えないためである．XGSは，痕跡を容易に扱えるように，補強CFGの一
+つであるDCG\cite{Pereira1980}を拡張したものである．XGSでは，次に示すス
+ラッシュ記法を用いて痕跡を記述する．スラッシュ記法では，スラッシュと呼
+ばれる記号`/'を使用して，非終端カテゴリの記述に痕跡の記述を追加する．
+`relC/np'はスラッシュ記法を用いた記述の一例であるが，これは「非終端カ
+テゴリrelCを根とする解析木が作られたとき，その根の下に痕跡を直接構成素
+として持つカテゴリnpが一つ存在する．」という意味を持つ．また，スラッシュ
+`/'の直後(右隣り)に記述されたカテゴリは，スラッシュカテゴリと呼ばれる．
+`relC/np'の例では，カテゴリnpはスラッシュカテゴリである．XGSでの文法記
+述例を図\ref{fig:xgs}に示す．また，この文法を使用した場合の，例文``A child
+who has a toy smiles.''に対する解析木を図\ref{fig:tree}に示す．
+
+\begin{figure}[htbp]
+  \begin{minipage}[b]{4cm}
+    \begin{center}
+      \begin{tabular}[h]{l}
+        s $\to$ np,\ vp.\\
+        np $\to$ det,\ n.\\
+        np $\to$ np,\ relC/np.\\
+        vp $\to$ vi.\\
+        vp $\to$ vt,\ np.\\
+        vp $\to$ vt,\ np\ np.\\
+        relC $\to$ relPron,\ s.
+      \end{tabular}
+      \caption{簡単な英文を解析する\\ための，XGSで\\記述された文法}
+      \label{fig:xgs}
+    \end{center}
+  \end{minipage}
+  \begin{minipage}[b]{10cm}
+    \begin{center}
+      \epsfile{file=tree.eps,scale=0.9}
+      
+      \caption{``A child who has a toy smiles.''\\に対する解析木．{\it t}が痕跡を表す．}
+      \label{fig:tree}
+    \end{center}
+  \end{minipage}
+\end{figure}
+
+\section{痕跡検出}
+
+解析系は，文に含まれる痕跡を検出するために，痕跡となるカテゴリを保持し
+なければならない．本論文で示す手法では，痕跡となるカテゴリの保持に，XG
+でのX リスト\cite{Pereira1981}と同じ手法を用いる．つまり，痕跡となるカ
+テゴリの保持にスタックを使用する．ここでは，このスタックを便宜的にXリ
+ストと呼ぶことにする．
+
+Xリストへのプッシュは次のようにおこなう．文法規則中のスラッシュ記法を
+処理するときに，そのスラッシュカテゴリをXリストにプッシュする．つまり，
+スラッシュ記法の直前(左隣り)にドット記号`・'のある項を含む状態に解析系
+が遷移するときに，そのスラッシュカテゴリをXリストにプッシュする．例え
+ば，図\ref{fig:xgs}の文法規則$[np \to np\ relC/np]$では，relC/npの解析
+を開始するとき，つまり，項$[np \to np \cdot relC/np]$を含む状態に解析
+系が遷移するときに，スラッシュカテゴリであるnpをXリストにプッシュする．
+
+Xリストからのポップは，痕跡を検出したときにおこなう．解析系は，Xリスト
+の先頭にあるスラッシュカテゴリが痕跡として文中に存在すると判断したとき，
+そのスラッシュカテゴリをXリストからポップし，そのスラッシュカテゴリに
+対してLR構文解析表に定義されている動作に従って解析を続ける．
+
+痕跡の検出は，文のすべての単語間に痕跡の存在を仮定することでおこな
+う．解析が単語の境界に到達したときに，その時点でのXリストの先頭にある
+スラッシュカテゴリに対して，LR構文解析表に動作\footnote{ACTION部での移
+動，還元，あるいはGOTO部での状態遷移}が定義されているとき，その単語境
+界にそのスラッシュカテゴリが痕跡として存在すると判断する．一方，LR構文
+解析表に動作定義がない場合やXリストが空である場合には，その単語境界に
+は痕跡は存在しないと判断する．
+
+自然言語の解析では，スラッシュカテゴリは，通常，非終端カテゴリであ
+る．痕跡の検出において，Xリストの先頭にあるスラッシュカテゴリが非終端
+カテゴリである場合には，そのスラッシュカテゴリを構成する左隅の品詞を先
+読み情報とした還元を考慮しなければならない．これを例を用いて次に説明す
+る．使用する文法は図\ref{fig:xgs}に示すものである．この文法からは図
+\ref{fig:states2}に示す各状態が構成される．例文として``A toy which a
+man gives a child moves.''を使用する．ここで，aの品詞はdetであり，toy，
+man，childはn，whichはrelPron，givesはvt，movesはviとする．childまで解
+析が終了したとき，解析系の状態は状態9であり，Xリストの先頭にあるスラッ
+シュカテゴリは非終端カテゴリnpである．ここでLR構文解析表を参照すると，
+状態9ではカテゴリnpに対する動作は定義されていない．したがって，解析系
+はchildとmoves の単語境界には痕跡は存在しないと判断する．しかし，実際
+にはカテゴリnpが痕跡として存在するので，この判断は正しくない．この判
+断の誤りは，文法規則$[np \to det\ n]$による還元によって，aとchildから
+`a child'がまだ構成されていないことに起因する．この還元は，Xリストの先
+頭にあるスラッシュカテゴリnpを構成する左隅の品詞であるdetを先読み情報
+としておこなわれるべきものである．しかし，このスラッシュカテゴリnpは痕
+跡として存在するので，この品詞detが先読み情報として実際の文から得られ
+ることはない．そのため，このままではこの還元はおこなわれない．そこで，
+痕跡検出の手続きの一つとして，この還元をおこなう．これによって，解析系
+は一時的に状態7に遷移したのち，状態10に遷移する．ここでLR構文解析表を
+参照すると，カテゴリnpに対して状態12への遷移が定義されている．これによっ
+て，解析系はchildとmovesの単語境界にカテゴリnpの痕跡が存在すると判断す
+る．これで痕跡が正しく検出されたことになる．
+
+\newlength{\vs}
+\setlength{\vs}{2mm}
+\setlength{\mpw}{4.5cm}
+
+\begin{figure}[htbp]
+  \begin{center}
+    {\small
+      \begin{minipage}[t]{\mpw}
+        I$_{0}$: \\
+        　\{[S' $\to$ $\cdot$ s] \\
+        　[s $\to$ $\cdot$ np\ vp] \\ 
+        　[np $\to$ $\cdot$ det\ n] \\
+        　[np $\to$ $\cdot$ np\ relC/np]\}
+
+        \vspace{\vs}
+        I$_{1}$ = GOTO(I$_{0}$, s): \\
+        　\{[S' $\to$ s $\cdot$]\}
+
+        \vspace{\vs}
+        I$_{2}$ = GOTO(I$_{0}$, np) \\
+        　= GOTO(I$_{8}$, np): \\
+        　\{[s $\to$ np $\cdot$ vp] \\ 
+        　[np $\to$ np $\cdot$ relC/np] \\
+        　[vp $\to$ $\cdot$ vi] \\ 
+        　[vp $\to$ $\cdot$ vt\ np] \\
+        　[vp $\to$ $\cdot$ vt\ np\ np] \\
+        　[relC $\to$ $\cdot$ relPron\ s]\}
+
+        \vspace{\vs}
+        I$_{3}$ = GOTO(I$_{0}$, det) \\
+        　= GOTO(I$_{7}$, det) \\
+        　= GOTO(I$_{8}$, det) \\
+        　= GOTO(I$_{10}$, det): \\
+        　\{[np $\to$ det $\cdot$ n]\}
+      \end{minipage}
+      \begin{minipage}[t]{\mpw}
+        I$_{4}$ = GOTO(I$_{2}$, vp): \\
+        　\{[s $\to$ np\ vp $\cdot$]\}
+
+        \vspace{\vs}
+        I$_{5}$ = GOTO(I$_{2}$, relC/np) \\
+        　= GOTO(I$_{10}$, relC/np) \\
+        　= GOTO(I$_{12}$, relC/np): \\
+        　\{[np $\to$ np\ relC/np $\cdot$]\} 
+
+        \vspace{\vs}
+        I$_{6}$ = GOTO(I$_{2}$, vi): \\
+        　\{[vp $\to$ vi $\cdot$]\}
+
+        \vspace{\vs}
+        I$_{7}$ = GOTO(I$_{2}$, vt): \\
+        　\{[vp $\to$ vt $\cdot$ np] \\ 
+        　[vp $\to$ vt $\cdot$ np\ np] \\ 
+        　[np $\to$ $\cdot$ det\ n] \\
+        　[np $\to$ $\cdot$ np\ relC/np]\}
+        
+        \vspace{\vs}
+        I$_{8}$ = GOTO(I$_{2}$, relPron) \\ 
+        　= GOTO(I$_{10}$, relPron) \\
+        　= GOTO(I$_{12}$, relPron): \\
+        　\{[relC $\to$ relPron $\cdot$ s] \\ 
+        　[s $\to$ $\cdot$ np\ vp] \\ 
+        　[np $\to$ $\cdot$ det\ n] \\
+        　[np $\to$ $\cdot$ np\ relC/np]\} 
+      \end{minipage}
+      \begin{minipage}[t]{\mpw}
+        I$_{9}$ = GOTO(I$_{3}$, n): \\
+        　\{[np $\to$ det\ n $\cdot$]\}
+
+        \vspace{\vs}
+        I$_{10}$ = GOTO(I$_{7}$, np): \\
+        　\{[vp $\to$ vt\ np $\cdot$] \\
+        　[vp $\to$ vt\ np $\cdot$ np] \\
+        　[np $\to$ np $\cdot$ relC/np] \\
+        　[np $\to$ $\cdot$ det\ n] \\
+        　[np $\to$ $\cdot$ np\ relC/np] \\
+        　[relC $\to$ $\cdot$ relPron\ s]\}
+
+        \vspace{\vs}
+        I$_{11}$ = GOTO(I$_{8}$, s): \\
+        　\{[relC $\to$ relPron\ s $\cdot$]\}
+
+        \vspace{\vs}
+        I$_{12}$ = GOTO(I$_{10}$, np): \\
+        　\{[vp $\to$ vt\ np\ np $\cdot$] \\
+        　[np $\to$ np $\cdot$ relC/np] \\
+        　[relC $\to$ $\cdot$ relPron\ s]\}
+      \end{minipage} \\
+    }
+    \caption{図\ref{fig:xgs}の文法から求められる，状態を構成する項の集
+      合}
+    \label{fig:states2}
+  \end{center}
+\end{figure}
+
+\vspace{-3mm}
+痕跡検出において，文のすべての単語間に痕跡の存在を仮定する理由を次に示
+す．痕跡処理をおこなわずに痕跡を含む文を解析すると，通常，痕跡が存在す
+る位置でその解析は失敗する．そこで，痕跡処理において，解析が失敗する位
+置に痕跡が存在すると仮定して痕跡の検出をおこなうものとする．そうすると，
+``A child whom a man gives a toy smiles.''などの文では，``A child whom
+a man gives a toy {\it t} smiles.''と解析されてしまい，正しく``A child
+whom a man gives {\it t} a toy smiles.''とは解析されない({\it t}が痕跡
+を表す)．このため，文のすべての単語間に痕跡の存在を仮定し痕跡の検出を
+おこなう．痕跡が存在するか否かの判断は，LR構文解析表を参照することで即
+座におこなわれる．このため，純粋なボトムアップ法での場合のような無駄な
+処理はおこなわれない．
+
+また逆に，文のすべての単語間に痕跡の存在を仮定して痕跡の検出をおこなう
+と，``A toy which a man gives a child moves.''などの文では，``A toy
+which a man gives {\it t} a child moves.''と解析されてしまい，正しく
+``A toy which a man gives a child {\it t} moves.''とは解析されない
+({\it t}が痕跡を表す)．そこで，痕跡が存在すると判断される場合には，解
+析過程を分岐させ横型探索によって，痕跡は存在しないものとした解析も同時
+におこなう．
+
+\section{状態の構成}
+
+XGSで記述された文法に対して，通常のGLR法での方法で，状態を構成する項の
+集合を求めると，次の(1)〜(3)に示す問題が生じる．ここで，説明上の都合に
+より，{\bf slash項}と{\bf 芯}という用語を導入する．slash項と
+は，スラッシュ記法の直前(左隣り)にドット記号`・'のある項のことである．
+図\ref{fig:states2}の項の集合I$_{2}$に含まれる項$[np \to np \cdot
+relC/np]$ は，slash項の一例である．また，slash項のうち，スラッ
+シュ記法が右辺の左端に存在するものを左隅slash項と呼ぶことにす
+る．芯とは，閉包を求めるときに関数CLOSUREに与えた項の集合に含まれる項
+のことである．図\ref{fig:states2}の項の集合I$_{2}$では，項$[s \to np
+\cdot vp]$と$[np \to np \cdot relC/np]$が芯である．
+
+\begin{enumerate}
+\item 状態が芯としてslash項とそうでない項を含む場合，そのslash
+  項ではない項の閉包として得られた項に基づく解析においても，その状態に遷
+  移するときにXリストにプッシュしたスラッシュカテゴリが参照されてしまい，
+  誤った痕跡の検出が引き起される．
+\item 状態が芯として複数のslash項を含む場合，その状態に遷移すると
+  きにXリストにプッシュすべきスラッシュカテゴリが複数存在してしまう．
+\item 状態が左隅slash項を含む場合，その左隅slash項の閉包として
+  得られた項以外の項に基づく解析においても，その状態に遷移するときにXリ
+  ストにプッシュしたスラッシュカテゴリが参照されてしまい，誤った痕跡の検
+  出が引き起される．
+\end{enumerate}
+
+次に，これらの問題についてより具体的に述べるとともに，その解決方法を示
+す．
+
+\subsection{状態分割}
+
+図\ref{fig:states2}の状態2(I$_{2}$)には，(1)に示した問題がある．状態2 
+に遷移するときにXリストにプッシュされたスラッシュカテゴリnpは，カテゴ
+リrelCの解析においてのみ参照されるべきものである．しかし，このスラッシュ
+カテゴリnpは，Xリスト上に存在する限り，カテゴリvpの解析，つまり，
+I$_{2}$のうちCLOSURE(\{$[s \to np \cdot vp]$\})に含まれる項に基づく解
+析においても参照されてしまう．その結果，誤った痕跡の検出がおこなわれる．
+
+非文である``A child has.''を用いて，次により具体的に述べる．ここで，a 
+の品詞はdet，childはn，hasはvtとする．childまで解析が終了したとき，解
+析系の状態は状態9であり，Xリストは空である．解析系は，次にhasを先読み
+し，その品詞であるvtを先読み情報として得る．ここで，文法規則$[np \to
+det\ n]$による還元をおこない，一時的に状態0に遷移したのち状態2に遷移す
+る．このとき，Xリストにスラッシュカテゴリnpをプッシュする．そして，先
+読み情報であるvtに従って状態7に遷移する．ここで，Xリストの先頭にあるス
+ラッシュカテゴリnpに対してLR構文解析表に動作が定義されているため，誤り
+であるにも関わらず，解析系はhasの直後(右隣り)にこのスラッシュカテゴリ
+npが痕跡として存在すると判断する．そして，このスラッシュカテゴリnpをX
+リストからポップし，カテゴリnpに対してLR構文解析表に定義されている動作
+に従って状態10に遷移する．この後，解析系は(状態2)$\to$状態4$\to$(状態
+0)$\to$状態1と遷移し\footnote{括弧で括られた状態への遷移は，還元による
+一時的なものである．}，この非文が正しいものであるかのように解析を終了す
+る．
+
+この問題は，状態から芯であるslash項の閉包を取り出し，それによって
+新たな状態を構成することで解決できる．図\ref{fig:states2}の状態2の場合，
+CLOSURE(\{$[np \to np \cdot relC/np]$\})を取り出し，これによって新たな
+状態を構成する．この状態分割\footnote{状態10も同様に分割される．}によっ
+て，図\ref{fig:states2}に示した状態を構成する項の集合は，図
+\ref{fig:states3}に示すものとなる．図\ref{fig:states3}の状態2は図
+\ref{fig:states3}では，状態21と状態22へと分割される．そして，解析系は
+状態22に遷移するときにのみ，スラッシュカテゴリnpをXリストにプッシュす
+る．これによって，上述の誤った痕跡の検出を防ぐことができる．
+
+\begin{figure}[htbp]
+  \begin{center}
+    {\small
+      \begin{minipage}[t]{\mpw}
+        I$_{0}$: \\
+        　\{[S' $\to$ $\cdot$ s] \\
+        　[s $\to$ $\cdot$ np\ vp] \\ 
+        　[np $\to$ $\cdot$ det\ n] \\
+        　[np $\to$ $\cdot$ np\ relC/np]\}
+
+        \vspace{\vs}
+        I$_{1}$ = GOTO(I$_{0}$, s): \\
+        　\{[S' $\to$ s $\cdot$]\}
+
+        \vspace{\vs}
+        I$_{21}$ = GOTO(I$_{0}$, np) \\
+        　= GOTO(I$_{8}$, np): \\
+        　\{[s $\to$ np $\cdot$ vp] \\ 
+        　[vp $\to$ $\cdot$ vi] \\ 
+        　[vp $\to$ $\cdot$ vt\ np] \\
+        　[vp $\to$ $\cdot$ vt\ np\ np]\}
+
+        \vspace{\vs}
+        I$_{22}$ = GOTO(I$_{0}$, np) \\
+        　= GOTO(I$_{7}$, np) \\
+        　= GOTO(I$_{8}$, np) \\
+        　= GOTO(I$_{10}$, np): \\
+        　\{[np $\to$ np $\cdot$ relC/np] \\
+        　[relC $\to$ $\cdot$ relPron\ s]\}
+      \end{minipage}
+      \begin{minipage}[t]{\mpw}
+        I$_{3}$ = GOTO(I$_{0}$, det) \\
+        　= GOTO(I$_{7}$, det) \\
+        　= GOTO(I$_{8}$, det) \\
+        　= GOTO(I$_{10}$, det): \\
+        　\{[np $\to$ det $\cdot$ n]\}
+
+        \vspace{\vs}
+        I$_{4}$ = GOTO(I$_{21}$, vp): \\
+        　\{[s $\to$ np\ vp $\cdot$]\}
+
+        \vspace{\vs}
+        I$_{5}$ = GOTO(I$_{22}$, relC/np): \\
+        　\{[np $\to$ np\ relC/np $\cdot$]\} 
+
+        \vspace{\vs}
+        I$_{6}$ = GOTO(I$_{21}$, vi): \\
+        　\{[vp $\to$ vi $\cdot$]\}
+
+        \vspace{\vs}
+        I$_{7}$ = GOTO(I$_{21}$, vt): \\
+        　\{[vp $\to$ vt $\cdot$ np] \\ 
+        　[vp $\to$ vt $\cdot$ np\ np] \\ 
+        　[np $\to$ $\cdot$ det\ n] \\
+        　[np $\to$ $\cdot$ np\ relC/np]\}
+      \end{minipage}
+      \begin{minipage}[t]{\mpw}
+        I$_{8}$ = GOTO(I$_{22}$, relPron): \\ 
+        　\{[relC $\to$ relPron $\cdot$ s] \\ 
+        　[s $\to$ $\cdot$ np\ vp] \\ 
+        　[np $\to$ $\cdot$ det\ n] \\
+        　[np $\to$ $\cdot$ np\ relC/np]\} 
+
+        \vspace{\vs}
+        I$_{9}$ = GOTO(I$_{3}$, n): \\
+        　\{[np $\to$ det\ n $\cdot$]\}
+
+        \vspace{\vs}
+        I$_{10}$ = GOTO(I$_{7}$, np): \\
+        　\{[vp $\to$ vt\ np $\cdot$] \\
+        　[vp $\to$ vt\ np $\cdot$ np] \\
+        　[np $\to$ $\cdot$ det\ n] \\
+        　[np $\to$ $\cdot$ np\ relC/np]\}
+
+        \vspace{\vs}
+        I$_{11}$ = GOTO(I$_{8}$, s): \\
+        　\{[relC $\to$ relPron\ s $\cdot$]\}
+
+        \vspace{\vs}
+        I$_{12}$ = GOTO(I$_{10}$, np): \\
+        　\{[vp $\to$ vt\ np\ np $\cdot$]\}
+      \end{minipage} \\
+    }
+    \caption{図\ref{fig:xgs}の文法から求められる, 状態分割\\を考慮した，
+      状態を構成する項の集合}
+    \label{fig:states3}
+  \end{center}
+\end{figure}
+
+このように状態を分割しても問題が生じないのは，それぞれの芯の閉包を独立
+したものとして扱うことが可能なためである．また，このような状態分割は，
+状態遷移における非決定性をもたらす．例えば，図\ref{fig:states3}では 
+状態0からのカテゴリnpによる遷移先として，状態21と状態22が存在する．こ
+れらの非決定性に対して，解析系は解析過程を分岐させ横型探索をおこなう．
+
+また，この状態分割の手法は(2)に示した問題に対しても有効である．状態
+が芯として$[A \to \alpha \cdot B/C \beta]$や$[D \to \gamma \cdot E/F
+\delta]$などのslash項を含む場合，この状態に遷移するときにXリスト
+にプッシュすべきスラッシュカテゴリとしてCやFなどが存在してしまう．ここ
+で，A，B，D，Eは非終端カテゴリ，$\alpha$，$\beta$，$\gamma$，$\delta$
+は非終端カテゴリおよび品詞からなるカテゴリ列，C，Fは非終端カテゴリある
+いは品詞とする．そこで，CLOSURE(\{$[A \to \alpha \cdot B/C \beta]$\})
+やCLOSURE(\{$[D \to \gamma \cdot E/F \delta]$\})などをそれぞれ取り出し，
+これらによって新たな状態をそれぞれ構成する．そして，これらの新たに構成
+された状態に遷移するときにのみ，対応するスラッシュカテゴリをXリストに
+プッシュする． このように，状態分割の手法によって，状態遷移においてXリ
+ストにプッシュすべきスラッシュカテゴリを一つにすることができる．
+
+\subsection{依存関係をともなう状態分割}
+
+次に，(3)に示した問題について例を用いて述べる．通常のGLR法での方法に
+よって，図\ref{fig:xgs2}に示す文法から，状態を構成する項の集合の一つと
+して図\ref{fig:states4}に示すI$_{x}$が得られる．この状態x(I$_{x}$)には，
+左隅slash項$[relC \to \cdot s/np]$が含まれ，(3)に示した問題がある．こ
+の状態xに遷移するときにXリストにプッシュされたスラッシュカテゴリnpは，
+カテゴリsの解析，つまり，CLOSURE(\{[relC $\to$ $\cdot$ s/np]\})に含ま
+れる項に基づく解析においてのみ参照されるべきものである．しかし，このス
+ラッシュカテゴリnpは，Xリスト上に存在する限り，CLOSURE(\{[relC $\to$
+$\cdot$ s/np]\})には含まれない，[s $\to$ np $\cdot$ vp]などの項に基づ
+く解析においても参照されてしまう．その結果，誤った痕跡の検出がおこなわ
+れる．
+
+\begin{figure}[htbp]
+  \begin{center}
+  \begin{minipage}[b]{6cm}
+    \begin{center}
+      \begin{tabular}[h]{l}
+        s $\to$ np,\ vp.\\
+        np $\to$ det,\ n.\\
+        np $\to$ np,\ relC.\\
+        vp $\to$ vi.\\
+        vp $\to$ vt,\ np.\\
+        vp $\to$ vt,\ np,\ np.\\
+        relC $\to$ s/np.
+      \end{tabular}
+      \caption{簡単な英文を解析するための，\\XGSで記述された文法(その二)\\}
+      \label{fig:xgs2}
+    \end{center}
+  \end{minipage}
+  \begin{minipage}[b]{6cm}
+    \begin{center}
+      {\small
+        \begin{tabular}[h]{l}
+          I$_{x}$: \{[s $\to$ np $\cdot$ vp] \\ 
+          　　[np $\to$ np $\cdot$ relC] \\
+          　　[vp $\to$ $\cdot$ vi] \\ 
+          　　[vp $\to$ $\cdot$ vt\ np] \\
+          　　[vp $\to$ $\cdot$ vt\ np\ np] \\
+          　　[relC $\to$ $\cdot$ s/np] \\
+          　　[s $\to$ $\cdot$ np\ vp] \\ 
+          　　[np $\to$ $\cdot$ det\ n] \\
+          　　[np $\to$ $\cdot$ np\ relC]\}
+        \end{tabular}
+        }
+      \caption{図\ref{fig:xgs2}に示す文法から求められる，\\状態を構成す
+        る項の集合の一つ\\(左隅slash項を含む)}
+      \label{fig:states4}
+    \end{center}
+  \end{minipage}
+  \end{center}
+\end{figure}
+
+\newcommand{\deriv}{}
+
+先に述べたような状態分割の手法によって，この問題を解決することは難しい．
+これは，左隅slash項の閉包とそれ以外の項とを独立したものとして扱えない
+ためである．図\ref{fig:states4}のI$_{x}$では，項$[np \to np \cdot relC]$ 
+に基づく解析には，CLOSURE(\{[relC $\to$ $\cdot$ s/np]\})に含まれる項に
+基づく解析が含まれる．このため，これらを独立したものとして扱うことはで
+きない．状態xからCLOSURE(\{[relC $\to$ $\cdot$ s/np]\})を取り出し，状
+態の分割を敢えておこなうなら，状態xは図\ref{fig:states5}に示す状態x1と
+状態x2に分割される．実際にこのような状態の分割をおこなった場合には，解
+析系はこれらの状態の間の依存関係を扱わなければならない．例えば，状態x2
+においてカテゴリrelCが構成された場合には，解析系は依存関係に従って一時
+的に状態x1に遷移し，そこからカテゴリrelCによる遷移をおこなわなければな
+らない．
+
+次に，少し複雑な依存関係をともなう状態の分割をおこなった場合について述
+べる．ある状態y(I$_{y}$=CLOSURE(\{$[A \to \alpha B \cdot C \beta]$\}))
+が，y1(I$_{y1}$=CLOSURE(\{$[A \to \alpha B \cdot C
+\beta]$\})$-$I$_{y2}$)，y2(I$_{y2}$=CLOSURE(\{$[D \to \cdot E/F
+\gamma]$\})$-$I$_{y3}$)，y3(I$_{y3}$=CLOSURE(\{$[G \to \cdot H/J
+\delta]$\}))の三つの状態に分割されるとする．また，C \deriv D $\zeta$，
+E \deriv G $\eta$とする．ここで，A，C，D，E，G，Hは非終端カテゴリ，B，
+F，Jは非終端カテゴリあるいは品詞，$\alpha$，$\beta$，$\gamma$，
+$\delta$，$\zeta$，$\eta$は非終端カテゴリおよび品詞からなるカテゴリ列，
+`\deriv' は0回以上の導出を表す．これらの状態の関係を図\ref{fig:depend}
+に示す．状態y1と状態y2は依存関係にあり，また，状態y2と状態y3も同様に依
+存関係にある．解析系が状態y3に遷移するときには，スラッシュカテゴリであ
+るJをXリストにプッシュすることになるが，これに加えてF もプッシュしなけ
+ればならない．これは，状態y3での解析が状態y2での解析の一部を構成するた
+め，状態y2でのスラッシュカテゴリであるFが状態y3での解析においても参照
+可能でなければならないからである．このように，依存関係をともなう状態分
+割をおこなった場合には，解析系の構成が複雑なものになってしまう．
+
+\setlength{\mpw}{3.5cm}
+
+\begin{figure}[htbp]
+  \begin{center}
+  \begin{minipage}[b]{\mpw}
+    \begin{center}
+       {\small
+        \begin{minipage}[t]{\mpw}
+          I$_{x1}$: \{[s $\to$ np $\cdot$ vp] \\ 
+          　　[np $\to$ np $\cdot$ relC] \\
+          　　[vp $\to$ $\cdot$ vi] \\ 
+          　　[vp $\to$ $\cdot$ vt\ np] \\
+          　　[vp $\to$ $\cdot$ vt\ np\ np]\}
+          
+          \vspace{\vs}
+          I$_{x2}$: \{[relC $\to$ $\cdot$ s/np] \\
+          　　[s $\to$ $\cdot$ np\ vp] \\ 
+          　　[np $\to$ $\cdot$ det\ n] \\
+          　　[np $\to$ $\cdot$ np\ relC]\}
+        \end{minipage}
+        }
+      \caption{図\ref{fig:states4}に示すI$_{x}$\\の分割(依存関係\\をともなう)}
+      \label{fig:states5}
+    \end{center}
+  \end{minipage}
+  \hspace{1cm}
+  \begin{minipage}[b]{6cm}
+    \begin{center}
+      \epsfile{file=depend.eps,width=6cm}
+      
+      \caption{状態y1，y2，y3の関係\\}
+      \label{fig:depend}
+    \end{center}
+  \end{minipage}
+  \end{center}
+\end{figure}
+
+\vspace{-3mm}
+また，状態に左隅slash項が再帰的に含まれる場合には，次に示す問題がある．
+通常のGLR法での方法によって，図\ref{fig:xgs3}に示す文法から，状態を構
+成する項の集合の一つとして図\ref{fig:states6}に示すI$_{z}$が得られる．
+この状態z(I$_{z}$)には，左隅slash項$[名詞句 \to \cdot 連体修飾節/後置
+詞句\ 名詞句]$が再帰的に含まれている．状態zからCLOSURE(\{[名詞句 $\to$
+$\cdot$ 連体修飾節/後置詞句\ 名詞句]\})を取り出し状態の分割をおこなう
+と，状態zは図\ref{fig:states7}に示す状態z1と状態z2に分割される．状態z1
+には，CLOSURE(\{[名詞句 $\to$ $\cdot$ 連体修飾節/後置詞句\ 名詞句]\})
+にも含まれる項$[後置詞句 \to \cdot 名詞句\ 後置詞]$と$[名詞句 \to
+\cdot 名詞]$が含まれているが，これらは項$[動詞句 \to \cdot 後置詞句\ 
+他動詞]$ から導かれたものである．状態z2では，左隅slash項$[名詞句 \to
+\cdot 連体修飾節/後置詞句\ 名詞句]$が再帰的に含まれているため，この項
+に基づく連体修飾節の解析が再帰的におこなわれ得る．この再帰的な解析では，
+その再帰の数だけスラッシュカテゴリである後置詞句を必要とする．しかし，
+どれだけ再帰的に解析がおこなわれるかを事前に知ることはできない．このた
+め，状態z2への遷移において，どれだけの数の後置詞句をスラッシュカテゴリ
+としてXリストにプッシュすべきかを決定できない．このため，状態に左隅
+slash項が再帰的に含まれる場合には，状態分割の手法による対処は難しい．
+
+\begin{figure}[htbp]
+  \begin{center}
+    \begin{tabular}[h]{l}
+      文 $\to$ 後置詞句，動詞句．\\
+      後置詞句 $\to$ 名詞句，後置詞．\\
+      動詞句 $\to$ 自動詞．\\
+      動詞句 $\to$ 後置詞句，他動詞．\\
+      名詞句 $\to$ 名詞．\\
+      名詞句 $\to$ 連体修飾節/後置詞句，名詞句．\\
+      連体修飾節 $\to$ 文．
+    \end{tabular}
+    \caption{簡単な日本語文を解析するための，\\XGSで記述された文法}
+    \label{fig:xgs3}
+  \end{center}
+\end{figure}
+
+\vspace{-1.5cm}
+\begin{figure}[htbp]
+  \begin{center}
+    \begin{minipage}[b]{6.9cm}
+      \begin{center}
+        {\small
+          \begin{tabular}[h]{l}
+            I$_{z}$: \{[文 $\to$ 後置詞句 $\cdot$ 動詞句] \\
+            　　[動詞句 $\to$ $\cdot$ 自動詞] \\ 
+            　　[動詞句 $\to$ $\cdot$ 後置詞句\ 他動詞] \\ 
+            　　[後置詞句 $\to$ $\cdot$ 名詞句\ 後置詞] \\ 
+            　　[名詞句 $\to$ $\cdot$ 名詞] \\
+            　　[名詞句 $\to$ $\cdot$ 連体修飾節/後置詞句\ 名詞句] \\
+            　　[連体修飾節 $\to$ $\cdot$ 文] \\
+            　　[文 $\to$ $\cdot$ 後置詞句\ 動詞句]\}
+          \end{tabular}
+          }
+        \caption{図\ref{fig:xgs3}に示す文法から求められる，\\状態を構成す
+          る項の集合の一つ\\(再帰的な左隅slash項を含む)}
+        \label{fig:states6}
+      \end{center}
+    \end{minipage}
+    
+    \begin{minipage}[b]{7cm}
+      \begin{center}
+        {\small
+          \begin{tabular}[h]{l}
+            I$_{z1}$: \{[文 $\to$ 後置詞句 $\cdot$ 動詞句] \\
+            　　[動詞句 $\to$ $\cdot$ 自動詞] \\ 
+            　　[動詞句 $\to$ $\cdot$ 後置詞句\ 他動詞] \\ 
+            　　[後置詞句 $\to$ $\cdot$ 名詞句\ 後置詞] \\ 
+            　　[名詞句 $\to$ $\cdot$ 名詞]\} \\
+            \\
+            I$_{z2}$: \{[名詞句 $\to$ $\cdot$ 連体修飾節/後置詞句\ 名詞句] \\
+            　　[連体修飾節 $\to$ $\cdot$ 文] \\
+            　　[文 $\to$ $\cdot$ 後置詞句\ 動詞句]\\
+            　　[後置詞句 $\to$ $\cdot$ 名詞句\ 後置詞] \\ 
+            　　[名詞句 $\to$ $\cdot$ 名詞]\}
+          \end{tabular}
+          }
+        \caption{図\ref{fig:states6}に示すI$_{z}$の分割\\ \\}
+        \label{fig:states7}
+      \end{center}
+    \end{minipage}
+  \end{center}
+\end{figure}
+
+このように，状態分割の手法は(3)に示した問題に対して有効でない．そこで，
+文法規則の置き換えによる解決方法を次に示す．
+
+\subsection{文法規則の置き換え}
+
+左隅slash項は，右辺の左端にスラッシュ記法が存在する文法規則から生じる．
+したがって，そのような文法規則が存在しなければ，左隅slash項が現れるこ
+とはない．そして，(3)に示した問題が起ることもない．そこで，文法に対す
+る前処理として，右辺の左端にスラッシュ記法が存在する文法規則に対して，
+図\ref{fig:replace}に示す置き換えをおこない，スラッシュ記法を擬似的に
+右辺の左端から移動させる．これによって，左隅slash項が現れることはなく
+なり，(3)に示した問題は(1)あるいは(2)に示した問題に帰着される．そして，
+先に述べたように，これらの問題は状態分割の手法によって解決される．こ
+こで，A，Bは非終端カテゴリ，Cは非終端カテゴリあるいは品詞，$\alpha$ は
+非終端カテゴリあるいは品詞からなるカテゴリ列を表す．また，dummyはスラッ
+シュ記法を擬似的に移動させるためだけに導入された非終端カテゴリであり，
+$\epsilon$は空文字列を表す．図\ref{fig:xgs3}に示す文法では，前処理をお
+こなうと図\ref{fig:xgs4}に示すものとなる．
+
+\begin{figure}[htbp]
+\begin{center}
+\begin{minipage}[b]{5cm}
+  \begin{center}
+    \begin{tabular}[h]{c}
+      $A$ $\to$ $B$/$C$ $\alpha$ \\
+      $\Downarrow$ \\
+      $\biggl\{$
+      \begin{minipage}[m]{3.5cm}
+        $A$ $\to$ dummy $B$/$C$ $\alpha$ \\
+        dummy $\to$ $\epsilon$ 
+      \end{minipage}
+    \end{tabular}
+    \caption{文法規則の置き換え}
+    \label{fig:replace}
+  \end{center}
+\end{minipage}
+\hspace{5mm}
+\begin{minipage}[b]{8.2cm}
+  \begin{center}
+    \begin{tabular}[h]{l}
+      文 $\to$ 後置詞句，動詞句．\\
+      後置詞句 $\to$ 名詞句，後置詞．\\
+      動詞句 $\to$ 自動詞．\\
+      動詞句 $\to$ 後置詞句，他動詞．\\
+      名詞句 $\to$ 名詞．\\
+      名詞句 $\to$ dummy，連体修飾節/後置詞句，名詞句．\\
+      連体修飾節 $\to$ 文．\\
+      dummy $\to$ $\epsilon$
+    \end{tabular}
+    \caption{図\ref{fig:xgs3}に示す文法を前処理した結果}
+    \label{fig:xgs4}
+  \end{center}
+\end{minipage}
+\end{center}
+\end{figure}
+
+\section{slash項に基づく状態遷移}
+
+slash項$[A \to \alpha \cdot B/C \beta]$を含む状態において，Bが構成され
+たときに解析系がおこなう状態遷移には，二通りのものが考えられる．ここで，
+A，Bは非終端カテゴリ，Cは非終端カテゴリあるいは品詞，$\alpha$，$\beta$ 
+は非終端カテゴリおよび品詞からなるカテゴリ列を表す．その一つは，B/Cに
+よる状態遷移である．解析系は，この状態に遷移するときにXリストにプッシュ
+したスラッシュカテゴリCが痕跡検出によって既にポップされているとき，B/C 
+による状態遷移をおこなう．もう一つは，単なるBによる状態遷移である．こ
+の状態遷移は，Xリストの内容とは無関係である．解析系は，LR構文解析表にB
+による状態遷移が定義されているとき，これをおこなう．したがって，B/Cに
+よる状態遷移と単なるBによる状態遷移をともにおこなう必要がある場合には，
+解析系は解析過程を分岐させ横型探索をおこなう．
+
+\section{複合名詞句制約}
+
+痕跡処理では，ロスの複合名詞句制約などのいわゆる「島制約」への対処が求
+められる．次に，ロスの複合名詞句制約について述べ，その後，それへの対処
+方法を示す．
+
+ロスの複合名詞句制約は，埋め込み文中の痕跡の位置に関する統語的な制約で
+ある．ロスの複合名詞句制約によれば，名詞句は文や名詞句の構造を二度越え
+て移動することはできない\cite{Tanaka1989}．この制約に違反する例を図
+\ref{fig:np_const}に示す．図\ref{fig:np_const}では，名詞句`a toy'がhas
+の直後(右隣り)から，`{\it t$_{1}$} has {\it t$_{2}$}'，そして，`the
+man knows the child who {\it t$_{1}$} has {\it t$_{2}$}'の二つの埋め込
+み文を越えて文頭に移動したために，ロスの複合名詞句制約に違反する．
+
+\begin{figure}[htbp]
+  \begin{center}
+    \epsfile{file=np_const.eps}
+    
+    \caption{ロスの複合名詞句制約に違反する例．{\it t$_{1}$}，{\it
+        t$_{2}$}が痕跡を表す．\\また，矢印は痕跡と対応付けられる名詞句を
+        指す．}
+    \label{fig:np_const}
+  \end{center}
+\end{figure}
+
+XGSでは，ロスの複合名詞句制約を表現するために，open($<$)，close($>$)と
+呼ばれる記法が導入されている．この記法には，「`$<$'と`$>$'の外側の構成
+素と，`$<$'と`$>$'で囲まれたカテゴリの中の痕跡とは対応付けることはでき
+ない」という意味が与えられている．この記法の使用例を図\ref{fig:xgs5}に
+示す．図\ref{fig:xgs5}に示す文法では，関係節を表すrelCが`$<$'と`$>$'で
+囲まれているため，関係節内の痕跡がその外側の構成素と対応付けられること
+はない．これによって，関係節が多重に存在する文の解析において，ロスの複
+合名詞句制約が満たされることになる．
+
+\begin{figure}[htbp]
+  \begin{center}
+  \begin{minipage}[b]{5cm}
+    \begin{center}
+      \begin{tabular}[h]{l}
+        s $\to$ np,\ vp.\\
+        np $\to$ det,\ n.\\
+        np $\to$ np,\ $<$relC/np$>$.\\
+        vp $\to$ vi.\\
+        vp $\to$ vt,\ np.\\
+        vp $\to$ vt,\ np\ np.\\
+        relC $\to$ relPron,\ s.
+      \end{tabular}
+      \caption{open($<$)，close($>$)\\による，ロスの複合\\名詞句制約の表現}
+      \label{fig:xgs5}
+    \end{center}
+  \end{minipage}
+  \hspace{1cm}
+  \begin{minipage}[b]{5cm}
+    \begin{center}
+      {\small
+        \begin{tabular}[h]{l}
+          I$_{s}$: \{[s $\to$ np $\cdot$ vp] \\ 
+          　　[np $\to$ np $\cdot$ $<$relC/np$>$] \\
+          　　[vp $\to$ $\cdot$ vi] \\ 
+          　　[vp $\to$ $\cdot$ vt\ np] \\
+          　　[vp $\to$ $\cdot$ vt\ np\ np] \\
+          　　[relC $\to$ $\cdot$ relPron\ s]\}
+        \end{tabular}
+        }
+      \caption{図\ref{fig:xgs5}に示す文法から\\求められる，状態を構成\\す
+        る項の集合の一つ\\(enclosed項を含む)}
+      \label{fig:states8}
+    \end{center}
+  \end{minipage}
+  \end{center}
+\end{figure}
+
+本論文で示す手法では，open($<$)，close($>$)を次のように解析系に組み込
+む．文法規則中の`$<$'と`$>$'で囲まれたカテゴリを処理するときに，Xリス
+トを一時的に空にする．つまり，`$<$'と`$>$'で囲まれたカテゴリの直前(左
+隣り)にドット記号`・'のある項を含む状態に遷移するときに，Xリストを一時
+的に空にする．そして，そのカテゴリの解析が終了したときに，Xリストの内
+容を元に戻す．このようなXリストの操作によって，open($<$)，close($>$)は
+解析系に組み込まれる．ここで，説明上の都合により，{\bf enclosed項}とい
+う用語を導入する．enclosed項とは，`$<$'と`$>$'で囲まれたカテゴリの直前
+(左隣り) にドット記号`・'のある項のことである．また，enclosed項のうち，
+`$<$'と`$>$'で囲まれたカテゴリが右辺の左端に存在するものを左隅enclosed
+項と呼ぶことにする．通常のGLR法での方法によって，図\ref{fig:xgs5}に示
+す文法から，状態を構成する項の集合の一つとして図\ref{fig:states8}に示
+すI$_{s}$が得られる．この状態s(I$_{s}$)には，enclosed項であり，かつ
+slash 項である$[np \to np \cdot <relC/np>]$が含まれている．したがって，
+解析系はこの状態sに遷移するときには，まず一時的にXリストを空にし，その
+後，スラッシュカテゴリであるnpをXリストにプッシュする．また，解析系は
+状態s からrelC/npによる状態遷移をおこなうときには，Xリストの内容をこの
+状態s に遷移する前のものに復元する．
+
+open($<$)，close($>$)を実現するXリスト操作による影響は，`$<$'と`$>$'で
+囲まれたカテゴリの解析，つまり，enclosed項の閉包に含まれる項に基づく解
+析に限定されなければならない．そうでなければ，検出されるべき痕跡が検出
+されない．open($<$)，close($>$)を用いて記述された文法に対して，通常の
+GLR法での方法で，状態を構成する項の集合を求めると，次の(1)，(2)に示す
+問題が生じる．
+
+\begin{enumerate}
+\item 状態が芯としてenclosed項とそうでない項を含む場合，そのenclosed
+  項ではない項の閉包として得られた項に基づく解析に対しても，その状態に
+  遷移するときにおこなわれたXリスト操作が影響し，痕跡が検出されなくなる．
+\item 状態が左隅enclosed項を含む場合，その左隅enclosed項の閉包として
+  得られた項以外の項に基づく解析に対しても，その状態に遷移するときにお
+  こなわれたXリスト操作が影響し，痕跡が検出されなくなる．
+\end{enumerate}
+
+これらの問題は，5章で論じた問題と類似している．(1)に示す問題は，状態か
+ら芯であるenclosed項の閉包を取り出し，それによって新たな状態を構成する
+ことで解決できる．また，(2)に示す問題は，文法に対する前処理として，右
+辺の左端に`$<$'と`$>$'で囲まれたカテゴリが存在する文法規則に対して，図
+\ref{fig:replace}に示すものと同様な置き換えをおこない，`$<$'と`$>$'で囲
+まれたカテゴリを擬似的に右辺の左端から移動させることで解決できる．
+
+\section{動作例}
+
+本論文で示す手法を用いてパーザを構成した例を次に示す．DCGに対するGLRパー
+ザと\break
+して論理型言語Prolog上に効率よく実装されたSGLR\cite{Numazaki1991}
+を拡張することでパーザを構成した．本論文では，このパーザをSGLR-plusと
+呼ぶことにする．SGLR-plusを使用して，``A child who has a toy smiles.''
+という文を解析した様子を図\ref{fig:sglr_plus}に示す．
+
+\begin{figure}[htbp]
+  \begin{center}
+    \begin{minipage}{11cm}
+      {\baselineskip=8pt
+\begin{verbatim}
+| ?- run.
+
+input: a child who has a toy smiles
+words: [a,child,who,has,a,toy,smiles]
+length: 7
+
+--- result 1/1 ---
+
+|- sentence
+    |- sen_dec
+        |- subj
+        |   |- noun_p
+        |       |- noun_p
+        |       |   |- art -- < a >
+        |       |   |- n -- < child >
+        |       |- relC/noun_p
+        |           |- relPron -- < who >
+        |           |- sen_dec
+        |               |- subj
+        |               |   |- noun_p -- < t >
+        |               |- pred_do
+        |                   |- verb_p
+        |                       |- verb
+        |                           |- vt -- < has >
+        |                           |- obj
+        |                               |- noun_p
+        |                                   |- art -- < a >
+        |                                   |- n -- < toy >
+        |- pred_do
+            |- verb_p
+                |- verb
+                    |- vi -- < smiles >
+
+argument info: []
+
+the number of results: 1 
+run time: 10 msec
+
+yes
+\end{verbatim}
+        }
+    \end{minipage}
+    \caption{SGLR-plusによる``A child who has a toy smiles.''の解析．
+      \\{\it t}が痕跡を表す．}
+    \label{fig:sglr_plus}
+  \end{center}
+\end{figure}
+
+SGLR-plus(痕跡処理あり)とSGLR(痕跡処理なし)を使用していくつかの文を解
+析した結果を次に示す．今回の解析では，それぞれ平叙文を概ね網羅する文法
+を使用した．また，SGLRは痕跡処理を持たないため，図\ref{fig:cfg2}と同様
+に，痕跡を含むカテゴリに対して，その痕跡に対応する構成素が欠けた文法規
+則を用意した．ただし，これらの解析では補強項での統語的制約のチェックは
+おこなわなかった．SGLR-plus，SGLRのそれぞれを使用した場合での文法規則
+数，解析系の状態数，項の総数を表\ref{tab:1}に示す．SGLR-plusを使用した
+場合には，痕跡処理がおこなわれるため，SGLRを使用した場合と比較して3割
+ほど文法規則が減少している．
+
+\begin{figure}[htbp]
+  \begin{center}
+    \begin{minipage}[t]{3.1cm}
+      \begin{tabular}[t]{l}
+        s $\to$ np,\ vp.\\
+        np $\to$ det,\ n.\\
+        np $\to$ np,\ relC.\\
+        vp $\to$ vi.\\
+        vp $\to$ vt,\ np.\\
+        vp $\to$ vt,\ np,\ np.
+      \end{tabular}
+    \end{minipage}
+    \begin{minipage}[t]{4cm}
+      \begin{tabular}[t]{l}
+        relC $\to$ relPron,\ s2.\\
+        s2 $\to$ vp.\\
+        s2 $\to$ np,\ vp2.\\
+        vp2 $\to$ vt.\\ 
+        vp2 $\to$ vt,\ np. 
+      \end{tabular}
+    \end{minipage}
+    \caption{図\ref{fig:xgs}に示す文法に対応する，スラッシュ\\記法を
+      用いないで記述された文法}
+    \label{fig:cfg2}
+  \end{center}
+\end{figure}
+
+\begin{table}[htbp]
+  \begin{center}
+    \caption{痕跡処理の有無による違い}
+    \label{tab:1}
+    \begin{tabular}[htbp]{|c||c|c|c|}              \hline
+      解析系    & 文法規則数 & 状態数 & 項総数 \\ \hline\hline
+      SGLR-plus & 224        & 288    & 9,235    \\ \hline
+      SGLR      & 345        & 454    & 14,248   \\ \hline
+    \end{tabular}
+  \end{center}
+\end{table}
+
+次に示す英文を解析の対象とした．それぞれの英文に対する，解析に要した時
+間\footnote{SGLRは，入力文から生成したトップ・レベルのゴール列を呼び出
+すことで起動する．このゴール列の実行に要した時間を示す．実行環境:
+SICStus 3 \#6，GNU/Linux 2.2.2，Intel Pentium Pro 180MHz}，得られた解
+析木の数，失敗した数を表\ref{tab:2}に示す．
+
+\begin{enumerate}
+\item The kids were skipping about in the park.
+\item The coffee has slopped over into the saucer.
+\item The trouble is that she does not like it.
+\item I want to go to France.
+\item They scattered gravel on the road.
+\item He told me that he liked baseball.
+\item I cannot allow you to behave like that.
+\item The child who has a toy smiles.
+\item Jane has an uncle who is very kind.
+\item The book which I bought yesterday is very interesting.
+\item I want a man who understands English.
+\item The book which the man who had a bag which looked heavy bought
+  is difficult.
+\end{enumerate}
+
+\begin{table}[htbp]
+  \begin{center}
+    \caption{解析結果}
+    \label{tab:2}
+    \begin{tabular}[htbp]{l}
+      \begin{tabular}[htbp]{|c||c|c|c|c|} \hline
+        英文 & 解析系 & $解析時間^{a}$ & 解析木数 & 失敗数 \\ \hline\hline
+        \raisebox{-1.5ex}[0cm][0cm]{1}  & SGLR-plus & 8  & 8  & 62 \\ \cline{2-5}
+                                        & SGLR      & 5  & 8  & 38 \\ \hline\hline
+        \raisebox{-1.5ex}[0cm][0cm]{2}  & SGLR-plus & 8  & 17 & 49 \\ \cline{2-5}
+                                        & SGLR      & 5  & 17 & 26 \\ \hline\hline
+        \raisebox{-1.5ex}[0cm][0cm]{3}  & SGLR-plus & 2  & 1  & 10 \\ \cline{2-5}
+                                        & SGLR      & 2  & 1  & 7  \\ \hline\hline
+        \raisebox{-1.5ex}[0cm][0cm]{4}  & SGLR-plus & 2  & 4  & 4  \\ \cline{2-5}
+                                        & SGLR      & 1  & 4  & 3  \\ \hline\hline
+        \raisebox{-1.5ex}[0cm][0cm]{5}  & SGLR-plus & 3  & 5  & 9  \\ \cline{2-5}
+                                        & SGLR      & 2  & 5  & 5  \\ \hline\hline
+        \raisebox{-1.5ex}[0cm][0cm]{6}  & SGLR-plus & 2  & 1  & 5  \\ \cline{2-5}
+                                        & SGLR      & 2  & 1  & 4  \\ \hline\hline
+        \raisebox{-1.5ex}[0cm][0cm]{7}  & SGLR-plus & 8  & 12 & 12 \\ \cline{2-5}
+                                        & SGLR      & 6  & 12 & 12 \\ \hline\hline
+        \raisebox{-1.5ex}[0cm][0cm]{8}  & SGLR-plus & 10 & 1  & 49 \\ \cline{2-5}
+                                        & SGLR      & 3  & 1  & 12 \\ \hline\hline
+        \raisebox{-1.5ex}[0cm][0cm]{9}  & SGLR-plus & 9  & 3  & 48 \\ \cline{2-5}
+                                        & SGLR      & 4  & 3  & 23 \\ \hline\hline
+        \raisebox{-1.5ex}[0cm][0cm]{10} & SGLR-plus & 5  & 3  & 16 \\ \cline{2-5}
+                                        & SGLR      & 3  & 3  & 6  \\ \hline\hline
+        \raisebox{-1.5ex}[0cm][0cm]{11} & SGLR-plus & 5  & 1  & 10 \\ \cline{2-5}
+                                        & SGLR      & 2  & 1  & 2  \\ \hline\hline
+        \raisebox{-1.5ex}[0cm][0cm]{12} & SGLR-plus & 314 & 3  & 1163 \\ \cline{2-5}
+                                        & SGLR      & 75  & 3  & 92  \\ \hline
+      \end{tabular} \\
+      $　^{a}単位: msec$
+    \end{tabular}
+  \end{center}
+\end{table}
+
+\vspace{-3mm}
+SGLR-plus，SGLRのそれぞれを使用した場合の解析時間を比較すると，
+SGLR-plusを使用した場合により多くの時間を要す傾向がある．一般に文法規
+則の増加は，非決定性の増加などによる処理量の増加を引き起す．今回の比較
+では，痕跡に関連する処理量がこれを上回ったため，この傾向が生じたと考え
+る．この傾向は，痕跡を含まない(1)〜(7)の文の解析にも見られる．これは，
+痕跡処理を解析系に組み込むためにおこなった状態分割に関連して，非決定性
+が増加したためであると考える． SGLR-plusを使用した解析ではより多くの時
+間を要す傾向があるとは言え，対象とした文のうち，(12)以外のものの解析は
+およそ数ミリ秒で終了している．(12)の文は複数の痕跡を含むため，
+SGLR-plusを使用した解析では，痕跡処理に関連する非決定性が増加するとと
+もに失敗の数も増加する．この様子を表\ref{tab:3}に示す．しかし，SGLRを
+使用した場合と比較すると，失敗の数ほど解析時間に差は生じていない．これ
+は，誤りがLR構文解析表から即座に判定されるためであると考える．
+
+{\footnotesize
+  \begin{table}[htbp]
+    \begin{center}
+      \caption{英文(12)の解析の過程におけるスタック数と失敗数．それぞ
+        れの単語までを解析した後の値を\\示す．スタック数は，統合されて
+        いるものをすべて展開したときの値を示す(括弧内の値は，\\統合され
+        たままのスタックの数を示す)．}
+      \label{tab:3}
+      \begin{minipage}[h]{\textwidth}
+        \begin{tabular}[h]{|cr||c|c|c|c|c|c|c|c|c|} \hline
+                   &            & the   & book  & which  & the    & man   & who   & had   & a     & bag   \\ \hline\hline
+         SGLR-plus & スタック数 & 1 (1) & 1 (1) & 2 (2)  & 2 (2)  & 2 (2) & 2 (1) & 6 (3) & 8 (2) & 8 (2) \\
+                   & 失敗数     & 0     & 0     & 3      & 4      & 5     & 9     & 10    & 12    & 13    \\ \hline
+         SGLR      & スタック数 & 1 (1) & 1 (1) & 2 (2)  & 2 (1)  & 2 (1) & 2 (1) & 6 (2) & 4 (1) & 4 (1) \\
+                   & 失敗数     & 0     & 0     & 1      & 1      & 1     & 1     & 1     & 2     & 2     \\ \hline
+        \end{tabular}
+      \end{minipage}
+
+      \vspace{2mm}
+      \begin{minipage}[h]{\textwidth}
+        \begin{tabular}[h]{|cr||c|c|c|c|c|c|c|} \hline
+                   &            & which  & looked & heavy  & bought  & is       & difficult & 右端記号 \\ \hline\hline
+         SGLR-plus & スタック数 & 28 (5) & 48 (2) & 62 (5) & 184 (2) & 1004 (8) & 1164 (5)  & 3    \\
+                   & 失敗数     & 31     & 31     & 53     & 72      & 86       & 517       & 1163 \\ \hline
+         SGLR      & スタック数 & 20 (3) & 32 (1) & 40 (2) & 112 (2) & 520 (5)  & 456 (2)   & 3    \\
+                   & 失敗数     & 5      & 5      & 9      & 10      & 10       & 22        & 92   \\ \hline
+        \end{tabular}
+      \end{minipage}
+    \end{center}
+  \end{table}
+  }
+
+
+\section{おわりに}
+
+本論文では，効率の良い構文解析法として知られているGLR法
+\cite{Tomita1987}に基づく痕跡処理の手法を示した．この手法では，文法記
+述形式としてXGS\cite{Konno1986}を使用し，XGでのXリスト
+\cite{Pereira1981}と基本的に同じ手法で痕跡を扱った．また，GLR法で文法
+規則が解析系の状態として集合的に扱われることから生じる問題を，状態の構
+成を工夫することで解決した．また，この手法によって，GLRパーザである
+SGLR\cite{Numazaki1991}を拡張し痕跡処理を実現した．
+
+構成素の移動現象を自然に記述する枠組みとして，DCG\cite{Pereira1980}に
+スラッシュ記法と下位範疇化制約という二つの概念を導入したものが，徳永ら
+によって提案されている\cite{Tokunaga1990}．この考え方を取り入れること
+が，今後の課題である．\nocite{*}
+
+\acknowledgment
+
+GLRパーザSGLRを提供していただいた東京工業大学大学院情報理工学研究科田中穂積教授，SGLRの
+開発者である故沼崎浩明氏，有用な意見をいただいた新潟大学宮崎研究室の学生
+諸君，に深く感謝致します．
+
+
+\bibliographystyle{jnlpbbl_old}
+\bibliography{v07n1_01}
+
+\begin{biography}
+\biotitle{略歴}
+\bioauthor{五百川 明}{
+1994年新潟大学工学部情報工学科卒業．1996年同大学院工学研究科修士課程修了．現在，
+同大学院自然科学研究科博士後期課程在学中(同大学法学部助手)．自然言語の意味処理に興味がある．情報処理学会会員．}
+\bioauthor{宮崎 正弘}{
+1969年東京工業大学工学部電気工学科卒業．同年日本電信電話公社に入社．以
+来，電気通信研究所において大型コンピュータDIPSの開発，コンピュータシス
+テムの性能評価法の研究，日本文音声出力システムや機械翻訳などの自然言語
+処理の研究に従事．1989年より新潟大学工学部情報工学科教授．自然言語の解析・生成，
+機械翻訳，辞書・シソーラスなど自然言語処理用言語知識の体系化などの研究
+に従事．工学博士．1995年日本科学技術情報センター賞(学術賞)受賞．電子情
+報通信学会，情報処理学会，人工知能学会，各会員．}
+
+\bioreceived{受付}
+\biorevised{再受付}
+\bioaccepted{採録}
+
+\end{biography}
+
+\end{document}
+

@@ -1,0 +1,894 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{amsmath}
+\usepackage{array}
+
+    \newcommand{\argmax}{}
+    \newcommand{\argmin}{}
+
+
+\Volume{22}
+\Number{4}
+\Month{December}
+\Year{2015}
+
+\received{2015}{6}{16}
+\revised{2015}{8}{12}
+\accepted{2015}{8}{28}
+
+\setcounter{page}{289}
+
+\jtitle{リカレントニューラルネットワークによる単語アラインメント}
+\jauthor{田村　晃裕\affiref{NICT} \and 渡辺　太郎\affiref{GOOGLE} \and 隅田英一郎\affiref{NICT}}
+\jabstract{
+本論文では，隠れ層の再帰的な構造により，過去のアラインメント履歴全体を活用するリカレントニューラルネットワーク (RNN) による単語アラインメントモデルを提案する．
+ニューラルネットワークに基づくモデルでは，従来，教師あり学習が行われてきたが，本論文では，本モデルの学習法として，Dyerらの教師なし単語アラインメント\cite{dyer11}を拡張して人工的に作成した負例を利用する教師なし学習法を提案する．
+提案モデルは，IBMモデル\cite{brown93}などの多くの従来手法と同様に，各方向で独立にアラインメントを学習するため，両方向を考慮した大域的な学習を行うことができない．
+そこで，各方向のモデルの合意を取るように同時に学習することで，アラインメントの精度向上を目指す．
+具体的には，各方向のモデルのword embeddingの差を表すペナルティ項を目的関数に導入し，両方向でword embeddingを一致させるようにモデルを学習する．
+日英及び仏英単語アラインメント実験を通じて，RNNに基づくモデルは，フィードフォワードニューラルネットワークによるモデル\cite{yang13}やIBMモデル4よりも単語アラインメント精度が高いことを示す．
+さらに，日英及び中英翻訳実験を通じて，これらのベースラインと同等かそれ以上の翻訳精度を達成できることを示す．
+}
+\jkeywords{単語アラインメント，リカレントニューラルネットワーク，教師なし学習，\linebreak 合意制約}
+
+\etitle{Recurrent Neural Networks for Word Alignment}
+\eauthor{Akihiro Tamura\affiref{NICT} \and Taro Watanabe\affiref{GOOGLE} \and Eiichiro Sumita\affiref{NICT}} 
+\eabstract{
+This paper proposes a novel word alignment model based on a recurrent neural network (RNN), in which an unlimited alignment history is represented by recurrently connected hidden layers. 
+In addition, we perform unsupervised learning inspired by \cite{dyer11}, which utilizes artificially generated negative samples. 
+Our alignment model is directional, like the generative IBM models \cite{brown93}. 
+To overcome this limitation, we encourage an agreement between the two directional models by introducing a penalty function, which ensures word embedding consistency across two directional models during training. 
+The RNN-based model outperforms both the feed-forward NN-based model \cite{yang13} and the IBM Model 4 under Japanese-English and French-English word alignment tasks, and achieves comparable translation performance to those baselines under Japanese-English and Chinese-English translation tasks. 
+}
+\ekeywords{Word Alignment, Recurrent Neural Network, Unsupervised Learning, Agreement Constraint}
+
+\headauthor{田村，渡辺，隅田}
+\headtitle{リカレントニューラルネットワークによる単語アラインメント}
+
+\affilabel{NICT}{国立研究開発法人情報通信研究機構}{National Institute of Information and Communications Technology}
+\affilabel{GOOGLE}{グーグル株式会社}{Google}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+\label{sect:intro}
+
+対訳文中の単語の対応関係を解析する単語アラインメントは，統計的機械翻訳に欠かせない重要な処理の一つであり，研究が盛んに行われている．
+その中で，生成モデルであるIBMモデル1-5 \cite{brown93}やHMMに基づくモデル\cite{vogel96}は最も有名な手法であり，それらを拡張した手法が数多く提案されている\cite{och03,taylor10}．
+近年では，Yangらが，フィードフォワードニューラルネットワーク (FFNN) の一種である「Context-Dependent Deep Neural Network for HMM (CD-DNN-HMM)」\cite{dahl12}をHMMに基づくモデルに適用した手法を提案し，中英アラインメントタスクにおいてIBMモデル4やHMMに基づくモデルよりも高い精度を達成している\cite{yang13}．
+このFFNN-HMMアラインメントモデルは，単語アラインメントに単純マルコフ性を仮定したモデルであり，アラインメント履歴として，一つ前の単語アラインメント結果を考慮する．
+
+一方で，ニューラルネットワーク (NN) の一種にフィードバック結合を持つリカレントニューラルネットワーク (RNN) がある．
+RNNの隠れ層は再帰的な構造を持ち，自身の信号を次のステップの隠れ層へと伝達する．
+この再帰的な構造により，過去の入力データの情報を隠れ層で保持できるため，入力データに内在する長距離の依存関係を捉えることができる．
+このような特長を持つRNNに基づくモデルは，近年，多くのタスクで成果をあげており，FFNNに基づくモデルの性能を凌駕している．
+例えば，言語モデル\cite{mikolov10,mikolov12,sundermeyer13}や翻訳モデル\cite{auli13,nal13}の構築で効果を発揮している．
+一方で，単語アラインメントタスクにおいてRNNを活用したモデルは提案されていない．
+本論文では，単語アラインメントにおいて，過去のアラインメントの情報を保持して活用することは有効であると考え，RNNに基づく単語アラインメントモデルを提案する．
+前述の通り，従来のFFNNに基づくモデルは，直前のアラインメント履歴しか考慮しない．
+一方で，RNNに基づくモデルは，隠れ層の再帰的な構造としてアラインメントの情報を埋め込むことで，FFNNに基づくモデルよりも長い，文頭から直前の単語アラインメントの情報，つまり過去のアラインメント履歴全体を考慮できる．
+
+NNに基づくモデルの学習には，通常，教師データが必要である．
+しかし，単語単位の対応関係が付与された対訳文を大量に用意することは容易ではない．
+この状況に対して，Yangらは，従来の教師なし単語アラインメントモデル（IBMモデル，HMMに基づくモデル）により生成した単語アラインメントを疑似の正解データとして使い，モデルを学習した\cite{yang13}．
+しかし，この方法では，疑似正解データの作成段階で生み出された，誤った単語アラインメントが正しいアラインメントとして学習されてしまう可能性がある．
+これらの状況を踏まえて，本論文では，正解の単語アラインメントや疑似の正解データを用意せずにRNNに基づくモデルを学習する教師なし学習法を提案する．
+本学習法では，Dyerらの教師なし単語アラインメント\cite{dyer11}を拡張し，正しい対訳文における単語対と語彙空間全体における単語対を識別するようにモデルを学習する．
+具体的には，まず，語彙空間全体からのサンプリングにより偽の対訳文を人工的に生成する．
+その後，正しい対訳文におけるアラインメントスコアの期待値が，偽の対訳文におけるアラインメントスコアの期待値より高くなるようにモデルを学習する．
+
+
+RNNに基づくモデルは，多くのアラインメントモデルと同様に，方向性（「原言語$\boldsymbol{f}\rightarrow$目的言語$\boldsymbol{e}$」又は「$\boldsymbol{e}\rightarrow\boldsymbol{f}$」）を持ち，各方向のモデルは独立に学習，使用される．
+ここで，学習される特徴は方向毎に異なり，それらは相補的であるとの考えに基づき，各方向の合意を取るようにモデルを学習することによりアラインメント精度が向上することが
+    示されている (Matusov, Zens, and Ney 2004; Liang, Taskar, and Klein 2006; Gra\c{c}a, Ganchev, and Taskar 2008; Ganchev, Gra\c{c}a, and Taskar 2008)．\nocite{matusov04,liang06,graca08,gancev08}
+そこで，提案手法においても，「$\boldsymbol{f}\rightarrow\boldsymbol{e}$」と「$\boldsymbol{e}\rightarrow\boldsymbol{f}$」の2つのRNNに基づくモデルの合意を取るようにそれらのモデルを同時に学習する．
+両方向の合意は，各方向のモデルのword embeddingが一致するようにモデルを学習することで実現する．
+具体的には，各方向のword embeddingの差を表すペナルティ項を目的関数に導入し，その目的関数にしたがってモデルを学習する．
+この制約により，それぞれのモデルの特定方向への過学習を防ぎ，双方で大域的な最適化が可能となる．
+
+提案手法の評価は，日英及び仏英単語アラインメント実験と日英及び中英翻訳実験で行う．
+評価実験を通じて，前記提案全てを含む「合意制約付き教師なし学習法で学習したRNNに基づくモデル」は，FFNNに基づくモデルやIBMモデル4よりも単語アラインメント精度が高いことを示す．
+また，機械翻訳実験を通じて，学習データ量が同じ場合には，FFNNに基づくモデルやIBMモデル4を用いた場合よりも高い翻訳精度を実現できることを示す\footnote{実験では，NNに基づくモデルの学習時の計算量を削減するため，学習データの一部を用いた．全学習データから学習したIBMモデル4を用いた場合とは同等の翻訳能であった．}．
+具体的には，アラインメント精度はFFNNに基づくモデルより最大0.0792（F1値），IBMモデル4より最大0.0703（F1値），翻訳精度はFFNNに基づくモデルより最大0.74\% (BLEU)，IBMモデル4より最大0.58\% (BLEU) 上回った．
+また，各提案（RNNの利用，教師なし学習法，合意制約）個別の有効性も検証し，機械翻訳においては一部の設定における精度改善にとどまるが，単語アラインメントにおいては各提案により精度が改善できることを示す．
+
+以降，\ref{sect:related}節で従来の単語アラインメントモデルを説明し，\ref{sect:RNN}節でRNNに基づく単語アラインメントモデルを提案する．
+そして，\ref{sect:learning}節でRNNに基づくモデルの学習法を提案する．
+\ref{sect:experiment}節では提案手法の評価実験を行い，\ref{sect:discuss}節で提案手法の効果や性質についての考察を行う．
+最後に，\ref{sect:conclusion}節で本論文のまとめを行う．
+
+
+\section{従来の単語アラインメントモデル}
+\label{sect:related}
+
+今まで数多くの単語アラインメント手法が提案されてきており，それらは，生成モデル（例えば\cite{brown93,vogel96,och03}）と識別モデル（例えば\cite{taskar05,moore05,blunsom06}）に大別できる．
+\ref{sect:SWA}節では生成モデルを概観し，\ref{sect:FFNN}節では識別モデルの一例として，提案手法のベースラインとなるFFNNに基づくモデル\cite{yang13}を説明する．
+
+
+\subsection{生成モデル}
+\label{sect:SWA}
+
+生成モデルでは，$J$単語から構成される原言語の文を$f_{1}^{J}=f_{1},\ldots,f_{J}$，それに対応する$I$単語で構成される目的言語の文を$e_{1}^{I}=e_{1},\ldots,e_{I}$とすると，$f_{1}^{J}$は$e_{1}^{I}$からアラインメント$a_{1}^{J}=a_{1},\ldots,a_{J}$を通じて生成されると考える．
+ここで，各$a_{j}$は，原言語の単語$f_{j}$が目的言語の単語$e_{a_{j}}$に対応する事を示す隠れ変数である．
+通常，目的言語の文には単語「null」 ($e_{0}$) が加えられ，$f_{j}$が目的言語のどの単語にも対応しない場合，$a_{j} = 0$となる．
+そして，$f_{1}^{J}$が$e_{1}^{I}$から生成される生成確率は，次の通り，$e_{1}^{I}$が生成する全アラインメントとの生成確率の総和で定義される：
+\begin{equation}
+\label{eqn:base1}
+p(f_{1}^{J}|e_{1}^{I})=\sum_{a_{1}^{J}}p(f_{1}^{J},a_{1}^{J}|e_{1}^{I}). 
+\end{equation}
+IBMモデル1，2やHMMに基づくモデルでは，式(\ref{eqn:base1})中の特定アラインメント$a_{1}^{J}$との生成確率$p(f_{1}^{J},a_{1}^{J}|e_{1}^{I})$をアラインメント確率$p_{a}$と語彙翻訳確率$p_{t}$で定義する\footnote{アラインメント確率$p_{a}$において，$a_{0}$=0である．}：
+\begin{equation}
+\label{eqn:base2}
+p(f_{1}^{J},a_{1}^{J}|e_{1}^{I}) = \prod_{j=1}^{J}p_a(a_{j}|a_{j-1},j)p_t(f_{j}|e_{a_{j}}).
+\end{equation}
+この3つのモデルでは，アラインメント確率の定義が異なる．
+例えば，HMMに基づくモデルでは単純マルコフ性を持つアラインメント確率を用いる：$p_a(a_{j}|a_{j}-a_{j-1})$．
+また，目的言語の各単語に対する稔性 (fertility) や歪み (distortion) を考慮するIBMモデル3-5も提案されている．
+
+これらのモデルは，EMアルゴリズム\cite{dempster77}により，単語単位のアラインメントが付与されていない対訳文の集合（ラベルなし学習データ）から学習される．
+また，ある対訳文 ($f_{1}^{J}$, $e_{1}^{I}$) の単語アラインメントを解析する際は，学習したモデルを用いて，次式(\ref{eqn:viterbi_alignment})を満たすアラインメント（ビタビアラインメント）$\hat{a}_{1}^{J}$を求める：
+\begin{equation}
+\label{eqn:viterbi_alignment}
+\hat{a}_{1}^{J}=\argmax_{a_{1}^{J}} p(f_{1}^{J},a_{1}^{J}|e_{1}^{I}).
+\end{equation}
+例えば，HMMに基づくモデルは，ビタビアルゴリズム\cite{viterbi67}によりビタビアラインメントを求めることができる．
+
+
+\subsection{FFNNに基づく単語アラインメントモデル}
+\label{sect:FFNN}
+
+FFNNは，非線形関数を持つ隠れ層を備えることにより，入力データから多層的に非線形な素性を自動的に学習することができ，入力データの複雑な特徴を捉えることができる．
+近年，その特長を活かし，音声認識\cite{dahl12}，統計的機械翻訳\cite{son12,vaswani13}やその他の自然言語処理\cite{collobert08,collobert11}等，多くの分野で成果をあげている．
+Yangらは，FFNNの一種であるCD-DNN-HMM \cite{dahl12}をHMMに基づくアラインメントモデルに適用したモデルを提案した\cite{yang13}．
+本節では，提案手法のベースラインとなる，このFFNNに基づく単語アラインメントモデルを説明する．
+
+FFNNに基づくモデルは，式(\ref{eqn:base2})のアラインメント確率$p_{a}$及び語彙翻訳確率$p_{t}$をFFNNにより計算する：
+\begin{equation}
+\label{eqn:FFNN}
+s_{NN}(a_{1}^{J}|f_{1}^{J},e_{1}^{I})= \prod_{j=1}^{J}t_{a}(a_{j}-a_{j-1}|c(e_{a_{j-1}})) \cdot t_{t}(f_{j},e_{a_{j}}|c(f_{j}),c(e_{a_{j}})).
+\end{equation}
+ただし，全単語にわたる正規化は計算量が膨大となるため，確率の代わりにスコアを用いる．
+$t_{a}$と$t_{t}$は，それぞれ，アラインメントスコアと語彙翻訳スコアであり，$p_{a}$と$p_{t}$に対応する．
+また，$s_{NN}$はアラインメント$a_{1}^{J}$のスコアであり，「$c(\text{単語}w)$」は単語$w$の文脈を表す．
+ビタビアラインメントは，典型的なHMMに基づくアラインメントモデル同様，ビタビアルゴリズムにより求める．
+アラインメントスコアは直前のアラインメント$a_{j-1}$に依存しているため，FFNNに基づくモデルも単純マルコフ過程に従う．
+
+図\ref{fig:FFNN}に，語彙翻訳スコア$t_{t}(f_{j},e_{a_{j}}|c(f_{j}),c(e_{a_{j}}))$を計算するネットワーク構造（語彙翻訳モデル）を示す．
+このネットワークは，lookup層（入力層），1層の隠れ層，出力層から構成され，各層は，それぞれ，重み行列$L$，$\{H, B_{H}\}$，$\{O,B_{O}\}$を持つ．
+$L$はword embedding行列であり，各単語を特徴付ける低次元の実ベクトルとして，単語の統語的，意味的特性を表す\cite{bengio03}．
+原言語の単語集合を$V_{f}$，目的言語の単語集合を$V_{e}$，word embeddingの長さを$M$とすると，$L$は$M \times (|V_{f}|+|V_{e}|)$行列である．
+ただし，$V_{f}$と$V_e$には，それぞれ，未知語を表す$\langle unk \rangle$と単語「null」を表す$\langle null \rangle$を追加する．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{22-4ia3f1.eps}
+\end{center}
+\caption{FFNNに基づくモデルにおける語彙翻訳スコア$t_{t}(f_{j}, e_{a_{j}}|c(f_{j}),c(e_{a_{j}}))$計算用ネットワーク}
+\label{fig:FFNN}
+\end{figure}
+
+この語彙翻訳モデルは，入力として，計算対象である原言語の単語$f_{j}$と目的言語の単語$e_{a_{j}}$と共に，それらの文脈単語を受け付ける．
+文脈単語とは，予め定めたサイズの窓内に存在する単語であり，図\ref{fig:FFNN}は窓幅が3の場合を示している．
+まず，lookup層が，入力の各単語に対して行列$L$から対応する列を見つけ，word embeddingを割り当てる．そして，それらを結合させた実ベクトル$z_{0}$を隠れ層に送る．
+次に，隠れ層がlookup層の出力$z_{0}$を受け取り，$z_{0}$の非線形な特徴を捉える．
+最後に，出力層が隠れ層の出力$z_{1}$を受け取り，語彙翻訳スコアを計算して出力する．
+隠れ層，出力層が行う具体的な計算は次の通りである\footnote{本論文では，実験コストを削減するため，NN（FFNN及びRNN）に基づくモデルの隠れ層は1層としたが，連続した$l$層の隠れ層を用いる事もできる：$z_{l}=f(H_{l} \times z_{l-1} + B_{H_{l}})$．複数の隠れ層を用いた実験は今後の課題とする．}：
+\begin{align}
+\label{eqn:FFNN2}
+z_{1} & =f(H \times z_{0} + B_{H}),\\
+t_{t} & =O \times z_{1} + B_{O}.
+\end{align}
+ここで，$H$，$B_{H}$，$O$，$B_{O}$は，それぞれ，$|z_{1}| \times |z_{0}|$，$|z_{1}| \times 1$，$1 \times |z_{1}|$，$1 \times 1$行列である．
+また，$f(x)$は非線形活性化関数であり，本論文の実験では，\cite{yang13}に倣い，htanh$(x)$\footnote{$x<-1$の時は$\mathrm{htanh}(x)=-1$，$x>1$の時は$\mathrm{htanh}(x)=1$，それ以外の時は$\mathrm{htanh}(x)=x$である．}を用いた．
+
+アラインメントスコア$t_{a}(a_{j}-a_{j-1}|c(e_{a_{j-1}}))$を計算するアラインメントモデルも，語彙翻訳モデルと同様に構成できる．
+語彙翻訳モデル及びアラインメントモデルの学習では，次式(\ref{eqn:FFNN3})のランキング損失を最小化するように，各層の重み行列を最適化する．
+最適化は，サンプル毎に勾配を計算してパラメータを更新する確率的勾配降下法 (SGD) \footnote{実験では，後述のRNNに基づくモデル同様，単純なSGDではなくバッチサイズ$D$のミニバッチSGDを用いた．}で行い，各重みの勾配は，誤差逆伝播法\cite{rumelhart86}で計算する．
+\begin{equation}
+\label{eqn:FFNN3}
+loss(\theta)=\sum_{(\boldsymbol{f},\boldsymbol{e}) \in T}\text{max}\{0,1-s_{\theta}(\boldsymbol{a^{+}}|\boldsymbol{f},\boldsymbol{e})+s_{\theta}(\boldsymbol{a^{-}}|\boldsymbol{f},\boldsymbol{e})\}. 
+\end{equation}
+ここで，$\theta$は最適化するパラメータ（重み行列の重み），$T$は学習データ，$s_{\theta}$はパラメータ$\theta$のモデルによる$a_{1}^{J}$のスコア（式(\ref{eqn:FFNN})参照），$\boldsymbol{a^{+}}$は正解アラインメント，$\boldsymbol{a^{-}}$はパラメータ$\theta$のモデルでスコアが最も高い不正解アラインメントである．
+
+
+\section{RNNに基づく単語アラインメントモデル}
+\label{sect:RNN}
+
+本節では，アラインメント$a_{1}^{J}$のスコアをRNNにより計算する単語アラインメントモデルを提案する：
+\begin{equation}
+\label{eqn:RNN1}
+s_{NN}(a_{1}^{J}|f_{1}^{J},e_{1}^{I}) = \prod_{j=1}^{J}t_{RNN}(a_{j}|a_{1}^{j-1},f_{j},e_{a_{j}}).
+\end{equation}
+ここで，$t_{RNN}$はアラインメント$a_{j}$のスコアであり，FFNNに基づくモデルと異なり，直前のアラインメント$a_{j-1}$だけでなく，$j-1$個の全てのアラインメントの履歴$a_{1}^{j-1}$に依存している．
+また，本モデルにおいても，FFNNに基づくモデルと同様，確率ではなくスコアを用いる．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-4ia3f2.eps}
+\end{center}
+\caption{RNNに基づくアラインメントモデル}
+\label{fig:RNN}
+\end{figure}
+
+図\ref{fig:RNN}にRNNに基づくモデルのネットワーク構造を示す．
+このネットワークは，lookup層（入力層），隠れ層，出力層から構成され，各層は，それぞれ，重み行列$L$，$\{H^{d}, R^{d}, B_{H}^{d}\}$，$\{O,B_{O}\}$を持つ．
+隠れ層の重み行列$H^{d}$，$R^{d}$，$B_{H}^{d}$は，直前のアラインメント$a_{j-1}$からの距離$d$ ($d=a_{j}-a_{j-1}$) 毎に定義される．
+本論文の実験では，8より大きい距離及び$-8$より小さい距離は，それぞれ，「$\geq 8$」と「$\leq -8$」にまとめた．
+つまり，隠れ層は，直前のアラインメントからの距離$d$に対応した重み行列$\{H^{\leq-8}, H^{-7}, \cdots, H^{7}, H^{\geq8}, R^{\leq-8}, R^{-7}, \cdots, R^{7}, R^{\geq8}, B_{H}^{\leq-8}, B_{H}^{-7}, \cdots, B_{H}^{7}, B_{H}^{\geq8}\}$ を用いて$y_{j}$を算出する．
+
+ビタビアラインメントは，FFNNに基づくモデルと同様に，図\ref{fig:RNN}のモデルを$f_{1}$から$f_{J}$に順番に適用して求める．
+ただし，アラインメント$a_{j}$のスコアは，$y_{i}$を通じて$a_{1}$から$a_{j-1}$の全てに依存しているため，動的計画法に基づくビタビアルゴリズムは適用できない．
+そこで，実験では，ビームサーチにより近似的にビタビアラインメントを求める．
+
+図\ref{fig:RNN}のモデルにより$f_{j}$と$e_{a_{j}}$のアラインメントのスコアを計算する流れを説明する．
+まず，$f_{j}$と$e_{a_{j}}$の2単語がlookup層へ入力される．
+そして，lookup層が2単語それぞれをword embeddingに変換し，そのword embeddingを結合させた実ベクトル$x_{j}$を隠れ層に送る．
+このlookup層が行う処理は，FFNNに基づくモデルのlookup層と同じである．
+次に，隠れ層は，lookup層の出力$x_{j}$と直前のステップ$j-1$の隠れ層の出力$y_{j-1}$を受け取り，それらの間の非線形な特徴を捉える．
+この時に用いる重み行列$H^{d}$，$R^{d}$，$B_{H}^{d}$は，直前のアラインメント$a_{j-1}$との距離$d$により区別されている．
+隠れ層の出力$y_{j}$は，出力層と次のステップ$j+1$の隠れ層に送られる．
+そして最後に，出力層が，隠れ層の出力$y_{j}$に基づいて$f_{j}$と$e_{a_{j}}$のアラインメントのスコア$t_\mathrm{RNN}(a_{j}|a_{1}^{j-1},f_{j},e_{a_{j}})$を計算して出力する．
+隠れ層，出力層が行う具体的な計算は次の通りで
+\linebreak
+ある\footnote{$j=1$の時の隠れ層では，$a_{0}$は0とし，直前ステップの隠れ層からの出力$y_{0}$は考慮しない：$y_{1}=f(H^{d} \times x_{1} + B^{d}_{H}).$}：
+\begin{align}
+\label{eqn:RNN2}
+& y_{j}=f(H^{d} \times x_{j} + R^{d} \times y_{j-1} + B^{d}_{H}),\\
+& t_\mathit{RNN}=O \times y_{j} + B_{O}.
+\end{align}
+ここで，$H^{d}$，$R^{d}$，$B^{d}_{H}$，$O$，$B_{O}$は，それぞれ，$|y_{j}| \times |x_{j}|$，$|y_{j}| \times |y_{j-1}|$，$|y_{j}| \times 1$，$1 \times |y_{j}|$，$1 \times 1$行列である．
+ただし，$|y_{j-1}| = |y_{j}|$である．
+また，$f(x)$は非線形活性化関数であり，\cite{yang13}と同様に，本論文ではhtanh(x)を用いる．
+
+前述の通り，FFNNに基づくモデルは，語彙翻訳スコア用とアラインメントスコア用の2つのモデルから構成される．
+一方で，RNNに基づくモデルは，直前のアラインメントとの距離$d$に依存した重み行列を隠れ層で使うことで，アラインメントと語彙翻訳の両者を考慮する1つのモデルで単語アラインメントをモデル化する．
+また，RNNに基づくモデルは再帰的な構造をした隠れ層を持つ．
+このため，過去のアラインメント履歴全体をこの隠れ層の入出力$y_{i}$にコンパクトに埋め込むことで，直前のアラインメント履歴のみに依存する従来のFFNNに基づくモデルよりも長いアラインメント履歴を活用して単語アラインメントを行うことができる．
+
+
+\section{モデルの学習}
+\label{sect:learning}
+
+提案モデルの学習では，特定の目的関数に従い，各層の重み行列（つまり，$L$，$H^{d}$，$R^{d}$，$B^{d}_{H}$，$O$，$B_{O}$）を最適化する．
+最適化は，単純なSGD（バッチサイズ$D=1$）よりも収束が早いミニバッチSGDにより行う．
+また，各重みの勾配は，通時的誤差逆伝播法\cite{rumelhart86}で計算する．
+通時的誤差逆伝播法は，時系列（提案モデルにおける$j$）でネットワークを展開し，時間ステップ上で誤差逆伝播法により勾配を計算する手法である．
+
+提案モデルは，FFNNに基づくモデル同様，式(\ref{eqn:FFNN3})で定義されるランキング損失に基づいて教師あり学習することができる（\ref{sect:FFNN}節参照）．
+しかし，この学習法は正解の単語アラインメントが必要であるという問題がある．
+この問題を解決するため，次の\ref{sect:usv}節で，ラベルなし学習データから提案モデルを学習する教師なし学習法を提案する．
+
+
+\subsection{教師なし学習}
+\label{sect:usv}
+
+本節で提案する教師なし学習は，Dyerらにより提案されたcontrastive estimation (CE) \cite{smith05}に基づく教師なし単語アラインメントモデル\cite{dyer11}を拡張した手法である．
+CEとは，観測データの近傍データを疑似負例と捉え，観測データとその近傍データを識別するモデルを学習する手法である．
+Dyerらは，ラベルなし学習データ中の対訳文$T$において考えられる全ての単語アラインメントを観測データ，目的言語側を単語空間$V_{e}$全体とした単語アラインメント，つまり，対訳文$T$中の原言語の各単語と$V_{e}$中の各単語との全単語対を近傍データとしてCEを適用した．
+提案する学習法は，この考え方を目的関数のランキング損失に導入する：
+\begin{equation}
+\label{eqn:usv1}
+\mathit{loss}(\theta)=\text{max} \biggl\{0,1-\sum_{\boldsymbol{(f^{+},e^{+})} \in T}\text{E}_{\Phi}[s_{\theta}(\boldsymbol{a}|\boldsymbol{f^{+}},\boldsymbol{e^{+}})]+\sum_{(\boldsymbol{f^{+}},\boldsymbol{e^{-}}) \in \Omega} \text{E}_{\Phi}[s_{\theta}(\boldsymbol{a}|\boldsymbol{f^{+}},\boldsymbol{e^{-}})]\biggr\}.
+\end{equation}
+ここで，$\Phi$は対訳文$(\boldsymbol{f},\boldsymbol{e})$に対する全ての単語アラインメントの集合，E$_{\Phi}[s_{\theta}]$は$\Phi$におけるスコア$s_{\theta}$の期待値を表す．
+$\Omega$は対訳文$T$中の目的言語の各単語を$V_{e}$全体とした対訳対集合である．
+したがって，$\boldsymbol{e^{+}}$は学習データ$T$中の目的言語の文であり，$\boldsymbol{e^{-}}$は$|\boldsymbol{e^{+}}|$個の目的言語の単語で構成される疑似の文である ($\boldsymbol{e^{-}} \in V_{e}^{|\boldsymbol{e^{+}}|}$)．
+一つ目の期待値が観測データ，二つ目の期待値が近傍データに関する項である．
+
+しかしながら，式(\ref{eqn:usv1})中の$\Omega$に対する期待値の計算量は膨大となる．
+そこで，計算量を削減するため，Noise Contrastive Estimation \cite{gutmann10,mnih12}に基づくNegative Sampling \cite{mikolov13}のように，近傍データ空間からサンプリングした空間を用いる．
+つまり，各原言語の文$\boldsymbol{f^{+}}$に対する$\boldsymbol{e^{-}}$として，$|\boldsymbol{e^{+}}|$個の目的言語の単語で構成される全ての文ではなく，サンプリングしたN文を使う．
+さらに，ビーム幅$W$のビームサーチにより期待値を計算することで，スコアが低いアラインメントを切り捨て計算量を削減する：
+\begin{equation}
+\label{eqn:usv2}
+\mathit{loss}(\theta)=\sum_{\boldsymbol{f^{+}} \in T}\text{max}\biggr\{0,1-\text{E}_{\text{GEN}}[s_{\theta}(\boldsymbol{a}|\boldsymbol{f^{+}},\boldsymbol{e^{+}})] + \frac{1}{N} \sum_{\boldsymbol{e^{-}}} \text{E}_{\text{GEN}}[s_{\theta}(\boldsymbol{a}|\boldsymbol{f^{+}},\boldsymbol{e^{-}})]\biggl\}.
+\end{equation}
+式(\ref{eqn:usv2})において，$\boldsymbol{e^{+}}$は学習データ内で$\boldsymbol{f^{+}}$の対訳となっている目的言語の文 ($\boldsymbol{(f^{+},e^{+})} \in T$) であり，$\boldsymbol{e^{-}}$は無作為に抽出された長さ$|\boldsymbol{e^{+}}|$の疑似の目的言語の文である．
+つまり，$|\boldsymbol{e^{+}}|=|\boldsymbol{e^{-}}|$である．
+そして，$N$は，各原言語の文$\boldsymbol{f^{+}}$に対して抽出する疑似の目的言語の文の数である．
+GENは，ビームサーチにより探索される単語アラインメント空間であり，全ての単語アラインメント空間$\Phi$の部分集合である．
+
+各$\boldsymbol{e^{-}}$は，無作為に抽出した$|\boldsymbol{e^{+}}|$個の目的言語の単語を順番に並べることで生成する．
+学習に効果的な負例を生成するために，$\boldsymbol{e^{-}}$の各単語は，$V_{e}$から抽出する代わりに，$l_{0}$正則化付きIBMモデル1 \cite{vaswani12}によって対訳文中で$f_{i} \in \boldsymbol{f^{+}}$との共起確率が$C$以上と判定された目的言語の単語集合から抽出する．
+$l_{0}$正則化付きIBMモデル1は，単純なIBMモデル1と比較して，より疎なアラインメントを生成するため，疑似翻訳$\boldsymbol{e^{-}}$の候補の範囲を制限することが可能となる．
+
+
+\subsection{両方向の合意制約}
+\label{sect:agreement}
+
+FFNNに基づくモデルとRNNに基づくモデルは，共に方向性を持つモデルである．
+すなわち，$\boldsymbol{f}$に対する$\boldsymbol{e}$のアラインメントモデルにより，単語$f_{j}$に対して$\boldsymbol{e}$との1対多アラインメントを表す．
+通常，方向性を持つモデルは方向毎に独立に学習され，両方向のアラインメント結果をヒューリスティックに結合し決定される．
+Yangらの研究においても，FFNNに基づくモデルは独立に学習されている\cite{yang13}．
+
+一方で，各方向のモデルの合意を取るように同時に学習することで，アラインメント精度を改善できることが示されている．
+例えば，MatusovらやLiangらは，目的関数を「$\boldsymbol{f}\rightarrow\boldsymbol{e}$」と「$\boldsymbol{e}\rightarrow\boldsymbol{f}$」の2つのモデルのパラメータで定義し，2つのモデルを同時に学習している\cite{matusov04,liang06}．
+また，GanchevらやGra\c{c}aらは，EMアルゴリズムのEステップ内で，各方向のモデルが合意するような制約をモデルパラメータの事後分布に課している\cite{gancev08,graca08}．
+そこで，提案モデルの学習においても両方向の合意制約を導入し，それぞれのモデルの特定方向への過学習を防ぎ，双方で大域的な最適化を可能とする．
+具体的には，各方向のword embeddingが一致するようにモデルを学習する．
+これを実現するために，各方向のword embeddingの差を表すペナルティ項を目的関数に導入し，その目的関数に基づいて各方向のモデルを同時に学習する：
+\begin{equation}
+\label{eqn:agreement}
+\argmin_{\theta_{FE},~\theta_{EF}} \bigl\{ loss(\theta_{FE}) + loss(\theta_{EF}) + \alpha \lVert \theta_{L_{EF}}-\theta_{L_{FE}} \rVert \bigr\}. 
+\end{equation}
+ここで，$\theta_{FE}$と$\theta_{EF}$は，それぞれ，$\boldsymbol{f} \rightarrow \boldsymbol{e}$と$\boldsymbol{e} \rightarrow \boldsymbol{f}$のアラインメントモデルのパラメータ，$\theta_{L}$はlookup層のパラメータ（$L$の重みでありword embeddingを表す），$\alpha$は合意制約の強さを制御するパラメータ，$\lVert \theta \rVert$は$\theta$のノルムである．
+実験では2-ノルムを用いた．
+この合意制約は，教師あり学習と教師なし学習の両方に導入可能である．
+教師あり学習の場合は，式(\ref{eqn:agreement})の$loss(\theta)$として式(\ref{eqn:FFNN3})を用い，教師なし学習の場合は式(\ref{eqn:usv2})を用いる．
+
+両方向の合意制約を導入した教師なし学習の手順をアルゴリズム1にまとめる．
+ステップ2では，学習データTからバッチサイズ分のD個の対訳文$(f^{+},e^{+})^{D}$を無作為に抽出する．
+ステップ3-1と3-2では，それぞれ，各$f^{+}$と$e^{+}$に対して，$l_{0}$正則化付きIBMモデル1 ($IBM1$) が特定した翻訳候補の単語集合から無作為に単語をサンプリングすることにより，負例となる対訳文を$N$個 ($\{e^{-}\}^{N}$と$\{f^{-}\}^{N}$) 生成する（\ref{sect:usv}節参照）．
+ステップ4-1と4-2では，特定の目的関数に従い，SGDにより各層の重み行列を更新する（\ref{sect:usv}節と\ref{sect:agreement}参照）．
+このステップでは，$\theta_{FE}$と$\theta_{EF}$の更新は同時に行われ，各方向のword embeddingを一致させるために，$\theta_{EF}$は$\theta_{FE}$の更新に，$\theta_{FE}$は$\theta_{EF}$の更新に制約を課している\footnote{t回目の$\theta_{EF}^{t}$，$\theta_{FE}^{t}$の更新の際には，それぞれ，$t-1$ 回目に更新された$\theta_{FE}^{t-1}$と$\theta_{EF}^{t-1}$が制約として使われ，更新中の$\theta_{EF}^{t}$，$\theta_{FE}^{t}$はお互いに依存しないことに注意されたい．$\theta_{EF}^{t}$と$\theta_{FE}^{t}$をお互いに依存させて同時に最適化する学習もあり得るが，今後の課題としたい．}．
+
+\begin{table}[t]
+\input{03table_algo01.txt}
+\end{table}
+
+
+\section{評価実験}
+\label{sect:experiment}
+
+\subsection{実験データ}
+\label{sect:data}
+
+提案手法の有効性を検証するため，単語アラインメントの精度及び翻訳精度の評価実験を行った．
+単語アラインメントの評価実験は，NAACL 2003のshared task \cite{mihalcea03}で使われたHansardsデータにおける仏英のタスク ({\it Hansards}) と，Basic Travel Expression Corpus ({\it BTEC}) \cite{takezawa02}における日英のタスク ({\it IWSLT$_{a}$}) で実施した．
+翻訳精度の評価実験は，IWSLT2007における日英翻訳タスク\cite{fordyce07} ({\it IWSLT})，新聞データから作成されたFBISコーパスにおける中英翻訳タスク ({\it FBIS})，NTCIR-9及びNTCIR-10における日英特許翻訳タスク\cite{goto10,goto13} ({\it NTCIR-9}, {\it NTCIR-10}) で行った．
+
+\begin{table}[t]
+\caption{実験データのサイズ（対訳文数）}
+\label{tbl:data}
+\input{03table01.txt}
+\end{table}
+
+表\ref{tbl:data}に各タスクで使用する対訳文の数を示す．「Train」は学習データ，「Dev」はディベロップメントデータ，「Test」はテストデータを表す．
+$\mathit{IWSLT}_{a}$及び{\it IWSLT}の実験データは共に{\it BTEC}のデータであり，$\mathit{IWSLT}_{a}$の実験データは，{\it IWSLT}の学習データのうち，単語アラインメントが人手で付与された9,960対訳文である\cite{goh10}．
+9,960の対訳文の最初の9,000を学習データ，残りの960をテストデータとした．
+$\mathit{IWSLT}_{a}$の学習データは単語アラインメントが付与されているラベルあり学習データであるのに対し，{\it Hansards}の学習データは単語アラインメントが付与されてないラベルなし学習データである．
+{\it Hansards}及び $\mathit{IWSLT}_{a}$のアラインメントタスクでは，各アラインメントモデルのハイパーパラメータは学習データの一部を用いた2分割交差検証により予め決定し，ディベロップメントデータは使わなかった\footnote{$\mathit{IWSLT}_{a}$ の学習データの最初の2,000文を用いた2分割交差検証で最適なパラメータを用いた．$\mathit{IWSLT}_{a}$以外のデータに対してもこの検証により得られたパラメータを使った．ディベロップメントデータを使った各タスクでのパラメータ調整は今後の課題としたい．}．
+また，NAACL 2003のshared taskオリジナルの学習データの総数は約110万文対あるが，今回の{\it Hansards}の実験では，学習時の計算量を削減するため，無作為にサンプリングした10万文対を学習データとして用いた．大規模データの実験は今後の課題とする．
+{\it FBIS}では，NIST02の評価データをディベロップメントデータとして使い，NIST03とNIST04の各評価データでテストした．
+
+
+\subsection{実験対象}
+\label{sect:method}
+
+評価実験では，提案手法であるRNNに基づくモデルに加え，ベースラインとして，IBMモデル4とFFNNに基づくモデルを評価した．
+また，単語アラインメントタスクにおける合意制約の有効性を考察するため，ベースラインとして，典型的なHMMに基づくアラインメントモデルであるVogelらのモデル\cite{vogel96} ($\mathit{HMM}_{indep}$) とこのVogelらのモデルにLiangらの両方向の合意制約\cite{liang06}を導入したモデル ($\mathit{HMM}_{joint}$) も評価した．
+IBMモデル4は，IBMモデル1-4とHMMに基づくモデルを順番に適用して学習した\cite{och03}．
+具体的には，IBMモデル1，HMMに基づくモデル，IBMモデル2，3，4をこの順で5回ずつ繰り返した ($1^{5}H^{5}3^{5}4^{5}$) ．
+これは，GIZA++のデフォルトの設定である ({\it IBM4})．
+$\mathit{HMM}_\mathit{indep}$及び $\mathit{HMM}_\mathit{joint}$はBerkleyAligner\footnote{https://code.google.com/p/berkeleyaligner/}を用いた．
+Liangらの通り，IBMモデル1，HMMに基づくモデルを順番に5回ずつ繰り返し，各モデルを学習した\cite{liang06}．
+FFNNに基づくモデルでは，word embeddingの長さ$M$を30，文脈の窓幅を5とした．
+したがって，$|z_{0}|$は$300=30 \times 5 \times 2$である．
+また，隠れ層として，ユニット数$|z_{1}|$が100の層を1層使用した．
+このFFNNに基づくモデルは，\cite{yang13}に倣って\ref{sect:FFNN}節の教師あり手法により学習したモデル $\mathit{FFNN}_{s}$ に加えて，\ref{sect:usv}節と\ref{sect:agreement}節で提案した教師なし学習や合意制約の効果を確かめるため，$\mathit{FFNN}_{s+c}$，$\mathit{FFNN}_{u}$，$\mathit{FFNN}_{u+c}$ のモデルを評価した．
+「$s$」は教師ありモデル，「$u$」は教師なしモデル，「$+c$」は学習時に合意制約を使うことを意味する．
+RNNに基づくモデルでは，word embeddingの長さ$M$を30，再帰的に連結している隠れ層のユニット数$|y_{j}|$を100とした．
+したがって，$|x_{j}|$は$60=30 \times 2$である．
+また，提案の学習法の効果を検証するため，FFNNに基づくモデル同様，$\mathit{RNN}_{s}$，$\mathit{RNN}_{s+c}$，$\mathit{RNN}_{u}$，$\mathit{RNN}_{u+c}$の4種類を評価した．
+FFNNに基づくモデル及びRNNに基づくモデルの各層のユニット数や$M$などのパラメータは，学習データの一部を用いた2分割交差検証により予め設定した．
+
+NNに基づくモデルの学習について説明する．
+まず，各層の重み行列を初期化する．
+具体的には，lookup層の重み行列$L$は，局所解への収束を避けるため，学習データの原言語側と目的言語側からそれぞれ予め学習したword embeddingに初期化する．
+その他の重みは，$[-0.1, 0.1]$のランダムな値に初期化する．
+word embeddingの学習には，Mikolovらの手法\cite{mikolov10}を基にしたRNNLMツールキット\footnote{http://rnnlm.org/}（デフォルトの設定）を用いる．
+その際，コーパスでの出現数が5回以下の単語は$\langle unk \rangle$に置き換える．
+各重みの初期化後は，ミニバッチSGDにより特定の目的関数に従って各重みを最適化する．
+本実験では，バッチサイズ$D$を100，学習率を0.01とし，50エポックで学習を終えた．
+また，学習データへの過学習を避けるため，目的関数には$l2$正則化項（正則化の比率は0.1）を加えた．
+教師なし学習におけるパラメータ$W$，$N$，$C$は，それぞれ，100，50，0.001とし，合意制約に関するパラメータ$\alpha$は0.1とした．
+
+翻訳タスクでは，フレーズベース機械翻訳 (SMT) システムMoses \cite{Koehn07}を用いた．
+日本語の各文はChaSen\footnote{http://chasen-legacy.sourceforge.jp/}，中国語の各文はStanford Chinese segmenter\footnote{http://nlp.stanford.edu/software/segmenter.shtml}により単語へ分割した．
+その後，40単語以上の文は学習データから除いた．
+言語モデルは，SRILMツールキット\cite{stolcke02}により，modified Kneser-Neyスムージング\cite{kneser95,chen98}を行い学習した．
+{\it IWSLT}，{\it NTCIR-9}及び{\it NTCIR-10}では，学習データの英語側コーパスから構築した5グラム言語モデル，{\it FBIS}では，English GigawordのXinhua部分のデータから構築した5グラム言語モデルを使用した．
+翻訳モデルは，各単語アラインメント手法により特定されたアラインメント結果に基づいて学習した．
+SMTシステムの各パラメータは，ディベロップメントデータを用いてMERT \cite{FOch03}によりチューニングした．
+
+
+\subsection{実験結果（単語アラインメント）}
+\label{sect:res_alignment}
+
+表\ref{tbl:res_wa}に各手法の単語アラインメントの精度をF1値で示す．
+NNに基づく教師ありモデルに対しては，学習データに付与されている正しい単語アラインメントを学習したモデル ({\it REF}) と，{\it IBM4}で特定した単語アラインメントを学習したモデル ({\it IBM4}) の2種類の精度を示す．
+{\it Hansards}の学習データには正しい単語アラインメントが付与されていないため，{\it REF}に対する実験は実施していない．
+
+\begin{table}[b]
+\caption{単語アラインメント精度}
+\label{tbl:res_wa}
+\input{03table02.txt}
+\end{table}
+
+評価手順は，まず，各アラインメントモデルにより，$\boldsymbol{f} \rightarrow \boldsymbol{e}$と$\boldsymbol{e} \rightarrow \boldsymbol{f}$のアラインメントをそれぞれ生成する．
+その後，「grow-diag-final-and」ヒューリスティックス\cite{koehn03}により，両方向のアラインメントを結合する．
+そして，その結合したアラインメント結果をF1値で評価する．
+有意差検定は，有意差水準5\%の符号検定で行った．
+具体的には，テストデータの各単語に対して，他方の手法では不正解だが正しく判定したものを $+$，他方の手法では正解だが誤って判定したものを $-$ として，2手法の評価に有意な差があるかどうかを片側検定の符号検定で判定した．
+表\ref{tbl:res_wa}中の「$+$」は，ベースラインとなるFFNNに基づくモデル $\mathit{FFNN}_{s}$({\it REF/IBM4})との精度差が有意であることを示し，「$++$」は，ベースラインのFFNNに基づくモデル $\mathit{FFNN}_{s}$({\it REF/IBM4})に加えて{\it IBM4}との精度差も有意であることを示す．
+また，正しい教師ラベルを使用するモデル ({\it REF}) と使用しないモデル（{\it REF}以外）のそれぞれで最高の精度を太字で示す．
+
+表\ref{tbl:res_wa}より，$\mathit{IWSLT}_{a}$と{\it Hansards}の両タスクにおいて，本論文の提案手法（RNNに基づくモデル，教師なし学習，合意制約）{\it RNN$_{u+c}$}が最もアラインメント精度が高いことが分かる．
+特に，ベースラインとの精度差は有意であることから，本論文の提案を組み合わせることにより，従来手法より高いアラインメント精度を達成できることが実験的に確認できる．
+
+次に，本論文の各提案の個別の有効性について確認する．
+表\ref{tbl:res_wa}より，$\mathit{IWSLT}_{a}$と{\it Hansards}の両タスクにおいて，$\mathit{RNN}_{s/s+c/u/u+c}$({\it IBM4})，$\mathit{RNN}_{s/s+c}$({\it REF})は，それぞれ，，$\mathit{FFNN}_{s/s+c/u/u+c}$({\it IBM4})，$\mathit{FFNN}_{s/s+c}$({\it REF})よりも精度が良い．
+特に，$\mathit{IWSLT}_{a}$では，$\mathit{RNN}_{s}$({\it REF})，$\mathit{RNN}_{s}$({\it IBM4})と$\mathit{FFNN}_{s}$({\it REF})，$\mathit{FFNN}_{s}$({\it IBM4})とのそれぞれの性能差は有意であることが分かる．
+これは，RNNに基づくモデルにより長いアラインメント履歴を捉えることで，アラインメント精度が向上することを示しており，RNNを利用したモデルの有効性を確認できる．
+ただし，{\it Hansards}においては，RNNの効果が少ない．
+この言語対による効果の違いについては\ref{sect:discuss_RNN}節で考察する．
+
+$\mathit{IWSLT}_{a}$と \textit{Hansards}の両タスクにおいて，$\mathit{RNN}_{s+c}$({\it REF/IBM4})，$\mathit{RNN}_{u+c}$のアラインメント精度は，それぞれ，$\mathit{RNN}_{s}$({\it REF/IBM4})，$\mathit{RNN}_{u}$を上回っており，これらの精度差は有意であった．
+さらに，$\mathit{FFNN}_{s+c}$({\it REF/IBM4})，$\mathit{FFNN}_{u+c}$は，それぞれ，$\mathit{FFNN}_{s}$({\it REF/IBM4})，$\mathit{FFNN}_{u}$より有意にアラインメント精度が良い．
+この結果より，教師ありと教師なしの両方の学習において，両方向の合意制約を導入することでFFNNに基づくモデル及びRNNに基づくモデルのアラインメント精度を改善できることが分かる．
+一方で，{\it HMM$_{joint}$}の方が{\it HMM$_{indep}$}よりも精度が良いことから，提案の合意制約に限らず，両方向の合意をとるようにモデルを学習することは有効であることが確認できる．
+HMMに基づくモデルに導入したLiangらの両方向の合意制約と提案の合意制約の傾向の違いは，\ref{sect:discuss_size}節で考察する．
+
+$\mathit{IWSLT}_{a}$では，$\mathit{RNN}_{u}$と$\mathit{RNN}_{u+c}$は，それぞれ，$\mathit{RNN}_{s}$({\it IBM4})と $\mathit{RNN}_{s+c}$({\it IBM4})より有意にアラインメント精度が良い．
+一方で，{\it Hansards}では，これらの精度は同等である．
+この傾向はFFNNに基づくモデルでも同様である．
+これは，学習データの質（{\it IBM4}の精度）が悪い場合，教師あり学習は{\it IBM4}による疑似学習データに含まれる誤りの悪影響を受けるのに対し，提案の教師なし学習は学習データの質に依らずに精度の良いFFNNやRNNに基づくモデルを学習できることを示している．
+
+
+\subsection{実験結果（機械翻訳）}
+\label{sect:res_translation}
+
+表\ref{tbl:res_mt}に各手法により付与されたアラインメントを用いたSMTシステムの翻訳精度を示す．
+評価尺度は，大文字と小文字を区別したBLEU4\footnote{評価ツールとしてmteval-v13a.pl (http://www.itl.nist.gov/iad/mig/tests/mt/2009/) を用いた．} \cite{Papineni02}を用いた．
+MERTの不安定な振る舞いの影響を緩和するため，MERTによるチューニングは3回行い，その平均値を表\ref{tbl:res_mt}に示す\cite{utiyama09}．
+
+\begin{table}[b]
+\caption{翻訳精度}
+\label{tbl:res_mt}
+\input{03table03.txt}
+\end{table}
+
+{\it IWSLT}では，アラインメントモデル及び翻訳モデルの学習には学習データ全てを用いた．
+一方で，{\it NTCIR-9}，{\it NTCIR-10}と{\it FBIS}では，アラインメントモデルの学習における計算量を削減するため，学習データから無作為にサンプリングした10万文対からアラインメントモデルを学習した．その後，学習したアラインメントモデルにより学習データ全ての単語アラインメントを自動的に付与し，翻訳モデルを学習した．
+また，詳細な比較を行うため，全学習データから学習したIBMモデル4に基づくSMTシステムの精度を{\it IBM4$_{all}$}として示す．
+翻訳精度の有意差検定は，有意差水準5\%でブートストラップによる検定手法\cite{koehn04} により行った．
+表\ref{tbl:res_mt}の「*」は，ベースライン（{\it IBM4}及び $\mathit{FFNN}_{s}$({\it IBM4})）との精度差が有意であることを示す．
+また，各タスクで最高精度（{\it IBM4$_{all}$}を除く）を太字で示す．
+
+表\ref{tbl:res_wa}と表\ref{tbl:res_mt}より，単語アラインメント精度を改善しても，必ずしも翻訳精度が向上するとは限らないことが分かる．
+この事は従来より知られており，例えば，\cite{yang13}においても同様の現象が確認されている．
+しかしながら，表\ref{tbl:res_mt}より，全ての翻訳タスクで，$\mathit{RNN}_{u}$と$\mathit{RNN}_{u+c}$は $\mathit{FFNN}_{s}$({\it IBM4})と{\it IBM4}よりも有意に翻訳精度がよいことが分かる．
+この結果から，提案手法は翻訳精度の改善にも寄与することが実験的に確認できる．
+また，{\it NTCIR-9}と{\it FBIS}では，提案モデルは学習データの一部から学習したが，学習データ全てから学習した $\mathit{IBM4}_\mathit{all}$と同等の精度を達成している．
+学習データ量の影響は\ref{sect:discuss_size}節で考察する．
+
+
+\section{考察}
+\label{sect:discuss}
+
+\subsection{RNNに基づくモデルの効果}
+\label{sect:discuss_RNN}
+
+図\ref{fig:wa}に $\mathit{FFNN}_{s}$及び $\mathit{RNN}_{s}$で解析した単語アラインメントの具体例を示す．
+三角が$\mathit{FFNN}_{s}$の解析結果，丸が $\mathit{RNN}_{s}$の解析結果，四角が正しい単語アラインメントを表す．
+図\ref{fig:wa}より，$\mathit{RNN}_{s}$は $\mathit{FFNN}_{s}$と比較して，複雑なアラインメント（例えば，図\ref{fig:wa}(a)中の「have you been」に対するギザギザのアラインメント）を特定できていることが分かる．
+これは，$\mathit{FFNN}_{s}$は直前のアラインメント履歴しか利用しないが，$\mathit{RNN}_{s}$は長いアラインメント履歴に基づいてアラインメントのパス（例えば，フレーズ単位のアラインメント）を捉えられることを示唆している．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-4ia3f3.eps}
+\end{center}
+\caption{単語アラインメントの解析結果例}
+\label{fig:wa}
+\end{figure}
+
+\ref{sect:res_alignment}節で述べた通り，RNNに基づくモデルの効果は，日英アラインメント ($\mathit{IWSLT}_{a}$) と比べて仏英アラインメント (\textit{Hansards}) に対して少ない．
+これは，英語とフランス語は語順が似ていて，日英に比べて1対1アラインメントが多く（図\ref{fig:wa}参照），仏英単語アラインメントは局所的な手がかりで捉えられる場合が多いためであると考えられる．
+図\ref{fig:wa}(b)は，このような単純な単語アラインメントは，$\mathit{FFNN}_{s}$と$\mathit{RNN}_{s}$の両モデルで正しく解析できることを示している．
+
+
+\subsection{学習データ量の影響}
+\label{sect:discuss_size}
+
+{\it BTEC}における日英アラインメントタスクにおいて様々なサイズの学習データを使った時のアラインメント精度を表\ref{tbl:size}に示す．
+「40~K」，「9~K」，「1~K」は，それぞれ，{\it IWSLT}の全学習データ，$\mathit{IWSLT}_{a}$の全学習データ，$\mathit{IWSLT}_{a}$の全学習データから無作為に抽出した1,000文対を学習データとした時の，$\mathit{IWSLT}_{a}$のテストデータに対するアラインメント精度である．
+「9~K」及び「1~K」はラベルあり学習データ，「40~K」はラベルなし学習データである．
+そのため，教師ありモデル({\it REF})の「40~K」に対する実験は実施していない．
+
+表\ref{tbl:size}より，「1~K」の $\mathit{RNN}_{s+c}$({\it REF})と「9~K」の $\mathit{RNN}_{u+c}$は「40~K」の{\it IBM4}より性能がよいことが分かる．
+すなわち，RNNに基づくモデルは，{\it IBM4}の学習データの22.5\%以下 (9,000/40,000) のデータから同等の精度を持つモデルを学習できたことが分かる．
+その結果，表\ref{tbl:res_mt}が示す通り，学習データの一部を使った $\mathit{RNN}_{u+c}$に基づくSMTシステムが，全学習データを用いた $\mathit{IBM4}_\mathit{all}$に基づくSMTシステムと同等の精度を達成できる場合がある．
+
+\begin{table}[b]
+\caption{学習データ量による単語アラインメント精度の比較}
+\label{tbl:size}
+\input{03table04.txt}
+\end{table}
+
+表\ref{tbl:size}より，HMMに基づくモデルに導入したLiangらの両方向の合意制約は学習データが小規模なほど効果があることが分かる．
+一方で，提案の合意制約は，Liangらの合意制約と比較すると精度の改善幅は小さいが，どのテータサイズにおいても同等の効果を発揮することが確認できる．
+
+また，各データサイズで\ref{sect:res_alignment}節と同様の手法の比較を行うと，教師ラベルを使わない場合は $\mathit{RNN}_{u+c}$，使う場合は$\mathit{RNN}_{s+c}$({\it REF})が最も性能が良い．
+そして，本論文で提案した，RNNの利用，教師なし学習，合意制約の個別の有効性も確認できることから，データサイズに依らず提案手法が有効であることが分かる．
+
+
+\section{まとめ}
+\label{sect:conclusion}
+
+本論文では，RNNに基づく単語アラインメントモデルを提案した．
+提案モデルは，隠れ層の再帰的な構造を利用し，長いアラインメント履歴に基づいてアラインメントのパス（例えば，フレーズ単位のアラインメント）を捉えることができる．
+また，RNN に基づくモデルの学習法として，Dyerらの教師なし単語アラインメント\cite{dyer11}を拡張して人工的に作成した負例を利用する教師なし学習法を提案した．
+そして，更なる精度向上のために，学習過程に各方向のword embeddingを一致させる合意制約を導入した．
+複数の単語アラインメントタスクと翻訳タスクの実験を通じて，RNNに基づくモデルは従来のFFNNに基づくモデル\cite{yang13}よりアラインメント精度及び翻訳精度が良いことを示した．
+また，提案した教師なし学習や合意制約により，アラインメント精度を更に改善できることを確認した．
+
+提案モデルでは，アラインメント対象の文脈をアラインメント履歴 ($y_{i}$) に暗示的に埋め込み利用しているが，今後は，FFNNに基づくモデルのように周辺単語の入力（$c(f_{j})$や$c(e_{a_{j}})$）として明示的に利用することも検討したい．
+また，Yangらは複数の隠れ層を用いることでFFNNに基づくモデルの精度を改善している\cite{yang13}．
+これに倣って提案モデルでも各隠れ層を複数にするなど，提案モデルの改良を行う予定である．
+さらに，本論文では提案モデルにより特定したアラインメントに基づいて翻訳モデルを学習したが，翻訳モデル学習時の素性としてアラインメントモデルが算出するスコアを使用したり，Watanabeら\cite{watanabe06}のように翻訳候補のリランキングの中で使ったりするなど，提案モデルのSMTシステムへの効果的な組み込み方に関しても検討したい．
+
+\acknowledgment
+
+本論文は国際会議The 52nd Annual Meeting of the Association for Computational Linguisticsで発表した論文\cite{tamura14}に基づいて日本語で書き直し，説明や評価を追加したものである．
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Auli, Galley, Quirk, \BBA\ Zweig}{Auli
+  et~al.}{2013}]{auli13}
+Auli, M., Galley, M., Quirk, C., \BBA\ Zweig, G. \BBOP 2013\BBCP.
+\newblock \BBOQ Joint Language and Translation Modeling with Recurrent Neural
+  Networks.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP 2013}, \mbox{\BPGS\ 1044--1054}.
+
+\bibitem[\protect\BCAY{Bengio, Ducharme, Vincent, \BBA\ Janvin}{Bengio
+  et~al.}{2003}]{bengio03}
+Bengio, Y., Ducharme, R., Vincent, P., \BBA\ Janvin, C. \BBOP 2003\BBCP.
+\newblock \BBOQ A Neural Probabilistic Language Model.\BBCQ\
+\newblock {\Bem Journal of Machine Learning Research}, {\Bbf 3}, \mbox{\BPGS\
+  1137--1155}.
+
+\bibitem[\protect\BCAY{Berg-Kirkpatrick, Bouchard-C\^{o}t\'{e}, DeNero, \BBA\
+  Klein}{Berg-Kirkpatrick et~al.}{2010}]{taylor10}
+Berg-Kirkpatrick, T., Bouchard-C\^{o}t\'{e}, A., DeNero, J., \BBA\ Klein, D.
+  \BBOP 2010\BBCP.
+\newblock \BBOQ Painless Unsupervised Learning with Features.\BBCQ\
+\newblock In {\Bem Proceedings of HLT:NAACL 2010}, \mbox{\BPGS\ 582--590}.
+
+\bibitem[\protect\BCAY{Blunsom \BBA\ Cohn}{Blunsom \BBA\
+  Cohn}{2006}]{blunsom06}
+Blunsom, P.\BBACOMMA\ \BBA\ Cohn, T. \BBOP 2006\BBCP.
+\newblock \BBOQ Discriminative Word Alignment with Conditional Random
+  Fields.\BBCQ\
+\newblock In {\Bem Proceedings of Coling/ACL 2006}, \mbox{\BPGS\ 65--72}.
+
+\bibitem[\protect\BCAY{Brown, Pietra, Pietra, \BBA\ Mercer}{Brown
+  et~al.}{1993}]{brown93}
+Brown, P.~F., Pietra, S. A.~D., Pietra, V. J.~D., \BBA\ Mercer, R.~L. \BBOP
+  1993\BBCP.
+\newblock \BBOQ The Mathematics of Statistical Machine Translation: Parameter
+  Estimation.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 19}  (2), \mbox{\BPGS\
+  263--311}.
+
+\bibitem[\protect\BCAY{Chen \BBA\ Goodman}{Chen \BBA\ Goodman}{1996}]{chen98}
+Chen, S.~F.\BBACOMMA\ \BBA\ Goodman, J. \BBOP 1996\BBCP.
+\newblock \BBOQ An Empirical Study of Smoothing Techniques for Language
+  Modeling.\BBCQ\
+\newblock In {\Bem Proceedings of ACL 1996}, \mbox{\BPGS\ 310--318}.
+
+\bibitem[\protect\BCAY{Collobert \BBA\ Weston}{Collobert \BBA\
+  Weston}{2008}]{collobert08}
+Collobert, R.\BBACOMMA\ \BBA\ Weston, J. \BBOP 2008\BBCP.
+\newblock \BBOQ A Unified Architecture for Natural Language Processing: Deep
+  Neural Networks with Multitask Learning.\BBCQ\
+\newblock In {\Bem Proceedings of ICML 2008}, \mbox{\BPGS\ 160--167}.
+
+\bibitem[\protect\BCAY{Collobert, Weston, Bottou, Karlen, Kavukcuoglu, \BBA\
+  Kuksa}{Collobert et~al.}{2011}]{collobert11}
+Collobert, R., Weston, J., Bottou, L., Karlen, M., Kavukcuoglu, K., \BBA\
+  Kuksa, P. \BBOP 2011\BBCP.
+\newblock \BBOQ Natural Language Processing (Almost) from Scratch.\BBCQ\
+\newblock {\Bem Journal of Machine Learning Research}, {\Bbf 12}, \mbox{\BPGS\
+  2493--2537}.
+
+\bibitem[\protect\BCAY{Dahl, Yu, Deng, \BBA\ Acero}{Dahl et~al.}{2012}]{dahl12}
+Dahl, G.~E., Yu, D., Deng, L., \BBA\ Acero, A. \BBOP 2012\BBCP.
+\newblock \BBOQ Context-Dependent Pre-trained Deep Neural Networks for Large
+  Vocabulary Speech Recognition.\BBCQ\
+\newblock {\Bem IEEE Transactions on Audio, Speech, and Language Processing},
+  {\Bbf 20}  (1), \mbox{\BPGS\ 30--42}.
+
+\bibitem[\protect\BCAY{Dempster, Laird, \BBA\ Rubin}{Dempster
+  et~al.}{1977}]{dempster77}
+Dempster, A.~P., Laird, N.~M., \BBA\ Rubin, D.~B. \BBOP 1977\BBCP.
+\newblock \BBOQ Maximum Likelihood from Incomplete Data via the EM
+  Algorithm.\BBCQ\
+\newblock {\Bem Journal of the Royal Statistical Society, Series B}, {\Bbf 39}
+  (1), \mbox{\BPGS\ 1--38}.
+
+\bibitem[\protect\BCAY{Dyer, Clark, Lavie, \BBA\ Smith}{Dyer
+  et~al.}{2011}]{dyer11}
+Dyer, C., Clark, J., Lavie, A., \BBA\ Smith, N.~A. \BBOP 2011\BBCP.
+\newblock \BBOQ Unsupervised Word Alignment with Arbitrary Features.\BBCQ\
+\newblock In {\Bem Proceedings of ACL/HLT 2011}, \mbox{\BPGS\ 409--419}.
+
+\bibitem[\protect\BCAY{Fordyce}{Fordyce}{2007}]{fordyce07}
+Fordyce, C.~S. \BBOP 2007\BBCP.
+\newblock \BBOQ Overview of the IWSLT 2007 Evaluation Campaign.\BBCQ\
+\newblock In {\Bem Proceedings of IWSLT 2007}, \mbox{\BPGS\ 1--12}.
+
+\bibitem[\protect\BCAY{Ganchev, Gra{\c{c}}a, \BBA\ Taskar}{Ganchev
+  et~al.}{2008}]{gancev08}
+Ganchev, K., Gra{\c{c}}a, J.~V., \BBA\ Taskar, B. \BBOP 2008\BBCP.
+\newblock \BBOQ Better Alignments = Better Translations?\BBCQ\
+\newblock In {\Bem Proceedings of ACL/HLT 2008}, \mbox{\BPGS\ 986--993}.
+
+\bibitem[\protect\BCAY{Goh, Watanabe, Yamamoto, \BBA\ Sumita}{Goh
+  et~al.}{2010}]{goh10}
+Goh, C.-L., Watanabe, T., Yamamoto, H., \BBA\ Sumita, E. \BBOP 2010\BBCP.
+\newblock \BBOQ Constraining a Generative Word Alignment Model with
+  Discriminative Output.\BBCQ\
+\newblock {\Bem IEICE Transactions}, {\Bbf 93-D}  (7), \mbox{\BPGS\
+  1976--1983}.
+
+\bibitem[\protect\BCAY{Goto, Chow, Lu, Sumita, \BBA\ Tsou}{Goto
+  et~al.}{2013}]{goto13}
+Goto, I., Chow, K.~P., Lu, B., Sumita, E., \BBA\ Tsou, B.~K. \BBOP 2013\BBCP.
+\newblock \BBOQ Overview of the Patent Machine Translation Task at the NTCIR-10
+  Workshop.\BBCQ\
+\newblock In {\Bem Proceedings of 10th NTCIR Conference}, \mbox{\BPGS\
+  260--286}.
+
+\bibitem[\protect\BCAY{Goto, Lu, Chow, Sumita, \BBA\ Tsou}{Goto
+  et~al.}{2011}]{goto10}
+Goto, I., Lu, B., Chow, K.~P., Sumita, E., \BBA\ Tsou, B.~K. \BBOP 2011\BBCP.
+\newblock \BBOQ Overview of the Patent Machine Translation Task at the NTCIR-9
+  Workshop.\BBCQ\
+\newblock In {\Bem Proceedings of 9th NTCIR Conference}, \mbox{\BPGS\
+  559--578}.
+
+\bibitem[\protect\BCAY{Gra{\c{c}}a, Ganchev, \BBA\ Taskar}{Gra{\c{c}}a
+  et~al.}{2008}]{graca08}
+Gra{\c{c}}a, J.~V., Ganchev, K., \BBA\ Taskar, B. \BBOP 2008\BBCP.
+\newblock \BBOQ Expectation Maximization and Posterior Constraints.\BBCQ\
+\newblock In {\Bem Proceedings of NIPS 2008}, \mbox{\BPGS\ 569--576}.
+
+\bibitem[\protect\BCAY{Gutmann \BBA\ Hyv{\"a}rinen}{Gutmann \BBA\
+  Hyv{\"a}rinen}{2010}]{gutmann10}
+Gutmann, M.\BBACOMMA\ \BBA\ Hyv{\"a}rinen, A. \BBOP 2010\BBCP.
+\newblock \BBOQ Noise-Contrastive Estimation: A New Estimation Principle for
+  Unnormalized Statistical Models.\BBCQ\
+\newblock In {\Bem Proceedings of AISTATS 2010}, \mbox{\BPGS\ 297--304}.
+
+\bibitem[\protect\BCAY{Kalchbrenner \BBA\ Blunsom}{Kalchbrenner \BBA\
+  Blunsom}{2013}]{nal13}
+Kalchbrenner, N.\BBACOMMA\ \BBA\ Blunsom, P. \BBOP 2013\BBCP.
+\newblock \BBOQ Recurrent Continuous Translation Models.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP 2013}, \mbox{\BPGS\ 1700--1709}.
+
+\bibitem[\protect\BCAY{Kneser \BBA\ Ney}{Kneser \BBA\ Ney}{1995}]{kneser95}
+Kneser, R.\BBACOMMA\ \BBA\ Ney, H. \BBOP 1995\BBCP.
+\newblock \BBOQ Improved Backing-off for M-gram Language Modeling.\BBCQ\
+\newblock In {\Bem Proceedings of ICASSP 1995}, \mbox{\BPGS\ 181--184}.
+
+\bibitem[\protect\BCAY{Koehn}{Koehn}{2004}]{koehn04}
+Koehn, P. \BBOP 2004\BBCP.
+\newblock \BBOQ Statistical Significance Tests for Machine Translation
+  Evaluation.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP 2004}, \mbox{\BPGS\ 388--395}.
+
+\bibitem[\protect\BCAY{Koehn, Hoang, Birch, Callison-Burch, Federico, Bertoldi,
+  Cowan, Shen, Moran, Zens, Dyer, Bojar, Constrantin, \BBA\ Herbst}{Koehn
+  et~al.}{2007}]{Koehn07}
+Koehn, P., Hoang, H., Birch, A., Callison-Burch, C., Federico, M., Bertoldi,
+  N., Cowan, B., Shen, W., Moran, C., Zens, R., Dyer, C., Bojar, O.,
+  Constrantin, A., \BBA\ Herbst, E. \BBOP 2007\BBCP.
+\newblock \BBOQ Moses: Open Source Toolkit for Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of ACL 2007}, \mbox{\BPGS\ 177--180}.
+
+\bibitem[\protect\BCAY{Koehn, Och, \BBA\ Marcu}{Koehn et~al.}{2003}]{koehn03}
+Koehn, P., Och, F.~J., \BBA\ Marcu, D. \BBOP 2003\BBCP.
+\newblock \BBOQ Statistical Phrase-Based Translation.\BBCQ\
+\newblock In {\Bem Proceedings of HLT/NAACL 2003}, \mbox{\BPGS\ 48--54}.
+
+\bibitem[\protect\BCAY{Le, Allauzen, \BBA\ Yvon}{Le et~al.}{2012}]{son12}
+Le, H.-S., Allauzen, A., \BBA\ Yvon, F. \BBOP 2012\BBCP.
+\newblock \BBOQ Continuous Space Translation Models with Neural Networks.\BBCQ\
+\newblock In {\Bem Proceedings of NAACL/HLT 2012}, \mbox{\BPGS\ 39--48}.
+
+\bibitem[\protect\BCAY{Liang, Taskar, \BBA\ Klein}{Liang
+  et~al.}{2006}]{liang06}
+Liang, P., Taskar, B., \BBA\ Klein, D. \BBOP 2006\BBCP.
+\newblock \BBOQ Alignment by Agreement.\BBCQ\
+\newblock In {\Bem Proceedings of HLT/NAACL 2006}, \mbox{\BPGS\ 104--111}.
+
+\bibitem[\protect\BCAY{Matusov, Zens, \BBA\ Ney}{Matusov
+  et~al.}{2004}]{matusov04}
+Matusov, E., Zens, R., \BBA\ Ney, H. \BBOP 2004\BBCP.
+\newblock \BBOQ Symmetric Word Alignments for Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of Coling 2004}, \mbox{\BPGS\ 219--225}.
+
+\bibitem[\protect\BCAY{Mihalcea \BBA\ Pedersen}{Mihalcea \BBA\
+  Pedersen}{2003}]{mihalcea03}
+Mihalcea, R.\BBACOMMA\ \BBA\ Pedersen, T. \BBOP 2003\BBCP.
+\newblock \BBOQ An Evaluation Exercise for Word Alignment.\BBCQ\
+\newblock In {\Bem Proceedings of the HLT-NAACL 2003 Workshop on Building and
+  Using Parallel Texts: Data Driven Machine Translation and Beyond},
+  \mbox{\BPGS\ 1--10}.
+
+\bibitem[\protect\BCAY{Mikolov, Karafi{\'a}t, Burget, Cernock{\'y}, \BBA\
+  Khudanpur}{Mikolov et~al.}{2010}]{mikolov10}
+Mikolov, T., Karafi{\'a}t, M., Burget, L., Cernock{\'y}, J., \BBA\ Khudanpur,
+  S. \BBOP 2010\BBCP.
+\newblock \BBOQ Recurrent Neural Network based Language Model.\BBCQ\
+\newblock In {\Bem Proceedings of INTERSPEECH 2010}, \mbox{\BPGS\ 1045--1048}.
+
+\bibitem[\protect\BCAY{Mikolov, Sutskever, Chen, Corrado, \BBA\ Dean}{Mikolov
+  et~al.}{2013}]{mikolov13}
+Mikolov, T., Sutskever, I., Chen, K., Corrado, G., \BBA\ Dean, J. \BBOP
+  2013\BBCP.
+\newblock \BBOQ Distributed Representations of Words and Phrases and their
+  Compositionality.\BBCQ\
+\newblock In {\Bem Proceedings of NIPS 2013}, \mbox{\BPGS\ 3111--3119}.
+
+\bibitem[\protect\BCAY{Mikolov \BBA\ Zweig}{Mikolov \BBA\
+  Zweig}{2012}]{mikolov12}
+Mikolov, T.\BBACOMMA\ \BBA\ Zweig, G. \BBOP 2012\BBCP.
+\newblock \BBOQ Context Dependent Recurrent Neural Network Language
+  Model.\BBCQ\
+\newblock In {\Bem Proceedings of SLT 2012}, \mbox{\BPGS\ 234--239}.
+
+\bibitem[\protect\BCAY{Mnih \BBA\ Teh}{Mnih \BBA\ Teh}{2012}]{mnih12}
+Mnih, A.\BBACOMMA\ \BBA\ Teh, Y.~W. \BBOP 2012\BBCP.
+\newblock \BBOQ A Fast and Simple Algorithm for Training Neural Probabilistic
+  Language Models.\BBCQ\
+\newblock In {\Bem Proceedings of ICML 2012}, \mbox{\BPGS\ 1751--1758}.
+
+\bibitem[\protect\BCAY{Moore}{Moore}{2005}]{moore05}
+Moore, R.~C. \BBOP 2005\BBCP.
+\newblock \BBOQ A Discriminative Framework for Bilingual Word Alignment.\BBCQ\
+\newblock In {\Bem Proceedings of HLT/EMNLP 2005}, \mbox{\BPGS\ 81--88}.
+
+\bibitem[\protect\BCAY{Och}{Och}{2003}]{FOch03}
+Och, F.~J. \BBOP 2003\BBCP.
+\newblock \BBOQ Minimum Error Rate Training in Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of ACL 2003}, \mbox{\BPGS\ 160--167}.
+
+\bibitem[\protect\BCAY{Och \BBA\ Ney}{Och \BBA\ Ney}{2003}]{och03}
+Och, F.~J.\BBACOMMA\ \BBA\ Ney, H. \BBOP 2003\BBCP.
+\newblock \BBOQ A Systematic Comparison of Various Statistical Alignment
+  Models.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 29}, \mbox{\BPGS\ 19--51}.
+
+\bibitem[\protect\BCAY{Papineni, Roukos, Ward, \BBA\ Zhu}{Papineni
+  et~al.}{2002}]{Papineni02}
+Papineni, K., Roukos, S., Ward, T., \BBA\ Zhu, W.-J. \BBOP 2002\BBCP.
+\newblock \BBOQ BLEU: a Method for Automatic Evaluation of Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of ACL 2002}, \mbox{\BPGS\ 311--318}.
+
+\bibitem[\protect\BCAY{Rumelhart, Hinton, \BBA\ Williams}{Rumelhart
+  et~al.}{1986}]{rumelhart86}
+Rumelhart, D.~E., Hinton, G.~E., \BBA\ Williams, R.~J. \BBOP 1986\BBCP.
+\newblock \BBOQ Learning Internal Representations by Error Propagation.\BBCQ\
+\newblock In Rumelhart, D.~E.\BBACOMMA\ \BBA\ McClelland, J.~L.\BEDS, {\Bem
+  Parallel Distributed Processing}, \mbox{\BPGS\ 318--362}. MIT Press.
+
+\bibitem[\protect\BCAY{Smith \BBA\ Eisner}{Smith \BBA\ Eisner}{2005}]{smith05}
+Smith, N.~A.\BBACOMMA\ \BBA\ Eisner, J. \BBOP 2005\BBCP.
+\newblock \BBOQ Contrastive Estimation: Training Log-Linear Models on Unlabeled
+  Data.\BBCQ\
+\newblock In {\Bem Proceedings of ACL 2005}, \mbox{\BPGS\ 354--362}.
+
+\bibitem[\protect\BCAY{Stolcke}{Stolcke}{2002}]{stolcke02}
+Stolcke, A. \BBOP 2002\BBCP.
+\newblock \BBOQ SRILM - An Extensible Language Modeling Toolkit.\BBCQ\
+\newblock In {\Bem Proceedings of ICSLP 2002}, \mbox{\BPGS\ 901--904}.
+
+\bibitem[\protect\BCAY{Sundermeyer, Oparin, Gauvain, Freiberg, Schl{\"u}ter,
+  \BBA\ Ney}{Sundermeyer et~al.}{2013}]{sundermeyer13}
+Sundermeyer, M., Oparin, I., Gauvain, J.-L., Freiberg, B., Schl{\"u}ter, R.,
+  \BBA\ Ney, H. \BBOP 2013\BBCP.
+\newblock \BBOQ Comparison of Feedforward and Recurrent Neural Network Language
+  Models.\BBCQ\
+\newblock In {\Bem Proceedings of ICASSP 2013}, \mbox{\BPGS\ 8430--8434}.
+
+\bibitem[\protect\BCAY{Takezawa, Sumita, Sugaya, Yamamoto, \BBA\
+  Yamamoto}{Takezawa et~al.}{2002}]{takezawa02}
+Takezawa, T., Sumita, E., Sugaya, F., Yamamoto, H., \BBA\ Yamamoto, S. \BBOP
+  2002\BBCP.
+\newblock \BBOQ Toward a Broad-coverage Bilingual Corpus for Speech Translation
+  of Travel Conversations in the Real World.\BBCQ\
+\newblock In {\Bem Proceedings of LREC 2002}, \mbox{\BPGS\ 147--152}.
+
+\bibitem[\protect\BCAY{Tamura, Watanabe, \BBA\ Sumita}{Tamura
+  et~al.}{2014}]{tamura14}
+Tamura, A., Watanabe, T., \BBA\ Sumita, E. \BBOP 2014\BBCP.
+\newblock \BBOQ Recurrent Neural Networks for Word Alignment Model.\BBCQ\
+\newblock In {\Bem Proceedings of ACL 2014}, \mbox{\BPGS\ 1470--1480}.
+
+\bibitem[\protect\BCAY{Taskar, Lacoste-Julien, \BBA\ Klein}{Taskar
+  et~al.}{2005}]{taskar05}
+Taskar, B., Lacoste-Julien, S., \BBA\ Klein, D. \BBOP 2005\BBCP.
+\newblock \BBOQ A Discriminative Matching Approach to Word Alignment.\BBCQ\
+\newblock In {\Bem Proceedings of HLT/EMNLP 2005}, \mbox{\BPGS\ 73--80}.
+
+\bibitem[\protect\BCAY{Utiyama, Yamamoto, \BBA\ Sumita}{Utiyama
+  et~al.}{2009}]{utiyama09}
+Utiyama, M., Yamamoto, H., \BBA\ Sumita, E. \BBOP 2009\BBCP.
+\newblock \BBOQ Two Methods for Stabilizing MERT: NICT at IWSLT 2009.\BBCQ\
+\newblock In {\Bem Proceedings of IWSLT 2009}, \mbox{\BPGS\ 79--82}.
+
+\bibitem[\protect\BCAY{Vaswani, Huang, \BBA\ Chiang}{Vaswani
+  et~al.}{2012}]{vaswani12}
+Vaswani, A., Huang, L., \BBA\ Chiang, D. \BBOP 2012\BBCP.
+\newblock \BBOQ Smaller Alignment Models for Better Translations: Unsupervised
+  Word Alignment with the $l_0$-norm.\BBCQ\
+\newblock In {\Bem Proceedings of ACL 2012}, \mbox{\BPGS\ 311--319}.
+
+\bibitem[\protect\BCAY{Vaswani, Zhao, Fossum, \BBA\ Chiang}{Vaswani
+  et~al.}{2013}]{vaswani13}
+Vaswani, A., Zhao, Y., Fossum, V., \BBA\ Chiang, D. \BBOP 2013\BBCP.
+\newblock \BBOQ Decoding with Large-Scale Neural Language Models Improves
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of EMNLP 2013}, \mbox{\BPGS\ 1387--1392}.
+
+\bibitem[\protect\BCAY{Viterbi}{Viterbi}{1967}]{viterbi67}
+Viterbi, A.~J. \BBOP 1967\BBCP.
+\newblock \BBOQ Error Bounds for Convolutional Codes and an Asymptotically
+  Optimum Decoding Algorithm.\BBCQ\
+\newblock {\Bem IEEE Transactions on Information Theory}, {\Bbf 13}  (2),
+  \mbox{\BPGS\ 260--269}.
+
+\bibitem[\protect\BCAY{Vogel, Ney, \BBA\ Tillmann}{Vogel
+  et~al.}{1996}]{vogel96}
+Vogel, S., Ney, H., \BBA\ Tillmann, C. \BBOP 1996\BBCP.
+\newblock \BBOQ Hmm-based Word Alignment in Statistical Translation.\BBCQ\
+\newblock In {\Bem Proceedings of Coling 1996}, \mbox{\BPGS\ 836--841}.
+
+\bibitem[\protect\BCAY{Watanabe, Suzuki, Tsukada, \BBA\ Isozaki}{Watanabe
+  et~al.}{2006}]{watanabe06}
+Watanabe, T., Suzuki, J., Tsukada, H., \BBA\ Isozaki, H. \BBOP 2006\BBCP.
+\newblock \BBOQ NTT Statistical Machine Translation for IWSLT 2006.\BBCQ\
+\newblock In {\Bem Proceedings of IWSLT 2006}, \mbox{\BPGS\ 95--102}.
+
+\bibitem[\protect\BCAY{Yang, Liu, Li, Zhou, \BBA\ Yu}{Yang
+  et~al.}{2013}]{yang13}
+Yang, N., Liu, S., Li, M., Zhou, M., \BBA\ Yu, N. \BBOP 2013\BBCP.
+\newblock \BBOQ Word Alignment Modeling with Context Dependent Deep Neural
+  Network.\BBCQ\
+\newblock In {\Bem Proceedings of ACL 2013}, \mbox{\BPGS\ 166--175}.
+
+\end{thebibliography}
+
+\begin{biography}
+\bioauthor{田村　晃裕}{
+2005年東京工業大学工学部情報工学科卒業．2007年同大学院総合理工学研究科修士課程修了．2007年から2011年まで日本電気株式会社にて自然言語処理，特にテキストマイニングに関する研究に従事．2011年から2014年まで情報通信研究機構にて統計的機械翻訳に関する研究に従事．2013年東京工業大学大学院総合理工学研究科博士課程修了．2014年から2015年まで日本電気株式会社にてテキスト分類に関する研究に従事．2015年から情報通信研究機構の研究員，現在に至る．工学博士．情報処理学会，言語処理学会，ACL各会員．
+}
+\bioauthor{渡辺　太郎}{
+1994年京都大学工学部情報工学科卒業．1997年京都大学大学院工学研究科情報工学専攻修士課程修了．2000年Language and Information Technologies, School of Computer Science, Carnegie Mellon University, Master of Science取得．2004年京都大学博士（情報学）．ATR，NTTおよびNICTにて研究員として務めた後，現在，グーグル株式会社ソフトウェアエンジニア．
+}
+\bioauthor{隅田英一郎}{
+1982年電気通信大学大学院修士課程修了．1999年京都大学大学院博士（工学）．日本アイ・ビー・エム東京基礎研究所，国際電気通信基礎技術研究所を経て，2007年より国立研究開発法人情報通信研究機構に勤務，現在，ユニバーサルコミュニケーション研究所副所長．自動翻訳，eラーニングに関する研究開発に従事．
+2007，2014年アジア太平洋機械翻訳協会長尾賞，2007年情報処理学会喜安記念業績賞，2010年文部科学大臣表彰・科学技術賞（開発部門），2013年第11回産学官連携功労者表彰・総務大臣賞．
+情報処理学会，電子情報通信学会，ACL，日本音響学会，ACM各会員．
+}
+\end{biography}
+
+
+\biodate
+
+
+
+
+
+\end{document}

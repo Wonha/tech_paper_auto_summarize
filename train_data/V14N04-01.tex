@@ -1,0 +1,779 @@
+    \documentclass[japanese]{jnlp_1.3e}
+\usepackage{jnlpbbl_1.1}
+\usepackage[dvips]{graphicx}
+\usepackage{tabularx}
+\usepackage{dcolumn}
+
+\Volume{14}
+\Number{4}
+\Month{July}
+\Year{2007}
+\received{2006}{2}{20}
+\revised{2006}{7}{24}
+\accepted{2006}{8}{24}
+
+\setcounter{page}{3}
+
+\jtitle{関係データベースを用いた構文木付きコーパス検索手法}
+\jauthor{橋本　泰一\affiref{cs} \and 吉田　恭介\affiref{cs} \and 野口　正樹\affiref{cs} \and 徳永　健伸\affiref{cs} \and 田中　穂積\affiref{chukyo}}
+\jabstract{
+本論文では，構文木をクエリとして与え，構文木付きコーパスからクエリと同じ構文木を部分木として含む文を検索する手法を提案する．構文木付きコーパスは，関係データベースに格納する．このような構造検索の過去の研究では，クエリの節点数が増加すると，検索時間が大幅に増加する問題があった．本論文で提案する手法は，節点数が多いクエリを部分木に分割し，漸進的に検索することで検索を効率化する．クエリの分割の単位やその検索順序は，検索対象となるコーパス中の規則の出現頻度をもとに自動的に決定する．本手法の有効性を確認するために7種類のコーパスを用いて評価実験を行ったところ，4種類のコーパスで分割の有効性が確認できた．
+}
+\jkeywords{構文木付きコーパス，情報検索，コーパス作成支援ツール，関係データベース}
+
+\etitle{Retrieving Syntactically Annotated Corpora \\
+	using a Relational Database}
+\eauthor{Taiichi Hashimoto\affiref{cs} \and Kyosuke Yoshida\affiref{cs} \and Masaki Noguchi\affiref{cs} \and \\
+	Takenobu Tokunaga\affiref{cs} \and Hozumi Tanaka\affiref{chukyo}} 
+\eabstract{
+This paper presents a method to retrieve sentences including  the same subtree as a given query from a treebank. Our system stores the treebank in a relational database. One of the problems of the previous work in structure retrieval is efficiency for large queries. 
+The proposed method divides a large query into several subtrees, and incrementally narrows down the result by using these subtrees as queries. The number of subtrees and the order are determined automaticaly based on the treebank statistics. We conducted experiments to evaluate the proposed method with seven treebanks and found that the proposed method significantly improved the retrieval efficiency  in four out of seven treebanks.
+}
+\ekeywords{Syntactically Annotated Corpora, Information Retrieval, Annotation Tool, Relational Database}
+
+\headauthor{橋本，吉田，野口，徳永，田中}
+\headtitle{関係データベースを用いた構文木付きコーパス検索手法}
+
+\affilabel{cs}{東京工業大学大学院情報理工学研究科計算工学専攻}{Department of Computer Science, Graduate School of Information Science and Engineering, Tokyo Institute of Technology}
+\affilabel{chukyo}{中京大学情報科学部認知科学科}{School of Computer and Cognitive Science, Chukyo University}
+
+
+
+\begin{document}
+\maketitle
+
+
+
+\section{はじめに}
+\label{intro}
+
+近年，自然言語処理の分野では，大規模な言語資源を利用した統計的手法が研
+究の中心となっている．特に，構文木付きコーパスは，統計的手法に基づく言
+語処理の高性能化のためだけでなく，言語学や言語処理研究の基本データとし
+ても貴重な資源である．そのため，大規模な構文木付きコーパスの作成が必要
+となっている．しかし，大規模な構文木付きコーパスを全て人手により作成す
+ることは，多大なコストを必要とするため困難である．
+一方，現在の構文解析の精度では，構文木の付与を完全に自動化することが難
+しい．現実的には，構文解析器の出力から人手によって正しい構文木を選択
+し，それを文に付与することが望ましい．
+
+コーパス作成中には，文法や品詞体系の変更など，コーパス作成方針の変更により，コーパスへの修正が必要になることもあり，継続的な修正作業や不整合の除去などの機能を持った構文木付きコーパスの作成を支援するシステムが必要になる\cite{cunningham:2003:a}\cite{plaehn:2000:a}．このようなシステムの多くは，GUIツールを用いて，構文木付けをするコーパスのファイル形式や品詞ラベルの不整合を防ぐことにより，コーパス作成者を支援するのが主な機能である．しかし，それだけでは，正しい構文木付きコーパスの作成には，不十分であり，構文木の一貫性を保つための支援が必要となる．
+
+構文木の一貫性を保つための支援として，過去の事例を参照することは有効である．複数の構文木候補のうち，正しい木の選択を迷った場合に，すでに構文木を付与されたコーパス中から，作業中の構文木と類似した部分を持つ構文木を参照できれば，正しい構文木付けが容易になり，一貫性を保つための支援ができる．このためには，構文木付きコーパスを検索対象とし，木構造の検索が可能な構文木付きコーパス検索システムが必要となる．構文木付きコーパス検索システムは，木構造検索を行うことになるため，UNIXの文字列検索コマンド$grep$などの文字列検索よりも検索に時間を要することが多い．既存の構文木付きコーパス検索システム\cite{randall:2000:a,rohde:2001:a,konig:2003:a,bird:2004:a}においても，主な課題として，検索時間の高速化が挙げられているが，検索時間を高速化する優れた手法はまだ提案されていない．今後，コーパスの規模が更に大きくなると，検索時間の高速化は不可欠な技術となる．
+
+本論文では，高速な構文木付きコーパス検索手法を提案する．本論文で提案する検索手法は，構文木付きコーパスを関係データベースに格納し，検索にはSQLを用いる．部分木を検索のクエリとして与え，クエリと同じ構造を含む構文木を検索結果として出力する．クエリの節点数が多い場合，クエリを分割し，それぞれのクエリを別のSQL文で漸進的に検索する．クエリを分割すべきかどうか，分割するクエリの大きさや検索順序は，構文木付きコーパス中の規則の出現頻度を用いて自動的に決定する．6言語，7種類のコーパスを用いて評価実験を行い，4種類のコーパスにおいて，漸進的に検索を行う本手法により検索時間が短縮され，本手法の有効性を確認した．また，残りの3種類のコーパスにおいては，漸進的に検索を行わなくても多大な検索時間を要しないことを本手法で判定することができた．そして，クエリの分割が検索時間の短縮に効果があった4種類のコーパスと分割の効果がなかった3種類のコーパスの違いについて，コーパスに含まれる文数，ラベルの頻度，節点の平均分岐数の観点から考察を行い，節点の平均分岐数がその一因であることを確認した．
+
+
+\section{構文木付きコーパスのデータベース化}
+\label{database}
+
+構文木をデータベース化する手法として，XML文書を関係データベースを用い
+てデータベース化する吉川らの手法を適用した\cite{yoshikawa:1999:a}．吉
+川らの手法は，クエリとしてXPathを用い，XML文書を関係データベースに格納
+する．XPathとは，W3Cにより勧告されたXML文書中の特定の構文を表現する記
+述方法である．XML文書を検索する場合，クエリであるXPathをSQL文に変換し，
+クエリを含むXML文書を検索する．吉川らの手法の大きな特徴は，検索が高速
+である点である．その理由は，XML文書の木構造の各節点を出現位置という2
+つの数字で表現し，その大小関係により，節点の親子関係や兄弟関係を表現
+する点にある．本手法では，構文木の構造をXML文書の構文構造に対応させ，
+データベース化を行った．
+
+
+\subsection{出現位置}
+
+構文木をデータベースに格納するにあたり，構文木中の各節点対して，出現
+位置と呼ばれる節点間の関係を計算するための2つの数字を与える．出現
+位置は，({\it left\_position}，{\it right\_position}) の対で表現され，
+次のアルゴリズムにより決定する．
+
+\begin{itemize}
+\item 葉\\
+左端からN番目の葉に対する出現位置は，(N, N)という整数値の対を与える．
+\item 葉以外の節点\\
+変数{\it position}を1以下の微小値$\alpha$で初期化する．根から深さ優先探
+索で辿り，節点を辿るときに$\alpha$を{\it position}に加算し，葉を辿る
+きに葉の{\it left\_position}または{\it right\_position}の値を代入する．
+節点を最初に通過するとき変数{\it position}の値を{\it left\_position}と
+して，最後に通過するときに{\it right\_position}として決定する．
+ただし，$\alpha$は，木の最大の深さの逆数よりも小さい値でなければならない．
+\end{itemize}
+
+このアルゴリズムで決定した出現位置の例を\figurename\ref{fig:tree-yoshikawa}に示す．また，このように各節点に出現位置を与えることで，\figurename\ref{fig:yoshikawa-hougan}のように節点間の関係を出現位置の大小関係で表現することができる．
+
+\begin{figure}[t]
+  \begin{center}
+\includegraphics{14-4ia1f1.eps}
+    \caption{出現位置の例}
+    \label{fig:tree-yoshikawa}
+  \end{center}
+\end{figure}
+
+\begin{figure}[t]
+  \begin{center}
+\includegraphics{14-4ia1f2.eps}
+    \caption{包含関係と先行関係}
+    \label{fig:yoshikawa-hougan}
+  \end{center}
+\end{figure}
+
+
+
+\subsection{関係データベースへの格納}
+
+前節で計算した出現位置とともに各節点の情報を関係データベースに格納す
+る．データベースは，{\it Node Table}，{\it Document Table}，{\it Label
+  Table}の3つのテーブルにより構成される．テーブルの例をそれぞれ表
+\ref{tbl:node}，\ref{tbl:doc}，\ref{tbl:label}に示す．
+
+{\it Node Table}は，構文木を
+構成する各節点に関する情報を格納する．各項目は，{\it
+  ID}が節点固有の値，{\it parentID}が節点の親の{\it ID}，{\it docID}が
+節点を含む構文木の{\it ID}，{\it labelID }が節点のラベルの{\it ID}，
+{\it nextSibID}が節点の右隣の兄弟の{\it ID}，{\it l\_pos, r\_pos}が節
+点の出現位置を表す．
+
+{\it Document Table}は，構文木が記述されているファイルに関する情報を格
+納する．各項目は，{\it docID}が構文木固有の値，{\it
+  file}が構文木が記述されているファイル名を表す．
+
+{\it Label Table}は，コーパスに含まれる記号，単語に関する情報を格納す
+る．各項目は，{\it labelID}がラベル固有の値，{\it
+  label}がラベル名，{\it frequency}がコーパスにおけるラベルの頻度を表
+す．
+
+\begin{table}[t]
+\caption{Node Table}
+\input{table1.txt}
+\end{table}
+
+\begin{table}[t]
+\input{table2-3.txt}
+\end{table}
+
+
+
+\section{構文木付きコーパスの検索手法}
+\label{retieve}
+
+\subsection{クエリの定義}
+
+\begin{figure}[t]
+  \begin{center}
+\includegraphics{14-4ia1f3.eps}
+	\caption{完全一致，部分一致の例}
+    	\label{fig:query}
+  \end{center}
+\end{figure}
+
+前節では，構文木付きコーパスを関係データベースに格納する方法について述
+べた．本手法では，木構造をクエリとし，クエリを部分木として含む文を検索
+する．まず，クエリの例を\figurename\ref{fig:query}に示す．図中の
+``$\ast$''は，任意のラベルを意味する．さらに，クエリを部分木として含むかどうか
+の判定方法として，完全一致と部分一致の二種類を用意した．完全一致は，ク
+エリの各節点の分岐数とコーパス内の対応する節点の分岐数が一致しなけ
+ればならない．一方，部分一致は，この分岐数が必ずしも一致する必要がない．
+例えば，\figurename\ref{fig:query}において，完全一致で検索した場合，
+(a)の木は，各節点の分岐数，ラベルが一致するためにクエリと一致すると
+見なす．一方，(b)の木は，分岐数が異なるため，クエリと一致すると見なさ
+ない．しかし，部分一致で検索した場合，節点の分岐数は一致する必要がな
+いため，両方の木がクエリと一致すると見なす．
+
+
+
+\subsection{構文木をクエリとした検索手法}
+
+本手法は，吉川らの手法と同様に検索を行うためにクエリである部分木を関係
+データベースのデータの操作，定義，検索などを行う言語SQLの文へ変換する．
+そして，変換したSQL文により該当した構文木をデータベース内から検索し，
+クエリを部分木として含む構文木を得る．クエリとそのクエリに対応するSQL
+文を\figurename\ref{fig:sql}に示す．\figurename\ref{fig:sql}中のSQL文
+のwhere構文以降が各節点の条件式となっている．システムは，条件を満たす
+節点をデータベース内を検索し，すべての条件を満たす節点をもつ構文木を出
+力する．
+
+\begin{figure}[t]
+  \begin{center}
+\includegraphics{14-4ia1f4.eps}
+    \caption{クエリとそのSQL文の例}
+    \label{fig:sql}
+  \end{center}
+\vspace{-1.3\baselineskip}
+\end{figure}
+
+
+\subsection{予備実験}
+
+吉川らは，シュークスピアの戯曲を Jon Bosak がタグ付けしたXML文書
+\cite{bosak:1999:a}を用いた評価実験により，検索手法が高速であることを
+示した\cite{yoshikawa:1999:a}．そこで，吉川の手法を構文木付きコーパス
+に適用し，予備実験を行った．検索対象のコーパスとして，Penn Treebank
+Corpus（48,884文）\cite{marcus:1994:a}を用いた．クエリは，Penn
+Treebank Corpus からランダムに4文を抽出した．そして，4文から節点数が2
+から20の抽出可能なすべての部分木をクエリとして，部分一致により検索を行っ
+た．その結果を\tablename\ref{tbl:yobi}，\figurename\ref{fig:yobi}に示す．
+
+
+\begin{table}[t]
+\input{table4.txt}
+\end{table}
+
+\begin{figure}[t]
+  \begin{center}
+\includegraphics{14-4ia1f5.eps}
+    \caption{予備実験結果}
+    \label{fig:yobi}
+  \end{center}
+\end{figure}
+
+実験結果より，クエリの節点数が7から12の間は，高速に検索を行っている
+が，節点数が7以下，12以上の場合，検索時間が非常に増加している．クエ
+リの節点数が7以下の場合，クエリに一致する文が非常に多いために検索に
+時間を要とすると考えられる．一方，クエリの節点数が12以上の場合は，ク
+エリと一致する文かどうかの判定，
+つまりSQL文の条件判定に検索時間を要し
+ていると考えられる．
+検索条件が多ければ，条件判定を行う処理が多くなり検
+索に
+時間を要する．吉川らが評価実験を行ったXML文書は，DTD (Document
+  Type Definition) により，
+節点のラベルや構造があらかじめ定義されている．構文木付きコーパスにお
+いては，文脈自由文法がDTDに相当する．XML文書は，少ないDTDの規則で簡潔
+な構造を定義している場合が多く，文書間での大きな構造の違いは少ない．そ
+のため，SQL文の条件は多くなりにくい．一方，構文木付きコーパスは，数千の規
+則を用いて文法を定義し，文によって様々な木構造が付与されている．そのた
+め，XML文書よりもSQL文の条件が多くなる可能性が高く，検索時間が増加する
+ケースが多くなることが予想できる．
+
+関係データベースの検索速度は，関係データベースシステムの種類，格納する
+データ，検索に要するSQL文に依存する．関係データベースを構築する際，
+技術者が格納するデータをみて関係データベースシステムを選んだり，生成す
+るSQL文の条件部分の優先度などの調整を経験的に行い，検索の効率化をはか
+ることが多い．クエリの節点数が多くなると変換したSQL文の条件部分が多くなり，条件を満たすデータの検出時間がかかる．そのため，検索時間が大幅にかかるように
+なる．このような場合，人手により条件の記述順序の変更などにより，チュー
+ニングを行う．しかし，構文付きコーパスは，言語や対象文書の違いなど様々
+なコーパスが存在する．コーパスそれぞれを人手でチューニングすることは困
+難である．そのため，自動的に検索速度をチューニングする手法が必要である．
+
+
+\subsection{漸進的検索}
+\label{retrieve:separate}
+
+予備実験の結果から，クエリの節点数が7から12の間は，高速に検索が可能
+であることがわかった．例えば，節点数16のクエリの平均検索時間は，0.56
+秒である．それに対して，節点数8のクエリの平均時間は，0.09秒である．
+もし，節点数16のクエリを節点数8のクエリ2つに分割し検索できれば，検索を高
+                      速化することが可能である．
+
+本手法では，クエリをSQL一文で検索するのではなく，
+複数のSQL文に分割し，SQL一文に要する検索時間を短くすることで高速化を行
+う．また，単一のSQL文により効率よく絞り込みが行うことができるように，
+コーパス内のラベルの頻度をもとにクエリの分割方法を決定する．
+
+
+\subsubsection{検索単位}
+
+クエリの節点数が多い場合には，クエリを複数のクエリに分割し，漸進的に
+検索を行う手法を提案する．本論文では，分割されたクエリを検索単位，効率
+的に検索可能なクエリの節点数の最大値を最大検索単位節点数と定義する．
+コーパスが与えられたとき，コーパスから最大検索単位節点数を計算し，ノー
+ド数が多いクエリは最大検索単位節点数をもとに分割して，漸進的に検索を
+行う．
+
+まず，コーパスから，節点数2から31\footnote{節点数が31までなのは，
+実験で用いた関係データベースシステムのSQL文は，クエリとして最大31ノー
+ドまでしか制約をかけることができないためである}のクエリ（部分木）各
+50個をランダムに抽出する．そして，各節点数ごとに平均検索時間を算出す
+る．そのデータから，以下の2つの条件を満たす最大値$i$を最大検索単位ノー
+ド数とする．
+
+\begin{itemize}
+\item 節点数 $i - n +1$ から $i$ の間のクエリの平均検索時間が$t$以下
+\item 節点数 $i + 1$ から $i + n$ の間のクエリの平均検索時間が$t$以上
+\end{itemize}
+
+$n$と$t$は，最大検索単位節点数を決定する際のパラメータである．$n$は，正の整数，$t$は，秒数である．例えば，$n$を3，$t$を0.5（秒）をした場合，\figurename\ref{fig:decograph}の予備実験結果では，節点数13，14，15において平均検索時間が$t$を下回り，節点数16，17，18において平均検索時間が$t$を上回っている．このとき，最大検索単位節点数は，15となる．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{14-4ia1f6.eps}
+	\caption{最大検索単位節点数決定例}
+    	\label{fig:decograph}
+\end{center}
+\end{figure}
+
+
+\subsubsection{クエリの分割}
+
+前節で，コーパスに最適化された検索単位の節点数を決定する手法について
+述べた．しかし，クエリの分割方法，分割されたクエリの検索順序によって，
+検索時間は大きく変わる．もし，最初に検索する検索単位の出力数が少なけれ
+ば，次に絞り込む検索範囲が狭まり，検索を効率よく行うことができる．つま
+り，絞り込みが早く行われるように分割や順序を決定することが望ましい．コー
+パス中の節点や文脈自由規則の頻度をもとにクエリの検索単位への分割，検
+索単位の検索順序を決定する．クエリの分割アルゴリズムを以下に示す．検索
+単位の検索順序は，分割された順である．
+
+\newlength{\StepW}\settowidth{\StepW}{Step 9\quad}
+\hangafter=1\hangindent=\StepW\noindent
+    Step 1\quad 
+クエリに含まれる節点のラベルのコーパス内での出現頻度を計算する．
+
+\hangafter=1\hangindent=\StepW\noindent
+    Step 2\quad 
+クエリ内の最小頻度の節点を検索単位$U_0$とする．
+
+\hangafter=1\hangindent=\StepW\noindent
+    Step 3\quad 
+$i = 1$
+
+\hangafter=1\hangindent=\StepW\noindent
+    Step 3\quad 
+検索単位$U_{i-1}$に含まれる節点に近接する最小頻度のラ
+  ベルの節点で初期化する．
+
+\hangafter=1\hangindent=\StepW\noindent
+    Step 4\quad 
+検索単位$U_{i}$に含まれる節点を持ち，検索単位$U_i$に加えても最
+  大検索単位節点数を越えない部分木があれば，根の頻度が最小である部分
+  木の節点を検索単位$U_i$へ追加する．
+
+\hangafter=1\hangindent=\StepW\noindent
+    Step 5\quad 
+もし，Step 4 において，部分木を加えられたのであれば，Step 4へ．そうでなければ，Step 6へ．
+
+\hangafter=1\hangindent=\StepW\noindent
+    Step 6\quad 
+$i=i+1$．クエリをすべて分割したならば，Step 7へ．そうで
+  なければ，Step 3へ．
+
+\hangafter=1\hangindent=\StepW\noindent
+    Step 7\quad 
+各検索単位をSQL文へ変換．
+
+クエリ分割方法を例を用いて説明する．クエリとして，
+\figurename\ref{fig:divide}の(1)が与えられ，最大検索単位節点数が5
+であると仮定する．まず，クエリに含まれる節点のラベルの出現頻度を計算
+する．その中で，最も出現頻度が低い``join''（出現頻度50）を検索単位
+$U_0$に加える．次に，節点 (``join'') を含む部分木の中で，最も出現頻度
+が低い``VP''を根とする部分木（出現頻度179,161）の節点を加えることを
+考える．しかし，この部分木の節点を加えると最大検索単位節点数を越え
+るため$U_0$には加えない．（\figurename\ref{fig:divide}の(2)）次に，
+新たな検索単位$U_1$を$U_0$に含まれる節点と隣接する節点のうち最小頻
+度である節点 (``VP'') 初期化する．そして，``VP''を含む部分木を
+$U_1$に加えることを考える．``VP''を根とする部分木の節点を加えた場合，
+$U_1$の節点は，``VP'', ``NP'', ``PP-CLR'', ``NP-TMP''の4つとなり，最
+大検索単位節点数を越えない．そのため，これらの節点を$U_1$に追加す
+る．さらに，$U_1$に``VP''を根とする部分木の節点を加えることを試みる
+が最大検索単位節点数を越えるために加えられない．
+（\figurename\ref{fig:divide}の(3)）そして，新たな検索単位$U_2$を構
+築を始める．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{14-4ia1f7.eps}
+	\caption{クエリ分割の例}
+    	\label{fig:divide}
+\end{center}
+\end{figure}
+
+最終的に，\figurename\ref{fig:divide}の (4) のように，クエリは3つの検
+索単位$U_0$，$U_1$, $U_2$に分割される．そして，それぞれの検索単位を
+SQL文へ変換し，検索を行う．そして，最初に決定した検索単位$U_0$により検
+索を行い，その結果に対して検索単位$U_1$により絞り込みを行う．絞り込み
+は，検索単位の初期化に利用した隣接する節点を次の検索単位のSQL文内の条
+件式として追加する．つまり，直前に利用したSQL文で次の検索単位に隣接す
+る節点のIDを獲得し，その条件を次の検索単位のSQL文の条件として加える．
+例では，$U_1$に対応するSQL文の節点``n4''に関する条件式，$U_2$に対応す
+るSQL文の節点``n3''に関する条件式が追加される条件式である．
+（\figurename\ref{fig:divide}の(5)）
+
+
+
+\section{評価実験}
+
+クエリ分割による検索の有効性を確認するために，7つの構文木付きコーパス
+を用いて，評価実験を行った．評価実験に使用したコーパスは，Penn
+Treebank Corpus \cite{marcus:1994:a}，TIGER Corpus \cite{konig:2003:b}，
+Penn Korean Treebank \cite{han:2002:a}，FLORESTA
+sint\'{a}(c)tica \cite{afonso:2002:a}，Penn Chinese
+Treebank \cite{xue:2002:a}，東工大コーパス (RWC) \cite{noro:2004:a}，東
+工大コーパス (EDR) \cite{noro:2002:a}である．各コーパスの諸元を
+\tablename\ref{tbl:corpora}に示す．
+
+\begin{table}[t]
+\input{table5.txt}
+\end{table}
+
+\begin{figure}[b]
+\begin{minipage}{0.47\hsize}
+\begin{center}
+\includegraphics{14-4ia1f8.eps}
+\caption{Penn Treebank Corpus: 完全一致}
+\label{fig:penn-e}
+\end{center}
+\end{minipage}
+\hfill
+\begin{minipage}{0.47\hsize}
+\begin{center}
+\includegraphics{14-4ia1f9.eps}
+      \caption{Penn Treebank Corpus: 部分一致}
+      \label{fig:penn-p}
+\end{center}
+\end{minipage}
+\end{figure}
+
+\begin{figure}[t]
+\begin{minipage}{0.47\hsize}
+\begin{center}
+\includegraphics{14-4ia1f10.eps}
+      \caption{TIGER Corpus: 完全一致}
+      \label{fig:tiger-e}
+\end{center}
+\end{minipage}
+\hfill
+\begin{minipage}{0.47\hsize}
+\begin{center}
+\includegraphics{14-4ia1f11.eps}
+      \caption{TIGER Corpus: 部分一致}
+      \label{fig:tiger-p}
+\end{center}
+\end{minipage}
+\end{figure}
+
+
+\begin{figure}[t]
+\begin{minipage}{0.47\hsize}
+\begin{center}
+\includegraphics{14-4ia1f12.eps}
+      \caption{Penn Korean Treebank: 完全一致}
+      \label{fig:korean-e}
+\end{center}
+\end{minipage}
+\hfill
+\begin{minipage}{0.47\hsize}
+\begin{center}
+\includegraphics{14-4ia1f13.eps}
+      \caption{Penn Korean Treebank: 部分一致}
+      \label{fig:korean-p}
+\end{center}
+\end{minipage}
+\end{figure}
+
+
+\begin{figure}[t]
+\begin{minipage}{0.47\hsize}
+\begin{center}
+\includegraphics{14-4ia1f14.eps}
+      \caption{FLORESTA sint$\acute{a}$(c)tica: 完全一致}
+      \label{fig:floresta-e}
+\end{center}
+\end{minipage}
+\hfill
+\begin{minipage}{0.47\hsize}
+\begin{center}
+\includegraphics{14-4ia1f15.eps}
+      \caption{FLORESTA sint$\acute{a}$(c)tica: 部分一致}
+      \label{fig:floresta-p}
+\end{center}
+\end{minipage}
+\end{figure}
+
+\begin{figure}[t]
+\begin{minipage}{0.47\hsize}
+\begin{center}
+\includegraphics{14-4ia1f16.eps}
+\caption{Penn Chinese Treebank: 完全一致}
+\label{fig:chinese-e}
+\end{center}
+\end{minipage}
+\hfill
+\begin{minipage}{0.47\hsize}
+\begin{center}
+\includegraphics{14-4ia1f17.eps}
+      \caption{Penn Chinese Treebank: 部分一致}
+      \label{fig:chinese-p}
+\end{center}
+\end{minipage}
+\end{figure}
+
+
+\begin{figure}[t]
+\begin{minipage}{0.47\hsize}
+\begin{center}
+\includegraphics{14-4ia1f18.eps}
+      \caption{東工大コーパス (RWC): 完全一致}
+      \label{fig:tit-rwc-e}
+\end{center}
+\end{minipage}
+\hfill
+\begin{minipage}{0.47\hsize}
+\begin{center}
+\includegraphics{14-4ia1f19.eps}
+      \caption{東工大コーパス (RWC): 部分一致}
+      \label{fig:tit-rwc-p}
+\end{center}
+\end{minipage}
+\end{figure}
+
+
+\begin{figure}[t]
+\begin{minipage}{0.47\hsize}
+\begin{center}
+\includegraphics{14-4ia1f20.eps}
+      \caption{東工大コーパス (EDR): 完全一致}
+      \label{fig:tit-edr-e}
+\end{center}
+\end{minipage}
+\hfill
+\begin{minipage}{0.47\hsize}
+\begin{center}
+\includegraphics{14-4ia1f21.eps}
+      \caption{東工大コーパス (EDR): 部分一致}
+      \label{fig:tit-edr-p}
+\end{center}
+\end{minipage}
+\end{figure}
+
+
+評価実験では，最大検索単位節点数を決定するパラメータ$t$を0.5（秒），
+$n$を3とし，最大検索単位節点数を計算した．クエリは，コーパスからランダ
+ムに抽出した部分木を用い，節点数1から31までの各50個を用いた．検索方法
+としては，完全一致と部分一致の2種類を行った．各コーパスにおける評価実験結果を
+\figurename\ref{fig:penn-e}から\figurename\ref{fig:tit-edr-p}に示す．
+
+
+
+Penn Treebank Corpus，TIGER Corpus，Penn Korean Treebank Corpus，FLOREST sint\'{a}(c)ticaの4つコーパスにおいては，完全一致による検索では節点数
+16以上，部分一致による検索では節点数11から13以上のクエリに対して，
+クエリの分割を行わずに検索を行った場合，急激に検索時間が増大することが
+わかる．一方，クエリを検索単位に分割することで高速に検索が行うことができ
+た．また，対照的に Penn Chinese Treebank Corpus，東工大コーパス (RWC), 
+東工大コーパス (EDR) では，完全一致と部分一致ともに許容検索時間を越えるこ
+とがなく，最大検索単位節点数は最大の31と計算された．これら3つのコー
+パスにおいては，クエリの分割を行う必要がなかった．
+
+
+
+\section{考察}
+\label{discussion}
+
+評価実験で用いたコーパスは，大きく分けて2つに分類できる．1つは，分割せずに検索した場合，
+クエリを構成する節点数が増えると検索時間が非常に遅くなるものである．このタイプのコーパスは，Penn Treebank Corpus，TIGER Corpus，Penn Korean Treebank Corpus，FLOREST sint\'{a}(c)ticaが当てはまる．もう1つは，クエリの節点数が増えても検索時間に影響を与えないものである．このタイプのコーパスとして，Penn Chinese Treebank Corpus，東工大コーパス (RWC), 東工大コーパス (EDR) が当てはまる．このような違いが，コーパスのどの特徴と関連しているのか，コーパスの以下の特徴に着目し考察した．
+
+\begin{itemize}
+\item コーパスの文数
+\item ラベルの頻度
+\item 節点の平均分岐数
+\end{itemize}
+
+
+\subsection{コーパスの文数}
+
+コーパスの文数が検索時間に影響を与えることが考えられる．つまり，文数が多ければ検索に時間がかかり，少なければ時間がかからないはずである．しかし，\tablename\ref{tbl:corpora}からわかるように Penn Korean Treebank Corpus（5,083文），FLOREST sint\'{a}(c)tica（8,307文）は，比較的コーパスに含まれる文数が少ないが，クエリの節点数が増加するとともに検索時間が大幅に増加している．また，Penn Chinese Treebank（15,168文）は文数が多いにも関わらず，節点数が増加しても検索時間は増加していない．
+
+さらに Penn Treebank Corpus の文数を1,000文，5,000文，11,976文，48,884文と変化させ，検索時間の変化を調べた．クエリなどの実験環境は，評価実験で用いたものと同じである．その結果を\figurename\ref{fig:size}に示す．この結果からコーパスに含まれる文数が減少しても，節点数が増加するとともに検索時間が増大していることがわかった．つまり，コーパスの文数と検索時間増大の間には，関連性は低いものと考えられる．
+
+\begin{figure}[t]
+	\begin{center}
+\includegraphics{14-4ia1f22.eps}
+       \caption{コーパスの文数と検索時間}
+       \label{fig:size}
+       \end{center}
+\end{figure}
+
+\begin{figure}[t]
+	\begin{center}
+\includegraphics{14-4ia1f23.eps}
+       \caption{ラベルなしクエリによる実験結果}
+       \label{fig:label}
+       \end{center}
+\end{figure}
+
+
+
+
+\subsection{ラベルの頻度}
+
+クエリ内のラベルが検索時間に影響を与えることが考えられる．例えば，クエリに含まれるラベルが非常に稀にしか出現しないラベルであれば，非常に早く検索することができるはずである．しかし，\tablename\ref{tbl:corpora}からわかるように，Penn Treebank Corpusはラベル（非終端記号）の異なり数が多いが検索時間が急激に増加している．一方，東工大コーパス (RWC) はラベルの異なりが少ないが，検索時間が増大していない．
+
+Penn Treebank Corpus，東工大コーパス (RWC) を用いて，ラベルを``$\ast$''で置き換えたクエリを用いて，実験を行った．クエリは，評価実験を行ったときと同一である．その結果を\figurename\ref{fig:label}に示す．ラベルの情報がなくなったため，双方ともに評価実験よりも検索時間を要しているが，節点数と検索時間との関係に変化はなかった．ラベルの頻度と検索時間の増大は関連性が低いと考えられる．
+
+
+\begin{figure}[t]
+	\begin{center}
+\includegraphics{14-4ia1f24.eps}
+       \caption{節点の平均分岐数}
+       \label{fig:branch}
+       \end{center}
+\end{figure}
+
+
+\subsection{節点の平均分岐数}
+
+次に，コーパスの特徴として節点の平均分岐数に注目した．分岐数が多くなれば，構文木は複雑になり，検索に時間を要することが考えられる．そこで，全てのコーパスについて，それぞれの節点の平均分岐数を調べた．その結果を\figurename\ref{fig:branch}に示す．この結果から確かに検索時間が増大する傾向にあるコーパスは，平均子供数が比較的大きいことがわかる．しかし，Penn Korean Treebank と Penn Chinese Treebank の差はあまりなく，平均分岐数が決定的な原因であるとは考えがたい．だが，コーパス内の文の構造の複雑さが一因である可能性は確認できる．
+
+
+
+\section{まとめ}
+
+本論文では，構文木付きコーパスを高速に構造検索する手法を提案した．構文木付きコーパスのデータベース化は，木構造を持つXML文書を格納・検索する手法を用い，部分木で表現されたクエリをSQL文に変換して検索を行う．節点数の多いクエリに対する検索時間が増大するという問題を解決するために，クエリを分割し，漸進的に検索する手法を提案した．クエリの分割は，まずコーパスから最大検索単位節点数を計算し，最大検索単位節点数をもとに，効率的に検索できるようクエリを分割し，検索を行う．
+
+評価実験では，7つのコーパス中の4つに対して，クエリを分割せずに検索する手法よりも効率的に検索を行うことができることを示した．また，評価実験で用いたコーパスには，クエリの節点数が増加すると検索時間が非常に遅くなるものと，そうでないものの2種類が存在した．その違いの要因が，コーパスに含まれる構文構造の複雑さに起因するものであることについて考察した．
+
+今後の課題として，次のようなものがあげられる．
+\begin{itemize}
+\item 節点が少ないクエリに対する検索の高速化
+\item 検索時間とコーパスに含まれる構文構造の複雑さとの関連性の解明
+\item コーパス作成支援システムへの応用
+\end{itemize}
+
+
+
+\bibliographystyle{jnlpbbl_1.3}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Afonso, Bick, Haber, \BBA\ Santos}{Afonso
+  et~al.}{2002}]{afonso:2002:a}
+Afonso, S., Bick, E., Haber, R., \BBA\ Santos, D. \BBOP 2002\BBCP.
+\newblock \BBOQ ``Floresta sint\'{a}(c)tica'': a treebank for Portuguese\BBCQ\
+\newblock In {\Bem Proceedings of {LREC} 2002}, \mbox{\BPGS\ 1698--1703}.
+
+\bibitem[\protect\BCAY{Bird, Chen, Davidson, Lee, \BBA\ Zheng}{Bird
+  et~al.}{2004}]{bird:2004:a}
+Bird, S., Chen, Y., Davidson, S., Lee, H., \BBA\ Zheng, Y. \BBOP 2004\BBCP.
+\newblock \BBOQ Extending {XPath} to Support Linguistic Queries\BBCQ\
+\newblock In {\Bem {UWA} Language Science Group 2004 Program---Symposium on
+  Speech and Language Technology}.
+
+\bibitem[\protect\BCAY{Bosak}{Bosak}{1999}]{bosak:1999:a}
+Bosak, J. \BBOP 1999\BBCP.
+\newblock {\Bem The Plays of Shakespeare in {XML}}.
+
+\bibitem[\protect\BCAY{Cunningham, Tablan, Bontcheva, \BBA\
+  Dimitrov}{Cunningham et~al.}{2003}]{cunningham:2003:a}
+Cunningham, H., Tablan, V., Bontcheva, K., \BBA\ Dimitrov, M. \BBOP 2003\BBCP.
+\newblock \BBOQ Language Engineering Tools for Collaborative Corpus
+  Annotation\BBCQ\
+\newblock In {\Bem Proceedings of Corpus Linguistics 2003}.
+
+\bibitem[\protect\BCAY{hye Han, Han, Ko, Yi, \BBA\ Palmer}{hye Han
+  et~al.}{2002}]{han:2002:a}
+hye Han, C., Han, N.-R., Ko, E.-S., Yi, H., \BBA\ Palmer, M. \BBOP 2002\BBCP.
+\newblock \BBOQ Penn Korean Treebank: Development and Evaluation\BBCQ\
+\newblock In {\Bem Proceedings of the {16th} Pacific Asia Conference on
+  Language, Inform Ation and Computation}.
+
+\bibitem[\protect\BCAY{K{\"o}nig, Esther, Lezius, \BBA\ Wolfgang}{K{\"o}nig
+  et~al.}{2003a}]{konig:2003:b}
+K{\"o}nig, Esther, Lezius, \BBA\ Wolfgang \BBOP 2003a\BBCP.
+\newblock \BBOQ The {TIGER} Language---A Description Language for Syntax
+  Graphs, Formal Definition\BBCQ\
+\newblock \BTR, Institut f{\"u}r Maschinelle Sprachverarbeitung, University of
+  Stuttgart.
+
+\bibitem[\protect\BCAY{K{\"o}nig, Esther, Lezius, Wolfgang, Voormann, \BBA\
+  Holger}{K{\"o}nig et~al.}{2003b}]{konig:2003:a}
+K{\"o}nig, Esther, Lezius, Wolfgang, Voormann, \BBA\ Holger \BBOP 2003b\BBCP.
+\newblock {\Bem {TIGERSearch} User'$s$ Manual}.
+
+\bibitem[\protect\BCAY{Marcus, Kim, Marcinkiewicz, MacIntyre, Bies, Ferguson,
+  Katz, \BBA\ Schasberger}{Marcus et~al.}{1994}]{marcus:1994:a}
+Marcus, M., Kim, G., Marcinkiewicz, M.~A., MacIntyre, R., Bies, A., Ferguson,
+  M., Katz, K., \BBA\ Schasberger, B. \BBOP 1994\BBCP.
+\newblock \BBOQ The Penn Treebank: Annotating Predicate Argument
+  Structure\BBCQ\
+\newblock In {\Bem {ARPA} '94}.
+
+\bibitem[\protect\BCAY{Noro, Hashimoto, Tokunaga, \BBA\ Tanaka}{Noro
+  et~al.}{2004}]{noro:2004:a}
+Noro, T., Hashimoto, T., Tokunaga, T., \BBA\ Tanaka, H. \BBOP 2004\BBCP.
+\newblock \BBOQ A Large-Scale Japanese {CFG} Derived from a Syntacticaly
+  Annotated Corpus and Its Evaluation\BBCQ\
+\newblock In {\Bem Proceedings of the 3rd Workshop on Treebanks and Linguistic
+  Theories}, \mbox{\BPGS\ 115--126}.
+
+\bibitem[\protect\BCAY{Plaehn \BBA\ Brants}{Plaehn \BBA\
+  Brants}{2000}]{plaehn:2000:a}
+Plaehn, O.\BBACOMMA\ \BBA\ Brants, T. \BBOP 2000\BBCP.
+\newblock \BBOQ Annotate---An Efficient Interactive Annotation Tool\BBCQ\
+\newblock In {\Bem Proceedings of the 6th Conference on Applied Natural
+  Language Processing}.
+
+\bibitem[\protect\BCAY{Randall}{Randall}{2000}]{randall:2000:a}
+Randall, B. \BBOP 2000\BBCP.
+\newblock {\Bem {CorpusSearch} User's Manual}.
+
+\bibitem[\protect\BCAY{Rohde}{Rohde}{2001}]{rohde:2001:a}
+Rohde, D. \BBOP 2001\BBCP.
+\newblock {\Bem {Tgrep2} User Manual}.
+
+\bibitem[\protect\BCAY{Xue, Chiou, \BBA\ Palmer}{Xue et~al.}{2002}]{xue:2002:a}
+Xue, N., Chiou, F.-D., \BBA\ Palmer, M. \BBOP 2002\BBCP.
+\newblock \BBOQ Building a Large-Scale Annotated Chinese Corpus\BBCQ\
+\newblock In {\Bem Proceedings of {COLING} 2002}.
+
+\bibitem[\protect\BCAY{吉川正俊\JBA 志村壮是\JBA 植村俊亮}{吉川正俊\Jetal
+  }{1999}]{yoshikawa:1999:a}
+吉川正俊\JBA 志村壮是\JBA 植村俊亮 \BBOP 1999\BBCP.
+\newblock \JBOQ オブジェクト関係データベースを用いた{XML}文書の格納と検索\JBCQ\
+\newblock \Jem{情報処理学会論文誌}, {\Bbf 40}  (SIG6(TOD3)), \mbox{\BPGS\
+  115--131}.
+
+\bibitem[\protect\BCAY{野呂智哉\JBA 白井清昭\JBA 徳永健伸\JBA
+  田中穂積}{野呂智哉\Jetal }{2002}]{noro:2002:a}
+野呂智哉\JBA 白井清昭\JBA 徳永健伸\JBA 田中穂積 \BBOP 2002\BBCP.
+\newblock \JBOQ 大規模日本語文法の開発—事例研究\JBCQ\
+\newblock \Jem{情報処理学会研究報告 {NL}-150}, \mbox{\BPGS\ 149--156}.
+
+\end{thebibliography}
+
+
+\begin{biography}
+
+\bioauthor{橋本　泰一（正会員）{\unskip}}{
+1997年東京工業大学工学部情報工学科卒業．
+2002年同大学大学院情報理工学研究科博士課程修了．
+同年同大学大学院情報理工学研究科助手．
+現在，同大学統合研究院特任准教授．
+博士（工学）．自然言語処理，知識情報処理の研究に従事．
+言語処理学会，情報処理学会各会員．
+}
+
+\bioauthor{吉田　恭介}{
+2003年東京工業大学工学部情報工学科卒業．
+2005年同大学大学院情報理工学研究科修士課程修了．
+}
+\bioauthor{野口　正樹}{
+2004年東京工業大学工学部情報工学科卒業．
+2006年同大学大学院情報理工学研究科計算工学専攻修士課程修了．
+現在，同専攻博士課程に在学中．
+言語資源の検索・利用に関する研究を行っている．
+また，言語資源の構築や知的創造作業支援などにも興味を持っている．
+情報処理学会学生会員．
+}
+\bioauthor{徳永　健伸（正会員）{\unskip}}{
+1961年生．1983年東京工業大学工学部情報工学科卒業．1985年同大学院理工学
+研究科修士課程修了．同年（株）三菱総合研究所入社．1986年東京工業大学大学
+院博士課程入学．現在，同大学大学院情報理工学研究科准教授．博士（工学）．
+自然言語処理，計算言語学，情報検索などの研究に従事．情報処理学会，人工
+知能学会，言語処理学会，計量国語学会，Association for Computational
+Linguistics，ACM SIGIR各会員．
+}
+\bioauthor{田中　穂積（正会員）{\unskip}}{
+1964年東京工業大学工学部情報工学科卒業．1966年同大学院理工学
+研究科修士課程修了．同年電気試験所（現産業技術総合研究所）入所．1980年
+東京工業大学助教授．1983年東京工業大学教授．現在，中京大学理工学部教授．
+工学博士．人工知能，自然言語処理に関する研究に従事．情報処理学会，電子
+情報通信学会，認知科学会，人工知能学会，言語処理学会，計量国語学
+会，AAAI，各会員．
+}
+
+\end{biography}
+
+
+
+
+\biodate
+
+
+\end{document}

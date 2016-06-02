@@ -1,0 +1,1039 @@
+\documentstyle[jnlpbbl,leqno,fleqn,bezier,lingmacros,epic,eepic,eclarith,macros]{jnlp_j_b5}
+\setcounter{page}{41}
+\setcounter{巻数}{4}
+\setcounter{号数}{1}
+\setcounter{年}{1997}
+\setcounter{月}{1}
+\受付{1996}{2}{8}
+\再受付{1996}{8}{20}
+\採録{1996}{9}{19}
+
+\setcounter{secnumdepth}{2}
+
+\title{話し言葉解析のためのコーパスに基づく優先度計算法}
+\author{\vspace*{-0.5mm}伝 康晴\affiref{ATR}}
+
+\headauthor{伝 康晴}
+\headtitle{話し言葉解析のためのコーパスに基づく優先度計算法}
+
+\affilabel{ATR}{ATR音声翻訳通信研究所}
+{ATR Interpreting Telecommunications Research Laboratories
+ (現在，奈良先端科学技術大学院大学 情報科学研究科,
+  Graduate School of Information Science, Nara Institute of Science and Technology)}
+
+\jabstract{
+\vspace*{-1mm}近年の音声認識技術の進歩によって，話し言葉の解析は自然言語処
+理の中心的なテーマの1つになりつつある．しかし，話し言葉の特
+徴である，言い淀み，言い直し，省略などのさまざまな不適格性の
+ために，従来の適格文の解析手法はそのままでは話し言葉の解析に
+は適用できない．我々は，適格文と不適格文を統一的に扱う統一モ
+デルに基づく話し言葉の解析手法を提案した．この手法においては，
+適格文の最適な解釈を求める処理と不適格性を検出・修正する処
+理がいずれも，最も優先度の大きい依存関係解釈を求めるという形
+で実現される．本稿では，この解析手法で用いるための優先度計算
+法について述べる．本手法は，コーパスに基づく手法であり，解釈
+の優先度はその解釈が学習データ中でどのくらいの頻度で生じてい
+るかに応じて与える．この際，学習データの希薄性の問題を回避す
+るために，解釈の候補と完全に一致する事例だけでなく類似した事
+例も考慮する．本稿では，まず，我々の話し言葉の解析手法の概略
+を説明し，次に，本手法の詳細を説明した後，本手法を話し言葉の
+構文・意味解析システム上に実装し，その性能を評価することで本
+手法の有効性を示す．その結果，オープン試験で，約半数の文に
+完全に正しい依存構造が与えられることを示す．
+}
+\jkeywords{話し言葉の解析，優先度計算, コーパスに基づく手法}
+
+\etitle{A Corpus-based Preference Decision Method\\
+for Spoken Language Analysis}
+\eauthor{\vspace*{-0.5mm}Yasuharu Den \affiref{ATR}} 
+
+\eabstract{
+\vspace*{-1mm}Recent advances in speech processing technologies have made the analysis
+of spoken language one of the central issues in natural
+language processing. However, it is difficult to apply traditional linguistic-based
+methods to spoken language analysis due to the ill-formedness of
+spoken language. We have proposed a spoken language analysis method
+based on a uniform model, which handles well- and ill-formed
+sentences in a uniform way. In this method, both the
+problem of finding the best interpretation of a sentence and
+that of detecting and recovering ill-formedness are resolved by finding
+the most preferred dependency analysis of the sentence. This paper
+presents a preference decision method for our spoken language analysis
+method. The method is corpus-based; the preference of an analysis
+candidate is determined according to how frequently such an analysis
+is observed in the training data. To overcome the data-sparseness
+problem, not only the instances exactly matching the candidate but
+also instances similar to the candidate are taken into account.
+We, first, overview our spoken language analysis method. Then, after
+providing the details of the preference decision method, we show
+its effectiveness with evaluating the performance of an experimental system.
+}
+\ekeywords{Spoken language analysis, Preference decision,
+Corpus-based method}
+\begin{document}
+\maketitle
+\section{はじめに}\label{sec:Intro}
+
+近年の音声認識技術の進歩によって，話し言葉の解析は自然言語処理の
+中心的なテーマの1つになりつつある．
+音声翻訳，音声対話システム，マルチモーダル・インターフェースなどの
+領域で，自然な発話を扱うための手法が研究され出している．
+しかし，話し言葉の特徴である，言い淀み，言い直し，省略などの
+さまざまな{\bf 不適格性}\,(ill-formedness)のために，従来の適格文の
+解析手法はそのままでは話し言葉の解析には適用できない．
+
+我々は，適格文と不適格文を統一的に扱う{\bf 統一モデル}\,(uniform
+model)に基づく話し言葉の解析手法を提案した\cite{伝:言処-投稿中}．
+そこでは，テキスト(漢字仮名混じり文)に書き起こされた日本語の話し言葉の
+文からその文の格構造を取り出す構文・意味解析処理の中で，言い淀み，
+言い直しなどの不適格性を適切に扱う手法について述べた．
+統一モデルを採用することにより，適格文におけるさまざまな問題(構造の
+決定や文法・意味関係の付与といった問題)を解決するための手法を拡張する
+ことで，不適格性の問題も同じ枠組の中で扱える．
+より具体的には，言い淀み，言い直しなどを語と語の間のある種の依存関係と
+考えることにより，{\bf 係り受け解析}の拡張として，適格性と不適格性を
+統一的に扱う手法が実現される．
+
+我々の手法においては，適格文の最適な解釈を求める処理と不適格性を
+検出・修正する処理がいずれも，最も{\bf 優先度}\,(preference)の大きい
+依存関係解釈を求めるという形で実現される．
+そこで，不適格性による依存関係まで考慮した優先度の計算方法を
+開発することがキーとなる．
+本稿では，この統一モデルに基づく話し言葉の解析手法で用いるための
+優先度計算法について述べる．
+
+優先度の概念は，これまでにも，適格文の曖昧性を解消し最適な解釈を
+求める手法の中に取り入れられている．
+これらは以下の3つのアプローチに大別できる．
+\begin{description}
+  \item[心理言語学的な知見に基づく手法] 人間の構文・意味解析において
+観察される優先度決定の偏向を利用する．
+{\bf 右結合原理}\cite{Kimball:Cog-2-1-15}，
+{\bf 最小結合原理}\cite{Frazier:Cog-6-291}，
+{\bf 語彙的選好}\cite{Ford:MRO-82-727}などが利用されている．
+  \item[意味知識・世界知識に基づく手法] 意味知識や世界知識を利用する．
+知識を人手で構築するもの\cite{Wilks:AI-6-53,Hirst:SIA-87,
+Hobbs:AI-63-69}と既存の辞書などを知識源とする
+もの\cite{Jensen:CL-13-3-251}がある．
+  \item[コーパスに基づく(corpus-based)手法] 優先度計算に必要な情報を
+コーパスから獲得する．
+{\bf 統計}に基づく手法\cite{Jelinek:IBM-RC16374,Pereira:ACL92-128,
+Hindle:CL-19-1-103,Resnik:ARPA93}や{\bf 用例}に基づく
+手法\cite{佐藤:人知-6-4-592,Sumita:IEICE-E75-D-4-585,
+Furuse:COLING92-645}がある．
+\end{description}
+
+本稿では，以下にあげる理由により，コーパスに基づく手法を用いる．
+\begin{enumerate}
+\renewcommand{\theenumi}{}
+\renewcommand{\labelenumi}{}
+  \item 心理言語学的な知見として得られているのは，構造的な選好など
+一部のものに限られ，特に，話し言葉の不適格性に関しては，
+ヒューリスティクスとして利用できる知見は得られていない．
+  \item 広範囲な意味知識や世界知識を人手で構築するのは困難である．
+また，世界知識の利用は構文・意味解析の範囲を越える．
+  \item これに対し，コーパスからの優先度情報の獲得は，加工された
+コーパスからであれば，容易に行なえ，かつ，情報の種類も限定されない．
+コーパスの加工を自ら行なう必要がある場合でも，知識自身を人手で
+構築するよりは負担が少ない．
+\end{enumerate}
+
+コーパスに基づく我々の優先度計算法では，依存関係解釈の優先度は，
+その解釈が学習データ中でどのくらいの頻度で生じているかに応じて
+与えられる．
+この際，学習データの希薄性(data-sparseness)の問題を回避するために，
+解釈の候補と完全に一致する事例だけでなく類似した事例も考慮される．
+類似性を適当に定義することにより，適格な文法・意味関係の優先度だけで
+なく，不適格性による依存関係の優先度も，同じ方法で計算できる．
+
+以下，まず\ref{sec:Uniform}\,節では，統一モデルに基づく話し言葉の
+解析手法の概略を説明する．
+次に\ref{sec:Corpus-based}\,節で，本稿で提案するコーパスに基づく
+優先度計算法を説明する．
+\ref{sec:Evaluation}\,節では，本手法を話し言葉の
+構文・意味解析システム上に実装し，その性能を評価することで本手法の
+有効性を検討する．
+最後に，\ref{sec:Conclude}\,節でまとめを述べる．
+\section{統一モデルに基づく話し言葉の解析}\label{sec:Uniform}
+
+\subsection{話し言葉の解析}\label{sec:Uniform:Spoken}
+
+日本語の話し言葉では，言い淀み，言い直し，省略などのさまざまな
+不適格性が生じる．
+例えば，(\ref{eq:Sentence1})には，(i)\,言い直し(「ほん」が「翻訳」に
+言い直されている)，(ii)\,助詞省略(「翻訳」の後の格助詞「を」が
+省略されている)の2つの不適格性がある．
+\enumsentence{\label{eq:Sentence1}
+  ほん，翻訳入れます．}
+
+我々が提案した話し言葉の解析手法は，適格文と不適格文を統一的に扱う
+統一モデルに基づいている．
+不適格文を扱う手法としては，従来，{\bf 二段階モデル}\,(two-stage
+model)に基づいたものが多かった\cite{Jensen:CL-9-3-147,
+Weischedel:CL-9-3-161,Mellish:ACL89-102}．
+これは，まず，通常の適格文の解析手法で入力文を解析し，それが失敗した
+場合に，不適格性を扱うための処理を起動する，というものである．
+しかし，統一モデルは，以下の点において二段階モデルに優る．
+\begin{enumerate}
+\renewcommand{\theenumi}{}
+\renewcommand{\labelenumi}{}
+  \item 不適格文の処理はしばしば，適格文の処理と同等な能力を必要とする．
+不適格文を扱うために，従来適格文の処理に使われてきた手法を拡張して
+使えることが望ましい．
+  \item 不適格文と適格文とが曖昧な場合が
+ある\cite{佐川:IPSJ-NL-94-100-73} ((\ref{eq:Sentence1})の「ほん」は
+「本」と同じ字面なので「本(に)翻訳(を)入れます」のような適格文と
+しての解釈が可能)．
+適格文と不適格文が統一的に扱えないと，このような曖昧性は解消できない．
+  \item 話し言葉(特に音声言語)の解析に必要な実時間処理は，不適格文を
+処理するのに二段階の過程を経る二段階モデルでは実現できないが，
+統一モデルでは漸時的な処理が可能なので，実時間処理を実現しやすい．
+  \item 統一モデルは人間の言語処理モデルとしても妥当である．
+人間がしばしば文の途中で不適格性に気づくことは，人間が適格文の処理と
+並行して，不適格性の検出のための処理を行なっていることを示唆する．
+\end{enumerate}
+
+以下では，この統一モデルに基づく話し言葉の解析手法の概略を説明する．
+
+\subsection{解析手法の概要}\label{sec:Uniform:Overview}
+
+本手法は，基本的には，係り受け解析の拡張である．
+入力文の依存構造を生成するために，各語(文節)の間の依存関係を調べる．
+例えば，(\ref{eq:Sentence2})に対する依存構造と各文節の間の
+文法・意味関係は(\ref{eq:Depend1})のようになる．
+\enumsentence{\label{eq:Sentence2}
+  会議では翻訳も入れます．}
+\enumsentence{\label{eq:Depend1}
+  [\DP{loct\&de} 会議では\Q [\DP{obje\&accAct} 翻訳も\Q 入れます]]}
+ここで，\Rel{loct}, \Rel{obje}は意味関係(それぞれ「場所」「対象」)を
+表し，\Rel{de}, \Rel{accAct}は文法関係(それぞれ「デ格」
+「目的格・能動態」)を表す．
+
+依存構造の決定と文法・意味関係の付与は，係り文節と受け文節の間の
+意味的な結合の強さや文法関係の実現のしやすさ(例えば「も」は「主格」に
+なりやすいか「目的格」になりやすいか)などを考慮して，さまざまな候補に
+優先度を与え，最終的に最も優先度の高い組合せを見つけることによって
+行なう．
+
+本手法では，通常の係り受け解析を拡張し，言い淀み，言い直しなども語と
+語(文節と文節)の間の依存関係ととらえる．
+例えば，言い直しを含む文(\ref{eq:Sentence3})の
+依存構造は(\ref{eq:Depend2})のようになる．
+\enumsentence{\label{eq:Sentence3}
+  ほん，翻訳入れます．}
+\enumsentence{\label{eq:Depend2}
+  [\DP{obje\&accAct} [\DP{phonRepair} ほん\Q 翻訳]\Q 入れます]}
+ここで，\Rel{phonRepair}は「ほん」と「翻訳」の間に音韻的な原因による
+言い直し(以下「音韻的言い直し」)によって依存関係が生じていることを表す．
+
+このように，不適格性を扱えるよう係り受け解析を拡張することによって，
+適格文の最適な解釈を求める処理と不適格性を検出・修正する処理が同じ
+道具だてで実現できるだけでなく，適格文と不適格文との間の曖昧性にも
+対処できる．
+
+\subsection{構文・意味解析の過程}\label{sec:Uniform:Process}
+
+本手法による構文・意味解析の過程を簡単な例題を用いて説明する．
+図\,\ref{fig:Process}\,は(\ref{eq:Sentence3})の解析過程である．
+この文は，言い直しと助詞省略の2つの不適格性を含む．
+さらに，言い直しは適格文との間で曖昧である(「ほん」は「本」と同じ字面)．
+\begin{figure}
+\begin{center}
+\mbox{
+{\bf A:}\quad
+ほん\Q 翻訳\Q 入れます}\\[\medskipamount]
+{\Large$\Downarrow$}\rlap{\fbox{文節解析}}\\[\medskipamount]
+\mbox{
+\makebox(0,0)[lb]{\raisebox{1.6\baselineskip}{\bf B:}}
+\begin{footnotesize}
+\Feature{
+  \Slot{phon} & \Value{ほん}\\
+  \Slot{syn} & \Pair{\footnotesize
+                     \Value{本},\Value{普通名詞},\Value{無},\Value{$-$}}\\
+  \Slot{sem} & \Pair{\footnotesize
+                     \Value{本},\Value{書物}}}
+\Feature{
+  \Slot{phon} & \Value{ほんやく}\\
+  \Slot{syn} & \Pair{\footnotesize
+                     \Value{翻訳},\Value{サ変名詞},\Value{無},\Value{$-$}}\\
+  \Slot{sem} & \Pair{\footnotesize
+                     \Value{翻訳},\Value{翻訳}}}
+\Feature{
+  \Slot{phon} & \Value{いれます}\\
+  \Slot{syn} & \Pair{\footnotesize
+                     \Value{入れる},\Value{がを動詞},\Value{基本},\Value{能動}}\\
+  \Slot{sem} & \Pair{\footnotesize
+                     \Value{入れる},\Value{授受}}}
+\end{footnotesize}}\\[\medskipamount]
+{\Large$\Downarrow$}\rlap{\fbox{依存構造解析}}\\[\medskipamount]
+\mbox{
+{\bf C:}\quad
+[\DP{?} [\DP{?} ほん\Q 翻訳]\Q 入れます]\qquad
+{\bf OR}\qquad
+[\DP{?} ほん\Q [\DP{?} 翻訳\Q 入れます]]}\\[\medskipamount]
+{\Large$\Downarrow$}\rlap{\fbox{依存関係解析}}\\[\medskipamount]
+\mbox{
+\raisebox{1.2\baselineskip}{\bf D:}
+\DependTable{\Pair{ほん,\,翻訳}}{
+  \Rel{of\&gen} & 0.0002\\
+  \underline{\Rel{phonRepair}} & \underline{0.0053}}
+\DependTable{\Pair{翻訳,\,入れます}}{
+  \underline{\Rel{obje\&accAct}} & \underline{0.0134}\\
+  \Rel{inst\&de} & 0.0031}
+\DependTable{\Pair{ほん,\,入れます}}{
+  \Rel{obje\&accAct} & 0.0004\\
+  \Rel{loct\&ni} & 0.0029}}\\[\medskipamount]
+{\Large$\Downarrow$}\rlap{\fbox{最適解選択}}\\[\smallskipamount]
+\mbox{
+{\bf E:}\quad
+[\DP{obje\&accAct} [\DP{phonRepair} ほん\Q 翻訳]\Q 入れます]}
+\end{center}
+\caption{構文・意味解析の過程}\label{fig:Process}
+\end{figure}
+
+解析過程は以下の4つのステップからなる．
+\begin{description}
+  \item[文節解析] 入力文{\bf A}を素性構造で表現された文節の列{\bf B}に
+変換する． 
+各素性構造は，音韻情報(よみ)，統語情報(語彙，範疇，形，態)，
+意味情報(概念，属性)を持つ\footnote{
+  統語範疇には，「連体詞」「副詞」「普通名詞」「固有名詞」「が動詞」
+「がを動詞」「が形容詞」などがある．
+形は，名詞文節の格や動詞文節の活用形であり，名詞文節が助詞省略を含む
+場合は「無」で表す．
+また，動詞文節以外の態は`\Value{$-$}'で表す．
+意味属性には，角川類語新辞典\cite{大野:角類新-81}の小分類を
+使用している．
+}．
+  \item[依存構造解析] 文節の列{\bf B}から可能な依存構造の
+集合{\bf C}を生成する．
+  \item[依存関係解析] 依存構造の集合{\bf C}に含まれる各依存関係に
+対して，依存関係解釈の候補{\bf D}を生成する．
+解釈の候補のおのおのには，$[0,1]$間の実数値で表される優先度を与える．
+  \item[最適解選択] 最も優先度の大きい解釈({\bf D}の下線部分)を選択し，
+文全体の依存構造と依存関係解釈{\bf E}を出力する．
+\end{description}
+
+この例では，{\bf B}の文節列に対して，{\bf C}の2つの依存構造が可能で
+あり，その中に3つの依存関係が含まれる．
+それぞれの依存関係に対する解釈の候補は{\bf D}のようになり，
+下線を引いたものが最も優先度の大きい組合せとして選択される．
+この過程において，助詞省略は「目的格」に解釈され，言い直しと
+適格文(「本(に)入れます」)との曖昧性も解消されている．
+\section{コーパスに基づく優先度計算法}\label{sec:Corpus-based}
+
+\subsection{本手法の概要}\label{sec:Corpus-based:Overview}
+
+係り受け解析を基本とする我々の構文・意味解析手法においては，
+依存関係解釈の候補のおのおのに$[0,1]$間の実数値で表される優先度が
+与えられる．
+以下では，優先度の計算法を説明する．
+
+我々の優先度計算法は，コーパスに基づく手法である．
+優先度は，その依存関係解釈が学習データ中でどのくらいの頻度で生じて
+いるかに応じて与える．
+すなわち，係り文節 $\alpha$ と受け文節 $\beta$ の間の依存関係
+解釈 $\pi$ の優先度$P(\pi,\alpha,\beta)$は，次式で与えられる(係り
+文節 $\alpha$ と受け文節 $\beta$ の間に依存関係解釈 $\pi$ が
+成り立つことを \Formula{$\pi$}{\alpha,\beta} で表す)．
+\begin{equation}\label{eq:Preference1}
+  P(\pi,\alpha,\beta) =
+\frac{\mbox{\Formula{$\pi$}{\alpha,\beta}の頻度}}
+     {\sum_{p,x,y}\mbox{\Formula{$p$}{x,y}の頻度}}
+\end{equation}
+分子は依存関係解釈 \Formula{$\pi$}{\alpha,\beta} の事例の頻度であり，
+分母は学習データ中のすべての事例の頻度の総和である．
+
+しかし，このままでは学習データの希薄性の問題を避けられないので，
+分子の \Formula{$\pi$}{\alpha,\beta} の頻度を計算する際に，完全に
+一致する事例だけでなく類似した事例の頻度も考慮する．
+例えば，\Formula{\Rel{obje}}{翻訳,入れる} の頻度を計算する際に，
+これと類似した事例 \Formula{\Rel{obje}}{通訳,行なう} が
+学習データ中にあれば，その頻度を考慮に入れるという具合である．
+これを{\bf 類似性に基づくスムージング}\,(similarity-based smoothing)と
+よぶ．
+
+同じ方法が言い直しなどの不適格な依存関係の解釈の優先度計算においても
+利用できる．
+例えば，音韻的言い直しのパターン「ほん」$\to$「翻訳」は別のパターン
+「どうじ」$\to$「同時通訳」に似ているので，前者の頻度を計算する際に，
+後者の頻度も考慮する．
+
+このように，さまざまな類似性を考えることによって，適格な
+文法・意味関係の優先度だけでなく，不適格性による依存関係の優先度も，
+同じ方法で計算できる．
+
+\subsection{依存関係解釈の事例}\label{sec:Corpus-based:Instance}
+
+依存関係解釈の頻度情報を獲得するために，学習データに対し人手で
+依存構造を付与し，そこから依存関係解釈の事例を抽出する．
+これらの事例は表\,\ref{tab:Instance}\,のような表の形で書ける．
+例えば，表の1行めは，「通訳」と「行なう」の間の依存関係を「対象」に
+解釈する事例が学習データ中に3例あったことを表す．
+\begin{table}
+\caption{依存関係解釈の事例}
+\label{tab:Instance}
+\centering
+\begin{tabular}[b]{|c|c|c|r|}
+  \hline
+  解釈 & 係り文節 & 受け文節 & 頻度\hfil \\\hline\hline
+  \Rel{obje}
+  & \Pair{\Value{通訳},\Value{翻訳}}
+  & \Pair{\Value{行なう},\Value{実行}}
+  & 3 \\
+  \Rel{obje}
+  & \Pair{\Value{論文},\Value{文章}}
+  & \Pair{\Value{受け取る},\Value{授受}}
+  & 5 \\
+  \Rel{agen}
+  & \Pair{\Value{学生},\Value{教育者}}
+  & \Pair{\Value{参加},\Value{加入}}
+  & 2 \\
+  \Rel{loct}
+  & \Pair{\Value{京都},\Value{都道府県}}
+  & \Pair{\Value{開催},\Value{実行}}
+  & 1 \\\hline
+  \Rel{accAct}
+  & \Pair{\Value{通訳},\Value{サ変名詞},\Value{を},\Value{$-$}}
+  & \Pair{\Value{行なう},\Value{がを動詞},\Value{基本},\Value{能動}}
+  & 2 \\
+  \Rel{accAct}
+  & \Pair{\Value{通訳},\Value{サ変名詞},\Value{も},\Value{$-$}}
+  & \Pair{\Value{行なう},\Value{がを動詞},\Value{基本},\Value{能動}}
+  & 1 \\
+  \Rel{accAct}
+  & \Pair{\Value{論文},\Value{普通名詞},\Value{無},\Value{$-$}}
+  & \Pair{\Value{受け取る},\Value{がを動詞},\Value{基本},\Value{能動}}
+  & 2\\
+  \Rel{datCaus}
+  & \Pair{\Value{学生},\Value{普通名詞},\Value{に},\Value{$-$}}
+  & \Pair{\Value{参加},\Value{がに動詞},\Value{基本},\Value{使役}}
+  & 1 \\\hline
+  \Rel{phonRepair}
+  & \Value{どおじ}
+  & \Value{どおじつうやく}
+  & 1 \\
+  \Rel{synRepair}
+  & \Pair{\Value{クレジットカード},\Value{普通名詞},\Value{を},\Value{$-$}}
+  & \Pair{\Value{クレジットカード},\Value{普通名詞},\Value{の},\Value{$-$}}
+  & 1 \\
+  \Rel{semRepair}
+  & \Pair{\Value{通訳},\Value{翻訳}}
+  & \Pair{\Value{翻訳},\Value{翻訳}}
+  & 2 \\\hline
+\end{tabular}
+\end{table}
+
+表中の係り文節，受け文節の欄には，解釈候補と事例との類似度を
+計算する際に参照される情報が書かれている．
+これらは，(a)\,意味関係(表の第1群)では意味情報(概念，属性)，
+(b)\,文法関係(表の第2群)では統語情報(語彙，範疇，形，態)であり，
+(c)\,言い直しの関係(表の第3群)では言い直しの種類(音韻的，統語的，
+意味的)に応じて異なる．
+
+\subsection{優先度}\label{sec:Corpus-based:Preference}
+
+係り文節 $\alpha$ と受け文節 $\beta$ の間の依存関係解釈 $\pi$ の
+優先度$P(\pi,\alpha,\beta)$は，類似性に基づくスムージングを用いると，
+次式のようになる．
+\begin{equation}\label{eq:Preference2}
+  P(\pi,\alpha,\beta) =
+\frac{\sum_{x,y} w_{\pi}(S_{\pi}(x,y,\alpha,\beta)) \times
+                 \mbox{\Formula{$\pi$}{x,y}の頻度}}
+     {\sum_{p,x,y}\mbox{\Formula{$p$}{x,y}の頻度}}
+\end{equation}
+ここで，$S_{\pi}(x,y,\alpha,\beta)$は
+解釈候補 \Formula{$\pi$}{\alpha,\beta} と
+事例 \Formula{$\pi$}{x,y} の{\bf 類似度}\,(similarity)であり，
+$w_{\pi}(s)$は解釈候補に対して類似度$s$を持つ事例の貢献度を
+決める{\bf 重みづけ関数}\,(weighting function)である．
+類似度と重みづけ関数の定義はいずれも，解釈 $\pi$ に依存して与える．
+
+(\ref{eq:Preference2})より，依存関係解釈の優先度はその解釈が
+学習データ中で生じる頻度確率によって与えられ，この際，解釈の頻度は
+それと似た事例の頻度を(類似度に応じて重みづけして)足し合わせることに
+よって得られる(図\,\ref{fig:Preference})．
+これは，クラスに基づくスムージング(class-based
+smoothing) \cite{Resnik:ARPA93}の一般化になっている\footnote{
+  クラスに基づくスムージングでは，(\ref{eq:Preference2})の
+分子は $\alpha$, $\beta$ と同じクラスに属する語$x$, $y$に関する
+事例 \Formula{$\pi$}{x,y} の頻度の和によって与えられる．
+我々の類似性に基づくスムージングでは，クラスへの帰属性を類似度に
+よって連続的に表現している．
+}．
+\begin{figure}
+\centering
+\setlength{\unitlength}{1mm}
+\newcommand{\ArrowHeadSize}{}
+\begin{picture}(105,45)
+  \put(10,40){\begin{tabular}[t]{|c|c|c|}
+                \multicolumn{3}{l}{\bf 解釈候補} \\\hline
+                \Rel{obje}
+                & \Pair{\Value{翻訳},\Value{翻訳}}
+                & \Pair{\Value{入れます},\Value{授受}} \\\hline
+              \end{tabular}}
+  \put(10, 0){\begin{tabular}[b]{|c|c|c|c|c@{ }c}
+                \multicolumn{4}{l}{\bf 事例} \\\cline{1-4}
+                \Rel{obje}
+                & \Pair{\Value{通訳},\Value{翻訳}}
+                & \Pair{\Value{行なう},\Value{実行}}
+                & 3
+                & $\to$
+                & $w(S_1)\times 3$ \\
+                \Rel{obje}
+                & \Pair{\Value{論文},\Value{文章}}
+                & \Pair{\Value{受け取る},\Value{授受}}
+                & 5
+                & $\to$
+                & $w(S_2)\times 5$ \\
+                $\vdots$
+                & $\vdots$
+                & $\vdots$
+                & $\vdots$
+                &
+                & $\vdots$ \\\cline{1-4}\cline{6-6}
+                \multicolumn{4}{l}{}
+                &
+                & (\ref{eq:Preference2})の分子
+              \end{tabular}}
+  \put(-4,30){\bf 類似度}
+  \put( 8,27.5){$S_1$}
+  \put( 1,25){$S_2$}
+  \bezier{75}(10,35)(5,27.5)(10,20)
+  \ArrowHead(5,27.5)(10,20)
+  \bezier{100}(10,35)(0,25)(10,15)
+  \ArrowHead(0,25)(10,15)
+\end{picture}
+\caption{優先度の計算}
+\label{fig:Preference}
+\end{figure}
+
+\subsection{類似度}\label{sec:Corpus-based:Similarity}
+
+解釈候補 \Formula{$\pi$}{\alpha,\beta} と
+事例 \Formula{$\pi$}{x,y} の類似度$S_{\pi}(x,y,\alpha,\beta)$は，
+解釈 $\pi$ の種類に応じて以下のように定義される．
+\begin{description}
+  \item[$\pi$ が意味関係の場合] $x$と $\alpha$ および$y$と $\beta$ の
+それぞれについて，意味情報に関する類似度を求めたものの相乗平均．
+すなわち，
+\begin{equation}\label{eq:Sem}
+  S_{\pi}(x,y,\alpha,\beta) =
+\sqrt{\strut S_{sem}(x,\alpha) \times S_{sem}(y,\beta)}
+\end{equation}
+ここで，$x$と $\alpha$ (および$y$と $\beta$)の意味的類似度$S_{sem}$は，
+意味シソーラス上の距離に基づいて
+計算する\cite{Sumita:IEICE-E75-D-4-585}．
+意味シソーラスは角川類語新辞典\cite{大野:角類新-81}のものを用いている．
+  \item[$\pi$ が文法関係の場合] $x$と $\alpha$ および$y$と $\beta$ の
+それぞれについて，統語情報に関する類似度を求めたものの相乗平均．
+すなわち，
+\begin{equation}\label{eq:Syn}
+  S_{\pi}(x,y,\alpha,\beta) =
+\sqrt{\strut S_{syn}(x,\alpha) \times S_{syn}(y,\beta)}
+\end{equation}
+ここで，$x$と $\alpha$ (および$y$と $\beta$)の統語的類似度$S_{syn}$は，
+統語範疇の階層上の距離に基づ\\いて計算する．
+統語範疇の階層は意味シソーラスを模して作成した．
+  \item[$\pi$ が言い直しの関係の場合]
+$x$と$y$および $\alpha$ と $\beta$ のそれぞれの類似度を求め，
+その差を1から引いたもの．すなわち，
+\begin{equation}\label{eq:Repair}
+  S_{\pi}(x,y,\alpha,\beta) = 1 - |\,S(x,y) - S(\alpha,\beta)\,|
+\end{equation}
+ここで，$x$と$y$ (および $\alpha$ と $\beta$)の類似度$S$は，言い直しの
+種類(音韻的，統語的，意味的)に応じて，$S_{phon}$, $S_{syn}$,
+$S_{sem}$を用いる\footnote{
+  $S_{phon}(x,y)$は$x$と$y$の音韻情報に関する類似度であり，
+$x$, $y$のよみの長さをそれぞれ$L_{x}$, $L_{y}$，また，それらの
+共通部\\分の長さを$L_{xy}$とすると，$S_{phon}(x,y) =
+2 \times L_{xy}/(L_{x} + L_{y})$で与えられる．
+}．
+\end{description}
+
+解釈 $\pi$ が意味関係もしくは文法関係の場合には，候補と事例に関して，
+係り文節同士，受け文節同士のそれぞれについて類似度を求め，その
+相乗平均をとる\footnote{
+  用例に基づく手法では，相乗平均の代わりに，相加平均や加重和を用いる
+ことが多い．
+本手法では，(用例に基づく手法のように)最も似ている事例の類似度
+そのものを優先度とするのではなく，すべての事例に関して類似度で
+重みづけた頻度の和をとっているので，類似度そのものがあまり大きく
+ならないように，相乗平均を採用している．
+}．
+しかし，$\pi$ が言い直しの関係の場合には同じ方法は使えない．
+例えば，音韻的言い直しのパターン「ほん」$\to$「翻訳」と別のパターン
+「どうじ」$\to$「同時通訳」は，直観的に似ていると感じるが，
+係り文節同士(「ほん」と「どうじ」)は似ていない．
+この場合，係り文節同士，受け文節同士の類似性を独立に調べるのは
+適当でない．
+むしろ，言い直しパターン全体としての類似性を調べる必要がある．
+
+そのために，まず，言い直しパターンを数値によってコード化する．
+言い直しでは通常，係り文節(修復対象)と受け文節(訂正部分)が何らかの
+点において類似している．
+ここで，「何らかの点」とは言い直しの種類に依存して決まる(例えば
+「音韻的言い直し」では音韻情報に関して類似している)．
+したがって，修復対象と訂正部分の類似度によって，その言い直しの
+パターンをコード化することができる．
+修復対象と訂正部分の類似性が大きい(あるいは小さい)言い直し同士は
+互いに似ていると考えることにすると，2つの言い直しパターンのコードの
+差によってそれらの間の類似度を定義することができる\footnote{
+  (\ref{eq:Repair})では，言い直しパターンのコードの差を類似度に
+反映させる際に，非常に単純な関数を用いたが，この点は検討の余地があろう．
+}．
+例えば，上記の2つの音韻的言い直しのパターンでは，
+$S_{phon}(ほん,ほんやく) = 2/3\ (= 2\times 2/(2+4))$および
+$S_{phon}(どおじ,どおじつうやく) = 3/5\ (= 2\times 3/(3+7))$より，
+両者の類似度は$0.933\ (= 1 - |\,2/3 - 3/5\,|)$となる．
+
+\subsection{重みづけ関数}\label{sec:Corpus-based:Weight}
+
+解釈候補に対して類似度$s$を持つ事例の貢献度を決める
+重みづけ関数$w_{\pi}(s)$は以下の3条件を満たすべきである．
+(i)\,貢献度は0以上1以下であり($w_{\pi}$の値域は$[0,1]$)，
+(ii)\,類似度が1の事例の貢献度は最大値1をとり($w_{\pi}(1) = 1$)，
+(iii)\,類似度が大きい事例ほど貢献度も大きい($w_{\pi}$は\\単調増加関数)．
+おのおのの解釈 $\pi$ ごとに，この3条件を満たす重みづけ
+関数$w_{\pi}(s)$を，次のような単純な多項式形式で与える\footnote{
+  重みづけ関数のよりよい定義の仕方には検討の余地があろう．
+}．
+\begin{equation}\label{eq:Weight}
+  w_{\pi}(s) = \sum_{k = 0}^{N} a_{\pi,k}\,s^{k}
+\end{equation}
+ここで，$N$はある正の定数であり\footnote{
+  実験システムでは$N = 3$を用いている．
+}，係数$a_{\pi,k}$は次式を満たす．
+\begin{equation}\label{eq:Coefficient}
+  a_{\pi,k} \ge 0\quad かつ\quad\sum_{k = 0}^{N} a_{\pi,k} = 1
+\end{equation}
+
+係数$a_{\pi,k}$は以下のようにして決める．
+類似性に基づくスムージングは，別の見方をすると，学\hspace{0.1mm}習データによって
+部\hspace{0.1mm}分\hspace{0.1mm}的に与えられた事\hspace{0.1mm}例の分\hspace{0.1mm}布から真の分\hspace{0.1mm}布を推\hspace{0.1mm}定していると
+みることが\\できる．
+\hspace{-0.3mm}いま，\hspace{-0.3mm}事例 \Formula{$\pi$}{\alpha,\beta} の真の頻度を
+$\hat{f}(\pi,\alpha,\beta)$，\hspace{-0.3mm}推定された頻度を
+$\tilde{f}(\pi,\alpha,\beta)$とすると，\hspace{-0.3mm}類\\似性に基づくスムージングに
+よる推定では，$\tilde{f}(\pi,\alpha,\beta)$は(\ref{eq:Preference2})の
+分子で与えられる．
+したがって，推定値の二乗誤差
+$|\,\tilde{f}(\pi,\alpha,\beta) - \hat{f}(\pi,\alpha,\beta)\,|^2$の
+すべての事例 \Formula{$\pi$}{\alpha,\beta} にわたる和を最小にする
+よ\\うに，重みづけ関数の係数を決めればよい．
+
+これを行なうためには，すべての事例の真の頻度がわかっている必要がある．
+ここでは，これを近似的に行なうために，学習データ中の各事例の頻度
+そのものが真の頻度を与えていると考え，その代わりに，各事例の推定頻度は
+学習データ中でその事例を除いた残りの部分から類似性に基づく
+スムージングによって与えられると考える(ジャックナイフ式の推定)．
+簡単な計算により，この二乗誤差最小化の問題は二次計画問題に帰着できる
+ことがわかり，したがって解析的に解ける．
+
+\subsection{文法関係解釈の優先度}\label{sec:Corpus-based:Syntactic}
+
+最後に，文法関係の解釈の優先度について注意を述べる．
+(\ref{eq:Depend1}), (\ref{eq:Depend2})に見られるように，適格な
+依存関係は意味関係と文法関係の両面から解釈される．
+一般に，両者の解釈は独立ではない．
+すなわち，どの意味関係解釈が選択されたかに依存して，可能な文法関係の
+解釈の範囲が異なる．
+したがって，文法関係の優先度は{\bf 条件つき}\,(conditional)の形で
+与えなければならない．
+
+係り文節 $\alpha$ と受け文節 $\beta$ の間の依存関係を意味関係 $\pi$ と
+文法関係 $\sigma$ に解釈する際の優先度は，確率論にしたがうと，
+次式のようになる．
+\begin{equation}\label{eq:Well-formed}
+  P(\pi\&\sigma,\alpha,\beta) =
+P(\pi,\alpha,\beta) \times
+P(\sigma,\alpha,\beta\,|\pi,\alpha^*,\beta^*)
+\end{equation}
+ここで，文法関係解釈の
+優先度$P(\sigma,\alpha,\beta\,|\pi,\alpha^*,\beta^*)$は条件つきの形で
+与えられており，条件は意味関係解釈 $\pi$ と係り文節 $\alpha^*$，
+受け文節 $\beta^*$によって課される．
+ただし，意味関係解釈は統語情報のうち形と態は制限しない(意味関係が
+「対象」であっても係り文節の形は「を」「も」「無」のいずれでも
+あり得る)ので，$\alpha^*$, $\beta^*$ではこれらの情報が
+「関知せず(don't care)」になっている．
+
+類似性に基づくスムージングを用いた条件つき優先度は，次式で与えられる．
+\begin{equation}\label{eq:Conditional1}
+\begin{array}[t]{@{}l@{}}
+  P(\sigma,\alpha,\beta\,|\pi,\alpha^*,\beta^*) =
+\displaystyle
+\frac{\sum_{x,y} w_{\sigma}(S_{\sigma}(x,y,\alpha,\beta)) \times
+                 \mbox{\Formula{$\sigma$}{x,y}の頻度}}
+     {\sum_{s}\mbox{\Formula{$s$}{\alpha^*,\beta^*}の頻度}}
+\end{array}
+\end{equation}
+ただし，分子の \Formula{$\sigma$}{x,y} と
+分母の \Formula{$s$}{\alpha^*,\beta^*} はいずれも意味関係解釈 $\pi$ と
+共起するものだけを対象とする．
+
+しかし，(\ref{eq:Conditional1})では，今度は，分母に関して学習データの
+希薄性が問題になる．
+そこで，分母に対しても類似性に基づくスムージングを用いる．
+その結果，優先度は次式のようになる．
+\begin{equation}\label{eq:Conditional2}
+\begin{array}[t]{@{}l@{}}
+  P(\sigma,\alpha,\beta\,|\pi,\alpha^*,\beta^*) =
+\displaystyle
+\frac{\sum_{x,y} w_{\sigma}(S_{\sigma}(x,y,\alpha,\beta)) \times
+                 \mbox{\Formula{$\sigma$}{x,y}の頻度}}
+     {\sum_{s,x,y} w_{s}(S_{s}(x,y,\alpha^*,\beta^*)) \times
+                   \mbox{\Formula{$s$}{x,y}の頻度}}
+\end{array}
+\end{equation}
+
+(\ref{eq:Conditional2})がどのように働くかを簡単な例で説明する．
+助詞省略を含む依存関係[\DP{obje\&accAct} 翻訳 入れます]において，
+文法関係解釈\Rel{accAct}の優先度を計算することを
+考える(図\,\ref{fig:Conditional})．
+分子は，解釈候補 \Formula{\Rel{accAct}}{翻訳,入れます} と似た
+事例の頻度の加重和によって与えられる．
+ここで，統\\語情報の類似度は形が一致するときのみ非ゼロの値を
+とる(図\,\ref{fig:Conditional}\,で$S_1$はゼロ，\hspace{-0.5mm}$S_2$は非ゼロ)よう\\に
+定義されており，よって，係り文節の形が「無」のもの(つまり助詞省略を
+含むもの)だけが分子の計算に貢献する．
+一方，分母は，係り文節と受け文節がそれぞれ「サ変名詞」「がを動詞」に
+類似したすべての事例の頻度の加重和である．
+したがって，この文法関係解釈の優先度は，概言すると，「係り文節と
+受け文節がそれぞれ「サ変名詞」「がを動詞」に似ている事例において，
+目的格の助詞が省略される確率」によって与えられる．
+\begin{figure}
+\centering
+\small
+\setlength{\unitlength}{1mm}
+\newcommand{\ArrowHeadSize}{}
+\begin{picture}(140,70)
+  \put(10,65){\begin{tabular}[t]{|c|c|c|}
+                \multicolumn{3}{l}{\bf 解釈候補} \\\hline
+                \Rel{accAct}
+                & \Pair{\small
+                        \Value{翻訳},\Value{サ変名詞},\Value{無},\Value{$-$}}
+                & \Pair{\small
+                        \Value{入れます},\Value{がを動詞},\Value{基本},\Value{能動}} \\\hline
+              \end{tabular}}
+  \put(85,55){\makebox[0pt][r]{
+              \begin{tabular}[t]{|c|c|}
+                \multicolumn{1}{l}{\bf $係り文節^*$}
+                & \multicolumn{1}{l}{\bf $受け文節^*$} \\\hline
+                \Pair{\small
+                      \Value{翻訳},\Value{サ変名詞},\Value{*},\Value{*}}
+                & \Pair{\small
+                        \Value{入れます},\Value{がを動詞},\Value{*},\Value{*}} \\\hline
+              \end{tabular}}}
+  \put(10, 0){\begin{tabular}[b]{|c|c|c|@{\hspace{3em}}c|c@{ }c@{ }c}
+                \multicolumn{4}{l}{\bf 事例} \\\cline{1-4}
+                \Rel{accAct}
+                & \SS{\small
+                      $\langle$\Value{通訳},\Value{サ変名詞},\\
+                      \hfill\Value{を},\Value{$-$}$\rangle$}
+                & \SS{\small
+                      $\langle$\Value{行なう},\Value{がを動詞},\\
+                      \hfill\Value{基本},\Value{能動}$\rangle$}
+                & 2
+                & $\to$
+                & $w(S_1)\times 2$
+                & $w(S^{\prime}_1)\times 2$ \\
+                \Rel{accAct}
+                & \SS{\small
+                      $\langle$\Value{論文},\Value{普通名詞},\\
+                      \hfill\Value{無},\Value{$-$}$\rangle$}
+                & \SS{\small
+                      $\langle$\Value{受け取る},\Value{がを動詞},\\
+                      \hfill\Value{基本},\Value{能動}$\rangle$}
+                & 2
+                & $\to$
+                & $w(S_2)\times 2$
+                & $w(S^{\prime}_2)\times 2$ \\
+                $\vdots$
+                & $\vdots$
+                & $\vdots$
+                & $\vdots$
+                &
+                & $\vdots$
+                & $\vdots$ \\
+                \Rel{datCaus}
+                & \SS{\small
+                      $\langle$\Value{学生},\Value{普通名詞},\\
+                      \hfill\Value{に},\Value{$-$}$\rangle$}
+                & \SS{\small
+                      $\langle$\Value{参加},\Value{がに動詞},\\
+                      \hfill\Value{基本},\Value{使役}$\rangle$}
+                & 1
+                & $\to$
+                & 
+                & $w(S^{\prime}_3)\times 1$ \\
+                $\vdots$
+                & $\vdots$
+                & $\vdots$
+                & $\vdots$
+                &
+                &
+                & $\vdots$ \\\cline{1-4}\cline{6-7}
+                \multicolumn{4}{l}{}
+                &
+                & (\ref{eq:Conditional2})の分子
+                & (\ref{eq:Conditional2})の分母
+              \end{tabular}}
+  \put(-3,52){\bf 類似度}
+  \put(8,44){$S_1$}
+  \put(1,40){$S_2$}
+  \put(91,44){\bf 類似度}
+  \put(83,40){$S^{\prime}_1$}
+  \put(86,31){$S^{\prime}_2$}
+  \put(86,20){$S^{\prime}_3$}
+  \bezier{125}(10,62)(5,48)(10,34)
+  \ArrowHead(5,48)(10,34)
+  \bezier{150}(10,62)(0,44)(10,26)
+  \ArrowHead(0,44)(10,26)
+  \bezier{75}(85,52)(90,42)(85,32)
+  \ArrowHead(90,42)(85,32)
+  \bezier{100}(85,52)(95,38)(85,24)
+  \ArrowHead(95,38)(85,24)
+  \bezier{150}(85,52)(100,32)(85,12)
+  \ArrowHead(100,32)(85,12)
+\end{picture}
+\caption{文法関係解釈の優先度の計算}
+\label{fig:Conditional}
+\end{figure}
+\section{評価}\label{sec:Evaluation}
+
+\subsection{実験}\label{sec:Evaluation:Experiment}
+
+統一モデルに基づく話し言葉の構文・意味解析システムに本稿で提案した
+優先度計算法を実装し，その性能を評価した．
+学習・試験データには
+ATR対話データベース(ADD)\,\cite{江原:ATR-TR-I-0186}の10対話(662文，
+2913依存関係，平均文長5.4文節，平均文字数26.4文字)を用いた．
+実験は次の2つの場合を調べた．
+\begin{description}
+  \item[クローズ試験] 10対話すべてを学習データとし，そのうちの1対話を
+試験データとする．
+試験データを変えてこの試行を10回繰り返し，平均をとる．
+  \item[オープン試験] 1対話を試験データとし，残りの9対話を
+学習データとする．
+試験データを変えてこの試行を10回繰り返し，平均をとる(交差検定)．
+\end{description}
+
+依存関係と文全体の解析の正解率を表\,\ref{tab:Accuracy1}\,に
+示す(あらかじめ人手で付与したものと完全に一致したときのみ正解)．
+オープン試験での構造解析の正解率は依存関係ごとで78\%，文全体で67\%で
+あり，関係解釈の正解率は依存関係ごとで66\%，文全体で49\%である．
+日本語において，依存関係解釈(深層格解釈)の性能を実例に対する実験で
+評価した研究はほとんど見られず，ましてや，
+話し言葉を対象としたものは皆無である．
+したがって，本実験結果を他の研究のものと比較するのは難しいが，
+\citeA{黒橋:言処-1-1-35}が技術文書を対象として行なった
+係り受け解析実験の比較的短い文(平均文字数30〜50文字)に対する
+文全体の構造正解率が78\%であることを考えると，
+決してよい成績とはいえない\footnote{
+  ただし，\citeA{黒橋:言処-1-1-35}では，出力結果を人間が見て正否を
+判断しており，本研究の正否判断より甘い．
+}．
+しかし，本研究が対象としている文には，さまざまな不適格性が含まれており，
+また，構造解析が最終的な目的ではなく依存関係解釈が目的であるから，
+構造正解率の10\%あまりの劣りはそれほど大きいとは思わない．
+いずれにせよ，日本語の話し言葉を対象とした依存関係解釈の実験結果を
+初めて提供できたことは非常に意義深い．
+
+次に，依存関係ごとの関係解釈の再現率(recall)と適合率(precision)を
+表\,\ref{tab:Recall1}\,に示す．
+「適格な依存関係(等位)」は等位構造をなす文法・意味関係解釈の総計であり，
+「適格な依存関係(従属)」は等位以外の文法・意味関係解釈の総計である．
+言い直しに注目すると，統語的言い直し(\Rel{synRepair})では再現率90\%，
+適合率47\%であり，意味的言い直し(\Rel{semRepair})では再現率88\%，
+適合率32\%である(オープン試験)\footnote{
+  音韻的言い直しでは，修復対象と適正な語との曖昧性が生じなかった
+ために，再現率，適合率ともに100\%であった．
+}．
+再現率は十分に高いが，適合率はかなり低い．
+これは，適格な依存関係がしばしば言い直しとして誤って解釈されたことを
+意味する．
+実際，適格な依存関係(等位)の再現率の低さは，言い直しが等位構造と
+間違われやすいことを示している．
+これは，適格文と不適格文を統一的に扱う統一モデルの欠点のようにみえる．
+この点について議論する前に，まず，誤りの実例を見る．
+\begin{table}
+\caption{依存関係と文全体の解析の正解率}
+\label{tab:Accuracy1}
+\centering
+\begin{tabular}{|l||r|r|r|r|}
+  \hline
+  & \multicolumn{2}{|c|}{依存関係}
+  & \multicolumn{2}{c|}{文全体} \\\cline{2-5}
+  & 構造\hfil\null & 解釈\hfil\null
+  & 構造\hfil\null & 解釈\hfil\null \\\hline\hline
+  クローズ試験 & 89.3\% & 86.3\% & 76.5\% & 68.1\% \\\hline
+  オープン試験 & 78.4\% & 66.1\% & 66.8\% & 49.0\% \\\hline
+\end{tabular}
+\end{table}
+\begin{table}
+\caption{依存関係解釈の再現率と適合率(一部)}
+\label{tab:Recall1}
+\centering
+\begin{tabular}{|l||c|r|r|}
+  \hline
+  & 解釈 & 再現率\hfil\null & 適合率\hfil\null \\\hline\hline
+  & 適格な依存関係(従属) & 84.7\% & 88.2\% \\\cline{2-4}
+  クローズ試験
+  & 適格な依存関係(等位) & 57.4\% & 83.0\% \\\cline{2-4}
+  & \Rel{synRepair} & 80.0\% & 38.1\% \\\cline{2-4}
+  & \Rel{semRepair} & 94.3\% & 33.0\% \\\hline\hline
+  & 適格な依存関係(従属) & 63.2\% & 65.9\% \\\cline{2-4}
+  オープン試験
+  & 適格な依存関係(等位) & 59.3\% & 85.4\% \\\cline{2-4}
+  & \Rel{synRepair} & 90.0\% & 47.4\% \\\cline{2-4}
+  & \Rel{semRepair} & 88.2\% & 31.6\% \\\hline
+\end{tabular}
+\end{table}
+
+\subsection{誤りの例}\label{sec:Evaluation:Error}
+
+解析誤りは，(i)\,構造解析の誤りと(ii)\,関係解釈の誤りの2つの
+タイプに分類できる．
+
+\subsubsection*{構造解析の誤り}
+
+言い直しの解析において，訂正部分に係るべき文節が誤って修復対象に
+係るように解析されると，修復対象の範囲の同定に失敗する．
+例えば，(\ref{eq:Error1})では，「今回の会議の」が「テーマ」ではなく
+「主旨」に係るように誤って解析され，その結果，修復対象の範囲に
+含まれてしまう．
+\enumsentence{\label{eq:Error1}
+  今回の会議の主旨といいますか，テーマといったようなもの\\
+($\times$ [今回の会議の\Q 主旨]\quad$\bigcirc$ [今回の会議の\Q テーマ])}
+
+この種の誤りは，心理言語学などで研究されてきた構造的な
+選好\cite{Kimball:Cog-2-1-15,Hobbs:COLING90-162}を利用すれば，
+なくすことができると思われる．
+
+\subsubsection*{関係解釈の誤り}
+
+表\,\ref{tab:Recall1}\,が示しているように，言い直しは等位構造と
+間違われやすい．
+例えば，(\ref{eq:Error2})では，「オーバーヘッドプロジェクタ」と
+「スライド」の間の依存関係が，順接関係(\Rel{conj\&to})ではなく
+意味的言い直し(\Rel{semRepair})として誤って解釈される．
+\enumsentence{\label{eq:Error2}
+  オーバーヘッドプロジェクタと二インチ×二インチのスライドと\\
+($\times$ \Rel{semRepair}\quad $\bigcirc$ \Rel{conj\&to})}
+
+この種の誤りは一般に，適格な依存関係解釈同士の間でも
+生じる(例えば\Rel{obje}と\Rel{agen}を間違う)が，上記のような言い直しが
+関与する誤りはより深刻である．
+なぜなら，これは統一モデルの妥当性に直接関係するからである．
+すなわち，通常の適格文の解析が失敗した時だけ言い直しの解析を起動する
+二段階モデルであれば，この種の誤りは生じない．
+そこで，次に，我々の優先度計算法を二段階モデルに組み込んで，その
+性能を統一モデルの場合と比較する．
+
+\subsection{二段階モデルとの比較}\label{sec:Evaluation:Two-stage}
+
+言い直しの解析の適合率の低さが統一モデルに起因するものかどうか
+調べるために，我々の優先度計算法を二段階モデルに組み込んで比較した．
+すなわち，言い直しに対する解釈規則を除いた規則群で第一段階の解析を
+行ない，それが失敗した場合に，言い直しに対する解釈規則を加えて再解析を
+行なう．
+
+依存関係解釈の再現率と適合率を表\,\ref{tab:Recall2}\,に示す．
+適合率は，統語的言い直しでは47\%から75\%と大きく改善されたが，
+意味的言い直しでは32\%から33\%に改善されたに過ぎなかった．
+逆に，再現率はそれぞれ，90\%, 88\%から30\%, 12\%と大きく
+低下した(オープン試験)．
+これは，統一モデルとは逆に，二段階モデルでは言い直しの多くが適格文と
+して誤って解析されたことを意味する．
+実際，適格な依存関係(従属，等位とも)の解釈の適合率が二段階モデルでは
+低下している．
+これは，\citeA{佐川:IPSJ-NL-94-100-73}が観察した不適格文と適格文との
+曖昧性が二段階モデルでは大きな問題となることを示している．
+これに対し，統一モデルでは，音響的・韻律的情報を用いることによって，
+誤って言い直しと判断される例を除去できる可能性が
+ある\cite{O'Shaughnessy:ICSLP92-931,Nakatani:ACL93-46}．
+
+最後に，二段階モデルにおける依存関係と文全体の解析の
+解釈正解率(表\,\ref{tab:Accuracy2})は，オープン試験でそれぞれ65.5\%，
+48\%であり，いずれも統一モデルのものを下回る．
+結論として，二段階モデルによって言い直しの解析の精度が改善される
+ことはなく(適合率は一部よくなるが再現率が悪くなる)，
+構文・意味解析の総合性能においても統一モデルが二段階モデルに優る．
+\section{おわりに}\label{sec:Conclude}
+
+本稿では，我々が提案した統一モデルに基づく話し言葉の解析手法で用いる
+ための優先度計算法について述べた．
+本手法は，コーパスに基づく手法であり，解釈の優先度はその解釈が
+学習データ中でどのくらいの頻度で生じているかに応じて与えられる．
+この際，学習データの希薄性の問題を回避するために，解釈の候補と
+完全に一致する事例だけでなく類似した事例も考慮される．
+本稿では，まず，統一モデルに基づく話し言葉の解析手法の概略を説明し，
+次に，本手法の詳細を説明した後，本手法を話し言葉の構文・意味解析
+システム上に実装し，その性能を評価することで本手法の有効性を示した．
+その結果，オープン試験で，約半数の文に完全に正しい依存構造が
+与えられることが示された．
+また，言い直しの解析の精度は若干悪いが，これは二段階モデルによっては
+改善できず，結論として，構文・意味解析の総合性能においては統一モデルが
+二段階モデルに優ることが示された．
+今後の課題としては，構造的な選好の利用ならびに音響的・韻律的情報を
+用いた不適格性の解析の高精度化があげられる．
+\begin{table}[tbp]
+\caption{依存関係解釈の再現率と適合率(一部) (二段階モデル)}
+\label{tab:Recall2}
+\centering
+\begin{tabular}{|l||c|r|r|}
+  \hline
+  & 解釈 & 再現率\hfil\null & 適合率\hfil\null \\\hline\hline
+  & 適格な依存関係(従属) & 86.7\% & 86.3\% \\\cline{2-4}
+  クローズ試験
+  & 適格な依存関係(等位) & 79.4\% & 53.5\% \\\cline{2-4}
+  & \Rel{synRepair} & 40.0\% & 80.0\% \\\cline{2-4}
+  & \Rel{semRepair} & 11.4\% & 40.0\% \\\hline\hline
+  & 適格な依存関係(従属) & 64.9\% & 64.8\% \\\cline{2-4}
+  オープン試験
+  & 適格な依存関係(等位) & 81.4\% & 50.5\% \\\cline{2-4}
+  & \Rel{synRepair} & 30.0\% & 75.0\% \\\cline{2-4}
+  & \Rel{semRepair} & 11.8\% & 33.3\% \\\hline
+\end{tabular}
+\end{table}
+\begin{table}[tbp]
+\caption{依存関係と文全体の解析の正解率(二段階モデル)}
+\label{tab:Accuracy2}
+\centering
+\begin{tabular}{|l||r|r|r|r|}
+  \hline
+  & \multicolumn{2}{|c|}{依存関係}
+  & \multicolumn{2}{c|}{文全体} \\\cline{2-5}
+  & 構造\hfil\null & 解釈\hfil\null
+  & 構造\hfil\null & 解釈\hfil\null \\\hline\hline
+  クローズ試験 & 84.9\% & 85.9\% & 74.5\% & 66.8\% \\\hline
+  オープン試験 & 74.7\% & 65.5\% & 66.4\% & 48.0\% \\\hline
+\end{tabular}
+\end{table}
+\bigskip
+\acknowledgment
+依存関係解釈の事例の作成に協力していただいた神戸大学大学院
+文化学研究科の高木一広，金城由美子の両氏に感謝致します．
+\bibliographystyle{jnlpbbl}
+\bibliography{main}
+\begin{biography}
+\biotitle{略歴}
+\bioauthor{伝 康晴}{
+1988年京都大学工学部電気工学第二学科卒業．
+1993年同大学大学院博士後期課程研究指導認定退学．
+京都大学博士(工学)．
+1991年より2年間ATR自動翻訳電話研究所滞在研究員．
+1993年国際電気通信基礎技術研究所入社，ATR音声翻訳通信研究所研究員．
+1996年10月より奈良先端科学技術大学院大学情報科学研究科助教授，現在に至る．
+計算言語学，認知科学の研究に従事．
+日本認知科学会，日本ソフトウェア科学会，人工知能学会，情報処理学会，
+言語処理学会各会員．}
+
+\bioreceived{受付}
+\biorevised{再受付}
+\bioaccepted{採録}
+
+\end{biography}
+
+\end{document}

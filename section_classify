@@ -2,28 +2,27 @@
 use strict;
 use 5.010;
 use utf8;
-#use feature 'unicode_strings';
 binmode(STDOUT, ":utf8");
 binmode(STDERR, ":utf8");
-# fgrep \\section *.tex
-# next jobs
-## add usable tokens by looking all file.
-## unify loop in clarifying section 
-## make log directory
+
+# set $log_switch 1 to make log file and section files
+my $log_switch = 1;
+
 $#ARGV >= 0 || die "Usage: ./section_classify [NAME OF DOCS]\n";
 
-# variables for testing/logging
-my $log_switch = 0;
+# define section's heads and contents 
+my ($head_intro, $body_intro, $head_relstudy, $body_relstudy ,$head_conclusion, $body_conclusion, $head_experiment, $body_experiment, $head_proposedtech, $body_proposedtech);
+# define variables used in logs 
 my ($log_file_name, $intro_file_name, $relstudy_file_name, $experiment_file_name, $conclusion_file_name, $proposedtech_file_name);
 
 # set list of section devider
 my (@list_intro, @list_conclusion, @list_experiment, @list_relstudy);
+my ($re_intro, $re_relstudy, $re_conclusion, $re_experiment);
 @list_intro = qw/はじめに/;
 @list_relstudy = qw/関連研究/;
 @list_experiment = qw/実験/;
 @list_conclusion = qw/結論 おわりに 終わりに/;
 ## make regular expression form. sample: $re_* = "intro|introduction|introduce";
-my ($re_intro, $re_relstudy, $re_conclusion, $re_experiment);
 $re_intro = join '|', @list_intro;
 $re_relstudy = join '|', @list_relstudy;
 $re_experiment = join '|', @list_experiment;
@@ -31,33 +30,30 @@ $re_conclusion = join '|', @list_conclusion;
 
 
 # get list of source files.
-my @src_file_list = <@ARGV>;
-# define section's heads and contents 
-my ($head_intro, $body_intro, $head_relstudy, $body_relstudy ,$head_conclusion, $body_conclusion, $head_experiment, $body_experiment, $head_proposedtech, $body_proposedtech);
+my @src_path_list = <@ARGV>;
+print "input files : ".scalar @src_path_list."\n";
 
 # start section classifing process for each source file.
-foreach my $src_file_name (@src_file_list) {
-#	($head_intro, $body_intro, $head_relstudy, $body_relstudy ,$head_conclusion, $body_conclusion, $head_experiment, $body_experiment, $head_proposedtech, $body_proposedtech) = "";
+for my $src_path (@src_path_list) {
 
+	my @path_token = split /\//, $src_path;
+	my $src_file_name = pop @path_token;
+	
+	&init_head_body;
+	&init_log($src_file_name) if ($log_switch);
 
-
-# Active logging
-	&test_on($src_file_name);
-
-# open read contents from input file, and close
+## open read contents from input file, then close
 	my ($fh_src, $src_file_lines_origin, $src_file_lines);
-	open $fh_src, '<:encoding(UTF-8)', $src_file_name || die "Can't open '$src_file_name': $!";
+	open $fh_src, '<:encoding(UTF-8)', $src_path || die "Can't open '$src_path': $!";
 	$src_file_lines_origin = join '', <$fh_src>;
 	$src_file_lines = $src_file_lines_origin;
 	close $fh_src;
 
-
-# classify section (another implementation method : split operator | use m// in list context | use s/// as condition for for loop : for(initailization; s///;): see p.177 learning perl )
-
-## classify proposed technique
+## classify section (another implementation method : split operator | use m// in list context | use s/// as condition for for loop : for(initailization; s///;): see p.177 learning perl )
+### classify proposed technique
 	$body_proposedtech = $src_file_lines;
 
-## classify intro
+### classify intro
 	if( $body_proposedtech =~ s/
 																^(\\section\{(?:$re_intro)[^\n]*?\})
 																(.*?)
@@ -67,7 +63,7 @@ foreach my $src_file_name (@src_file_list) {
 		$body_intro = $2;
 	}
 
-## classify relative study
+### classify relative study
 	if( $body_proposedtech =~ s/
 																^(\\section\{(?:$re_relstudy)[^\n]*?\})
 																(.*?)
@@ -78,7 +74,7 @@ foreach my $src_file_name (@src_file_list) {
 	}
 
 	
-## classify experiment
+### classify experiment
 	if( $body_proposedtech =~ s/
 																^(\\section\{(?:$re_experiment)[^\n]*?\})
 																(.*?)
@@ -88,7 +84,7 @@ foreach my $src_file_name (@src_file_list) {
 		$body_experiment = $2;
 	}
 
-## classify conclusion
+### classify conclusion
 	if( $body_proposedtech =~ s/
 																^(\\section\{(?:$re_conclusion)[^\n]*?\})
 																(.*?)
@@ -99,23 +95,28 @@ foreach my $src_file_name (@src_file_list) {
 }
 
 
-# make logs if log switch is on
-	if ($log_switch) {
-# make log file 
-		&print_log($src_file_name);
-# make section files
-		&print_section;
-	}
+### make log file and section file
+	&print_log($src_file_name) if ($log_switch);
+	&print_section if ($log_switch);
 }
 
 
 
+
+# subroutines
+sub init_head_body {
+	$head_intro = ""; $body_intro = ""; 
+	$head_relstudy = ""; $body_relstudy = "";
+	$head_conclusion = ""; $body_conclusion = "";
+	$head_experiment = ""; $body_experiment = "";
+	$head_proposedtech = ""; $body_proposedtech = "";
+}
+
 # subroutines for test 
-sub test_on{
+sub init_log{
 	my $src_file_name = $_[0];
-	$log_switch = 1;
 	
-# make directory by current file name
+## make directory by current file name
 	my $cur_log_path = './logs/'.$src_file_name.'/';
 	if (-e $cur_log_path) {
 		unlink glob "${cur_log_path}* ${cur_log_path}.*";

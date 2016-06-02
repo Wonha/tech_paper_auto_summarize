@@ -1,0 +1,781 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.1}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+
+\Volume{15}
+\Number{5}
+\Month{October}
+\Year{2008}
+
+\received{2008}{5}{9}
+\accepted{2008}{7}{24}
+
+\setcounter{page}{169}
+
+\jtitle{トーナメントモデルを用いた日本語係り受け解析}
+\jauthor{岩立　将和\affiref{Author_1} \and 浅原　正幸\affiref{Author_1} \and 松本　裕治\affiref{Author_1}}
+\jabstract{
+日本語係り受け解析においては，工藤らの相対的な係りやすさを考慮した日本語係り受け解析モデルが，
+決定的解析アルゴリズムや文脈自由文法のパージングアルゴリズムに基づく手法を上回る精度を示している．
+決定的解析手法では係り先候補文節を同時に一つしか考慮しないが，
+工藤らの相対モデルではすべての係り先候補文節間の選択選好の強さをlog-linearモデルで推定している．
+これに対し本稿では，同時に対象とする係り先候補文節を二候補に限定し，選択選好を二つの候補同士の対戦からなるトーナメントで
+直接表現したモデルを提案する．
+京大コーパス Version 4.0 を使用した実験において，提案手法は従来手法を上回る精度を示した．
+}
+\jkeywords{日本語係り受け解析，構文解析，トーナメントモデル}
+
+\etitle{Japanese Dependency Parsing Using a Tournament Model}
+\eauthor{Masakazu Iwatate\affiref{Author_1} \and Masayuki Asahara\affiref{Author_1} \and Yuji Matsumoto\affiref{Author_1}} 
+\eabstract{
+In Japanese dependency parsing, Kudo's relative preference-based method outperforms both deterministic and probabilistic CFG-based parsing methods.
+In the relative preference-based method, a log-linear model estimates selectional preferences
+for all candidate heads, which cannot be considered in the deterministic parsing methods.
+We propose an algorithm based on a tournament model, in which the selectional preferences are directly modeled by one-on-one games in a step-ladder tournament.
+In evaluation experiment with Kyoto Text Corpus Version 4.0, the proposed method outperforms the previous research, including the relative preference-based method.
+}
+\ekeywords{Japanese, Dependency parsing, Syntax parsing, Tournament model}
+
+\headauthor{岩立，浅原，松本}
+\headtitle{トーナメントモデルを用いた日本語係り受け解析}
+
+
+\affilabel{Author_1}{奈良先端科学技術大学院大学情報科学研究科}{Graduate School of Information Science, Nara Institute of Science and Technology}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+
+多言語依存構造解析器に関して，CoNLL-2006 \shortcite{CoNLL-2006} や CoNLL-2007 \shortcite{CoNLL-2007} といった
+評価型 Shared Task が提案されており，言語非依存な解析アルゴリズムが多く提案されている．
+これらのアルゴリズムは対象言語の様々な制約---交差を許すか否か，
+主辞が句の先頭にあるか末尾にあるか---に適応する必要がある．
+この問題に対し様々な手法が提案されている．
+Eisner \shortcite{Eisner:1996} は文脈自由文法に基づくアルゴリズムを提案した．
+山田ら \shortcite{Yamada:2003}，およびNivreら \shortcite{Nivre:2003,Nivre:2004} は
+shift-reduce法に基づくアルゴリズムを提案した．
+Nivreらはのちに，交差を許す言語に対応する手法を提案した \shortcite{Nivre:2005} ．
+McDonaldら\shortcite{McDonald:2005b}はChu-Liu-Edmondsアルゴリズム（以下「CLEアルゴリズム」）
+\shortcite{Chu:1965,Edmonds:1967}を用いた，最大全域木の探索に基づく手法を提案した．
+
+多くの日本語係り受け解析器は入力として文節列を想定している．
+日本語の書き言葉の係り受け構造に関する制約は他の言語よりも強く，
+文節単位には左から右にしか係らず，係り受け関係は非交差であるという制約を仮定することが多い．
+図\ref{fig_jpsen}は日本語の係り受け構造の例である．
+ここで係り受け関係は，係り元から係り先に向かう矢印で表される．
+文(a)は文(b)と似ているが，両者の構文構造は異なる．
+特に「彼は」と「食べない」に関して，(a)は直接係り受け関係にあるのに対して，(b)ではそうなっていない．
+この構文構造の違いは意味的にも，肉を食べない人物が誰であるかという違いとして現れている．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{15-5ia8f1.eps}
+\end{center}
+\caption{日本語文の係り受け構造の例}
+\label{fig_jpsen}
+\end{figure}
+
+
+
+日本語係り受け解析では，機械学習器を用いた決定的解析アルゴリズムによる手法が，
+確率モデルを用いた，CKY法等の文脈自由文法の解析アルゴリズムによる手法よりも高精度の解析を実現している．
+工藤ら \shortcite{Kudo:2002} はチャンキングの段階適用（cascaded chunking，以下「CCアルゴリズム」）を日本語係り受け解析に適用した．
+颯々野\shortcite{Sassano:2004}はShift-Reduce法に基づいた時間計算量$O(n)$のアルゴリズム（以下「SRアルゴリズム」）を提案している．
+これらの決定的解析アルゴリズムは入力文を先頭から末尾に向かって走査し，
+係り先と思われる文節が見つかるとその時点でそこに掛けてしまい，それより遠くの文節は見ないので，
+近くの文節に係りやすいという傾向がある．
+
+\ref{sec:exp_acc}節で述べるように，我々はCLEアルゴリズムを日本語係り受け解析に適用した実験を行ったが，
+その精度は決定的解析手法に比べて同等あるいは劣っていた．
+実際CLEアルゴリズムは，左から右にしか係らないかつ非交差という日本語の制約に合っていない．
+まず全ての係り関係の矢印は左から右に向かうので，各ステップにおいて
+係り受け木にサイクルができることはない．
+加えて，CLEアルゴリズムは交差を許す係り受け解析を意図しているので，日本語の解析の際には
+非交差のチェックをするステップを追加しなければならない．
+
+
+工藤ら \shortcite{Kudo:2005j} は候補間の相対的な係りやすさ（選択選好性）に基づいたモデルを提案した．
+このモデルでは係り先候補集合から最尤候補を選択する問題を，
+係り元との選択選好性が最大の候補を選択する問題として定式化しており，
+京大コーパスVersion 3.0に対して最も高い精度を達成している\footnote{
+	ただし京大コーパスVersion 2.0に対しては，颯々野の手法が最高精度を達成している．
+	相対モデルと颯々野手法を同じデータで比べた報告はない．}．
+決定的手法においては候補間の相対的な係りやすさを考慮することはせず，単に注目している
+係り元文節と係り先候補文節が係り受け関係にあるか否かということのみを考える．
+また，この手法は，先に述べたCLEアルゴリズムに，左から右にのみ掛ける制約と非交差制約を導入した方法を拡張したものになっている．
+
+上にあげた手法はいずれも，係り元とある候補の係りやすさを評価する際に他の候補を参照していない\footnote{
+	手法によっては係り元や候補に係っている文節や，周辺の文節の情報を素性として使用しているものもあるが，
+	アクションの選択に重要な役割を果たす文節がこれらの素性によって参照される場所にあるとは限らない．}．
+これに対し内元ら \shortcite{Uchimoto:2000}は，（係り元，係り先候補）の二文節が係るか否かではなく，二文節の間に正解係り先がある・その候補に係る・その候補を越えた先に正解係り先がある，の3クラスとして学習し，解析時には各候補を正解と仮定した場合の確率が最大の候補を係り先として選択する確率モデルを提案している．
+また，金山ら \shortcite{Kanayama:2000} はHPSGによって係り先候補を絞り込み，さらに，三つ以下の
+候補のみを考慮して係り受け確率を推定する手法を提案している．
+
+
+本稿では，飯田ら \shortcite{Iida:2003} が照応解析に用いたトーナメントモデルを日本語係り受け解析に
+適用したモデルを提案する．
+同時に係り元と二つの係り先候補文節を提示して対決させるという一対一の対戦を
+ステップラダートーナメント状に組み上げ，最尤係り先候補を決定するモデルである．
+
+2節ではどのようにしてトーナメントモデルを日本語係り受け解析に適用するかについて説明する．
+3節ではトーナメントモデルの性質について関連研究と比較しながら説明する．
+4節では評価実験の結果を示す．
+5節では我々の現在の仕事および今後の課題を示し，6章で本研究をまとめる．
+
+
+\section{トーナメントモデル}
+
+
+トーナメントモデルは飯田ら \shortcite{Iida:2003} が照応解析のために提案したモデルである．
+このモデルでは，与えられた照応表現の先行詞候補集合から二つを提示し，そのどちらが
+より先行詞らしいかをSVM などの二値分類器を用いて判断するという勝ち抜き戦を行ってい
+くことで，最尤先行詞候補を選択する．
+日本語係り受け解析も，ある係り元文節の複数の係り先候補の中から最尤候補を一つ選出する
+問題であるから，照応解析における最尤先行詞候補選出と類似した問題である．
+このトーナメントモデルを，日本語の係り受け構造の制約を考慮しつつ
+日本語係り受け解析に適用することを考える．
+
+図\ref{fig_jpsen}(b)の文の解析において，「彼は」の係り先を同定するトーナメントの例を図\ref{fig_tournament}に示す．
+左から右にしか係らない制約に従うと，係り先候補集合は係り元より右側に位置する四文節
+（「肉を」，「食べない」，「人と」，「結婚した」）である．
+このトーナメントは，候補集合の中からまず「肉を」と「食べない」を戦わせ，次にその勝者と「人と」を戦わせ，
+最後に第二試合の勝者と「結婚した」を戦わせる，ステップラダートーナメントである．
+このトーナメントの結果，最終的な勝者である「結婚した」が最尤係り先候補として選ばれ，「彼は」の係り先文節として認定される．
+図\ref{fig_tournament}では明記していないが，
+非交差制約をトーナメントモデルに導入するのは容易である．
+係り先候補集合から最尤候補を選択する際に，交差を生じない候補のみを
+候補集合として考えればよい．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{15-5ia8f2.eps}
+\end{center}
+\caption{トーナメントの例}
+\label{fig_tournament}
+\end{figure}
+
+以下に具体的なアルゴリズムを示す．
+
+
+
+\subsection{訓練事例生成アルゴリズム}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{15-5ia8f3.eps}
+\end{center}
+\caption{訓練事例生成アルゴリズムの疑似コード}
+\label{fig_train}
+\end{figure}
+
+このアルゴリズムは図\ref{fig_train}に示すように，全ての文節を係り元文節として見ていき，
+\pagebreak
+各係り元文節について，正解係り先候補とその他の全ての係り先候補との組について訓練事例を生成する．
+訓練事例生成の際は非交差制約を考慮せず，係り元の右側に位置するすべての文節を係り先候補として扱う．
+トーナメントモデルでは二値分類器で係り先を判定するため，左右いずれかの文節が
+正解係り先となる事例のみを生成する．
+
+
+このアルゴリズムに図\ref{fig_jpsen}に示した文を入力すると，表\ref{tbl_exgen_example}のような
+訓練事例が生成される\footnote{
+	説明の都合上，訓練事例生成と解析の例に同一の文を使用しているが，
+	実験において訓練データとテストデータに重なりはない．}．
+決定的手法や相対モデルなど，同時に一つの候補のみを見て（係り元，候補）の形の訓練事例を生成するモデルでは，
+「係り元：彼は，候補：食べない，クラスラベル：係る」と「係り元：彼は，候補：食べない，クラスラベル：係らない」という
+クラスラベルの異なる二つの矛盾した訓練事例が生成されるが，トーナメントモデルではこれらを区別し
+矛盾のない訓練事例を生成できる．
+
+
+\begin{table}[t]
+\caption{生成される訓練事例}
+\begin{center}
+\input{08table01.txt}
+\end{center}
+\label{tbl_exgen_example}
+\end{table}
+
+
+\subsection{解析アルゴリズム}
+\label{sec:parsing_algorithm}
+
+CCアルゴリズムやSRアルゴリズムには，訓練事例生成と解析のアルゴリズムを同一にしなければならないという制限があるが，
+トーナメントモデルにはそのような制限はない．
+そのためトーナメントモデルの解析アルゴリズムには主に，文頭に近い文節から係り先を同定していくか文末に近い
+文節から係り先を同定していくか，トーナメントをどう組むか，交差を許すか否か，といった自由度がある．
+
+図\ref{fig_test}は，文末に近い文節から係り先を同定し，
+トーナメントの組み方としては
+図\ref{fig_tournament}のような文頭に近い候補から先に戦わせるステップラダートーナメントとし，
+非交差制約を考慮する解析アルゴリズムである．
+同定順が文末から文頭であるため，注目している係り元より右側の係り受け関係はすべて決まっている．
+{\it head}は各文節の係り先を格納する配列であるとともに，
+非交差制約に違反しない候補をつなぐ線形リストの役目も果たしている．
+
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{15-5ia8f4.eps}
+\end{center}
+\caption{解析アルゴリズムの疑似コード}
+\label{fig_test}
+\end{figure}
+
+
+\section{議論}
+
+以下でトーナメントモデルの性質について先行研究と比較しながら論じる．
+
+\subsection{文脈の識別性}
+\label{sec:context}
+
+CCアルゴリズムとSRアルゴリズムは，二文節つまり一つの係り元文節と一つの係り先文節のみを
+参照してアクション（掛けるか掛けないか）を選択する．
+だが，たとえば図\ref{fig_jpsen}における「彼は」と「食べない」のように，
+ある二文節が係り受け関係にあるか否かが文脈に依存する場合がある．
+決定的解析アルゴリズムや相対モデルのような二文節のみを見るモデルでは，
+文脈素性によらなければこの二つの場合を識別することができない．
+
+なお，文脈素性とは，係り元文節と係り先候補文節自身以外の文節に関する素性のこととする．
+具体的にはたとえば，候補文節に隣接する左右の文節の情報（周辺文節素性）や，
+解析済みの係り受け関係に関する素性（動的素性）などである．
+動的素性が利用できるのは，ある係り元文節の係り先の同定を終えてから別の係り元文節の係り先の同定を行うようなモデルに限られる．
+日本語係り受け解析においては周辺文節素性はあまり使われていない．
+
+
+同時に参照する文節数に基づく分類によると，
+トーナメントモデルは三文節つまり一つの係り元文節と二つの係り先候補文節を同時に見る
+三つ組モデルということができる．
+三つ組モデルでは二つの候補のどちらがより係り先としてふさわしいかを直接比較し，最適な係り先を決定する
+ことができるので，文脈の識別性は二つ組モデルより高い．
+再び図\ref{fig_jpsen}の文について考えてみると，(b)では「彼は」は「食べない」に係っていない．
+これは，より適切な係り先「結婚した」が「食べない」の右に存在するからである．
+二つ組モデルにおいて，二文節の外に「結婚した」が存在することは動的素性によって検出できる可能性があるが，
+確実ではないので，
+二つ組モデルは「結婚した」が存在することを知らないまま係り先を選ばなければならないかもしれない．
+
+なお，金山ら \cite{Kanayama:2000} も一つの係り元文節と二つの係り先候補文節を同時に見るモデルを
+三つ組モデルと呼んでいる．
+トーナメントモデルと金山らのモデルは，複数の候補を同時に提示することで
+\ref{sec:context}〜\ref{sec:selectional}節の性質を備えているという点で共通している．
+両手法の主な相違点は，$k$個の係り先候補集合から一つの係り先を選ぶという問題を
+二つ（金山モデルでは二つまたは三つ）の候補から最も係り先として適切なものを選ぶという問題に落とし込む方法として，
+金山モデルではHPSGおよびヒューリスティック\footnote{
+	HPSGによる絞り込みの結果，候補が四つ以上あるときは，係り元に最も近い候補・係り元に二番目に近い候補・係り元から最も遠い候補 の三候補を提示する．}，
+トーナメントモデルではトーナメントを用いている点である．
+提案手法は HPSG のような人手による文法規則を用いる必要がない．
+
+
+\subsection{文中における相対的な位置の表現}
+\label{sec:relative}
+
+三つ組モデルにおける二つの候補のうち係り元に近い方を「左候補」，遠い方を「右候補」と区別して
+呼ぶことにする．
+そうすると，トーナメントモデルの対戦においては係り元，左候補，右候補がこの順で文頭から文末の方向に並んでいることが保証されている．
+先行研究では，係り元と候補との間の距離（絶対距離）を1 or 2-5 or 6+ といったバケツ素性で表現しており，
+後述のようにトーナメントモデルでもこの素性を使用している．
+
+絶対距離素性は相対位置を表す素性の一種であるとも考えられるが，
+ある候補との距離が1であるか否かの情報は重要だとしても，日本語は語順自由なので距離の絶対値はあまり
+重要ではない．
+たとえば図\ref{fig_jpsen}(b)の文において「彼は」を係り元とするとき，
+候補「食べない」と「結婚した」との距離はそれぞれ2と4であるため，どちらも「2-5」のバケツに分類される．
+したがって文脈素性を用いない場合，二つ組モデルはこの二つの候補のどちらが係り元により近い位置にあるかという
+相対的な位置関係を認識することができない．
+
+決定的解析アルゴリズムは先に相対的に近い対から判定するため，暗に相対位置の情報を用いている．
+これに対し提案手法は，相対位置をより直接的に，ラベルとして表現している．
+
+また，相対位置の認識は，ある種の格要素が他の格要素より近くに現れやすいといった
+傾向の学習にも有用と考えられる．
+たとえば目的語は他の要素より述語の近くに置かれやすい．
+
+
+決定的解析アルゴリズムは係り元に近い候補を選択しやすいため，
+工藤ら\shortcite{Kudo:2005j}が指摘しているように，決定的解析アルゴリズムは長距離の係り関係を
+正しく解析するのが苦手である．
+その理由としては，\ref{sec:context}節および\ref{sec:relative}節のような文脈識別能力が
+低いことが大きいと考えられる．
+なお，正解係り先は係り元に近いことが多いので，
+近い候補を選択しやすいという傾向のために生じる解析誤りはそれほど多くない．
+
+
+\subsection{選択選好}
+\label{sec:selectional}
+
+相対モデル \shortcite{Kudo:2005j} は係り先候補間の選択選好性の強さを直接学習し，
+log-linearモデルの尤度として全順序にエンコードする．
+CLEアルゴリズムを用いたMcDonaldら\shortcite{McDonald:2005b}の手法では，選択選好性を
+MIRA \shortcite{Crammer:2003}とよばれるパーセプトロンアルゴリズムで学習する．
+これに対してトーナメントモデルは候補間の一対一対戦のトーナメントで選択選好性を学習するため，
+全順序ではなく半順序の学習を行っている．
+
+
+相対モデルやMcDonaldらの手法が全候補を識別モデルで独立して見るのに対し，
+トーナメントモデルではどの候補がより適切かを前の試合の勝者と新しい候補で評価する．
+前の試合の勝者はそれ以前の候補をすべて倒しているので，新しい候補が前の試合の勝者を倒したということは，
+半順序の束において先行した全ての候補より係り先としてふさわしいということである\footnote{
+	提案手法では一次解しか出力しないため半順序関係の束の部分構造は一次元的なものになる．
+	提案手法を $k$-best 解を出力するアルゴリズムに拡張すると，半順序関係の束の部分構造はより複雑なものになる．}．
+このことから，トーナメントモデルは全ての候補を独立に見る手法より選択選好性に関してより豊かな情報を
+学習することができる可能性がある．
+
+
+
+\subsection{文節の挿入に対する頑健性}
+
+日本語においては様々な文節が任意の位置に挿入されることがある．
+その要因としては，かき混ぜ構文，ゼロ代名詞，任意格等がある．
+
+CCアルゴリズムは距離の短い係り受け関係から決定していくという戦略をとっている．
+ある挿入文節の係り先が，あるcascaded chunkingステップにおいて決定されると，
+それ以降のcascaded chunkingステップではその挿入文節は無視される．
+たとえば，「肉をあまり食べない」と「肉を食べない」という文について考える．
+CCアルゴリズムではまず各文節が隣の文節に係るかどうかをチェックし
+係り先が決まった文節を徐々に取り除いていくので，前者の文は最初のステップで
+「あまり」が隣の「食べない」に係ると解析され，次のステップでは「あまり」が
+取り除かれて「肉を食べない」という後者の文と同じ形になる．
+したがって，前者の文が訓練データに出現していれば後者の文も正しく解析できることを期待できるし，逆も然りである．
+このように，文節の挿入の影響を受けないようにする仕組みが解析器の文節の挿入に対する頑健性を実現している．
+
+トーナメントモデルにもこれと同様の仕組みがある．
+一文あるいは二文の訓練データから
+\linebreak
+表~\ref{tbl_exgen_example2}の事例が生成されたなら，
+「彼は肉をあまり食べない」という文の解析において「彼は」の係り先を同定する際に
+まず「あまり」と「食べない」と戦わせて「あまり」を敗退させれば，「彼は肉を食べない」という文の解析と
+同様の状況になる．
+このようにうまくトーナメントを組むことができれば，挿入文節が最終決定を妨害しないような解析を
+することができると考えられる．
+
+\begin{table}[t]
+\hangcaption{生成された訓練事例．この二つの事例が訓練データの単一の文から生成される必要はなく，二つの文から生成されることもありうる．}
+\begin{center}
+\input{08table02.txt}
+\end{center}
+\label{tbl_exgen_example2}
+\end{table}
+
+
+\section{評価実験}
+
+\subsection{設定}
+\label{sec:experimental_settings}
+
+我々はトーナメントモデル，CCアルゴリズム\shortcite{Kudo:2002}，SRアルゴリズム\shortcite{Sassano:2004}，
+CLEアルゴリズム\shortcite{McDonald:2005b}をSVMを用いて実装し，
+係り受け正解率と文正解率を京大コーパスVersion 4.0を用いて評価した．
+係り受け正解率とは係り先文節を正しく同定できた文節の割合であり，
+文正解率とは文中の全ての文節の係り先を正しく同定できた文の割合である．
+係り受け正解率は各文の末尾の文節（係り先を持たない）を除いて計算する\footnote{
+	多くの先行研究で用いられている基準である．}．
+また，一文節からなる文は本実験では一切使用しておらず，
+以下の文数も一文節からなる文を除いた数である．
+
+1月1日〜1月8日分の記事（7,587文）を訓練データとし，
+1月9日分（1,213文），1月10日分（1,479文），1月15日分（1,179文）の記事をそれぞれテストデータとした．
+二値分類器としてはTinySVM\footnote{
+	http:\slash\slash{}chasen.org\slash\~{}taku\slash{}software\slash{}TinySVM\slash}を用いた．以下のすべての実験・手法において，多くの先行研究と同じく三次の多項式カーネルを使用し，誤分類のコストは1.0とした．
+すべての実験はDual Core Xeon 3GHz x 2のLinux上で行った．
+
+
+\subsection{使用した素性}
+
+使用した素性を表\ref{tbl_features}に示す．
+文節の主辞とは，文節の形態素のうち品詞が特殊・助詞・接尾辞以外の形
+態素のうち最も右側のもの，語形とは品詞が特殊以外の
+形態素のうち最も右側のものである．
+また，文節の子文節とは，その文節に係っている文節のこととする．
+なお，トーナメントモデルは同時に候補を二つ見るため，候補に関する素性は
+それぞれの候補について別々に作成する．
+標準素性と追加素性は颯々野\shortcite{Sassano:2004}の用いたのとほぼ同じものを使用した．
+格助詞素性は，ある格要素がすでに埋まっているかどうかを認識させ，
+「複数のヲ格が単一の文節に係ることはない」といった現象を
+学習させることを意図したものである．
+
+ある動的素性が使用できるかは解析アルゴリズムに依存する．
+たとえば表\ref{tbl_features}の素性の中では格助詞素性のみが動的素性であるが，この格助詞素性は
+トーナメントモデルにおいて文末から文頭に向かって係り先を決定していく解析アルゴリズムでは
+「候補の全ての子文節」とは候補の子文節のうち係り元より右側にあるものに限られる．
+SRアルゴリズムでも同様に，係り元より右側にあるものに限られる．
+CCアルゴリズムでは片側に限られるということはないものの，候補から遠い子文節については未解析である
+場合がある．
+またCLEアルゴリズムではすべての係り関係を独立と考える都合上，動的素性は使用できない．
+
+
+\begin{table}[b]
+\caption{使用した素性}
+\begin{center}
+\input{08table03.txt}
+\end{center}
+\label{tbl_features}
+\end{table}
+
+
+
+\subsection{解析精度}
+\label{sec:exp_acc}
+
+\begin{table}[b]
+\caption{訓練データ（7,587文）による係り受け正解率／文正解率[\%]}
+\label{tbl_accuracy}
+\begin{center}
+\input{08table04.txt}
+\end{center}
+\end{table} 
+
+解析精度を表\ref{tbl_accuracy}に示す．
+係り受け正解率に関するマクネマー検定($p < 0.01$)によると，
+トーナメントモデルは，素性セット：全素性，テストデータ：1月10日分のSRアルゴリズム($p = 0.083$)および
+CCアルゴリズム($p = 0.099$)以外の全ての条件で他の手法より優位であった．
+テストデータ：1月9日分に対して報告されている最高の係り受け正解率は
+颯々野\shortcite{Sassano:2004}の89.56\%であるが\footnote{
+	この結果は京大コーパスVersion 4.0ではなくVersion 2.0を用いた実験の結果である．
+	また，用いた素性も我々のものとは異なる．}，
+トーナメントモデルはこの係り受け正解率を上回っている．
+ただし，颯々野の実験の出力が手元にないためにマクネマー検定の代わりに
+符号検定($p < 0.01$)を行ったところ，この差は有意ではなかった($p = 0.097$)．
+
+
+
+追加素性と格助詞素性の有無による精度の差に注目すると，
+トーナメントモデルは他のモデルより精度差が小さいことが分かる．
+このことは単に「元の精度が高い方が大幅な精度向上が難しい」と解釈できるが，
+「トーナメントモデルは他の手法よりモデル自身で周辺情報を多くとらえられている」とも解釈できる．
+なお，素性の追加による係り受け正解率の向上に関しては，テストデータ：1月9日分のトーナメントモデルのみ有意ではなかった($p = 0.25$)．
+また結果からは，同じ素性を用いたときSRアルゴリズムとCCアルゴリズムの精度がほぼ同じということも分かる．
+だがこの結果は両アルゴリズムの能力が同程度ということを示しているわけではなく，
+解析順が違えば使用できる動的素性も異なるため，各アルゴリズムに最適な素性を使ったときの
+能力には差が出る可能性がある．
+
+ 
+\subsection{解析時間と訓練事例の規模}
+
+各方式において全素性を使用し，テストデータ：1月9日分全体を解析するのに要した時間と，
+訓練事例の規模を表\ref{tbl_speed}に示す．
+ステップ数とは，SVM classifyの実行回数である．
+
+
+\begin{table}[b]
+\caption{解析時間と訓練事例の規模}
+\begin{center}
+\input{08table05.txt}
+\end{center}
+\label{tbl_speed}
+\end{table}
+
+時間計算量はトーナメントモデルとCCアルゴリズムが$O(n^2)$，
+SRアルゴリズムが$O(n)$である．
+結果からはSRアルゴリズムが最も高速でCCアルゴリズムもそれに準ずる速度，
+トーナメントモデルはSRアルゴリズムの4倍以上の時間がかかっていることがわかる．
+ステップ数でみるとトーナメントモデルはSRアルゴリズムの1.7倍程度であるのに
+解析時間では4倍以上の差が開く理由は，トーナメントモデルは訓練事例数の規模が大きく
+SVMモデルが巨大になるためアクションの決定に時間がかかるからである．
+
+
+\subsection{解析順等の精度への影響}
+
+\ref{sec:parsing_algorithm}節において，トーナメントモデルには係り先の同定順，トーナメントの組み方，
+非交差制約の考慮に関して自由度があると述べた．
+そこで，これらの自由度および動的素性である格助詞素性の有無に関して実験を行った．
+その解析精度を表\ref{tbl:variation}に示す．
+なお，唯一の動的素性である格助詞素性を使用せず非交差制約も仮定しない場合，各係り元文節の係り先の同定は独立となるので，同定順は解析結果に影響を与えない．
+精度の変化は多くの場合0.1\%程度と小さいが，係り受け正解率に関しては一貫して格助詞素性あり，同定順：右から左，
+トーナメント：右から左，非交差制約：ありという設定が最もよい．
+また，格助詞素性を使用することでほとんどの場合精度が向上しているが，向上幅はそれほど大きくない．
+
+\begin{table}[b]
+\caption{解析順等を変化させたときの係り受け正解率／文正解率[\%]}
+\label{tbl:variation}
+\begin{center}
+\input{08table06.txt}
+\end{center}
+\end{table}
+
+なお，動的素性である格助詞素性を使用しているため，トーナメントの組み方と非交差制約の考慮の有無を
+変更する場合には同一のモデルを共用できるが，同定順の変更はモデルの再学習を必要とする．
+なぜなら，解析時に有効な係り先候補の子文節は，同定順が左から右の場合には係り元より左にあって候補に
+係っている文節に限られ，同定順が右から左の場合は係り元より右にある子文節に限られるので，
+訓練事例生成時には格助詞素性における子文節をそのように制限する必要があるからである．
+
+
+
+
+
+\subsection{相対モデルとの比較}
+
+我々は相対モデルを実装していないため，京大コーパスVersion 3.0を使い，
+工藤ら\shortcite{Kudo:2005j}と実験設定を合わせた実験を行った．
+ただし素性は統一していない．
+訓練データは1月1日〜1月11日分の記事と1月〜8月分の社説（24,263文），
+テストデータは1月14日〜1月17日分の記事と10〜12月分の社説（9,287文）である．
+工藤ら\shortcite{Kudo:2005j}は誤分類のコストをディベロップメントデータを用いて調整しているが，
+本実験ではしておらずすべての実験・手法において1.0に固定した．
+また，本実験の解析順等は\ref{sec:exp_acc}節の実験と同じく，同定順：右から左，トーナメント：左から右，非交差制約：ありとした．
+係り受け正解率の計算法は上の実験と同じだが，文正解率は工藤ら\shortcite{Kudo:2005j}の基準に合わせ，
+一文節からなる文であっても計算に含めた．
+
+\begin{table}[t]
+\caption{工藤ら(2005)との比較実験の係り受け正解率／文正解率[\%] }
+\begin{center}
+\input{08table07.txt}
+\end{center}
+\label{tbl_accuracy_kudo05}
+\end{table} 
+
+結果を表\ref{tbl_accuracy_kudo05}に示す．
+工藤ら\shortcite{Kudo:2005j}の実験と本実験では使用した素性が異なるので直接的な比較はできないが，
+唯一両方の素性で実験されているCCアルゴリズムの結果を比較すると
+我々の素性の方が優れているように見える．
+係り受け正解率に関するマクネマー検定($p < 0.01$)によると，トーナメントモデルはSRアルゴリズムおよび
+CCアルゴリズムに対して優位である．
+相対モデルに関しては出力が手元にないのでマクネマー検定は行えないが，
+係り受け正解率に関する符号検定($p < 0.01$)によるとトーナメントモデルは
+相対モデル\shortcite{Kudo:2005j}より優位であった．
+一方，トーナメントモデルは「組み合わせ」モデル\shortcite{Kudo:2005j}を係り受け正解率において
+上回っているものの，符号検定によるとその差は有意ではなかった($p = 0.014$)\footnote{
+	「組み合わせ」モデルとは，CCアルゴリズムが近距離の係り受け関係に，
+	相対モデルが遠距離の係り受け関係に強いことに着目し，係り関係の距離に基づいて両手法を
+	使い分けるモデルである．
+	距離の閾値はディベロップメントセットを用いて3と決めている．
+	しかしながらトーナメントモデルの解析精度はCCアルゴリズムと比較して近距離・遠距離ともに上回っているため，
+	このようなアドホックな組み合わせは不要と思われる．}．
+
+
+
+ただし，工藤ら\shortcite{Kudo:2005j}の実験で用いているlog-linearモデルはSVMに比べて訓練時間が短いが，
+精度の面では不利といえる．というのは，SVMは多項式カーネルによって組み合わせ素性が
+自動的に考慮されるが，log-linearモデルは明示的に組み合わせ素性を導入する必要があるからである．
+ 
+
+
+
+\section{議論と今後の課題}
+
+われわれのエラー分析によると，エラーの多くは並列構造に関係したものであった．
+颯々野\shortcite{Sassano:2004}は，各文節が並列構造のキー文節であるか否かを素性として入れることで
+解析精度が向上したと報告している．
+京大コーパスには係り受け関係のタグとして並列や同格がタグづけされているが，
+今回の実験ではこれらのタグは一切使用していないので，何らかの形で使用することで精度向上が期待できる．
+単純な導入法としては，各タグごとにone-vs-rest SVMを作成し，
+係り先とタグを同時に決めるようにすることが考えられる．
+また，新保ら\shortcite{Shimbo:2007}のように，並列構造解析を係り受け解析の前処理として
+行う方法も考えられる．
+ 
+
+共起情報の導入によって精度向上を図ることも考えられる．
+一つの使い方としては，動詞--名詞の共起情報を，現在の格助詞素性のような形で入れることである．
+阿辺川ら\shortcite{Abekawa:2006}は$k$-best解を出力できる解析器の出力を，共起情報を用いて
+リランキングする手法を提案している．
+我々はすでにトーナメントモデルにおける$k$-best解出力アルゴリズムを考案しており，
+そのようなリランキング法の導入も検討している．
+
+
+トーナメントモデルを英語などの他の言語に対応させることも，別の課題としてあげられる．
+日本語は書き言葉においては左から右にしか係らないが，多くの言語にはこの制約はないため，
+係り先候補が係り元の左側にあるか右側にあるかを区別する仕組みが必要となる．
+単純な解決法としては，左右どちら側にあるかを識別できるようなモデル（素性名）にすることである．
+非交差制約の有無に関しては問題にならない．
+現在のアルゴリズムではわざわざ非交差制約を満たさないものを候補から除外しているので，
+この処理をなくすことで対応できる．
+また，日本語では文節列に対して解析を行っているが，たとえば英語において単語列に対して解析する場合には
+時間計算量$O(n^2)$の$n$が大きくなるため計算量の問題が深刻になる．
+この問題は，必要に応じて基本句同定を行うことで軽減できると考える．
+
+
+
+\section{まとめ}
+
+本稿ではトーナメントモデルを用いた日本語係り受け解析手法を提案した．
+トーナメントモデルは（係り元，候補1，候補2）の三つ組を同時に見て，
+係り元文節の最尤係り先候補を候補同士の一対一対戦で構成されるステップラダートーナメントによって決定する．
+この三つ組を同時に見ることによって，従来の（係り元，候補）のみを見るモデルと比べて
+素性による文脈識別能力の向上が期待できる．
+また，二つの候補を係り元に近い方の候補，遠い方の候補と区別することによって
+候補間の相対的な位置関係を把握できる．
+さらに決定的解析手法と比べると，すべての候補を考慮できるという長所がある．
+トーナメントモデルの解析精度はほとんどの実験設定において従来手法を有意に上回った．
+解析速度の面での問題はあるものの，二つ以上の候補を同時に見ることで
+解析精度を向上させる可能性を示した．
+
+
+
+
+\bibliographystyle{jnlpbbl_1.3}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Abekawa \BBA\ Okumura}{Abekawa \BBA\
+  Okumura}{2006}]{Abekawa:2006}
+Abekawa, T.\BBACOMMA\ \BBA\ Okumura, M. \BBOP 2006\BBCP.
+\newblock \BBOQ {Japanese Dependency Parsing Using Co-occurrence Information
+  and a Combination of Case Elements}\BBCQ\
+\newblock In {\Bem {Proceedings of the 21st International Conference on
+  Computational Linguistics and 44th Annual Meeting of the Association for
+  Computational Linguistics (COLING-ACL 2006)}}, \mbox{\BPGS\ 833--840}.
+
+\bibitem[\protect\BCAY{Buchholz \BBA\ Marsi}{Buchholz \BBA\
+  Marsi}{2006}]{CoNLL-2006}
+Buchholz, S.\BBACOMMA\ \BBA\ Marsi, E. \BBOP 2006\BBCP.
+\newblock \BBOQ {CoNLL-X Shared Task on Multilingual Dependency Parsing}\BBCQ\
+\newblock In {\Bem {CoNLL-2006: Proceedings of the Tenth Conference on
+  Computational Natural Language Learning}}, \mbox{\BPGS\ 149--164}.
+
+\bibitem[\protect\BCAY{Chu \BBA\ Liu}{Chu \BBA\ Liu}{1965}]{Chu:1965}
+Chu, Y.~J.\BBACOMMA\ \BBA\ Liu, T.~H. \BBOP 1965\BBCP.
+\newblock \BBOQ {On the shortest arborescence of a directed graph}\BBCQ\
+\newblock {\Bem Science Sinica}, {\Bbf 14}, \mbox{\BPGS\ 1396--1400}.
+
+\bibitem[\protect\BCAY{Crammer \BBA\ Singer}{Crammer \BBA\
+  Singer}{2003}]{Crammer:2003}
+Crammer, K.\BBACOMMA\ \BBA\ Singer, Y. \BBOP 2003\BBCP.
+\newblock \BBOQ {Ultraconservative Online Algorithms for Multiclass
+  Problems}\BBCQ\
+\newblock {\Bem Journal of Machine Learning Research}, {\Bbf 3}, \mbox{\BPGS\
+  951--991}.
+
+\bibitem[\protect\BCAY{Edmonds}{Edmonds}{1967}]{Edmonds:1967}
+Edmonds, J. \BBOP 1967\BBCP.
+\newblock \BBOQ {Optimum branchings}\BBCQ\
+\newblock {\Bem Journal of Research of the Natural Bureau of Standards}, {\Bbf
+  71B}, \mbox{\BPGS\ 233--240}.
+
+\bibitem[\protect\BCAY{Eisner}{Eisner}{1996}]{Eisner:1996}
+Eisner, J.~M. \BBOP 1996\BBCP.
+\newblock \BBOQ {Three New Probabilistic Models for Dependency Parsing: An
+  Exploration}\BBCQ\
+\newblock In {\Bem {COLING-96: Proceedings of the 16th Conference on
+  Computational Linguistics---Volume 1}}, \mbox{\BPGS\ 340--345}.
+
+\bibitem[\protect\BCAY{Iida, Inui, Takamura, \BBA\ Matsumoto}{Iida
+  et~al.}{2003}]{Iida:2003}
+Iida, R., Inui, K., Takamura, H., \BBA\ Matsumoto, Y. \BBOP 2003\BBCP.
+\newblock \BBOQ {Incorporating Contextual Cues in Trainable Models for
+  Coreference Resolution}\BBCQ\
+\newblock In {\Bem EACL Workshop `The Computational Treatment of Anaphora'}.
+
+\bibitem[\protect\BCAY{Kudo \BBA\ Matsumoto}{Kudo \BBA\
+  Matsumoto}{2002}]{Kudo:2002}
+Kudo, T.\BBACOMMA\ \BBA\ Matsumoto, Y. \BBOP 2002\BBCP.
+\newblock \BBOQ {Japanese Dependency Analysis Using Cascaded Chunking}\BBCQ\
+\newblock In {\Bem {CoNLL-2002: Proceedings of the Sixth Conference on
+  Computational Language Learning}}, \mbox{\BPGS\ 1--7}.
+
+\bibitem[\protect\BCAY{McDonald, Pereira, Ribarov, \BBA\ Haji\^{c}}{McDonald
+  et~al.}{2005}]{McDonald:2005b}
+McDonald, R., Pereira, F., Ribarov, K., \BBA\ Haji\^{c}, J. \BBOP 2005\BBCP.
+\newblock \BBOQ {Non-projective Dependency Parsing Using Spanning Tree
+  Algorithm}\BBCQ\
+\newblock In {\Bem {HLT-EMNLP-2005: Proceedings of the conference on Human
+  Language Technology and Empirical Methods in Natural Language Processing}},
+  \mbox{\BPGS\ 523--530}.
+
+\bibitem[\protect\BCAY{Nivre}{Nivre}{2003}]{Nivre:2003}
+Nivre, J. \BBOP 2003\BBCP.
+\newblock \BBOQ {An Efficient Algorithm for Projective Dependency
+  Parsing}\BBCQ\
+\newblock In {\Bem {IWPT-2003: 8th International Workshop on Parsing
+  Technology}}, \mbox{\BPGS\ 149--160}.
+
+\bibitem[\protect\BCAY{Nivre, Hall, K\"{u}bler, McDonald, Nilsson, Riedel,
+  \BBA\ Yuret}{Nivre et~al.}{2007}]{CoNLL-2007}
+Nivre, J., Hall, J., K\"{u}bler, S., McDonald, R., Nilsson, J., Riedel, S.,
+  \BBA\ Yuret, D. \BBOP 2007\BBCP.
+\newblock \BBOQ {The CoNLL 2007 Shared Task on Dependency Parsing}\BBCQ\
+\newblock In {\Bem {CoNLL-2007: Proceedings of the CoNLL Shared Task Session of
+  EMNLP-CoNLL-2007}}, \mbox{\BPGS\ 915--932}.
+
+\bibitem[\protect\BCAY{Nivre \BBA\ Nilsson}{Nivre \BBA\
+  Nilsson}{2005}]{Nivre:2005}
+Nivre, J.\BBACOMMA\ \BBA\ Nilsson, J. \BBOP 2005\BBCP.
+\newblock \BBOQ {Psuedo-Projective Dependency Parsing}\BBCQ\
+\newblock In {\Bem {ACL-2005: Proceedings of 43rd Annual Meeting of the
+  Association for Computational Linguistics}}, \mbox{\BPGS\ 99--106}.
+
+\bibitem[\protect\BCAY{Nivre \BBA\ Scholz}{Nivre \BBA\
+  Scholz}{2004}]{Nivre:2004}
+Nivre, J.\BBACOMMA\ \BBA\ Scholz, M. \BBOP 2004\BBCP.
+\newblock \BBOQ {Deterministic Dependency Parsing of English Text}\BBCQ\
+\newblock In {\Bem {COLING-2004: Proceedings of the 20th International
+  Conference on Computational Linguistics}}, \mbox{\BPGS\ 64--70}.
+
+\bibitem[\protect\BCAY{Sassano}{Sassano}{2004}]{Sassano:2004}
+Sassano, M. \BBOP 2004\BBCP.
+\newblock \BBOQ {Linear-Time Dependency Analysis for Japanese}\BBCQ\
+\newblock In {\Bem {COLING-2004: Proceedings of the 20th International
+  Conference on Computational Linguistics}}, \mbox{\BPGS\ 8--14}.
+
+\bibitem[\protect\BCAY{Shimbo \BBA\ Hara}{Shimbo \BBA\
+  Hara}{2007}]{Shimbo:2007}
+Shimbo, M.\BBACOMMA\ \BBA\ Hara, K. \BBOP 2007\BBCP.
+\newblock \BBOQ {A Discriminative Learning Model for Coordinate
+  Conjunctions}\BBCQ\
+\newblock In {\Bem {Proceedings of the 2007 Joint Conference on Empirical
+  Methods in Natural Language Processing and Computational Natural Language
+  Learning (EMNLP-CoNLL)}}, \mbox{\BPGS\ 610--619}.
+
+\bibitem[\protect\BCAY{Yamada \BBA\ Matsumoto}{Yamada \BBA\
+  Matsumoto}{2003}]{Yamada:2003}
+Yamada, H.\BBACOMMA\ \BBA\ Matsumoto, Y. \BBOP 2003\BBCP.
+\newblock \BBOQ {Statistical Dependency Analysis with Support Vector
+  Machines}\BBCQ\
+\newblock In {\Bem {IWPT-2003: 8th International Workshop on Parsing
+  Technology}}, \mbox{\BPGS\ 195--206}.
+
+\bibitem[\protect\BCAY{内元\JBA 村田\JBA 関根\JBA 井佐原}{内元\Jetal
+  }{2000}]{Uchimoto:2000}
+内元清貴\JBA 村田真樹\JBA 関根聡\JBA 井佐原均 \BBOP 2000\BBCP.
+\newblock \JBOQ 後方文脈を考慮した係り受けモデル\JBCQ\
+\newblock \Jem{自然言語処理}, {\Bbf 7}  (5), \mbox{\BPGS\ 3--17}.
+
+\bibitem[\protect\BCAY{工藤\JBA 松本}{工藤\JBA 松本}{2005}]{Kudo:2005j}
+工藤拓\JBA 松本裕治 \BBOP 2005\BBCP.
+\newblock \JBOQ {相対的な係りやすさを考慮した日本語係り受け解析モデル}\JBCQ\
+\newblock \Jem{情報処理学会誌}, {\Bbf 46}  (4), \mbox{\BPGS\ 1082--1092}.
+
+\bibitem[\protect\BCAY{金山\JBA 鳥澤\JBA 光石\JBA 辻井}{金山\Jetal
+  }{2000}]{Kanayama:2000}
+金山博\JBA 鳥澤健太郎\JBA 光石豊\JBA 辻井潤一 \BBOP 2000\BBCP.
+\newblock \JBOQ 3つ以下の候補から係り先を選択する係り受け解析モデル\JBCQ\
+\newblock \Jem{自然言語処理}, {\Bbf 7}  (5), \mbox{\BPGS\ 71--91}.
+
+\end{thebibliography}
+
+
+\begin{biography}
+\bioauthor{岩立　将和}{
+2007年法政大学情報科学部コンピュータ科学科卒業．
+同年，奈良先端科学技術大学院大学情報科学研究科博士前期課程入学，現在に至る．
+}
+\bioauthor{浅原　正幸}{
+1998 年京都大学総合人間学部基礎科学科卒業．2001 年
+奈良先端科学技術大学院大学情報科学研究科博士前期課程
+修了．同年より日本学術振興会特別研究員．2003 年奈良
+先端科学技術大学院大学情報科学研究科博士後期課程修了．
+2004 年同大学助教，現在に至る．博士（工学）．自然言語
+処理の研究に従事．
+}
+\bioauthor{松本　裕治}{
+1977 年京都大学工学部情報工学科卒．1979 年同大学大
+学院工学研究科修士課程情報工学専攻修了．同年電子技術
+総合研究所入所．1984〜85 年英国インペリアルカレッジ
+客員研究員．1985〜87 年（財）新世代コンピュータ技術
+開発機構に出向．京都大学助教授を経て，1993 年より奈
+良先端科学技術大学院大学教授，現在に至る．工学博士．
+専門は自然言語処理．情報処理学会，日本ソフトウェア科
+学会，人工知能学会，認知科学会，AAAI ，ACL，ACM 各会員．
+}
+\end{biography}
+
+
+\biodate
+
+\end{document}

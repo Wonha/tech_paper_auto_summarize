@@ -1,0 +1,870 @@
+
+
+
+
+
+\documentstyle[epsf,jnlpbbl]{jnlp_j_b5}
+
+\setcounter{page}{3}
+\setcounter{巻数}{10}
+\setcounter{号数}{5}
+\setcounter{年}{2003}
+\setcounter{月}{10}
+\受付{2002}{11}{29}
+\再受付{2003}{3}{18}
+\採録{2003}{8}{12}
+
+\setcounter{secnumdepth}{2}
+
+\title{自然言語の構文解析のためのLR解析表の圧縮法}
+\author{秋葉 友良\affiref{AIST} \and 伊藤 克亘\affiref{NU}}
+
+\headauthor{秋葉，伊藤}
+\headtitle{自然言語の構文解析のためのLR解析表の圧縮法}
+
+\affilabel{AIST}{産業技術総合研究所情報処理研究部門}
+{Information Technology Research Institute,
+National Institute of Advanced Industrial Science and Technology}
+
+\affilabel{NU}{名古屋大学大学院情報科学研究科メディア科学専攻}
+{Dept. of Media Science, Graduate School of Information Science,
+Nagoya University}
+
+
+\jabstract{
+  LR構文解析法で利用するLR解析表のサイズを削減する新規の手法を提案する．
+  提案法は，(1)従来のLR表縮小方法と同時に適用可能，(2)提案法によって作
+  成されたLR表は従来のLR構文解析アルゴリズムでほぼそのまま利用可能，
+  (3)解析結果や解析効率に影響を与えない，といった特徴を持つ．提案法を
+  実際の自然言語処理用文法に適用したところ，元の文法のサイズによって，
+  約60\,\%程度から，25\,\%程度まで，LR表が圧縮されることを確認した．}
+
+\jkeywords{構文解析，一般化LR法，LR表圧縮}
+
+\etitle{A Method of LR Table Compaction \\ for Natural Language Processing}
+\eauthor{Tomoyosi Akiba\affiref{AIST} \and Katunobu Itou\affiref{NU}}
+
+\eabstract{
+  This paper presents a method to reduce the size of the parsing table
+  used in the LR parsing algorithm. The proposed method has the
+  following significant characteristics; (1) that it can be applied along
+  with any other methods for the parsing table reduction already known
+  today, (2) that the parsing tables constructed by it can be used in
+  the existing LR parser without modification, and (3) that it does
+  not affect the parsing results and the parsing efficiency. We
+  applied the method to construct the reduced LR table from some
+  existing grammars used for NLP, and compared the produced LR tables
+  with the tables constructed by the ordinary method. Our method
+  showed that  the produced tables had the sizes of between 60\,\% and
+  25\,\% of their  original sizes according to the grammars.}
+
+\ekeywords{Syntactic Analysis, Generalized LR Parsing, Parsing Table
+  Compaction}
+
+\begin{document}
+\maketitle
+
+
+\thispagestyle{empty}
+\section{はじめに}
+
+LR構文解析法は，構文解析アルゴリズムとして最も効率の良い手法の一つであ
+る．LR構文解析法の中でも，横型探索で非決定的解析を行うことにより文脈自
+由言語の扱いを可能にした方法は一般化LR法(GLR法)と呼ばれ，自然言語処理
+および，音声認識で利用されている．また，LR法の構文解析過程に確率を割り
+当てることで，確率言語モデルを得ることができる．確率一般化LR(PGLR)モデ
+ル\cite{inui1998}，およびその一般化であるAPGLRモデル\cite{akiba2001}は，
+構文解析結果の構文木の曖昧性解消や，音声認識の確率言語モデル
+\cite{nagai1994,imai1999,akiba2001}として利用されている．
+
+LR構文解析法では，文法が与えられた時点であらかじめ計算できる解析過程を
+先に求め，LR解析表(以下，LR表)で表しておき，文解析時に利用する．LR法は，
+言わば，空間効率を犠牲にする(LR表を作成する)ことによって，解析時間の効
+率化を実現する手法である．LR法を実際の問題に適用する場合の問題点の一つ
+は，文法の規則数増加に伴うLR表のサイズの増大である．計算機言語の解析
+\cite{aho1986}，自然言語の解析\cite{luk2000}，音声認識\cite{nagai1994}，
+それぞれの立場からこの問題点が指摘されている．
+
+LR表のサイズを押えるひとつの方法は，解析効率を犠牲にして空間効率をある
+程度に押える方法である．本来LR法が利用されていた計算機言語用の構文解析
+においては，LR法は決定的解析器として利用されてきた．決定的解析としての
+LR法が扱える文法は，文脈自由文法のサブセットである．LR表は，その作り方
+から幾つかの種類に分類されるが，それらは決定的解析で扱える言語に違いが
+ある．単純LR(Simple LR; SLR)表は，作り方が単純で表サイズを小さく押えら
+れるが扱える文法の範囲が狭い．正準LR(Cannonical LR; CLR)表は，サイズは
+非常に大きくなるが扱える文法の範囲は最も広い．両者のバランスを取るLR表
+として，サイズを小さく押えつつ扱える文法の範囲をそこそこ広くとれる，
+LALR(Look Ahead LR)表が提案されている．一方，文脈自由文法を扱う自然言
+語処理でLR表を利用する場合は，非決定的解析として利用するのが普通である．
+決定的解析で扱える言語の大きさは，非決定的解析での解析効率に相当する．
+すなわち，SLR, LALR, CLRの順に効率は良くなるが，それに伴い表のサイズは増
+大する．
+
+また，計算機言語に用いるLR表のサイズ圧縮手法には，2次元配列としてのス
+パースな表をいかに効率よく圧縮するかという視点のものも多い．これらは，
+作成後の表を表現するデータ構造に工夫を行ったもので，表自体が運ぶ情報に
+は違いがない．自然言語処理の分野でも，解析表縮小の手法が提案されている．
+田中らは，文脈自由文法と単語連接の制約を切り放して記述しておき，LRテー
+ブル作成時に2つの制約を導入する手法(MSLR法)\cite{tanaka1995}を用いるこ
+とで，単独の文脈自由文法を記述するより解析表のサイズを小さくすることが
+できたと報告している\cite{tanaka1997}．Lukらは，文法を小さな部分に分割
+して，それぞれを扱うパーザを組み合わせることで，解析表のサイズを押える
+方法を提案している\cite{luk2000}．
+
+以上の従来手法をまとめると，次の3つの手法に分類できる．
+\begin{enumerate}
+\item 処理効率を犠牲にして空間効率を稼ぐ方法．
+\item 表のデータ構造を工夫して記憶量を引き下げる方法．
+\item 文法の記述方法を工夫してより小さな表を導出する方法．
+\end{enumerate}
+
+本稿では，LR表のサイズを圧縮する，上記の3分類には当てはまらない新規の
+手法を提案する．提案法は従来の手法と異なり，LR表作成アルゴリズムの再検
+討を行い，解析に不要な情報を捨象することによって，表の圧縮を実現する．
+本手法は，次のような特徴を持つ．(1)上記の従来の縮小手法とは手法の軸が
+異なるため，どの手法とも同時に適用可能である\footnote{ただし，MSLR法
+  \cite{tanaka1995}との同時適用には，表作成に若干の修正が必要である．
+  MSLR法では，提案法で解析に不要とする情報の一部を利用しているためであ
+  る．MSLR法への対応方法ついては，付録.Bで述べる．}．(2)入力文の構
+文木を得るという自然言語処理用途において，提案法は解析時の効率に影響を
+あたえることはない\footnote{計算機言語の構文解析では，解析時に規則に付
+  随するアクション(プログラム)を実行することが要求される．提案法による
+  圧縮LR表では適用されるCFG規則は解析時に動的に求まるので，規則から付
+  随するアクションを検索する処理の分オーバーヘッドが生じる．入力文から
+  構文木を得ることを目的とする自然言語処理用途では，このオーバーヘッド
+  は生じない．}．(3)従来の表作成および解析アルゴリズムへの変更個所は小
+さく，プログラムの軽微な修正で適用可能である．特に，提案法によって作成
+された圧縮LR表は，既存のLR構文解析プログラムでほぼそのまま利用可能であ
+る．
+
+本稿の構成は以下の通りである．まず\ref{ss:base}節で，提案法の基本原理
+を説明する．また，提案法の性質を考察する．続く\ref{ss:experiment}節で
+は，提案法の実装方法と，実際の文法に提案手法を適用した実験結果を示す．
+\ref{ss:extension}節では，提案手法の限界を克服するための拡張方法につい
+て述べ，実際の文法に適用した結果を報告する．\ref{ss:related}節では，
+関連研究について述べる．
+
+\section{LR解析表の圧縮}
+\label{ss:base}
+
+本稿で提案するLR解析表の圧縮方法について，その原理と性質について述べる．
+
+\subsection{提案法の基本原理}
+\label{sec:basic}
+
+LR構文解析法は，LR表と，スタック，先読み語を参照し，次の動作を決定する．
+LR表は，文法が与えられた時点であらかじめ計算できる構文解析過程を表した
+ものである．LR表の作成(付録.A参照)には，構文解析中のある状態を表すデー
+タ構造として，LR項(LR Item)を用いる．LR項とは，ある生成規則(CFG規則)の
+右辺の記号列中のある位置にドット`・'を付けたデータ構造である．ドットは，
+記号列のどの部分まで解析が進んだかを表す．下記のLR(0)項\footnote{説明
+  では，LR(0)項を用いるが，提案法は，LR(1)項にも適用可能である．すなわ
+  ち，SLR, LALR, CLRなどのLR表の種類に依らず適用可能である．}は，生成規
+則$A \rightarrow \alpha$において，$\alpha$の先頭部分列$\beta$まで解析
+が終了し，その後記号列$\gamma$を解析する必要がある状態を表す．
+\begin{quote}
+  $[ A \rightarrow \beta \cdot \gamma ]$
+\end{quote}
+$\beta$や$\gamma$は空記号列の場合も含まれる．
+例えば，生成規則$A \rightarrow B_1 B_2 B_3$に対して，
+$[A \rightarrow \cdot B_1 B_2 B_3]$, 
+$[A \rightarrow B_1 \cdot B_2 B_3]$,
+$[A \rightarrow B_1 B_2 \cdot B_3]$,
+$[A \rightarrow B_1 B_2 B_3 \cdot]$
+の4つのLR項が考えられる．このように，従来のLR表で用いられるLR項は規則
+毎に作成され，LR項だけで解析中の規則とその解析位置，解析された記号列
+($\beta$)およびこれから解析すべき記号列($\gamma$)を特定することができ
+る．
+
+一方，LR構文解析法では，解析途中の状態を表現するデータ構造として，解析
+済の(終端および非終端)記号を記憶する解析スタックが併用される(文脈自由
+言語を受理するプッシュダウン・オートマトンのスタックに相当する)．上の
+例のLR項が表す状態では，解析スタックには，記号列$\beta$が，スタックトッ
+プから逆順に保持されているはずである．例えば，LR項$[A \rightarrow B_1
+B_2 \cdot B_3]$が表す状態では，スタックは$[... B_1, i, B_2, j]$ (ただ
+し，$i,j$は状態番号，スタックトップは右)となる．
+
+したがって，すでに解析済の記号列は，LR項と解析スタックに重複して記載さ
+れており，冗長である．そこで，LR項から冗長な解析済記号列$\beta$の記号
+情報を捨象することが可能となる．ここで，捨象可能なのは，記号情報だけで，
+記号数の情報は保持する必要があることに注意されたい．解析スタックには，
+解析済の記号がその記号が属する規則に関係なくフラットに保持される．スタッ
+ク$[..., B_1, i, B_2, j, B_3, k]$を見ただけでは，記号$B_3$が規則$A
+\rightarrow B_3$，$A \rightarrow B_2 B_3$，$A \rightarrow B_1 B_2 B_3$
+のいずれに属する$B_3$なのか，区別することができない．そこで，LR項が表
+す解析状態で，スタックトップからいくつの記号がこの規則で解析中かという
+情報を保持しなければならない．
+
+以上のことから，従来のLR項のドットの左側の記号列を抽象化して，その記号
+の個数で置き換え，新しいLR項とする．すなわち，次のようなLR項を用いる．
+\begin{quote}
+  $[ A \rightarrow |\beta| \cdot \gamma ]$
+\end{quote}
+ここで，$|\beta|$は，記号列$\beta$の記号数を表すものとする．
+このLR項を{\bf 左方抽象化LR項}と呼ぶことにする．
+例えば，生成規則$A \rightarrow B_1 B_2 B_3$に対して，
+$[A \rightarrow 0 \cdot B_1 B_2 B_3]$, 
+$[A \rightarrow 1 \cdot B_2 B_3]$,
+$[A \rightarrow 2 \cdot B_3]$,
+$[A \rightarrow 3 \cdot]$
+の4つの左方抽象化LR項が考えられる．
+
+LR表は，生成規則集合が与えられた時点で，そこから求められる構文解析時の
+あらゆる解析途中の状態を抽出し，また各状態間の遷移関係を求めて，状態遷
+移図(プッシュダウンオートマトン)として表現したものである．ここで解析途
+中の状態は，LR項の集合(クロージャ)に対応し，規則適用の部分的解析結果
+(LR項に相当)の複数の可能性(集合)を表している．この時，解析状態の同一性
+は，クロージャの同一性で判断される．例えば，異なる解析パスから，同一の
+LR項集合が得られる場合，それらは同じ状態とみなすことができる．
+
+クロージャの要素として，従来のLR項の代わりに，不必要な情報が捨象された
+左方抽象化LR項を用いると，より多くの解析状態(クロージャ)が同一の状態と見なさ
+れる．したがって，結果として得られるLR表の状態数が減少し，表のサイズが
+縮小される．これが提案手法の原理である．
+\newpage
+\subsection{圧縮LR表作成アルゴリズム}
+
+LR表作成アルゴリズムは，従来のLR項の代わりに，上記の左方抽象化LR項を用
+いても，新たな処理を加えること無く若干の修正だけで適用できる．以下では，
+LR表作成手順の[クロージャ] [GOTO手続き][LR項集合の集合][LR表の作成]の
+各手続き(付録.A参照)，それぞれについて，修正手続きを示す．(この手法
+を，{\bf 提案法1}と呼ぶ．また提案法1によって作成されたLR表を{\bf  圧縮
+  LR表}と呼ぶ．)
+
+[クロージャ]，[GOTO手続き]，[LR項集合の集合]では，LR項のドットの左側を
+参照する手続きが存在しないので，左方抽象化LR項を用いて，ほぼそのまま，
+「LR項集合の集合」を作成できる．唯一，ドットの左側の生成・修正の手続き
+に若干の変更を加える．具体的には，以下の2点を変更する．
+
+[クロージャ]作成手続きのステップ2を次のように変更する．
+\begin{enumerate}
+\setcounter{enumi}{1}
+\item $\mbox{closure}(I)$に左方抽象化LR項$[ B \rightarrow |\beta| \cdot A
+  \gamma]$があれば，左辺が$A$の全ての生成規則$A \rightarrow
+  \alpha$について，LR項$[ A \rightarrow 0 \cdot \alpha]$を加
+  える．この手続きを新たなLR項が加えられなくなるまで繰り返す．
+\end{enumerate}
+  
+また，[GOTO手続き]$\mbox{GOTO}(I,A)$を次のように変更する．
+\begin{itemize}
+\item $I$中の，ドットのすぐ右が$B$である全てのLR項$[ A \rightarrow
+  |\beta| \cdot B \gamma ]$に対し，LR項$[ A \rightarrow |\beta|+1
+  \cdot \gamma ]$を求め，そのクロージャを返す．
+\end{itemize}
+
+得られたLR項集合の集合から[LR表の作成]において，$\mbox{action}$表への
+$\mbox{shift}$や$\mbox{accept}$の書き込み，および$\mbox{goto}$表の作成
+にも変更点はない．一方，$\mbox{reduce}$動作の引数には，従来の生成規則
+の代わりに，生成記号の左辺記号と右辺記号列の記号数のペアを記述する．
+すなわち，[LR表の作成]のreduce動作の書き込みを次のように変更する．
+\begin{itemize}
+\item $I_i$にLR項$[A \rightarrow |\alpha| \cdot ]$が存在するならば，$a
+  \in follow(A)$について，$\mbox{action}(i,a)$に$\mbox{reduce} ~~
+  |\alpha|, A$を加える．
+\end{itemize}
+
+このように，修正手続きで作成されるLR表では，reduce動作の引数には生成規
+則のうち，左辺の記号列の記号情報を捨象した一部の情報しか記述されない．
+しかし，この情報$|\alpha|$と$A$さえあれば，どの生成規則が適用されたかは，
+構文解析時に特定可能である点に注意されたい．左辺記号$A$と，解析スタッ
+クから$|\alpha|$個の記号をポップすることで得られる記号列$\alpha$から，
+$A \rightarrow \alpha$と復元可能である．
+
+また，提案手法での修正箇所は，既存の表作成アルゴリズム中のある手続きを
+同等の手続きで置き換えただけであり，新たな手続きの呼び出しは行っていな
+い．したがって，従来の表作成アルゴリズムと同じ計算オーダで作成可能であ
+る．
+\newpage
+\subsection{提案法の適用例}
+
+日本語において，動詞の格を表す句は，語順が自由であり，任意に省略可能で
+あることが多い．次のような日本語を解析する文法(図\ref{fig:g_example})
+を考える．
+\begin{quote}
+太郎が 花子に りんごを 与える
+
+花子に 太郎が りんごを 与える
+
+りんごを 太郎が 花子に 与える
+
+太郎が りんごを 与える
+
+りんごを 与える
+
+与える
+\end{quote}
+
+\begin{figure}
+\begin{quote}
+\begin{verbatim}
+S → PP_HUMAN_ga  PP_HUMAN_ni  PP_OBJECT_wo VP
+S → PP_HUMAN_ga  PP_OBJECT_wo  PP_HUMAN_ni  VP
+S → PP_HUMAN_ni  PP_HUMAN_ga  PP_OBJECT_wo  VP
+S → PP_HUMAN_ni  PP_OBJECT_wo  PP_HUMAN_ga  VP
+S → PP_OBJECT_wo  PP_HUMAN_ga  PP_HUMAN_ni  VP
+S → PP_OBJECT_wo  PP_HUMAN_ni  PP_HUMAN_ga  VP
+S → PP_HUMAN_ni  PP_OBJECT_wo  VP
+S → PP_OBJECT_wo  PP_HUMAN_ni  VP
+S → PP_HUMAN_ga  PP_OBJECT_wo  VP
+S → PP_OBJECT_wo  PP_HUMAN_ga  VP
+S → PP_HUMAN_ga  PP_HUMAN_ni  VP
+S → PP_HUMAN_ni  PP_HUMAN_ga  VP
+S → PP_OBJECT_wo  VP
+S → PP_HUMAN_ni  VP
+S → PP_HUMAN_ga  VP
+S → VP
+PP_HUMAN_ga → NP_HUMAN  が
+PP_HUMAN_ni → NP_HUMAN  に
+PP_OBJECT_wo → NP_OBJECT  を
+NP_HUMAN → 太郎
+NP_HUMAN → 花子
+NP_OBJECT → りんご
+NP_OBJECT → 本
+VP → 与える
+VP → 渡す
+\end{verbatim}
+\end{quote}
+\caption{文法例}\label{fig:g_example}
+\end{figure}
+
+この文法から，従来の表作成アルゴリズムと，提案法による表作成アルゴリズ
+ムによってつくられたGOTOグラフの一部(記号`S'を左辺に持つ規則の集合に相
+当する部分)を，それぞれ図\ref{fig:goto}，図\ref{fig:r_goto}に示す．従
+来法では，規則右辺に現れる記号列の文脈によって異なる状態が作成されるた
+め，木の形に分岐したグラフが作成される．一方提案法では，記号列の文脈に
+よらずに後方部分がマージされたグラフが作成され，状態数が32から12へ大幅
+に減少することが分かる．
+
+\begin{figure}
+  \begin{center}
+    \leavevmode
+    \epsfile{file=goto2.eps,scale=1.0}
+
+    \caption{従来法によるGOTOグラフ}
+    \label{fig:goto}
+  \end{center}
+\end{figure}
+
+\begin{figure}
+  \begin{center}
+    \leavevmode
+    \epsfile{file=r_goto2.eps,scale=1.0}
+    \caption{提案法によるGOTOグラフ}
+    \label{fig:r_goto}
+  \end{center}
+\end{figure}
+
+
+\subsection{提案法の効果と解析効率}
+\label{ss:quality}
+
+提案法の効果と効率について，その性質を考察する．
+
+\subsubsection{圧縮の効果}
+
+LR項においてドットより左方の記号列が記号数へと抽象化されることにより，
+従来異なるLR項として認識された以下のような2つのLR項が，同一のLR項とし
+て認識されることになる．
+\begin{quote}
+  $[ A \rightarrow \beta_1 \cdot \gamma]$ ~~~,~~~
+  $[ A \rightarrow \beta_2 \cdot \gamma]$
+
+  where $|\beta_1| = |\beta_2|$
+\end{quote}
+これらから生成されるクロージャも同一のクロージャとなる．すなわち，「LR
+項集合の集合」作成時に，従来異なる状態(LR項集合)となっていたものが，1
+つの状態にマージされることになる．よって，最終的なLR表の状態数は減少す
+る．
+
+ここで，マージされるLR項が存在するための，文法$G$の必要条件を考察する．
+上記の同一視される2つのLR項について，$\beta_1$と$\beta_2$以外は等しく
+なければならない．また，$|\beta_1|= |\beta_2|$，すなわち
+$|\beta_1\gamma| = |\beta_2\gamma|$である必要がある．以上をまとめると，
+文法$G$に，以下の条件を満たす規則のペア$A_1 \rightarrow \alpha_1$，
+$A_2 \rightarrow \alpha_2$が少なくとも一組以上存在する必要がある．
+\begin{itemize}
+\item 左辺記号$A_1$，$A_2$が等しい．
+
+\item $\alpha_1$と$\alpha_2$の接尾記号列が一致する．すなわち，
+  $\alpha_1 = \beta_1 \gamma_1$，$\alpha_2 = \beta_2 \gamma_2$と書ける
+  とき，$\gamma_1 = \gamma_2$となる$\gamma_1,\gamma_2$が存在する．
+
+\item $|\alpha_1| = |\alpha_2|$
+\end{itemize}
+このような規則のペアが，文法$G$中に多く存在するほど，提案法による状態
+数の削減の効果は大きい．
+
+\subsubsection{解析の効率}
+
+圧縮LR表を用いて構文解析を行った場合の効率について考える．提案法は，す
+でに解析済の情報(ドットの左側の記号情報)だけを捨象する．これから解析す
+る部分(ドットの右側の記号情報)には手を加えない．提案法によって状態の統
+合が行われた場合，統合後の状態(クロージャ)は以前の状態と同数のLR項を持
+ち，それぞれのLR項のこれから解析する部分(ドットの右側の記号情報)も等し
+い．したがって，統合後もその後の解析の処理量は等しく，構文解析の効率は
+悪くならない．
+
+\newpage
+\section{実装と実験}
+\label{ss:experiment}
+
+\subsection{実装}
+
+提案法を実装するには，LR表作成プログラム，構文解析プログラムの修正が必
+要となる．しかし以下に示す通り，既存の処理系のわずかな個所の修正で実装
+可能である．
+
+\subsubsection{LR表}
+
+圧縮LR表では，従来のLR表と比べ，唯一reduce動作の引数の意味が変更になる．
+従来のLR表では，reduce動作の引数には生成規則を指定する．実際には，規則
+へのポインタ(規則番号)が記述される．一方，圧縮LR表では，生成規則から右
+辺の記号情報を捨象した情報，すなわち「左辺記号と右辺の記号数」(へのポ
+インタ)である．あらかじめ存在する生成規則のリストとは異なり，「左辺記
+号と右辺の記号数」のリストは表作成のために新規に導入する概念である．厳
+密に実装するならば，LR表作成プログラムでこのリストを新規に作成し，構文
+解析プログラムとの間でこのリストを共有しなければならない．しかし，「左
+辺記号と右辺の記号数」は生成規則の一部であることを利用して，reduceの引
+数に「左辺記号と右辺の記号数」の条件を満たす任意の規則番号を記述し代用
+することで，リストの受け渡しを避けることが可能である．
+
+\subsubsection{LR表作成プログラム}
+
+提案法で用いる左方抽象化LR項は，次のような方法によって，既存のLR表作成プログ
+ラムに比較的容易に導入することが可能である．左方抽象化LR項
+は，文法に現れない記号$X$を$|\beta|$個ドットの左に書くことでも表現でき
+る．例えば，$|\beta| = 2$とすると，次のように書ける．
+\begin{quote}
+  $[ A \rightarrow X X \cdot \gamma ]$
+\end{quote}
+このようなLR項表現は，従来のLR項と容易に交換可能である．
+GOTO手続きにおいて，LR項のドットを右へ一つ移動する時に，
+飛び越えた記号を$X$で置き換えるように変更するだけで，従来法
+に組み込むことができる．
+
+\subsubsection{構文解析プログラム}
+
+「左辺記号と右辺の記号数」リストの参照を除けば，圧縮LR表は，従来のLR構
+文解析アルゴリズムでそのまま利用可能である．また多くの実装系では，読み
+込んだ規則集合のうち，実際の解析に利用する「左辺記号と右辺の記号数」だ
+けを保持するものが多いため，提案法の実装は極めて容易である．実際，MSLR
+パーザ\cite{mslr1998}では，LR表読み込み部分の若干の修正で動作可能となっ
+た．また，LR法を利用した音声認識システムniNja\cite{itou1992}では，全く
+修正の必要はなくそのまま動作可能であった．
+
+\subsection{実験}
+\label{sec:exp1}
+
+提案法の効果を調べるため，3種類の文法から従来法と提案法1でLR表を作成し，
+表のサイズを比較した．比較には，LR表(およびGOTOグラフの)状態数，表中の
+空欄でないセルの数を表すエントリ数，を用いた．
+
+文法「道案内1」「道案内2」は，道案内対話\cite{itou1999}に現れるユーザ
+の発話をモデル化した文法で，音声認識用に設計された\cite{akiba2001}．語
+彙サイズはどちらも約380，規則数はそれぞれ616，1302である．「道案内2」
+は，「道案内1」に比べて，意味的に整合性のある文だけを受理するように，
+より強い制約を加えた文法である．文法「旅行会話」は，ATR研究用自然発話
+音声データベース\cite{morimoto1994}旅行会話タスクの発話を受理するよう
+に記述した文法である\cite{imai1999}．語彙サイズは2839，規則数3971と，
+文法1,2に比べて大規模な文法である．また，自然言語処理用途に開発されて
+おり，入力文に対して構文的に可能な数多くの構文木を割り当てる．
+
+提案法1でLR表を作成し，その性質を調べた．結果を表\ref{tbl:state}に示す．
+すべての文法について，LR表圧縮の効果が得られていることがわかる．LR表の
+サイズは，「道案内1」「道案内2」に関しては約60\,\%前後に，「旅行会話」に
+関しては約1/4まで圧縮することができた．文法の規則数が大きいほど圧縮率
+が大きくなる傾向が見られるが，これは規則数が増えることで，
+\ref{ss:quality}節で述べた性質を満たす規則対の候補が増えることに起因す
+ると考えられる．また，作成したLR表を用いてテキスト解析の実験を行ったが，
+従来のLR表を使った場合と全く同じ結果が得られ，解析時間にも差は認められ
+なかった．
+
+\begin{table}
+\caption{LR表圧縮の効果}
+\label{tbl:state}
+\begin{center}
+\begin{tabular}{|l|l|r|r|r|r|r|}
+\hline
+ & 文法 & \multicolumn{2}{c|}{道案内1} & \multicolumn{2}{c|}{道案内2} & \multicolumn{1}{c|}{旅行会話}\\
+\cline{2-7}
+ & LR表タイプ & \multicolumn{1}{c|}{SLR} & \multicolumn{1}{c|}{CLR} & \multicolumn{1}{c|}{SLR} & \multicolumn{1}{c|}{CLR} & \multicolumn{1}{c|}{SLR}\\
+\cline{2-7}
+ & 規則数 & \multicolumn{2}{c|}{616} & \multicolumn{2}{c|}{1,302} & \multicolumn{1}{c|}{3,971} \\
+\hline
+従来法 & 状態数 & 703 & 876 & 2,079 & 3,530 & 4,017\\
+ & エントリ数 & 13,689 & 15,164 & 21,092 & 29,698 & 10,054,708\\
+\hline
+ & 状態数 & 444 & 568 & 757 & 1,815 & 935\\
+ 提案法1 & (圧縮率) & (63.2\,\%) & (64.8\,\%) & (36.4\,\%) & (51.4\,\%) & (23.3\,\%)\\
+ (左方抽象化LR項) & エントリ数 & 8,031 & 9,155 & 12,282 & 18,669 & 2,250,317\\
+ & (圧縮率) & (58.7\,\%) & (60.4\,\%) & (58.2\,\%) & (62.9\,\%) & (22.4\,\%)\\
+\hline
+ & 状態数 & 404 & 518 & 669 & 1,600 & 842\\
+ 提案法2 & (圧縮率) & (57.5\,\%) & (59.1\,\%) & (32.1\,\%) & (45.3\,\%) & (21.0\,\%)\\
+ (可変長LR項) & エントリ数 & 7,111 & 8,132 & 10,435 & 16,345 & 1,978,521\\
+ & (圧縮率) & (51.9\,\%) & (53.6\,\%) & (49.5\,\%) & (55.0\,\%) & (19.7\,\%)\\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\section{更なる圧縮のための改良手法}
+\label{ss:extension}
+
+\ref{ss:quality}節で述べたように，(1)規則左辺の記号が同じ，(2)右辺の接
+尾部分が共通，(3)右辺の記号数が同じ，の3条件を満たす規則の組が文法中に
+多く現れるほど，提案法の効果は大きい．このうち，(3)右辺記号数の条件は，
+改善の余地がある．本節では，この条件を克服するための拡張方法について述
+べる．
+
+\subsection{可変長LR項}
+
+ドットの左側に記号数が必要なのは，reduce動作時にスタックからポップする
+要素数を記録するためである．この要素数は，LR表にreduce動作の引数として，
+静的に記述される．しかし，このポップ要素数は解析時に動的に求めることも
+できる．そこで，図\ref{fig:stack}のように，この情報をスタックに保持す
+ることを考える．すなわち，reduce動作の際，スタックに保持された区切り位
+置までポップするような構文解析アルゴリズムを考える．
+
+\begin{figure}
+  \begin{center}
+    \leavevmode
+    \epsfile{file=stack2.eps,scale=1.0}
+    \caption{区切り付きスタック}
+    \label{fig:stack}
+  \end{center}
+\end{figure}
+
+このような区切りをスタックに入れるようなLR表はどのように生成すればよい
+だろうか．区切りは，規則右辺の最初の記号をスタックに積む時に挿入すればよい．
+すなわち，LR項
+\begin{quote}
+  $[ A \rightarrow \cdot B \alpha ]$
+\end{quote}
+からGOTO手続きによって，LR項
+\begin{quote}
+  $[ A \rightarrow B \cdot \alpha ]$
+\end{quote}
+を生成する際に，スタックに挿入すればよい．ドットが最左にある場合の，次
+の状態への遷移(すなわち，shift動作やgoto)の場合に，スタックに区切りを
+挿入する．注意すべきなのは，ある状態(クロージャ)に，ドットのすぐ右の記
+号が同じで，ドットが最左のものと規則途中にあるものの，2つ以上のLR項が
+含まれている場合があることである．すなわち，次のような2つのLR項が，同
+じクロージャ$I$に含まれている可能性がある．
+\begin{quote}
+  $[ A \rightarrow \cdot B \alpha ]$ ~~~,~~~ 
+  $[ A \rightarrow \beta \cdot B \gamma ]$
+\end{quote}
+この場合，前者(ドットが最左のもの)と後者(ドットが途中のもの)からの，記
+号$B$による遷移($\mbox{GOTO}(I,B)$)を別に扱うことを考える．例えば，前
+者を記号$B_{\mbox{start}}$による遷移，後者を記号$B_{\mbox{cont}}$によ
+る遷移とし，$\mbox{GOTO}(I,B_{\mbox{start}})$と
+$\mbox{GOTO}(I,B_{\mbox{cont}})$を別々に計算する．
+
+このように変更したGOTOグラフでは，もはやLR項にドット左の記号数は必要な
+い．ただし，ドットが最左であるか，途中であるかの区別は必要となる．ドッ
+トが途中にある場合のLR項を，次のようなドット左方可変長のLR項で表すこと
+にする．
+\begin{quote}
+  $[ A \rightarrow * \cdot \gamma ]$
+\end{quote}
+記号$*$は，長さ1以上の記号列があることを表す．このようなLR項を用いる
+ことで，ドット左方の記号列に関する情報がさらに抽象化され，GOTOグラフ作
+成時の状態数がさらに減少することが期待できる\footnote{ただし，GOTO手続
+  きの記号を場合別けしたことによって，状態数が増加するため，全体として
+  かならずしも状態数減少になるとは限らない．}．LR表生成アルゴリズムに
+必要な変更点は，以下の通りである．(この変更を行った手法を{\bf 提案法2}
+とする．)
+
+{\flushleft \bf [GOTO手続き]}
+\begin{itemize}
+\item $I$中の，ドットのすぐ右が$B$であるLR項$[ A \rightarrow \cdot B
+  \gamma]$すべてに対し，LR項$[ A \rightarrow * \cdot \gamma]$を求め，
+  そのクロージャを$\mbox{GOTO}(I,B_{\mbox{start}})$の返り値とする．ま
+  た，LR項$[ A \rightarrow * \cdot B \gamma]$に対し，LR項$[ A
+  \rightarrow * \cdot \gamma ]$を求め，そのクロージャを
+  $\mbox{GOTO}(I,B_{\mbox{cont}})$の返り値とする．
+\end{itemize}
+
+{\flushleft \bf [LR項集合の集合]}
+\begin{enumerate}
+\setcounter{enumi}{1}
+\item $C$の各LR項集合$I$，$G'$のある記号$A$，$s \in
+  \{\mbox{start},\mbox{cont} \}$について，$\mbox{GOTO}(I,A_s)$を計算し，
+  LR項集合$I'$を求め，$C$に加える．この手続きを，$C$に新たなLR項集合が
+  加えられなくなるまで繰り返す．
+\end{enumerate}
+
+{\flushleft \bf [LR表の作成]}
+\begin{itemize}
+\item 終端記号$a$と，$s \in \{\mbox{start},\mbox{cont} \}$について，
+  $\mbox{GOTO}(I_i, a_s) = I_j$ならば，$\mbox{action}(i,a)$に
+  $\mbox{shift} ~s,j$を加える．
+  
+\item 非終端記号$A$，$s \in \{\mbox{start},\mbox{cont} \}$について，
+  $\mbox{GOTO}(I_i, A_s) = I_j$ならば，$\mbox{goto}(i,A)$に$s,j$を加える．
+\end{itemize}
+
+構文解析アルゴリズムに必要な変更は，以下の3点である．
+\begin{itemize}
+\item shift動作とgoto時に，LR表の記述に従い，スタックに区切り記号を挿
+  入する．
+  
+\item shift動作とgoto時に，shift/shiftコンフリクト，goto/gotoコンフリ
+  クトを扱えるようにする．実装は，GLR法によるshift/reduceコンフリクト，
+  shift/reduceコンフリクトの扱いと同様に，スタックを分岐させればよい．
+  
+\item reduce動作の際，従来の固定数ポップ動作の代わりに，スタックの最初
+  の区切り記号までポップする．
+\end{itemize}
+
+\subsection{実験}
+
+\ref{sec:exp1}節で用いた3種類の文法から，提案法2を用いてLR表を作成した．
+実験結果を表\ref{tbl:state}に示す．LR表のサイズをさらに10\,\%程度縮小で
+きることを確認した．また，音声認識システムniNja\cite{itou1992}に提案法
+2の解析アルゴリズムを実装し，従来法と同じ解析結果が得られることを確認
+した．
+
+\section{関連研究}
+\label{ss:related}
+
+\subsection{共通記号列のまとめ処理}
+
+生成規則($A \rightarrow \alpha$)に対し右辺記号列($\alpha$)中のある位置
+にドット`・'を付けたデータ構造($A \rightarrow \beta \cdot \gamma$,  た
+だし$\alpha = \beta \gamma$)は，項(Item)と呼ばれ，構文解析中に規則のど
+こまで解析が進んだかを表すために，本稿で述べたLR項の他，Earley法
+\cite{earley1970}やチャート法\cite{key1980}など，種々の構文解析アルゴ
+リズムで共通に利用されている．本稿で示した手法は，LR法においてItem以降
+の解析がドットの左側(右辺記号列のprefix，$\beta$)には依存しないことを
+利用し，ドットの右側の記号列(右辺記号列のsuffix，$\gamma$)が共通なもの
+をまとめあげることによって，LR表の圧縮を実現したと考えることができる．
+同様に，Itemのドット左右の記号列について複数の規則の間で共通する記号列
+をまとめて処理することによる，解析の効率化手法が知られている．
+
+本稿の提案法のように，ドットの右側の記号列($\gamma$)が共通なItemをまと
+めて扱う手法が提案されている．文献\cite{leermakers1992}では，Earley法
+においてItem以降の解析がドットの右側の記号列($\gamma$)のみに依存し，ドッ
+トの左側($\beta$)や生成規則左辺の記号($A$)には依存しないことを利用して，
+これらを重複処理しないことによる効率化手法が示されている．文献
+\cite{moore2000}では，同様の手法をチャート法に適用している．
+
+逆に，ドットの左側の記号列($\beta$)が共通なItemをまとめて処理する手法
+としては，LR法が挙げられる．LR法では，共通なprefixを持つ複数のItemをま
+とめて解析の一状態とするようにLR表を作成することで，解析の効率化を実現
+している．文献\cite{nederhof1994}では，この考え方を進めて，共通の
+prefixをもつ規則をすべてまとめて処理する手法が示されている．また，共通
+したprefixを持つ2つ以上の規則を持たないように文法を変形することによっ
+て効率化を行なう手法も提案されている\cite{moore2000}．
+
+\subsection{可変な規則長の扱い}
+
+本稿の提案法2では，ドット左側の記号数情報を捨象した可変長LR項の導入の
+ため，reduce動作時にスタックからポップする記号数を動的に求める必要があっ
+た．そのために，GOTO手続きを規則の解析開始か途中かによって別々に計算す
+る手法を示した．同様の考え方は，規則の右辺に記号の正規表現を許した拡張
+CFG(正規右辺文法)を扱うLR構文解析法として提案されている
+\cite{nederhof1994,purdom1981}．正規右辺文法では，規則の右辺に合
+致する記号数を予め知ることができないので，解析時に動的に求める必要があ
+るためである．
+
+
+\section{結論}
+
+解析に使用するLR表の大きさが問題であったLR構文解析法について，表作成に
+用いられる基本データ構造(LR項)の見直しを行うことにより，LR表の状態数を
+減少させ，サイズを圧縮する手法について述べた．提案法を実際の文法に適用
+したところ，規則数500〜1500程度の文法に対しては元のサイズの60\,\%程度，
+規則数4000の文法に対しては25\,\%程度に圧縮できることを確認した．提案法は，
+従来のLR表作成アルゴリズム，解析アルゴリズムに大きく手を加えることなく
+実装可能であるとともに，解析効率に影響を与えることもない．また，提案法
+を拡張し圧縮率を改善する手法を検討した．アルゴリズムへの変更個所は増加
+するが，実験結果ではさらに10\,\%程度サイズを圧縮できることを確認した．本
+研究により，これまで解析表のサイズの問題でLR法の適用が困難であった分野，
+例えば大規模な文法を用いた自然言語処理や音声認識，また計算資源(記憶容
+量)に制限がある環境(例えば，モバイル用途)での使用などにおいて，効率の
+良いLR法を適用する機会が増えると考えられる．
+
+\acknowledgment
+
+本稿の実験には，東工大田中・徳永研究室で開発されたMSLRパーザ
+\cite{mslr1998}および文法を使用した．また，本手法に関して御討論いただ
+いた田中・徳永研究室の皆様に感謝する．
+
+
+\bibliographystyle{jnlpbbl}
+\bibliography{427}
+
+
+
+\appendix
+\section{LR表作成手順}
+
+
+LR表は，文法が与えられた時点であらかじめ計算できる構文解析過程を表した
+ものである．LR構文解析法におけるパーザは，このLR表と，スタック，先読み
+語，を参照し，次の動作を決定する．LR表には，SLR (Simple LR)，LALR
+(Look-Ahead LR)，CLR (Canonical LR)，などの幾つかのバリエーションがあ
+り，これらは決定性解析で扱える言語の範囲に違いがある．以下，説明のため
+LR表の作成法を簡単に述べる．詳細は文献
+\cite{aho1986,tanaka1989}等を参照されたい．
+
+LR項は，LR表作成に使用するデータ構造であり，構文解析中のある状態を表す
+ものである．SLR表作成にはLR(0)項を，CLR表作成にはLR(1)項を用いる
+\footnote{ LALR表作成には，LR(0)項，LR(1)項それぞれから作成する手法が
+  知られている．}．LR(0)項とは，ある生成規則の右辺の任意の位置にドット
+を付けたデータ構造である．ドットは，規則中のどの部分まで解析が進んだか
+を表す．下記のLR(0)項は，生成規則$A \rightarrow \alpha$において，
+$\alpha$が$\beta \gamma$と書けるとき，$\beta$まで解析が終わった状態を
+表している．
+\begin{quote}
+  $[ A \rightarrow \beta \cdot \gamma ]$
+\end{quote}
+
+LR(1)項とは，ドット付き生成規則と，1つの先読み語(終端記号)からなるデー
+タ構造である．下記のLR(1)項は，同様に$\beta$まで解析が終わった状態を表
+し，さらに1つの先読み語$a$を持つ．$a$は，直感的には，この生成規則適用
+の直後に現れる先読み語を表す．
+\begin{quote}
+  $[ A \rightarrow \beta \cdot \gamma, a ]$
+\end{quote}
+
+以降の説明では，LR(0)項を用いてSLR表を作成する場合について考えるが，
+LR(1)項からCLR表を作成する場合も，先読み語の計算が付け加わるだけで，ほ
+ぼ同様に求めることができる．
+
+{\flushleft \bf [クロージャ]}
+
+クロージャ(closure)とは，LR項の集合であり，あるLR項集合$I$が与えられる
+と，以下の手続きでクロージャ$\mbox{closure}(I)$を求めることができる．
+\begin{enumerate}
+\item $I$の全要素を$\mbox{closure}(I)$に加える．
+    
+\item $\mbox{closure}(I)$にLR項$[ B \rightarrow \beta \cdot A \gamma
+  ]$があれば，左辺が$A$の全ての生成規則$A \rightarrow \alpha$について，
+  LR項$[ A \rightarrow \cdot \alpha ]$を加える．この手続きを新たなLR項
+  が加えられなくなるまで繰り返す．
+\end{enumerate}
+クロージャとは，直感的には，あるLR項の表す解析状態と同時に現れ得る全て
+のLR項を，あらかじめトップダウンに展開して求めたものである．
+
+{\flushleft \bf [GOTO手続き]}
+
+GOTO手続き$\mbox{GOTO}(I,B)$は，アイテム集合$I$と記号$B$から，新しいア
+イテム集合を次のように求める．
+\begin{itemize}
+\item $I$中の，ドットのすぐ右が$B$である全てのLR項$[ A \rightarrow
+  \beta \cdot B \gamma ]$に対し，ドットを一つ右に移動したLR項$[ A
+  \rightarrow \beta B \cdot \gamma ]$を求め，そのクロージャを返す．
+\end{itemize}
+直感的には，構文解析のある状態$I$で，$B$が得られたときの，次の状
+態を求めている．
+
+{\flushleft \bf [LR項集合の集合]}
+
+上記クロージャ，GOTO手続きを用いて，ある拡大文法\footnote {開始記号を
+  $S$とする文法$G$に対して，新しい開始記号$SS$と生成規則$SS
+  \rightarrow S$を追加して得られる文法を，$G$の拡大文法という．} $G'$
+から，LR項集合の集合$C$を次の手順で求める．
+\begin{enumerate}
+\item 初期のLR項集合を$\mbox{closure}({[SS \rightarrow \cdot S ]})$
+  とし，$C$に加える．
+  
+\item $C$の各LR項集合$I$，$G'$のある記号$A$に対して，
+  $\mbox{GOTO}(I,A)$を計算し，LR項集合$I'$を求め，$C$に加える．この手
+  続きを，$C$に新たなLR項集合が加えられなくなるまで繰り返す．
+\end{enumerate}
+
+{\flushleft \bf [LR表の作成]}
+
+「LR項集合の集合」$C$の各状態(すなわちLR項集合)は，LR表の1状態に対応す
+る．LR表は，状態$i$と終端記号$a$からパーザの動作を決める表
+$\mbox{action}(i,a)$と，$i$と非終端記号$A$から状態$j$を決める表
+$goto(i,A)$から成る．$C$の各LR項集合$I_i$について，次の手順でLR表を作
+成することができる．
+\begin{itemize}
+\item $I_i$にLR項$[A \rightarrow \alpha \cdot ]$が存在するならば，
+  終端記号$a \in \mbox{follow}(A)$について，
+  $\mbox{action}(i,a)$に$\mbox{reduce} A \rightarrow \alpha$を加える．
+  $\mbox{follow}(A)$は，ある記号の次に現れ得る終端記号を計算
+  する手続き．
+
+\item $I_i$にLR項$[SS \rightarrow S \cdot ]$が存在するならば，
+  $\mbox{action}(i,\$)$に$\mbox{accept}$を加える．
+    
+\item 終端記号$a$について，$\mbox{GOTO}(I_i, a) = I_j$ならば，
+  $\mbox{action}(i,a)$に$\mbox{shift} j$を加える．
+  
+\item 非終端記号$A$について，$\mbox{GOTO}(I_i, A) = I_j$ならば，
+  $\mbox{goto}(i,A)$に$j$を加える．
+\end{itemize}
+
+\subsection*{LR構文解析法}
+
+LR構文解析法は，解析スタックのトップに積まれているLR表状
+態，次の入力語(先読み語)から，action表を参照して，次のように解析を進める．
+\begin{itemize}
+\item $\mbox{shift} i$: 先読み語と状態$i$をスタックにプッシュする．先
+  読み語を一つ読み進める．
+
+\item $\mbox{reduce} A \rightarrow \alpha$: スタックから$2|\alpha|$個
+  ポップし，その時のスタックトップの状態$j$を用い，スタックに非終端記
+  号$A$と$\mbox{goto}(j,A)$をプッシュする．
+
+\item $\mbox{accept}$: 入力を受理
+\end{itemize}
+
+
+\section{MSLR法への適用}
+MSLR法\cite{tanaka1995}は，文脈自由文法から生成したLR表に，形態素の
+接続可能性を表した接続表の制約を組み込む手法である．終端記号$a$と$b$の
+接続可能性を使って，LR表から次のような動作を削除することで，接続表を組
+み込むことができる．
+\begin{quote}
+  動作Actの直前に実行する動作がshiftで，そのshiftの先読み語が$a$，Act
+  の先読み語が$b$であるとき，$a$と$b$が接続不可ならActを削除する．
+\end{quote}
+
+この手法を可能にするためには，shift直後の状態が，その先読み語($a$)毎に
+分節されていなければならない．しかし，提案法のLR表では，shift直後の状
+態では，直前の先読み語($a$)の情報は抽象化されてしまい，その結果，先読
+み語($a$)毎に分節された状態にはならないため，MSLR法をそのまま導入する
+ことはできない．
+
+この問題を解決するためには，提案手法においてドットのすぐ左の終端記号を
+抽象化しないようにすればよい．すなわち，次のようなLR項を導入する．
+\begin{quote}
+  $[ A \rightarrow |\beta| a \cdot \gamma ]$ ($a$が終端記号の場合)
+
+  $[ A \rightarrow |\beta A| \cdot \gamma ]$ ($A$が非終端記号の場合)
+\end{quote}
+このようなLR項からLR表を作成すると，終端記号の直後のshift動作で遷移す
+る状態については，終端記号毎に分節された状態となり，MSLR法の適用が可能
+となる．
+
+
+\begin{biography}
+\biotitle{略歴}
+\bioauthor{秋葉 友良}{
+1990年東京工業大学理学部情報科学科卒業．
+1995年同大学院総合理工研究科システム科学専攻博士課程了．
+同年，電子技術総合研究所入所．2001年，産業技術総合研究所．
+現在，情報処理研究部門主任研究員．
+博士（工学）．
+自然言語処理，音声認識，音声対話の研究に従事．
+}
+\bioauthor{伊藤 克亘}{
+博士(工学)．1993年，電子技術総合研究所入所．
+2003年，名古屋大学大学院情報科学研究科助教授．現在に至る．
+音声を主とした自然言語全般に興味を持つ．
+}
+
+\bioreceived{受付}
+\biorevised{再受付}
+\bioaccepted{採録}
+
+\end{biography}
+
+\end{document}
+

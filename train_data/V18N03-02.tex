@@ -1,0 +1,1431 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+\newcommand{\argmax}{}
+\newcommand{\argmin}{}
+
+
+
+\Volume{18}
+\Number{3}
+\Month{June}
+\Year{2011}
+
+\received{2010}{9}{30}
+\accepted{2010}{11}{9}
+
+\setcounter{page}{247}
+
+\jtitle{ラベルなしデータの二段階分類とアンサンブル学習に基づく\\
+	半教師あり日本語語義曖昧性解消}
+\jauthor{井上　裁都\affiref{Author_1} \and 斎藤　博昭\affiref{Author_1}}
+\jabstract{
+本稿では，パラメータ調整を簡略化したブートストラッピング的手法による
+日本語語義曖昧性解消を提案する．
+本稿で取り上げるブートストラッピングとは，ラベルなしデータを既存の
+教師あり学習手法を用いて分類し，その中で信頼度の高いデータを
+ラベル付きデータに加え，この手順を反復することによって分類の性能を向上させる
+半教師あり学習手法である．
+従来のブートストラッピングによる語義曖昧性解消においては，プールサイズ，
+ラベル付きデータに追加するラベルなしデータの事例数，手順の反復回数といった
+パラメータをタスクに合わせ調整する必要があった．
+本稿にて提案する手法はヒューリスティックと教師あり学習（最大エントロピー法）
+によるラベルなしデータの二段階の分類，および学習に用いるラベルなしデータの
+条件を変えた複数の分類器のアンサンブルに基づく．
+これにより必要なパラメータ数は一つになり，
+かつパラメータの変化に対し頑健な語義曖昧性解消を実現する．
+SemEval-2 日本語タスクのデータセットを用いたベースラインの教師あり手法との
+比較実験の結果，パラメータの変化に対し最高で 1.8 ポイント，
+最低でも 1.56 ポイントの向上が見られ，提案手法の有効性を示せた．
+}
+\jkeywords{語義曖昧性解消，半教師あり学習，ブートストラッピング，最大エントロピー法，アンサンブル学習，頑健性}
+
+\etitle{Semi-Supervised Japanese Word Sense Disambiguation\\
+	Based on Two-Stage Classification of Unlabeled Data\\
+	and Ensemble Learning}
+\eauthor{Tatsukuni Inoue\affiref{Author_1} \and Hiroaki Saito\affiref{Author_1}} 
+\eabstract{
+In this paper, we propose a bootstrapping-like method 
+which eases optimal and empirical parameter selection 
+for Japanese word sense disambiguation. 
+Bootstrapping means, in this paper, semi-supervised learning methods 
+based on the following procedures: 
+(1) train a classifier on labeled examples, 
+(2) use the classifier to select confident unlabeled examples, 
+(3) add them to the labeled examples, 
+(4) repeat steps 1--3. 
+Traditional bootstrapping methods require empirical selection for 
+the parameters including the pool size, the number of 
+the most confident examples and the number of iterations. 
+Our method uses two-stage unlabeled example classification 
+based on heuristics and a supervised method (Maximum Entropy classifier) 
+and combines a series of classifiers along a sequence of varying conditions. 
+This method requires only one parameter 
+and enables parameter robust word sense disambiguation. 
+Experiments compared with the baseline supervised method 
+on the Japanese WSD task of SemEval-2 shows that our method obtained 
+accuracy improvement between 1.8 and 1.56 points.
+}
+\ekeywords{Word sense disambiguation, Semi-supervised learning, Bootstrapping, Maximum entropy, Ensemble learning, Robustness}
+
+\headauthor{井上，斎藤}
+\headtitle{ラベルなしデータの二段階分類とアンサンブル学習に基づく半教師あり日本語語義曖昧性解消}
+
+\affilabel{Author_1}{慶應義塾大学大学院理工学研究科}{Graduate School of Science and Technology, Keio University}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+\label{sec:intro}
+
+語義曖昧性解消は古典的な自然言語処理の課題の一つであり，先行研究の多くは
+教師あり学習により成果を挙げてきた\cite{Marquez04,Navigli09}．
+しかし，教師あり学習による語義曖昧性解消においては
+データスパースネスが大きな問題となる．
+多義語の語義がその共起語より定まるという仮定に基づけば，
+一つの多義語と共起し得る単語の種類が数万を超えることは珍しくなく，
+この数万種類のパターンに対応するために充分な語義ラベル付きデータを
+人手で確保し，教師あり手法を適用するのは現実的でない．
+一方で語義ラベルが付与されていない，いわゆるラベルなしのデータを
+大量に用意することは，ウェブの発展，学術研究用のコーパスの整備などにより
+比較的容易である．
+このような背景から，訓練データと大量のラベルなしデータを併用して
+クラス分類精度を向上させる半教師あり学習，または訓練データを必要としない
+教師なし学習による効果的な語義曖昧性解消手法の確立は重要であると言える．
+
+本稿では半教師あり手法の一つであるブートストラッピング法を取り上げ，
+従来のブートストラッピング法による語義曖昧性解消手法の欠点に対処した
+手法を提案する．
+ブートストラッピング法による語義曖昧性解消においては主に
+Self-training（自己訓練）\cite{Nigam00b}とCo-training（共訓練）\cite{Blum98}
+の二つのアプローチがある\cite{Navigli09}．
+まずこれらの手法に共通する手順を述べると次のようになる．
+
+\vspace{0.5\baselineskip}
+\begin{center}
+\begin{minipage}{0.85\hsize}
+\underline{一般的ブートストラッピング手順}
+\begin{description}
+\item[Step 1] ラベルなしデータ$U$から事例$P$個をランダムに取り出し$U'$を作る．
+\item[Step 2] ラベル付きデータ$L$を用いて一つまたは二つの分類器に学習させ$U'$の事例を分類する．
+\item[Step 3] Step 2で分類した事例より分類器毎に信頼性の高いものから順に$G$個を選び，$L$に加える．
+\item[Step 4] Step 1から$R$回繰り返す．
+\end{description}
+\end{minipage}
+\end{center}
+\vspace{0.5\baselineskip}
+
+Self-trainingとCo-trainingの違いは，前者はStep 2で用いる分類器は
+一つであるのに対し，後者は二つ用いる点にある．
+またCo-trainingにおいては二つの独立した素性集合を設定し，
+各分類器を一方の素性集合のみを用いて作成する．
+Co-trainingにおいてこのように設定するのは，
+Step 3において追加する事例を一方の素性のみから決定することから，
+追加事例のもう一方の素性を見たとき新しい規則の獲得が期待できるためである．
+Self-trainingとCo-trainingの欠点はいずれも性能に影響するパラメータが
+多数存在し，かつこれらのパラメータを最適化する手段がないことである．
+具体的にはStep 1のプールサイズ$P$, Step 3の$L$に加える事例の個数$G$, 
+手順の反復回数$R$は全てパラメータであり，タスクに合わせた調整を必要とする．
+
+本稿では，ラベル付きデータとラベルなしデータを同時に活用しつつも，
+パラメータ設定をほとんど不要とする新しい手法を提案する．
+本手法はまずヒューリスティックと教師あり学習で構築した分類器による
+ラベルなしデータの二段階の「分類」を行う．
+ここで「分類」とは語義曖昧性解消を行い，
+語義ラベルを付与することを意味する．
+本稿では以後特に断りがない限り，分類とはこの語義ラベル付与のことを指す．
+二段階分類したラベルなしデータの中で条件を満たすデータは
+オリジナルのラベル付きデータに加えられる．
+その結果，パラメータ設定がほぼ不要なブートストラッピング的
+半教師あり手法による語義曖昧性解消を実現する．
+さらに追加するラベルなしデータの条件を変えることで
+複数の分類器を作成し，アンサンブル学習することで，
+パラメータの変化に頑健な分類器を生成する．
+
+本稿の構成は以下の通りである．
+\ref{sec:work}節にて関連研究および本研究の位置付けを述べる．
+\ref{sec:method}節にて提案手法およびその原理を並行して述べる．
+\ref{sec:exp}節にてSemEval-2日本語タスク\cite{Okumura10}のデータセットに
+提案手法を適用した実験の結果を示す．
+\ref{sec:conc}節にて結論を述べる．
+
+
+\section{関連研究}
+\label{sec:work}
+
+本節ではまず\ref{sec:intro}節でブートストラッピング手法として挙げた
+Self-trainingおよびCo-trainingを用いた語義曖昧性解消の
+先行研究を概観する．
+また，アンサンブル学習に基づく語義曖昧性解消には
+教師あり学習のアンサンブル，教師なし学習のアンサンブル，
+半教師あり学習のアンサンブルに基づいた手法が提案されており，
+これら先行研究を併せて概説する．
+
+
+\subsection{ブートストラッピングに基づく研究}
+\label{sec:work1}
+
+Self-trainingに基づいた語義曖昧性解消の先駆けとしては
+Yarowskyの研究\cite{Yarowsky95}が挙げられる．
+Yarowskyは「語義はその語の連語より定まる(one sense per collocation)」
+「語義はその語を含む談話より定まる(one sense per discourse)」という
+二つのヒューリスティックに基づき，
+ラベルなしデータに反復的にラベル付けするアルゴリズムを提案した．
+この手法は二つの観点からラベル付けをするため，
+Co-trainingの一種であると見ることもできる．
+また，このヒューリスティックに基づいたYarowskyのアルゴリズムは
+Abney \cite{Abney04}により，目的関数の最適化問題として定式化されている．
+
+Co-trainingを用いた語義曖昧性解消の早期の例としては
+新納の報告\cite{Shinnou01a}がある．
+新納はCo-trainingを適用するにあたり，二組の素性集合の独立性を高めるため，
+ラベル付きデータに追加するラベルなしデータを
+素性間の共起性に基づいて選択する手法を提案した．
+結果，日本語の語義曖昧性解消において通常のCo-trainingよりも
+性能が向上したと報告した．
+
+MihalceaはCo-trainingとSelf-trainingの両方を語義曖昧性解消に適用し，
+\ref{sec:intro}節にて述べたパラメータの影響について調査した\cite{Mihalcea04a}．
+この報告ではパラメータの自動での最適化はできず，
+最適な設定と自動による設定に大きな差があったと報告している．
+また，Mihalceaは同じ報告の中でスムージングしたCo-trainingおよび
+Self-trainingを提案した．
+これは手順の反復のたびに生成される各分類器の多数決より語義判定し
+ブートストラッピングするという方式であり，
+ブートストラッピングとアンサンブル学習の組合せの一種と見ることができる．
+この方式は通常のブートストラッピングよりも性能が向上したと報告された．
+
+以上の手法は\ref{sec:intro}節で述べたようなパラメータを
+タスク（データセット）に合わせ調整しなければならないという大きな課題がある．
+
+NiuらはZhuらの提案したラベル伝播手法\cite{Zhu02}に基づいた
+半教師あり手法による語義曖昧性解消について調査した\cite{Niu05}．
+ラベル伝播は事例を節点とする連結グラフを考え，重み付きの辺を通して
+ラベルありの事例からラベルなしの事例へとラベル情報を反復的に伝播させる．
+そして伝播の収束結果よりラベルを推定する．
+この手法はSenseval-3 \cite{Mihalcea04b} English lexical sampleタスクの
+データセットに適用した結果，従来の教師あり学習と比較して著しい成果は
+得られなかったとしている．
+
+PhamらはCo-trainingとSmoothed Co-training \cite{Mihalcea04a}に加え，
+Spectral Graph Transduction (SGT) \cite{Joachims03}およびSGTとCo-trainingを
+組合せたCo-trainingの語義曖昧性解消への適用を調査した\cite{Pham05}．
+Transductionとは訓練データから分類器を生成せず，
+直接テストデータにラベル付けする推論方法である\cite{Vapnik98}．
+SGTは$k$近傍法のTransductive版であるとされる．
+SGTは$k$近傍法の応用であるため，$k$がパラメータとなり，
+かつ$k$は性能に与える影響が大きいと報告されている．
+よってPhamらの調査した手法全てにはパラメータ設定の問題が
+存在していることになる．
+
+手法のアンサンブルを含まないブートストラッピングによる語義曖昧性解消の
+研究の最後として小町らの報告\cite{Komachi10}を挙げる．
+小町らはブートストラッピング手法の一つであるEspresso \cite{Pantel06}に対し
+グラフ理論に基づいて意味ドリフト\cite{Curran07}の解析を行った．
+意味ドリフトは，語義曖昧性解消の観点から考えると，
+どのような語義の語も持つ素性をジェネリックパターンと考え，
+ジェネリックパターンを持つ（信頼性が低いとされるべき）ラベルなしデータに対し
+手順の反復過程においてラベルが与えられることにより，
+反復終了後に生成される分類器の性能が低下してしまう現象と解釈できる．
+この問題への対処のため小町らは二つのリンク解析的関連度算出法を適用した．
+この手法は意味ドリフトに頑健かつパラメータ数が一つで
+さらにその調整が比較的容易という利点を持つ．
+Senseval-3 English lexical sampleタスクのデータセットに手法を適用した
+実験の結果，小町らの手法は類似したグラフ理論的手法である
+HyperLex \cite{Veronis04}やPageRank \cite{Agirre06}と比較して
+高い性能が得られたと報告している．
+
+
+\subsection{アンサンブル学習に基づく研究}
+\label{sec:work2}
+
+教師あり学習のアンサンブルに基づく研究としては，
+AdaBoostを用いた\cite{Escudero00}，素性として用いる文脈の大きさを変えて
+複数のNaive Bayes分類器をアンサンブルした\cite{Pedersen00}，
+六種の分類器の組合せによる\cite{Florian02}，
+二段階の分類器の出力の選択に基づいた\cite{Klein02}，
+複数のNaive Bayes分類器の出力の比較に基づいた\cite{Wang04}が挙げられる．
+ここではWangらの手法をより詳しくみる．
+WangらはまずPedersonと同様に素性として用いる文脈の大きさ，
+つまり目標の多義語前後$k$語以内の語を素性として用いるとして，
+$k$を変えることで複数のNaive Bayes分類器を作成する．
+次にラベル付きデータを各分類器にて分類する．
+各要素がこの各分類器による分類結果であるベクトルをdecision trajectoryと呼ぶ．
+最後に各ラベル付きデータから得たdecision trajectoryの集合を訓練データとし，
+これらと入力から得たdecision trajectoryの類似度に基づいて入力の語義を判定する．
+Wangらの手法は中国語の語義曖昧性解消実験の結果，
+Pedersonの手法などと比較して最も良い結果が得られたと報告した．
+
+教師なし手法のアンサンブルの例としてはBrodyらの研究\cite{Brody06}が挙げられる．
+Brodyらは過去に語義曖昧性解消において有効と報告された教師なし手法である
+Extended Gloss Overlap \cite{Banerjee03}，
+Distributional and WordNet Similarity \cite{McCarthy04}，
+Lexical Chains \cite{Galley03}および
+Structural Semantic Interconnections \cite{Navigli05}を組合せた手法を提案した．
+この手法は組合せに用いた各手法と比較し，
+より良い結果が得られたと報告されている．
+
+最後に本稿で提案する手法に最も関連の深いブートストラッピング手法の
+アンサンブルを行ったLeらの研究\cite{Le08}について述べる．
+Leらは我々と同様に従来のブートストラッピングによる語義曖昧性解消の問題点に
+対する解決法を提案した．
+Leらが解決法を提案した問題点は，(1)ラベル付きデータのラベル毎のデータ数の偏り，
+(2)ラベル付きデータに追加するラベルなしデータ決定の基準，
+(3)手順の反復の停止条件および最終分類器の作成法の三つである．
+ここで問題(2)は\ref{sec:intro}節にて述べたパラメータ$G$の決定法，
+問題(3)はパラメータ$R$の決定法とも換言できる．
+Leらはこれらの解決のため，追加するラベルなしデータのリサイズ，
+複数のデータ追加条件の閾値の設定および対応する複数の追加データ集合の設定，
+訓練データを用いた追加データの評価および手順反復停止条件の設定，
+そして追加データと教師あり学習手法別の各分類器のいくつかの組合せ法を提案した．
+ここで追加データの評価と手順反復停止条件の設定の手法は，
+Zhouらが提案したTri-training法\cite{Zhou05}で用いられた
+手法を参考に設定している．
+Tri-trainingはCo-trainingを発展させた手法であり，
+Co-trainingと異なりパラメータ設定を不要とする特徴がある．
+実験はSenseval-2 \cite{Edmonds01}およびSenseval-3のEnglish lexical sample
+タスクのデータセットを用いて行われ，従来の教師あり手法と比較し
+最大で1.51ポイントの精度向上が見られたとLeらは報告した．
+
+
+
+\subsection{本研究の位置付け}
+
+\ref{sec:work1}節と\ref{sec:work2}節を踏まえた上での
+本研究の位置付けは以下の通りである．
+まず，小町らの手法はパラメータ設定が容易という利点があるが，
+他の教師あり手法と組合せるのが困難なのが問題点である．
+高性能な教師あり手法を用いず，さらに性能を向上させるのは難しい．
+また，Leらの手法の難点として手順の反復停止条件の設定が挙げられる．
+これは，教師あり学習を用い追加データを訓練データとして分類器を作成し
+オリジナルのラベル付きデータを分類して得られるエラー率，
+および追加データの総数に基づき設定される．
+具体的には次の式を用い追加データの評価値$q$を求める．
+\begin{equation}
+q=m(1-2\eta)^2
+\label{eq0}
+\end{equation}
+ここで，$m$は追加データの総数，$\eta$はエラー率を示す．
+この$q$が前回の値よりも小さければ反復は停止する．
+しかし反復の停止にこの条件が用いられる具体的根拠は示されていない．
+単に反復を自動的に停止するためと述べられているだけである．
+このためこの停止条件が最適であるかどうか疑問が残る．
+
+そこで本研究の立場だが，まず本稿ではこの停止条件の追究はしない方針とする．
+しかし，\ref{sec:intro}節にて目標としたように
+ブートストラッピングにおけるパラメータの削減は達成を目指す．
+そこで本研究では手順の反復回数（パラメータ$R$）を一回に留めるという方針を採る．
+この方針には次の利点が考えられる．
+
+\begin{itemize}
+\item 手順の回数が固定され計算時間の予測が立てやすい．
+\item ラベル付きデータへのラベルなしデータの追加が一度のみとなるため，
+追加されたデータに対し分析，考察を加えやすい．
+\item 反復1回目の精度を向上させることで，
+手法を複数反復できるように拡張したとき更なる精度向上が見込める．
+\end{itemize}
+
+以上の検討に基づき，本研究では反復を伴わず，かつ教師あり学習手法を
+併用した高性能なブートストラッピング的手法を確立する．
+また反復回数を一回にすることは，
+反復回数以外のパラメータを削減することにもつながる．
+詳しくは\ref{sec:method}節にて述べる
+
+
+
+\section{提案手法}
+\label{sec:method}
+
+提案手法は\ref{sec:intro}節で述べたラベルなしデータの二段階の分類と
+その結果を用いたアンサンブル学習による最終分類器作成の全三段階からなる．
+手法の流れを次に，また本手法に基づくシステム全体像を図\ref{fig:img01}に示す．
+
+\begin{figure}[b]
+ \begin{center}
+  \includegraphics{18-3ia2f1.eps}
+ \end{center}
+  \caption{提案手法システム全体像}
+  \label{fig:img01}
+\end{figure}
+
+\vspace{0.5\baselineskip}
+\begin{center}
+\begin{minipage}{0.85\hsize}
+\begin{description}
+\item[Stage 1] ヒューリスティックによる分類\\
+（手掛り語獲得，手掛り付き事例抽出・分類1回目）
+\item[Stage 2] 教師あり学習手法による分類\\
+（手掛り付き事例分類2回目，二次分類器作成）
+\item[Stage 3] アンサンブル学習による最終分類器作成
+\end{description}
+\end{minipage}
+\end{center}
+\vspace{0.5\baselineskip}
+
+まず図\ref{fig:img01}の見方を述べる．
+長方形の囲みは各種処理，楕円の囲みは各処理の出力を示す．
+各種処理の中には語義分類の処理が三回登場するが，
+これらの括弧内の分類器はそれぞれの分類処理のために
+作成し使用する分類器を示している．
+実線の矢印は各処理において入出力されるデータの流れを示す．
+点線は入出力するデータへの処理に利用するデータであり，
+分類器作成のために訓練データとして用いるデータも含まれる．
+図\ref{fig:img01}における訓練データとはオリジナルのラベル付きデータを指す．
+本システムにおける最終的な語義曖昧性解消の対象は，
+テストデータとして図\ref{fig:img01}のように入力し，
+その結果は語義分類最終結果として出力される．
+
+図\ref{fig:img01}に基づく本システムの概観は次のようになる．
+まず本システムの最初の手順は手掛り語の獲得である．
+手掛り語は訓練データから抽出する形で獲得する．
+第二の手順はラベルなしデータからの手掛り付き事例の獲得である．
+手掛り付き事例の獲得は，
+手掛り語を用いたラベルなしデータからの手掛り付き事例の抽出・分類（1回目），
+訓練データを用いて作成された一次分類器による手掛り付き事例の語義分類，
+一次分類器による分類結果に基づく手掛り付き事例の分類（2回目）といった
+多段の手順により実現される．
+最後の手順はテストデータの語義曖昧性解消である．
+これは獲得した手掛り付き事例と訓練データを用いた二次分類器の作成，
+および異なる条件で作成された複数の二次分類器による
+テストデータの分類結果に基づく最終分類器の判定より構成される．
+
+本節では，以後本手法を全三段階に区切り，詳述していく．
+ここで一つ注意点がある．
+それは今，本システムを上述のように手掛り語，手掛り付き事例，
+語義分類最終結果と出力されるデータに着目し，手順を三つに区切ったが，
+これは以後に述べる三段階の手順と対応関係にないということである．
+具体的には，手法第一段階は図\ref{fig:img01}の手掛り語獲得から
+手掛り付き事例抽出・分類1回目まで，
+手法第二段階は一次分類器による手掛り付き事例の分類から
+二次分類器によるテストデータの語義分類まで，
+手法第三段階は最終分類器によるテストデータの語義分類のみと対応する．
+
+手法第一段階はヒューリスティックによるラベルなしデータの分類として一括りし，
+手掛り語ならびに手掛り付き事例の詳細と併せて\ref{sec:first}節にて詳述する．
+手法第二段階はラベルなしデータから抽出した手掛り付き事例の
+教師あり学習手法による分類とその結果に基づく二次分類器の作成として括り出し，
+詳細を\ref{sec:second}節にて述べる．
+手法第三段階はアンサンブル学習による最終分類器の作成として括り，
+\ref{sec:third}節にて詳述する．
+\ref{sec:summary}節では本手法のまとめをする．
+このような手法の全三段階の区切りは，\ref{sec:exp}節にて述べる
+実験結果の考察において意味を持つことになる．
+
+なお本稿では，訓練データ，テストデータおよびラベルなしデータはいずれも
+UniDic\footnote{http://www.tokuteicorpus.jp/dist/}を用いて形態素解析済み
+\footnote{SemEval-2日本語タスクのデータセットはUniDicを用いた
+自動解析およびその人手での修正が施されている．} であり，訓練データにおいてラベルは各形態素に付与されているものとする．
+また本稿では便宜上，形態素を単語または語とも呼ぶことにする．
+
+
+
+\subsection{Stage 1：ヒューリスティックによる分類}
+\label{sec:first}
+
+分類第一段階は訓練データからの手掛り語の獲得ならびにヒューリスティックによる
+ラベルなしデータからの手掛り付き事例の抽出・分類（1回目）からなる．
+
+
+\subsubsection{手掛り語の獲得}
+
+本手法で獲得する手掛り語$W_{ts}$とは，訓練データ$L$において語義ラベルが
+付与された対象語\footnote{本稿では語義曖昧性解消の対象語を単に「対象語」と呼ぶ．} $t$の前後$n_w$語以内において共起する内容語
+\footnote{具体的には\ref{sec:exp}節参照のこと．} の表層形であり，かつ与えられた訓練データ内で共起する$t$に付与された
+語義ラベルが必ずある一つの語義ラベル$s$に定まる語の集合とする．
+後者の条件は，$s$が付与された$t$を$t_s$とすると，
+形態素$w_j$共起の下で$t$が$t_s$である確率を$p(t_s|w_j)$とすると，
+\begin{equation}
+p(t_s|w_j)=1 \label{eq1}
+\end{equation}
+を満たす$w_j$であることとも書き換えることができる．
+前者の条件にある窓幅$n_w$については\ref{sec:third}節で詳述する．
+
+このような条件を満たす$w_{ts} \in W_{ts}$が
+語義ラベルが付与されていない$t$と共起したとき，
+この$t$は単純に式(\ref{eq1})より$t_s$である可能性が高いと考え，
+以後$W_{ts}$は$t$の語義曖昧性解消の手掛りとして利用する．
+また表層形を条件としたのは，基本形，品詞といった情報は表層形と比べ情報の
+粒度が荒く，表層形の方が手掛りとしての信頼性が高いと考えたことによる．
+
+もし式(\ref{eq1})を満たす$w_j$が$L$全体で一度だけ出現する語である場合，
+$t$が$t_s$に決定付けられる可能性は低いとも考えられるが，
+これは二度以上出現する語の場合も大差はないと筆者は考える．
+$p(t_s|w_j)$は語義曖昧性解消において単純ベイズや決定リストのルールの
+信頼度などにしばしば用いられ
+\footnote{ここでは$w_j$は任意の素性である．}，
+その中で$p(t_s|w_j)$をスムージングして用いる例もいくつかある
+\cite{Yarowsky95,Yagi01,Tsuruoka02}．
+しかしこの場合は最適な閾値を求める必要があり，
+問題がかえって難しくなってしまう．
+このため，今回は単純な式(\ref{eq1})を$w_{ts}$の条件とした．
+
+なお上述の$w_{ts}$は添え字が示すように共起する$t_s$に
+付与されていた$s$の情報を含む．
+よって実際の手掛り語獲得では，例えば対象語が「相手」，
+$n_w=2$，訓練データの一つに「相手に取って不足はない」があり，
+この文中の「相手」に``117-0-0-3''という語義ID\footnote{ここに示したIDはSemEval-2日本語タスクにて用いられたもの．
+上位二つの数字は見出し語のID，残り二つはそれぞれ
+語義の大分類，中分類のIDを示す．
+なお``117-0-0-3''の辞書定義文は「自分と対抗して物事を争う人」である．} が付与されていたとする．
+このとき「取っ」という語が訓練データにおいて``117-0-0-3''の語義の
+「相手」とのみ共起するのであれば，この訓練データからは《取っ, 117-0-0-3》
+という二つ組一つを抽出する．
+
+
+
+\subsubsection{手掛り付き事例抽出・分類（1回目）}
+
+ここでは，まず手掛り付き事例抽出の手順を述べる前に
+SemEval-2日本語タスクにおける対象語$t$の表記ゆれへの対処について述べる．
+SemEval-2においては$t$について与えられる情報は訓練データ$L$を除くと
+与えられた辞書に記述された見出し語$H_t$と語義の語釈文$D_t$のみであり，
+$t$の表記に関する情報は充分には与えられない．
+例えば，$t$の一つに「子供」があるが，これは他にも「子ども」「こども」
+といった表記があるのに対し，$H_t$にない「子ども」という表記の情報は
+与えられていない．
+この問題に対処しない場合，ラベルなしデータから$t$の事例を
+充分な数獲得できないだけでなく，
+$t$の表記により語義の傾向が変わる場合も考えられ，
+抽出する事例の語義に偏りが生まれる可能性も考えられる．
+このため，UniDicの辞書を用いて，
+以下の手順で$t$の取り得る表記（表層形）$E_t$の獲得を行った．
+なお下記のStep 2では実際には$E_{t0}$からひらがなのみで構成される
+表層形を除外して$V_t$を抽出している．
+これはこのような語は語彙素の同定が困難であり
+表層形獲得精度の低下を招くためである．
+また$e_t \in E_t$は品詞細分類の情報も合わせて獲得し，
+以後$t$の事例としてこの二つ組の情報が一致するものを獲得する．
+
+\vspace{0.5\baselineskip}
+\begin{center}
+\begin{minipage}{0.85\hsize}
+\underline{対象語表層形の獲得手順}
+\begin{description}
+\item[Step 1] $t$に対し$L$と$H_t$から獲得可能な全ての表層形$E_{t0}$を抽出する．
+\item[Step 2] $E_{t0}$と対応する語彙素$V_t$をUniDicの辞書から抽出する．
+\item[Step 3] $V_t$の全表層形$E_{t1}$をUniDicの辞書から抽出する．
+\item[Step 4] $E_{t0}$および$E_{t1}$を合わせて対象語の表層形$E_t$として獲得する．
+\end{description}
+\end{minipage}
+\end{center}
+\vspace{0.5\baselineskip}
+
+続いて，獲得した手掛り語$W_{ts}$および対象語の表層形$E_t$を用いて
+ラベルなしデータ$U$より手掛り付き事例の抽出および1回目の分類を行う．
+手順を以下に示す．
+
+\vspace{0.5\baselineskip}
+\begin{center}
+\begin{minipage}{0.85\hsize}
+\underline{手掛り付き事例抽出・\mbox{分類（1回目）の手順}}
+\begin{description}
+\item[Step 1] $U$から$e_t \in E_t$と一致する表層形の形態素を探索し，
+発見したら$i_{t0}$とする．
+\item[Step 2] $i_{t0}$の前後$n_w'$語以内に$w_{ts} \in W_{ts}$が共起する場合，
+$i_{t0}$を手掛り付き事例$i_{ts1} \in I_{ts1}$として抽出する．
+\end{description}
+\end{minipage}
+\end{center}
+\vspace{0.5\baselineskip}
+
+手掛り付き事例$I_{ts1}$とは対象語$t$の前後に手掛り語$w_{ts}$が共起する
+事例を指し，上記手順より抽出される．
+また，ここで抽出される$I_{ts1}$の$s$は$w_{ts}$の添え字の$s$であり，
+$i_{t0}$に$s$を付与することで分類したとみなすことができる．
+よって上記手順では，手掛り付き事例の抽出と分類を同時に行っていると解釈できる．
+一方で，$i_{t0}$の集合$I_{t0}$と$\bigcup_{s}I_{ts1}$の差集合は
+語義ラベルが付与されないということで，
+語義判定不可に分類されたと考えることもできる．
+
+上記手順を具体例を挙げ説明すると次のようになる．
+$E_t$に「相手」，$W_{ts}$に《取っ, 117-0-0-3》が含まれているとし，$U$より
+「ゼネコン三十一社を相手取って一人あたり三千三百万円の損害賠償を求めた」
+という文に対し上記手順を適用するとする．
+また，$n_w'=2$とする．
+この場合，文中の「相手」が$i_{t0}$となり，$t$の前後2語以内に
+「取っ」が共起するため，$s={}$``117-0-0-3''とし，
+$i_{t0}$を手掛り付き事例$i_{ts1}$として抽出する．
+
+さて，ここでパラメータ$n_w'$についてであるが，
+これは$W_{ts}$獲得に用いるパラメータ$n_w$とは区別する．
+さらに$n_w'$の値は上述の例と同様に``2''と固定する．
+この2という数は\ref{sec:second}節で述べる教師あり学習による分類の素性として
+対象語前後``2''語以内の形態素を用いることと対応するのだが，
+その理由を列挙すると以下のようになる．
+
+\begin{enumerate}
+\item $W_{ts}$獲得に用いる訓練データ$L$は本タスクにおいて数少ない
+信頼できるデータである．したがって，$L$からは出来る限り多くの特徴を抽出したい．
+\item 一方，ラベルなしデータ$U$は多量に存在するが，これを自動的に分類した
+データは当然ながら必ずしも信頼できるわけではない．
+\item 反復回数一回でなるべく信頼性が高くかつ充分な数のデータの獲得が望ましい．
+\item $n_w'$を教師あり学習の素性抽出の範囲と一致させた場合，
+抽出した手掛り付き事例$i_{ts1}$の素性に必ず$w_{ts}$が含まれる．
+このため，$i_{ts1}$を教師あり手法で再分類したとき高精度の分類が期待できる．
+\item $w_{ts}$は$n_w$に関わらず式(\ref{eq1})を満たす．
+つまりある程度の範囲までは$n_w$を大きくすることで
+信頼性を維持しつつ多数の$w_{ts}$を獲得できる．
+\item $w_{ts}$が充分な数あれば，一度の処理で多数の$U$を分類し
+やはり充分な数のデータを$L$に加えることができる．
+\end{enumerate}
+
+上述の理由には従来法の欠点と提案法の利点の両方が含まれている．
+その対応関係は，理由(4)は(2)への対処であり，
+(5)は(4)の補足かつ(1)への対処であり，(6)は(5)を踏まえた(3)への対処となる．
+またここに述べた理由は，\ref{sec:second}節にて述べる
+手掛り付き事例分類2回目において，\ref{sec:intro}節で述べたパラメータ
+$P$, $G$, $R$が削減可能となる理由にもなる．
+詳しくは\ref{sec:second}節にて改めて述べる．
+
+以上のアルゴリズムをもって，本手法の第一段階とする．
+節題の通り，本処理は経験則に基づく部分が多い．
+しかし，本処理は以降の処理においても必要とされる性質を備えている．
+これらは\ref{sec:second}節および\ref{sec:third}節にて詳述する．
+
+
+\subsection{Stage 2：教師あり学習手法による分類}
+\label{sec:second}
+
+分類第二段階では\ref{sec:first}節で抽出・分類した手掛り付き事例に対し，
+オリジナルの訓練データから得られる一次分類器を用いて2回目の分類を行う．
+そして，その結果得られる手掛り付き事例を用いて二次分類器を作成する．
+
+
+\subsubsection{教師あり学習手法}
+
+本手法で用いる教師あり学習手法は最適化にL-BFGS \cite{Liu89}を用いた
+最大エントロピー法\cite{Nigam00a}とした．
+この理由はSemEval-2日本語タスクフォーマルラン参加チームの一つの報告
+\cite{Fujita10}に最大エントロピー法が有効というものがあったためである．
+また学習の素性もFujitaらの報告を参考に次のように設定した．
+
+\begin{itemize}
+\item 範囲\\対象語前後2語以内
+\item 1グラム素性\\
+形態素の表層形\\
+形態素の基本形\footnote{本研究では用言の基本形のカナ表記を「基本形」とする．
+詳しくは\ref{sec:exp}節参照のこと．}
+\item 2グラム・3グラム・対象語を含むスキップ2グラム素性\\
+形態素の表層形\\
+形態素の基本形\\
+形態素の品詞と対象語との相対位置の組合せ\\
+形態素の品詞細分類と対象語との相対位置の組合せ
+\end{itemize}
+
+具体的には，対象語「相手」の事例「相手に取って不足はない」
+に対しては次の素性が獲得できる．
+下記例中の``*''を含む素性はスキップ2グラムを示す．
+また品詞に付与されている番号は対象語との相対位置である．
+
+\vspace{0.5\baselineskip}
+\begin{center}
+\begin{minipage}{0.85\hsize}
+\small
+相手，に，取っ，トル，相手 に，に 取っ，相手 に 取っ，相手 * 取っ，
+に トル，相手 に トル，相手 * トル，名詞$_0$ 助詞$_1$，助詞$_1$ 動詞$_2$，
+名詞$_0$ 助詞$_1$ 動詞$_2$，名詞$_0$ * 動詞$_2$，
+名詞-普通名詞-一般$_0$ 助詞-格助詞$_1$，助詞-格助詞$_1$ 動詞-一般$_2$，
+名詞-普通名詞-一般$_0$ 助詞-格助詞$_1$ 動詞-一般$_2$，
+名詞-普通名詞-一般$_0$ * 動詞-一般$_2$
+\end{minipage}
+\end{center}
+\vspace{0.5\baselineskip}
+
+
+\subsubsection{手掛り付き事例分類（2回目）}
+
+前述の学習手法，素性，そして訓練データ$L$を用いて
+一次分類器$C_1$を作成し，$C_1$を用いて\ref{sec:first}節で
+抽出・分類した手掛り付き事例$I_{ts1}$を再分類する．
+この分類2回目の結果が分類1回目の結果と一致する，つまり
+$C_1$の$i_{ts1} \in I_{ts1}$の分類結果を$c_1(i_{ts1})$としたとき，
+$c_1(i_{ts1})=s$である場合，$i_{ts1}$を$i_{ts2} \in I_{ts2}$とし$L$に加え，
+これを用いて$C_1$同様に二次分類器$C_2$を作成する．
+
+\ref{sec:first}節で述べたように$i_{ts1}$はその素性に
+必ず手掛り語$w_{ts}$を含む．
+そのため$c_1(i_{ts1})$は$s$と一致する可能性が高いが，実際に一致を確認し，
+一致しなければ$C_2$作成においてこの手掛り付き事例は使わない．
+この結果，$C_2$作成に用いられる$I_{ts2}$のラベル$s$は
+信頼性の高いものとなる．
+
+このシステムの重要な点は単に二種類の分類手法の結果が
+合致するものを選択することではない．
+そうだとすれば，分類1回目は一般的な教師あり学習手法を
+用いても良いことになってしまう．
+重要なのは分類2回目にて$C_1$が高い精度で分類可能な
+事例$I_{ts1}$を分類1回目において選択していることにある．
+つまり，{\bf 分類1回目が分類2回目の精度向上を明確に支援している}
+ことがポイントである．
+これにより$I_{ts2}$全てを$L$に加えても信頼性は保持され，
+同時に充分な数のブートストラッピングが可能になる．
+これは従来法において必要だった\ref{sec:intro}節に挙げたパラメータ，
+ラベル付きデータ$L$に加える事例の個数$G$および手順の反復回数$R$を
+決めることなしに適切な事例を$L$に加えられることも意味する．
+なぜなら，$G$を定めずとも全事例を$L$に加えればよく，
+$R$を定めずとも一度の実行で充分な数の事例の獲得が可能だからである．
+またプールサイズ$P$については，Blumらの考察\cite{Blum98}
+から考えるとブートストラッピングの反復において意味を持つ値であると思われる．
+よって，反復回数1の本手法は単にプールを設定する必要がなく，
+事例を全てのラベルなしデータ$U$から抽出することで処理できる．
+
+また，$W_{ts}$は$n_w>2$であれば$L$の素性にない語
+（つまり対象語から3語以上離れた位置にある語）を含むことから，
+$I_{ts1}$の素性はやはり$L$の素性にない語を含む．
+すると$I_{ts1}$が分類2回目の結果，$L$に追加されれば，
+上述の通り分類2回目の信頼性は高いと言えるため，$C_2$は$C_1$と比べ
+正しく分類できる$U$が増える可能性が高い．
+したがって，本手法は$U$の$L$への追加における効率性が
+高い手法であるとも言うことができる．
+
+上述の性質はCo-trainingとの類似性を指摘することもできる．
+Co-trainingは\ref{sec:intro}節で述べたように二つの素性集合のうち
+一方のみに基づいて分類することで他方の素性について新しい規則の獲得が
+期待できるのが特徴である．
+本手法では，$W_{ts}$と$C_1$に用いる素性の二種類の素性を
+実質的に両方考慮して手掛り付き事例を分類している．
+しかし，$C_2$に用いる素性は後者の素性のみである．
+つまり，一方は他方の一部ということになるが，
+一方の素性で分類した結果を他方の素性を用いる分類器の訓練データに
+加えるという点ではCo-trainingと共通する．
+その一方で，提案手法は$L$に追加する$U$の分類に二種類，
+つまり全ての素性を用いており，一方のみを使う場合と比較すると
+分類結果の信頼性が高いという利点がある．
+このような変則的なCo-trainingと通常のCo-trainingの間にどのような差異が
+生まれるかは未調査だが，ここに述べた性質は性能の向上に結び付くと期待される．
+
+本処理の直感的な意味としては，$C_1$にまず簡単な問題を解かせ，
+その結果を$C_2$の学習に利用していると解釈できる．
+一方で従来のブートストラッピングは，難易度がランダムな問題を複数解かせ，
+その中でシステムが自信を持って答えられるものから学習すると考えられる．
+しかし後者の場合，回答に対し「間違った自信」を持ってしまい，
+結果として不適切な学習をしてしまう危険性があり得る．
+前者の，つまり提案した手法は，確実ではないが$C_1$が解くのが簡単であろう
+問題を選択しており，この危険性はいくらか低減していると推測される．
+この推測が正しいとすれば，$C_1$に提示する問題を選択する
+分類1回目の処理は重要な意味を持つことになる．
+また，ここで提示するのは勿論ラベルなしの文章であるが，
+見方を変えると「良い文章」をシステムに提示することで
+より良い学習が可能になると考えられ，興味深い．
+
+
+
+\subsection{Stage 3：アンサンブル学習による最終分類器作成}
+\label{sec:third}
+
+本節では\ref{sec:second}節で作成した二次分類器$C_2$をアンサンブルして
+最終分類器$C_3$を作成する方法を述べる．
+アンサンブルには\ref{sec:first}節の手掛り語抽出において
+決定法を保留していた窓幅$n_w$を利用する．
+すなわち，$n_w$をパラメータとする二次分類器を$C_2(n_w)$とし，
+$n_w$を変化させた$C_2(n_w)$を複数組合せ$C_3$とする．
+組合せの方法は各最大エントロピー分類器が出力する
+各ラベルの推定確率の中で最高値を出力した分類器の判定を採用する方式とする．
+つまり入力を$\mathbf{x}$，$C_2(n_w)$が$\mathbf{x}$に対し出力する
+語義$s$である推定確率を$p(s|\mathbf{x},n_w)$とすると，
+\begin{equation}
+s_*(\mathbf{x})=\argmax_{s} \left[ \max_{n_w}p(s|\mathbf{x},n_w) \right]
+\label{eq2}
+\end{equation}
+より求まる$s_*(\mathbf{x})$を$C_3$の出力とする．
+
+式(\ref{eq2})の方式で良い結果が得られる根拠は
+手掛り語$W_{ts}$の条件の一つである式(\ref{eq1})にある．
+式(\ref{eq1})の制約の下で$n_w$の値を大きくしたとき，
+得られる$W_{ts}$に以下の二つの変化が見られる．
+
+\begin{itemize}
+\item $n_w$変化前になくかつ$n_w$変化後に式(\ref{eq1})を満たす語が追加される．
+\item $n_w$変化前にはあるが$n_w$変化後に式(\ref{eq1})を満たさなくなる語が削除される．
+\end{itemize}
+
+ここで重要なのは後者の性質である．
+式(\ref{eq1})の性質上，後者の変化より$W_{ts}$から削除された語は
+$n_w$をどんなに大きくしても再度$W_{ts}$に追加されることは絶対にない．
+$n_w$変化後に削除される語は必ずしも重要度が高い語とも低い語とも言えないが，
+少なくとも一度は$W_{ts}$の条件を満たすため重要度が高い語を含む可能性は高い．
+よって，$n_w$の変化によって変わる各$W_{ts}$の集合には他の集合にはない
+重要度の高い$W_{ts}$が含まれている可能性が少なからずあるということになる．
+したがって，$n_w$の差異により各分類器に長所・短所が生まれ，
+アンサンブル学習の効果が生まれやすいということができる．
+逆に，$C_2$をアンサンブルしない場合，
+$n_w$の差異により性能に大きく差がつくと考えられ，
+$n_w$をパラメータとした調整は難しいと考えられる．
+
+また$n_w$を増やせば，それだけ対象語から離れた位置にある語を特徴とすることに
+なるため，少しずつ$W_{ts}$の信頼性が落ちていくものと考えられるが，
+これに伴い任意の$s$に対し$C_2(n_w)$の$s$の推定確率
+$p(s|\mathbf{x},n_w)$も落ちていくと予想される．
+すると，$C_3$の出力を式(\ref{eq2})を満たす$s_*(x)$としたが，
+$n_w$の増大に従い$C_2(n_w)$の判定が採用される確率も減少していくと考えられる．
+よって，$n_w$の増大は$W_{ts}$の信頼性の減少を意味するが，
+同時に$C_2(n_w)$の判定の採用確率も減ぜられる．
+このため本手法は$n_w$の増大に対し頑健な
+アンサンブル手法であるとも言うことができる．
+
+本手法はMihalceaのSmoothed Co-training \cite{Mihalcea04a}
+およびWangらTrajectory Basedの手法\cite{Wang04}と類似性を持つ．
+まずWangらは文脈の大きさを変えながら複数のNaive Bayes分類器を
+作成しているが，提案手法の処理はこれとよく似ている．
+Wangらの手法は文脈の大きさというパラメータの影響の差による性能差が
+小さくなることで性能が上がると見られるが，本手法でも同様の効果が期待できる．
+またMihalceaはCo-trainingの反復過程にて分類器の多数決を適用した結果，
+反復回数の差による性能差が小さくなりかつ全体的な性能も向上したと報告したが，
+本手法における分類器の組合せにおいても同様の効果が期待できる．
+
+なお，分類器の組合せのもう一つの単純な方式として
+推定確率を重みとした重み付き多数決方式，つまり
+\begin{equation}
+s_*(x)=\argmax_{s} \left[ \sum_{n_w}p(s|\mathbf{x},n_w) \right]
+\label{eq3}
+\end{equation}
+が考えられる．ここで記号の意味は式(\ref{eq2})と同じである．
+しかし，式(\ref{eq3})の方式は事前実験の結果，
+式(\ref{eq2})の方式ほどは良くないことがわかった．
+これは，$n_w$の増大に伴い$C_2(n_w)$の推定確率が低くなることに変わりはないが，
+式(\ref{eq2})と比べ$n_w$の大きな$C_2(n_w)$の判定が
+より重めに考慮されていることが原因と思われる．
+
+最後に本手法唯一のパラメータである$n_w$の変化の範囲について述べる．
+一つの方法としては範囲を設けない，つまり任意の$n_w$を許すことが考えられるが，
+当然ながら$n_w$を増やすことで計算時間が増加する．
+また，$n_w$の増大に伴う分類器の信頼性の減少に対し
+ある程度は頑健であるとはいえ，限度の存在があり得る．
+このため$n_w$の変化の範囲には何らかの閾値を定めるのが妥当と考えられる．
+\ref{sec:exp}節で述べる実験ではパラメータ$n_{\max}$を定め，
+$1 \leq n_w \leq n_{\max}$の範囲で$n_w$を1刻みで変化させるとし，$n_{\max}$の
+変化により語義曖昧性解消の性能がどのように変化していくか見ていく．
+
+
+\subsection{まとめ}
+\label{sec:summary}
+
+提案手法を一つのアルゴリズムとして表現すると次のようになる．
+
+\vspace{0.5\baselineskip}
+\begin{center}
+\begin{minipage}{0.85\hsize}
+\begin{description}
+\item[Step 0] $n_w$を初期値($=1$)に設定する．
+\item[Step 1] 訓練データ$L$中の語義ラベル$s$が付与された対象語を$T_s$とする．
+\item[Step 2] $t_s \in T_s$前後$n_w$語以内の式(\ref{eq1})を満たす
+内容語の表層形を手掛り語$W_{ts}$として獲得する．
+\item[Step 3] ラベルなしデータ$U$から対象語$t$に対する事例$I_{t0}$を抽出する．
+\item[Step 4] $i_{t0} \in I_{t0}$の前後$n_w'=2$以内に$w_{ts} \in W_{ts}$
+が出現するとき，$i_{t0}$を手掛り付き事例$i_{ts1} \in I_{ts1}$として抽出する．
+\item[Step 5] $L$を用いて一次分類器$C_1$を作成し
+$i_{ts1}$を分類した結果を$c_1(i_{ts1})$とする．
+\item[Step 6] $c_1(i_{ts1})=s$であるとき，$i_{ts1}$を
+$i_{ts2} \in I_{ts2}$とする．
+\item[Step 7] $L$に$I_{ts2}$を加え二次分類器$C_2$を作成する．
+\item[Step 8] $n_w$を$1 \leq n_w \leq n_{\max}$の範囲で変化させ，Step 1から7まで繰り返す．
+\item[Step 9] Step 8で得られた$C_2$をアンサンブルして最終分類器$C_3$とする．
+\end{description}
+\end{minipage}
+\end{center}
+\vspace{0.5\baselineskip}
+
+まず着目すべきは本手法はStep 8に示した$n_{\max}$以外に
+パラメータが存在しないことである．
+そして\ref{sec:exp}節で示すようにこのパラメータの設定は比較的容易である．
+
+次に留意すべきは\ref{sec:intro}節で述べた$P$, $G$, $I$といった
+パラメータがないにも関わらず，
+ブートストラッピングの効果が充分に見込めるという点である．
+このメカニズムは，上記Step 2に示した手掛り語$W_{ts}$の条件，
+Step 4の$I_{ts1}$の抽出の条件，Step 6の$I_{ts2}$抽出の条件，さらにStep 8, 9が
+巧妙に作用しあっていることに基づいている．
+
+最後に注意すべきは，本手法はStep 0から9までの1度の実行だけで，
+充分なブートストラッピングが可能であり，2回以上の反復を必要としない点である．
+しかし，Step 4の$I_{ts1}$の抽出は必然的に再現率を犠牲にするため，
+本手法1回の実行で完全な学習ができる訳ではない．
+本手法の反復による更なる精度の向上は今後の課題である．
+
+
+
+\section{実験}
+\label{sec:exp}
+
+今回実験に使用したデータセットはSemEval-2日本語タスク\cite{Okumura10}
+において配布された訓練データ（語義ラベル），テストデータを含む
+形態素解析済みコーパス，および語義の定義に用いられた
+岩波国語辞典\cite{Nishio94}のデータのみである．
+ラベルなしデータとしては上述の形態素解析済みコーパス全てを利用した．
+本研究では形態素の基本形の情報も利用するが，SemEval-2日本語タスクにおいては
+データセットに漢字表記の基本形の情報は付与されていない．
+しかし，用言については基本形のカナ表記（bfm; 語形）の情報が付与されているため，
+本研究ではこれを基本形として扱った．
+また本研究では，配布されたコーパスの形態素に付与されている品詞が
+名詞，動詞，形容詞，形状詞，副詞，接尾辞，接頭辞のいずれかであるものを
+内容語とした．
+
+本研究では，訓練データに対する前処理として，
+SemEval-2日本語タスクにおいて語義の定義に用いられた
+岩波国語辞典の語釈文に含まれる用例の訓練データへの追加を行った．
+まず岩波国語辞典の用例中の対象語は``—''に置きかえられているため，
+``—''を人手で対象語に置換し直し，
+用例を自動と人手による修正により抽出した．
+用例の形態素解析にはSemEval-2のデータセットの形態素解析に用いられたのと
+同様に辞書としてUniDicを用い，MeCab\footnote{http://mecab.sourceforge.net/}
+を用いて形態素解析した．
+形態素解析結果に対する対象語の語義の付与は，
+用例の抽出同様，自動と人手による修正の組合せより行った．
+ここで追加した用例の総数は788であり，
+追加後の訓練データ全体の約24\%を占める．
+
+上記の辞書中の用例とオリジナルのデータセットの間には性質に相違がある．
+オリジナルのデータセットはまとまった文章で与えられ，
+対象語周辺から多くの文脈情報が得られる．
+対して，辞書の用例は短い文で与えられ，得られる文脈情報は少なく，
+また用例自体は通常の文章に現れにくい表現の場合がある．
+\ref{sec:first}節にて述べた手掛り語獲得の手法は，
+対象語から離れた位置からも手掛り語を獲得することを想定した手法であり，
+上述のような性質の異なるデータを併用すると不具合が生じる可能性が考えられる．
+このため実験では，手掛り語獲得において，上記の辞書用例からの追加データを
+使用する場合と使用しない場合の二通りの実験を行った．
+
+実験は$n_{\max}$を変化させつつ，\ref{sec:third}節で述べた通りに
+$n_w$を$1 \leq n_w \leq n_{\max}$の範囲で1刻みで変化させ最終分類器を作成し，
+最終分類器の性能を前述のテストデータを用いて評価した．
+$n_{\max}$の値は$1 \leq n_{\max} \leq 100$の範囲で1刻みで変化させた．
+
+まず手掛り語獲得において辞書用例データを使用しない場合の
+実験結果を図\ref{fig:img02}に示す．
+ここでFinal classifierが提案手法の分類精度であり，
+1st classifierの結果は\ref{sec:second}節にて述べた
+一次分類器によるテストデータの分類精度を示す．
+なお一次分類器はベースラインの教師あり手法であることに注意されたい．
+また，最終分類器と二次分類器の性能比較のため，
+$n_w$を$1 \leq n_w \leq 100$の範囲で変化させ二次分類器単体で
+テストデータを分類したときの評価結果を図\ref{fig:img03}に示す．
+
+図\ref{fig:img02}と図\ref{fig:img03}の共通点としては，
+どの$n_{\max}$，$n_w$においても最終分類器，二次分類器ともに
+一次分類器の結果を上回っていることがわかる．
+これより本手法の第二段階の時点で信頼性の高い
+ブートストラッピングができていたことが確認できる．
+一方で図\ref{fig:img03}を見て明らかな通り，二次分類器は最終分類器と
+比較してパラメータ($n_w$)による精度のバラつきがかなり大きいことがわかる．
+また最終分類器は$n_{\max} = 50$付近から，二次分類器は$n_w = 60$付近から
+$n_{\max}$，$n_w$の増加に伴い明白に精度が落ちていくことがわかるが，
+二次分類器の精度の落ち方は最終分類器と比べ明らかに大きい．
+これより\ref{sec:third}節で述べたように提案手法が$n_w$の増大に対し
+実際に頑健であることもわかる．
+二次分類器の最高値は最終分類器と比べると有意に高いと言えるが，
+そのときの$n_w = 23$のすぐ近くに大きな谷($n_w = 27$)があり，
+これより二次分類器のパラメータ調整の難しさがうかがえる．
+一方で，最終分類器は特に$35 \leq n_{\max} \leq 50$の範囲で
+性能が安定しており，パラメータ調整は比較的容易と言える．
+
+次に手掛り語獲得において辞書用例データを使用した場合の
+最終分類器の評価結果を図\ref{fig:img04}，
+二次分類器の評価結果を図\ref{fig:img05}に示す．
+始めに図\ref{fig:img04}と図\ref{fig:img05}を比較すると，
+やはり最終分類器の方がパラメータの変化に対し性能が頑健であることがわかる．
+しかし図\ref{fig:img02}と図\ref{fig:img04}で最終分類器同士を比較すると，
+$n_{\max} = 10$周辺では辞書用例使用の方がわずかに性能が良いが，
+$n_{\max}$がこれより大きくなると辞書用例不使用と比べ性能がやや落ちる．
+$5 \leq n_{\max} \leq 50$の範囲における性能の安定性を比較すると，
+これは明確に辞書用例不使用の方が高いと言える．
+また図\ref{fig:img03}と図\ref{fig:img05}で二次分類器同士を比較すると，
+辞書用例使用の方は$n_w = 20$周辺においてやや安定性が高いが，有意差があるとは
+言いにくく，いずれにせよこれらは最終分類器より性能の安定性が低い．
+結論としては，辞書用例使用の有無ではっきりと有意差があるとは言えないが，
+今回の実験では性能の安定性は辞書用例不使用の方が比較的高いとみることにする．
+以後は辞書用例不使用の場合の実験結果のみを示す．
+
+\begin{figure}[t]
+\setlength{\captionwidth}{202pt}
+\begin{minipage}[t]{202pt}
+  \includegraphics{18-3ia2f2.eps}
+  \hangcaption{$n_{\max}$の変化による提案手法分類精度の推移（手掛り語獲得で辞書用例不使用）}
+  \label{fig:img02}
+  \end{minipage}
+\hfill
+  \begin{minipage}[t]{202pt}
+  \includegraphics{18-3ia2f3.eps}
+  \hangcaption{$n_w$の変化による二次分類器の分類精度の推移（手掛り語獲得で辞書用例不使用）}
+  \label{fig:img03}
+  \end{minipage} 
+\vspace{1\baselineskip}
+\end{figure}
+\begin{figure}[t]
+\setlength{\captionwidth}{202pt}
+\begin{minipage}[t]{202pt}
+  \includegraphics{18-3ia2f4.eps}
+  \hangcaption{$n_{\max}$の変化による提案手法分類精度の推移
+（手掛り語獲得で辞書用例使用）}
+  \label{fig:img04}
+ \end{minipage}
+\hfill
+ \begin{minipage}[t]{202pt}
+  \includegraphics{18-3ia2f5.eps}
+  \hangcaption{$n_w$の変化による二次分類器の分類精度の推移
+（手掛り語獲得で辞書用例使用）}
+  \label{fig:img05}
+  \end{minipage}
+\end{figure}
+
+続いて$5 \leq n_w \leq 20$，$20 \leq n_w \leq 35$，$35 \leq n_w \leq 50$，
+$5 \leq n_w \leq 50$の四つの範囲別（$n_{\max}$も同様）
+の二次分類器・最終分類器の精度の最高値・最低値・平均値，
+および最頻出語義選択，一次分類器の精度を表\ref{tbl:tbl01}に示す．
+ここで最高値，最低値の右括弧内の値はそのときの$n_w$，$n_{\max}$を示す．
+最高値，最低値の$n_w$，$n_{\max}$が複数ある場合はその中で最も小さい値を示した．
+
+表\ref{tbl:tbl01}において特筆すべきはやはり最終分類器の
+最低値と平均値の高さである．
+以下全て$5 \leq n_{\max} \leq 50$（$n_w$も同じ）の範囲について述べる．
+まず最低値は0.44ポイント二次分類器を上回り，
+一次分類器を常に1.56ポイント上回ることになる．
+これは二次分類器の平均値よりも高い値である．
+また最終分類器の平均値は一次分類器を1.69ポイント上回る．
+一方，最高値は二次分類器の方が最終分類器を0.44ポイント上回り，
+最大で一次分類器を2.24ポイント上回ることになる．
+しかし，最高値と最低値の差は二次分類器は1.12ポイントあるのに対し，
+最終分類器はわずか0.24ポイントである．
+よって，パラメータの調整を考えると最終分類器の方が手法として扱いやすい．
+
+\begin{table}[t]
+\caption{各分類器の分類精度の比較（手掛り語獲得で辞書用例不使用）}
+\label{tbl:tbl01}
+\input{02table01.txt}
+\end{table}
+
+最後に一次分類器の精度，$n_{\max}$が表\ref{tbl:tbl01}に示した
+$5 \leq n_{\max} \leq 50$の範囲における最高値・最低値の精度のときの値の
+最終分類器の精度，および$5 \leq n_{\max} \leq 50$の範囲での最終分類器の
+精度の平均値のそれぞれについて，SemEval-2日本語タスクの
+語義曖昧性解消対象語別に求めた結果を表\ref{tbl:tbl02}に示す．
+なお表\ref{tbl:tbl02}に示した最高値・最低値は$n_{\max}$を対象語別に
+精度が最高値・最低値になるように変化させたときの値ではないため，
+表\ref{tbl:tbl02}の「子供」の結果のように，
+最低値の精度が最高値より高い場合も存在する．
+また対象語右の括弧内の数字はSemEval-2における判別すべき語義の総数であり，
+この数字に付記された``+''はテストデータに新語義の語が含まれていたことを示す．
+ただし本稿では特に新語義判別を考慮した処理はしておらず，
+本実験での一次，二次，最終の各分類器の比較に新語義の有無は関係しない．
+
+\begin{table}[t]
+\caption{対象語・分類器別の分類精度の比較（手掛り語獲得で辞書用例不使用）}
+\label{tbl:tbl02}
+\input{02table02.txt}
+\end{table}
+
+表\ref{tbl:tbl02}において強調してある一次分類器の精度は
+最終分類器の平均値を上回るもの，強調してある最終分類器の平均値は
+一次分類器の精度を5ポイント以上上回るものを示している．
+まず最終分類器の平均値を上回る一次分類器の結果を見てみると，
+その差は最大で「始める」の3.7ポイントと比較的小さい．
+一方，一次分類器の結果を上回る最終分類器の結果を見てみると，
+最大で「教える」が14.3ポイント向上しているとわかる．
+
+対象語の語義数と精度の変化の関係を見てみると，
+例外的に「もの」は比較的語義数が多くて精度の向上もやや大きいが，
+語義数の多い語は一次分類器と比べ最終分類器の精度が落ちる傾向がある．
+これは，手掛り語の条件である式(\ref{eq1})の存在により，
+語義数が多いと有益な手掛り語の獲得が難しくなるためと考えられる．
+対処方法の一つとしては語義数により手掛り語の条件を変えることが考えられるが，
+どのように条件を変えるべきかは難しい問題である．
+
+最後に全体を見てみると，結局一次分類器と最終分類器の間に
+差がないものが多いことに気付く．
+よって提案手法は一部の単語に対し高い効果を持つ手法であるということになる．
+この原因としては，本手法で手掛り語として用いたのが
+内容語の表層形の1グラムのみと，手掛り語が素性としては
+非常に狭い範囲内に位置するものだったこと，
+そして手掛り付き事例抽出の条件が対象語前後2語以内に手掛り語を含むという
+厳しい制約であったことが考えられる．
+ここで後者の原因は手掛り付き事例抽出の条件の$n_w'=2$を可変にし，
+さらに多くの二次分類器を作成してアンサンブルすることで取り除ける可能性がある．
+一方，前者の原因は単に素性の粒度を荒くしただけでは精度が低下する恐れがある．
+
+以上を踏まえると\ref{sec:first}節にて述べたヒューリスティックは
+部分的に有効と言えるが，汎用性に不安が残る．
+\ref{sec:first}節の手法第一段階を他の段階と切り離すとすると，
+第二段階，第三段階に変更を加えない場合，第一段階の要件は
+\begin{enumerate}
+\item 手掛り付き事例を（仮の）ラベルを付与して抽出すること
+\item 抽出事例は第二段階の分類を助ける手掛りを持つこと
+\item 第三段階にて二次分類器を複数作成するためのパラメータを持つこと
+\item 要件(2)の手掛りの信頼性と要件(3)のパラメータの間に相関があること
+\end{enumerate}
+の四つである．
+この中で特に難しいと思われるのは要件(2)であるが，
+これを実現する方法の一つとしては特徴選択がある．
+第一段階は狭い意味での特徴選択をしているとも見ることができ，
+効果的な特徴選択法を利用することで上述の問題への対処，
+つまりより多くの単語の語義曖昧性解消を実現できる可能性がある．
+特徴選択を応用した語義曖昧性解消の研究の一つとしては
+Mihalceaによるものが挙げられる\cite{Mihalcea02}．
+Mihalceaは手法はSenseval-2 English all words taskにおいて
+二位の成績から5.4ポイント引き離し最高の成績を得た実績がある．
+よって，Mihalceaの手法を本手法に応用することで
+更なる性能の向上を見込める可能性がある．
+
+
+
+\section{おわりに}
+\label{sec:conc}
+
+本稿では，従来のブートストラッピング法による語義曖昧性解消手法の
+欠点であるパラメータ調整の難しさに対処するため，
+パラメータ設定をほぼ不要とするブートストラッピング的
+半教師あり語義曖昧性解消手法を提案した．
+この手法は二段階の分類をラベルなしデータに適用するものであり，
+反復回数を一回に留めるにも関わらず充分な効果がある
+ブートストラッピングを実現した．
+またラベル付きデータに追加するラベルなしデータの条件を変え，
+複数の分類器を作成しアンサンブル学習することで
+唯一のパラメータの調整も容易とする手法を確立した．
+
+本手法の改良の方針としては次の二つが考えられる．
+\begin{itemize}
+\item 本手法を通常のブートストラッピング同様に
+訓練データの反復追加を可能にし，性能が向上するように拡張する．
+\item \ref{sec:first}節にて述べたヒューリスティックによる分類を
+より多くの語の語義曖昧性解消に有効な汎用的手法に改良する．
+\end{itemize}
+これらはいずれも重要度の高い課題であり，
+並行して取り組むべき課題であると言える．
+また，提案した手法は語義曖昧性解消に特化しているが，
+\ref{sec:second}節と\ref{sec:third}節で述べたような
+半教師ありのアンサンブル学習の枠組みを異なる問題に
+適用することも興味深い課題である．
+
+最後に，実現可能性は未知数だが本手法の発展の可能性として，
+語義曖昧性解消のような分類問題において機械学習を用い
+人間にとって理解しやすい規則を獲得できるようになれば
+面白いのではないかと筆者は考えている．
+これは本稿にて提示したヒューリスティックに基づいた手法
+そのものを訓練事例とみなし，機械が自動でこの訓練事例に類似し，
+かつ人間に理解しやすい規則を獲得するというものである．
+これを実現するには「理解しやすさ」という
+尺度を定義することから始めなければならないと思われるが，
+もし実現できれば，従来の機械学習において困難だった
+獲得した規則の解釈が容易になることが予想される．
+そうすれば機械学習，またはこれを応用した自然言語処理などの
+研究の進展が加速するのではないかと期待できる．
+
+
+
+
+\acknowledgment
+
+本研究に用いた評価用データセットをご準備，ご提供くださいました
+SemEval-2日本語タスクの運営の皆様，
+ならび本稿のために有益なコメントをお寄せくださいました
+査読者の皆様に深く感謝いたします．
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Abney}{Abney}{2004}]{Abney04}
+Abney, S. \BBOP 2004\BBCP.
+\newblock \BBOQ Understanding the Yarowsky algorithm.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 30}  (3), \mbox{\BPGS\
+  365--395}.
+
+\bibitem[\protect\BCAY{Agirre, Mart{\'i}nez, de~Lacalle, \BBA\ Soroa}{Agirre
+  et~al.}{2006}]{Agirre06}
+Agirre, E., Mart{\'i}nez, D., de~Lacalle, O.~L., \BBA\ Soroa, A. \BBOP
+  2006\BBCP.
+\newblock \BBOQ Two Graph-Based Algorithms for State-of-the-art WSD.\BBCQ\
+\newblock In {\Bem Proceedings of the 2006 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 585--593}.
+
+\bibitem[\protect\BCAY{Banerjee \BBA\ Pedersen}{Banerjee \BBA\
+  Pedersen}{2003}]{Banerjee03}
+Banerjee, S.\BBACOMMA\ \BBA\ Pedersen, T. \BBOP 2003\BBCP.
+\newblock \BBOQ Extended Gloss Overlaps as a Measure of Semantic
+  Relatedness.\BBCQ\
+\newblock In {\Bem Proceedings of the 18th International Joint Conference on
+  Artificial Intelligence (IJCAI)}, \mbox{\BPGS\ 805--810}.
+
+\bibitem[\protect\BCAY{Blum \BBA\ Mitchell}{Blum \BBA\ Mitchell}{1998}]{Blum98}
+Blum, A.\BBACOMMA\ \BBA\ Mitchell, T. \BBOP 1998\BBCP.
+\newblock \BBOQ Combining Labeled and Unlabeled Data with Co-Training.\BBCQ\
+\newblock In {\Bem COLT: Proceedings of the Workshop on Computational Learning
+  Theory}, \mbox{\BPGS\ 92--100}.
+
+\bibitem[\protect\BCAY{Brody, Navigli, \BBA\ Lapata}{Brody
+  et~al.}{2006}]{Brody06}
+Brody, S., Navigli, R., \BBA\ Lapata, M. \BBOP 2006\BBCP.
+\newblock \BBOQ Ensemble Methods for Unsupervised WSD.\BBCQ\
+\newblock In {\Bem Proceedings of the 44th Annual Meeting of the Association
+  for Computational Linguistics joint with the 21st International Conference on
+  Computational Linguistics (COLING-ACL)}, \mbox{\BPGS\ 97--104}.
+
+\bibitem[\protect\BCAY{Curran, Murphy, \BBA\ Scholz}{Curran
+  et~al.}{2007}]{Curran07}
+Curran, J.~R., Murphy, T., \BBA\ Scholz, B. \BBOP 2007\BBCP.
+\newblock \BBOQ Minimising Semantic Drift with Mutual Exclusion
+  Bootstrapping.\BBCQ\
+\newblock In {\Bem Proceedings of the 10th Conference of the Pacific
+  Association for Computational Linguistics}, \mbox{\BPGS\ 172--180}.
+
+\bibitem[\protect\BCAY{Edmonds \BBA\ Cotton}{Edmonds \BBA\
+  Cotton}{2001}]{Edmonds01}
+Edmonds, P.\BBACOMMA\ \BBA\ Cotton, S. \BBOP 2001\BBCP.
+\newblock \BBOQ SENSEVAL-2: Overview.\BBCQ\
+\newblock In {\Bem Proceedings of the 2nd International Workshop on Evaluating
+  Word Sense Disambiguation Systems (Senseval-2)}, \mbox{\BPGS\ 1--6}.
+
+\bibitem[\protect\BCAY{Escudero, M{\`a}rquez, \BBA\ Rigau}{Escudero
+  et~al.}{2000}]{Escudero00}
+Escudero, G., M{\`a}rquez, L., \BBA\ Rigau, G. \BBOP 2000\BBCP.
+\newblock \BBOQ Boosting Applied to Word Sense Disambiguation.\BBCQ\
+\newblock In {\Bem Proceedings of the 11th European Conference on Machine
+  Learning (ECML)}, \mbox{\BPGS\ 129--141}.
+
+\bibitem[\protect\BCAY{Florian, Cucerzan, Schafer, \BBA\ Yarowsky}{Florian
+  et~al.}{2002}]{Florian02}
+Florian, R., Cucerzan, S., Schafer, C., \BBA\ Yarowsky, D. \BBOP 2002\BBCP.
+\newblock \BBOQ Combining classifiers for word sense disambiguation.\BBCQ\
+\newblock {\Bem Natural Language Engineering}, {\Bbf 8}  (4), \mbox{\BPGS\
+  327--431}.
+
+\bibitem[\protect\BCAY{Fujita, Duh, Taira, \BBA\ Shindo}{Fujita
+  et~al.}{2010}]{Fujita10}
+Fujita, S., Duh, K., Taira, H., \BBA\ Shindo, H. \BBOP 2010\BBCP.
+\newblock \BBOQ MSS: Investigating the Effectiveness of Domain Combinations and
+  Topic Features for Word Sense Disambiguation.\BBCQ\
+\newblock In {\Bem Proceedings of the 5th International Workshop on Semantic
+  Evaluations (SemEval-2010)}, \mbox{\BPGS\ 383--386}.
+
+\bibitem[\protect\BCAY{Galley \BBA\ McKeown}{Galley \BBA\
+  McKeown}{2003}]{Galley03}
+Galley, M.\BBACOMMA\ \BBA\ McKeown, K. \BBOP 2003\BBCP.
+\newblock \BBOQ Improving Word Sense Disambiguation in Lexical Chaining.\BBCQ\
+\newblock In {\Bem Proceedings of the 18th International Joint Conference on
+  Artificial Intelligence (IJCAI)}, \mbox{\BPGS\ 1486--1488}.
+
+\bibitem[\protect\BCAY{Joachims}{Joachims}{2003}]{Joachims03}
+Joachims, T. \BBOP 2003\BBCP.
+\newblock \BBOQ Transductive Learning via Spectral Graph Partitioning.\BBCQ\
+\newblock In {\Bem Proceedings of the 20th International Conference on Machine
+  Learning (ICML)}, \mbox{\BPGS\ 290--297}.
+
+\bibitem[\protect\BCAY{Klein, Toutanova, Ilhan, Kamvar, \BBA\ Manning}{Klein
+  et~al.}{2002}]{Klein02}
+Klein, D., Toutanova, K., Ilhan, H.~T., Kamvar, S.~D., \BBA\ Manning, C.~D.
+  \BBOP 2002\BBCP.
+\newblock \BBOQ Combining Heterogeneous Classifiers for Word-Sense
+  Disambiguation.\BBCQ\
+\newblock In {\Bem Proceedings of the ACL workshop on Word Sense
+  Disambiguation: Recent Successes and Future Directions}, \mbox{\BPGS\
+  74--80}.
+
+\bibitem[\protect\BCAY{小町\JBA 工藤\JBA 新保\JBA 松本}{小町 \Jetal
+  }{2010}]{Komachi10}
+小町守\JBA 工藤拓\JBA 新保仁\JBA 松本裕治 \BBOP 2010\BBCP.
+\newblock Espresso
+  型ブートストラッピング法における意味ドリフトのグラフ理論に基づく分析 :
+  語義曖昧性解消における評価.\
+\newblock \Jem{人工知能学会論文誌}, {\Bbf 25}  (2), \mbox{\BPGS\ 233--242}.
+
+\bibitem[\protect\BCAY{Le, Shimazu, Huynh, \BBA\ Nguyen}{Le
+  et~al.}{2008}]{Le08}
+Le, A.-C., Shimazu, A., Huynh, V.-N., \BBA\ Nguyen, L.-M. \BBOP 2008\BBCP.
+\newblock \BBOQ Semi-supervised learning integrated with classifier combination
+  for word sense disambiguation.\BBCQ\
+\newblock {\Bem Computer Speech and Language}, {\Bbf 22}  (4), \mbox{\BPGS\
+  330--345}.
+
+\bibitem[\protect\BCAY{Liu \BBA\ Nocedal}{Liu \BBA\ Nocedal}{1989}]{Liu89}
+Liu, D.~C.\BBACOMMA\ \BBA\ Nocedal, J. \BBOP 1989\BBCP.
+\newblock \BBOQ On the limited memory BFGS method for large scale
+  optimization.\BBCQ\
+\newblock {\Bem Mathematical programming}, {\Bbf 45}, \mbox{\BPGS\ 503--528}.
+
+\bibitem[\protect\BCAY{M{\`a}rquez, Escudero, Mart{\'i}nez, \BBA\
+  Rigau}{M{\`a}rquez et~al.}{2004}]{Marquez04}
+M{\`a}rquez, L., Escudero, G., Mart{\'i}nez, D., \BBA\ Rigau, G. \BBOP
+  2004\BBCP.
+\newblock \BBOQ Supervised Corpus-Based Methods for WSD.\BBCQ\
+\newblock In Agirre, E.\BBACOMMA\ \BBA\ Edmonds, P.\BEDS, {\Bem Word Sense
+  Disambiguation: Algorithms and Applications}, \mbox{\BPGS\ 167--216}.
+  Springer.
+
+\bibitem[\protect\BCAY{McCarthy, Koeling, Weeds, \BBA\ Carroll}{McCarthy
+  et~al.}{2004}]{McCarthy04}
+McCarthy, D., Koeling, R., Weeds, J., \BBA\ Carroll, J. \BBOP 2004\BBCP.
+\newblock \BBOQ Finding Predominant Word Senses in Untagged Text.\BBCQ\
+\newblock In {\Bem Proceedings of the 42nd Annual Meeting of the Association
+  for Computational Linguistics}, \mbox{\BPGS\ 280--287}.
+
+\bibitem[\protect\BCAY{Mihalcea}{Mihalcea}{2002}]{Mihalcea02}
+Mihalcea, R. \BBOP 2002\BBCP.
+\newblock \BBOQ Word sense disambiguation with pattern learning and automatic
+  feature selection.\BBCQ\
+\newblock {\Bem Natural Language Engineering}, {\Bbf 8}  (4), \mbox{\BPGS\
+  343--358}.
+
+\bibitem[\protect\BCAY{Mihalcea}{Mihalcea}{2004}]{Mihalcea04a}
+Mihalcea, R. \BBOP 2004\BBCP.
+\newblock \BBOQ Co-training and Self-training for Word Sense
+  Disambiguation.\BBCQ\
+\newblock In {\Bem Proceedings of the 8th Conference on Computational Natural
+  Language Learning (CoNLL)}, \mbox{\BPGS\ 33--40}.
+
+\bibitem[\protect\BCAY{Mihalcea \BBA\ Edmonds}{Mihalcea \BBA\
+  Edmonds}{2004}]{Mihalcea04b}
+Mihalcea, R.\BBACOMMA\ \BBA\ Edmonds, P.\BEDS\ \BBOP 2004\BBCP.
+\newblock {\Bem Proceedings of the 3rd International Workshop on the Evaluation
+  of Systems for the Semantic Analysis of Text (Senseval-3)}.
+
+\bibitem[\protect\BCAY{Navigli}{Navigli}{2009}]{Navigli09}
+Navigli, R. \BBOP 2009\BBCP.
+\newblock \BBOQ Word sense disambiguation: A survey.\BBCQ\
+\newblock {\Bem ACM Computing Surveys}, {\Bbf 41}  (2), \mbox{\BPGS\ 1--69}.
+
+\bibitem[\protect\BCAY{Navigli \BBA\ Velardi}{Navigli \BBA\
+  Velardi}{2005}]{Navigli05}
+Navigli, R.\BBACOMMA\ \BBA\ Velardi, P. \BBOP 2005\BBCP.
+\newblock \BBOQ Structural semantic interconnections: A knowledge-based
+  approach to word sense disambiguation.\BBCQ\
+\newblock {\Bem IEEE Transactions on Pattern Analysis and Machine
+  Intelligence}, {\Bbf 27}  (7), \mbox{\BPGS\ 1075--1088}.
+
+\bibitem[\protect\BCAY{Nigam \BBA\ Ghani}{Nigam \BBA\ Ghani}{2000}]{Nigam00b}
+Nigam, K.\BBACOMMA\ \BBA\ Ghani, R. \BBOP 2000\BBCP.
+\newblock \BBOQ Analyzing the Effectiveness and Applicability of
+  Cotraining.\BBCQ\
+\newblock In {\Bem Proceedings of the 9th International Conference on
+  Information and Knowledge Management}, \mbox{\BPGS\ 86--93}.
+
+\bibitem[\protect\BCAY{Nigam, Laerty, \BBA\ McCallum}{Nigam
+  et~al.}{1999}]{Nigam00a}
+Nigam, K., Laerty, J., \BBA\ McCallum, A. \BBOP 1999\BBCP.
+\newblock \BBOQ Using Maximum Entropy for Text Classication.\BBCQ\
+\newblock In {\Bem Proceedings of IJCAI-99 Workshop on Machine Learning for
+  Information Filtering}, \mbox{\BPGS\ 61--67}.
+
+\bibitem[\protect\BCAY{西尾\JBA 岩淵\JBA 水谷}{西尾 \Jetal }{1994}]{Nishio94}
+西尾実\JBA 岩淵悦太郎\JBA 水谷静夫 \BBOP 1994\BBCP.
+\newblock \Jem{岩波国語辞典 第五版}.
+\newblock 岩波書店.
+
+\bibitem[\protect\BCAY{Niu, Ji, \BBA\ Tan}{Niu et~al.}{2005}]{Niu05}
+Niu, Z.-Y., Ji, D.-H., \BBA\ Tan, C.~L. \BBOP 2005\BBCP.
+\newblock \BBOQ Word Sense Disambiguation Using Label Propagation Based
+  Semi-Supervised Learning.\BBCQ\
+\newblock In {\Bem Proceedings of the 43rd Annual Meeting on Association for
+  Computational Linguistics}, \mbox{\BPGS\ 395--402}.
+
+\bibitem[\protect\BCAY{Okumura, Shirai, Komiya, \BBA\ Yokono}{Okumura
+  et~al.}{2010}]{Okumura10}
+Okumura, M., Shirai, K., Komiya, K., \BBA\ Yokono, H. \BBOP 2010\BBCP.
+\newblock \BBOQ SemEval-2010 Task: Japanese WSD.\BBCQ\
+\newblock In {\Bem Proceedings of the 5th International Workshop on Semantic
+  Evaluations (SemEval-2010)}, \mbox{\BPGS\ 69--74}.
+
+\bibitem[\protect\BCAY{Pantel \BBA\ Pennacchiotti}{Pantel \BBA\
+  Pennacchiotti}{2006}]{Pantel06}
+Pantel, P.\BBACOMMA\ \BBA\ Pennacchiotti, M. \BBOP 2006\BBCP.
+\newblock \BBOQ Espresso: Leveraging Generic Patterns for Automatically
+  Harvesting Semantic Relations.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on
+  Computational Linguistics and the 44th Annual Meeting of the Association for
+  Computational Linguistics}, \mbox{\BPGS\ 113--120}.
+
+\bibitem[\protect\BCAY{Pedersen}{Pedersen}{2000}]{Pedersen00}
+Pedersen, T. \BBOP 2000\BBCP.
+\newblock \BBOQ A Simple Approach to Building Ensembles of Naive Bayesian
+  Classifiers for Word Sense Disambiguation.\BBCQ\
+\newblock In {\Bem Proceedings of the 1st Annual Meeting of the North American
+  Chapter of the Association for Computational Linguistics}, \mbox{\BPGS\
+  63--69}.
+
+\bibitem[\protect\BCAY{Pham, Ng, \BBA\ Lee}{Pham et~al.}{2005}]{Pham05}
+Pham, T.~P., Ng, H.~T., \BBA\ Lee, W.~S. \BBOP 2005\BBCP.
+\newblock \BBOQ Word Sense Disambiguation with Semi-Supervised Learning.\BBCQ\
+\newblock In {\Bem Proceedings of the 20th National Conference on Artificial
+  Intelligence (AAAI)}, \mbox{\BPGS\ 1093--1098}.
+
+\bibitem[\protect\BCAY{新納}{新納}{2001}]{Shinnou01a}
+新納浩幸 \BBOP 2001\BBCP.
+\newblock 素性間の共起性を検査するCo-trainingによる語義判別規則の学習.\
+\newblock \Jem{情報処理学会 自然言語処理研究会 NL-145-5}, \mbox{\BPGS\ 29--36}.
+
+\bibitem[\protect\BCAY{鶴岡\JBA 近山}{鶴岡\JBA 近山}{2002}]{Tsuruoka02}
+鶴岡慶雅\JBA 近山隆 \BBOP 2002\BBCP.
+\newblock ベイズ統計の手法を利用した決定リストのルール信頼度推定法.\
+\newblock \Jem{自然言語処理}, {\Bbf 9}  (3), \mbox{\BPGS\ 3--19}.
+
+\bibitem[\protect\BCAY{Vapnik}{Vapnik}{1998}]{Vapnik98}
+Vapnik, V.~N. \BBOP 1998\BBCP.
+\newblock {\Bem Statistical Learning Theory}.
+\newblock John Wiley and Sons.
+
+\bibitem[\protect\BCAY{V{\'e}ronis}{V{\'e}ronis}{2004}]{Veronis04}
+V{\'e}ronis, J. \BBOP 2004\BBCP.
+\newblock \BBOQ HyperLex: Lexical cartography for information retrieval.\BBCQ\
+\newblock {\Bem Computer Speech and Language}, {\Bbf 18}  (3), \mbox{\BPGS\
+  223--252}.
+
+\bibitem[\protect\BCAY{Wang \BBA\ Matsumoto}{Wang \BBA\
+  Matsumoto}{2004}]{Wang04}
+Wang, X.\BBACOMMA\ \BBA\ Matsumoto, Y. \BBOP 2004\BBCP.
+\newblock \BBOQ Trajectory Based Word Sense Disambiguation.\BBCQ\
+\newblock In {\Bem Proceedings of the 20th international conference on
+  Computational Linguistics}, \mbox{\BPGS\ 903--909}.
+
+\bibitem[\protect\BCAY{八木\JBA 野呂\JBA 白井\JBA 徳永\JBA 田中}{八木 \Jetal
+  }{2001}]{Yagi01}
+八木豊\JBA 野呂智哉\JBA 白井清昭\JBA 徳永健伸\JBA 田中穂積 \BBOP 2001\BBCP.
+\newblock 決定リストを用いた語義曖昧性解消.\
+\newblock \Jem{電子情報通信学会 言語とコミュニケーション研究会 NLC2001-42},
+  \mbox{\BPGS\ 47--52}.
+
+\bibitem[\protect\BCAY{Yarowsky}{Yarowsky}{1995}]{Yarowsky95}
+Yarowsky, D. \BBOP 1995\BBCP.
+\newblock \BBOQ Unsupervised Word Sense Disambiguation Rivaling Supervised
+  Methods.\BBCQ\
+\newblock In {\Bem Proceedings of the 33rd Annual Meeting of the Association
+  for Computational Linguistics}, \mbox{\BPGS\ 189--196}.
+
+\bibitem[\protect\BCAY{Zhou \BBA\ Li}{Zhou \BBA\ Li}{2005}]{Zhou05}
+Zhou, Z.-H.\BBACOMMA\ \BBA\ Li, M. \BBOP 2005\BBCP.
+\newblock \BBOQ Tri-training: Exploiting Unlabeled Data using Three
+  Classifiers.\BBCQ\
+\newblock {\Bem IEEE Transactions on Knowledge and Data Engineering}, {\Bbf 17}
+   (11), \mbox{\BPGS\ 1529--1541}.
+
+\bibitem[\protect\BCAY{Zhu \BBA\ Ghahramani}{Zhu \BBA\
+  Ghahramani}{2002}]{Zhu02}
+Zhu, X.\BBACOMMA\ \BBA\ Ghahramani, Z. \BBOP 2002\BBCP.
+\newblock \BBOQ Learning from Labeled and Unlabeled Data with Label
+  Propagation.\BBCQ\
+\newblock \BTR, CMU CALD tech report CMU.CALD.02.107.
+
+\end{thebibliography}
+
+
+
+\begin{biography}
+\bioauthor{井上　裁都}{
+2009年慶應義塾大学理工学部情報工学科卒業．
+2011年同大学院修士課程修了．修士（工学）．
+}
+\bioauthor{斎藤　博昭}{
+慶應義塾大学理工学部情報工学科准教授．工学博士．
+}
+\end{biography}
+
+\biodate
+
+
+\end{document}

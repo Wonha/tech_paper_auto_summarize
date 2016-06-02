@@ -1,0 +1,1225 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+
+\newcommand{\argmax}{}
+
+
+\Volume{21}
+\Number{5}
+\Month{September}
+\Year{2014}
+
+\received{2014}{2}{17}
+\revised{2014}{4}{11}
+\accepted{2014}{5}{12}
+
+\setcounter{page}{1037}
+
+\jtitle{単語並べ替えと冠詞生成の同時逐次処理：日英機械翻訳への適用}
+\jauthor{林　　克彦\affiref{Author_1} \and 須藤　克仁\affiref{Author_1} \and 塚田　　元\affiref{Author_1} \and 鈴木　　潤\affiref{Author_1} \and 永田　昌明\affiref{Author_1}}
+\jabstract{本稿では，機械翻訳の単語並べ替え問題に
+シフトリデュース構文解析法を応用するための手法を提案する．
+提案手法では，単一言語の Inversion Transduction 文法によって
+単語並べ替え問題を定式化する．また，日本語文と英語文との
+単語対応をとりやすくするため，あらかじめ除去した英冠詞を
+翻訳結果へ挿入する問題も単語並べ替えと同時に定式化する．
+提案法を日英特許翻訳に適用したところ，
+句に基づく統計的機械翻訳の BLEU スコア 29.99 に対して，
+$+3.15$の改善が得られた．}
+
+\jkeywords{統計的機械翻訳，単語並べ替え，後編集，冠詞生成，シフトリデュース構文解析}
+
+\etitle{Incremental Word Re-Ordering and Article Generation: \\
+	Its Application to Japanese-to-English Machine Translation}
+\eauthor{Katsuhiko Hayashi\affiref{Author_1} \and Katsuhito Sudoh\affiref{Author_1} \and Hajime Tsukada\affiref{Author_1} \and \\
+	Jun Suzuki\affiref{Author_1} \and Masaaki Nagata\affiref{Author_1}}
+\eabstract{
+This paper introduces a novel word re-ordering model
+for statistical machine translation
+that employs a shift-reduce parser
+for inversion transduction grammars.
+The proposed model also solves article generation problems
+simultaneously with word re-ordering.
+We applied it
+to the post-ordering
+of phrase-based machine translation (PBMT)
+for Japanese-to-English patent translation tasks.
+Our experimental results suggest that our
+method achieves a significant improvement
+of $+3.15$ BLEU scores
+against $29.99$ BLEU scores of
+the baseline PBMT system.
+}
+\ekeywords{Statistical machine translation, Word re-ordering, Postediting, Shift-reduce parsing}
+
+\headauthor{林, 須藤, 塚田, 鈴木, 永田}
+\headtitle{単語並べ替えと冠詞生成の同時逐次処理}
+
+\affilabel{Author_1}{NTTコミュニケーション科学基礎研究所}{NTT Communication Science Laboratories}
+
+
+\begin{document}
+\maketitle
+
+\section{はじめに}
+句に基づく統計的機械翻訳 \cite{Koehn:03}
+が登場し，仏英などの言語対
+における機械翻訳性能は大きく向上した．
+その一方で，文の構文構造が
+大きく異なる言語対（日英など）において，長距離の単語並べ替え
+を上手く扱うことができないという問題がある．
+
+近年，この問題を解決するため，
+同期文脈自由文法 \cite{Wu:97,Chiang:05}や
+木トランスデューサ \cite{Graehl:04,Galley:06}により，
+構文情報を使って単語並べ替えと訳語選択を同時にモデル
+化する研究が活発化している．
+しかし，単語アライメントや構文解析のエラーを同時にモデルへ
+組み込んでしまうため，句に基づく手法と比較して，
+いつでもより良い性能を達成できているわけではない．
+
+これらの研究と並行して，
+事前並べ替え法 \cite{Collins:05,Isozaki:12}や
+事後並べ替え法 \cite{Sudoh:11,Goto:12}に関する
+研究も盛んに行われている．
+これらの手法は単語並べ替えと訳語選択の処理を分けてモデル化し，
+語順が大きく異なる言語対で，句に基づく手法の翻訳性能を
+大きく向上させられることが報告されている．
+
+特に，文献 \cite{Isozaki:12}で提案された
+主辞後置変換規則による事前並べ替え法は，
+特許文を対象とした英日翻訳で高い性能を達成して
+いる \cite{Goto:09,Goto:10}．
+この規則はある言語（本稿では英語を仮定する）を
+日本語（主辞後置言語）の語順へと変換するものであるが，
+文献 \cite{Sudoh:11}では，
+主辞後置変換規則によってできた日本語語順の
+英語文を元の英語文へと復元するためのモデルを構築し，
+主辞後置変換規則の利点を日英翻訳へと適用可能にしている（事後並べ替え法）．
+
+文献 \cite{Goto:12}では事後並べ替えを
+構文解析によってモデル化している．
+この手法は，1言語の上で定義されたInversion Transduction文法 (ITG) \cite{Wu:97}\footnote{
+ITGは2言語の構文解析(biparsing)を扱う枠組みであるが，
+単語並べ替え問題では原言語の単語と目的言語の訳語を同じと考えることができるため，
+1言語の上で定義された通常の構文解析として扱える．}
+にBerkeley構文解析器を適用することで，単語並べ替えを行う．
+また，主辞後置変換規則では日英単語アライメント性能を向上させるため，データから英冠詞を除去する．
+そのため，翻訳結果に冠詞生成を行う必要があり，
+文献 \cite{Goto:12}では，構文解析による単語並べ替えとは独立して，
+$N$-gramモデルによる冠詞生成法を提案している．
+
+文献 \cite{Goto:12}の手法は，Berkeley構文解析器の解析速度の問題
+や冠詞生成を独立して行うことから，解析効率や精度の点で大きな問題が残る．
+本稿では，この構文解析に基づく事後並べ替えの新たな手法を提案し，
+解析効率，及び，翻訳性能の改善をはかる．提案手法はシフトリデュース構文解析法
+に基づいており，文献 \cite{Goto:12}で利用された段階的枝刈り手法によるBerkeley
+構文解析 \cite{Petrov:07}と比べて，次の利点を持つ．
+\begin{itemize}
+\item[1] 線形時間で動作し，高速で精度の高い単語並べ替えが可能．
+\item[2] 並べ替え文字列の$N$-gram素性（非局所素性に該当）を用いても計算量が変わらない．
+\item[3] アクションを追加するだけで，並べ替えと同時に語の生成操作などが行える．
+\end{itemize}
+1と2の利点は，解析効率における利点，また，2と3は
+翻訳性能を向上させる上での利点となる．特に，3つ目
+の利点を活かして，単語並べ替えと冠詞生成問題を同時にモデル化
+することが，提案法の最も大きな新規性と言える．
+本稿では，日英特許対訳データを使って，提案手法が従来手法を
+翻訳速度，性能の両面で上回ることを実験的に示す．
+以下，第2章では構文解析による事後並べ替えの枠組み，
+第3章では提案手法，第4章では実験結果について述べる．
+第5，6章では研究の位置付けとまとめを行う．
+
+
+\section{構文解析による事後並べ替え}
+\label{sec:post}
+
+図~\ref{fig:flow}に示すように，
+事後並べ替えによる機械翻訳方式 \cite{Sudoh:11}
+は2つのステップに分けられる．
+最初のステップでは入力文をそのままの並びで
+出力言語文（中間言語文）へと翻訳する．
+そして，次のステップにおいて中間言語文を並べ替え，
+出力言語の語順になった文を生成する．
+文献 \cite{Goto:12}はこの 2 番目のステップを
+構文解析によってモデル化し，
+そのための学習データを
+次のような手順で作成している．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-5ia3f1.eps}
+\end{center}
+\caption{事後並べ替えによる機械翻訳方式の流れ}
+\label{fig:flow}
+\end{figure}
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-5ia3f2.eps}
+\end{center}
+\caption{主辞後置変換規則による中間英語データの作成例}
+\label{fig:treealign}
+\end{figure}
+
+まず，図~\ref{fig:treealign}の左図
+に示すように，英語文に対して語彙化構文木を作成する．
+次に，主辞後置変換規則によって，
+図~\ref{fig:treealign}の右図に示すような木（中間英語木）へと
+変換する\footnote{右図
+からNP(telescope)$\rightarrow$N(telescope)
+のような単一規則は解析効率を考慮して全て除去している．}．
+この変換では，非終端記号に付随する
+主辞をその句の後方へと移動する．例えば，
+左図のPP(with)$\rightarrow$PR(with) NP(telescope)の辺では，
+PPの主辞となるwithはtelescopeの前に位置するが，右図では
+PP$^{\#}$$\rightarrow$N(telescope)$^{\text{``a/an''}}$ PR(with)のように
+telescopeの後ろに位置する．
+\#は並べ替えを意味するマークである．
+右図の木構造における葉ノードから成る文を中間英語文と呼ぶ．
+
+さらに，中間英語文からは冠詞(the, a, an)が消去されており，
+逆に，日本語の助詞（が(ga)，は(wa)，を(wo)）が挿入されているが，
+これらは日本語文との単語対応をとりやすくするためである．
+削除された冠詞はそれが先頭に挿入される句を表す品詞ないしは非終端記号に
+マークしている．例えば，N(telescope)$^{\text{``a/an''}}$である．
+文献 \cite{Goto:12}はこのような削除した冠詞のマークを
+行っていないが，提案手法では
+削除した冠詞の挿入を構文解析の枠組みとして定式化するため，
+このようなマークを行っている．
+
+\#や冠詞マークを使うことで，
+図\ref{fig:treealign}の右図に示す中間英語木から
+元の英語文を復元することは可能である．
+よって，中間英語木から学習した構文解析器によって，
+翻訳器が出力した中間英語文に中間英語木構造を自動推定することで，
+機械翻訳の単語並べ替えを行うことができる．
+
+
+
+\section{シフトリデュース構文解析による単語並べ替えと冠詞生成}
+
+\subsection{単一言語のInversion Transduction文法}
+
+第\ref{sec:post}節で説明した
+単語並べ替え（及び，冠詞生成）問題は，
+文献 \cite{Tromble:09,DeNero:11}などで言及されているように，
+Inversion trasduction 文法 (ITG) \cite{Wu:97}と関連付けられる．
+本来，ITGは2言語の構文解析(biparsing)を扱う枠組みであるが，
+単語並べ替え問題を扱う場合，1言語の構文解析として
+定式化する点に注意する（単一言語のITG）．
+
+単一言語のITG $G$は$G=(V,T,P,I,\text{TOP})$から成る．
+ここで$V$は非終端記号，及び，品詞の集合，
+$T$は終端記号の集合，
+$P$は生成規則の集合，
+$I$は冠詞挿入(``the''，``a/an''，``no article'')を行う非終端記号
+及び品詞の候補集合，
+TOPは開始記号である．
+生成規則の集合$P$は
+\[
+\text{X}\rightarrow w, \qquad
+\text{X}\rightarrow \text{Y}\text{Z}, \qquad 
+\text{X}^{\#}\rightarrow \text{Y}\text{Z}, \qquad 
+\text{TOP}\rightarrow \text{X} | \text{X}^{\#}
+\]
+の形式を持つ規則から構成される($w\in T$，X, X$^{\#}$, Y, Z$\in V$)．
+最初の規則は単語$w$を生成する語彙生成規則，
+次の2つは2分生成規則，最後は終了規則である．
+
+
+\subsection{シフトリデュース構文解析}
+\label{sec:sr}
+
+単一言語のITGに対するシフトリデュース構文解析法を定義する．
+本稿で用いる記法は，文献 \cite{Huang:10}や\cite{Zhang:11}を参考にしているため，
+以下の定義を読解する上で，それらを参考にすると良いだろう．
+
+シフトリデュース構文解析は状態とアクションを使って解析を進める．
+基本的な動作原理は，まず，入力文$W=w_{1}\dots w_{|W|}$をバッファ$B$に積み込み（慣習に従い，左端が先頭），
+シフトと呼ばれるアクションによって，バッファの先頭単語に語彙生成規則を適用して，状態が持つスタックの先頭へと移す．
+そして，リデュースと呼ばれるアクションを使って，状態が持つスタックの先頭2つの要素に対して2分生成規則を適用して，
+構文木を組み上げていく．本稿ではさらに，挿入アクションを使って，冠詞の生成問題も同時にモデル化する．
+
+シフトリデュース構文解析における状態$p$は
+\[
+p: [\ell: \langle i, j, S\rangle: \pi]
+\]
+として定義され，$\ell$はステップ数，$S$はスタックを表す．
+スタックは$\dots|s_{1}|s_{0}$を要素に持ち，各要素は部分解析木を表現する．
+慣習に従い，スタックの要素は右端を先頭とし，各要素を$|$で区切る．
+$i$はスタック先頭要素$s_{0}$が持つ部分解析木の左端単語の$W$中での位置インデックスを表し，
+$j$はバッファ$B$の先頭単語の$W$中での位置インデックスを表す．
+$\pi$は予測前状態へのポインタ集合である．
+予測前状態とは，現状態の$s_{0}$が構築される直前の状態のことであり，
+$\pi$はそこへのバックポインタを保持する．$\pi$が集合となるのは，
+文献\cite{Huang:10}の動的計画法により状態の結合が起こると，$\pi$を
+もう一方の状態の$\pi$へと結合するからである
+\footnote{$\pi$の結合は，シフトで作られた状態同士が
+結合されたときに起こる．詳細は文献 \cite{Huang:10}を参照．}．
+
+各スタックの要素は以下の
+部分解析木に関する変数を持つ．
+\[
+s=\langle\text{H},h,w_{left},w_{right},a\rangle.
+\]
+ここでHとは$s$が持つ部分解析木の
+ルートにある非終端記号または品詞ラベルの変数を表す．
+$h$はHに付随する主辞単語の$W$中のインデックスを表す変数である，
+$a$は``the''，``a/an''，``no article''，またはnullが
+割り当てられる変数を示している\footnote{``no article''とnullを区別し，
+一度``no article''が挿入されても，``the''や``a/an''の挿入が行えるようにして\linebreak いる．}．
+$w_{left}$と$w_{right}$は部分解析木が覆う並べ替え文字列の
+左端と右端単語を表す変数である（解析時に並べ替えが起こったとき，
+$w_{left}$と$w_{right}$だけを明示的に並べ替えることに注意）．
+$s$の要素$*$は$s.*$として参照する．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{21-5ia3f3.eps}
+\end{center}
+\caption{状態定義の説明図: 慣習上，スタックは右端，バッファは左端が先頭とする．}
+\label{fig:state}
+\end{figure}
+
+図\ref{fig:state}には状態の説明図を示す．
+以下のアクションに関する説明が煩雑になることを防ぐため，スタック要素の定義からL, R, $w_{l}$は
+除いたが，後述する識別モデルの素性にはこれらを利用する．
+LはHの左側の子供となる非終端記号，Rは右側の子供となる非終端記号，
+$w_{l}$はLに付随する主辞単語の$W$中の位置インデックスを表す変数である．
+
+提案手法はシフト-X，挿入-$x$，リデュースMR-X，
+リデュースSR-X$^{\#}$，終了の5種類のアクションを持つ．
+以下，各アクションは推論規則
+\[
+\frac{\text{前状態}p}{\text{後状態}p'}\ \text{条件部}
+\]
+を使って定義する．条件部にはアクションの適用条件を記述し，
+状態$p$にアクションを適用すると，状態$p'$になることを表す．
+解析は初期状態$p_{0}: [0: \langle 0, 1, \epsilon\rangle: \emptyset]$
+から始まり，終了アクションによって導かれる終了状態に
+至るまで続ける．
+\begin{itemize}
+\item {\bf シフト-X:} バッファの先頭単語をスタックに積み，
+品詞を割り当てる．
+\[
+\frac{p: [\ell: \langle i, j, S|s_{0}'\rangle: \pi]}{p': [\ell+1: \langle j, j+1, S|s_{0}'|s_{0})\rangle: \{p\}]}
+	\quad \text{X}\rightarrow w_{j}\in P.
+\]
+ここで$s_{0}$はH=X，$h=j$，$w_{left}=w_{j}$，$w_{right}=w_{j}$，
+$a=\text{null}$となり，
+単語$w_{j}$に品詞Xが割当られたことを意味する．
+
+\item {\bf 挿入-$x$:} 現在の状態が持つスタック先頭要素の
+部分解析木が覆う単語列の先頭に
+``the''，``a/an''，``no articles''のいずれか（変数$x$で表す）を
+挿入する操作を行う．
+\begin{multline*}
+\frac{p: [\ell: \langle i, j, S|s_{0}')\rangle: \pi]}{p': [\ell+1: \langle i, j, S|s_{0}\rangle: \pi]}\ s_{0}'.\text{X} \in I\wedge \\
+	(s_{0}'.a=\text{null }||\text{ }x\neq\text{``no article''}\wedge s_{0}'.a\neq\text{``the''}\wedge s_{0}'.a\neq\text{``a/an''}).
+\end{multline*}
+ここで$s_{0}$はH=$s_{0}'.$H，$h=s_{0}'.h$，$w_{left}=s_{0}'.w_{left}$，
+$w_{right}=s_{0}'.w_{right}$，$a=x$となる．
+アクションの適用条件で
+$s_{0}'=\text{null}$は現状態でまだ一度も冠詞挿入が行われていないことを意味し，
+``the''，``a/an''，``no article''が代入できる．
+一方，すでに``no article''が挿入された位置には，
+条件$x\neq\text{``no article''}\wedge s_{0}'.a\neq\text{``the''}\wedge s_{0}'.a\neq\text{``a/an''}$によって，
+``the''か``a/an''のみ挿入可能で，そのいずれかを挿入以後，その位置には冠詞挿入は行えない．
+
+\item {\bf リデュース：} リデュースMR-Xと
+リデュースSR-X$^{\#}$の2種類を定義する．
+これらは同じ形式の推論規則で表記できる．
+\[
+\frac{q: [\_: \langle k, i, S'|s_{1}'\rangle: \pi']
+\quad 
+p: [\ell: \langle i, j, S|s_{0}'\rangle: \pi]}{
+p': [\ell+1: \langle k, j, S'|s_{0}\rangle: \pi']}\ \text{X}\rightarrow \text{Y}\text{Z}\in P \wedge q\in\pi.
+\]
+リデュースは$s_{0}'$と$s_{1}'$を文法規則X$\rightarrow$Y Zに
+よって結合し，新たなスタック要素$s_{0}$を作り出す．
+リデュースMR-Xでは
+\[
+s_{0}=\langle\text{X},s_{0}'.h,s_{1}'.w_{left},s_{0}'.w_{right},s_{1}'.a\rangle
+\]
+を新たに作り出す．
+新たな非終端記号はXとなり，その主辞単語は$s_{0}.h=s_{0}'.h$として，Zの主辞単語
+の位置インデックスを代入する．
+リデュースMRは非終端記号YとZが覆う
+2つの句をそのままの並びで結合するため，
+Xが覆う句の左端は
+$s_{0}.w_{left}=s_{1}'.w_{left}$，
+右端は$s_{0}.w_{right}=s_{0}'.w_{right}$となる．
+冠詞変数は$s_{0}.a=s_{1}'.a$として，Yの先頭に挿入された冠詞変数が代入される．
+リデュースSR-X$^{\#}$はMR-Xとは逆に，
+文法規則X$^{\#}\rightarrow$Y Zによって
+YとZの句を並べ替えて結合し，新たなスタック要素
+\[
+s_{0}=\langle\text{X}^{\#},s_{0}'.h,s_{0}'.w_{left},s_{1}'.w_{right},s_{0}'.a\rangle
+\]
+を作り出す．
+新たな非終端記号はX$^{\#}$となり，その主辞単語はリデュースMR同様に
+$s_{0}.h=s_{0}'.h$として，Zの主辞単語の位置インデックスを代入する．
+リデュースSRは非終端記号YとZが覆う2つの句を並べ替えて結合するため，
+X$^{\#}$が覆う句の左端は$s_{0}.w_{left}=s_{0}'.w_{left}$，
+右端は$s_{0}.w_{right}=s_{1}'.w_{right}$となる．
+冠詞変数は$s_{0}.a=s_{0}'.a$として，Zの先頭に挿入された冠詞変数が代入される．
+
+\item {\bf 終了：} シフトやリデュース
+をこれ以上適用できなくなり，終了規則が適用できる場合，
+\[
+\frac{p: [\ell: \langle 0, |W|, s_{0}'\rangle: \pi]}{p': [\ell+1: \langle 0, |W|, s_{0})\rangle: \pi]}
+\quad \text{TOP}\rightarrow \text{X}|\text{X}^{\#}\in P.
+\]
+として，終了状態$p'$を導く．ただし，
+$s_{0}'.\text{H}=\text{X}|\text{X}^{\#}$，$s_{0}.\text{H}=\text{TOP}$とする．
+終了状態$p'$からバックトレースすることで，
+中間英語木，または，英語文は出力できる．
+\end{itemize}
+
+図\ref{fig:process}に解析の例を示す．
+図\ref{fig:process}では，解析の過程が全て理解できるよう，
+スタック要素を省略せず，解析部分木を全て示した．
+
+
+入力文$W$が与えられたとき，
+初期状態$p_{0}$から終了状態に
+至る状態とアクションの系列を
+完全アクション状態系列と呼び，
+\begin{equation}
+y=((p_{0},a_{0}),(p_{1},a_{1}),\dots,(p_{|y|-1},a_{|y|-1}),(p_{|y|},-))
+\end{equation}
+と定義すると，シフトリデュース構文解析の
+探索問題は以下のように定式化される．
+\begin{equation}
+{\hat y}=\argmax_{y\in{\cal Y}(W)}\sum_{\ell=0}^{|y|-1}Score(p_{\ell},a_{\ell}).
+\end{equation}
+ここで${\cal Y}(W)$は，$W$に対して解析可能な全ての完全アクション状態
+系列の集合を表す．一般に，$Score(p,a)$は識別モデルによってモデル化
+される．
+\begin{equation}
+Score(p,a)=\Phi(p,a)\cdot\overrightarrow{\alpha}
+\end{equation}
+素性関数$\Phi$は状態$p$とアクション$a$を素性ベクトル$\Phi (p,a)$へ写像する関数である，
+素性ベクトルは発火した素性が対応する次元に1，それ以外は0をとる．
+$\overrightarrow{\alpha}$は重みベクトルで，素性ベクトルとの内積をスコアとする．
+表\ref{tab:feats}には本稿の実験で使用した
+素性テンプレートを示す．
+$\circ$によって結合された要素は組み合わせ素性を表し，状態$p$が持つ
+要素から全て計算される．さらに，全ての素性は$a$を結合して，状態$p$で
+アクション$a$を行う判断をモデル化している．
+例えば，図\ref{fig:process}のstep5の状態でレデュースSR-VP$^{\#}$アクションを
+行う場合，素性テンプレートの$s_{0}.\text{H}\circ s_{1}.\text{H}\circ s_{1}.\text{L}$はV$\circ$NP$\circ$N$\circ$レデュースSR-VP$^{\#}$
+という素性になり，素性関数$\Phi$によって素性ベクトルの対応する次元へ写像される．
+表の最も下の行は並べ替え文字列に関わる素性で，本稿ではこれらを
+{\bf 非局所素性}({\bf non-local feature, nf})と呼ぶ．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{21-5ia3f4.eps}
+\end{center}
+\caption{中間英語文``girl wo saw''に対する提案手法の動作事例}
+\label{fig:process}
+\vspace{-1\Cvs}
+\end{figure}
+
+実装上では，解析性能を高めるため，
+ビームサーチ \cite{Y-Zhang:08}により，
+各ステップではスコアが上位beam個の状態を
+ビームスタックに保持して解析を行う．
+
+
+\subsection{曖昧性除去によるビームサーチの効率改善}
+\label{sec:amb}
+
+単一言語のITGに従って，ある文字列の並べ替えを行う場合，
+様々な導出過程から同一の並べ替え文字列を作り出すことができる．
+例えば，図\ref{fig:amb}のような例である．
+
+\begin{table}[t]
+\caption{素性テンプレート}
+\input{03table01.txt}
+\label{tab:feats}
+\end{table}
+\begin{figure}[t]
+\begin{center}
+\includegraphics{21-5ia3f5.eps}
+\end{center}
+\caption{複数の導出による並べ替えの曖昧性}
+\label{fig:amb}
+\end{figure}
+
+これは元の文``e1 e2 e3 e4''を並べ替えない場合の
+ITG木が複数存在することを示している．
+この現象をSpurious Ambiguityの問題と呼ぶ．
+文献 \cite{Wu:97}ではSpurious Ambiguityを解消するために，
+左分岐重視(Left heavy)のITGを提案しているが，
+図\ref{fig:treealign}のような一般的な複数の非終端記号を持つ
+文法規則において，一意な構造に変換する方法は自明ではない．
+
+シフトリデュース構文解析におけるビームサーチでは，
+Spurious Ambiguityが及ぼす問題は大きい．
+なぜなら，同じ並べ替え文字列を表現した冗長な状態により，
+ビームスタックが無駄に消費されるからである．実際に
+このことは第\ref{sec:exp_amb}節の実験で示す．
+
+提案法では，この問題に対応するため，2つの手法を活用する．
+1つは文献 \cite{Huang:10}の動的計画法に基づく
+シフトリデュース構文解析法を適用することである．
+この手法では，識別モデルの素性ベクトルが同じになる
+状態を結合し，ビームスタック上に不要な解を
+保持する必要がなくなる．そのため，
+冗長な状態の多くを効率的に抑えることができる\footnote{ただし，挿入によってできた状態の結合は
+行っていない．なぜなら，結合される状態同士の
+予測前状態へのポインタ集合が必ず一致することが
+保証されないからである \cite{Huang:10}．}．
+
+もう1つは並べ替え文字列を解析と同時に構築し，ハッシュテーブルに
+よって同じ文字列を持つ状態を枝刈りする方法である．同じステップ
+にある状態で，並べ替え文字列とスタック要素$s_{0}$と$s_{1}$の部分木
+のルート非終端記号が全て一致する場合，
+モデルスコアの低い方の状態を削除する．$s_{0}$と$s_{1}$のルート
+非終端記号を考慮するのは，解析エラーを軽減するためである．
+
+
+\subsection{CKY構文解析との計算量比較}
+
+シフトリデュース構文解析は最適解を求められる保証はないが，
+入力文長に対して，線形時間に動作するという利点がある．
+一方で，CKY構文解析法は最適解を求めることはできるが，
+1次の主辞・従属辞関係を考慮した場合，最悪計算量が
+$O(n^5|V|^3)$に及ぶことが知られている($n$は入力文長，
+$|V|$は非終端記号の集合サイズ) \cite{Eisner:99}．
+
+さらに，単一言語のITGに対して，
+第\ref{sec:sr}節で定義したような並べ替え単語列の
+左端単語$w_{left}$と右端単語$w_{right}$を特徴量（非局所素性）に考慮すると，
+リデュースMRに対応するCKY構文解析の推論規則は以下のようになる．
+\[
+\frac{[i,h,k,\text{X},w_{left},w_{right}]\hspace{1.5mm}
+[k,h',j,\text{X'},w_{left}',w_{right}']}{[i,h',j,
+\text{X''},w_{left},w_{right}']}
+\qquad
+\text{X''}\rightarrow\text{X}\text{X'}\in P
+\]
+ここで$[i,h,k,\text{X},w_{left},w_{right}]$はある1つのCKYアイテムを表し，
+$i,k$はアイテムが表現する解析結果の左端と右端のインデックス，
+$h$は主辞のインデックスを表す．
+この推論規則では，長さ$n$に対する
+9つの自由変数$i,h,k,h',j,w_{left},w_{right},w_{left}',w_{right}'$，
+非終端記号の集合$V$から3つの記号X,X',X''を考慮するため，
+計算量は$O(n^9|V|^3)$となる．
+本稿では，主辞は必ず後置することを仮定しているため，$h$と$h'$は
+それぞれ$k$と$j$から参照でき，計算量は$O(n^7|V|^3)$となる．
+$N$-gramを考慮した構文解析がこのような高い計算量に及ぶことは，
+文献 \cite{Z-Li:11}の係り受けと品詞タグ付けの同時解析でも
+言及されている（品詞タグ付けの場合，連接部分の計算量は$n$ではなく，品詞の候補数となる）．
+
+CKY構文解析ではあるCKYアイテムに対して，ビタビスコア$\beta$を
+最大にする解をボトムアップに計算していく．
+\begin{multline}
+\beta([i,j,\text{X''},w_{left},w_{right}'])
+	= \max_{k,w_{right},w_{left}',\text{X},\text{X'}}
+	\{
+	\beta([i,k,\text{X},w_{left},w_{right}])\cdot
+	\beta([k,j,\text{X'},w_{left}',w_{right}'])\\
+\cdot p(\text{X''}\rightarrow\text{X}\hspace{0.5mm}\text{X'})\cdot
+	nf(w_{right},w_{left}')\}.
+\label{eq:cky}
+\end{multline}
+$p$は規則のスコア，$nf$は並べ替え文字列から
+計算される$2$-gramモデルなどの
+非局所素性に関わるスコアである．
+$N$-gramを考慮したCKY構文解析の計算量は
+Hook Trickと呼ばれる分配法則
+によってさらに削減できる \cite{huang-zhang-gildea:2005:IWPT}．
+Hook Trickは式(\ref{eq:cky})の右辺に対して，
+次のような式変換を行う（$\max$演算は積に対して分配的であることに従う）．
+\pagebreak
+\begin{multline}
+\max_{k,w_{left}',\text{X'}}\bigl\{\max_{w_{right},\text{X}}\bigl\{
+	\beta([i,k,\text{X},w_{left},w_{right}])\cdot
+	p(\text{X''}\rightarrow\text{X}\hspace{0.5mm}\text{X'})\cdot
+	nf(w_{right},w_{left}')\bigr\}  \\
+\cdot\beta([k,j,\text{X'},w_{left}',w_{right}'])\bigr\}
+\end{multline}
+内部$\max$演算では$i,j,k,w_{left},w_{right},w_{left}'$とX,X',X''
+を考慮し，外部$\max$演算では
+$i,j,k,w_{left},$\\$w_{left}',w_{right}'$とX',X''を考慮する．
+これより計算量は$O(n^7|V|^3)$から$O(n^6|V|^3+n^6|V|^2)$となる．
+しかし，このような計算量は一般にコストが大きく，提案法と比較して，
+実用的ではない．
+
+非局所素性を考慮したCKY構文解析はCube Pruningと呼ばれる近似解法 \cite{Huang:07}
+を使うと，$O(n^3|V|^3)$のCKY構文解析として解くことはできるが，
+最適解が求められる保証はなくなる．
+これより，CKY法や同様の原理（動的計画法）に基づくBerkeley構文解析などと比較して，
+提案法は単語並べ替え問題において，実用性の観点から大きな利点がある．
+
+
+\section{実験}
+
+\subsection{実験データとツール}
+
+実験にはNTCIR-9とNTCIR-10の特許データを使い，日英翻訳を行った．
+日本語の形態素解析には
+Mecab\footnote{https://code.google.com/p/mecab/}
+を使用した．
+英語文の語彙化構文木を作成するため，Enju \cite{Miyao:08}を
+用いて全ての英語文を解析した．
+機械翻訳には，デコーダにMoses \cite{Koehn:07}，
+単語アライメントにGIZA++ \cite{Och:03:sys}，
+言語モデルにSRILM \cite{Stolcke:11}を用いた．
+データ及びツールについては表2と表3にまとめる．
+
+\begin{table}[b]
+\begin{minipage}{0.5\textwidth}
+\caption{NTCIR-9とNTCIR-10データ}
+\label{tab:data}
+\input{03table02.txt}
+\end{minipage}
+\begin{minipage}{0.5\hsize}
+\caption{実験に使用したツール}
+\label{tab:tool}
+\input{03table03.txt}
+\end{minipage}
+\end{table}
+
+Enjuによって解析した語彙化構文木を文献 \cite{Isozaki:12}
+の規則によって中間英語木へと変換した．
+削除した冠詞の挿入マークは，その冠詞を含む句の中で最も葉に
+近い非終端記号に付与した．
+冠詞を含む句の非終端記号がない場合，品詞に挿入マークを付与した．
+日本語の助詞挿入は文献 \cite{Isozaki:12}に従って行った．
+
+提案手法の単語並べ替えモデルの
+学習は平均化パーセプトロン \cite{Collins:04}で行った．
+また，学習データの量が多いため，素性ハッシング \cite{Shi:09}
+を使って，素性計算を高速化した．
+提案手法，及び，比較手法での冠詞挿入によって``a/an''が挿入された場合，
+挿入位置の後ろに位置する単語の1文字目が母音の場合，anを挿入し，
+子音の場合，aを挿入して翻訳結果を出力した．
+日本語助詞は事後並べ替えの解析時には1単語として扱い，
+翻訳結果の出力時には全て取り除いた．
+
+
+\subsection{単語並べ替えに関する実験結果}
+\label{sec:exp_amb}
+
+提案手法の単語並べ替え性能を調べるため，
+全訓練データの中間英語木3,191,228文からランダムに
+300,000文を抽出し，並べ替えのための構文解析器を学習
+した．
+ただし，中間英語木において冠詞削除，及び，日本語助詞の
+挿入は行っておらず，ここでは並べ替えのみ（挿入アクションは
+用いない）を行うようにしている．
+なぜなら，冠詞削除や日本語助詞の挿入は翻訳時の
+単語アライメント性能向上を意図した操作であり，ここでは
+純粋に提案法の構文解析，及び，単語並べ替え性能を調べる
+ことが目的だからである．
+
+\begin{figure}[b]
+\setlength{\captionwidth}{0.45\textwidth}
+\begin{minipage}{0.45\textwidth}
+\begin{center}
+\includegraphics{21-5ia3f6.eps}
+\end{center}
+\hangcaption{学習のイテレーション回数と開発データに対するF値}
+\label{fig:comp}
+\end{minipage}
+\hfill
+\begin{minipage}{0.45\textwidth}
+\begin{center}
+\includegraphics{21-5ia3f7.eps}
+\end{center}
+\hangcaption{学習のイテレーション回数と開発データに対するBLEUスコア}
+\label{fig:comp2}
+\end{minipage}
+\end{figure}
+
+図\ref{fig:comp}では提案法を学習したときの
+学習イテレーションと開発データに対するF値の関係，図~\ref{fig:comp2}には
+BLEUスコア\cite{Papineni:02}との関係を示す．
+F値の計算はEVALB\footnote{http://nlp.cs.nyu.edu/evalb/}を用いて
+評価した\footnote{解析（品詞タグ付け）エラーによる文スキップを避けるため，
+性能は句読点も全て含めて評価した．}．
+``Base''は通常のビームサーチ，``DP''は動的計画法付きビームサーチ，
+``Hash''は第\ref{sec:amb}節で述べたハッシュテーブルによる枝刈りを表し，
+各システムはビーム幅12で訓練した．
+図\ref{fig:comp}と図\ref{fig:comp2}から，``DP''や``Hash''に比べて，``Base''による学習の
+効率が悪いことがわかる．
+図\ref{fig:comp3}と図\ref{fig:comp4}では``Base''のビーム幅を12，24，36
+にしたときの学習イテレーションと開発データに対するF値，及び，BLEUとの関係を示した．
+これから``Base''による学習は，``DP''や``Hash''よりも
+ビーム幅を大きく設定しなければ，学習が円滑に行えないことがわかる．
+
+\begin{figure}[b]
+\setlength{\captionwidth}{0.45\textwidth}
+\begin{minipage}{0.45\textwidth}
+\begin{center}
+\includegraphics{21-5ia3f8.eps}
+\end{center}
+\hangcaption{``Base''法の学習時におけるビーム幅と開発データに対するF値の関係：テスト時のビーム幅は訓練時と同じに設定}
+\label{fig:comp3}
+\end{minipage}
+\hfill
+\begin{minipage}{0.45\textwidth}
+\begin{center}
+\includegraphics{21-5ia3f9.eps}
+\end{center}
+\hangcaption{``Base''法の学習時におけるビーム幅と開発データに対するBLEUスコアの関係：テスト時のビーム幅は訓練時と同じに設定}
+\label{fig:comp4}
+\end{minipage}
+\end{figure}
+\begin{table}[b]
+\caption{NTCIR-9テストデータに対する語順並べ替え，ITG構文解析性能と解析時間}
+\label{tab:f-m}
+\input{03table04.txt}
+\end{table}
+\begin{table}[b]
+\caption{非局所素性(nf.)による構文解析，及び，語順並べ替え性能への影響}
+\label{tab:re1}
+\input{03table05.txt}
+\end{table}
+
+
+表\ref{tab:f-m}は，NTCIR-9のテストデータの中間英語文を各システムに
+よって解析したときのBLEU，RIBES \cite{Isozaki:10}，構文解析性能（再現率，適合率，F値，文正解率），
+解析時間を示した．文献 \cite{Goto:12}は論文から抜粋した数値を示す．
+Berkeley構文解析はデフォルト設定で学習し，6回の学習イテレーションを行った．
+結果からは，提案手法のうち``DP''法が他の手法に比べ，高い性能を達成できる
+ことがわかった．
+
+表\ref{tab:re1}では，表\ref{tab:feats}の非局所素性を全て取り除いた (nf.無し)
+モデルを学習し，nf.有りのモデルと比較した．
+実験結果からは，非局所素性が並べ替えの性能向上に寄与していることがわかる．
+
+表\ref{tab:re2}では，$k$-best出力時に，
+出力リストの中にどれだけの種類の文字列があるかを示す．
+表~\ref{tab:re2}には，テストデータに対して出力した
+各$k$-bestリスト中の文字列種類数の合計 / $k$-bestリストサイズの合計
+を示し，分子の数が多い程，多様な並べ替え文字列を出力できることを意味する．
+例えば，``Base''法の$64$-bestリストには，
+3, 4種類程度の並べ替え文字列しか存在せず，
+Berkeley構文解析でも同様に，同じ文字列を表す
+解析結果を大量に出力しているがわかる．
+一方，``Hash''法ではこれらの冗長な表現を排除し，多様な解析結果を
+出力できている．
+
+\begin{table}[t]
+\caption{$k$-bestリスト中に存在する文字列種類}
+\label{tab:re2}
+\input{03table06.txt}
+\end{table}
+
+以上の実験から，
+シフトリデュース法による単語並べ替え性能を向上させるには，Spurious Ambiguityの問題
+に対処し，ビーム幅を効率的に活用することが極めて重要であることがわかった．
+よって，以下の翻訳実験では，提案法は全て``DP''法を用いて行う．
+``Hash''は``DP''よりも同じ文字列を多く排除できる
+一方で，文字列を動的に作り出す必要があり，計算コストが高い．
+``Hash''法のコスト削減や``DP''法との併用については，
+今後の課題である．
+
+
+\subsection{翻訳に関する実験結果}
+
+通常の日英翻訳器は，Mosesのdistortion limitを0，6，12，20
+に設定し，言語モデルには訓練データの全英語文から
+学習した6-gram言語モデルを使用した．
+Mosesの学習はBLEUに対してMinimum error
+rate training (MERT) \cite{Och:03}を行った．
+
+単語並べ替えによる翻訳実験では，
+学習データに中間英語木3,191,228文から抽出した中間英語文を使用し，
+日本語から中間英語文への翻訳モデルを作成した．
+中間英語文の言語モデルは6-gramまで学習し，
+Mosesのdistortion limit (dist)は0に設定した．
+Mosesの学習はBLEUに対してMERTで行った．
+事後並べ替えは翻訳器から出力した
+中間英語文の1-bestを単語並べ替えモデルで
+元の英語文にし，評価を行った．
+
+表\ref{tab:mtresults}に提案手法と他の手法の実験結果を示す．
+表\ref{tab:mtresults}からは提案手法が文献 \cite{Goto:12}の
+モデルを上回る性能を達成していることがわかる．
+文献 \cite{Goto:12}の実験結果は我々の実験によるものではないが，
+実験に使用したツールやデータは同一のものであることを明記しておく．
+さらに，\ref{sec:sr}節で定義した
+非局所素性(nf.)を使ったモデル(nf.有り)と
+取り除いたモデル(nf.無し)を比較すると，
+非局所素性が有効であることがわかる．BLEUスコアを使って，
+有意水準5\%で2項検定を行ったところ，nf.無しモデルとnf.有りモデル
+には有意な差が確認された．
+また，非局所素性を使うことによる解析時間への影響も少ない．
+
+
+\subsection{実験結果の分析}
+
+
+提案手法では単語並べ替えと冠詞挿入を同時に行っているが，
+それらを同時解析することの利点を分析するため，
+様々なシステムとの比較を行った．
+NTCIR-9と-10のテストデータに対する実験結果は
+表\ref{tab:article}に示す．
+
+\begin{table}[b]
+  \caption{システム比較}
+  \label{tab:mtresults}
+\input{03table07.txt}
+\small
+解析時間は 1 文当たりの平均秒を示している． **は我々の実験によるものではなく，論文からの引用を意味する．\par
+\end{table}
+\begin{table}[b]
+\caption{単語並べ替えと冠詞挿入に関する各システムの精度比較}
+\label{tab:article}
+\input{03table08.txt}
+\small
+J-HFEは日本語から中間英語，J-Eは日本語から英語への翻訳を意味する．\par
+\end{table}
+
+\vspace{1\Cvs}\noindent
+\textbf{\underline{単語並べ替えと冠詞生成の同時処理の有効性 (1. 2. 3. 4.)}}
+　2.の結果は1.の結果から冠詞を削除したときの性能を示している．
+冠詞を削除すると，BLEU評価尺度による
+翻訳精度が極端に落ちることがわかる．
+これはBLEUが$N$-gram単位で評価を行う尺度だからである．
+
+次に，3.の結果は，
+$N$-gram手法によって2.の翻訳文へ冠詞挿入を行ったとき
+の結果を示している．
+$N$-gram手法は文献 \cite{Goto:12}と同様の
+冠詞挿入手法を意味する\footnote{ここでは
+翻訳結果と6-gram言語モデルの
+有限状態トランスデューサを合成し，その結果から
+1bestを探索することで冠詞挿入を行った．
+有限状態トランスデューサには
+内製システムを利用した．}．
+この結果から，$N$-gram手法によって性能は向上するが，
+1.の同時解析ほどの性能は得られないことがわかる．
+
+提案手法と$N$-gram手法による翻訳結果を比較すると，
+提案手法の方が冠詞挿入を多く行っていることがわかった．
+$N$-gram手法では冠詞挿入を行う程，
+文が長くなるため，確率が小さくなり，
+なるべく短い文が選ばれてしまうためであると考察される．
+
+4.は，Mosesによって日英翻訳を行うとき，英語データから冠詞を削除し，
+翻訳結果出力後に$N$-gram手法で冠詞挿入した結果を示している．
+この結果から，単純に冠詞を後編集で挿入するだけでは，
+翻訳性能を改善できないことがわかる．
+
+
+\vspace{1\Cvs}\noindent
+\textbf{\underline{日英対訳データから冠詞を除去することの意味 (1. 5.)}}
+　5.では，冠詞を英語文から削除せず， 
+提案手法で単語並べ替えのみを行った結果を
+示している．このアプローチでは翻訳性能を
+向上させることができなかった．
+この理由は中間英語文で``the the the''のように
+冠詞が連続して出現してしまうため，翻訳文にも
+不要な冠詞が出現してしまうからである．
+
+
+\vspace{1\Cvs}\noindent
+\textbf{\underline{Berkeley構文解析器との比較 (1. 2. 3. 6. 7.)}}
+　Berkeley構文解析器と提案手法を比較する．
+Berkeley構文解析器は提案手法と同様の500,000文を使って学習した．
+2. 3.と6. 7.の結果から，Berkeley構文解析器による単語並べ替え性能と
+提案手法による単語並べ替えの性能はほぼ同等であることがわかる．
+一方，1.と7.の結果に対して，BLEUスコアを使って，有意水準5\%で
+2項検定を行ったところ，それらには有意な差が確認できた．
+これは提案法の冠詞生成が$N$-gram冠詞生成法よりも高い精度であるためと言える．
+
+また，Berkeley構文解析器と提案手法の解析速度を比較すると，
+提案手法のビーム幅を156に設定したときにちょうど同程度の解析時間となる．
+さらに，提案手法は冠詞挿入も行っているのに対し， 
+Berkeley構文解析器は$N$-gram手法による
+冠詞挿入を未だ行っていない時点での解析時間であり，
+提案法が従来法よりも効率的に動作することがわかる．
+
+
+\section{関連文献}
+
+事後並べ替え手法は須藤ら \cite{Sudoh:11}に
+よって提案された．須藤らは日本語文から中間英語文への
+翻訳を行った後，再び機械翻訳によって中間英語文を
+英語文へと翻訳している．
+後藤らは中間英語文から英語文への並べ替えを構文解析に
+よって行うことで，須藤らの手法を上回る精度を達成した．
+本稿でも同様に，構文解析によって事後並べ替えをモデル化した．
+提案法はシフトリデュース構文解析法を基盤にしており，
+単語並べ替えと冠詞生成を同時に処理する仕組みや非局所素性の
+導入を行うことで，精度と解析効率をさらに向上させた．
+これらの点から，提案法は後藤らの手法と明確に区別できる．
+
+文献 \cite{Knight:94}では，機械翻訳の後編集において
+冠詞挿入を行うことの重要性を提唱し，
+英語文への冠詞挿入を決定木によって行った．
+後続的にいくつかの文献で英語文への冠詞挿入を機械学習によって
+解く手法が提案されているが \cite{Minnen:00,Turner:07}，
+構文解析と冠詞挿入を同時に行う枠組みを提唱したのは，著者らの知る限り，
+本稿が初めてである．
+
+提案手法で採用したシフトリデュース構文解析法は
+様々な文法理論の構文解析に応用されている．
+例えば，依存文法 \cite{Yamada:03,Nivre:03,Huang:10}，
+文脈自由文法 \cite{Sagae:06}，組み合わせ範疇文法 \cite{Zhang:11}
+などへの応用がある．
+シフトリデュース構文解析法を
+単一言語のITGへ応用した例は本稿が初めてである．
+
+
+\section{まとめと今後の課題}
+
+本稿では，シフトリデュース構文解析法をベースにした
+単語並べ替えと冠詞生成の同時逐次処理法を提案し，
+日英機械翻訳における事後並び替え問題に適用した．
+日英特許翻訳タスクを使った実験から，
+提案法は文献 \cite{Goto:12}
+における事後並べ替え法の解析精度と効率の問題を改善できることがわかった．
+特に，解析効率の面では，理論上の計算量，及び，実際の解析速度において，
+従来法より優れることを示した．
+また，冠詞生成を単語並べ替えと同時にモデル化することが
+翻訳精度の向上につながることを示した．
+
+提案法は，本質的には事後並べ替えだけでなく，
+事前並べ替えにも適用可能である．
+ただし，文献 \cite{Isozaki:12}の主辞後置変換規則を用いずに，
+モデルを学習するためのデータを作成する方法は自明ではない．
+よって，単語アライメントと構文木から単語並べ替え
+構文解析器の学習データを作るための手法開発が今後の課題である．
+また，提案手法は翻訳結果の$1$-bestに対して，動作する仕組み
+であったが，今後は多様な翻訳結果に対して動作させるため，
+翻訳ラティスを解析する仕組みに拡張することが課題となる．
+
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Chiang}{Chiang}{2005}]{Chiang:05}
+Chiang, D. \BBOP 2005\BBCP.
+\newblock \BBOQ A Hierarchical Phrase-based Model for Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 43rd Annual Meeting on Association for
+  Computational Linguistics}, \mbox{\BPGS\ 263--270}.
+
+\bibitem[\protect\BCAY{Collins, Koehn, \BBA\ Ku{\v{c}}erov{\'a}}{Collins
+  et~al.}{2005}]{Collins:05}
+Collins, M., Koehn, P., \BBA\ Ku{\v{c}}erov{\'a}, I. \BBOP 2005\BBCP.
+\newblock \BBOQ Clause Restructuring for Statistical Machine Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 43rd Annual Meeting on Association for
+  Computational Linguistics}, \mbox{\BPGS\ 531--540}.
+
+\bibitem[\protect\BCAY{Collins \BBA\ Roark}{Collins \BBA\
+  Roark}{2004}]{Collins:04}
+Collins, M.\BBACOMMA\ \BBA\ Roark, B. \BBOP 2004\BBCP.
+\newblock \BBOQ Incremental Parsing with the Perceptron Algorithm.\BBCQ\
+\newblock In {\Bem Proceedings of the 42nd Annual Meeting on Association for
+  Computational Linguistics}, \mbox{\BPG\ 111}.
+
+\bibitem[\protect\BCAY{DeNero \BBA\ Uszkoreit}{DeNero \BBA\
+  Uszkoreit}{2011}]{DeNero:11}
+DeNero, J.\BBACOMMA\ \BBA\ Uszkoreit, J. \BBOP 2011\BBCP.
+\newblock \BBOQ Inducing Sentence Structure from Parallel Corpora for
+  Reordering.\BBCQ\
+\newblock In {\Bem Proceedings of the Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 193--203}.
+
+\bibitem[\protect\BCAY{Eisner \BBA\ Satta}{Eisner \BBA\
+  Satta}{1999}]{Eisner:99}
+Eisner, J.\BBACOMMA\ \BBA\ Satta, G. \BBOP 1999\BBCP.
+\newblock \BBOQ Efficient Parsing for Bilexical Context-Free Grammars and Head
+  Automaton Grammars.\BBCQ\
+\newblock In {\Bem Proceedings of the 37st Annual Meeting on Association for
+  Compu tational Linguistics}, \mbox{\BPGS\ 457--464}.
+
+\bibitem[\protect\BCAY{Galley, Graehl, Knight, Marcu, DeNeefe, Wang, \BBA\
+  Thayer}{Galley et~al.}{2006}]{Galley:06}
+Galley, M., Graehl, J., Knight, K., Marcu, D., DeNeefe, S., Wang, W., \BBA\
+  Thayer, I. \BBOP 2006\BBCP.
+\newblock \BBOQ Scalable Inference and Training of Context-rich Syntactic
+  Translation Models.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on
+  Computational Linguistics and the 44th annual meeting of the Association for
+  Computational Linguistics}, \mbox{\BPGS\ 961--968}.
+
+\bibitem[\protect\BCAY{Goto, Chow, Lu, Sumita, \BBA\ Tsou}{Goto
+  et~al.}{2013}]{Goto:10}
+Goto, I., Chow, K.~P., Lu, B., Sumita, E., \BBA\ Tsou, B.~K. \BBOP 2013\BBCP.
+\newblock \BBOQ Overview of the Patent Machine Translation Task at the NTCIR-10
+  Workshop.\BBCQ\
+\newblock In {\Bem Proceedings of NTCIR}, \mbox{\BPGS\ 260--286}.
+
+\bibitem[\protect\BCAY{Goto, Lu, Chow, Sumita, \BBA\ Tsou}{Goto
+  et~al.}{2011}]{Goto:09}
+Goto, I., Lu, B., Chow, K.~P., Sumita, E., \BBA\ Tsou, B.~K. \BBOP 2011\BBCP.
+\newblock \BBOQ Overview of the Patent Machine Translation Task at the NTCIR-9
+  Workshop.\BBCQ\
+\newblock In {\Bem Proceedings of NTCIR}, \mbox{\BPGS\ 559--578}.
+
+\bibitem[\protect\BCAY{Goto, Utiyama, \BBA\ Sumita}{Goto
+  et~al.}{2012}]{Goto:12}
+Goto, I., Utiyama, M., \BBA\ Sumita, E. \BBOP 2012\BBCP.
+\newblock \BBOQ Post-ordering by Parsing for Japanese-English Statistical
+  Machine Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 50th Annual Meeting of the Association
+  for Computational Linguistics}, \mbox{\BPGS\ 311--316}.
+
+\bibitem[\protect\BCAY{Graehl \BBA\ Knight}{Graehl \BBA\
+  Knight}{2004}]{Graehl:04}
+Graehl, J.\BBACOMMA\ \BBA\ Knight, K. \BBOP 2004\BBCP.
+\newblock \BBOQ Training Tree Transducers.\BBCQ\
+\newblock In {\Bem Proceedings of HLT-NAACL}, \mbox{\BPGS\ 105--112}.
+
+\bibitem[\protect\BCAY{Huang \BBA\ Chiang}{Huang \BBA\ Chiang}{2007}]{Huang:07}
+Huang, L.\BBACOMMA\ \BBA\ Chiang, D. \BBOP 2007\BBCP.
+\newblock \BBOQ Forest Rescoring: Faster Decoding with Integrated Language
+  Models.\BBCQ\
+\newblock In {\Bem Proceedings of the 45th Annual Meeting on Association for
+  Computational Linguistics}, \lowercase{\BVOL}~45, \mbox{\BPG\ 144}.
+
+\bibitem[\protect\BCAY{Huang \BBA\ Sagae}{Huang \BBA\ Sagae}{2010}]{Huang:10}
+Huang, L.\BBACOMMA\ \BBA\ Sagae, K. \BBOP 2010\BBCP.
+\newblock \BBOQ Dynamic Programming for Linear-time Incremental Parsing.\BBCQ\
+\newblock In {\Bem Proceedings of the 48th Annual Meeting of the Association
+  for Computational Linguistics}, \mbox{\BPGS\ 1077--1086}.
+
+\bibitem[\protect\BCAY{Huang, Zhang, \BBA\ Gildea}{Huang
+  et~al.}{2005}]{huang-zhang-gildea:2005:IWPT}
+Huang, L., Zhang, H., \BBA\ Gildea, D. \BBOP 2005\BBCP.
+\newblock \BBOQ Machine Translation as Lexicalized Parsing with Hooks.\BBCQ\
+\newblock In {\Bem Proceedings of the Ninth International Workshop on Parsing
+  Technology}, \mbox{\BPGS\ 65--73}.
+
+\bibitem[\protect\BCAY{Isozaki, Hirao, Duh, Sudoh, \BBA\ Tsukada}{Isozaki
+  et~al.}{2010}]{Isozaki:10}
+Isozaki, H., Hirao, T., Duh, K., Sudoh, K., \BBA\ Tsukada, H. \BBOP 2010\BBCP.
+\newblock \BBOQ Automatic Evaluation of Translation Quality for Distant
+  Language pairs.\BBCQ\
+\newblock In {\Bem Proceedings of the 2010 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 944--952}. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Isozaki, Sudoh, Tsukada, \BBA\ Duh}{Isozaki
+  et~al.}{2012}]{Isozaki:12}
+Isozaki, H., Sudoh, K., Tsukada, H., \BBA\ Duh, K. \BBOP 2012\BBCP.
+\newblock \BBOQ {HPSG}-based Preprocessing for {English-to-Japanese}
+  Translation.\BBCQ\
+\newblock {\Bem ACM Transactions on Asian Language Information Processing
+  (TALIP)}, {\Bbf 11}  (3).
+
+\bibitem[\protect\BCAY{Knight \BBA\ Chander}{Knight \BBA\
+  Chander}{1994}]{Knight:94}
+Knight, K.\BBACOMMA\ \BBA\ Chander, I. \BBOP 1994\BBCP.
+\newblock \BBOQ Automated Postediting of Documents.\BBCQ\
+\newblock In {\Bem Proceedings of the National Conference on Artificial
+  Intelligence}, \mbox{\BPG\ 779}.
+
+\bibitem[\protect\BCAY{Koehn, Hoang, Birch, Callison-Burch, Federico, Bertoldi,
+  Cowan, Shen, Moran, \BBA\ Zens}{Koehn et~al.}{2007}]{Koehn:07}
+Koehn, P., Hoang, H., Birch, A., Callison-Burch, C., Federico, M., Bertoldi,
+  N., Cowan, B., Shen, W., Moran, C., \BBA\ Zens, R. \BBOP 2007\BBCP.
+\newblock \BBOQ Moses: Open Source Toolkit for Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 45th Annual Meeting of the ACL on
+  Interactive Poster and Demonstration Sessions}, \mbox{\BPGS\ 177--180}.
+
+\bibitem[\protect\BCAY{Koehn, Och, \BBA\ Marcu}{Koehn et~al.}{2003}]{Koehn:03}
+Koehn, P., Och, F., \BBA\ Marcu, D. \BBOP 2003\BBCP.
+\newblock \BBOQ Statistical Phrase-based translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 2003 Conference of the North American
+  Chapter of the Association for Computational Linguistics on Human Language
+  Technology-Volume 1}, \mbox{\BPGS\ 48--54}.
+
+\bibitem[\protect\BCAY{Li, Zhang, Che, Liu, Chen, \BBA\ Li}{Li
+  et~al.}{2011}]{Z-Li:11}
+Li, Z., Zhang, M., Che, W., Liu, T., Chen, W., \BBA\ Li, H. \BBOP 2011\BBCP.
+\newblock \BBOQ Joint Models for Chinese POS Tagging and Dependency
+  Parsing.\BBCQ\
+\newblock In {\Bem Proceedings of the Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 1180--1191}. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Minnen, Bond, \BBA\ Copestake}{Minnen
+  et~al.}{2000}]{Minnen:00}
+Minnen, G., Bond, F., \BBA\ Copestake, A. \BBOP 2000\BBCP.
+\newblock \BBOQ Memory-based Learning for Article Generation.\BBCQ\
+\newblock In {\Bem Proceedings of the 2nd workshop on Learning language in
+  logic and the 4th conference on Computational natural language
+  learning-Volume 7}, \mbox{\BPGS\ 43--48}.
+
+\bibitem[\protect\BCAY{Miyao \BBA\ Tsujii}{Miyao \BBA\ Tsujii}{2008}]{Miyao:08}
+Miyao, Y.\BBACOMMA\ \BBA\ Tsujii, J. \BBOP 2008\BBCP.
+\newblock \BBOQ Feature Forest Models for Probabilistic HPSG Parsing.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 34}  (1), \mbox{\BPGS\
+  35--80}.
+
+\bibitem[\protect\BCAY{Nivre}{Nivre}{2003}]{Nivre:03}
+Nivre, J. \BBOP 2003\BBCP.
+\newblock \BBOQ An Efficient Algorithm for Projective Dependency Parsing.\BBCQ\
+\newblock In {\Bem Proceedings of the 8th International Workshop on Parsing
+  Technologies}.
+
+\bibitem[\protect\BCAY{Och}{Och}{2003}]{Och:03}
+Och, F.~J. \BBOP 2003\BBCP.
+\newblock \BBOQ Minimum Error Rate Training in Statistical Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 41st Annual Meeting on Association for
+  Computational Linguistics-Volume 1}, \mbox{\BPGS\ 160--167}. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Och \BBA\ Ney}{Och \BBA\ Ney}{2003}]{Och:03:sys}
+Och, F.~J.\BBACOMMA\ \BBA\ Ney, H. \BBOP 2003\BBCP.
+\newblock \BBOQ A Systematic Comparison of Various Statistical Alignment
+  Models.\BBCQ\
+\newblock {\Bem Computational linguistics}, {\Bbf 29}  (1), \mbox{\BPGS\
+  19--51}.
+
+\bibitem[\protect\BCAY{Papineni, Roukos, Ward, \BBA\ Zhu}{Papineni
+  et~al.}{2002}]{Papineni:02}
+Papineni, K., Roukos, S., Ward, T., \BBA\ Zhu, W.-J. \BBOP 2002\BBCP.
+\newblock \BBOQ BLEU: A Method for Automatic Evaluation of Machine
+  Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 40th annual meeting on association for
+  computational linguistics}, \mbox{\BPGS\ 311--318}. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Petrov \BBA\ Klein}{Petrov \BBA\
+  Klein}{2007}]{Petrov:07}
+Petrov, S.\BBACOMMA\ \BBA\ Klein, D. \BBOP 2007\BBCP.
+\newblock \BBOQ Improved Inference for Unlexicalized Parsing.\BBCQ\
+\newblock In {\Bem Human language technologies 2007: The Conference of the
+  North American Chapter of the Association for Computational Linguistics},
+  \mbox{\BPGS\ 404--411}.
+
+\bibitem[\protect\BCAY{Sagae \BBA\ Lavie}{Sagae \BBA\ Lavie}{2006}]{Sagae:06}
+Sagae, K.\BBACOMMA\ \BBA\ Lavie, A. \BBOP 2006\BBCP.
+\newblock \BBOQ A Best-first Probabilistic Shift-reduce Parser.\BBCQ\
+\newblock In {\Bem Proceedings of the COLING/ACL on Main Conference Poster
+  Sessions}, \mbox{\BPGS\ 691--698}.
+
+\bibitem[\protect\BCAY{Shi, Petterson, Dror, Langford, Smola, \BBA\
+  Vishwanathan}{Shi et~al.}{2009}]{Shi:09}
+Shi, Q., Petterson, J., Dror, G., Langford, J., Smola, A., \BBA\ Vishwanathan,
+  S. \BBOP 2009\BBCP.
+\newblock \BBOQ Hash Kernels for Structured Data.\BBCQ\
+\newblock {\Bem The Journal of Machine Learning Research}, \mbox{\BPGS\
+  2615--2637}.
+
+\bibitem[\protect\BCAY{Stolcke, Zheng, Wang, \BBA\ Abrash}{Stolcke
+  et~al.}{2011}]{Stolcke:11}
+Stolcke, A., Zheng, J., Wang, W., \BBA\ Abrash, V. \BBOP 2011\BBCP.
+\newblock \BBOQ SRILM at Sixteen: Update and Outlook.\BBCQ\
+\newblock In {\Bem Proceedings of IEEE Automatic Speech Recognition and
+  Understanding Workshop}.
+
+\bibitem[\protect\BCAY{Sudoh, Wu, Duh, Tsukada, \BBA\ Nagata}{Sudoh
+  et~al.}{2011}]{Sudoh:11}
+Sudoh, K., Wu, X., Duh, K., Tsukada, H., \BBA\ Nagata, M. \BBOP 2011\BBCP.
+\newblock \BBOQ Post-ordering in Statistical Machine Translation.\BBCQ\
+\newblock In {\Bem Proceedings of MT Summit}.
+
+\bibitem[\protect\BCAY{Tromble \BBA\ Eisner}{Tromble \BBA\
+  Eisner}{2009}]{Tromble:09}
+Tromble, R.\BBACOMMA\ \BBA\ Eisner, J. \BBOP 2009\BBCP.
+\newblock \BBOQ Learning Linear Ordering Problems for Better Translation.\BBCQ\
+\newblock In {\Bem Proceedings of the 2009 Conference on Empirical Methods in
+  Natural Language Processing: Volume 2}, \mbox{\BPGS\ 1007--1016}.
+
+\bibitem[\protect\BCAY{Turner \BBA\ Charniak}{Turner \BBA\
+  Charniak}{2007}]{Turner:07}
+Turner, J.\BBACOMMA\ \BBA\ Charniak, E. \BBOP 2007\BBCP.
+\newblock \BBOQ Language Modeling for Determiner Selection.\BBCQ\
+\newblock In {\Bem Human Language Technologies 2007: The Conference of the
+  North American Chapter of the Association for Computational Linguistics;
+  Companion Volume, Short Papers}, \mbox{\BPGS\ 177--180}. Association for
+  Computational Linguistics.
+
+\bibitem[\protect\BCAY{Wu}{Wu}{1997}]{Wu:97}
+Wu, D. \BBOP 1997\BBCP.
+\newblock \BBOQ Stochastic Inversion Transduction Grammars and Bilingual
+  Parsing of Parallel Corpora.\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 23}  (3), \mbox{\BPGS\
+  377--403}.
+
+\bibitem[\protect\BCAY{Yamada \BBA\ Matsumoto}{Yamada \BBA\
+  Matsumoto}{2003}]{Yamada:03}
+Yamada, H.\BBACOMMA\ \BBA\ Matsumoto, Y. \BBOP 2003\BBCP.
+\newblock \BBOQ Statistical Dependency Analysis with Support Vector
+  Machines.\BBCQ\
+\newblock In {\Bem Proceedings of the 8th International Workshop on Parsing
+  Technologies}, \lowercase{\BVOL}~3.
+
+\bibitem[\protect\BCAY{Zhang \BBA\ Clark}{Zhang \BBA\ Clark}{2008}]{Y-Zhang:08}
+Zhang, Y.\BBACOMMA\ \BBA\ Clark, S. \BBOP 2008\BBCP.
+\newblock \BBOQ A Tale of Two Parsers: Investigating and Combining Graph-based
+  and Transition-based Dependency Parsing using Beam-Search.\BBCQ\
+\newblock In {\Bem Proceedings of the 2008 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 562--571}.
+
+\bibitem[\protect\BCAY{Zhang \BBA\ Clark}{Zhang \BBA\ Clark}{2011}]{Zhang:11}
+Zhang, Y.\BBACOMMA\ \BBA\ Clark, S. \BBOP 2011\BBCP.
+\newblock \BBOQ Shift-reduce CCG Parsing.\BBCQ\
+\newblock In {\Bem Proceedings of the 49th Meeting of the Association for
+  Computational Linguistics}, \mbox{\BPGS\ 683--692}.
+
+\end{thebibliography}
+
+\begin{biography}
+\bioauthor{林　　克彦}{
+2013年，奈良先端科学技術大学院大学博士後期課程修了．
+現在，NTTコミュニケーション科学基礎研究所に所属．
+博士（工学）．
+構文解析，機械翻訳に関する研究に従事．
+ACL, 情報処理学会，言語処理学会各会員．
+}
+
+\bioauthor{須藤　克仁}{
+2000年，京都大学工学部卒業．
+2002年，同大大学院情報学研究科修士課程修了．
+同年，日本電信電話株式会社入社．
+音声言語処理，統計的機械翻訳に関する研究に従事．
+ACL, 情報処理学会，言語処理学会，日本音響学会各会員．
+}
+
+
+\bioauthor{塚田　　元}{
+1987年，東京工業大学理学部情報科学科卒業．
+1989年，同大学院理工学研究科修士課程修了．
+同年，日本電信電話株式会社入社．
+現在，NTTコミュニケーション科学基礎研究所に所属．
+統計的機械翻訳の研究に従事．
+ACL, 電子情報通信学会，情報処理学会，人工知能学会，言語処理学会，日本音響学会各会員．
+}
+
+\bioauthor{鈴木　　潤}{
+2001年，慶應義塾大学大学院理工学研究科計算機科学専攻修士課程修了．
+同年，日本電信電話株式会社入社．
+2005年 奈良先端大学院大学博士後期課程修了．
+2008〜2009年 MIT CSAIL客員研究員．
+現在，NTTコミュニケーション科学基礎研究所に所属．
+博士（工学）．
+主として自然言語処理，機械学習に関する研究に従事．
+ACL, 情報処理学会，言語処理学会各会員．
+}
+
+\bioauthor{永田　昌明}{
+1987年，京都大学大学院工学研究科修士課程修了．
+同年，日本電信電話株式会社入社．
+現在，NTTコミュニケーション科学研究所主幹研究員（上席特別研究員）．
+博士（工学）．
+統計的自然言語処理の研究に従事．
+ACL, 電子情報通信学会，情報処理学会，人工知能学会，言語処理学会各会員．
+}
+
+
+\end{biography}
+
+
+\biodate
+
+\end{document}

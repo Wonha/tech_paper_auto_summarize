@@ -1,0 +1,981 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+
+\Volume{19}
+\Number{5}
+\Month{December}
+\Year{2012}
+
+\received{2012}{4}{18}
+\revised{2012}{7}{15}
+\accepted{2012}{7}{26}
+
+\setcounter{page}{381}
+
+\usepackage{multirow}
+
+
+
+\jtitle{小規模誤りデータからの日本語学習者作文の助詞誤り訂正}
+\jauthor{今村　賢治\affiref{NTT} \and 齋藤　邦子\affiref{NTT} \and 貞光　九月\affiref{NTT} \and 西川　　仁\affiref{NTT}}
+\jabstract{
+本稿では，置換，挿入，削除操作を行う識別的系列変換で日本語
+学習者作文の助詞誤りを自動訂正する．誤り訂正タスクの場合，難しいのは大
+規模な学習者作文コーパスを集めることである．この問題を，識別学習の枠組
+み上で2つの方法を用いて解決を図る．一つは日本語としての正しさを測るた
+め，少量の学習者作文から獲得したn-gram二値素性と，大規模コーパスから獲
+得した言語モデル確率を併用する．もう一つは学習者作文コーパスへの直接的
+補強として，自動生成した疑似誤り文を訓練コーパスに追加する．さらに疑似
+誤り文をソースドメイン，実際の学習者作文をターゲットドメインとしたドメ
+イン適応を行う．実験では，n-gram二値素性と言語モデル確率を併用すること
+で再現率の向上ができ，疑似誤り文をドメイン適応することにより安定した精
+度向上ができた．
+}
+\jkeywords{助詞誤り訂正，言語モデル，疑似誤り生成，ドメイン適応，識別的系列変換}
+
+\etitle{Particle Error Correction of Japanese Learners \\from Small Error Data}
+\eauthor{Kenji Imamura\affiref{NTT} \and Kuniko Saito\affiref{NTT} \and Kugatsu Sadamitsu\affiref{NTT} \and Hitoshi Nishikawa\affiref{NTT}} 
+\eabstract{
+This paper presents grammatical error correction of
+Japanese particles written by foreign Japanese learners.  Our method
+is based on discriminative sequence conversion, which corrects
+particle errors by substitution, insertion, or deletion.  For this
+kind of error correction task, it is difficult to collect large
+learners' corpora.  We attempt to solve this problem based on a
+discriminative learning framework which uses the following two
+methods.  First, language model probabilities obtained from large
+Japanese corpora are combined with n-gram binary features obtained
+from the learners' corpora.  This method is applied in order to
+measure the correctness of Japanese sentences.  Second, automatically
+generated pseudo-error sentences are added to the learners' corpora in
+order to enrich the corpora directly.  Furthermore, we apply domain
+adaptation, in which the pseudo-error sentences (the source domain)
+are adapted to the real-error sentences (the target domain).
+Experimental results show that the recall rate has been improved by
+using both the language model probabilities and the n-gram binary
+features. Stable improvement has been achieved by using pseudo-error
+sentences with the domain adaptation.
+}
+\ekeywords{Particle Error Correction, Language Models, Pseudo-Error Generation, Domain Adaptation, Discriminative Sequence Conversion}
+
+\headauthor{今村，齋藤，貞光，西川}
+\headtitle{小規模誤りデータからの日本語学習者作文の助詞誤り訂正}
+
+\affilabel{NTT}{日本電信電話株式会社，NTTメディアインテリジェンス研究所}{NTT Media Intelligence Laboratories, NTT Corporation}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+
+日本語学習者の作文の誤り訂正は，教育の一環としてだけでなく，近年はビジ
+ネス上の必要性も生じてきている．たとえば，オフショア開発（システム開発
+の外国への外部発注）では，中国，インドなどへの発注が増加している．外国
+に発注する場合，日本との意思疎通は英語または日本語で行われるが，日本語
+学習者の多い中国北部では，日本語が使われることも多い．しかし，中国語を
+母語とするものにとって日本語は外国語であり，メールなどの作文には誤りを
+含み，意思疎通に問題となるため，それらを自動検出・訂正する技術が望まれ
+ている\shortcite{Ohki:ParticleError2011j,Suenaga:ErrorCorrection2012j}．
+そこで本稿では，日本語学習者作文の誤り自動訂正法を提案する．外国人にとっ
+て，助詞はもっとも誤りやすい語であるため，本稿では助詞の用法を訂正対象
+とする．
+
+日本語の助詞誤り訂正タスクは，英語では前置詞誤りの訂正に相当する．英語
+の前置詞・冠詞誤りの訂正では，分類器を用いて適切な前置詞を選択するアプ
+ローチが多い\shortcite{gamon:2010:NAACLHLT,HAN10.821,rozovskaya-roth:2011:ACL-HLT2011}．
+これらは，誤りの種別を限定することにより，分類器による訂正を可能とし
+ている．一方，\shortciteA{mizumoto-EtAl:2011:IJCNLP-2011}は，日本語学
+習者の誤りの種別を限定せず，翻訳器を利用した誤り訂正を行った．この方法
+は，誤りを含む学習者作文を正しい文に変換することにより，あらゆる種類の
+誤りを訂正することを狙ったものである．本稿の訂正対象は助詞誤りであるが，
+今後の拡張性を考慮して，翻訳器と同様な機能を持つ
+識別的系列変換\shortcite{Imamura:MorphTrans2011}をベースとした誤り訂正を行う．
+
+翻訳の考え方を使った場合，モデル学習のために，誤りを含む学習者作文とそ
+れを訂正した修正文のペア（以下，単にペア文とも呼ぶ）が大量に必要である．
+しかし，実際の学習者作文を大規模に収集し，さらに母語話者が修正するのは
+コストが高く難しい場合が多い．この問題に対し，本稿では以下の2つの提案
+を行う．
+
+\begin{enumerate}
+\item 日本語平文コーパスの利用（言語モデル確率と二値素性の混在）
+
+学習者作文・修正文ペアのうち，修正文側は正しい日本語であるため，既存の
+日本語平文コーパスなどから容易に入手可能である．そこで，比較的大規模な
+日本語平文コーパスを日本語修正文とみなして，変換器のモデルとして組み込
+む．組み込む際には，日本語平文コーパスは言語モデル確率の算出に利用し，
+学習者作文・日本語修正文ペアから獲得した二値素性と共に，識別モデルの枠
+組みで全体最適化を行う．学習者作文・修正文ペアに出現しないものであって
+も，言語モデル確率によって日本語の正しさが測られるため，誤り訂正の網羅
+性の向上が期待できる．
+
+\item 疑似誤り文によるペア文の拡張（とドメイン適応の利用）
+
+学習者作文は容易に入手できないため，正しい文から誤りパターンに従って誤
+らせることにより，自動的に学習者作文を模した疑似誤り文を作成する．この
+疑似誤り文と元にした日本語文をペアにして，訓練コーパスに追加する．ただ
+し，自動作成した疑似誤り文は，実際の学習者作文の誤り分布を正確には反映
+していない．そのため，疑似誤りをソースドメイン，実誤りをターゲットドメ
+インとみなして，ターゲットドメインへの適応を行う．疑似誤りの分布が実際
+の誤りと少々異なっていても，安定して精度向上ができると期待される．
+\end{enumerate}
+
+以下，第\ref{sec-particle-errors}章では，我々が収集した日本語学習者作
+文の誤り傾向について述べる．第\ref{sec-conversion}章では，本稿のベース
+となる誤り訂正法と，日本語平文コーパスの利用法について説明する．第
+\ref{sec-pseudo-sentences}章では，疑似誤り文によるペア文の拡張法につい
+て説明し，第\ref{sec-experiments}章では実験で精度変換を確認する．第
+\ref{sec-related-work}章では関連研究を紹介し，第\ref{sec-conclusion}章
+でまとめる．
+
+
+
+\section{日本語学習者の誤り傾向}
+\label{sec-particle-errors}
+
+まず，実際に外国人がどのような日本語書き誤りをしてしまうのか，日本語を
+学んでいる中国語母語話者を対象に誤り例を収集した．
+
+被験者は日本語の学習歴があり，日本の技術系大学に在籍する，もしくは卒業
+した背景をもつ37名である．日本滞在歴は半年から6年程度である．各被験者
+に技術系文書（Linuxマニュアル等80文）の英文と24個の図（のべ104課題）を提示
+し，キーボード入力による日本語作文を実施した（これを学習者作文と呼ぶ）．
+最終的には2,770文の学習者作文データを収集し，各作文を日本語母語話者が
+推敲した（以下，単に修正文と呼ぶ）．誤りを訂正する際には，文意を変更せ
+ず，文法的に正しい日本語とするための最小限の訂正を
+行うよう留意した\footnote{ただし，用語の選択誤りは訂正した．}．
+言い換えると，この推敲で訂正された誤りは，訂正しないと正しい日本語にはならないものである．
+
+
+\subsection{誤りの分類と出現分布}
+
+誤り傾向の分析にあたり，まずは大分類として，文法誤り，語彙誤り，表記誤
+りの3種類を設定し，さらに小分類を設定した（表\ref{tbl-error-class}）．
+
+収集した2,770文の分析を実施したところ，訂正が可能であったものは2,171文
+であった．訂正が出来なかったものは，全く誤りがない日本語文559文，およ
+び文として不完全な断片40文である．これ以降の分析は，訂正が可能であった
+2,171文に対して行った．
+
+まず，誤り訂正の発生箇所は4,916箇所であり，1文あたり平均2.26箇所であっ
+た．また各誤りの種別について，誤り大分類での出現分布をみると，文法誤り
+が54\%と最も多く，続いて語彙誤り28\%，表記誤りが16\%であった．これ以外
+は複数の誤りが混在する複合型誤りである．さらに小分類での出現分布をみる
+と，最も多く発生していたのは助詞・助動詞誤り33\%，続いてカタカナ語誤り
+11\%，単語選択（類義語）の誤り10\%であった．
+
+\begin{table}[t]
+\caption{誤りの分類と誤り例}
+\label{tbl-error-class}
+\input{02table01.txt}
+\end{table}
+
+
+
+
+\subsection{誤り傾向}
+
+今回の誤り傾向であるが，助詞誤りおよびカタカナ誤りは中国語母語話者に限
+らず広く外国人に共通して出現するものであると推測される．助詞は日本語特
+有の文法であり，多くの非日本語母語話者にとっては習得が難しいものである．
+そのため，中国語母語話者に限らず外国人の学習者作文の誤りに対する訂正対
+象を助詞とすることは，発生率から考えても効果的である．
+
+助詞の種類によって誤り発生のしやすさは異なっているはずであり，全ての助
+詞が一律に誤りとはならない．今回の作文データにおける助詞誤りについて，
+さらに詳細に内訳を分析をしたところ，まず，誤りタイプとしては置換誤りが
+74\%，助詞の抜けが17\%，余分な助詞の出現が9\%であった．特に置換誤りの
+発生が高い．また余分な助詞の出現が9\%と非常に低く，訂正のために助詞の
+削除操作が必要となるケースは少ないことがわかる．個別の助詞誤り発生回数
+上位10件は表\ref{tbl-particle-errors}のとおりである．
+
+このうち，「は→が」への置換訂正については，1文中に2回，「は／係助詞」が出
+現し，片方を「が／格助詞」に置換しなければならなかったものである（たと
+えば，「問題\underline{は}あるときは．．．」）．「の」の助詞抜けとして
+は，「2つファイル」のように，数量表現に後続する名詞の直前の「の」が欠
+けている誤りがよく見られた．また，余分な助詞「の」としては，「やったの
+人」「小さいの絵」など，連体修飾で使用された動詞や形容詞に後続して「の」
+が余分に存在している誤りが多い．
+
+以上の分析から，本稿では，誤りの出現頻度の高い助詞誤りを訂正対象とした．
+また，助詞の置換，挿入，削除が現れていることから，原文（入力文）を置換，
+挿入，削除操作することにより，誤り訂正を行う．
+
+\begin{table}[t]
+\caption{頻出した助詞誤り}
+\label{tbl-particle-errors}
+\input{02table02.txt}
+\end{table}
+
+
+
+\section{識別的系列変換}
+\label{sec-conversion}
+
+本章では，ベースとなる識別的系列変換を用いた誤り訂正方式について述べる．
+本稿の誤り訂正は，学習者作文および修正文をあらかじめ形態素解析し，単語
+列から単語列へ変換することで行う．本方式は，基本的には識別モデルを用い
+た句に基づく統計翻訳器と同等であるが，挿入，削除操作への拡張と，
+言語モデル確率を扱う拡張を行っている．分類器を用いる誤り訂正
+方法と異なり，1文中の複数の誤りを一度に訂正し，助詞以外の誤りにも拡張が
+可能な方式である．
+
+
+\subsection{基本方式}
+
+本稿では，音声認識結果を言語処理用単語列に変換する
+形態素変換器 \shortcite{Imamura:MorphTrans2011}をベースにし，
+以下の手順で入力文の誤りを訂正する．
+
+\begin{itemize}
+\item まず，入力単語列でフレーズテーブルを検索し，入力側にマッチするフ
+レーズを得る．フレーズテーブルは，助詞誤りとその訂正候補を対にして格納
+したものである．これは誤り訂正タスクに
+おけるConfusion Set \shortcite{rozovskaya-roth:2010:EMNLP}と同じもので，
+表\ref{tbl-particle-errors}をテーブル化したものである\footnote{
+	表\ref{tbl-particle-errors}はフレーズテーブルの一部である．
+\ref{sec-experimental-settings}節で述べるように，実際にはipadic-2.7.0
+の最上位品詞が「助詞」であるすべての単語間の誤りを対象とした．}．フレー
+ズテーブルと照合することにより，すべての訂正候補が得られる．また，無修
+正の場合を考慮し，入力単語を出力単語にコピーしたフレーズを作成し，両者
+をまとめてラティス構造にパックする（図\ref{fig-lattice}）．これをフレー
+ズラティスと呼ぶ．
+
+\item フレーズラティスから，条件付き確率場(Conditional Random Fields;
+CRF) \shortcite{Lafferty:CRF2001}に基づき，最尤フレーズ列を探索する．
+本稿の誤り訂正では語順の変更を行わないため，探索にはViterbiアルゴリズ
+ムを用いる．フレーズラティスには，非文法的系列（たとえば，図\ref{fig-lattice}では，
+格助詞「を」が連続する系列も候補として存在）も
+含まれるが，枝刈りなどは行わず，モデルに従い最尤探索を行う．
+
+\item 学習時には，学習者作文と修正文に対して，DPマッチによる単語アライ
+メントを行い，正解のフレーズ列を作成する．
+この正解から，助詞誤りだけを取得してフレーズテーブルを作成するほか，正
+解を教師データとしてCRFを学習する\footnote{
+	本稿では，CRF学習のための最適化プログラムとして岡崎の
+libLBFGSを用い，実装した．\\
+http://www.chokkan.org/software/liblbfgs/}．
+\end{itemize}
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{19-5ia2f1.eps}
+\end{center}
+\caption{フレーズラティスの例（太線は正解系列を表す）}
+\label{fig-lattice}
+\end{figure}
+
+
+
+\subsection{挿入・削除操作}
+
+一般的に句に基づく翻訳器は置換操作のみで翻訳を行うが，本稿で実施する誤
+り訂正は，助詞の置換操作のほかに，挿入，削除操作も対象となる．挿入操作
+は，空単語からある単語への置換，削除操作は，ある単語から空単語への置換
+とみなせるため，両者も基本的には置換操作と同等に扱い，モデルの学習・適
+用を行う．
+
+しかし，挿入操作は，全単語間に挿入される可能性があるため，ラティス構築
+時にサイズが爆発するなど，非常に計算コストの高い操作である．挿入箇所を
+ある程度絞ることが望ましいため，本稿では，名詞直後に後続する助詞のみ，
+挿入を許可するという制約をかける．挿入は1箇所1単語のみとする．この制約
+により，一部訂正不可能な誤りも生じる（たとえば，格助詞「に」の直後に係
+助詞「は」を挿入し，「に」を「には」に訂正するのは不可能となる）．
+
+なお，置換操作は，挿入操作と削除操作の連続でも表現できる．本稿では，挿
+入と削除操作が連続していた場合は，置換操作になるように正解データを作成
+し，モデルを学習する．誤り訂正時には，フレーズラティス内に置換操作の候
+補と，挿入と削除操作が連続する候補が混在するが，誤り訂正モデルに従い最
+尤探索すると，ほとんどすべての場合，置換操作が選ばれる．
+
+
+\subsection{素性}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{19-5ia2f2.eps}
+\end{center}
+\caption{マッピング素性とリンク素性}
+\label{fig-features}
+\end{figure}
+\begin{table}[b]
+\caption{素性テンプレート}
+\label{tbl-templates}
+\input{02table03.txt}
+\end{table}
+
+本手法では2種類の素性を用いる．一つは翻訳モデルに相当する入力と出力の
+フレーズ対応度を測るためのマッピング素性，もう一つは言語モデルに相当す
+る出力単語列の日本語としてのもっともらしさを測るためのリンク素性である．
+マッピング素性とリンク素性の概要を図\ref{fig-features}に，素性テンプレー
+トの一覧を表\ref{tbl-templates}に示す．
+
+固有表現抽出など，識別モデルを用いるタスクでは，タグを付与すべき単語の
+ほかに，その周辺単語を素性として用いる場合が多く，今回も同様な考え方を
+する．具体的には，当該フレーズの入力側前後2単語をウィンドウとして，1〜
+3-gramと当該フレーズの出力単語の対を，二値のマッピング素性として使用す
+る．
+
+
+リンク素性に関しては，次節で詳細に述べる．
+
+
+
+\subsection{日本語平文コーパスの利用とリンク素性への組み込み}
+
+誤り訂正タスクにおいては，「正しい日本語」を出力する必要があるため，リ
+ンク素性は重要であると考えられる．この「正しい日本語」は，既存の日本語
+平文コーパスから容易に入手可能である．そこで以下の2 種類のリンク素性を
+併用し，識別学習を通じて全体最適化を行う．識別モデルを用いる本稿の方式
+は，相互に依存する素性を混在できるという特徴を利用している．
+
+\begin{itemize}
+\item n-gram二値素性：
+出力単語の1〜3-gramを二値素性として使用する．最適化用の訓練コーパス
+（学習者作文・修正文などのペア文）からしか獲得できない．個々のn-gramの
+素性重みは，マッピング素性を含む他の素性との兼ね合いを考慮しながら最適
+化されるため，きめ細かい最適化ができ，訓練コーパスにおける精度は高い．
+言い換えると，未知テキスト中に訓練コーパスと同じパターンの誤りが出現し
+た場合，非常に高い精度で訂正ができる．
+
+\item 言語モデル確率：
+出力単語列のn-gram確率（実際にはトライグラム確率）の対数値を実数素性と
+して使用する．素性重みは1つしか付与されないが，言語モデルは日本語平文
+コーパスから学習できるため，訓練コーパスに限らず，大量の文から構築でき
+る．訓練コーパスに出現した／しないにかかわらず，日本語としての適切さを
+スコアとして与えることができる．
+\end{itemize}
+
+識別学習における二値素性と実数素性の混在は，半教師あり学習における補助
+モデル\shortcite{suzuki-EtAl:2009:EMNLP,Suzuki:SemiSupervised2010j}
+と同じ考え方であり，訓練コーパス上での精度を保ちながら，未知テキストに
+対して頑健な訂正が行えるという利点がある．
+
+
+
+\section{疑似誤り文を用いたペア文の拡張}
+\label{sec-pseudo-sentences}
+
+第\ref{sec-conversion}章で述べた誤り訂正器には，学習のため，翻訳におけ
+る対訳文に相当する学習者作文・修正文ペアが必要である．しかし，実際の誤
+り事例を大量に収集するのは困難であるため，自動生成した疑似誤り文を用い
+てペア文を拡張する．本章では，まず疑似誤り文生成方法について説明し，ド
+メイン適応を利用した疑似誤り文の適用方式について説明する．
+
+
+\subsection{疑似誤り生成}
+
+前述のとおり，学習者作文・日本語修正文ペアのうちの日本語修正文に関して
+は，日本語平文コーパスなどから文を適当に選択することにより，容易に入手
+できる．よって，収集した文を，学習者作文のように誤らせることができれば，
+ペア文として扱うことができる．
+
+本稿では，\shortciteA{rozovskaya-roth:2010:NAACLHLT}と同様の生成方法を取る．
+具体的には，フレーズテーブルには，すでに誤った助詞とその訂正候補が記録
+されているので，これを逆に適用し，訂正候補助詞が出現したら，正しい助詞
+を誤らせる．誤りはある確率で発生させるが，発生確率には，実誤りコーパス
+（学習者作文と日本語修正文ペア）上での正解助詞$e$とその誤り助詞$f$の相
+対頻度を使用する．すなわち，
+\begin{equation}
+P_{error}(f|e)  =  \frac{C(f,e)}{C(e)},
+\end{equation}
+
+ただし，$P_{error}(f|e)$は誤り発生確率，$C(f,e)$は，実誤りコーパス上で
+の正解助詞$e$とその誤り助詞$f$の共起頻度，$C(e)$は同コーパス上での正解
+助詞$e$の出現頻度である．
+
+このように生成した疑似誤り文を訓練コーパスに加えることにより，誤り訂正
+モデルを学習する．
+
+
+
+\subsection{素性空間拡張法によるドメイン適応}
+\label{sec-domain-adaptation}
+
+自動で作成した疑似誤り文の問題点は，実際の誤りの確率分布を反映している
+保証がない点である．より正確に実誤りに近づけるため，本稿ではドメイン適
+応の技術を用いる．すなわち疑似誤り文コーパスをソースドメイン，実際の学
+習者作文コーパスをターゲットドメインとみなし，ターゲットドメインに適応
+させた誤り訂正モデルを学習する．
+
+本稿では，ドメイン適応法に\shortciteA{daumeiii:2007:ACLMain}の素性空間
+拡張法 (Feature Augmentation) を用いる．これは，素性空間を拡張すること
+によりドメイン適応を行うもので，ソースドメインに関するモデルを事前分布
+と考えることに相当する．また，学習方法（学習器）を変更する必要がないと
+いう特徴がある．
+
+素性空間拡張法を簡単に説明する．素性選択によって構築された素性は，共通，
+ソース，ターゲットの素性空間に拡張して配備される．この際，ソースドメイ
+ンから作成された素性 ($D_s$) は共通およびソースに，ターゲットドメイン
+から作成された素性 ($D_t$) は共通およびターゲットの素性空間に配備する．
+つまり，素性空間が3倍に拡張される（図\ref{fig-augment}）．
+
+パラメータ推定は，上記素性空間上で通常どおり推定される．その結果，ソー
+スドメイン，ターゲットドメインで共通に用いられる素性（つまり，ソース，
+ターゲットで矛盾しない素性）に関しては，共通空間の重みが大きくなり，両
+者で矛盾する素性に関しては，ソースまたはターゲット空間の素性が重くなる．
+どちらか片方にしか出現しない素性については，共通空間とドメイン依存空間
+の素性が重くなる．
+
+図\ref{fig-augment}には，素性空間拡張法の適用例も示した．
+ここでは，格助詞「が」を「を」に置換するか，無修正にするかという問題に
+単純化する．いま，ソースドメインデータ，ターゲットドメインデータから，
+以下の3種類の素性が得られたとする（表{\ref{tbl-templates}}の素性No.~11
+を想定）．
+
+\begin{itemize}
+\item 「機能:が:利用」は，ソースドメイン，ターゲットドメイン双方に現れ，
+  どちらも「を」に訂正している．
+\item 「データ:が:変更」は，ソース，ターゲット双方に現れているが，ソー
+  スドメインでは無修正，ターゲットドメインでは「を」に置換されている．
+\item 「関数:が:実行」は，ソースドメインのみに現れている．
+\end{itemize}
+
+この素性空間上でパラメータ推定を行うと，「機能:が:利用」は，ドメイン間
+で矛盾しないので，共通空間の重みが特に大きくなる．一方，「データ:が:変
+更」は，ソース・ターゲットで矛盾しているので，共通空間の重みが0になり，
+ソースまたはターゲット空間で，訂正先に依存した重みが重くなる．また，
+「関数:が:実行」は，共通空間とソース空間の重みが大きくなっている．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{19-5ia2f3.eps}
+\end{center}
+\caption{素性空間の拡張}
+\label{fig-augment}
+\end{figure}
+
+誤り訂正時には，共通とターゲット空間の素性のみを利用してデコードが行わ
+れる．ターゲットドメインに最適化されているため，実際の誤り出現分布に近
+くなる．また，ターゲットドメインの訓練データに現れない素性に関しても，
+ソースドメインデータから学習された共通空間の素性が利用できるため，ター
+ゲットドメインのみを利用するときより，未知の入力に頑健になる．
+図\ref{fig-augment}の例では，ソースドメインのみに出現した「関数:が:実行」
+も利用して訂正ができる．
+
+
+
+\section{誤り訂正実験}
+\label{sec-experiments}
+
+\subsection{実験設定}
+\label{sec-experimental-settings}
+
+\paragraph{訂正対象助詞：}
+
+本稿で誤り訂正の対象とする助詞は，ipadic-2.7.0の最上位品詞が助詞である
+ものすべてである．これには，格助詞，係助詞のほか，副助詞，接続助詞，終
+助詞，並立助詞なども含まれ，のべ236種類あるが，後述する学習者作文コー
+パスに出現しない，もしくは誤りがない助詞は訂正対象にならないため，実際
+の訂正対象助詞は38種類である
+\footnote{\shortciteA{suzuki-toutanova:2006:COLACL}が対象とした格助詞
+10種+係助詞「は」と比べると，本稿では「ヘ」が対象外，「より」は単独で
+は出現せず，連語「により」が訂正対象となっている．また，上記論文では，
+「に／は」のように，格助詞と「は」の連続も1語扱いで訂正対象としているが，
+本稿では連続した置換，挿入，削除操作を用いて訂正している．}．
+
+
+\paragraph{学習者作文コーパス（実誤りコーパス）：}
+
+実験に使用したコーパスは，\ref{sec-particle-errors}章で述べた2,770文
+（104 課題）である．ここから助詞誤りのみを残し，それ以外の部分は日本語修
+正文の単語を埋め込んだ文を作成，コーパスとした．つまり，実験に使用した
+ペア文は，助詞誤りのみを含んだものである．ただし，助詞の表記が学習者作
+文，日本語修正文で一致している場合は誤りとはみなさず，日本語修正文の品
+詞を学習者作文にコピーして利用した．誤り総数は，助詞13,534個中1,087箇
+所 (8.0\%) である．また，誤り助詞と訂正助詞を対にした異なり数は，132種
+類（置換修正95種類，挿入14種類，削除23種類）である．なお，実験に使用し
+たすべての文は，MeCab\footnote{http://mecab.sourceforge.net/}（辞書はipadic-2.7.0を使用）
+によって形態素解析し，その表記と品詞を単語情報とした．
+
+\paragraph{言語モデル：}
+
+言語モデルは，Wikipediaのコンピュータ関連記事と，CentOS 5の日本語マニュ
+アルから，のべ527,151文を取得し，SRILM \shortcite{Stolcke:SRILM2011}で
+トライグラムを学習して使用した．バックオフ推定には，Modified
+Kneser-Neyディスカウントと補間推定を併用し，
+未知ユニグラムを疑似単語 \texttt{<unk>}として残す設定で学習した．
+
+\paragraph{疑似誤りコーパス：}
+
+疑似誤り文は，言語モデル作成用コーパスから，ランダムに10,000文を取得し
+て生成した．誤り発生確率は，実誤りコーパス上での相対頻度を倍率1.0とし
+て，倍率0.0（つまり誤りなし）〜2.0まで変化させて実験を行った．
+
+\paragraph{評価法：}
+評価は，
+コーパスを課題単位に分割し，5分割交差検定で行った．評価基準は2
+種類使用した．
+
+\begin{enumerate}
+\item 正解の単語列とシステム出力の単語列の表記を比較し，誤り訂正
+の再現率，適合率，F値を算出した．
+
+\item 本タスクは，訂正すべき助詞数に比べ，訂正不要な助詞が圧倒的に多く，
+システムによって訂正不要な助詞を過剰に訂正してしまう懸念がある．そのた
+め，訂正によって文の品質が向上した助詞数（訂正が必要な助詞をシステムが
+正しく訂正した数）と悪化した助詞数（訂正不要な助詞を過剰に訂正した数）
+の差を相対向上数として評価基準とした．この基準では，まったく修正を行わ
+なかった場合に$\pm 0$となる．
+\end{enumerate}
+
+
+
+\subsection{実験結果1: 日本語平文コーパスの利用}
+
+まず，日本語平文コーパスを言語モデル確率として利用することの効果を測る
+ため，以下の3手法について精度測定を行った．
+
+\begin{itemize}
+\item \textbf{提案手法：}
+リンク素性にn-gram二値素性，言語モデル確率を併用した場合．
+\item \textbf{n-gram二値素性のみ：}
+リンク素性にn-gram二値素性のみを用い，言語モデル確率を使用しない場合．
+\item \textbf{言語モデル確率のみ：}
+リンク素性に言語モデル確率のみを用い，n-gram二値素性を使用しない場合．
+\end{itemize}
+
+実験結果を表\ref{tbl-exp-results}に示す．表中の
+\mbox{\dag}は提案手法とn-gram二値素性のみの間で有意差があったもの，
+\mbox{\S}は提案手法と言語モデル確率のみの間で有意差があったものを
+表す ({$p < 0.05$}) 
+\footnote{適合率・再現率には比率の$\chi^2$検定を使用し，
+相対向上数には文単位の$t$検定を使用した．}．
+
+\begin{table}[b]
+\caption{リンク素性を変えたときの誤り訂正結果}
+\label{tbl-exp-results}
+\input{02table04.txt}
+\end{table}
+
+まず適合率について，使用したリンク素性を比較すると，提案手法とn-gram二
+値素性のみが同じ精度で，言語モデル確率のみの適合率が低めとなった．再現
+率は，提案方式が他の2つの方法に比べて大幅に向上 (9.9\%，11.2\%→18.9\%) 
+し，その結果，F値も高い値を示した．n-gram二値素性のみと言語モデル確率
+のみを比較すると，言語モデル確率のみの方が若干再現率が高い．その結果，
+F値は提案手法（両者併用），言語モデル確率のみ，n-gram二値素性のみの順
+で精度が高くなった．
+
+しかし，相対向上数をみると，言語モデル確率のみは若干悪化しており（つま
+り過剰訂正が多い），再現率の向上が，誤り訂正の精度に直結していないこと
+がわかる．これは，約92\%の助詞を無訂正にすべきという本タスクの特徴に由
+来するもので，安易な再現率向上は過剰訂正を引き起こすことを示している．
+
+提案手法は，相対向上数でも他の2方式に勝っている．ただし，提案手法と
+n-gram二値素性のみの間では有意差はなかった．これは，n-gram二値素性は確
+実な誤りに集中して訂正する効果があるためで，相対向上数からみると有利に
+働いたためと考えられる．提案方式は，n-gram二値素性，言語モデル確率の併
+用によって，適合率を保持したまま再現率を向上させており，誤り訂正精度の
+向上に有効である．
+
+
+
+\subsection{実験結果2: 疑似誤り文によるペア文の拡張}
+
+次に，疑似誤り文の導入効果を測定する．リンク素性を提案方法に限定し，疑
+似誤り文の使用方法のみを変えて実験を行う．
+
+図\ref{fig-graph1}は，訓練に用いるコーパスと訓練法を以下の4通りに変え
+て，再現率／適合率カーブを測定した結果である．なお，図\ref{fig-graph1}
+は，誤り訂正器が出力するスコアが高い方から，ある再現率を達成するための
+訂正助詞を取得，適合率を算出したものである．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{19-5ia2f4.eps}
+\end{center}
+\caption{再現率／適合率カーブ（誤り発生確率は倍率1.0のとき）}
+\label{fig-graph1}
+\end{figure}
+
+\begin{itemize}
+\item \textbf{TRG:} 実誤りコーパスだけを用いて誤り訂正モデルを作成した場合
+（ベースライン）．
+\item \textbf{SRC:} 疑似誤りコーパスだけを用いて誤り訂正モデルを作成した場合．
+\item \textbf{ALL:} 実誤りコーパスに疑似誤りコーパスを単純追加してモデ
+ルを作成した場合．
+\item \textbf{AUG:} 提案方法．疑似誤りコーパスをソースドメイン，実誤り
+コーパスをターゲットドメインとして素性空間拡張法によるドメイン適
+応を行った場合．
+\end{itemize}
+
+TRGをベースラインと考えると，疑似誤り文のみ(SRC)ではTRGの精度に達して
+いない．そのため，疑似誤り文を追加したALLでも適合率は再現率が高いとこ
+ろでようやくTRGと同等の適合率である．提案法であるAUGは，再現率が高くな
+るに従い，TRGより高い適合率で誤りが訂正できている．再現率18\%では，TRG 
+の適合率が50.5\%に対して，AUGの適合率は55.4\% 
+となった（ただし，$p = 0.16$で有意差はない）．
+なお，再現率18\%でのSRCの適合率は35.6\%で，ランダムに訂正するのに比べ
+ると適合率は高い．
+
+図\ref{fig-graph2}は，誤り発生確率毎の各方式の相対向上数をプロットした
+ものである．この実験では，誤り発生確率が低い方が全体的に精度がよく，誤
+り発生なし（倍率0.0）から0.6まではALL方式もTRGを上回っている．しかし，
+SRC は倍率を高くするに従って相対向上数が低下しており，誤り発生確率を適
+切に制御しないと，疑似誤り文が効果的に作用しない．一方AUGは，誤り発生
+確率を変えても，安定した精度向上を果たした．誤り発生倍率が1.0のときの
+相対向上数は，TRGが+28に対してAUGは+59と，有意に向上しており，疑似誤り
+文を使用するときは，ドメイン適応を併用することが望ましい．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{19-5ia2f5.eps}
+\end{center}
+\caption{誤り発生確率（倍率）毎の相対向上数}
+\label{fig-graph2}
+\end{figure}
+
+
+
+\subsection{誤り訂正例}
+
+実験2において，誤り発生倍率1.0のとき，提案方式 (AUG) の適合率は
+54.8\% (210/383)，再現率は19.3\% (210/1087)であった．約55\%の適合率は，
+45\%程度の修正箇所を再修正しないと正しい文にならないという意味で，実用
+上は決して高いとは言えない．助詞の用法には，意味的・文法的に明らかな誤
+用と，許容可能なものがあるため，人手評価を行った．
+
+何らかの修正操作を出力したが，正解と異なった部分173箇所に関して，1名
+の評価者によって主観評価した．なお，そのうち151箇所は，正解では無修正
+だった部分を過剰に修正したものである．評価観点は，システム修正を許容可
+能か（正解と比較して，意味的・文法的に異なっていないか）である．結果，
+173箇所のうち103箇所は許容可能であった．つまり，許容可能という観点での
+適合率は，$(210+103)/383=81.7\%$ となった．
+
+表\ref{tbl-correct-examples}は，システムによる誤り訂正例である．置換，
+挿入，削除操作により誤り訂正が成功したもののほか，人手評価によって許容
+可能と判断されたものには，係助詞「は」と格助詞「が」の置換 (No.~4) や，
+複合名詞が正しい格助詞を補完して分割されたもの (No.~5) があった．許容不
+可として残ったものの中には，No.~7のように慣用句を過剰訂正したもの，受動
+態をとらえられず，能動態の格助詞に置換したもの (No.~8)，Linuxのfreeコ
+マンドの内容を知らないと訂正ができないもの (No.~10) があった．No.~9は
+「は」と「が」の置換であるが，「私たち」と「あなた」が呼応する表現であ
+るため，許容不可と判断された．本稿で用いた素性は訂正対象助詞の局所文脈
+のみであるため，大域的素性を導入しないと正しい訂正は困難なものもある．
+
+\begin{table}[t]
+\caption{システムによる誤り訂正例（訂正部分周辺のみ）}
+\label{tbl-correct-examples}
+\input{02table05.txt}
+\end{table}
+
+
+
+\section{関連研究}
+\label{sec-related-work}
+
+日本語学習者の助詞誤り検出・訂正は従来より研究されてきた．{\kern-0.5zw}近年では，
+\shortciteA{suzuki-toutanova:2006:COLACL}が，最大エントロピー法 (ME) 
+による分類器を用いて，助詞（主に格助詞）が欠落した文からの復元を行って
+いる．この入力文は形態素・構文解析済みであり，基本的に誤り箇所が既に分
+かっているとき，挿入操作だけで修正を行う．
+\shortciteA{Ohki:ParticleError2011j}は，形態素・構文解析済みの入力文
+（誤りを含む）に対して，周辺の形態素や係り先を素性として，SVMで助詞の
+誤用検出する方法を提案している．ここでは，助詞の欠落も対象としている．
+検出を行うのみで修正までは行わない．
+
+英語の前置詞・冠詞誤り訂正では，\shortciteA{HAN10.821}が，前置詞周辺単
+語や構文解析の主辞などを素性としたME分類器を用いて，前置詞の誤り訂正を
+行った．\shortciteA{gamon:2010:NAACLHLT}は前置詞と冠詞誤りを対象に，ME
+分類器による誤り検出，決定木による誤り訂正を行った．また，
+\shortciteA{rozovskaya-roth:2010:EMNLP}は平均化パーセプトロンに基づく
+分類器で前置詞の誤り訂正を行っている．これらの研究は，いずれも誤りの
+種類を助詞や前置詞・冠詞に限定することで，分類器による誤り訂正を可能と
+している．
+
+一方，\shortciteA{mizumoto-EtAl:2011:IJCNLP-2011}は，誤りを助詞に限定
+せず，すべての誤りを対象とした自動訂正法を提案した．ここでは，対訳文に
+相当する学習者作文と日本人による修正文のペアを大量にSNSから収集し，句
+に基づく統計翻訳の仕組みを利用して訂正を行う．誤りを含む入力の形態素解
+析は行わず，文字単位で翻訳を行う．本稿で使用した系列変換は，基本的には
+統計翻訳と同等な手法である．そのため，誤りの種類を助詞に限定する必要が
+なく，他の誤りにも拡張できる．しかし，本稿の方式はあらかじめ学習者作文
+が単語に分割されていることを前提としている．誤りを含む文を形態素解析，
+構文解析した場合の精度は，一般的には日本語母語話者が記述した文の解析精
+度より落ちると考えられるため，単語分割法も併せて検討する
+必要がある\shortcite{Fujino:ErrorMorphAnalysis2012j}．
+
+母語話者の記述したテキスト（日本語修正文相当）のモデル化という観点で上
+記研究を俯瞰すると，
+\shortciteA{suzuki-toutanova:2006:COLACL,Ohki:ParticleError2011j,HAN10.821,rozovskaya-roth:2010:EMNLP} 
+はn-gram二値素性として利用している．
+\shortciteA{gamon:2010:NAACLHLT,mizumoto-EtAl:2011:IJCNLP-2011}は，
+n-gram確率という形でモデル化している．本稿では，識別モデルの枠組みで両
+者を併用し，マッピング素性を含んで全体最適化を行うことにより，再現率を
+向上することができた．
+
+学習者作文の利用という観点で俯瞰すると，いずれの研究も，学習者の誤り傾
+向をモデルとして組み込むことにより，母語話者の記述したテキストのみを用
+いて誤り訂正を行う場合に比べ，訂正精度が向上したと報告している
+\shortcite{HAN10.821,gamon:2010:NAACLHLT,rozovskaya-roth:2010:EMNLP,Kasahara:CaseParticleCorrection2012j} 
+．本稿の方式は，マッピング素性という形で学習者の誤り傾向をモデル化して
+おり，従来研究の成果を取り込んでいる．
+
+学習者作文を模した擬似誤り文に関しては，
+\shortciteA{rozovskaya-roth:2010:NAACLHLT}が提案を行っている．そこで
+は，学習者の実誤りと同じ分布を持つ擬似誤り文を追加することにより，精度
+が向上したと報告している．ただ，データ（論文では学習者の母語別）によっ
+て最適な擬似誤り生成方法が異なっており，擬似誤り生成を制御する必要があ
+る．本稿では，擬似誤りと実誤りのずれをドメイン適応技術を用いて修正する
+ことで安定した精度向上ができた．
+
+さまざまな種類の誤りの同時訂正は，
+\shortciteA{dahlmeier-ng:2012:EMNLP-CoNLL}も行い，前置詞・冠詞誤りだけ
+でなく，スペルミス，句読点，名詞の数の誤りも含めて訂正を行っている．誤
+りの種別ごとに分類器やルールを用いて訂正仮説を生成し，山登り的に書き換
+えを繰り返すことで 1 文中の複数の誤りを訂正する．彼らは，複数の仮説を保
+持することで，山登り時に局所解に陥る可能性を軽減しているが，本稿の方式
+はすべての仮説をフレーズラティスに持ち，Viterbiアルゴリズムで最適な組
+み合わせを探索しているので，モデル上は最適な訂正結果であることが保証さ
+れている．
+
+本タスクは，訂正すべき助詞に比べ訂正不要な助詞が圧倒的に多く，安易な再
+現率の向上は誤り訂正精度（相対向上数）の改善に直結しないと述べた．これ
+はデータ不平衡問題 (Imbalanced Data Problem) と呼ばれ，機械学習を実タ
+スクに適用するときの主要な問題の一つと認識されている（たとえば，サーベ
+イ論文\shortcite{He:Imbalanced2009}を参照）．この問題の解決方法には，
+少数派と多数派のデータを増減させることで平衡させる方法（サンプリング法）
+や，少数派の分類誤り（本タスクの場合，訂正誤り）と多数派の分類誤りに異
+なるコストを与えて学習する方法（ベイズリスク最小法）など，さまざまなも
+のが提案されており，本タスクに適用できるか検討する必要がある．なお，本
+稿で提案した疑似誤り文は，実誤りの分布を変えないようにデータを増やすの
+が目的であるので，少数派データを増やすover-sampling 法とは異なる位置づ
+けである．
+
+
+\section{おわりに}
+\label{sec-conclusion}
+
+本稿では，中国語母語話者の日本語作文における，助詞誤り訂正法を提案した．
+誤り訂正タスクで難しいのは，誤りを含む実際の学習者作文とその修正文を入
+手することである．この問題に対して，本稿では，まず日本語平文コーパスを
+利用して，言語モデル確率とペア文から獲得した二値素性を識別モデルの枠組
+みで併用し，誤り訂正の再現率を向上させた．また，学習者作文を模した疑似
+誤り文を自動生成し，学習コーパスに追加した．ドメイン適応を併用すること
+により，誤り発生確率によらず，安定した精度向上ができることを示した．
+
+本稿で用いた識別的系列変換は，助詞誤りに限定せず，すべての誤りを対象と
+することができる．今後は，他の種類の誤り訂正にも拡張するのが課題である．
+
+\acknowledgment
+
+本研究の一部は，\textit{the 50th Annual Meeting of the Association for
+Computational Linguistics}で発表したものである
+\shortcite{imamura-EtAl:2012:ACL2012short}．本論文に関して，非常に有益
+なコメントをいただいた査読者の方々に感謝する．
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Dahlmeier \BBA\ Ng}{Dahlmeier \BBA\
+  Ng}{2012}]{dahlmeier-ng:2012:EMNLP-CoNLL}
+Dahlmeier, D.\BBACOMMA\ \BBA\ Ng, H.~T. \BBOP 2012\BBCP.
+\newblock \BBOQ A Beam-Search Decoder for Grammatical Error Correction.\BBCQ\
+\newblock In {\Bem Proceedings of the 2012 Joint Conference on Empirical
+  Methods in Natural Language Processing and Computational Natural Language
+  Learning (EMNLP-CoNLL 2012)}, \mbox{\BPGS\ 568--578}, Jeju Island, Korea.
+
+\bibitem[\protect\BCAY{Daume~III}{Daume~III}{2007}]{daumeiii:2007:ACLMain}
+Daume~III, H. \BBOP 2007\BBCP.
+\newblock \BBOQ Frustratingly Easy Domain Adaptation.\BBCQ\
+\newblock In {\Bem Proceedings of the 45th Annual Meeting of the Association of
+  Computational Linguistics (ACL-2007)}, \mbox{\BPGS\ 256--263}, Prague, Czech
+  Republic.
+
+\bibitem[\protect\BCAY{藤野\JBA 水本\JBA 小町\JBA 永田\JBA 松本}{藤野 \Jetal
+  }{2012}]{Fujino:ErrorMorphAnalysis2012j}
+藤野拓也\JBA 水本智也\JBA 小町守\JBA 永田昌明\JBA 松本裕治 \BBOP 2012\BBCP.
+\newblock 日本語学習者の作文の誤り訂正に向けた単語分割.\
+\newblock \Jem{言語処理学会第18回年次大会}, \mbox{\BPGS\ 26--29}.
+
+\bibitem[\protect\BCAY{Gamon}{Gamon}{2010}]{gamon:2010:NAACLHLT}
+Gamon, M. \BBOP 2010\BBCP.
+\newblock \BBOQ Using Mostly Native Data to Correct Errors in Learners'
+  Writing.\BBCQ\
+\newblock In {\Bem Human Language Technologies: The 2010 Annual Conference of
+  the North American Chapter of the Association for Computational Linguistics
+  (HLT-ACL 2010)}, \mbox{\BPGS\ 163--171}, Los Angeles, California.
+
+\bibitem[\protect\BCAY{Han, Tetreault, Lee, \BBA\ Ha}{Han
+  et~al.}{2010}]{HAN10.821}
+Han, N.-R., Tetreault, J., Lee, S.-H., \BBA\ Ha, J.-Y. \BBOP 2010\BBCP.
+\newblock \BBOQ Using an Error-Annotated Learner Corpus to Develop an {ESL/EFL}
+  Error Correction System.\BBCQ\
+\newblock In {\Bem Proceedings of the Seventh International Conference on
+  Language Resources and Evaluation (LREC'10)}, Valletta, Malta.
+
+\bibitem[\protect\BCAY{He \BBA\ Garcia}{He \BBA\
+  Garcia}{2009}]{He:Imbalanced2009}
+He, H.\BBACOMMA\ \BBA\ Garcia, E.~A. \BBOP 2009\BBCP.
+\newblock \BBOQ Learning from Imbalanced Data.\BBCQ\
+\newblock {\Bem IEEE Transactions on Knowledge and Data Engineering}, {\Bbf 21}
+   (9), \mbox{\BPGS\ 1263--1284}.
+
+\bibitem[\protect\BCAY{Imamura, Izumi, Sadamitsu, Saito, Kobashikawa, \BBA\
+  Masataki}{Imamura et~al.}{2011}]{Imamura:MorphTrans2011}
+Imamura, K., Izumi, T., Sadamitsu, K., Saito, K., Kobashikawa, S., \BBA\
+  Masataki, H. \BBOP 2011\BBCP.
+\newblock \BBOQ Morpheme Conversion for Connecting Speech Recognizer and
+  Language Analyzers in Unsegmented Languages.\BBCQ\
+\newblock In {\Bem Proceedings of Interspeech 2011}, \mbox{\BPGS\ 1405--1408},
+  Florence, Italy.
+
+\bibitem[\protect\BCAY{Imamura, Saito, Sadamitsu, \BBA\ Nishikawa}{Imamura
+  et~al.}{2012}]{imamura-EtAl:2012:ACL2012short}
+Imamura, K., Saito, K., Sadamitsu, K., \BBA\ Nishikawa, H. \BBOP 2012\BBCP.
+\newblock \BBOQ Grammar Error Correction Using Pseudo-Error Sentences and
+  Domain Adaptation.\BBCQ\
+\newblock In {\Bem Proceedings of the 50th Annual Meeting of the Association
+  for Computational Linguistics (ACL-2012) Volume 2: Short Papers},
+  \mbox{\BPGS\ 388--392}, Jeju Island, Korea.
+
+\bibitem[\protect\BCAY{笠原\JBA 藤野\JBA 小町\JBA 永田\JBA 松本}{笠原 \Jetal
+  }{2012}]{Kasahara:CaseParticleCorrection2012j}
+笠原誠司\JBA 藤野拓也\JBA 小町守\JBA 永田昌明\JBA 松本裕治 \BBOP 2012\BBCP.
+\newblock 日本語学習者の誤り傾向を反映した格助詞訂正.\
+\newblock \Jem{言語処理学会第18回年次大会}, \mbox{\BPGS\ 14--17}.
+
+\bibitem[\protect\BCAY{Lafferty, McCallum, \BBA\ Pereira}{Lafferty
+  et~al.}{2001}]{Lafferty:CRF2001}
+Lafferty, J., McCallum, A., \BBA\ Pereira, F. \BBOP 2001\BBCP.
+\newblock \BBOQ Conditional Random Fields: Probabilistic Models for Segmenting
+  and Labeling Sequence Data.\BBCQ\
+\newblock In {\Bem Proceedings of the 18th International Conference on Machine
+  Learning (ICML-2001)}, \mbox{\BPGS\ 282--289}, Williamstown, Massachusetts.
+
+\bibitem[\protect\BCAY{Mizumoto, Komachi, Nagata, \BBA\ Matsumoto}{Mizumoto
+  et~al.}{2011}]{mizumoto-EtAl:2011:IJCNLP-2011}
+Mizumoto, T., Komachi, M., Nagata, M., \BBA\ Matsumoto, Y. \BBOP 2011\BBCP.
+\newblock \BBOQ Mining Revision Log of Language Learning {SNS} for Automated
+  {Japanese} Error Correction of Second Language Learners.\BBCQ\
+\newblock In {\Bem Proceedings of 5th International Joint Conference on Natural
+  Language Processing (IJCNLP-2011)}, \mbox{\BPGS\ 147--155}, Chiang Mai,
+  Thailand.
+
+\bibitem[\protect\BCAY{大木\JBA 大山\JBA 北内\JBA 末永\JBA 松本}{大木 \Jetal
+  }{2011}]{Ohki:ParticleError2011j}
+大木環美\JBA 大山浩美\JBA 北内啓\JBA 末永高志\JBA 松本裕治 \BBOP 2011\BBCP.
+\newblock
+  非日本語母国語話者の作成するシステム開発文書を対象とした助詞の誤用判定.\
+\newblock \Jem{言語処理学会第17回年次大会発表論文集}, \mbox{\BPGS\ 1047--1050}.
+
+\bibitem[\protect\BCAY{Rozovskaya \BBA\ Roth}{Rozovskaya \BBA\
+  Roth}{2010a}]{rozovskaya-roth:2010:EMNLP}
+Rozovskaya, A.\BBACOMMA\ \BBA\ Roth, D. \BBOP 2010a\BBCP.
+\newblock \BBOQ Generating Confusion Sets for Context-Sensitive Error
+  Correction.\BBCQ\
+\newblock In {\Bem Proceedings of the 2010 Conference on Empirical Methods in
+  Natural Language Processing (EMNLP-2010)}, \mbox{\BPGS\ 961--970}, Cambridge,
+  Massachusetts.
+
+\bibitem[\protect\BCAY{Rozovskaya \BBA\ Roth}{Rozovskaya \BBA\
+  Roth}{2010b}]{rozovskaya-roth:2010:NAACLHLT}
+Rozovskaya, A.\BBACOMMA\ \BBA\ Roth, D. \BBOP 2010b\BBCP.
+\newblock \BBOQ Training Paradigms for Correcting Errors in Grammar and
+  Usage.\BBCQ\
+\newblock In {\Bem Human Language Technologies: The 2010 Annual Conference of
+  the North American Chapter of the Association for Computational Linguistics
+  (HLT-ACL 2010)}, \mbox{\BPGS\ 154--162}, Los Angeles, California.
+
+\bibitem[\protect\BCAY{Rozovskaya \BBA\ Roth}{Rozovskaya \BBA\
+  Roth}{2011}]{rozovskaya-roth:2011:ACL-HLT2011}
+Rozovskaya, A.\BBACOMMA\ \BBA\ Roth, D. \BBOP 2011\BBCP.
+\newblock \BBOQ Algorithm Selection and Model Adaptation for {ESL} Correction
+  Tasks.\BBCQ\
+\newblock In {\Bem Proceedings of the 49th Annual Meeting of the Association
+  for Computational Linguistics: Human Language Techologies (ACL-HLT 2011)},
+  \mbox{\BPGS\ 924--933}, Portland, Oregon.
+
+\bibitem[\protect\BCAY{Stolcke, Zheng, Wang, \BBA\ Abrash}{Stolcke
+  et~al.}{2011}]{Stolcke:SRILM2011}
+Stolcke, A., Zheng, J., Wang, W., \BBA\ Abrash, V. \BBOP 2011\BBCP.
+\newblock \BBOQ {SRILM} at Sixteen: Update and Outlook.\BBCQ\
+\newblock In {\Bem Proceedings of IEEE Automatic Speech Recognition and
+  Understanding Workshop (ASRU 2011)}, Waikoloa, Hawaii.
+
+\bibitem[\protect\BCAY{末永\JBA 松嶋}{末永\JBA
+  松嶋}{2012}]{Suenaga:ErrorCorrection2012j}
+末永高志\JBA 松嶋敏泰 \BBOP 2012\BBCP.
+\newblock
+  ベイズ決定理論にもとづく階層Nグラムを用いた最適予測法と日本語入力支援技術へ
+の応用.\
+\newblock \Jem{言語処理学会第18回年次大会}, \mbox{\BPGS\ 6--9}.
+
+\bibitem[\protect\BCAY{Suzuki \BBA\ Toutanova}{Suzuki \BBA\
+  Toutanova}{2006}]{suzuki-toutanova:2006:COLACL}
+Suzuki, H.\BBACOMMA\ \BBA\ Toutanova, K. \BBOP 2006\BBCP.
+\newblock \BBOQ Learning to Predict Case Markers in Japanese.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on
+  Computational Linguistics and 44th Annual Meeting of the Association for
+  Computational Linguistics (COLING-ACL 2006)}, \mbox{\BPGS\ 1049--1056},
+  Sydney, Australia.
+
+\bibitem[\protect\BCAY{鈴木\JBA 磯崎}{鈴木\JBA
+  磯崎}{2010}]{Suzuki:SemiSupervised2010j}
+鈴木潤\JBA 磯崎秀樹 \BBOP 2010\BBCP.
+\newblock 大規模ラベルなしデータを利用した係り受け解析の性能検証.\
+\newblock \Jem{言語処理学会第16回年次大会発表論文集}, \mbox{\BPGS\ 19--22}.
+
+\bibitem[\protect\BCAY{Suzuki, Isozaki, Carreras, \BBA\ Collins}{Suzuki
+  et~al.}{2009}]{suzuki-EtAl:2009:EMNLP}
+Suzuki, J., Isozaki, H., Carreras, X., \BBA\ Collins, M. \BBOP 2009\BBCP.
+\newblock \BBOQ An Empirical Study of Semi-supervised Structured Conditional
+  Models for Dependency Parsing.\BBCQ\
+\newblock In {\Bem Proceedings of the 2009 Conference on Empirical Methods in
+  Natural Language Processing (EMNLP-2009)}, \mbox{\BPGS\ 551--560}, Singapore.
+
+\end{thebibliography}
+
+
+\begin{biography}
+\bioauthor{今村　賢治}{
+1985年千葉大学工学部電気工学科卒業．
+同年日本電信電話株式会社入社．
+1995年〜1998年NTTソフトウェア株式会社．
+2000年〜2006年ATR音声言語コミュニケーション研究所．
+2006年よりNTTサイバースペース研究所
+（現NTTメディアインテリジェンス研究所）主任研究員．現在に至る．
+主として自然言語処理の研究・開発に従事．博士（工学）．
+電子情報通信学会，情報処理学会，言語処理学会，ACL各会員．
+}
+\bioauthor{齋藤　邦子}{
+1996年東京大学理学部化学科卒業．
+1998年同大学院修士課程修了．同年日本電信電話株式会社入社．
+現在，NTTメディアインテリジェンス研究所主任研究員．自然言語処理の
+研究・開発に従事．言語処理学会，情報処理学会各会員．
+}
+\bioauthor{貞光　九月}{
+2004年筑波大学第三学群情報学類卒業．
+2009年筑波大学大学院システム情報工学研究科コンピュータサイエンス専攻修了．
+同年，日本電信電話株式会社入社．
+以来，自然言語処理の研究開発に従事．
+現在，NTTメディアインテリジェンス研究所音声言語メディアプロジェクト研究員．
+情報処理学会，言語処理学会各会員．
+}
+\bioauthor{西川　　仁}{
+2006年慶應義塾大学総合政策学部卒業．
+2008年同大学大学院政策・メディア研究科修士課程修了．
+同年日本電信電話株式会社入社．
+現在NTTメディアインテリジェンス研究所にて自然言語処理技術の
+研究開発に従事．
+奈良先端科学技術大学院大学博士後期課程在学中．
+言語処理学会，人工知能学会，情報処理学会各会員．
+}
+\end{biography}
+
+
+\biodate
+
+
+\end{document}

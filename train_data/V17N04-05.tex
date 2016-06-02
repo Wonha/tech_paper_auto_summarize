@@ -1,0 +1,979 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+\def\resp#1{}
+\def\respeqn#1{}
+\def\bleu{}
+\def\es{}
+\def\step#1{}
+\def\freq#1#2{}
+\def\ngram{}
+\def\NGRAM{}
+    \newcommand{\argmax}{}
+
+
+
+
+\Volume{17}
+\Number{4}
+\Month{July}
+\Year{2010}
+
+
+
+\received{2009}{11}{14}
+\revised{2010}{2}{28}
+\accepted{2010}{3}{17}
+
+\setcounter{page}{91}
+
+\jtitle{コーパスごとの類似度を考慮した用例に基づく\\
+	感情推定手法の改善}
+\jauthor{三品　賢一\affiref{Author_1} \and 土屋　誠司\affiref{Author_2} \and 鈴木　基之\affiref{Author_3} \and 任　　福継\affiref{Author_3}}
+\jabstract{
+発話文を感情ごとに分類したコーパスを構築し，入力文と最も類似度が高
+い発話文を含むコーパスの感情を推定結果として出力する用例ベースの感
+情推定手法が提案されている．従来手法ではコーパスを構築する際，発話テキス
+トの収集者が個人個人で発話文の分類先を決定しているため，分類先を決
+定する基準が個々によってぶれてしまう．これにより，例えば``希望''のコーパスの中に喜
+びの発話文が混じるといったことが起こり，推定成功率を下げてしまう．
+本稿ではこの問題を解決するため，コーパスごとにおける入力文の形態素列の出
+現回数を用いて，入力文とコーパスの類似度を定義する．そしてこの類似度を従
+来手法に導入した新たな類似度計算式を提案する．これにより，誤って分
+類されてしまった発話文の影響を緩和することができる．評価実験では従
+来手法と比べて成功率が\resp{21.5}ポイント向上し，提案手法の有効性が確認できた．
+}
+\jkeywords{感性情報処理，類似度計算，用例ベース，N-gram}
+
+\etitle{An Improvement of Example-based Emotion Estimation Using Similarity between Sentence and each Corpus}
+\eauthor{Kenichi Mishina\affiref{Author_1} \and Seiji Tsuchiya\affiref{Author_2} \and Motoyuki Suzuki\affiref{Author_3} \and Fuji Ren\affiref{Author_3}}
+\eabstract{
+Example-based emotion estimators need an emotion corpus in which each
+sentences are assigned with emotion tags. It is difficult to determine
+emotion tags for the sentence consistently because of ambiguity of emotion.
+As a result, there are several wrong tags in a corpus. It causes decrease in
+the performance of an emotion estimation. 
+
+In order to solve the problem, a
+new similarity between input sentence and emotion corpus is proposed. This
+similarity is based on frequencies of morpheme N-gram of the both input
+sentence and corpus. Experimental results show that the proposed method
+improves emotion precision \resp{from 60.3{\%} to 81.8{\%}}.
+}
+\ekeywords{Affective computing, Similar calculation, Example-based, N-gram}
+
+\headauthor{三品，土屋，鈴木，任}
+\headtitle{コーパスごとの類似度を考慮した用例に基づく感情推定手法の改善}
+
+\affilabel{Author_1}{徳島大学大学院先端技術科学教育部}{Graduate School of Advanced Technology and Science, The University of Tokushima}
+\affilabel{Author_2}{同志社大学理工学部}{Faculty of Science and Engineering, Doshisha University}
+\affilabel{Author_3}{徳島大学大学院ソシオテクノサイエンス研究部}{Institute of Technology and Science, The University of Tokushima}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+
+\resp{コミュニケーションの手段として，メールやWebの掲示板を日常的に利用するシー
+ンは非常に多い．}
+メール\resp{やWebの掲示板}によるコミュニケーションの特徴として，非言語情報が欠落しているため，会話時に相手から感じる対人圧力が
+低くなり，気軽に考えていることを書き出すことができるメリットがあげられる
+\cite{sugitani20070320}．
+しかし一方で，\resp{メッセージ}の受け取り手は\resp{テキスト}の内容のみから相手の
+考えを読み取らなければならないため，ちょっとした言葉の誤解が，感情的な問
+題へと発展していくことがある\cite{小林正幸}．
+また，書き方によっては書き手の感情が伝わりにくいことがあったり\cite{katou20051020}，書き手はそれほど怒っ
+ていないにもかかわらず，非常に怒っているようにとらえられたりと，過剰に感
+情が伝わってしまうこともある\cite{小林正幸}．このように，\resp{書き手が思っている程，伝えたいこ
+とが相手に伝わらない傾向があるため{\cite{citeulike:528278}}，メールやWeb
+の掲示板では相手に誤解を与えやすいというデメリットを持っているといえる．}
+
+そこで我々は上記の問題点を解決するため，
+\respeqn{テキスト}から読み手が想起する書き手の感情を推定し，推定結果を書き手に示すこ
+とで\resp{テキスト}を書き手に修正させ，相手に誤解を与えないようにするシステムの
+開発を目指した研究を行っている．
+このようなシステムを実現するためには，\resp{読み手が想起する書き手の感情をテキ
+スト中の発話文}から推定する手法が必要となる．
+
+\respeqn{発話文}からの感情推定手法として，
+目良らは複数の事象の格フレームタイプのうち，どれに入力文が
+当てはまるかを判定し，該当した格フレームタイプに対応する情緒計算式を用い
+て発話者の感情が快か不快かを判定する手法を提案している\cite{mera}．この手法では，
+あらかじめ用意した情緒計算式のほかに，ユーザの嗜好情報を基にした単語に対す
+る好感度データを用いる．
+単語に限らず，文の冒頭に現れる副詞や文末表現によって話し手の意図や心的態
+度を表すモダリティ\cite{modality2}も，感情推定に有用であることが考えられる．文末表現から
+情緒を推定する可能性についての検討を徳久らが行っており
+\cite{徳久雅人:20080131}，文末表現と情緒の間に若干の相関がみられたと報告
+している．
+
+単語や文末表現に感情の属性を振ったとしても，単語や文末表現の組み合わせに
+よって感情が変化すると考えられる．そのため，単語や文末表現を用いて感情推
+定を行うためには，これらの組み合わせに対応して感情を出力するルールの作成
+が必要になると考えられる．
+ルールの例として，例えば``嬉しい''という語に``喜び''の属性が割り振られていたとする．ここで``嬉
+しいことなんてひとつもない''という文の感情を推定する場合，推定結果として
+は``喜び''ではなく``悲しみ''や``怒り''といった感情が出力されるべきである．
+``喜び''の単語が含まれているからといって，単純に``喜び''を出力してよいわ
+けではない．ここで``悲しみ''や``怒り''を出力するためのルールを作成してお
+くことで，感情推定が可能になる．
+しかし，このようなルールの作成は単語に感情の属性を割り振る作業以上にコストがかかると考えら
+れる．この問題を解決す
+る方法として，三品らは用例に基づく感情推定手法を提案している
+\cite{aiac}．この手法では，発話者が表現している感情ごとに\respeqn{発話文}を
+分類した感情コーパスを用い，入力文と最も類似度が高い発話文
+が含まれる感情コーパスの感情を推定結果として得る．類似度計算には機械翻訳
+システムの性能のスコアを求めるBLEU \cite{bleu}を用いている．この手法を実装するため
+には発話文を収集して感情ごとに分類した感情コーパスを構築すればよく，
+先に述べた例のようなルールを作成する必要がない．
+しかし，この手法は感情推定成功率が決して高くないため，類似度の計算式を
+改良する必要がある．
+
+この方法では入力文とコーパス中の各文の類似度を計算し，その最大値の文が持
+つ感情を出力している．そのため，次のような特異な文によって感情推定に失敗
+することがある．
+\begin{enumerate}
+ \item 感情が異なっていても，たまたま表現や文型が類似している文\label{enum:prob1}
+ \item コーパスを構築する際に誤って分類された文\label{enum:prob2}
+\end{enumerate}
+感情が異なるが類似している文の例として，``嫌悪''の文``嫌いなんです''と``喜び''の文``好みな
+んです''があげられる．ともに\resp{名詞の後に``なんです''}が続く形となっており，
+文型が類似している．
+ここで入力文として``好きなんです''が与えられたとき，入力文の``なんです''
+は二つの文に存在しており，形態素数も同じであるため，
+``嫌悪''と``喜び''の文とのBLEUスコアは同じになってしまう．
+その結果，``嫌悪''と``喜び''が出力されてしまう．この推定結果
+としては``喜び''のみが出力されることが適切であると考えられる．
+
+また，コーパスを構築する際には誤って分類される\respeqn{発話文}
+を完全に取り除くことは非常に困難であると考えられる．このことから，誤って分類された\respeqn{発話
+文}の影響を最小限に抑える手段が必要となる．
+
+本稿では三品らの手法を改善し，(\ref{enum:prob1})や(\ref{enum:prob2})の文による影響を抑え，感情推定成功率を向上させる手法を提
+案する．本稿では，まず\ref{sec:conventional}章で従来手法である``BLEUを類似
+度計算に用いた用例に基づく感情推定手法'' について述べる．次
+に\ref{sec:proposed_method}章で，従来手法で用いられていた類似度計算式とは
+異なる新たな類似度計算式を提案する．また，この新たに提案する類似度計算式
+で，どのようにして従来手法の問題点を解決するかについて述べる．そして\ref{sec:ev}章では従来手法と提案
+手法の感情推定成功率の比較を行う．また三品らの方法とは異なる感情推定の従
+来法として，SVMを用いた感情推定を行い，結果を比較する．最後に
+\ref{sec:conclusion}章でまとめと今後の課題を述べる．
+
+
+
+
+
+\section{BLEUを類似度計算に用いた用例に基づく感情推定手法}
+\label{sec:conventional}
+
+\subsection{概要}
+
+\begin{figure}[b]
+ \begin{center}
+  \includegraphics{17-4ia6f1.eps}
+ \end{center}
+ \caption{用例に基づく感情推定}
+ \label{fig:estimation}
+\end{figure}
+
+\resp{三品らによって提案された類似度計算を用いた用例に基づく
+感情推定アルゴリズムは次の式で定式化される．}
+\pagebreak
+\begin{equation}
+\respeqn{E(x) = \argmax_{e} sim(x, s) \hspace{1em} (s \in C_{e})}
+\end{equation}
+\resp{ここで{$x$}を入力文，{$E(x)$}を推定結果となる感情，{$C_{e}$}を感情{$e$}の
+コーパス，{$s$}を{$C_{e}$}に含まれる文，
+{$sim(x, s)$}を{$x$}と{$s$}の類似度を返す
+関数とする．三品らは{$sim(\cdot)$}にBLEU{\cite{bleu}}を用いている．}
+この手法は，発話文を発話者の感情別に分類して構築した感情コーパスを
+用いることで感情推定を行う用例ベースの手法である．
+発話文の分類先は，
+発話文の収集者が発話者の感情を判定することで決定する．図\ref{fig:estimation}に
+発話文からの感情推定の流れを示す．まず発話者の
+感情によって分類された感情コーパスを用意しておく．次に発話者の感情を推定する対象と
+なる発話文を入力とする．そして，各感情コ
+ーパスに含まれる発話文と入力文との類似度を求める．最後に各感情コ
+ーパス別に，得られた類似度の最大値を求める．この類似度が入力文が表現している感
+情のスコアとなる．スコアは0から1までの値をとり，値が大きいほどその感情を
+表しているという意味になる．得られた類似度の中で最も値が大きい類似度
+の感情を，感情推定結果として出力する．
+この方法では図\ref{fig:estimation}における類似度の計算にBLEUを用いている．
+
+用例ベースではない手法では，単語や文末表現への感情属性の付与
+や，単語や文末表現の組み合わせから感情を導出するルールを作成する必要が出
+てくるため，作業コストが非常に高いと考えられる．しかし従来手法のような用例ベース
+のシステムを構築する際には，発話文を集め，発話者の感情ごとに発話文を分類して
+コーパスを構築すればよく，用例ベースではない手法と比べて作業コストが低いと考
+えられる．
+
+
+\subsection{BLEU}
+
+BLEUは機械翻訳システムが出力
+した複数の翻訳候補文から，システムの翻訳精度を評価するための尺度である．
+BLEUは次のとおりに定義されている\cite{bleu}．
+\begin{equation}
+	\respeqn{{\rm BLEU}(x,y) = {\rm BP} \cdot \exp\left( \sum^{\rm
+					      N}_{n=1}\frac{1}{\rm N}\log 
+					      p_{n}(x,y) \right) }
+		\label{eq:bleu}
+\end{equation}
+なお，\cite{bleu}では${\rm N} = 4$を用
+いている．\resp{{$p_{n}(x,y)$}}は機械翻訳文\resp{{$x$}}と人による翻訳文
+\resp{{$y$}}に
+おける共通\NGRAM  数の適合率（\NGRAM 
+適合率）\resp{を返す関数}であり，$\rm BP$は機械翻訳文が人による翻訳文に比べて
+簡潔すぎることによる適合率のペナルティ
+である．三品らの方法では，BLEUにおける機械翻訳文をコーパス中の1文，人に
+よる翻訳文を入力文と変更して，類似度計算に用いている\resp{（以下，式({\ref{eq:bleu}})を{$sim_{\bleu}$}と表記する）}．
+
+
+\subsubsection{\NGRAM  適合率}
+
+\NGRAM  適合率\resp{{$p_{n}(x,s)$}}は，入力文\respeqn{$x$}と感情コーパス中の1文\respeqn{$s$}の間で共通な\NGRAM  が
+多く存在するかを表す値である．共通な\NGRAM  が多いほど\resp{{$p_{n}(\cdot)$}}
+は大きくなる．
+\respeqn{$x$}と\respeqn{$s$}を用いて，\resp{{$p_{n}(x,s)$}}は
+次のとおりに定義されている．
+\begin{gather}
+p_{n}(x,s) = \frac{\displaystyle \sum_{\ngram \in 
+	G_{n}(s)}Count^{*}_{n}(x, s, \ngram)}{\displaystyle
+	\sum_{\ngram \in G_{n}(s)}Count_{n}(s, \ngram)}  \\
+Count^{*}_{n}(x, s, \ngram) = \min\left\{Count_{n}(x, \ngram),
+	 Count_{n}(s, \ngram)\right\}
+	\label{eq:pn}
+\end{gather}
+\resp{ここで{$G_{n}(s)$}を{$s$}に含まれる``連続する{$n$}個の形態素から作られる形
+態素N-gram''の集合を返す関数とする．{$Count_{n}(x, \ngram)$}は，{$x$}中の{$\ngram$}の出現
+数を返す}\footnote{\resp{形態素同士の比較は，形態素の文字列と形態素の品詞を用いて行う．こ
+れらが一致していれば，二つの形態素は等しいとする．}}．\respeqn{$s$}が
+\respeqn{$x$}と共通な\NGRAM  を持っていなければ\resp{{$Count^{*}_{n}(\cdot)$}}
+は\resp{すべての{$w_{n}$}で}0になるため，
+\resp{{$p_{n}(\cdot)$}}は入力文と感情コーパス中の1文がどれほど共通な\NGRAM  を持っているかの指
+標となる．
+
+
+\resp{{$p_{n}(\cdot)$}}を求める例として，
+形態素unigramの適合率\resp{{$p_{1}(x,s)$}}と形態素bigramの適合率\resp{{$p_{2}(x,s)$}}を計算する．
+\respeqn{$x$}を``明日からの旅行が楽しみです''，\respeqn{$s$}を``明日がすごく楽しみで
+す''とする．このときの形態素unigramの\resp{{$Count_{1}(\cdot)$}}と
+\resp{{$Count^{*}_{1}(\cdot)$}}の値を
+表\ref{table:count1}に示す\footnote{\resp{本稿では形態素を``形態素の文字列
+/品詞''の形式で表記する．}}．表\ref{table:count1}と式(\ref{eq:pn})より，
+\resp{{$p_{1}(x,s)$}}は$1/2$であることがわかる．また形態素
+bigramの\resp{{$Count_{2}(\cdot)$}}と\resp{{$Count^{*}_{2}(\cdot)$}}の
+値を表\ref{table:count2}に示す．表
+\ref{table:count2}と式(\ref{eq:pn})より，\resp{{$p_{2}(x,s)$}}は
+$2/5$であることがわかる．なお，形態素bigramには文頭や文末を表す記号は
+\cite{bleu}と同様に用いていない．
+
+ \begin{table}[t]
+ \caption{$Count_{1}とCount^{*}_{1}$の例}
+ \label{table:count1}
+\input{06table01.txt}
+\end{table}
+\begin{table}[t]
+ \caption{$Count_{2}とCount^{*}_{2}$の例}
+ \label{table:count2}
+\input{06table02.txt}
+\end{table}
+
+
+\subsubsection{適合率のペナルティ}
+
+ここでは感情コーパス中の1文\respeqn{$s$}が入力文\respeqn{$x$}に比べて簡潔すぎることによる適合率のペナルティ
+BPについて説明する．
+\respeqn{$s$}が\respeqn{$x$}に比べて簡潔すぎる場合，\respeqn{$s$}に含まれるほとんどの形態
+素を\respeqn{$x$}が含んでいる可能性がある．この場合は$p_{n}$が大きくな
+り，BLEUスコアが高くなってしまう．つまり，簡潔な文を数多く含んで
+いる感情コーパスのほうが，入力文との類似度が高くなりやすくなってしまうの
+で，これを防ぐためにBPが用いられる．
+\resp{{$g(x)$}}を\resp{{$x$}}の形態素数を返す関数として，
+${\rm BP}$は次のとおりに定義される．
+\begin{equation}
+{\rm BP} = \left\{
+	\begin{array}{lll}
+	 1 & {\rm if} & \respeqn{g(x) < g(s)} \\
+	 e^{(1 - \respeqn{g(x)} / \respeqn{g(s)})} & & \respeqn{{\rm otherwise}} \\
+	\end{array}
+	\right. \label{eq:bp}
+\end{equation}
+\respeqn{$x$}を``明日からの旅行が楽しみです''，\respeqn{$s$}を``明日がすごく楽しみで
+す''としたとき，$\respeqn{g(x)} = 7$，$\respeqn{g(s)} = 6$となるため，${\rm BP} = e^{1 - 7/6} \approx 0.846$
+となる．これは\respeqn{$s$}が短かすぎるため，適合率へペナルティが課せられることを意味する．
+
+
+
+\section{提案手法}
+\label{sec:proposed_method}
+
+\subsection{\respeqn{コーパスごとの出現回数を考慮したペナルティ}}
+
+三品らの方法には次のような文の影響を受け，感情推定に失敗する問題点がある．
+\begin{enumerate}
+ \item 感情が異なっていても，たまたま表現や文型が類似している文
+ \item コーパスを構築する際に誤って分類された文
+\end{enumerate}
+これらの文が影響を及ぼしてしまう原因として，1文対1文の類似度の
+みを用いて感情推定を行っている点があげられる．これが原因で，例えば``喜び''の文を入力し
+たとしても，この入力文と表現や文型が類似している文が``希望''のコーパスに存在
+していれば，感情推定結果として``希望''が出力される可能性が非常に高くなる．ま
+た，``喜び''の文を``希望''のコーパスに分類されてしまっていた場合，``喜び''の文を入力
+した時に``希望''が出力される可能性もある．
+
+\resp{この問題を解決するために，形態素N-gram適合率に対して新たなペナルティFPを
+導入する．
+FPは入力文の形態素列が各感情コーパスにどの程度偏って存在す
+るかを表す指標であり，各感情コーパス中の出現頻度から計算される．
+この指標を用いる理由は，入力文に含まれ
+る形態素列が，他の感情コーパスに比べて相対的に数多く出現している
+感情コーパスの感情を，入力文は表現している可能性が
+高いのではないか，と考えたためである．入力文{$x$}において，
+感情{$e$}に対するFPを次のとおりに定義する．
+}
+\begin{equation}
+\respeqn{
+ {\rm FP}_{n} =
+  \frac{1}{\left|G_{n}(x)\right|}\sum_{\ngram \in
+  G_{n}(x)}{\frac{\freq{C_{e}}{\ngram}}{\displaystyle \sum_{c \in
+  C}{\freq{c}{\ngram}}}} \label{eq:wn} }
+\end{equation}
+\resp{
+ここで{$C$}をすべ
+ての感情コーパス，{${freq_{\it C_{e}}}$}を感情コーパス{$C_{e}$}における{$\ngram$}の
+出現回数を返す関数とする．
+FPは，たまたま1文対1文の類似度が高かったとしても，類似度計算
+に用いている文を含むコーパスにおいて入力文の形態素列の出現回数が少なけれ
+ば，求められる類似度を低く押さえる効果を持つ．これにより，(1)と(2)の文に
+よる影響を改善する．}
+
+\resp{一般に，一部の文書に偏って存在している単語を表す指標として，TF-IDFがよく
+用いられている．その意味では，FPのかわりにTF-IDFを用いる方法が考えられる．
+しかしTF-IDFは，ある感情コーパス中の絶対的な出現頻度（{\it tf}値）を，
+他の感情コーパスにも出現しているかどうか，という形態素N-gramの一般性を
+示す値（{\it idf}値）を用いて修正したものであり，ある感情コーパス
+中での出現頻度が低い形態素N-gramであれば，たとえその感情コーパスに
+偏って存在していたとしても，その値は低いものとなる．そのため，TF-IDF
+を類似度計算に導入したとしても，FPよりその効果は薄いものとなることが
+予想される．}
+
+
+
+\subsection{\respeqn{RECARE}}
+
+従来手法で用いられていた\resp{{$sim_{\rm BLEU}$}に{${\rm FP}_{n}$}を導入し，
+\pagebreak
+更に式を適切に変更する
+ことで，``類似しているが感情が異なる文''や，``コーパス構築時に誤って分類さ
+れてしまった文''を含むコーパスに対して頑健な感情推定を行うための新たな類似
+度計算式RECARE}\footnote{{\underline R}obust {\underline E}motion 
+{\underline C}{\underline A}tegorization with {\underline R}ough {\underline E}motion 
+Corpora}\resp{を定義する．RECAREは二つの文に類似した表現が含まれており，
+かつ二つの文が同じ感情を表しているかどうかを表すスコアとなる．}
+
+\resp{まず，式（{\ref{eq:bleu}}）で定義される{$sim_{\rm BLEU}$}に対し，
+前節で定義したFPを導入する（これを{$sim_{\rm BLEUFP^{+}}$}と
+表記する）．}
+\begin{align}
+ \respeqn{sim_{\rm BLEUFP^{+}}(x,s)} & \respeqn{=} \respeqn{{\rm BP} \cdot \exp
+	\left\{ \sum^{\rm N}_{n=1}\frac{1}{\rm N}\log     
+	\left({\rm FP}_{n} \cdot p_{n}(x,s) \right)\right\}} \nonumber\\
+  & \respeqn{=} \respeqn{{\rm BP} \cdot \exp\left\{ \frac{1}{\rm N}\log \prod^{\rm N}_{n=1} 
+	\left({\rm FP}_{n} \cdot p_{n}(x,s) \right)\right\}} \nonumber\\
+  & \respeqn{=} \respeqn{{\rm BP} \cdot \exp\left\{ \log \left\{ \prod^{\rm N}_{n=1} 
+	\left({\rm FP}_{n} \cdot p_{n}(x,s) \right)\right\}^{\frac{1}{\rm N}}\right\}} \nonumber\\
+  & \respeqn{=} \respeqn{{\rm BP} \cdot \left(\prod^{\rm N}_{n=1} 
+	\left({\rm FP}_{n} \cdot p_{n}(x,s)\right)
+	\right)^{\frac{1}{\rm N}}}\label{eq:bleu_with_fp_pi}
+\end{align}
+
+式(\ref{eq:bleu_with_fp_pi})では\resp{{${\rm FP}_{n}\cdot p_{n}(\cdot)$}}の相乗平均を求めている
+ことになるが，
+\resp{{$p_{n}(x,s) = 0$}}となる$n$が存在したとき，$\respeqn{sim_{\rm BLEUFP^{+}}}= 0$となる．
+これは$n$が高次になるほど起こりやすくなると考えら
+れる（$n$が高次になるほど入力文とコーパス中の1文との共通な形態素N-gramが
+現れにくくなると考えられるためである）．このままでは，低次の\resp{{$p_{n}(\cdot)$}}の情報も失われてしまう．しかし，単語や文末表現の組み合わせによって発話文の感情が決まるとする
+ならば，``隣接する形態素同士の組み合わせからなる低次の形態素N-gram''の適合
+率は積極的に利用すべきである．高次の
+形態素N-gramの適合率が0になったとしても，低次の形態素N-gramの適合率を破
+棄する理由はない．以上のことから，形態素N-gramの適合率の相乗平均を求めることは，用例ベースの感
+情推定には不向きであると考え，提案する新たな類似度計算式では形態素N-gramの適合率の
+相加平均を求めることとした．以上のことから，\respeqn{RECARE}を次のとおりに定義する．
+\begin{equation}
+\respeqn{sim_{\rm RECARE}(x,s)} = {\rm BP} \cdot \frac{1}{\rm N} \sum^{\rm N}_{n=1} {\rm FP}_{n}
+ \cdot p_{n}(x,s) \label{eq:recare}
+\end{equation}
+
+
+
+
+\section{評価実験}
+\label{sec:ev}
+
+\subsection{提案手法と従来手法の比較}
+\label{sec:comp_es_bleu}
+
+提案手法では従来手法と比べ，下記の2点が異なる．
+\begin{enumerate}
+ \item 各感情コーパスにおける``入力文の形態素N-gram''の出現回数によって
+       決まるペナルティFPの導入 \label{item:new1}
+ \item 形態素N-gramの適合率の相加平均による類似度計算 \label{item:new2}
+\end{enumerate}
+評価実験では上記の2点によって感情推定の成功率がどの程度変化するのかを調
+べる．
+
+
+\subsubsection{実験設定}
+
+実験には，\resp{基本的な感情であり，収集したコーパス中に比較的頻出
+した}``喜び''，``怒
+り''，``嫌悪''，``希望''の4種類の感情カテゴリを用いた．各感情コーパスに
+は838文の発話文が含まれる．発話文はWeb上の掲示板
+から8名の作業者によって収集した．
+発話文の分類先とな
+る感情コーパスは，作業者の主観によって決定した．また発話文の分類先は複
+数選ぶことを許容した．
+
+入力となる文とその感情は次の手順で決定した．
+まず，感情コーパスに含まれない，別途掲示板から収集した文を無作為な順番で被験者4名に提示し，
+被験者に文の感情を判定させる．このとき，
+判定結果としての感情を``喜び''，``怒り''，``嫌悪''，``希望''の中から0個以上を選ばせる．
+被験者4名のうち3名以上の判定結果が一致した文を各感情ごとに51文ず
+つ用意し，入力文として用いる．なお，この予備実験で入力文に割り振られた感
+情の数はすべて1つとなった．
+
+感情推定の成功条件として，出力として得られる4つの感情類似度のうち，最も
+値が大きい類似度の感情と，入力文の感情が一致すれば成功とした．
+
+上記の(\ref{item:new1})，(\ref{item:new2})の効果を確かめるため
+に，実験に用いた類似度計算式は\resp{三品らの方法（式 ({\ref{eq:bleu}})）}と
+\resp{RECARE（式({\ref{eq:recare}})）}に加え，
+BLEUにFPのみを導入した\resp{{$sim_{\rm BLEUFP^{+}}$}（式({\ref{eq:bleu_with_fp_pi}})）}と，\respeqn{RECARE}からFPを除い
+た$\respeqn{sim_{\rm RECAREFP^{-}}}$を用いた．$\respeqn{sim_{\rm RECAREFP^{-}}}$を次のとおりに定義する．
+\begin{equation}
+ \respeqn{sim_{\rm RECAREFP^{-}}(x,s)} = {\rm BP} \cdot \frac{1}{\rm N}\sum^{\rm N}_{n=1}
+ p_{n}(x,s) \label{eq:es_without_fp}
+\end{equation}
+
+
+\subsubsection{実験結果と考察}
+
+類似度の計算に用いる$\respeqn{\ngram}$の$n$の値を変化させながら，推定成功率を計算
+した．
+図\ref{fig:success_ratios}に感情推定の成功率を示す．三品らの方法で最も推定成
+功率が良好だったのは$\rm N=2$を用いたときの60.3\%であり，提案手法では$\rm N=3$を
+用いたときの\resp{81.8\%}であった．ここでは，まず(\ref{item:new1})のFPを導入したことによる成
+功率の影響について考察する．図\ref{fig:success_ratios}より，FP無しの
+$\respeqn{sim_{\rm RECAREFP^{-}}}$で最も良好だった成功率57.8\%(N=3)と比
+べて，FP有りの提案手法$\respeqn{sim_{\rm RECARE}}$の
+成功率\resp{81.8\%}が大きく上回っていることがわかる．同様に，FP無しの従来手法
+$\respeqn{sim_{\rm BLEU}}$の
+成功率60.3\%と比べて，FP有りの$\respeqn{sim_{\rm BLEUFP^{+}}}$で最も良好
+だった成功率\resp{77.9\%(N=1)}が大きく上回ってい
+る．これらのことから，
+形態素N-gramの適合率の平均の求め方に関わらず，FPの
+導入が成功率の向上に寄与していることがわかる．
+
+次に(\ref{item:new2})の，類似度計算に形態素N-gramの適合率の相加平均を用
+いたことによる成功率の影響を考察する．
+$\rm N=2$以降で$\rm N$が増加するにつれて，三品らの方法の成功率は減少して
+\resp{いるが，}
+提案手法においては\resp{成功率の減少は認められなかった．}このこと
+から，形態素N-gramの適合率の相加平均を類似度計算に用いることは，高次の
+$\rm N$を用いたときの成功率の改善に効果があることがわかる．
+
+\begin{figure}[t]
+ \begin{center}
+  \includegraphics{17-4ia6f2.eps}
+ \end{center}
+ \caption{感情推定成功率}
+ \label{fig:success_ratios}
+\end{figure}
+
+\resp{なお，類似度計算に相乗平均を用い，FPを導入した方法 ({$sim_{\mathrm{BLEUFP}^{+}}$}) は，Nを増加させると急激にその性能を落としていた．この原因は，Nが大きくなる
+と共通の形態素N-gramがコーパス中に存在しなくなる割合が増加する
+ため，式 ({\ref{eq:wn}}) において，1文中のすべての{$w_{n}$}で{$\freq{C_{e}}w_{n}$}が0になる，という場合が増加したためであった．
+提案方法においては，類似度計算に相加
+平均を用いることでこの問題を解決し，Nが大きい場合においても高い性能を維持
+していることがわかった．}
+
+\resp{このような場合は，共通形態素N-gramが存在しないため，FPと
+同様に形態素N-gram適合率 ({$p_{n}(x,s)$}) 
+も0になる．そこで，{$sim_{\mathrm{BLEUFP}^{+}}$}だけではなく，同じように相乗平均
+を利用している従来方法 ({$sim_{\mathrm{BLEU}}$}) も影響を受けると考えられる．
+本実験においては，従来方法における類似度計算に式 ({\ref{eq:bleu}}) を用いて
+いる．この式では{$p_{n}(x,s)$}の対数をとっているために，実装上，もし
+{$p_{n}(x,s)=0$}であった場合は，非常に小さな正の値にフロアリングした上で
+対数を求めていた．そのため，{$sim_{\mathrm{BLEUFP}^{+}}$}のように急激に性能を落とす
+ことはなかったと考えられる．このことを確認するため，式 ({\ref{eq:bleu}}) を式
+ ({\ref{eq:bleu_with_fp_pi}}) と同様，対数を用いない形に変形した上で，
+フロアリングをせずに実験を行ったところ，{$sim_{\mathrm{BLEU}}$}も{$sim_{\mathrm{BLEUFP}^{+}}$}
+と同様，Nが大きくなるとその性能を急激に落とす結果となった．}
+
+
+\subsubsection{\resp{感情推定に有効な形態素N-gram}}
+
+\resp{提案方法（や三品らの方法）においては，各感情コーパス中に含まれる形態素
+N-gramのうち，感情ごとに出現頻度に偏りがあるものが，感情推定において重要
+な意味を持つ．そこで，どのような形態素N-gramが提案方法にとって有効に働いた
+のか，といったことについて調査を行った．}
+
+\begin{table}[b]
+  \caption{喜びの文の感情推定に寄与していた形態素N-gramのコーパス別出現回数の一部}
+\label{tbl:freq1}
+\input{06table03.txt}
+\end{table}
+\begin{table}[b]
+ \caption{怒りの文の感情推定に寄与していた形態素N-gramのコーパス別出現回数の一部}
+\input{06table04.txt}
+\end{table}
+
+\resp{感情推定実験において，三品らの方法では感情判定に失敗し，提案方法で
+成功した入力サンプルを抽出し，その中に含まれるすべての形態素N-gramにつ
+いて，各感情コーパス内での出現頻度を調べた．特に正解感情の
+コーパスに偏って頻出している形態素N-gramを表{\ref{tbl:freq1}}〜
+{\ref{tbl:freq4}}に示す．
+これを見ると，「喜び」の``ありがとう／感動詞''や``♪／名詞''，
+「怒り」の``むかつく／動詞''，
+「希望」の``たい／助動詞，です／助動詞''等，感情を表現するであろうと思われる
+形態素N-gramが感情推定に寄与していたことがわかる．}
+
+\begin{table}[t]
+ \caption{嫌悪の文の感情推定に寄与していた形態素N-gramのコーパス別出現回数の一部}
+\input{06table05.txt}
+\end{table}
+\begin{table}[t]
+ \caption{希望の文の感情推定に寄与していた形態素N-gramのコーパス別出現回数の一部}
+\label{tbl:freq4}
+\input{06table06.txt}
+\end{table}
+
+\resp{一方，「喜び」の``でし／助動詞，た／助動詞''や「嫌悪」の``顔／名詞''等，
+一見すると感情とは無関係と思われる形態素N-gramも存在した．
+これらについては，今後別の角度からの検証（例えば，Web掲示板において
+喜びを表現する時は，「〜でした」のような丁寧な表現が用いられること
+が多い，といった仮説を立て，統計的に検証する）を行う必要があるが，
+今まで発見されていなかった事実を暗示するものである可能性がある．
+また，「怒り」に``職場／名詞''，``仕事／名詞''，
+「嫌悪」に``上司／名詞''，``会社／名詞''
+がはいっていることも，「Webの掲示板においては，仕事に対する不満や
+愚痴等が多い」といった事実を暗示しているのかもしれない．}
+
+
+
+\subsection{\resp{FPの導入効果の検証}}
+
+\resp{FPはコーパス中に含まれる以下のふたつの文の影響を低減する目的で
+提案された．}
+\begin{enumerate}
+ \item \resp{感情が異なっていても，たまたま表現や文型が類似している文}
+ \item \resp{コーパスを構築する際に誤って分類された文}
+\end{enumerate}
+\resp{FPがこうした文に対して，どの程度頑健性を持っているかを検証するため，
+感情コーパス内に存在するこうした文を増減させ，その時の性能を評価した．
+また，FPのかわりにTF-IDFを用いた時の性能についても評価を行った．}
+
+
+\subsubsection{\resp{表現や文型が類似している文の影響}}
+
+\resp{``入力文と感情が異なっているが，たまたま表現や文型が類似している文''の
+影響について，こうした文を各感情コーパスから削除した時の性能を評価する
+ことで検証を行った．}
+
+\resp{
+``たまたま表現や文型が類似している文''
+として``入力文とは感情が異なるコーパス中において，BLEUスコアが高い文''と
+定義し，各感情コーパスにおいて，このような文をBLEUスコア順に上位から{$n$}文
+削除した．また条件を揃えるため，正解となる感情コーパスからは
+乱数で{$n$}文削除した．}
+
+\begin{figure}[b]
+ \begin{center}
+  \includegraphics{17-4ia6f3.eps}
+ \end{center}
+ \caption{表現等が類似している文の影響}
+ \label{fig:similar}
+\end{figure}
+
+\resp{
+感情の推定成功率を図{\ref{fig:similar}}に示す．
+ここで横軸は，コーパス1つあたりの除去した文数を表す．
+この結果を見ると，三品らの
+方法，提案方法どちらも``たまたま表現や文型が類似している文''を削除する
+ことで性能が向上していることから，これらの文の影響を受けていたことがわかる．
+しかし，提案方法では文を一切削除しなかった場合においても
+比較的性能の低下が抑えられていることから，
+その目的である``たまたま表現や文型が類似している文''による影響を抑える
+ことができていることがわかった．}
+
+
+
+\subsubsection{\resp{感情分類を誤った文の影響}}
+
+\resp{
+次に，各感情コーパス中で感情分類を誤った文を意図的に増加
+させ，その時の性能を評価した．
+具体的には，各感情コーパスから{$n$}文を乱数で抽出し，それら
+を他の感情コーパスへと均等に混入させることで，感情分類を誤った文を
+増加させた．}
+
+\begin{figure}[b]
+ \begin{center}
+  \includegraphics{17-4ia6f4.eps}
+ \end{center}
+ \caption{感情分類を誤った文の影響}
+ \label{fig:shuffle}
+\end{figure}
+\begin{table}[b]
+\caption{感情分類を誤った文に対する性能差}
+\label{tbl:shuffle-diff}
+\input{06table07.txt}
+\end{table}
+
+\resp{
+感情推定成功率を図{\ref{fig:shuffle}}に示す．
+ここで横軸は，コーパス1つあたりの混入させた文数を表す．
+この結果を見ると，混入する
+文が増加するに従って両方法ともに性能が低下し，感情分類を誤った文の影響を
+大きく受けていることがわかる．しかし，両者の性能差
+（表{\ref{tbl:shuffle-diff}}）はわずかではあるが
+拡がっており，提案方法の方が若干ではあるが，こうした
+文の影響を低減できていることがわかった．}
+
+
+\subsubsection{\resp{TF-IDFの導入との比較}}
+
+\resp{FPの有効性を確認するため，FPのかわりにTF-IDFを用いた実験を行った．
+ここでは，TF-IDFをFPと同様，0から1の範囲の値とするため，
+{\it tf}値として拡大正規化索引語頻度{\cite{kita2}}を用い，また{\it idf}値も
+通常の{\it idf}値{\cite{jones}}を式 ({\ref{eq:idf-norm}}) を用いて正規化し，
+下記のような計算式によるTF-IDF値を用いた．}
+\begin{align}
+\respeqn{
+sim_{\rm TFIDF}(x,s)} & \respeqn{=} \respeqn{{\rm BP} \cdot \frac{1}{\rm N} \sum^{\rm N}_{n=1}{tfidf}_{n} \cdot p_{n}(x,s)} \\
+\respeqn{
+tfidf_{n} } & \respeqn{=} \respeqn{\frac{1}{\left|G_{n}(x)\right|}\sum_{\ngram \in
+  G_{n}(x)}{tf_{n} \cdot idf_{n}} }\\
+\respeqn{
+tf_{n}} & \respeqn{=} \respeqn{ \left\{
+	  \begin{array}{lll}
+	   0.5 + 0.5 \cdot \frac{\displaystyle freq_{C_{e}(w_{n})}}{\displaystyle
+	    \max_{c \in C}freq_{c}(w_{n})} & {\rm if} &
+	    freq_{C_{e}}(w_{n}) > 0 \\
+	   0 & {\rm if} & freq_{C_{e}}(w_{n}) = 0  
+	 \end{array} \right. } \\
+\respeqn{
+idf_{n} } & \respeqn{=} \respeqn{ \left\{
+	   \begin{array}{lll}
+	    \frac{\log \frac{|C|}{D(w_{n})} + 1}{\log |C| + 1} & {\rm
+	     if} & D(w_{n}) > 0 \\
+	    0 & {\rm if} & D(w_{n}) = 0
+	   \end{array}
+\right . \label{eq:idf-norm}} 
+\end{align}
+\resp{ここで{$D(w_{n})$}は{$w_{n}$}を含むコーパスの数を返す関数である．}
+
+\begin{figure}[b]
+ \begin{center}
+  \includegraphics{17-4ia6f5.eps}
+ \end{center}
+ \caption{TF-IDFを用いた感情推定結果}
+ \label{fig:tf-idf}
+\end{figure}
+
+
+\resp{TF-IDFを用いた感情推定実験の結果を図{\ref{fig:tf-idf}}に示す．
+この結果を見ると，すべてのNにおいてFPのほうが2.5ポイント〜8ポイント
+程度上まわっており，FPの有効性が認められた．}
+
+
+
+
+\subsection{提案手法とSVMの比較}
+三品らの方法とは異なる従来手法の一つとして，良好なクラス分類が可能なSVM (Support
+Vector Machine) による感情推定を行い，提案手法との比較を行った．
+本稿では学習，分類を行うプログラムとして，${\rm SVM}^{light}$\footnote{http://svmlight.joachims.org/}を用いた．
+
+
+\subsubsection{特徴ベクトルの生成\label{sec:sent2vec}}
+
+SVMを用いて感情推定を行うために，まず感情コーパスの
+各発話文から特徴ベクトルを生成する必要がある．今回は特徴ベクトルと
+して，1文中に出現する$\ngram$の出現回数をベクトルして表現したものを用い
+た．
+特徴ベクトルを生成するために，
+まず考慮する$\ngram$の最高次数Nを決め，それ以下の各$n$について，感情コー
+パスから得られる\NGRAM すべてに通し番号を振った（このとき，
+\NGRAM が低次であるほど若い番号を振ることとした）．次に，感情コーパスから
+取り出した一つの発話文
+$s$の\NGRAM を$m$，$s$における$m$の出現回数を$f$，それ以外の次元の値を0とす
+る特徴ベクトルを生成した．
+例えば最高次数を${\rm N}_{max} = 2$と
+した場合，形態素unigramと形態素bigramを用いて発話文から特徴ベクト
+ルを生成する．
+この時，特徴ベクトルの次元数は，コーパス中に出現するすべてのunigramと
+bigramの種類数となる．
+${\rm N}_{max} = 1$とした特徴ベクトルの例として，``ありがとうございまし
+た！！''という発話文の場合，
+各形態素unigramに割り振られる番号を表\ref{table:mresult}のとおりとすると，
+``ありがとうございました！！''の特徴ベクトル$v$
+は以下のように表現される．
+\begin{equation}
+ v = (0, 1, 0, 1, 1, 0, 0, 1, 2, 0, ..., 0) \label{eq:sent_vec}
+\end{equation}
+
+\begin{table}[b]
+  \caption{形態素unigramに対応する番号}
+  \label{table:mresult}
+\input{06table08.txt}
+\end{table}
+
+
+
+\subsubsection{クラス分類モデルの構築}
+
+クラス分類モデルは感情コーパスの数と同じ数だけ構築する．
+例えば，``怒り''の分類モデルを構築する場合，ポジティブデータを``怒り''のコーパ
+スに含まれる発話文から生成した特徴ベクトル，ネガティブデータを
+``怒り''以外の感情コーパスに含まれる発話文から生成
+した特徴ベクトルと定義し，学習を行う．
+
+本稿で学習に用いるポジティブデータの量はネガティブデータの量に比べて少
+なく，デフォルト値では良好な分類性能が得られない．そこでcost factor
+ ($C_{+}/C_{-}$) の計
+算には，Morikらが定義した次の式を用いた\cite{morik}．
+\begin{equation}
+ \frac{C_{+}}{C_{-}} 
+  = \frac{\rm number\ of\ negative\ training\
+  examples}{\rm number\ of\ positive\ training\ examples}
+\end{equation}
+cost factor以外の学習パラメータはデフォルト値を用いた．
+また学習パラメータで与えるカーネルのタイプもデフォルトである線形カーネル
+を用いた．
+
+
+\subsubsection{実験設定}
+
+実験に用いた感情コーパスは，
+\ref{sec:comp_es_bleu}節と同様に``喜び''，``怒り''，``嫌悪''，``希望''の各838文で
+あり，入力文も\ref{sec:comp_es_bleu}節と同様の文を用いた．
+成功条件は，入力文の感情と出力感情が一致すれば推定成功とした．
+ 
+
+
+\subsubsection{実験結果と考察}
+
+表\ref{table:svm_success_ratios}に推定成功率を示す．
+SVMで最も高かった推定成功率が$\rm N=2$を用いたときの80.4\%であり，
+提案手法の中で最も高かった\resp{成功率81.8\%と比べると1.4ポイント程度の
+差になっている．このことから，発話文の感情推定において，適切な N を選択
+すれば，SVMと提案手法は同程度の感情推定成功率が得られることが示された．}
+
+\begin{table}[b]
+ \caption{SVMと提案手法の感情推定成功率}
+  \label{table:svm_success_ratios}
+\input{06table09.txt}
+\end{table}
+
+\resp{しかし，表{\ref{table:svm_success_ratios}}を見ると，
+{${\rm N}_{max} > 2$}を用いた場合のSVMによる推定精
+度が急激に減少していることがわかる．}これは``感情コーパス中で出現回数が少ない高次の\NGRAM ''を素性として利用してい
+る事例に対する過学習が原因であると考えられる．
+\resp{一方提案方法においては，N を増加させていってもその性能にはほとんど
+差がなく，``出現回数が少ない高次{\NGRAM}''の影響をほとんど受けていないこと
+がわかる．これは，RECAREの計算を相加平均で行ったことの
+効果であると考えられる．}
+
+\resp{一般に感情コーパス中の文数などによって最適な N は異なることが考え
+られ，SVMの場合は，実際の応用に際し評価実験を通して最適値を探索することが
+必要である．
+一方RECAREであれば，十分大きな N を設定しておくことで，（計算量や
+記憶容量等の問題を除けば）常に最適な推定精度を得ることが可能となる．}
+
+\resp{更に，例えば6形態素からなるある特定の文末表現がある特定の感情に
+数多く出現する，といったことがあった場合，SVMであれば，全体として
+考慮すべき形態素の長さを決定する必要があるが，RECAREならば，その特定
+の文末表現を利用するためだけに $\mathrm{N} = 6$と設定してしまっても，悪影響を
+ほとんど及ぼさない．こうしたことから，SVMに比べてRECAREが有効である
+ことが示された．}
+
+
+
+
+\section{まとめ}\label{sec:conclusion}
+
+本稿では，\resp{``感情が異なっていても，たまたま表現や文型が類似している文''や，
+``コーパスを構築する際に誤って分類された文''の影響を改善し，高い精度で感
+情推定を実現するための類似度計算手法であるRECAREを提案した．}
+
+\resp{入力文で使われている形態素N-gramが，各感情コーパス間でどの程度偏って
+いるか，といったことを表す値であるFPを定義し，BLEUをベースとした類似度
+計算に導入した．更に，高次のN-gramに対する学習サンプル数の不足からくる，
+いわゆる「ゼロ頻度問題」に対処するため，相乗平均で計算されるBLEUをベースと
+した類似度を変形し，相加平均を用いて類似度計算を行う方法を提案した．}
+
+評価実験の結果，従来手法に比べ，推定精度が60.3\%から\resp{81.8{\%}}へと大きく
+\resp{向上し，また問題としていた2種類の文のうち，特に``たまたま表現や文型
+が類似している文''の影響を効果的に低減させている}ことを確認した．
+また形態素N-gramを素性に用いたSVMによる感情推定に比べ，提案手法では
+\resp{N が大きい場合に推定精度の低下がほとんど見られず，}
+発話文の感情推定には提案手法が有効であることを示した．
+
+\resp{今後，「希望」や「自信」，「脅迫」といった
+更に複雑な感情を加えた時の性能の評価，
+また，必要があれば
+推定結果として複数の感情を出力することが可能となるようなアルゴリズム
+の改善について検討を行う予定である．}
+
+
+
+
+
+
+
+\acknowledgment
+
+本研究の一部は，科学研究費補助金（挑戦的萌芽研究，課題番号21650030）の
+補助を受けて行われた．記して謝意を表す．
+
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Jones}{Jones}{1972}]{jones}
+Jones, K.~S. \BBOP 1972\BBCP.
+\newblock \BBOQ A statistical interpretation of term specificity and its
+  application in retrieval.\BBCQ\
+\newblock {\Bem Journal of Documentation}, {\Bbf 28}, \mbox{\BPGS\ 11--21}.
+
+\bibitem[\protect\BCAY{Kruger, Epley, Parker, \BBA\ Ng}{Kruger
+  et~al.}{2005}]{citeulike:528278}
+Kruger, J., Epley, N., Parker, J., \BBA\ Ng, Z.-W. \BBOP 2005\BBCP.
+\newblock \BBOQ Egocentrism over e-mail: Can we communicate as well as we
+  think?\BBCQ\
+\newblock {\Bem Journal of Personality and Social Psychology}, {\Bbf 89}  (6),
+  \mbox{\BPGS\ 925--936}.
+
+\bibitem[\protect\BCAY{Mishina, Ren, \BBA\ Kuroiwa}{Mishina
+  et~al.}{2006}]{aiac}
+Mishina, K., Ren, F., \BBA\ Kuroiwa, S. \BBOP 2006\BBCP.
+\newblock \BBOQ An emotion similarity calculation using dialog sentence
+  corpora.\BBCQ\
+\newblock In {\Bem Proceedings International Symposium on Artificial
+  Intelligence and Affective Computing 2006}, \mbox{\BPGS\ 168--176}.
+
+\bibitem[\protect\BCAY{Morik, Brockhausen, \BBA\ Joachims}{Morik
+  et~al.}{1999}]{morik}
+Morik, K., Brockhausen, P., \BBA\ Joachims, T. \BBOP 1999\BBCP.
+\newblock \BBOQ Combining statistical learning with a knowledge-based
+  approach---a case study in intensive care monitoring.\BBCQ\
+\newblock In {\Bem Proceedings 16th International Conf. on Machine Learning},
+  \mbox{\BPGS\ 268--277}.
+
+\bibitem[\protect\BCAY{Papineni, Roukos, Ward, \BBA\ Zhu}{Papineni
+  et~al.}{2001}]{bleu}
+Papineni, K., Roukos, S., Ward, T., \BBA\ Zhu, W.-J. \BBOP 2001\BBCP.
+\newblock \BBOQ BLEU: a method for automatic evaluation of machine
+  translation.\BBCQ\
+\newblock In {\Bem Proceedings 40th Annual Meeting on Association for
+  Computational Linguistics}, \mbox{\BPGS\ 311--318}.
+
+\bibitem[\protect\BCAY{徳久\JBA 前田\JBA 村上\JBA 池原}{徳久 \Jetal
+  }{2008}]{徳久雅人:20080131}
+徳久雅人\JBA 前田浩佑\JBA 村上仁一\JBA 池原悟 \BBOP 2008\BBCP.
+\newblock 対話行為と情緒を解析するための文末表現パターンの作成.\
+\newblock \Jem{電子情報通信学会技術研究報告. NLC,
+  言語理解とコミュニケーション}, {\Bbf 107}  (480), \mbox{\BPGS\ 45--50}.
+
+\bibitem[\protect\BCAY{北\JBA 津田\JBA 獅々掘}{北 \Jetal }{2002}]{kita2}
+北研二\JBA 津田和彦\JBA 獅々掘正幹 \BBOP 2002\BBCP.
+\newblock \Jem{情報検索アルゴリズム}.
+\newblock 共立出版, 東京.
+
+\bibitem[\protect\BCAY{小林}{小林}{2001}]{小林正幸}
+小林正幸 \BBOP 2001\BBCP.
+\newblock \Jem{なぜ、メールは人を感情的にするのか}.
+\newblock ダイヤモンド社.
+
+\bibitem[\protect\BCAY{日本語記述文法研究会}{日本語記述文法研究会}{2009}]{moda
+lity2}
+日本語記述文法研究会\JED\ \BBOP 2009\BBCP.
+\newblock \Jem{現代日本語文法}.
+\newblock くろしお出版.
+
+\bibitem[\protect\BCAY{加藤\JBA 杉村\JBA 赤堀}{加藤 \Jetal
+  }{2005}]{katou20051020}
+加藤由樹\JBA 杉村和枝\JBA 赤堀侃司 \BBOP 2005\BBCP.
+\newblock
+  電子メールを使ったコミュニケーションにおいて生じる感情への電子メールの内容の
+影響.\
+\newblock \Jem{日本教育工学会論文誌}, {\Bbf 29}  (2), \mbox{\BPGS\ 93--105}.
+
+\bibitem[\protect\BCAY{杉谷}{杉谷}{2007}]{sugitani20070320}
+杉谷陽子 \BBOP 2007\BBCP.
+\newblock メールはなぜ「話しやすい」のか? : CMC(Computer-Mediated
+  Communication)における自己呈示効力感の上昇.\
+\newblock \Jem{社会心理学研究}, {\Bbf 22}  (3), \mbox{\BPGS\ 234--244}.
+
+\bibitem[\protect\BCAY{目良\JBA 市村\JBA 相沢\JBA 山下}{目良 \Jetal
+  }{2002}]{mera}
+目良和也\JBA 市村匠\JBA 相沢輝昭\JBA 山下利之 \BBOP 2002\BBCP.
+\newblock 語の好感度に基づく自然言語発話からの情緒生起手法.\
+\newblock \Jem{人工知能学会論文誌}, {\Bbf 17}  (3), \mbox{\BPGS\ 186--195}.
+
+\end{thebibliography}
+
+
+
+
+
+\begin{biography}
+
+\bioauthor{三品　賢一}{
+2006年徳島大学工学部知能情報工学科卒業．
+2008年同大大学院先端技術科学教育部システム創生工学専攻博士前期課程了．
+2010年同博士後期課程中退．在学中は感性情報処理の研究に従事．
+電子情報通信学会会員．
+}
+\bioauthor{土屋　誠司}{
+2002年三洋電機株式会社入社．2007年同志社大学大学院博士後期課程修了．博士（工学）．同年
+徳島大学大学院助教．2009年同志社大学理工学部インテリジェント情報工学科助
+教．主に，知識処理，意味解釈の研究に従事．言語処理学会，人工
+知能学会，情報処理学会，電子情報通信学会各会員．
+}
+\bioauthor{鈴木　基之}{
+1993年東北大学工学部情報工学科卒業．1996年同大大学院博士後期課程を退学し，
+同大大型計算機センター助手．博士（工学）．2006年〜2007年英国エジンバラ大学客員
+研究員．2008年徳島大学大学院ソシオテクノサイエンス研究部准教授，
+現在に至る．音声認識・理解，音楽情報処理，
+自然言語処理，感性情報処理等の研究に従事．電子情報通信学会，
+情報処理学会，日本音響学会，ISCA各会員．
+}
+\bioauthor{任　　福継}{
+1959年生．1982年北京郵電大学電信工程学部卒業．1985年同大学大学院計算
+機応用専攻修士課程修了．1991年北海道大学大学院工学研究科博士後期課程修
+了．博士（工学）．広島市立大学助教授を経て，2001年より徳島大学工学部教
+授．現在に至る．自然言語処理，感性情報処理，人工知能の研究に従事．電子情報通
+信学会，情報処理学会，人工知能学会，言語処理学会，電気学会，AAMT, IEEE各会
+員．
+}
+\end{biography}
+
+
+
+
+\biodate
+
+
+\end{document}

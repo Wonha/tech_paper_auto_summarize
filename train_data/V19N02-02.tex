@@ -1,0 +1,742 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+\usepackage{multirow}
+\usepackage{color}
+\usepackage{colortbl}
+\definecolor{gray}{rgb}{0.86,0.86,0.86}
+\usepackage{tabularx}
+
+
+\Volume{19}
+\Number{2}
+\Month{July}
+\Year{2012}
+
+\received{2011}{11}{11}
+\revised{2011}{12}{23}
+\accepted{2012}{3}{1}
+
+\setcounter{page}{89}
+
+\jtitle{トピック情報を用いたブートストラップ法に基づく語彙獲得}
+\jauthor{貞光　九月\affiref{NTT} \and 齋藤　邦子\affiref{NTT} \and 今村　賢治\affiref{NTT} \and 松尾　義博\affiref{NTT} \and 菊井玄一郎\affiref{NTT}\affiref{OKAPU}}
+\jabstract{
+本論文ではブートストラップ法を用いた語彙獲得を行う際に，トピック情報を用いることでセマンティックドリフトを緩和し，獲得精度を向上できることを示す．
+獲得対象とする語を含む文書の大域的情報であるトピック情報を，統計的トピックモデルを用いて推定し，識別モデルを用いたブートストラップ法における3つの過程で利用する．1つ目は識別モデルにおける素性として，2つ目は負例生成の選択基準として，3つ目は学習データの多義性解消のために用いる．
+実験において，提案手法を用いることでセマンティックドリフトを軽減し，語彙の獲得精度が6.7から28.7\%向上したことを示す．
+}
+\jkeywords{語彙獲得，ブートストラップ法，セマンティックドリフト，統計的トピックモデル，LDA}
+
+\etitle{Entity Set Expansion based on Bootstrapping Methods using Topic Information}
+\eauthor{Kugatsu Sadamitsu\affiref{NTT}\and
+	Kuniko Saito\affiref{NTT}\and
+	Kenji Imamura\affiref{NTT}\and
+	Yoshihiro Matsuo\affiref{NTT} \and
+        Genichiro Kikui\affiref{NTT}\affiref{OKAPU}} 
+\eabstract{
+This paper proposes three modules based on latent topics of documents for alleviating ``semantic drift'' in bootstrapping entity set expansion. 
+These new modules are added to a discriminative bootstrapping algorithm to realize topic feature generation, negative example selection and positive example disambiguation.
+In this study, we model latent topics with  LDA (Latent Dirichlet Allocation) in an unsupervised way. 
+Experiments show that the accuracy of the extracted entities is improved by 6.7 to 28.2\% depending on the domain. 
+}
+\ekeywords{Set expansion, Bootstrap, Semantic drift, Statistical topic models, LDA}
+
+\headauthor{貞光，齋藤，今村，松尾，菊井}
+\headtitle{トピック情報を用いたブートストラップ法に基づく語彙獲得}
+
+\affilabel{NTT}{NTTサイバースペース研究所}{NTT Cyber Space Laboratories}
+\affilabel{OKAPU}{現在，岡山県立大学}{Presently with Okayama Prefectural University}
+
+
+
+\begin{document}
+\maketitle
+
+\section{はじめに}
+自然言語処理技術を用いた多様なアプリケーションにおいて，対象ドメインに特化した辞書が必要となる場面は多く存在する．
+例えば情報検索タスクにおいて，検索クエリとドメイン辞書とを併用することで検索結果をドメイン毎に分類して提示することを可能としたり，
+特定のドメインに特化した音声認識システムにおいてはそのドメインに応じた認識辞書を用いた方が音声認識精度が高いことが知られている \cite{廣嶋2004}．
+
+
+一方で，特定のドメインに対する要求でなく，ドメイン非依存の場面においても，詳細なクラスに分類した上で体系的な辞書を用いる必要が生じる場合がある．
+例えば関根らの定義した拡張固有表現 \cite{sekine2008extended} は，従来のIREX固有表現クラスが8クラスであったのに対し，200もの細分化されたクラスを持つ．
+橋本らによって作成された関根の拡張固有表現に基づくラベル付きコーパスにより，
+機械学習による拡張固有表現抽出器の研究がなされている \cite{橋本08,橋本10} が，
+コーパスにおいて付与された各クラスの出現数にはばらつきがあり，極端に学習データの少ないクラスも存在する．
+コーパスから単純な学習により固有表現抽出器を構築した場合，これら低頻度のクラスについて正しく学習できないことが予想されるため，各クラス毎の直接的な辞書の拡充が必要とされる．
+
+
+このようにドメインやクラスに依存した辞書の重要性は高いが，
+一方で辞書の作成には大きな人的コストがかかってしまうため，
+可能な限りコストをかけずにドメイン依存の語彙を獲得したいという要求がある．
+本論文で対象とする語彙獲得タスクは，ドメインやクラスに応じた少量の語彙集合，
+特に固有表現集合で表される教師データを用いて，新たな固有表現集合を獲得することを目的とする．
+なお，本論文では固有表現をエンティティ，初期に付与される教師データをシードエンティティと呼ぶこととする．
+語彙獲得タスクにおいては，教師データを繰り返し処理により増加させることのできる，ブートストラップ法を用いた手法が多く提案されており \cite{pantel2006espresso,bellare2007lightly}，本論文でも同様にブートストラップ法に基づいた手法を提案する．
+ブートストラップ法の適用により，初期に少量のシードエンティティしか存在しない場合であっても，手掛かりとなる情報，すなわち学習データを逐次的に増加させることが可能であるため，大規模なエンティティ獲得に繋がる．
+しかしブートストラップ法を用いたエンティティ獲得における課題として，獲得されるエンティティの持つ意味が，シードエンティティ集合の元来の意味から次第に外れていくセマンティックドリフトと呼ばれる現象があり，エンティティ獲得精度を悪化させる大きな要因となっている．
+
+
+本論文では，従来用いられてきた局所的文脈情報だけではなく，文書全体から推定されるトピック情報を併用することで，セマンティックドリフトの緩和とエンティティ獲得の精度向上を図る．
+本論文におけるトピックとは，ある文書において述べられている「政治」や「スポーツ」等のジャンルを指し，統計的トピックモデル（以下トピックモデル）を用いて自動的に推定する．
+本論文ではエンティティ獲得精度向上のために，トピック情報を3通りに用いた手法を提案する．
+第一に，識別器を用いたブートストラップ法における素性として利用する．
+第二に，識別器において必要となる学習用の負例を自動的に生成する尺度として利用する．
+第三に，教師データ中のエンティティの多義性を解消することで，適した教師データのみを利用する．
+以下2節で先行研究とその課題，3節でトピック情報を用いた詳細な提案手法，4節で実験結果について報告し，
+提案手法が少量のシードからのエンティティ獲得において効果があることを示す．
+
+
+\section{ブートストラップ法を用いた語彙獲得における課題}
+
+\subsection{ブートストラップ法とセマンティックドリフト}
+
+本節では，ブートストラップ法によるエンティティ獲得の基本的な処理の流れと，その課題について述べる．
+はじめに，ブートストラップ法に基づくエンティティと属性の関係獲得法であるEspresso  \cite{pantel2006espresso} について述べる．
+属性とは獲得対象とするエンティティ集合において，複数のエンティティが共通して関係する語（``has-a''や``is-a''等の関係）であるとする．
+例えばエンティティ「ヤクルト」と「巨人」の属性は，「監督」(has-a) や「球団」(is-a) 等となる．
+関係獲得タスクは語彙獲得タスクを含んだタスクと捉えられるため，両者を比較することに意味はある．
+Espressoでは，初期に与えられるシードエンティティとシード属性の組から，それらを含んで出現する文脈パターンを手掛かりとして，新たなエンティティ--属性ペアに対し，自己相互情報量 (PMI) に基づいて定義されたスコア関数に基づいてスコアを付与する．
+ここでの文脈パターンの例としては，「NTT」をエンティティ (X)，「株価」を属性 (Y) とした場合，
+「X (NTT) /の/Y（株価）/が/反発」といったものがあげられる．
+Espressoはブートストラップ法の各繰り返しにおいて，スコア関数値を高くするようなエンティティ--属性ペアを新たな正例として獲得するフェーズと，文脈パターンの獲得フェーズを交互に行い，
+必要なエンティティ--属性ペア数が得られるまで繰り返す．
+ブートストラップ法を用いることで少量のシードエンティティのみが与えられた場合でも，教師データを増加させつつ新たなエンティティを獲得していくことが可能なため，
+本稿でもEspressoと同様，ブートストラップ法に基づいた語彙獲得を行っていく．
+
+
+
+ブートストラップ法によって少量のシードエンティティから新たなエンティティ集合を獲得する際の主な課題として，獲得する対象が本来獲得すべき種類とは異なる対象へと次第に変わっていってしまうという現象があげられる．
+例えば獲得対象が企業名である場合に，「NTT」と「トヨタ」をシードエンティティとして与え，
+Espresso等のエンティティ獲得アルゴリズムにより「ヤクルト」が獲得できたとする． 
+しかし「ヤクルト」には企業名以外にも，プロ野球球団名や飲料品名といった多義性が存在するため，
+次の繰り返しにおいて獲得されるエンティティが「巨人」等の本来獲得対象としていたエンティティではないものに遷移していく場合がある．
+この現象はセマンティックドリフトと呼ばれ，ブートストラップ法に基づく語彙獲得における精度低下の大きな要因となっている．
+
+\subsection{識別モデルに基づくブートストラップ法と課題}
+\label{sec:problem}
+
+
+先行研究では，新たなエンティティを選択する際のスコア関数を独自に定義することで
+セマンティックドリフトを抑え，エンティティを精度良く獲得する手法が提案されている
+\cite{thelen2002bootstrapping,sarmento2007more}．
+これらのスコア関数は，基本的にはEspressoと同様にシードエンティティの特徴になるべく近い特徴を持つエンティティに対し，高いスコアを与えるように設計されている．
+
+
+スコア関数についての研究とは異なる観点で提案されたのがBellareらの識別モデルに基づくブートストラップ法である \cite{bellare2007lightly}．
+彼らの方法では識別モデルからのスコアによってスコア関数を構築するため，柔軟な素性設計が可能となる．
+例えば，「X (NTT)/の/Y（株価）/が/上昇」という文脈を考えた時，素性関数$f$によって
+$f({\rm surf.}=``$の$'',{\rm position}=X+1)=1,\\ f({\rm surf.}=``$上昇$'',{\rm position}=Y+2)=1$といった素性が構築される．
+BellareらはEspressoと同様に関係獲得タスクに識別モデルに基づくブートストラップ法を適用しているが，文脈パターンに相当する素性の重みは，識別学習によって自動的に付与される．
+そのためEspressoにおける文脈パターン獲得フェーズは不要となり，代わりにエンティティ獲得フェーズと属性獲得フェーズとに分けた手法が提案されている．
+我々はBellareらの手法に若干の変更を加えたものをベースラインとして用いることとした．このベースラインについては\ref{sec:baseline}節で詳しく述べる．
+
+
+Bellareらの手法及び我々のベースラインシステムには3つの課題が残存する．
+1つ目の課題は，大域的な情報が識別モデルに反映されていないという点である．
+識別モデルの導入により素性の柔軟な設計が可能になった一方，彼らは局所的な文脈中の単語の表層と品詞のみを素性として用いるのみで，識別モデルの利点を積極的には用いていない．
+局所的文脈に基づく素性のみでは，エンティティの曖昧性を解消できない場合がしばしばある．
+例えばエンティティ「ヤクルト」は企業名としても球団名としても存在する．
+「ヤクルト」に対して「捕手」のような属性を付与することによって，ある程度曖昧性を解消することは可能であるが，属性を付与した場合でもなお曖昧性が残る場合もある．
+ここで属性として「広報」が与えられ，文書が次のように与えられている場合を考える．
+「18日の夜，ヤクルトの広報担当者が取材に対してコメントを発表した．
+18日の試合で途中退場したY選手は，診断の結果軽いねんざと診断された，とコメントは伝えている．」
+一文目だけを見た場合，このヤクルトは企業名を指すか球団名を指すかは明らかではない．
+文書全体を読むことで，このエンティティが「球団名」を指していることが明らかになるが，局所的な文脈パターンのみを用いた場合，文書全体からの大域的情報を利用することはできない．
+我々は文書全体を通して存在するトピックを，
+エンティティ識別の際の素性として用いる方法を\ref{sec:topicfeature}節において述べる．
+
+
+2つ目の課題は，識別学習における負例の問題である．
+識別学習では正例と負例が必要になることが一般的である．
+Bellareらは現在の正例以外全てを負例として扱っているが，この場合も偽負例が混じる可能性が排除できない上，正例と負例の量が大きく乖離するというデータ非平衡の問題もある．
+一方，Mintzらは複数のクラスに属する正例群を与えた後，別のクラスに属するエンティティと属性を擬似的な負例ペアとすることで負例を生成している \cite{mintz2009distant}. 
+しかし，1つのクラスのみを獲得対象とする場合，このような負のクラスを加えることには人的コストがかかる上，属性を組み合わせたとしても，エンティティ「ヤクルト」に対する多義属性「広報」が存在するように，属性の多義性によって偽負例が生成されてしまう可能性がある．
+
+
+3つ目の課題はシードエンティティの質及び獲得された正例エンティティの多義性についての問題である．
+少量のシードエンティティのみを手がかりとして行う語彙獲得タスクでは，シードエンティティによる精度への影響は大きい．
+Pantelらは大規模なWEBに対して，比較的単純なスコアリング関数を用いて効率的なエンティティ獲得手法を提案しており \cite{pantel2009web}，
+10個程度のシードエンティティにより十分な精度でエンティティ集合が得られると報告している．
+一方でVyasらはシードエンティティの選択によりエンティティ獲得の結果に影響が出ることを示している \cite{vyas2009helping}．
+特に多義性のあるシードエンティティが混入した場合にセマンティックドリフトが生じやすく，精度の劣化は大きいと考えられるため，
+Vyasらは精度を落とす可能性の高いシードを除去するアルゴリズムを提案している．
+この問題はシードエンティティに限らず，獲得された後に教師データとして用いられるエンティティについても同様が生じてしまう．
+
+
+我々はこれら3つの課題に対し，トピック情報を用いて解決する手法を以下で提案する．
+
+
+
+
+\section{トピック情報を用いたブートストラップ法}
+\label{sec:propose}
+
+\subsection{ベースライン手法}
+\label{sec:baseline}
+
+本節ではBellareらの手法を基としたベースライン手法について述べる．
+なお，本節ベースライン手法は図\ref{fig:structure}の実線矢印で，
+次節以降で述べる提案手法は破線矢印で表している．
+本ベースライン手法がBellareらの手法と異なる点は，獲得対象がエンティティに限られるという点である．
+そのため，本ベースライン手法ではエンティティ獲得と属性獲得との交互獲得は行わず，初期に正例属性集合として与えた後の属性集合は不変であるとする．
+新規属性獲得を行うことも可能ではあるが，獲得された属性集合に偽正例が混じることによってセマンティックドリフトが生じるリスクを排除するために，エンティティのみの獲得を行うこととした．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{19-2ia938f1.eps}
+\end{center}
+\caption{提案手法のシステム構成図}
+\label{fig:structure}
+\end{figure}
+
+
+
+ベースライン法においては，はじめに人手によって $N_e$ 個の正例シードエンティティ集合$E_P$が与えられた後，シードエンティティとのPMIの大きい順に各名詞のランキングを行う．
+ランキングされた名詞のうちスコアの高い方から $N_a$ 個の正例属性集合($A_p$)を選択する．
+$N_e$ 及び $N_a$ は事前に調整するパラメータであり，本論文ではいずれも$10$とした．
+エンティティ--属性ペアとしてのシードは，シードエンティティ集合$E_P$と正例属性集合$A_P$とを組み合わせることで得た．
+次にこのエンティティ--属性ペアを，正例教師データ用の文書集合を獲得する際の検索クエリとして用いる．
+検索の結果得られる，あるエンティティ--属性ペア $\{e,a\}$  を含む正例文書集合を $D_{e,a}$ と表す．
+1つ1つの文書を個別に教師データとして用いるのではなく，同じエンティティ--属性ペアを含む文書をまとめることにより，過適応の緩和が期待できる．
+正例文書集合$D_{e,a}$を元に$e,a$の周辺文脈についての素性化を行う一方，
+学習用の負例についても文書集合全体からランダムに選択した後に素性化を行い，
+これらを元に識別モデルを学習する．
+次に識別モデルの適用方法について述べる．
+新規正例エンティティとなりうる候補エンティティは，正例属性 $a \in A_P$ の近傍に出現する固有表現$e'$のみに限定する．
+訓練データの場合と同様，過適応緩和のため，識別対象 $e',a$ は文書集合 $D_{e',a}$ としてまとめられ，素性化処理を行った後に識別モデルが適用される．
+識別モデル適用の結果出力されるスコアを $s(e,a)$ とし，
+正例属性集合 $A_p$ について $s(e,a)$ の和をとったスコア $\sum_{a\in A_P} s(e,a)$ の値の高い方から順に，任意の種類数の新規正例エンティティを獲得する．
+
+
+\subsection{トピック素性とトピックモデル}
+\label{sec:topicfeature}
+
+\ref{sec:problem}節で1つ目の課題として述べたように，識別モデルにおける素性としてこれまでは局所的文脈に基づく素性が用いられてきた \cite{bellare2007lightly}．
+我々は文脈情報に加え，トピック情報を併用することでエンティティの持つ曖昧性を解消し，セマンティックドリフトの影響を緩和する．
+文書の背景にあるトピックを利用する場合，文書に対して明示的にトピックラベルが付与されているデータであれば，そのラベルを直接トピック情報として用いることができるが，
+全ての文書にトピックラベルを人手で付与するにはコストがかかる．
+本稿ではラベル無しの文書集合しか存在しない場合でもトピック情報の取得を可能にするため，
+文書のトピックと単語との関係をモデル化するトピックモデルを用いる．
+トピックモデルは，文書のトピックと関連の強い単語に高い確率を付与することで，文書をより緻密に表現できるモデルであり，
+情報検索等多様なアプリケーションにおいて利用されている \cite{hofmann1999probabilistic}．
+例えばある文書のトピックがスポーツであるならば，
+「サッカー」といったスポーツに関する単語が出現しやすく，
+「国会」といった単語が出現しにくい，
+といった大域的情報を扱うことができる．
+
+本稿ではトピックモデルとして，各文書におけるトピック間の共起関係をディリクレ分布によって表現するLatent Dirichlet Allocation (LDA) を用いることとする \cite{blei2003latent}．
+LDAをはじめとするトピックモデルを用いることで，具体的には文書$d$におけるトピック$z$の事後確率$p(z|d)$を計算することが可能となる．
+LDAを用いた場合，事後確率を解析的に求めることは困難であるが，変分ベイズ法を用いて近似的に事後確率を求めたり \cite{blei2003latent}，マルコフ連鎖モンテカルロ法を用いて近似的に事後確率を推定することが可能である \cite{Griffiths2004fst}．
+例えば，\ref{sec:problem}節の「ヤクルト」の例に関して，トピックモデルはトピック$z=\text{``野球''}$に対して高い事後確率を付与することが期待される\footnote{$z$は離散変数上の確率変数であり，明示的にトピックを表すような単語を値とはとらない．}．
+この事後確率は文書$d$のトピック$z$らしさを表現していることに他ならないので，識別における大域的素性として直接的に活用できる．
+我々の手法において，エンティティ--属性ペア$e,a$に対するトピック素性$\phi_t(z,e,a)$は，LDAの事後確率に基づいて以下のように計算される．
+\[
+\phi_t(z,e,a)=\frac{\sum_{d \in D_{e,a}} p(z|d)}{\sum_{z^\prime }\sum_{d \in D_{e,a}} p(z^\prime |d)}.
+\]
+
+
+
+\subsection{トピック情報に基づく負例生成}
+\label{sec:negative}
+
+正例のみが存在する状況下で識別モデルを利用する際に問題となるのは，
+学習用の負例をいかに生成するかという点であり，\ref{sec:problem}節において2つ目の課題としていた．
+例えば初期の正例以外全てを負例として扱う場合や，ランダムに負例を選択する場合，実際には正例である事例を，誤って負例として扱ってしまう偽負例を生じてしまい，識別結果に対しても悪影響を及ぼす可能性がある．
+我々の目的は偽負例の生成を抑制するというだけでなく，正例と負例の量を平衡に保ちつつ，セマンティックドリフトを緩和するために幅広いジャンルから負例としてふさわしいものを獲得することである．
+本節ではトピックモデルを用いることでこのような要求を満たす負例を自動的に獲得する手法について述べる．
+負例生成問題は，正例とラベルなしデータのみが存在する場合における主要な問題と捉えられている \cite{liu2002partially,li2010negative}．
+しかし先行研究における手法はある程度大きな規模の正例データを想定しており，
+我々が用いる非常に少量の正例データについては有効に機能しないと考えられる．
+
+
+
+
+そこで，前節で用いたトピックモデルの尺度において，正例からできるだけ遠い事例を負例として選択する手法を提案する．
+トピックの分布は単語の分布と比べ比較的密であり，少量の正例データからでも正のトピックが推定可能である．
+各異なり単語を独立次元とするベクトル表現では，例えば「プリウス」と「キャディラック」では全く異なる次元に存在するが，トピックを独立次元とするベクトル表現で捉えると，これらの単語を含む文書は同じトピック次元上に存在する可能性が高く，逆に言えば，負例はそれ以外のトピック次元中に存在しやすい．
+トピックに基づくこの尺度をトピック$z$に対する ``正のトピックスコア'' $PT(z)$ と呼び，本スコアを元に負例にふさわしい文書を選択していく．
+正のトピックスコア$PT(z)$を，以下のように正例文書集合$D_{e,a}$中の各文書が与えられた時の事後確率の和として定義する．
+\begin{equation}
+PT(z)=\frac{\sum_{d \in {D_{e,a}}} p(z|d)}{|D_{e,a}|}．
+\end{equation}
+$PT(z)$の低い方から$50\%$のトピックを負のトピックとし，負のトピック各々において同数ずつ，総数が正例文書数と等しくなるように文書を選択した．
+この際の文書の選択基準としては，負のトピックに対する事後確率が高く，かつエンティティ候補となり得る固有表現と属性に相当する名詞が，任意のウインドウサイズ内に現れる文書であるとした．
+本実験に用いたウインドウサイズは3単語である．
+
+
+\subsection{トピック情報による正例の多義性解消}
+\label{sec:tpc_sel}
+
+本節では\ref{sec:problem}節で挙げた3つ目の課題，
+正例の教師データに多義性が含まれ得るという課題を解決する手法を提案する．
+正例の中には多義性を持つものも存在するため，その正例が出現する全ての文書を正例の抽出対象として用いることはセマンティックドリフトを引き起こす要因となる
+（例えば\ref{sec:problem}節の「ヤクルト」の例があげられる）．
+従来研究ではこのようなセマンティックドリフトを引き起こす要因となるシードエンティティを除外する手法が提案されている \cite{vyas2009helping}．
+これに対し，我々はトピックを用いることにより，エンティティを無条件に除外するのではなく，ドメインに合ったトピックでは活かし，ドメインから外れたトピックでは除外するといったような，細かな処理を可能とする手法を提案する．
+「ヤクルト，広報」というエンティティ--属性の二つ組に加え，「ヤクルト，広報，$z=\text{``野球''}$」のような三つ組の形とすることで，より確実性の高い正例集合を作ることができる．
+
+
+具体的には，前節で述べた正のトピックスコア$PT(z)$をここでも利用する．
+まず，任意の閾値$th$において，$PT(z)>th$を満たすトピック$z$を正のトピックとする．
+もしも条件を満たす$z$が1つもない場合は，最も$PT(z)$の高い$z$を正のトピックとする．
+そして正例文書集合の中から，正のトピックに含まれる全てのトピック$z^\prime$に対し， $p(z^\prime |d)\le th $となるような文書$d$を正例文書集合から除外する．
+なお，シードエンティティが与えられているか否かに関わらず，
+文書単位のトピック事後確率は事前に全て計算しておくことが可能であるため，
+本手法の適用は比較的高速に行うことが可能である．
+本節で述べた手法は，\ref{sec:topicfeature}節のトピック素性をハード制約として用いた場合と捉えることができる．
+
+
+
+
+
+
+\section{実験}
+
+\subsection{実験条件}
+
+本節では提案手法の有効性を示すために，少量のシードエンティティから
+の新規エンティティ獲得精度を比較し，
+その結果についての考察を行う．
+
+
+実験には2008年5月の日本語ブログ約3000万記事を用いた．
+単語及び固有表現を処理単位として素性に変換しており（以後簡単のため固有表現を含めて単語と呼ぶ），
+形態素解析にはJTAG \cite{Fuchi98} を，
+IREX定義に基づく固有表現抽出器には最小誤り分類基準に基づくCRFを用いた \cite{suzuki2006training}．
+素性を獲得する素性テンプレートとしては``(head) \textit{entity} (mid.) \textit{attribute} (tail)''を用いた．
+head, mid. tailに位置する各単語は表層，品詞，固有表現ラベルに対し，その位置情報を付加した上で素性に変換する．
+文脈のウインドウサイズ ($|head|,|mid|,|tail|$) はそれぞれ最大で2単語とし，
+素性は正例，負例を通じて最低5回以上出現しているものを用いた．
+
+\begin{table}[b]
+\caption{シードエンティティ及び正例属性}
+\label{table:seed}
+\input{03table01.txt}
+\end{table}
+
+
+本節では「車名」「番組名」「スポーツ組織名」の3つのドメインを対象に実験を行う．
+一回の繰り返しで獲得するエンティティ種類数は $100$ 種類とし， 合計10回の繰り返しを経て，最終的に1000種類の新規エンティティを獲得する．
+シードとしたエンティティと属性を表\ref{table:seed}に示す．正例属性はシードエンティティとのPMIの高いものから順に10個を選択したが，番組名においては，属性として明らかにふさわしくないと判断したものを主観的に除去した（「この間」と「さっき」）．
+識別器には$SVM^{light}$ \cite{joachims1999making} の2次多項式カーネルを用いた．
+
+
+トピックモデルの学習と適応にはMessage Passing Interface (MPI) で LDA を利用できる Parallel LDA を用い \cite{liu2011plda}，
+トピック数100のLDAを学習，適応した．
+トピックモデルの学習コーパスは，本実験で用いる2008年5月のブログコーパス31日分のうち，14日分の記事約1400万記事を用いた．
+予備実験の検討より，学習におけるマルコフ連鎖モンテカルロ法のサンプリング回数は200回とし，うち50回を初期値への依存を弱めるための burn-in として用いた．
+
+
+
+実験条件として以下の4条件に基づいて実験を行った．
+\begin{itemize}
+\item{1. ベースライン：\ref{sec:baseline}節で述べたものに相当する}
+\item{2. ベースラインにトピック素性を追加した手法}
+\item{3. 2.に対し負例生成法を追加した手法}
+\item{4. 3.に対し正例の多義性解消法を追加した手法（図\ref{fig:structure}の全破線矢印部に一致）}
+\end{itemize}
+システムが獲得した1000個のエンティティについて，2人の評価者が商用検索エンジンを用いて検索し，エンティティと各ドメイン名のAND検索の検索結果上位40件中に，シードエンティティと同じ使い方をされているものが存在するか否かという観点で，正解または不正解のラベルを付与した．
+また獲得された単語のうち，固有表現抽出器が誤って獲得した固有表現以外の単語（例えば「番組名」における「月9」等）については不正解とした．
+評価者間の $\kappa$ 値は $0.895$ であった． 
+2人の評価者間で評価が異なった場合，第3の評価者が評価を行い，その評価を正しい評価として用いた．
+
+
+\subsection{実験結果と考察}
+
+表\ref{table:result}に各ドメイン毎の実験結果を示す．
+表中の値は精度と有意差を表している．
+トピック素性を用いた手法2.においては，車名とスポーツ組織名のドメインにおいて改善を示している．
+
+\begin{table}[b] 
+\hangcaption{
+3ドメインにおける各手法による評価．太字で示している数値は直前行の結果と二項検定を行い， $5\%$ の有意差水準において有意に差があったものを示している．斜体は同 $10\%$ での有意差水準の場合}
+\label{table:result}
+\input{03table02.txt}
+\end{table}
+
+また負例生成法は車名と番組名のドメインにおいて改善を示している．
+これは，負例生成法が偽負例を選択するリスクを低減させたことが要因の1つと考えられる．
+同様に正例の多義性解消法においても車名と番組名において精度の改善を示している．
+スポーツ組織名のドメインにおいてはトピック素性を追加した場合に明らかな改善が見られたものの，ある程度の改善がなされてしまったために，他の2つの手法による改善は見られなかった．
+車名における精度が他のドメインより低いのは，「バイク名」のような比較的近い意味のエンティティが獲得されたことに起因する．
+これら似たドメインというのは，文脈的特徴が似ているだけでなく，トピックによる特徴も近くなったためと考える．
+
+\begin{table}[b] 
+\hangcaption{$z_h$, $z_l$, $z_e$の3トピックに属する特徴的な単語．獲得対象となるドメインに対し，$z_h$ は最も近い（$PT(z)$が最も高い）トピック，$z_l$ は最も遠い（$PT(z)$が最も低い）トピックを表す． $z_e$ は負例生成で選ばれる負のトピックの1つを表しており，ベースラインを用いた場合の結果に見られるエンティティのセマンティックドリフト（3行目）を抑えることに効果があったことを示している}
+\label{table:real_topic}
+\input{03table03.txt}
+\end{table}
+
+提案手法が有効に機能した結果，ベースラインにおいて生じていたセマンティックドリフトが軽減されたということを示すため，ターゲットドメインに近いトピックと遠いトピックに属する単語を表\ref{table:real_topic}に挙げる．
+表\ref{table:real_topic}は以下に定義される正のトピック$z_h$と負のトピック$z_l$, $z_e$に属する特徴的な単語を示している．
+\begin{itemize}
+\item{$z_h$ （2行目） $PT(z)$が最大となるトピックであり，正のトピックとして用いられる．}
+\item{$z_e$ （4行目） ベースラインにおいて観察されるエンティティのセマンティックドリフトを抑えるのに効果があったトピック．$PT(z)$ の大きい順にソートした際に下位半分に現れる負のトピックの1つから選択したトピック．
+}
+\item{$z_l$ （5行目） $PT(z)$を最小とするトピックであり，負のトピックとして用いられる．}
+\end{itemize}
+各トピックにおける特徴単語として，スコア$p(v|z)/p(v)$が最も高くなる3単語を選択した．
+ここで$p(v|z)$はLDAにおけるモデルパラメータ，$p(v)$は単語$v$のユニグラム確率であり，コーパス全体からの単純な最尤推定で求められる．
+
+
+正例の多義性解消法が有効に機能するためには，
+正のトピック$z_h$が対象ドメインに近い必要がある．
+反対に負例生成法が有効に機能するためには，下位半分のトピックに含まれるトピック $z_l$, $z_e$ が対象ドメインから遠い必要がある．
+表\ref{table:real_topic}を見ると，このいずれもを満たしていることが確認できる．
+例えば表中「車名」において，最も近いトピックには「車検」という単語等を含み，最も遠いトピックには「内科」という単語を含んでいるため，対象ドメインに対しそれぞれ近い単語，遠い単語が選ばれていると言える．
+さらに効果的な負のトピックとして，電子機器のトピックが選ばれているために，ベースラインにおいて獲得された「iPod」等の単語が提案手法では獲得されなかった．
+この傾向は「車名」以外のドメインにおいても確認でき，提案手法の語彙獲得精度の向上に繋がった要因であると考えられる．
+
+
+\section{関連研究}
+
+先行研究においては，文書/文レベルの全ての単語を素性とした分布類似度を用いたアプローチ (distributional approach) が提案されている \cite{pantel2009web}．
+これらの手法は大域的情報を用いた手法とみなすことができるが，単語の素性空間は非常に多次元かつ疎な空間であり，データ量が増えた場合においてもこの問題を完全に解消することはできない．
+我々の手法はトピック情報という中間的な単位に落とし込むことでこれらの問題を解消する．
+
+
+我々が用いたトピックモデルは一種の確率的クラスタリングモデルであるので，
+エンティティ獲得にクラスタリング情報を用いた先行研究として
+Pa\c{s}caらの研究を挙げて比較する \cite{pasca2008weakly}．
+Pa\c{s}caらはエンティティの獲得だけでなく，
+周辺文脈をクラスタリングし，その中からクラスを代表するにふさわしい
+単語を選択してクラス名として定義する．
+さらに検索クエリログを用いて，当該クラス内のエンティティと共に用いられるクエリを当該クラスの属性であるとする，「クラス，エンティティ，属性」の3つ組を取得する手法を提案している．
+Pa\c{s}caらの手法ではクラスタリングを用いているものの，クラスタリング対象範囲は周辺の文脈にとどまる．
+これに対し我々の手法は文書全体からトピックを推定する点で，より広域な情報を取り入れることができる．
+また提案手法は語彙獲得の目的に特化させるため，
+Pa\c{s}caらで用いられていたクラス名を，
+エンティティの候補が対象クラスに属するか否かを判定するための属性の1つ（``is-a''の属性）として扱う．
+属性をクラス名のみに絞った方が適合率は高くなると考えられるが，
+局所的な文脈中にはクラス名が存在しない場合も多い．
+例えば書籍の場合，書籍タイトルの前後に「本」や「書籍」といったクラスを表わす単語が共起することは少ない．
+このため，他の属性と併用することで，より高精度かつ網羅的なエンティティ獲得が可能となる．
+
+トピックモデルを用いた関連研究として，selectional preferences をモデル化するために，LDAを拡張した生成モデルを利用したRitterらの研究が挙げられる \cite{ritter2010}．
+Ritter らの手法は我々の手法に最も近いものと言えるが，生成モデルであるか識別モデルであるかの違いがあり，局所的文脈素性と柔軟に統合できるという点で我々のモデルには優位性がある．
+
+
+\ref{sec:negative}節で述べた負例生成は，正例とラベルなしデータのみが存在する場合においての主要な問題と捉えられている \cite{liu2002partially,li2010negative}．
+しかし先行研究における手法はある程度の規模の正例データを想定しており，
+非常に少量な正例データについては有効に機能しないと考えられる．
+これに対し，本稿では少量の正例データからでも適切に負例を生成可能な手法を提案した．
+一方McIntosh は，複数クラスの語彙獲得タスクにおいて獲得されたエンティティが，シードエンティティよりもそれ以降のイテレーションに得られたエンティティ集合に近い場合に負例であると自動的に判定し，さらに負例のクラスタリングと拡張を行うことで，適切な負例集合を得る手法を提案している \cite{mcintosh2010unsupervised}．
+またKiso らは単語の共起関係をグラフ上で表現し，
+HITSスコアの高い単語が正例に該当しない場合はそれらをストップリストとして用いることで，セマンティックドリフトを抑える手法を提案している \cite{kiso2011hits}．
+McIntoshやKisoらの手法が，セマンティックドリフトを生じやすい単語を直接的に負例として捉えることを主眼としているのに対し，我々はセマンティックドリフトが生じる先のトピックに制約を設ける目的で負例を捉えるという点で異なる．
+特にMcIntoshの手法では，セマンティックドリフトを抑える効果の高い負例を抽出できる可能性が高い反面，本来の正例が負例になってしまう偽負例を生じる可能性がある．
+本稿ではセマンティックドリフトを生じやすい単語，言いかえると正例・負例両方の多義性が存在する単語の場合，\ref{sec:tpc_sel}節のトピック情報による多義性解消を併用することで，負例として当該単語が用いられている事例では，正例としても負例としても用いないという判断を行っている．
+一方正例として当該単語が用いられている事例では，正例学習データとして用いることで，学習データを可能な限り増やしていくというブートストラップ法の観点に見合った手法となっている．
+
+
+本稿ではリソースとして文書集合を用いたが，一方でクエリログを用いたエンティティ獲得の研究も進められている．
+小町らはクエリログ中に共起する単語をエンティティ及び属性とみなし，ブートストラップ法に基づくエンティティ獲得法の提案を行っている \cite{小町08}．
+クエリログを使った他の手法としては，他にもSekineらの研究 \cite{sekine2007acquiring} やPa\c{s}caらの研究 \cite{pasca2008weakly} が挙げられる．
+しかし，クエリログ単独ではトピックのような大域的な文脈を考慮することができず，また，非公開で一般的に入手が困難なリソースであるという現実的な側面もある．
+我々はこれらの観点から文書をリソースとして用いることとした．
+
+
+
+\section{まとめと今後の課題}
+
+本稿ではトピック情報を用いた3通りの手法により，エンティティ獲得精度を改善できることを示した．
+従来の識別モデルを用いたブートストラップ法の課題であった，
+大域的情報を取り込んだ素性の設計，教師データにおける負例の生成，
+正例教師データにおける多義性を持ったエンティティの存在といった諸問題を，トピックモデルから得られるトピック情報を用いることで解消した．
+今後のさらなる獲得精度向上のためには，トピックモデルの粒度を目的のドメインに合わせていくことが必要である．
+このためにはトピックモデルに対する能動学習が有効であると考える \cite{Hu2011}．
+また関連研究の1つとして挙げた分布類似度を用いたアプローチ \cite{pantel2009web} との比較や統合についても検証する必要もある．
+別の観点としては，ブートストラップ法のグラフ理論的な拡張があげられる．
+小町らはエンティティ獲得のアルゴリズムをグラフ理論に基づいて解釈し，グラフカーネルの一種であるラプラシアンカーネルを導入することで性能を改善している \cite{小町10}．
+トピックモデルを扱えるグラフ理論に基づく枠組みとしては，Cohnら提案したPHITSがあり \cite{cohn2000learning}，彼らの考えを導入することができれば，より高い精度のエンティティ獲得法を構築できると考える．
+
+
+
+
+
+\acknowledgment
+
+本研究の一部は，\textit{the 49th Annual Meeting of the Association for Computational Linguistics: Human Language Technologies} で発表したものである\cite{sadamitsu2011}．本論文に関して，非常に有益なコメントを頂いた査読者の方々に感謝の意を表する．
+
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Bellare, Talukdar, Kumaran, Pereira, Liberman, McCallum,
+  \BBA\ Dredze}{Bellare et~al.}{2006}]{bellare2007lightly}
+Bellare, K., Talukdar, P.~P., Kumaran, G., Pereira, F., Liberman, M., McCallum,
+  A., \BBA\ Dredze, M. \BBOP 2006\BBCP.
+\newblock \BBOQ {Lightly-supervised attribute extraction}.\BBCQ\
+\newblock In {\Bem Proceedings of the Advances in Neural Information Processing
+  Systems Workshop on Machine Learning for Web Search}.
+
+\bibitem[\protect\BCAY{Blei, Ng, \BBA\ Jordan}{Blei
+  et~al.}{2003}]{blei2003latent}
+Blei, D.~M., Ng, A.~Y., \BBA\ Jordan, M.~I. \BBOP 2003\BBCP.
+\newblock \BBOQ {Latent dirichlet allocation}.\BBCQ\
+\newblock {\Bem The Journal of Machine Learning Research}, {\Bbf 3},
+  \mbox{\BPGS\ 993--1022}.
+
+\bibitem[\protect\BCAY{Cohn \BBA\ Chang}{Cohn \BBA\
+  Chang}{2000}]{cohn2000learning}
+Cohn, D.\BBACOMMA\ \BBA\ Chang, H. \BBOP 2000\BBCP.
+\newblock \BBOQ {Learning to probabilistically identify authoritative
+  documents}.\BBCQ\
+\newblock In {\Bem Proceedings of the 17th International Conference on Machine
+  Learning}, \mbox{\BPGS\ 167--174}.
+
+\bibitem[\protect\BCAY{Fuchi \BBA\ Takagi}{Fuchi \BBA\ Takagi}{1998}]{Fuchi98}
+Fuchi, T.\BBACOMMA\ \BBA\ Takagi, S. \BBOP 1998\BBCP.
+\newblock \BBOQ {Japanese morphological analyzer using word
+  co-occurrence-JTAG}.\BBCQ\
+\newblock In {\Bem Proceedings of the 36th Annual Meeting of the Association
+  for Computational Linguistics and 17th International Conference on
+  Computational Linguistics}, \mbox{\BPGS\ 409--413}.
+
+\bibitem[\protect\BCAY{Griffiths \BBA\ Steyvers}{Griffiths \BBA\
+  Steyvers}{2004}]{Griffiths2004fst}
+Griffiths, T.~L.\BBACOMMA\ \BBA\ Steyvers, M. \BBOP 2004\BBCP.
+\newblock \BBOQ {Finding scientific topics}.\BBCQ\
+\newblock {\Bem Proceedings of the National Academy of Sciences of the United
+  States of America}, {\Bbf 101 Suppl}  (Suppl 1), \mbox{\BPGS\ 5228--5235}.
+
+\bibitem[\protect\BCAY{Hofmann}{Hofmann}{1999}]{hofmann1999probabilistic}
+Hofmann, T. \BBOP 1999\BBCP.
+\newblock \BBOQ {Probabilistic latent semantic indexing}.\BBCQ\
+\newblock In {\Bem Proceedings of the 22nd annual international ACM SIGIR
+  conference on Research and development in information retrieval},
+  \mbox{\BPGS\ 50--57}.
+
+\bibitem[\protect\BCAY{Hu \BBA\ Boyd-graber}{Hu \BBA\
+  Boyd-graber}{2011}]{Hu2011}
+Hu, Y.\BBACOMMA\ \BBA\ Boyd-graber, J. \BBOP 2011\BBCP.
+\newblock \BBOQ {Interactive topic modeling}.\BBCQ\
+\newblock In {\Bem Proceedings of the 49th Annual Meeting of the Association
+  for Computational Linguistics: Human Language Technologies}, \mbox{\BPGS\
+  248--257}.
+
+\bibitem[\protect\BCAY{Joachims}{Joachims}{1999}]{joachims1999making}
+Joachims, T. \BBOP 1999\BBCP.
+\newblock {\Bem {Making large-Scale SVM Learning Practical. Advances in Kernel
+  Methods---Support Vector Learning}}.
+\newblock Software available at http://svmlight.joachims.org/.
+
+\bibitem[\protect\BCAY{Kiso, Shimbo, Komachi, \BBA\ Matsumoto}{Kiso
+  et~al.}{2011}]{kiso2011hits}
+Kiso, T., Shimbo, M., Komachi, M., \BBA\ Matsumoto, Y. \BBOP 2011\BBCP.
+\newblock \BBOQ {HITS-based seed selection and stop list construction for
+  bootstrapping}.\BBCQ\
+\newblock In {\Bem Proceedings of the 49th Annual Meeting of the Association
+  for Computational Linguistics: Human Language Technologies}, \mbox{\BPGS\
+  30--36}.
+
+\bibitem[\protect\BCAY{Li, Liu, \BBA\ Ng}{Li et~al.}{2010}]{li2010negative}
+Li, X.-L., Liu, B., \BBA\ Ng, S.-K. \BBOP 2010\BBCP.
+\newblock \BBOQ {Negative training data can be harmful to text
+  classification}.\BBCQ\
+\newblock In {\Bem Proceedings of the 2010 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 218--228}.
+
+\bibitem[\protect\BCAY{Liu, Lee, Yu, \BBA\ Li}{Liu
+  et~al.}{2002}]{liu2002partially}
+Liu, B., Lee, W.~S., Yu, P.~S., \BBA\ Li, X. \BBOP 2002\BBCP.
+\newblock \BBOQ {Partially supervised classification of text documents}.\BBCQ\
+\newblock In {\Bem Proceedings of the 19th International Conference on Machine
+  Learning}, \mbox{\BPGS\ 387--394}.
+
+\bibitem[\protect\BCAY{Liu, Zhang, Chang, \BBA\ Sun}{Liu
+  et~al.}{2011}]{liu2011plda}
+Liu, Z., Zhang, Y., Chang, E.~Y., \BBA\ Sun, M. \BBOP 2011\BBCP.
+\newblock \BBOQ {PLDA}+: Parallel Latent Dirichlet Allocation with Data
+  Placement and Pipeline Processing.\BBCQ\ {\itshape ACM Transactions on
+  Intelligent Systems and Technology, special issue on Large Scale Machine
+  Learning}. Software available at http://code.google.com/p/plda.
+
+\bibitem[\protect\BCAY{McIntosh}{McIntosh}{2010}]{mcintosh2010unsupervised}
+McIntosh, T. \BBOP 2010\BBCP.
+\newblock \BBOQ {Unsupervised discovery of negative categories in lexicon
+  bootstrapping}.\BBCQ\
+\newblock In {\Bem Proceedings of the 2010 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 356--365}.
+
+\bibitem[\protect\BCAY{Mintz, Bills, Snow, \BBA\ Jurafsky}{Mintz
+  et~al.}{2009}]{mintz2009distant}
+Mintz, M., Bills, S., Snow, R., \BBA\ Jurafsky, D. \BBOP 2009\BBCP.
+\newblock \BBOQ {Distant supervision for relation extraction without labeled
+  data}.\BBCQ\
+\newblock In {\Bem Proceedings of the Joint Conference of the 47th Annual
+  Meeting of the Association for Computational Linguistics and the 4th
+  International Joint Conference on Natural Language Processing of the Asian
+  Federation of Natural Language Processing}, \mbox{\BPGS\ 1003--1011}.
+
+\bibitem[\protect\BCAY{Pa\c{s}ca \BBA\ Durme}{Pa\c{s}ca \BBA\
+  Durme}{2008}]{pasca2008weakly}
+Pa\c{s}ca, M.\BBACOMMA\ \BBA\ Durme, B.~V. \BBOP 2008\BBCP.
+\newblock \BBOQ {Weakly-supervised acquisition of open-domain classes and class
+  attributes from web documents and query logs}.\BBCQ\
+\newblock In {\Bem Proceedings of the 46th Annual Meeting of the Association
+  for Computational Linguistics}, \mbox{\BPGS\ 19--27}.
+
+\bibitem[\protect\BCAY{Pantel, Crestan, Borkovsky, Popescu, \BBA\ Vyas}{Pantel
+  et~al.}{2009}]{pantel2009web}
+Pantel, P., Crestan, E., Borkovsky, A., Popescu, A.-M., \BBA\ Vyas, V. \BBOP
+  2009\BBCP.
+\newblock \BBOQ {Web-scale distributional similarity and entity set
+  expansion}.\BBCQ\
+\newblock In {\Bem Proceedings of the 2009 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 938--947}.
+
+\bibitem[\protect\BCAY{Pantel \BBA\ Pennacchiotti}{Pantel \BBA\
+  Pennacchiotti}{2006}]{pantel2006espresso}
+Pantel, P.\BBACOMMA\ \BBA\ Pennacchiotti, M. \BBOP 2006\BBCP.
+\newblock \BBOQ {Espresso: Leveraging generic patterns for automatically
+  harvesting semantic relations}.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on
+  Computational Linguistics and the 44th Annual Meeting of the Association for
+  Computational Linguistics}, \mbox{\BPGS\ 113--120}.
+
+\bibitem[\protect\BCAY{Ritter \BBA\ Etzioni}{Ritter \BBA\
+  Etzioni}{2010}]{ritter2010}
+Ritter, A.\BBACOMMA\ \BBA\ Etzioni, O. \BBOP 2010\BBCP.
+\newblock \BBOQ {A Latent dirichlet allocation method for selectional
+  preferences}.\BBCQ\
+\newblock In {\Bem Proceedings of the 48th Annual Meeting of the Association
+  for Computational Linguistics}, \mbox{\BPGS\ 424--434}.
+
+\bibitem[\protect\BCAY{Sadamitsu, Saito, Imamura, \BBA\ Kikui}{Sadamitsu
+  et~al.}{2011}]{sadamitsu2011}
+Sadamitsu, K., Saito, K., Imamura, K., \BBA\ Kikui, G. \BBOP 2011\BBCP.
+\newblock \BBOQ {Entity set expansion using topic information}.\BBCQ\
+\newblock In {\Bem Proceedings of the 49th Annual Meeting of the Association
+  for Computational Linguistics: Human Language Technologies}, \mbox{\BPGS\
+  726--731}.
+
+\bibitem[\protect\BCAY{Sarmento, Jijkuon, Rijke, \BBA\ Oliveira}{Sarmento
+  et~al.}{2007}]{sarmento2007more}
+Sarmento, L., Jijkuon, V., Rijke, M.~D., \BBA\ Oliveira, E. \BBOP 2007\BBCP.
+\newblock \BBOQ {More like these: growing entity classes from seeds}.\BBCQ\
+\newblock In {\Bem Proceedings of the 16th ACM Conference on Information and
+  Knowledge Management}, \mbox{\BPGS\ 959--962}.
+
+\bibitem[\protect\BCAY{Sekine}{Sekine}{2008}]{sekine2008extended}
+Sekine, S. \BBOP 2008\BBCP.
+\newblock \BBOQ {Extended named entity ontology with attribute
+  information}.\BBCQ\
+\newblock In {\Bem Proceedings of the 6th International Language Resources and
+  Evaluation}.
+
+\bibitem[\protect\BCAY{Sekine \BBA\ Suzuki}{Sekine \BBA\
+  Suzuki}{2007}]{sekine2007acquiring}
+Sekine, S.\BBACOMMA\ \BBA\ Suzuki, H. \BBOP 2007\BBCP.
+\newblock \BBOQ {Acquiring ontological knowledge from query logs}.\BBCQ\
+\newblock In {\Bem Proceedings of the 16th International Conference on World
+  Wide Web}, \mbox{\BPGS\ 1223--1224}.
+
+\bibitem[\protect\BCAY{Suzuki, McDermott, \BBA\ Isozaki}{Suzuki
+  et~al.}{2006}]{suzuki2006training}
+Suzuki, J., McDermott, E., \BBA\ Isozaki, H. \BBOP 2006\BBCP.
+\newblock \BBOQ {Training conditional random fields with multivariate
+  evaluation measures}.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on
+  Computational Linguistics and the 44th Annual Meeting of the Association for
+  Computational Linguistics}, \mbox{\BPGS\ 217--224}.
+
+\bibitem[\protect\BCAY{Thelen \BBA\ Riloff}{Thelen \BBA\
+  Riloff}{2002}]{thelen2002bootstrapping}
+Thelen, M.\BBACOMMA\ \BBA\ Riloff, E. \BBOP 2002\BBCP.
+\newblock \BBOQ {A bootstrapping method for learning semantic lexicons using
+  extraction pattern contexts}.\BBCQ\
+\newblock In {\Bem Proceedings of the 2002 Conference on Empirical Methods in
+  Natural Language Processing}, \mbox{\BPGS\ 214--221}.
+
+\bibitem[\protect\BCAY{Vyas, Pantel, \BBA\ Crestan}{Vyas
+  et~al.}{2009}]{vyas2009helping}
+Vyas, V., Pantel, P., \BBA\ Crestan, E. \BBOP 2009\BBCP.
+\newblock \BBOQ {Helping editors choose better seed sets for entity set
+  expansion}.\BBCQ\
+\newblock In {\Bem Proceeding of the 18th ACM Conference on Information and
+  Knowledge Management}, \mbox{\BPGS\ 225--234}.
+
+\bibitem[\protect\BCAY{小町\JBA 鈴木}{小町\JBA 鈴木}{2008}]{小町08}
+小町守\JBA 鈴木久美 \BBOP 2008\BBCP.
+\newblock {検索ログからの半教師あり意味知識獲得の改善}.\
+\newblock \Jem{人工知能学会論文誌}, {\Bbf 23}  (3), \mbox{\BPGS\ 217--225}.
+
+\bibitem[\protect\BCAY{小町\JBA 工藤\JBA 新保\JBA 松本}{小町 \Jetal
+  }{2010}]{小町10}
+小町守\JBA 工藤拓\JBA 新保仁\JBA 松本裕治 \BBOP 2010\BBCP.
+\newblock { Espresso
+  型ブートストラッピング法における意味ドリフトのグラフ理論に基づく分析}.\
+\newblock \Jem{人工知能学会論文誌}, {\Bbf 25}  (2), \mbox{\BPGS\ 233--242}.
+
+\bibitem[\protect\BCAY{廣嶋\JBA 大附\JBA 林}{廣嶋 \Jetal }{2004}]{廣嶋2004}
+廣嶋伸章\JBA 大附克年\JBA 林良彦 \BBOP 2004\BBCP.
+\newblock 関連語彙獲得に基づく認識辞書のオフライン教師なし適応.\
+\newblock \Jem{情報処理学会研究報告 (SIG-SLP), 74号}, \mbox{\BPGS\ 107--114}.
+
+\bibitem[\protect\BCAY{橋本\JBA 乾\JBA 村上}{橋本 \Jetal }{2008}]{橋本08}
+橋本泰一\JBA 乾孝司\JBA 村上浩司 \BBOP 2008\BBCP.
+\newblock {拡張固有表現タグ付きコーパスの構築}.\
+\newblock \Jem{情報処理学会研究報告 (SIG-NLP), 113号}, \mbox{\BPGS\ 113--120}.
+
+\bibitem[\protect\BCAY{橋本\JBA 中村}{橋本\JBA 中村}{2010}]{橋本10}
+橋本泰一\JBA 中村俊一 \BBOP 2010\BBCP.
+\newblock
+  {拡張固有表現タグ付きコーパスの構築—白書，書籍，Yahoo!知恵袋コアデータ}.\
+\newblock \Jem{言語処理学会第16回年次大会}, \mbox{\BPGS\ 916--919}.
+
+\end{thebibliography}
+
+
+\begin{biography}
+\bioauthor{貞光　九月}{
+2004年 筑波大学第三学群情報学類卒業．2009年 同大学大学院博士課程修了．
+同年日本電子電話株式会社入社．現在，NTTサイバースペース研究所 研究員．
+自然言語処理の研究に従事．言語処理学会，情報処理学会各会員
+}
+\bioauthor{齋藤　邦子}{
+1996年 東京大学理学部化学科卒業．1998年 同大学院修士課程修了．
+同年日本電信電話株式会社入社．現在，NTTサイバースペース研究所
+主任研究員．自然言語処理研究開発に従事．
+言語処理学会，情報処理学会各会員．
+}
+\bioauthor{今村　賢治}{
+1985年 千葉大学工学部電気工学科卒業．
+同年日本電信電話株式会社入社．
+1995年--1998年 NTTソフトウェア株式会社．
+2000年--2006年 ATR音声言語コミュニケーション研究所．
+2006年よりNTTサイバースペース研究所主任研究員．現在に至る．
+主として自然言語処理の研究・開発に従事．博士（工学）．
+電子情報通信学会，情報処理学会，言語処理学会，ISCA各会員．
+}
+\bioauthor{松尾　義博}{
+1988年 大阪大学理学部物理学科卒．1990年 同大大学院研究科博士前期課程修
+了．同年日本電信電話（株）入社．機械翻訳，自然言語処理の研究に従事．情
+報処理学会，言語処理学会，各会員．
+}
+\bioauthor{菊井玄一郎}{
+1984年 京都大学工学部電気工学科卒．1986年 同大学大学院工学研究科
+修士課程電気工学第二専攻修了．同年日本電信電話(NTT)入社．1990--1994
+（株）国際電気通信基礎技術研究所(ATR)．2001年ATR音声言語コミュニケーショ
+ン研究所研究室長．2006年NTT サイバースペース研究所音声・言語基盤技術
+グループリーダ．2011年岡山県立大学情報工学部情報システム工学科教授．
+現在に至る．博士（情報学）．言語処理学会，情報処理学会，音響学会各会員．
+}
+
+\end{biography}
+
+
+\biodate
+
+
+
+\end{document}

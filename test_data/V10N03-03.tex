@@ -1,0 +1,1427 @@
+
+\documentstyle[jnlpbbl,epsf]{jnlp_j_b5}
+
+\newsavebox{\mykern}
+\sbox{\mykern}{\kern-.5zw}
+
+\setcounter{page}{39}
+\setcounter{巻数}{10}
+\setcounter{号数}{3}
+\setcounter{年}{2003} 
+\setcounter{月}{4}
+\受付{2002}{4}{30}
+\再受付{2002}{7}{19}
+\採録{2002}{7}{29}
+
+\setcounter{secnumdepth}{2}
+
+\title{文脈素性のベクタ空間モデルを用いた日英翻訳選択\\
+       {\large --- S{\normalsize ENSEVAL}-2 日本語翻訳タスク
+       参加システムの開発 ---}}
+\author{熊野 正\affiref{ATR} \and
+        柏岡 秀紀\affiref{ATR} \and 田中 英輝\affiref{ATR}}
+
+\headauthor{熊野，柏岡，田中}
+\headtitle{文脈素性のベクタ空間モデルを用いた日英翻訳選択}
+
+\affilabel{ATR}{ATR音声言語コミュニケーション研究所}
+{ATR Spoken Language Translation Research Laboratories}
+
+\jabstract{
+{\sc Senseval}-2 日本語翻訳タスクは，
+日本語単語の語義をその訳語の異なりとして定義・分類し，
+新たな表現に含まれる日本語単語の語義を判別する課題である．
+実際の課題としては，語義分類の定義として日英対訳用例を収集した
+翻訳メモリ（TM）が与えられ，語義の選択は TM 中から適切な用例を選択するか，
+対象となる日本語単語の翻訳結果を示すことで解くことができる．
+我々は，
+入力表現の対象語周辺文脈が最も似ている TM の
+日本語表現を選択する単言語の問題と見なし，
+本タスクを解くシステムを開発した．
+対象語周辺文脈の類似度は，
+対象語周辺文脈を特徴づける要素である
+「文脈素性」の出現を各次元に配置した「文脈素性ベクタ」を用い，
+ベクタ空間モデルを用いて計算する．
+文脈素性は，対象語周辺文脈の特徴を，
+対象語との構文的/位置的関係と単語の形態的/意味的属性の組で
+表現したもので，これにより，TM 表現間の文脈の違いを詳細に表現できる．
+{\sc Senseval}-2 参加システムは，
+形態素・構文解析器に JUMAN+KNP，シソーラスに日本語彙体系を用い，
+精度・再現率はともに 45.8\,\% を達成した．
+各素性の有効性について分析した結果，
+シソーラスから得た意味属性に関する文脈素性が性能に最も寄与しており，
+係り受けに関する素性は限定的にしか寄与していないことがわかった．
+}
+
+\jkeywords{翻訳選択，多義解消，ベクタ空間モデル，{\sc Senseval}-2 日本語翻訳タスク}
+
+\etitle{Japanese-English Translation Selection\\
+ Using Vector Space Model}
+
+\eauthor{Tadashi Kumano\affiref{ATR} \and 
+Hideki Kashioka\affiref{ATR} \and Hideki Tanaka\affiref{ATR}}
+
+\eabstract{
+In the {\sc Senseval}-2 Japanese task, senses of Japanese words are
+defined with respect to differences from their English translations.
+The Translation Memory (TM) that has pairs of their Japanese expressions
+and their English translations included on target Japanese words can be
+treated as sense categorization. 
+Each translation of a given Japanese expression including the target
+word is categorized by selecting an appropriate Japanese expression from
+the TM.
+We can consider the task to be the mono-lingual problem of selecting
+the Japanese expression having the most similar context among candidate
+Japanese expressions in TM.
+We developed the system that tackles the task by calculating the
+similarity context of words co-occuring with the target word.
+The system calculates the similarity between the input expression and
+TM expressions from ``context feature vectors'' 
+which characterize context words co-occurring with the target word, 
+in each dimension, using the vector space model.
+Context attributes represent context word information as the
+combination of the syntactic/distance relation to the target word and
+the morphological/semantic attributes of the context word itself.
+They enable us to handle various context characteristics in a unified
+manner.
+The system participating in {\sc Senseval}-2 achieved a precision
+and recall of 45.8\,\%,
+using JUMAN+KNP as morphological/syntactic analyzer and NIHONGO
+GOI TAIKEI as thesaurus.
+The result shows that the semantic attributes of context words make
+the greatest contribution to the performance, and that those of the
+dependency relation make a limited contribution.
+}
+
+\ekeywords{translation selection, disambiguation, vector space model,
+S{\scriptsize\it ENSEVAL}-2 Jap\-a\-nese translation task}
+
+
+\begin{document}
+\thispagestyle{empty}
+\maketitle
+
+
+
+
+
+
+\section{はじめに}
+単語の意味を判別し，多義曖昧性を解消する技術（語義曖昧性解消;
+Word Sense Disambiguation）は，
+機械翻訳や情報検索，意味・構文解析など，
+自然言語処理のあらゆる分野において必要である\cite{ide:98}．
+これは一般に，テキストに現れた単語の語義が
+辞書などであらかじめ与えられた複数の語義の
+いずれに該当するかを判定する分類問題である．
+ただし，曖昧性解消をどのような応用に利用するかに依存して，
+どのような語義分類を与えるのが適切であるかは異なる．
+そして，分類の粒度や語義定義の与え方に応じて，
+最適な分類手法は異なってくることが予想される．
+それゆえ，具体的な応用に沿った語義曖昧性解消課題を設定して
+解決手法を研究することは有用である．
+
+2001年に開催された
+語義曖昧性解消国際コンテスト {\sc Senseval}-2\footnote{
+cf.\ {\tt http://www.sle.sharp.co.uk/senseval2/}
+}\
+では，
+このような考え方に基づき，日本語翻訳タスクが実施された．
+本タスクは，
+日本語単語（対象語）320語に対して，1語あたり約20の日英対訳用例を
+収集した翻訳メモリ
+を語義分類の定義と見なし，
+新たな日本語表現に含まれる対象語の語義を
+翻訳メモリ中の適切な用例を選択することで
+分類する課題である\cite{kurohashi:01a}．
+
+各対象語の語義分類は，翻訳メモリとして収集された日英の表現対であるが，
+語義を決定している重要な要因が日本語表現に現れる周辺文脈であると
+みなすことにより単言語の語義曖昧性解消課題と捉えることができる．
+この種の問題は，一般に，
+正解タグを付与した訓練データを用い，
+各分類に属する表現例の対象語周辺文脈の性質を
+機械学習によって獲得することで解決できる．
+正解タグを付与した訓練データの作成のために，
+さまざまな全自動/半自動の訓練データ構築手法が
+提案されてきた\cite{dagan:94,yarowsky:95,karov:98}．
+
+しかし，本タスクには，以下のような問題点がある．
+\begin{itemize}
+ \item 翻訳メモリ中には，各語義分類ごとに1つしか
+       正解例が与えられない．
+       また，正解タグを付与した
+       訓練データも（タスクの配布物としては）与えられない．
+ \item 翻訳メモリ中の表現は，
+       （人間の感覚で）最低限語義を分別できる程度の，
+       たかだか数語の文脈しか持たない．
+ \item 語義分類間の違いがしばしば非常に微妙である．
+\end{itemize}
+本タスクでは，上記の問題点のため，
+正解例を機械的に拡張するための手がかりは乏しく，
+これを精度よく行うことは難しい．
+
+このため，我々は，
+入力表現を直接的に翻訳メモリの各日本語表現と比較して
+表現間の類似度を計算し，用例を選択する手法を採用した．
+我々は，情報抽出や文書分類の分野でよく用いられる
+ベクタ空間モデル（Vector Space Model
+）による
+文書間比較\cite{salton:83} の手法に着目し，
+Sch\"utze による，
+目的語の近傍に出現する単語の情報をベクタ（共起ベクタ）に表現して
+共起ベクタ間の余弦値を類似度の尺度とする
+手法\cite{schutze:97} を用いた．
+ベクタ空間モデルでは，通常，ベクタの各次元に
+文書中の単語の出現（真偽値）や出現頻度を配置する．
+しかし本タスクへの適用を考えた場合，
+翻訳メモリの日本語表現中に対象語と共に出現する単語は非常に少ないため，
+単純に表層的な単語出現情報を用いるだけでは
+表現の特徴（表現間の差異）をつかみきれない．
+またデータスパースネスの影響も深刻である．
+そこで我々は，単語の代わりに
+対象語周辺の各種素性（{\bf 文脈素性}）の出現を
+各次元に配置したベクタ（{\bf 文脈素性ベクタ}）を
+用いることとした． 
+各文脈素性は，対象語周辺文脈を特徴づける要素を表すもので，
+表現中に出現する内容語の
+\begin{enumerate}
+ \item[a)] 対象語との構文的/位置的関係（構文解析の結果から獲得）\\
+	   例: 対象語にガ格でかかる，対象語より前にある，
+	       任意の位置，\ldots
+ \item[b)] 形態的/意味的属性（形態素解析の結果とシソーラスから獲得）\\
+	   例: 標準形=\hspace*{-.25zw}「子供」，
+	       品詞=\hspace*{-.25zw}「名詞」，
+	       シソーラス上の意味コード=\hspace*{-.25zw}「名\kern0pt86」，
+	       \ldots
+\end{enumerate}
+を任意に組み合わせたものである．
+これは，対象語周辺の単語の出現を
+さまざまな抽象化のレベルで捉えることを意味する．
+これにより，文脈素性ベクタは，
+表現間の微妙な違いを表現すると同時に，
+適応範囲の広い文脈特徴量となることが期待できる．
+
+本稿では，
+まず \ref{sec:task}~章で {\sc Senseval}-2 日本語翻訳タスクの
+特徴について述べるとともに，
+本タスクを解決するシステムの設計方針について述べる．
+次に \ref{sec:method}~章で文脈素性ベクタを用いた
+翻訳選択の手法を説明する．
+そして \ref{sec:senseval_result}~章で {\sc Senseval}-2 参加
+システムの諸元と，コンテスト参加結果を紹介する．
+\ref{sec:vector_component}~章では，
+\ref{sec:method}~章で
+各種文脈素性の翻訳選択性能への寄与について調査した結果を報告し，
+考察を行う．
+最後に \ref{sec:conclusion}~章でまとめと今後の課題について述べる．
+
+
+
+\section{
+	 S{\normalsize\bf ENSEVAL}-2 日本語翻訳タスクの特徴とシステム設計方針}
+\label{sec:task}
+{\sc Senseval}-2 日本語翻訳タスクは，
+対訳用例に基づく翻訳アプリケーションにおいて，
+ある対象語を含んだ表現の翻訳として
+適切な対訳用例を選択する問題を，
+語義曖昧性解消の問題と見なした課題である\cite{kurohashi:01a}．
+
+コンテスト参加者は，
+あらかじめ配布される対訳用例集「翻訳メモリ」に基づいて
+翻訳を選択するシステムを構築する．
+そして，後に評価データが配布されると，システムを用いて
+データ中の指定された対象語の翻訳を翻訳メモリ中の用例から選択する．
+
+本章では，配布された翻訳メモリと評価データの概要を説明し，
+タスクの特徴とそれに適したシステムの設計について考察する．
+
+
+\subsection{翻訳メモリ}
+\label{sec:TM}
+語義分類の定義として与えられる翻訳メモリは，
+毎日新聞9年分の記事から収集された用例を元に作成されたもので，
+各対象語に対して，図~\ref{fig:TM_entry} のような形式で与えられる．
+\begin{figure}[tp]
+ \begin{center}
+  \begin{minipage}{.8\textwidth}
+\epsfile{file=figs/fig1.eps,scale=1.0}
+  \end{minipage}
+ \end{center}
+ \caption{翻訳メモリの例}
+ \label{fig:TM_entry}
+\end{figure}
+各語義分類（\verb|<sense>|）を定義する用例は，
+1対の対象語を含む日本語表現（\verb|<jexpression>|）と
+その表現全体の対訳である英語表現（\verb|<eexpression>|），
+それに用例作成時に対訳作成者によって付与された
+補足情報（\verb|<transmemo>|）などからなっている．
+配布された翻訳メモリは 320 対象語に対して合計 6,920 用例（1対象語
+平均 21.6 用例）であった．
+
+用例中の日本語表現は，図~\ref{fig:TM_entry} の例のように，
+一般に短く，人間が見て最低限語義を分別できる程度の文脈しか
+与えられていない（日本語表現の平均単語数は 4.5 語）．
+また分類間の日本語表現の違いは微妙なものも多く，
+図~\ref{fig:TM_entry} の用例 \verb|14-19| 〜 \verb|14-21| のように，
+全く同じ日本語表現が複数の異なる翻訳に分類されていることもある．
+このように分類間の日本語表現の違いが微妙な場合に，
+補足情報が分類を行う上で決定的な情報を持っているものも
+ある（図~\ref{fig:TM_entry} の用例 \verb|14-20|，\verb|14-21| が一例）．
+
+
+\subsection{評価データ}
+評価データは，毎日新聞1994年の記事の中から選ばれたものである．
+翻訳メモリに存在する対象語から動詞・名詞20語ずつが選ばれ，
+この対象語を持つ記事が各対象語につき30記事ずつ選ばれた．
+評価記事は図~\ref{fig:eval_entry} のように，
+記事全体が形態素解析されており，
+対象語に印（\verb|<head>|）がつけられている．
+\begin{figure}[tp]
+ \begin{center}
+  \begin{minipage}{.8\textwidth}
+   \footnotesize
+   \begin{verbatim}
+<instance id="ataeru.001" docsrc="00004730" topic="(046) 341.241.2(4+73)">
+<context>
+
+<mor pos="7" rd="トウオウ">東欧</mor>
+<mor pos="1" rd="キキ">危機</mor>
+<mor pos="457" rd="ナラ" bfm="だ">なら</mor>
+<mor pos="1" rd="キンキュウ">緊急</mor>
+<mor pos="1" rd="キョウギ">協議</mor>
+<mor pos="490" rd="　">　</mor>
+<mor pos="1" rd="ソウキ">早期</mor>
+<mor pos="1" rd="カメイ">加盟</mor>
+<mor pos="423" rd="ハ">は</mor>
+<mor pos="13" rd="サキオクリ">先送り</mor>
+<mor pos="468" rd="−−">−−</mor>
+<mor pos="2" rd="エヌエイティーオー">ＮＡＴＯ</mor>
+<mor pos="1" rd="シュノウ">首脳</mor>
+<mor pos="1" rd="カイギ">会議</mor>
+<mor pos="1" rd="サイシュウ">最終</mor>
+<mor pos="1" rd="ブンショ">文書</mor>
+<mor pos="1" rd="ゲンアン">原案</mor>
+   \end{verbatim}
+   \vspace*{-1.5\baselineskip}
+   \hspace*{5em}$\vdots$
+   \vspace*{-.5\baselineskip}
+   \begin{verbatim}
+<mor pos="7" rd="トウオウ">東欧</mor>
+<mor pos="22" rd="ショ">諸</mor>
+<mor pos="24" rd="コク">国</mor>
+<mor pos="419" rd="ノ">の</mor>
+<mor pos="1" rd="ケネン">懸念</mor>
+<mor pos="419" rd="ニ">に</mor>
+<mor pos="468" rd="，">，</mor>
+<mor pos="1" rd="シンリ">心理</mor>
+<mor pos="24" rd="テキ">的</mor>
+<mor pos="1" rd="ホショウ">保証</mor>
+<mor pos="419" rd="ヲ">を</mor>
+<mor pos="102" rd="アタエ" bfm="与える"><head>与え</head></mor>
+<mor pos="454" rd="タ" bfm="た">た</mor>
+<mor pos="420" rd="ト">と</mor>
+<mor pos="103" rd="イエル" bfm="いえる">いえる</mor>
+<mor pos="468" rd="．">．</mor>
+   \end{verbatim}
+   \vspace*{-1.5\baselineskip}
+   \hspace*{5em}$\vdots$
+   \vspace*{-.5\baselineskip}
+   \begin{verbatim}
+</context>
+</instance>
+   \end{verbatim}
+  \end{minipage}
+ \end{center}
+ \caption{評価データの一例}
+ \label{fig:eval_entry}
+\end{figure}
+対象語は記事本文中に設定されていることが多いが，
+記事先頭にある見出しに設定されていることもある．
+
+
+\subsection{タスクの特徴とシステム設計方針}
+語義曖昧性解消問題の解法には，
+決定木学習\cite{tanaka:94} や
+決定リスト学習\cite{yarowsky:95} のような，
+正解例からの学習に基づく手法がしばしば用いられる．
+しかし本タスクのように，
+どの分類に対しても正解例が1例しか与えられていないような
+問題を解くには適していない．
+半自動的に正解例を拡張しようという試みも，
+本タスクの翻訳メモリのように，対象語あたりの語義数が非常に多く，
+かつそれぞれの違いが微妙で文脈情報も少ない場合には
+精度よく行うことは難しい．
+このため，我々は，
+入力表現を直接的に翻訳メモリの各日本語表現と比較して
+表現間の類似度を計算し，用例を選択する手法が適切であると考えた．
+
+類似度に基づく手法は，類似度をどのように定めるかが重要である．
+表現間の類似度の尺度には，従来から数多くの提案がされてきた．
+
+田中らは，
+表現中の内容語の一致数と，
+一致した内容語間の距離（文字数）に基づいて，
+類似度を定義している\cite{tanaka:99}．
+また黒橋らは，
+表現中の各文節の類似度を字面や品詞，シソーラスの意味コードの一致度などを
+用いて求め，
+動的計画法を用いて表現間の類似文節列を発見している\cite{kurohashi:92}．
+これらは表現間の類似度を直接計算する手法であるが，
+本タスクで必要な，ある対象語を中心とした類似性を測定する手法とは
+やや異なる．
+
+一方 Sch\"utze は，
+ベクタ空間モデルを用いて単語の語義曖昧性解消を行っている．
+コーパスから目的語の近傍に出現する単語の情報を単語ベクタとして収集し，
+それらを語義ごとに足し合わせることで，
+語義を表す文脈ベクタを作成している．
+そして，入力表現を表す単語ベクタと各語義の文脈ベクタとの間の
+余弦値を求めることにより，
+入力表現がどの語義に一番近いかを求めている\cite{schutze:97}．
+また Fujii は，
+日本語の動詞の語義曖昧性を解消するために
+ある語義に属する用例表現集合と入力表現を比較する際，
+動詞の格スロットに入る名詞の類似度を求めている．
+この類似度は，シソーラスの意味コードの一致度，または
+ベクタ空間モデルによって計算する\cite{fujii:98}．
+これらの手法は，ある対象語を中心とした類似性を測定しているが，
+数多くの正解例の存在を前提にしており，
+そのままでは本タスクに適用できない．
+
+そこで我々は，
+Sch\"utze の手法の文脈ベクタに相当する{\bf 文脈素性ベクタ}を，
+ただ1つの正解例から構築することを目指した．
+文脈ベクタは，単語ベクタを足し合わせることで
+周辺語の意味的な性質を表現していたが，
+文脈素性ベクタではシソーラスを用い，直接的に周辺語の意味属性を
+表現する．
+また，周辺語の出現を，目的語との関係（係り受け関係など）と併せて
+表現することで，格スロットの類似性の観点を取り入れる．
+
+
+
+\section{文脈素性ベクタを用いた翻訳選択}
+\label{sec:method}
+本章では，対象語周辺の文脈を多角的に表現するための
+{\bf 文脈素性}の考え方を説明する．
+そして，
+これを用いてベクタ空間モデルによって表現間の類似度を計算し，
+翻訳選択を行う手法について述べる．
+
+
+\subsection{文脈素性}
+対象語から見て
+構文的/位置的関係 $r$ にある単語（群）が持つ
+形態的/意味的属性 $t$=$v$（属性種別が $t$ でその値が $v$）を指して，
+{\bf 文脈素性} $r$:$t$=$v$ と呼ぶ．
+
+一例として，
+翻訳選択の対象語（対象語）が「間」であるような表現 $e_1$:
+\begin{center}
+「夫婦の\mbox{}\underline{間}\mbox{}に子供が産まれる」 
+\end{center}
+を考える．
+\begin{figure}[tp]
+ \begin{center}
+  \epsfile{file=figs/expression-j.EPS,scale=1.0}
+ \end{center}
+ \caption{表現 $e_1$ とその文脈情報（抜粋）}
+ \label{fig:expression-j}
+\end{figure}
+図~\ref{fig:expression-j} のように，この表現には，
+対象語「間」の周辺に内容語「夫婦」「子供」「産まれる」が存在している．
+これら周辺語は，対象語との間に図中 {\sf a)} に示すような
+構文的/位置的関係にある．
+また各単語は，それぞれ図中 {\sf b)} に示すような
+形態的/意味的属性を持つ．
+
+この表現 $e_1$ は，対象語の周囲に
+図~\ref{fig:e1-context_feature} のような文脈素性を持っている．
+\begin{figure}[tp]
+ \begin{center}
+  
+  \begin{minipage}{.75\textwidth}
+   \begin{center}
+    \footnotesize
+    \begin{tabular}{r@{\,:\,}l}
+     対象語にノ格でかかる & 基本形=\hspace*{-.25zw}「夫婦」\\
+     対象語にノ格でかかる & 基本形読み=\hspace*{-.25zw}「ふうふ」\\
+     対象語にノ格でかかる & 出現形=\hspace*{-.25zw}「夫婦」\\
+     対象語にノ格でかかる & 出現形読み=\hspace*{-.25zw}「ふうふ」\\
+     対象語にノ格でかかる & 品詞=\hspace*{-.25zw}「名詞」\\
+     対象語にノ格でかかる & 意味コード=\hspace*{-.25zw}「名\kern0pt74」\\
+     対象語より前にある & 基本形=\hspace*{-.25zw}「夫婦」\\
+     対象語より前にある & 基本形読み=\hspace*{-.25zw}「ふうふ」\\
+     \multicolumn{2}{c}{$\vdots$}\\
+     任意の周辺位置にある & 基本形=\hspace*{-.25zw}「夫婦」\\
+     任意の周辺位置にある & 基本形読み=\hspace*{-.25zw}「ふうふ」\\
+     \multicolumn{2}{c}{$\vdots$}\\
+     対象語 & 基本形=\hspace*{-.25zw}「間」\\
+     対象語 & 基本形読み=\hspace*{-.25zw}「あいだ」\\
+     \multicolumn{2}{c}{$\vdots$}\\
+     対象語より後にある & 基本形=\hspace*{-.25zw}「子供」\\
+     対象語より後にある & 基本形読み=\hspace*{-.25zw}「こども」\\
+     \multicolumn{2}{c}{$\vdots$}\\
+     対象語がニ格で係る & 基本形=\hspace*{-.25zw}「産まれる」\\
+     対象語がニ格で係る & 基本形読み=\hspace*{-.25zw}「うまれる」\\
+     \multicolumn{2}{c}{$\vdots$}\\
+     対象語より後にある & 基本形=\hspace*{-.25zw}「産まれる」\\
+     対象語より後にある & 基本形読み=\hspace*{-.25zw}「うまれる」\\
+     \multicolumn{2}{c}{$\vdots$}
+    \end{tabular}
+   \end{center}
+  \end{minipage}
+  
+ \end{center}
+ \caption{表現 $e_1$ の持つ文脈素性（抜粋）}
+ \label{fig:e1-context_feature}
+\end{figure}
+
+
+\subsection{文脈素性ベクタの作成}
+文脈素性ベクタは，以下の手順で作成する．
+\begin{enumerate}
+ \item 翻訳メモリ中の日本語表現と入力表現の各々を行成分に，
+       各文脈素性を列成分に持つ行列（{\bf 文脈素性共起行列}）を
+       作成する（\ref{sec:appearance}~節）．
+ \item 文脈素性のうちシソーラス上の意味コードを属性に持つものに
+       対応する要素（意味属性要素）を，
+       それぞれ上位概念まで拡張する（\ref{sec:expand_sense}~節）．
+ \item 各要素に対して文脈素性種別に応じた
+       重みづけをする（\ref{sec:weight}~節）．
+ \item 行列の各行ベクタを文脈素性ベクタと見なす．
+\end{enumerate}
+
+以下では，
+図~\ref{fig:expression-j} の表現 $e_1$ を例にとり，
+上記の各手順を説明する．
+
+\subsubsection{文脈素性共起行列の作成}
+\label{sec:appearance}
+
+{\bf 文脈素性共起行列} $A$ は，
+翻訳メモリ中の日本語表現と入力表現の各々を行成分に，
+各日本語表現が持つすべての
+文脈素性を列成分に持つ行列である．
+
+行列の要素 $a_{e,\mbox{\scriptsize$r$:$t$=$v$}}$ は，表現 $e$ 中，
+対象語の周辺に文脈素性 $r$:$t$=$v$ が
+出現しているか（真偽値）を表している．
+例えば，図~\ref{fig:expression-j} の表現 $e_1$ に対応する
+行列の行成分は，表~\ref{tab:appearance} に示される表現の行の
+ようになる\footnote{
+誌面の都合上，多くの本来出現している要素を割愛している．}
+．
+\begin{table}[tp]
+ \caption{表現 $e_1$ の文脈素性共起行列（抜粋）}
+ \begin{flushleft}
+  \footnotesize\tabcolsep3pt
+  \begin{tabular}{r|c||c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c}
+   \multicolumn{1}{c}{} & \multicolumn{17}{c}{文脈素性}\vspace*{.1zh}\\
+   \cline{3-18}
+   \multicolumn{2}{r|}{a)} &
+    \multicolumn{7}{c|}{対象語にノ格でかかる} &
+    \hspace*{3pt}$\cdots$\hspace*{3pt} & 
+    \multicolumn{7}{c|}{対象語がニ格でかかる} &
+    \hspace*{3pt}$\cdots$\hspace*{-6pt} \\
+   \cline{3-18}
+   \multicolumn{2}{r|}{\raisebox{-.5zh}[0pt][0pt]{b)}} &
+    \raisebox{-.5zh}[0pt][0pt]{$\cdots$} & 基本形 &
+    \raisebox{-.5zh}[0pt][0pt]{$\cdots$} & 品詞 &
+    \raisebox{-.5zh}[0pt][0pt]{$\cdots$} & 意味 &
+    \raisebox{-.5zh}[0pt][0pt]{$\cdots$} &
+    \raisebox{-.5zh}[0pt][0pt]{$\cdots$} &
+    \raisebox{-.5zh}[0pt][0pt]{$\cdots$} & 基本形 &
+    \raisebox{-.5zh}[0pt][0pt]{$\cdots$} & 品詞 &
+    \raisebox{-.5zh}[0pt][0pt]{$\cdots$} & 意味 &
+    \raisebox{-.5zh}[0pt][0pt]{$\cdots$} &
+    \hspace*{3pt}\raisebox{-.5zh}[0pt][0pt]{$\cdots$}
+     \hspace*{-6pt}\vspace*{-.1zh}\\
+   \multicolumn{2}{r|}{} &
+    & \hspace*{-.5zw}「夫婦」\hspace*{-.5zw} &
+    & \hspace*{-.5zw}「名詞」\hspace*{-.5zw} &
+    & \hspace*{-.5zw}「名\kern0pt74」\hspace*{-.5zw} &
+    &
+    &
+    & \hspace*{-.5zw}「産まれる」\hspace*{-.5zw} &
+    & \hspace*{-.5zw}「動詞」\hspace*{-.5zw} &
+    & \hspace*{-.5zw}「用\kern0pt26」\hspace*{-.5zw} & \\
+   \cline{3-18}
+   \multicolumn{1}{r}{}\vspace*{-7.9pt}\\
+   \cline{2-18}
+   \hspace*{-3pt}表現 & $e_1$ &
+    $\cdots$ & 1 & $\cdots$ & 1 & $\cdots$ & 1 & $\cdots$ &
+   $\cdots$ &
+   $\cdots$ & 1 & $\cdots$ & 1 & $\cdots$ & 1 & $\cdots$ &
+   \hspace*{3pt}$\cdots$\hspace*{-6pt} \\
+   \cline{2-18}
+  \end{tabular}
+ \end{flushleft}
+ \begin{center}
+  \footnotesize\tabcolsep3pt
+  \begin{tabular}{c|c|c|c|c|c|c|c|c|c|c|c}
+   \hline
+   \hspace*{-6pt}$\cdots$\hspace*{3pt} &
+    \multicolumn{10}{c|}{対象語と係り関係がある} &
+    \hspace*{3pt}$\cdots$\hspace*{-6pt} \\
+   \hline
+   \hspace*{-6pt}\raisebox{-.5zh}[0pt][0pt]{$\cdots$}\hspace*{3pt} &
+    \raisebox{-.5zh}[0pt][0pt]{$\cdots$} & 基本形 & 基本形 &
+    \raisebox{-.5zh}[0pt][0pt]{$\cdots$} & 品詞 & 品詞 &
+    \raisebox{-.5zh}[0pt][0pt]{$\cdots$} & 意味 & 意味 &
+    \raisebox{-.5zh}[0pt][0pt]{$\cdots$} &
+   \hspace*{3pt}\raisebox{-.5zh}[0pt][0pt]{$\cdots$}
+   \hspace*{-6pt}\vspace*{-.1zh}\\
+    &
+    & \hspace*{-.5zw}「夫婦」\hspace*{-.5zw}
+    & \hspace*{-.5zw}「産まれる」\hspace*{-.5zw} &
+    & \hspace*{-.5zw}「名詞」\hspace*{-.5zw}
+    & \hspace*{-.5zw}「動詞」\hspace*{-.5zw} &
+    & \hspace*{-.5zw}「名\kern0pt74」\hspace*{-.5zw}
+    & \hspace*{-.5zw}「用\kern0pt26」\hspace*{-.5zw} &
+    \\
+   \hline
+   \hline
+   \hspace*{-6pt}$\cdots$\hspace*{3pt} &
+    $\cdots$ & 1 & 1 & 
+    $\cdots$ & 1 & 1 &
+    $\cdots$ & 1 & 1 &
+    $\cdots$ &
+    \hspace*{3pt}$\cdots$\hspace*{-6pt} \\
+   \hline
+  \end{tabular}
+ \end{center}
+ \begin{flushright}
+  \footnotesize\tabcolsep3pt
+  \begin{tabular}{c|c|c|c|c|c|c|c|c|c|c|c|c|}
+   \hline
+   \hspace*{-6pt}$\cdots$\hspace*{3pt} &
+    \multicolumn{12}{c|}{任意の周辺位置にある} \\
+   \hline
+   \hspace*{-6pt}\raisebox{-.5zh}[0pt][0pt]{$\cdots$}\hspace*{3pt} &
+    \raisebox{-.5zh}[0pt][0pt]{$\cdots$} & 基本形 & 基本形 & 基本形 &
+    \raisebox{-.5zh}[0pt][0pt]{$\cdots$} & 品詞 & 品詞 &
+    \raisebox{-.5zh}[0pt][0pt]{$\cdots$} & 意味 & 意味 & 意味 &
+    \raisebox{-.5zh}[0pt][0pt]{$\cdots$}\vspace*{-.1zh}\\
+    &
+    & \hspace*{-.5zw}「夫婦」\hspace*{-.5zw}
+    & \hspace*{-.5zw}「子供」\hspace*{-.5zw} 
+    & \hspace*{-.5zw}「産まれる」\hspace*{-.5zw} &
+    & \hspace*{-.5zw}「名詞」\hspace*{-.5zw}
+    & \hspace*{-.5zw}「動詞」\hspace*{-.5zw} &
+    & \hspace*{-.5zw}「名\kern0pt74」\hspace*{-.5zw}
+    & \hspace*{-.5zw}「名\kern0pt86」\hspace*{-.5zw}
+    & \hspace*{-.5zw}「用\kern0pt26」\hspace*{-.5zw} &
+    \\
+   \hline
+   \hline
+   \hspace*{-6pt}$\cdots$\hspace*{3pt} &
+    $\cdots$ & 1 & 1 & 1 & 
+    $\cdots$ & 1 & 1 &
+    $\cdots$ & 1 & 1 & 1 & 
+    $\cdots$ \\
+   \hline
+  \end{tabular}
+ \end{flushright}
+ \label{tab:appearance}
+\end{table}
+周辺語の多くは対象語に対して複数の構文的/位置的関係に
+解釈できるので，
+ある1つの周辺語中に現れる形態的/意味的属性は，
+一般に複数の文脈素性要素となって行成分中に出現することに注意されたい．
+
+\subsubsection{意味属性要素の拡張}
+\label{sec:expand_sense}
+前節で作成した行列の各行ベクタをそのまま文脈素性ベクタと見なし，
+ベクタ間の角度の余弦値を計算して表現間の類似度を求めることができる．
+しかし，それはデータスパースネスの克服という点で十分でない．
+なぜならこのままでは，
+シソーラス上の意味コードを属性に持つ文脈素性の出現の一致を，
+単純な真偽で測ることになってしまうからである．
+階層構造を持つシソーラス上の2つの意味コードに対しては，
+単純な意味コードの一致による真偽値ではなく，
+一致している階層の深さを考慮した一致度を決めることができる．
+我々が用いる日本語語彙体系のように階層構造を持つシソーラスの場合，
+その概念から最上位概念までの上位概念を共有している度合を
+意味コードの一致度と見なすことができる．
+
+我々は，
+形態的/意味的属性として意味コードを持つ文脈素性に対応する
+行列要素（意味属性要素）の出現の各々について，
+その上位概念である意味コードの文脈素性も出現していると見なす
+拡張を行うことにした．
+具体的には，以下の通りである．
+\begin{quote}
+ シソーラス上のある概念に対して，
+ 最上位から $n$~階層目の概念を表す意味コードを $s_n$ とする．
+ 各上位概念の意味コードは，上から $s_1, s_2, \ldots, s_{n - 1}$ で
+ 表される．
+ 表現 $e$ 中に，
+ 構文的/位置的関係 $r$ と組み合わされた
+ 文脈素性 `\mbox{$r$:意味コード=$s_n$}' が
+ 出現している（要素 $a_{e,\mbox{\scriptsize$r$:意味コード=$s_n$}} = 1$
+ である）とき，
+ これの代わりに，
+ 要素
+ $a_{e,\mbox{\scriptsize$r$:意味コード=$s_1$}},
+  a_{e,\mbox{\scriptsize$r$:意味コード=$s_2$}}, \ldots,
+  a_{e,\mbox{\scriptsize$r$:意味コード=$s_n$}}$ の各々に
+ 等しく $\frac{1}{\sqrt{n}}$ を与える．
+\end{quote}
+これは，意味コードを含む部分的な文脈素性ベクタが
+以下の性質を保持することを期待している．
+\begin{itemize}
+ \item 2つの意味コードが概念階層を共有している度合は，
+       ベクタの意味属性成分どうしの余弦値に一致する．
+ \item 拡張後の全ての意味属性要素
+       $a_{e,\mbox{\scriptsize$r$:意味コード=$s_1$}},
+       a_{e,\mbox{\scriptsize$r$:意味コード=$s_2$}}, \ldots,
+       a_{e,\mbox{\scriptsize$r$:意味コード=$s_n$}}$
+       からなる部分ベクタの大きさ
+       \[
+       \sqrt{(a_{e,\mbox{\scriptsize$r$:意味コード=$s_1$}})^2 +
+              (a_{e,\mbox{\scriptsize$r$:意味コード=$s_2$}})^2 +
+              \ldots +
+              (a_{e,\mbox{\scriptsize$r$:意味コード=$s_n$}})^2}
+       \]
+       を拡張前の
+       意味属性要素 $a_{e,\mbox{\scriptsize$r$:意味コード=$s_n$}}$ と
+       等しくすることで，
+       概念階層の深さにかかわらず余弦値計算への寄与を一定に保つ．
+\end{itemize}
+
+一例として，表~\ref{tab:appearance} の文脈素性
+\begin{center}
+ \begin{tabular}{r@{\,:\,}l}
+  任意の周辺位置にある & 意味コード=\hspace*{-.25zw}「名\kern0pt74」\\
+  任意の周辺位置にある & 意味コード=\hspace*{-.25zw}「名\kern0pt86」
+ \end{tabular}
+\end{center}
+に対応する要素を拡張してみる．
+概念「名\kern0pt74」と「名\kern0pt86」は，
+日本語語彙体系上に図~\ref{fig:thesaurus} のように位置している．
+\begin{figure}[tp]
+ \begin{center}
+  \epsfile{file=figs/thesaurus.EPS,scale=1.0}
+ \end{center}
+ \caption{日本語語彙体系上での概念「名\kern0pt74」「名\kern0pt86」}
+ \label{fig:thesaurus}
+\end{figure}
+従って，2つの要素は表~\ref{tab:expand_sense} のように拡張される．
+\begin{table}[tp]
+ \caption{意味属性要素の上位概念の展開}
+ \begin{center}
+  \footnotesize\tabcolsep3pt
+  \begin{tabular}{c|c|c|c}
+   \hline
+   \multicolumn{4}{c}{\makebox[0pt]{任意の周辺位置にある}}\\
+   \hline
+   \hspace*{-6pt}\raisebox{-.5zh}[0pt][0pt]{$\cdots$}
+    &
+    意味 & 意味 &
+    
+     \raisebox{-.5zh}[0pt][0pt]{$\cdots$}
+      \hspace*{-6pt}\vspace*{-.1zh}\\
+    & \hspace*{-.5zw}「名\kern0pt74」\hspace*{-.5zw}
+    & \hspace*{-.5zw}「名\kern0pt86」\hspace*{-.5zw} &
+    \\
+   \hline
+   \hline
+   \hspace*{-6pt}$\cdots$
+    &
+    1 & 1 & 
+    
+    $\cdots$\hspace*{-6pt} \\
+   \hline
+  \end{tabular}
+ \end{center}
+ \begin{center}
+  $\Downarrow$
+ \end{center}
+ \begin{center}
+  \footnotesize\tabcolsep3pt
+  \begin{tabular}{c|c|c|c|c|c|c|c|c|c|c}
+   \hline
+   \multicolumn{11}{c}{任意の周辺位置にある}\\
+   \hline
+   \hspace*{-6pt}\raisebox{-.5zh}[0pt][0pt]{$\cdots$}
+    &
+    意味 & 意味 & 意味 & 意味 & 意味 & 意味 & 意味 & 意味 & 意味 &
+    \raisebox{-.5zh}[0pt][0pt]{$\cdots$}\hspace*{-6pt}\vspace*{-.1zh}\\
+    & \hspace*{-.5zw}「名\kern0pt1」\hspace*{-.5zw}
+    & \hspace*{-.5zw}「名\kern0pt2」\hspace*{-.5zw}
+    & \hspace*{-.5zw}「名\kern0pt3」\hspace*{-.5zw}
+    & \hspace*{-.5zw}「名\kern0pt4」\hspace*{-.5zw}
+    & \hspace*{-.5zw}「名\kern0pt5」\hspace*{-.5zw}
+    & \hspace*{-.5zw}「名\kern0pt72」\hspace*{-.5zw}
+    & \hspace*{-.5zw}「名\kern0pt74」\hspace*{-.5zw}
+    & \hspace*{-.5zw}「名\kern0pt85」\hspace*{-.5zw}
+    & \hspace*{-.5zw}「名\kern0pt86」\hspace*{-.5zw}
+    & \\
+   \hline
+   \hline
+    & \multicolumn{1}{c|}{\rule[-2ex]{0pt}{5.5ex}\fbox{$\frac{1}{\sqrt{7}}$}} &
+     \multicolumn{1}{@{\protect\makebox[0pt]{$\leftarrow$}\hspace*{3pt}}c|}{\fbox{$\frac{1}{\sqrt{7}}$}} &
+     \multicolumn{1}{@{\protect\makebox[0pt]{$\leftarrow$}\hspace*{3pt}}c|}{\fbox{$\frac{1}{\sqrt{7}}$}} &
+     \multicolumn{1}{@{\protect\makebox[0pt]{$\leftarrow$}\hspace*{3pt}}c|}{\fbox{$\frac{1}{\sqrt{7}}$}} &
+     \multicolumn{1}{@{\protect\makebox[0pt]{$\leftarrow$}\hspace*{3pt}}c|}{\fbox{$\frac{1}{\sqrt{7}}$}} &
+     \multicolumn{1}{@{\protect\makebox[0pt]{$\leftarrow$}\hspace*{3pt}}c|}{\fbox{$\frac{1}{\sqrt{7}}$}} &
+     \multicolumn{1}{@{\protect\makebox[0pt]{$\leftarrow$}\hspace*{3pt}}c|}{\fbox{
+   $\frac{1}{\sqrt{7}}$}} & & & \\
+   \hspace*{-6pt}$\cdots$
+    &
+    $\lor$ & $\lor$ & $\lor$ & $\lor$ & $\lor$ & $\lor$ & & & &
+    
+    $\cdots$\hspace*{-6pt}\vspace*{-.5ex}\\
+    & \multicolumn{1}{c|}{\rule[-3ex]{0pt}{4.5ex}$\frac{1}{\sqrt{8}}$} &
+     \multicolumn{1}{@{\protect\makebox[0pt]{$\leftarrow$}\hspace*{3pt}}c|}{$\frac{1}{\sqrt{8}}$} &
+     \multicolumn{1}{@{\protect\makebox[0pt]{$\leftarrow$}\hspace*{3pt}}c|}{$\frac{1}{\sqrt{8}}$} &
+     \multicolumn{1}{@{\protect\makebox[0pt]{$\leftarrow$}\hspace*{3pt}}c|}{$\frac{1}{\sqrt{8}}$} &
+     \multicolumn{1}{@{\protect\makebox[0pt]{$\leftarrow$}\hspace*{3pt}}c|}{$\frac{1}{\sqrt{8}}$} &
+     \multicolumn{1}{@{\protect\makebox[0pt]{$\leftarrow$}\hspace*{3pt}}c|}{$\frac{1}{\sqrt{8}}$} &
+     \multicolumn{1}{@{\protect\makebox[0pt]{$\leftarrow$}\hspace*{3pt}}c|}{} &
+     
+     \multicolumn{1}{@{\protect\makebox[0pt]{$-$}\hspace*{3pt}}c|}{\fbox{$\frac{1}{\sqrt{8}}$}} &
+     \multicolumn{1}{@{\protect\makebox[0pt]{$\leftarrow$}\hspace*{3pt}}c|}{\fbox{
+   $\frac{1}{\sqrt{8}}$}} & \\
+   \hline
+  \end{tabular}
+ \end{center}
+ \label{tab:expand_sense}
+\end{table}
+このとき，同じ構造的／位置的関係に複数の意味コードが与えられた文脈素性が
+存在することがあり，これらの展開の結果，
+上位の意味コードを含む文脈素性に対して
+それぞれ異なった値を配置しようとする要素があるが，
+その場合は大きい方の値を採用する．
+
+\subsubsection{文脈素性要素の重みづけ}
+\label{sec:weight}
+2つの文脈素性ベクタを比較して類似度を測る際に，
+文脈素性の出現の一致が類似性に寄与する度合は，
+文脈素性によって異なると考えられる．
+例えば，表~\ref{tab:appearance} で表現 $e_1$ の文脈素性として
+出現しているもののうち，
+\begin{center}
+ 任意の周辺位置にある\,:\,意味コード=\hspace*{-.25zw}「名\kern0pt74」
+\end{center}
+の一致は
+\begin{center}
+ 任意の周辺位置にある\,:\,品詞=\hspace*{-.25zw}「名詞」
+\end{center}
+より類似性への寄与が大きいであろうし，さらに
+\begin{center}
+ 対象語にノ格で係る\,:\,意味コード=\hspace*{-.25zw}「名\kern0pt74」
+\end{center}
+の一致は
+\begin{center}
+ 任意の周辺位置にある\,:\,意味コード=\hspace*{-.25zw}「名\kern0pt74」
+\end{center}
+より類似性への寄与が大きいであろう．
+すなわち，{\bf 文脈素性種別} $r$:$t$ が
+類似性への寄与の度合を決定しているのではないかと考えられる．
+
+ベクタ空間モデルを用いた文書間比較においては，
+一般に索引語が文書の内容に寄与する度合（重要度）で
+索引語の重みづけを行う．
+我々は，同様の枠組で文脈素性ベクタの各文脈素性要素の出現に
+重みづけをすることにした．
+先の考察結果を実現するために，
+各要素に対して以下のように重みづけを行うことにする．
+\begin{quote}
+ 表現 $e$ 中の文脈素性 $r$:$t$=$v$ を考える．
+
+ 重みづけ前の文脈素性共起行列 $A$ の要素
+ $a_{e,\mbox{\scriptsize$r$:$t$=$v$}}$ に対して，\\
+ 重みづけ後の文脈素性共起行列 $A'$ の要素
+ $a'_{e,\mbox{\scriptsize$r$:$t$=$v$}}$ は次のように計算する．
+ \[
+  a'_{e,\mbox{\scriptsize$r$:$t$=$v$}} =
+  \sqrt{w(\mbox{$r$:$t$})} \cdot 
+  \frac{a_{e,\mbox{\scriptsize$r$:$t$=$v$}}}
+       {\displaystyle\sqrt{\sum_{v \in V}
+                           (a_{e,\mbox{\scriptsize$r$:$t$=$v$}})^2}}
+ \]
+ ここで，$V$ は文脈素性種別 $r$:$t$ に対してありうる全ての
+ 形態的/意味的属性の値，
+ $w(\mbox{$r$:$t$})$ は，文脈素性種別 $r$:$t$ に応じて決まる重みである．
+\end{quote}
+
+この重みづけの結果，
+文脈素性ベクタ中，ある文脈素性種別 $r$:$t$ に属する要素からなる
+部分ベクタの大きさは $\sqrt{w(\mbox{$r$:$t$})}$ に正規化される．
+これは直感的には，2つの文脈素性ベクタの類似度を計算するとき，
+ある文脈素性種別 $r$:$t$ に属する要素成分の類似度が
+全体の類似度に寄与する度合が次の式のようになる．
+\begin{quote}
+ \[
+  \frac{w(\mbox{$r$:$t$})}
+       {\displaystyle\sum_{\mbox{\footnotesize $r$:$t$\/} \in R \times T}
+                     \!\!w(\mbox{$r$:$t$})}
+ \]
+ ここで，$R$ はありうる全ての構文的/位置的関係，\\
+ $T$ はありうる全ての形態的/意味的属性種別
+\end{quote}
+つまり文脈素性種別ごとの寄与度の比が $w$ の比になる
+ことを意味する．
+
+{\sc Senseval}-2 日本語翻訳タスクへの参加システムでは
+この解釈に基づき，文脈素性種別ごとの $w$ を，
+その種別の意味づけを考慮したうえで直感的に決定した．
+
+
+\subsection{表現間の類似度の計算}
+\label{sec:candidate}
+ある対象語を含む日本語入力表現に対して，
+その語の適切な翻訳を選択するためには，
+入力表現の文脈素性ベクタを，
+その対象語に対応する翻訳メモリ中の全ての選択肢中の
+日本語表現の文脈素性ベクタと比較する．
+そして，入力表現のベクタとのなす角が最も小さい（余弦値が
+最も大きい）選択肢を採用する．
+
+文脈素性ベクタ間の比較を行うためには，
+当然両方のベクタは一意に決まっている必要がある．
+しかし，対象語周辺語は一般に多義であり，
+シソーラス上の意味コードには複数の候補がある．
+対象語の曖昧性解消にあたって，
+全ての周辺語の曖昧性を解消しておく必要があるというのは，
+手法として適切でない．
+そこで我々は，
+文脈素性ベクタ間の比較に先立って
+周辺語の曖昧性の解消は行わないことにした．
+代わりに，
+曖昧性を持つ周辺語の全ての候補の組み合わせについて
+文脈素性ベクタを計算し，
+その全てを「文脈素性ベクタ候補」として持つことにする．
+そして，
+文脈素性ベクタ間の類似度の計算の際には，
+お互いの全ての候補の組み合わせについて類似度を求め，
+値が最も大きな組み合わせを採用する．
+これによって，
+周辺語の多義性解消を対象語の翻訳選択と同時に行うことができる．
+
+
+\section{
+	 S{\normalsize\bf ENSEVAL}-2 日本語翻訳タスク参加システム}
+\label{sec:senseval_result}
+
+我々の開発した {\sc Senseval}-2 参加システムは，
+翻訳メモリ中の各日本語表現，評価データ，それぞれに対して，
+以下の手順で文脈素性となる情報を付与し，文脈素性ベクタを作成している．
+
+\begin{center}
+ \begin{tabular}{p{7zw}l}
+  {\bf 形態素解析} & JUMAN version.\ 3.61 \cite{kurohashi:98-1}\\
+  \hspace*{2zw}$\Downarrow$\\
+  {\bf 構文解析} & KNP version.\ 2.0~b6 \cite{kurohashi:98-2}\\
+  \hspace*{2zw}$\Downarrow$\\
+  \multicolumn{2}{l}{\bf シソーラスによる内容語への意味コード付与}
+  \\
+  \hspace*{2zw}$\Downarrow$ & 日本語語彙体系 \cite{ikehara:97}\\
+  \multicolumn{2}{l}{\bf 文脈素性ベクタ作成}
+ \end{tabular}
+\end{center}
+
+以下ではシステムの諸元を説明し，コンテスト参加の結果を紹介する．
+
+\subsection{システムの諸元}
+
+\subsubsection{文脈を考慮する範囲}
+翻訳メモリ中の表現が非常に短いのに対し，
+評価データはそれぞれ新聞記事1記事分と非常に長い．
+できるだけ長さをそろえるために，
+評価データの方は対象語を含む1文のみを用いることにした．
+
+
+\subsubsection{文脈素性・種別ごとの重み}
+\label{sec:params}
+対象語周辺の文脈素性を形成するものとして採用した，
+構文的/位置的関係と形態的/意味的属性の一覧を
+表~\ref{tab:params} に示す．
+\begin{table*}[t]
+ \caption{{\sc Senseval}-2 参加システムが採用した文脈素性要素と，種別ごとの重み}
+ \begin{center}
+  \begin{tabular}[t]{l|r@{\hspace*{1em}}}
+   \hline
+   構文的/位置的関係種別 $r$ & \multicolumn{1}{c}{$w_r(r)$}\\
+   \hline
+   対象語に係る\footnotemark
+   \hspace*{\fill}
+   （格関係: 特定） & 3\\
+   \hspace*{\fill}（格関係: 不特定） & 1\\
+   対象語を受ける\addtocounter{footnote}{-1}\footnotemark
+   \ 
+   （格関係: 特定） & 3\\
+   \hspace*{\fill}（格関係: 不特定） & 1\\
+   対象語と係り受け関係がある
+   \addtocounter{footnote}{-1}\footnotemark
+   & 1\\
+   対象語 & 2\\
+   対象語文節中 & 2\\
+   対象語より前 & 1\\
+   対象語より後 & 1\\
+   任意の周辺文脈 & 2\\
+   \hline
+  \end{tabular}
+  \hspace*{3zw}
+  \newlength{\zerowidth}\settowidth{\zerowidth}{0}
+  \begin{tabular}[t]{l|r@{\hspace*{1em}}}
+   \hline
+   形態的/意味的属性種別 $t$ & \multicolumn{1}{c}{$w_t(t)$}\\
+   \hline
+   出現形 & 1\\
+   出現形読み & 1\\
+   標準形 & 4\\
+   標準形読み & 4\\
+   品詞 & \protect\makebox[\zerowidth][l]{0\footnotemark}\\
+   活用 & \protect\makebox[\zerowidth][l]{0\addtocounter{footnote}{-1}\footnotemark}\\
+   意味 & 12\\
+   \hline
+  \end{tabular}
+ \end{center}
+ \label{tab:params}
+\end{table*}
+
+また，\ref{sec:weight}~節で説明した，文脈素性種別 $r$:$t$ ごとに
+与える重みは，表~\ref{tab:params} の $w_r(r)$ と $w_t(t)$ を用いて
+\[
+ w(\mbox{$r$:$t$}) = w_r(r)\cdot w_t(t)
+\]
+と与えることにした．
+これは，表中全ての $r$:$t$ の組み合わせについて
+人手で直感的に値を定めるのは困難なためである．
+
+
+\subsubsection{形態素・構文解析結果の誤りの扱い}
+\label{sec:error_correct}
+形態素・構文解析結果の誤りは，次のように扱った．
+
+\newpage
+\begin{enumerate}
+ \item 翻訳メモリ中の各表現の文脈素性ベクタを作成する際には，
+       誤りを人手で修正した．
+ \item 評価セットの各表現の文脈素性ベクタを作成する際\footnotemark
+       には，修正は行わなかった．
+\end{enumerate}
+
+\addtocounter{footnote}{-2}
+\footnotetext{
+対象語がその文節の主辞（一番最後の自立語）でないときには，
+これらの構文的関係は考慮しない．
+}
+\addtocounter{footnote}{1}
+\footnotetext{
+「品詞」と「活用」の属性種別は，
+選択に有効な属性ではないのではないかと予測した．
+このため，{\sc Senseval}-2 参加システムでは，
+実験時間の削減の必要もあり，これらを利用しなかった．
+}
+\addtocounter{footnote}{1}
+\footnotetext{
+評価セットには形態素解析結果（単語境界，品詞コード）のタグが
+与えられていたが，
+我々はその情報を利用せず，
+新たに形態素・構文解析を行った．
+}
+
+\subsubsection{翻訳メモリ中の補足情報の扱い}
+配布された翻訳メモリには，
+日英表現対のいくつかに，作成者が加えた日本語による補足情報，
+例えば補足的な表現例やコメントなど，が含まれていた（\ref{sec:TM}~節
+参照）．
+これらは以下のように扱う．
+
+\begin{enumerate}
+ \item \label{enum:add_expr}
+       対象語が含まれているならば，
+       日英表現対の日本語表現と同等に扱う．
+       すなわち，日英表現対の日本語表現と補足情報の両方に対して
+       文脈素性ベクタを作成し，
+       それらの全てを，\ref{sec:candidate}~節で述べた
+       文脈素性ベクタ候補と扱う．
+ \item \label{enum:add_context}
+       対象語が含まれないならば，
+       それらに含まれる全ての内容語を，
+       対応する日本語用例で対象語の「任意の周辺文脈」
+       に属しているものと見なし，
+       該当する文脈素性要素に組み入れる．
+\end{enumerate}
+
+各補足情報の上記 \ref{enum:add_expr} と \ref{enum:add_context} への分類，
+および \ref{enum:add_expr} の場合の対象語へのマーキングは，
+全て人手で行った．
+
+\subsubsection{シソーラスの検索}
+「日本語語彙体系」は，
+一般名詞，固有名詞，用言の3つの体系からなる．
+そして，
+収録されている各単語には標準形と読みの情報がある．
+
+「日本語語彙体系」から各単語の意味コードを取得するときには，
+以下の手順に従った．
+
+\begin{enumerate}
+ \item \label{enum:yomi_trust}
+       翻訳メモリ中の各表現の文脈素性ベクタを作成するときには，
+       表現の形態素解析結果は人手で修正済である
+       （\ref{sec:error_correct}~節）ので，
+       修正済の形態素解析結果と完全に一致する単語のみを（複数あれば
+       全てを候補に）採用する．
+       すなわち，
+       形態素解析結果の品詞情報を基に
+       体系（一般名詞/固有名詞/用言）を選択し，
+       その中で
+       標準表記と読みが一致するものを選ぶ．
+       一方，評価セットの場合は
+       形態素解析結果の修正は行わないため，
+       読みや品詞分類が誤っている場合がある．
+       そのため，
+       体系の選択を行うときには一般名詞と固有名詞の区別は行わず，
+       標準表記が一致する語を全て選択する．
+ \item 翻訳メモリ中には，
+       例えば「〜\usebox{\mykern}（人）に手をあげる」のように，
+       単語が特定されず，その概念を表す語が添えられている用例がある．
+       この語には，その概念語に対する一般名詞を検索し，
+       その意味コードを当てる．
+ \item 数詞には全て意味コード「名\kern0pt2585（数量）」を割り当てる．
+ \item \label{enum:nonexist}
+       体系中に存在しない単語には，
+       該当する体系の最上位の意味コードを1つ割り当てる．
+ \item 上記 \ref{enum:yomi_trust}~〜~\ref{enum:nonexist} で
+       一般名詞の意味コードを割り当てた場合，
+       「日本語語彙体系」の「一般名詞と固有名詞の
+       意味属性対応表 \cite[pp.~1:89--91]{ikehara:97}」に
+       相当する項目があれば，
+       得られる固有名詞の意味コードも併せて候補にする．
+       固有名詞から一般名詞への拡張も同様に行う．
+       
+\end{enumerate}
+
+
+\subsection{参加システムの翻訳選択精度}
+我々の参加システムが評価データに対して行った翻訳選択実験の，
+正解データ（gold standard）に対する精度・再現率\footnote{
+\ref{sec:candidate}~節で述べたように，
+翻訳選択は翻訳メモリ中の表現と入力表現それぞれの文脈素性ベクタ候補の
+総当たりで余弦値を計算して決定する．
+ここで，余弦値が 0 より大きくなる組み合わせが1つもないときには，
+システムは結果を「判定不能（UNASSIGNABLE）」とし，選択は行わない．
+このとき，
+精度はこれを評価セットから除いたときの正解率，
+再現率はこれを失敗としたときの正解率である．
+}\
+は，
+ともに 45.8\,\% であった
+（gold standard 作成者間の一致度は 86.0\,\%，
+baseline（無作為に1つを選択）の精度は 36.8\,\%）．
+ただ，参加システムにはベクタの正規化などに重大な不具合があった．
+この点を修正し，参加システムと同じ文脈素性種別の重みを用いて
+再度実験を行った．
+その精度・再現率はともに 49.3\,\%（名詞: 50.0\,\%，動詞: 48.5\,\%）であった．
+
+
+
+\section{文脈素性種別と翻訳選択性能との関係}
+\label{sec:vector_component}
+本システムの開発にあたって，
+各種の文脈素性が表現の類似性を異なる観点から表現し，
+それぞれ類似性への寄与の度合が異なるという前提があった．
+従って，システムの翻訳選択性能は，
+文脈素性種別ごとの重みづけに本質的に依存すると言える．
+{\sc Senseval}-2 参加システムでは
+この重みを直感的に定めたが，
+より適切な重みを正解データから獲得することで
+性能の向上が期待できる．
+
+本章では，
+最適な重みの正解データからの学習の前段階として，
+文脈素性が種別ごとに翻訳選択性能にどのように寄与しているかを調査した．
+
+\subsection{実験}
+各文脈素性種別 $r$:$t$ について，
+それぞれ重み $w(\mbox{$r$:$t$})$ のみを 1，残りを全て 0 にした重み集合を用いて
+翻訳選択実験を行い，性能を比較した．
+実験時間の節約のため，対象語との構文的/位置的関係が
+\begin{itemize}
+ \item 任意の周辺位置にある
+ \item 対象語より前にある
+ \item 対象語より後にある
+\end{itemize}
+である文脈素性要素については，
+対象語から内容語 5~語分より遠くにあるものを対象から外した\footnote{
+この条件で {\sc Senseval}-2 参加システムと同じ文脈素性種別の重みを
+用いて評価実験を行った結果の精度/再現率は，52.1\,\%/51.3\,\%
+（名詞: 54.4\,\%/53.6\,\%，動詞: 49.7\,\%/49.0\,\%）であった．
+}
+．
+
+実験の結果得られた，各文脈素性種別ごとの
+精度/再現率を図~\ref{fig:prec_rec} に示す．
+また，得られた精度/再現率の総合的な指標として，
+各々の F-尺度:
+\[
+ F = \frac{(\beta + 1)PR}{\beta P + R}
+\]
+を $\beta = 1$ として計算したものの上位を
+表~\ref{tab:f_measure} に示す．
+
+\subsection{分析}
+\begin{figure}[p]
+ \begin{center}
+\begin{tabular}{c}
+ 
+  \epsfile{file=figs/all.eps,scale=1.0}\\
+
+  (1) 全対象語\\
+ 
+ \vspace*{.15\baselineskip}\\
+ 
+ 
+  \epsfile{file=figs/noun.eps,scale=1.0}\\
+
+  (2) 名詞\\
+ 
+ \vspace*{.15\baselineskip}\\
+ 
+ 
+  \epsfile{file=figs/verb.eps,scale=1.0}\\
+
+  (3) 動詞\\
+ 
+ 
+ 
+  \multicolumn{1}{r}{\epsfile{file=figs/legend.eps,scale=1.0}}\\
+\end{tabular} 
+\end{center}
+ \vspace*{-.4\baselineskip}
+ \caption{文脈素性種別ごとの精度/再現率}
+ \label{fig:prec_rec}
+\end{figure}
+
+\begin{table}[tp]
+ \caption{文脈素性種別と F-尺度（上位抜粋）}
+ \label{tab:f_measure}
+ \begin{center}
+  \small
+  (1) 全対象語\\
+  \begin{tabular}[t]{r@{\,:\,}l|c}
+   \hline
+   \protect\makebox[14zw][r]{構文的/位置的関係} & 形態的/意味的属性種別 & F-尺度\\
+   \hline
+   任意の周辺文脈 & 意味 & 0.454\\
+   対象語と係り受け関係にある & 意味 & 0.423\\
+   対象語より前 & 意味 & 0.421\\
+   任意の周辺文脈 & 品詞 & 0.385\\
+   対象語 & 意味\footnotemark & 0.384\\
+   対象語 & 標準形読み\addtocounter{footnote}{-1}\footnotemark & 0.383\\
+   対象語と係り受け関係にある & 品詞 & 0.377\\
+   \hline
+  \end{tabular}
+ \end{center}
+ \vspace*{.25\baselineskip}
+ \begin{center}
+  \small
+  (2) 名詞\\
+  \begin{tabular}[t]{r@{\,:\,}l|c}
+   \hline
+   \protect\makebox[14zw][r]{構文的/位置的関係} & 形態的/意味的属性種別 & F-尺度\\
+   \hline
+   対象語より後 & 意味 & 0.465\\
+   任意の周辺文脈 & 意味 & 0.452\\
+   対象語と係り受け関係にある & 意味 & 0.407\\
+   対象語より後 & 品詞 & 0.396\\
+   対象語 & 出現形読み\addtocounter{footnote}{-1}\footnotemark & 0.390\\
+   対象語 & 出現形\addtocounter{footnote}{-1}\footnotemark & 0.390\\
+   対象語 & 意味\addtocounter{footnote}{-1}\footnotemark & 0.390\\
+   \hline
+  \end{tabular}
+ \end{center}
+ \vspace*{.25\baselineskip}
+ \begin{center}
+  \small
+  (3) 動詞\\
+  \begin{tabular}[t]{r@{\,:\,}l|c}
+   \hline
+   \protect\makebox[14zw][r]{構文的/位置的関係} & 形態的/意味的属性種別 & F-尺度\\
+   \hline
+   対象語に係る（格関係: 特定）& 意味 & 0.457\\
+   任意の周辺文脈 & 意味 & 0.456\\
+   対象語より前 & 意味 & 0.455\\
+   対象語に係る（格関係: 不特定）& 意味 & 0.442\\
+   対象語と係り受け関係にある & 意味 & 0.440\\
+   対象語より前 & 品詞 & 0.387\\
+   任意の周辺文脈 & 品詞 & 0.384\\
+   \hline
+  \end{tabular}
+ \end{center}
+\end{table}
+
+前節の実験結果を分析し，
+以下の考察を行った．
+
+\begin{description}
+ \item[精度と再現率の関係] 図~\ref{fig:prec_rec} が示すように，
+	    ある素性を用いて翻訳選択を行ったときの
+	    選択精度と再現率は両立しない．
+	    例えば，構文的/位置的関係が
+	    「対象語文節中」や「対象語に係る」「対象語を受ける」
+	    である素性や，
+	    形態的/意味的属性種別が「出現形（読み）」「基本形（読み）」
+	    である素性など，
+	    限定的な素性を用いると，精度は高くなるが再現率が低くなる．
+	    逆に，構文的/位置的関係が
+	    「任意の周辺文脈」や「対象語より前/後」
+	    である素性や，
+	    形態的/意味的属性種別が「意味」「品詞」
+	    である素性などでは，再現率は高くなるが精度があまり高くない．
+ \footnotetext{
+対象語に相当する部分が
+形態素解析の結果得られる単語より小さく，
+単語の中に含まれてしまう場合，
+システムはその含む単語全体を対象語として扱う（例えば
+対象語「味」に対する「味わい」）．
+そのため，この大きな対象語の「意味」や「標準形」属性などで
+選択が可能なことがある．
+}
+
+	    その中で比較的精度と再現率を両立しているのは，
+	    表~\ref{tab:f_measure} の F-尺度が示すように，
+	    形態的/意味的属性種別が「意味」である素性が多い．
+	    シソーラスの意味情報が翻訳選択性能に貢献していることが分かる．
+ \item[名詞と動詞の違い] 図~\ref{fig:prec_rec} (3)
+	    の再現率のグラフを見ると，
+	    動詞では，構文的/位置的関係が
+	    「対象語に係る」や「対象語より前」である素性と，
+	    「対象語を受ける」や「対象語より後」である素性とで，
+	    再現率が二分されることが分かる．
+	    このうち再現率が高い方のグループである
+	    「対象語に係る（格関係: 特定）」
+	    「対象語に係る（格関係: 不特定）」
+	    「対象語より前」
+	    の3種類について，
+	    形態的/意味的属性種別が同じ素性を用いたときの
+	    性能を比較してみると，
+	    再現率はどれもほとんど同じであるが，
+	    精度は
+	    「対象語に係る（格関係: 特定）」
+	    が高い．
+	    つまり，動詞の場合は，
+	    対象語と特定の格関係にある（格スロットに入る）単語の
+	    類似性が性能に貢献すると言える．
+	    この傾向は，表~\ref{tab:f_measure} (3) の F-尺度によっても
+	    裏付けられる．
+
+	    一方，図~\ref{fig:prec_rec} (2)
+	    の再現率のグラフを見ると，
+	    名詞では動詞に比較して，
+	    構文的/位置的関係が
+	    「任意の周辺」や「対象語より前/後」である素性を用いたときに
+	    再現率が高くなっている．
+	    また，表~\ref{tab:f_measure} (2) の F-尺度を見ても，
+	    「対象語より後\,:\,意味」「任意の周辺文脈\,:\,意味」の
+	    上位2素性が抜きん出ている．
+	    全般には，名詞の場合，係り受け関係は性能にあまり貢献せず，
+	    対象語より後の文脈の方が性能に貢献する度合が高いと言える．
+\end{description}
+
+また，前節表~\ref{tab:params} で決めた文脈素性分類ごとの重みを
+全て与えて翻訳選択実験を行ったときの性能は，F-尺度で 0.517 であり，
+表~\ref{tab:f_measure} で最大のF-尺度を持つものより大きい．
+このことから，提案の枠組による各種文脈情報の統合は効果があったと言える．
+
+
+
+\section{まとめ}
+\label{sec:conclusion}
+本稿では，ベクタ空間モデルを用いた翻訳選択手法を提案し，
+本手法を用いたシステムで {\sc Senseval}-2 日本語翻訳タスクに
+参加した結果を報告した．
+ある対象語を含む対訳用例の中から最適な翻訳を選択する問題を，
+対象語周辺の詳細な文脈情報を表す文脈素性ベクタの類似した用例を
+選択することで解決する．
+
+本手法を用いた {\sc Senseval}-2 日本語翻訳タスク参加システムは，
+不具合修正後の精度が 49.3\,\% であった．
+
+本手法で利用した各種文脈素性が翻訳選択性能に寄与する度合を
+調査したところ，
+シソーラスの意味情報が大きく貢献していることが分かった．
+また構文的制約の緩い素性の方が全般に頑強であった．
+
+今後の課題として，以下の2点を挙げる．
+\begin{itemize}
+ \item 表現間の類似度を計算するとき，
+       周辺語の意味がシソーラス上で一般に複数の語義を持つために，
+       語義曖昧性の数だけ「文脈素性ベクタ候補」を作成し，
+       総当たりで類似度を求めている（\ref{sec:candidate}~節）．
+       このため，周辺語の数が増えるにしたがって
+       計算時間が指数関数的に増大する．
+       何らかの枝刈りを検討したい．
+ \item 正解データに基づく，最適な文脈素性種別ごとの重みの学習方法を
+       検討したい．
+\end{itemize}
+
+
+\vspace{\baselineskip}
+
+\acknowledgment
+
+訓練データの整備に協力していただいた，大阪大学（現 通信総合研究所）の
+森本郁代氏に感謝いたします．
+
+本研究は，通信・放送機構の研究委託
+「大規模コーパスベース音声対話翻訳技術の研究開発」
+により実施したものである．
+
+
+
+\bibliographystyle{jnlpbbl}
+\bibliography{kumano}
+
+\begin{biography}
+\biotitle{略歴}
+\bioauthor{熊野 正}{
+1993年東京工業大学工学部情報工学科卒業．
+1995年同理工学研究科情報工学専攻修士課程修了．
+同年，日本放送協会に入局．同放送技術研究所に勤務．
+2000年より ATR 音声言語通信研究所（現 ATR 音声言語
+コミュニケーション研究所）に勤務．
+第4研究室研究員．
+自然言語処理，情報検索，機械翻訳，人工知能の研究に従事．
+電子情報通信学会，情報処理学会，人工知能学会各会員．
+}
+\bioauthor{柏岡 秀紀}{
+1993年大阪大学大学院基礎工学研究科博士後期課程修了．
+博士（工学）．
+同年 ATR 音声翻訳通信研究所入社．
+1998年同研究所主任研究員．
+1999年奈良先端科学技術大学院大学情報学研究科客員助教授．
+2000年 ATR 音声言語通信研究所主任研究員．
+2001年 ATR 音声言語コミュニケーション研究所主任研究員．
+自然言語処理，機械翻訳の研究に従事．
+言語処理学会，情報処理学会，人工知能学会，日本認知科学会各会員．
+}
+\bioauthor{田中 英輝}{
+1982年九州大学工学部電子工学科卒業．
+1984年同大学院修士課程修了．
+同年，日本放送協会に入局．
+1987年同放送技術研究所勤務．
+1997年より2年間 ATR エイ・ティ・アール音声翻訳通信研究所に勤務．
+1999年 NHK 放送技術研究所に復帰．
+2000年より ATR 音声言語通信研究所（現 ATR 音声言語
+コミュニケーション研究所）に勤務．
+現在，第4研究室室長．
+機械翻訳，機械学習，情報検索の研究に従事．
+工学博士．
+言語処理学会，情報処理学会，映像情報メディア学会，ACL各会員．
+}
+
+\bioreceived{受付}
+\biorevised{再受付}
+\bioaccepted{採録}
+
+\end{biography}
+
+\end{document}

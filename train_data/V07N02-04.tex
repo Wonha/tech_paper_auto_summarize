@@ -1,0 +1,1726 @@
+
+
+
+
+\documentstyle[epsbox,jnlpbbl]{jnlp_j_b5}
+
+\setcounter{page}{63}
+\setcounter{巻数}{7}
+\setcounter{号数}{2}
+\setcounter{年}{2000}
+\setcounter{月}{4}
+\受付{1999}{10}{21}
+\再受付{1999}{12}{13}
+\採録{2000}{1}{7}
+
+\setcounter{secnumdepth}{2}
+\setlength{\parindent}{\jspaceskip}
+
+\title{最大エントロピーモデルと\\書き換え規則に基づく固有表現抽出}
+\author{内元 清貴\affiref{CRL} \and 馬 青\affiref{CRL} 
+  \and 村田 真樹\affiref{CRL} \and 小作 浩美\affiref{CRL}
+  \and 内山 将夫\affiref{CRL} \and 井佐原 均\affiref{CRL}}
+
+\headauthor{内元,馬,村田,小作,内山,井佐原}
+\headtitle{最大エントロピーモデルと書き換え規則に基づく固有表現抽出}
+
+\affilabel{CRL}{郵政省通信総合研究所}
+{Communications Research Laboratory, Ministry of Posts and Telecommunications}
+
+\jabstract{
+本論文では，ME(最大エントロピー)モデルと書き換え規則を用いて
+固有表現を抽出する手法について述べる．
+固有表現の定義はIREX固有表現抽出タスク(IREX-NE)の定義に基づくものとする．
+その定義によると，固有表現には一つあるいは複数の形態素からなるもの，
+形態素単位より短い部分文字列を含むものの2種類がある．
+複数の形態素からなる固有表現は，
+固有表現の始まり，中間，終りなどを表すラベルを40個用意し，
+各々の形態素に対し付与すべきラベルを推定することによって抽出する．
+ラベルの推定にはMEモデルを用いる．
+このMEモデルでは学習コーパスで観測される素性と
+各々の形態素に付与すべきラベルとの関係を学習する．
+ここで素性とはラベル付与の手がかりとなる情報のことであり，
+我々の場合，着目している形態素を含む前後2形態素ずつ
+合計5形態素に関する見出し語，品詞の情報のことである．
+一方，形態素単位より短い部分文字列を含む固有表現は，
+MEモデルを用いてラベルを決めた後に書き換え規則を適用することによって抽出する．
+書き換え規則は学習コーパスに対するシステムの解析結果とコーパスの
+正解データとの差異を調べることによって自動獲得することができる．
+本論文ではIREX-NE本試験に用いられたデータに対し我々の手法を適用した
+結果を示し，さらにいくつかの比較実験から
+書き換え規則と精度，素性と精度，学習コーパスの量と精度の関係を明らかにする．
+}
+
+\jkeywords{固有表現，最大エントロピー(ME)モデル，書き換え規則}
+
+\etitle{Named Entity Extraction \\Based on A Maximum Entropy Model\\
+  and Transformation Rules}
+\eauthor{Kiyotaka Uchimoto\affiref{CRL} \and Qing Ma\affiref{CRL} 
+  \and Masaki Murata\affiref{CRL} \and Hiromi Ozaku\affiref{CRL}
+  \and Masao Utiyama\affiref{CRL} \and Hitoshi Isahara\affiref{CRL}} 
+
+\eabstract{
+This paper describes a system for extracting named entities. 
+The system is based on a ME (maximum entropy) model 
+and transformation rules. 
+Eight types of named entities are defined by IREX-NE, 
+and each named entity consists of one or more morphemes, 
+or it includes a substring of a morpheme. 
+We define 40 named entity labels, which are at the beginning, 
+the middle, or the end of a named entity, 
+and extract a named entity which consists of one or more morphemes 
+by estimating the labels according to the ME model. 
+The trained ME model detects the relationship between features 
+and named entity labels assigned to morphemes. 
+The features are clues used for estimating labels. 
+We use information about lexical items and parts-of-speech 
+as features in the target morpheme. 
+We also use information 
+about lexical items and parts-of-speech in four morphemes, 
+two on the left and two on the right of the target morpheme, 
+as features. 
+After estimating the named entity labels according to the ME model, 
+we extract a named entity, which includes a substring of a morpheme, 
+by using transformation rules. 
+These rules are automatically acquired by investigating the difference 
+between named entity labels in a tagged corpus and those extracted by 
+our system from the same corpus without tags. 
+This paper also 
+evaluates the relationships between transformation rules and accuracy, 
+between features and accuracy, and between the amount of 
+training data and accuracy by conducting several comparative experiments. 
+}
+
+\ekeywords{named entity, maximum entropy (ME) model, transformation rule}
+
+\input{prepictex}
+\input{pictex}
+\input{postpictex}
+\def\q{}
+\def\p{}
+
+\begin{document}
+\thispagestyle{plain}
+\maketitle
+
+
+\vspace{-3mm}
+\section{はじめに}
+\label{sec:introduction}
+
+固有表現(NE = Named Entity)抽出は
+情報抽出における基礎技術として認識されているだけでなく，
+形態素，構文解析の精度向上にもつながる重要な技術である．
+米国では1980年代からMUC(Message Understanding Conference)\cite{Muc:homepage}
+のようなコンテストが行なわれ，
+その技術の向上が図られてきた．
+日本においても1998年からコンテスト形式のプロジェクト
+「IREX (Information Retrieval and Extraction Exercise)」が始められ，
+そのタスクの一つとして固有表現抽出が盛り込まれた．
+このタスクで固有表現として抽出するのは，
+「郵政省」のように組織の名称を表すもの，
+「小渕恵三」のように人名を表すもの，「神戸」のように地名を表すもの，
+「カローラ」のように固有物の名称を表すものおよび，
+「9月28日」，「午後3時」，「100万円」，「10\%」のように
+日付，時間，金銭，割合を表す表現である．
+このように，固有名詞的表現だけでなく，時間表現，数値表現も抽出の対象と
+しているため，本論文ではそれらをすべてまとめて固有表現と呼ぶ．
+このような固有表現は多種多様で，次々と新たに生み出されるため
+そのすべてを辞書に登録しておくことは不可能である．
+また，同じ表現でも，あるときは地名としてまたあるときは人名として使われる
+というようにタイプに曖昧性がある．
+そのため，テキストが与えられたときその中でどの部分がどのタイプの固有表現
+であるかを同定するのは容易ではない．
+
+固有表現を抽出する方法には大きく分けると，人手で作成した規則に基づく方法と
+学習に基づく方法がある．
+固有表現の定義は抽出したものを何に応用するかによって異なってくるもので
+あるため，前者の方法では定義が変わるたびに規則を人手で作成し直す必要があり
+コストがかかる．
+後者の方法は学習コーパスを作る必要があるが，
+データスパースネスに強い学習モデルを使えばそれほど大量のコーパスがなくても
+高い精度が得られる．
+そこで我々は後者の方法をとることにした．
+
+この学習に基づく方法は英語での固有表現抽出の研究でも用いられている．
+例えば，HMM\cite{Bikel:97,Miller:98}，決定木モデル\cite{Cowie:95}，
+ME(最大エントロピー)モデル\cite{Borthwick:98}，共起情報\cite{Lin:98}，
+誤り駆動の書き換え規則\cite{Aberdeen:95}などに基づくシステムがある．
+学習に基づく方法としてMUCのコンテストで最も精度が高かったのは
+HMMに基づくNymbleという名のシステムである．
+このシステムは基本的に以下のような手法をとっている．
+まず学習では，MUCのNEタスクで定義された「PERSON」や「ORGANIZATION」
+などの固有表現およびそれ以外を表す「NOT-A-NAME」をそれぞれ状態として持つ
+状態遷移図を用意し，ある状態で，ある単語が入力されたときにどの状態に移るかを
+状態遷移確率として求める．そして，解析する際には，
+ビタビアルゴリズムを用いて，入力された単語列が辿り得る状態のパスうち，
+最適なパスを探索し，順次，辿った状態を出力することで固有表現を抽出する．
+他の学習手法を用いたシステムも確率の計算方法は違うが同様の手法をとっている
+ことが多い．
+Borthwickらは，この学習に基づくシステムおよび
+人手で作成した規則に基づくシステムの中から，
+それぞれMUCで比較的精度の高かったシステムを選びそれらを
+学習に基づく方法によって統合することによってより高い精度を
+得ている\cite{Borthwick:98}．
+あるデータに対しては人間のパフォーマンスを
+越えるような結果も得られている\cite{Borthwick_muc:98}．
+
+学習に基づく方法は固有表現抽出の研究以外に
+形態素解析や構文解析においてもよく用いられている
+\cite{Uchimoto99_jinbun}．
+学習モデルとしてはMEモデルを用いたものが
+優れた精度を得ていることが多く
+\cite{ratnaparkhi:emnlp96,ratnaparkhi:emnlp97,Uchimoto:eacl99}，
+データスパースネスに強いため，
+我々は固有表現抽出においてもこのMEモデルを用いることにした．
+さらに後処理として，誤り駆動により獲得した書き換え規則を用いる．
+この書き換え規則を用いる手法は
+形態素解析でも用いられている\cite{Brill:95,Hisamitsu:98}．
+
+固有表現の定義はIREX固有表現抽出タスク(IREX-NE)の定義\cite{irex:homepage}に
+基づくものとする．
+その定義によると，固有表現には「日本」や「国立／公文書／館」
+(／は形態素の区切りを表す)のように一つあるいは複数の形態素からなるもの，
+あるいは「在米」の「米」，「兵庫／県内」の「兵庫県」のように
+形態素単位より短い部分文字列を含むものの2種類がある．
+
+前者の固有表現は，
+固有表現の始まり，中間，終りなどを表すラベルを40個用意し，
+各々の形態素に対し付与すべきラベルを推定することによって抽出する．
+ラベルの推定にはMEモデルを用いる．
+このMEモデルでは学習コーパスで観測される素性と
+各々の形態素に付与すべきラベルとの関係を学習する．
+ここで素性とはラベル付与の手がかりとなる情報のことであり，
+我々の場合，着目している形態素を含む前後2形態素ずつ
+合計5形態素に関する見出し語，品詞の情報のことである．
+ラベルを推定する際には，入力文を形態素解析し，
+MEモデルを用いてそれぞれの形態素ごとにそこで観測される素性から
+各ラベルの尤もらしさを確率として計算し，
+一文全体における確率の積の値が高くなり，かつ
+ラベルとラベルの間の連接規則を満たすように
+各々の形態素に付与するラベルを決める．
+一文における最適解の探索にはビタビアルゴリズムを用いる．
+
+一方，後者の固有表現のように形態素単位より短い部分文字列を含む固有表現は
+上記の方法では抽出できないので，MEモデルを用いてラベルを決めた後に
+書き換え規則を適用することによって抽出する．
+書き換え規則は学習コーパスに対するシステムの解析結果とコーパスの
+正解データとの差異を調べることによって自動獲得することができる．
+一つあるいは複数の形態素からなる固有表現についても同様に書き換え規則を
+適用することは可能であるが，本論文ではMEモデルについてはラベル付けの
+精度に重点を置き，書き換え規則についてはできるだけ簡便な獲得方法を用いて
+効果をあげることに重点を置く．
+
+本論文ではIREX-NE本試験に用いられたデータに対し我々の手法を適用した
+結果を示し，さらにいくつかの比較実験からMEモデルにおける素性と精度の関係，
+学習コーパスの量と精度の関係，
+さらに簡便な方法を用いて自動獲得した書き換え規則がどの程度精度に貢献するか
+を明らかにする．
+
+\section{固有表現抽出アルゴリズム}
+\label{sec:algorithm}
+
+\subsection{アルゴリズムの概要}
+\label{sec:overview}
+
+固有表現はIREX-NEの定義にしたがい，
+表~\ref{table:tag} の8種類とする．
+この節ではこの表にあげたSGMLタグを付与する方法について述べる．
+
+{\scriptsize
+\begin{table*}[htbp]
+  \begin{center}
+    \caption{固有表現のタグ}
+    \label{table:tag} 
+      \begin{tabular}[c]{|l@{ }l@{ }l|p{4.7cm}|}
+        \hline
+        & 開始位置タグ & 終了位置タグ & 例\\
+        \hline
+        固有名詞的表現 & & & \\
+        \hline
+        \p 組織名，政府組織名 & $<$ORGANIZATION$>$ & $<$/ORGANIZATION$>$ 
+        & 郵政省，ニューヨーク大学，毎日新聞，ＩＲＥＸ実行委員会\\
+        \p 人名               & $<$PERSON$>$       & $<$/PERSON$>$ 
+        & 長尾眞，グリッシュマン，若ノ花\\
+        \p 地名               & $<$LOCATION$>$     & $<$/LOCATION$>$ 
+        & 日本，神戸，井の頭線，富士山\\ 
+        \p 固有物名           & $<$ARTIFACT$>$     & $<$/ARTIFACT$>$ 
+        & ノーベル賞，ＰＬ法案，特殊相対性理論，ペンティアム２００ＭＨｚ，
+        カローラ\\
+        \hline
+        時間表現 & & & \\
+        \hline
+        \p 日付表現           & $<$DATE$>$         & $<$/DATE$>$ 
+        & ９月２８日，去年，ある秋\\
+        \p 時間表現           & $<$TIME$>$         & $<$/TIME$>$ 
+        & 午後５時２５分，未明，明け方\\
+        \hline
+        数値表現 & & & \\
+        \hline
+        \p 金額表現           & $<$MONEY$>$        & $<$/MONEY$>$ 
+        & １ドル，数十兆円，五千から六千万円\\
+        \p 割合表現           & $<$PERCENT$>$      & $<$/PERCENT$>$ 
+        & ２０％，５割，５分の１，２倍\\
+        \hline
+      \end{tabular}
+  \end{center}
+\end{table*}
+}
+
+本手法では以下の手順で固有表現を抽出する．
+\begin{enumerate}
+\item テキストを形態素解析する．
+
+  実験では形態素解析にJUMAN\cite{JUMAN3.6}を用いた．
+  例えば，``在米女性を中心に「人権を考える会」ができ，…''
+  という部分は
+  表~\ref{table:ex} の第1行のように形態素ごとに区切られ，
+  それぞれの形態素ごとに第2行，第3行のような品詞の情報が得られる．
+
+  {\small
+    \begin{table*}[htbp]
+      \begin{center}
+        \caption{MEモデルを用いたラベル付与の例}
+        \label{table:ex} 
+        \begin{tabular}[c]{|c|c||l@{ }l@{ }l@{ }l@{ }l@{ }l@{ }l}
+          \hline
+          \multicolumn{2}{|c||}{見出し語} 
+          & 在米 & 女性 & を & 中心 & に & 「 & 人権 \\
+          \hline
+          \multicolumn{2}{|c||}{品詞(大分類)} 
+          & 名詞 & 名詞 & 助詞 & 名詞 & 助詞 & 特殊 & 名詞 \\
+          \multicolumn{2}{|c||}{品詞(細分類)}
+          & 普通名詞 & 普通名詞 & 格助詞 & 普通名詞 & 格助詞 
+          & 括弧始 & 普通名詞 \\
+          \hline
+          ラベル & 1 & OTHER & OTHER & OTHER & OTHER & OTHER & PRE
+          & ORG:BEGIN \\
+          の候補 & 2 & OTHER & OTHER & OTHER & OTHER & OTHER & PRE 
+          & ART:SINGLE \\
+          & $\cdots$ & $\cdots$ & $\cdots$ & $\cdots$ & $\cdots$ & $\cdots$ 
+          & $\cdots$ & $\cdots$ \\
+          \hline
+        \end{tabular}
+
+        \vspace*{0.2cm}
+        \begin{tabular}[c]{cccl@{ }l@{ }l@{ }l@{ }l@{ }l@{ }l|c|}
+          \cline{4-11}
+          & & & を & 考える & 会 & 」 & が & でき & ，& スコア\\
+          \cline{4-11}
+          & & & 助詞 & 動詞 & 名詞 & 特殊 & 助詞 & 動詞 & 特殊 & \\
+          & & & 格助詞 & \* & 普通名詞 & 括弧終 & 格助詞 & \* & 読点 & \\
+          \cline{4-11}
+          & & & ORG:MIDDLE & ORG:MIDDLE & ORG:END & POST & OTHER 
+          & OTHER & OTHER & 0.8\\
+          & & & POST & OTHER & OTHER & OTHER & OTHER & OTHER & OTHER & 0.7\\
+           & & & $\cdots$ & $\cdots$ & $\cdots$ & $\cdots$ & $\cdots$ 
+          & $\cdots$ & $\cdots$ & $\cdots$ \\
+          \cline{4-11}
+        \end{tabular}\\
+        \vspace*{1em}
+      (表で「ORG」「ART」はそれぞれ「ORGANIZATION」「ARTIFACT」の略である．)
+      \end{center}
+    \end{table*}
+    }
+
+\item 各形態素にラベルを付与する．
+
+  ラベルとしては，以下の合計40個を用意した．
+  \begin{enumerate}
+  \item[(a)] 
+    IREX-NEで定義されている固有表現のタグに「OPTIONAL」を加えた9種類を，
+    固有表現の始まり，中間，終り，単独に分けた9$\times$4=36個．
+    例えば人名のタグの場合，
+    それぞれ「PERSON:BEGIN」「PERSON:MIDDLE」「PERSON:END」
+    「PERSON:SINGLE」を用いる．
+    このように分けたのは，複数の形態素が一つの固有表現を構成することが
+    あることを考慮するためである．
+
+    「OPTIONAL」のタグはタグ付けが判定者にも困難な場合のために
+    設けたものである．これもIREX-NEにおける定義にしたがっている．
+    固有表現の判定は人間にも難しいことが多い．
+    例えば，「東京高裁」はLOCATIONかORGANIZATIONか，
+    「日経平均株価」と言ったときの「日経」はORGANIZATIONとするべきか
+    などがそうである．このような場合，
+    それぞれ「東京高裁」，「日経」にこのタグを付与し，固有表現としては
+    抽出しない．
+    この「OPTIONAL」をラベルとして考慮したのはその性質を学習することによって，
+    例えばLOCATIONかORGANIZATIONの判定が困難なものをいずれかのタグに分類して
+    しまうのを避けることができると考えたためである．
+    
+  \item[(b)] 固有表現の前後の1形態素および固有表現に挟まれた1形態素を
+    他の形態素と区別するための3個(「PRE」「POST」「MID」)．
+    例えば，
+    ``昨日大阪と神戸で…''という部分では「大阪」と「神戸」がそれぞれ
+    地名を表す固有表現であり，その前後の形態素は次のようにラベル付けされる．
+    \begin{flushleft}
+      ``昨日(PRE)／大阪(LOCATION:SINGLE)／と(MID)／神戸(LOCATION:SINGLE)
+      ／で(POST)…''\\
+      (括弧内はそれぞれ前の形態素に付与されたラベルの候補)
+    \end{flushleft}
+    この三つのラベル「PRE」「POST」「MID」を用いたのは，
+    固有表現の前後の形態素(接辞など)は
+    固有表現を抽出する際に手がかりとなることが多いため，
+    次にあげる「OTHER」と区別する方が良いと考えたからである．
+  \item[(c)] 以上のどのラベルもつかない「OTHER」．
+  \end{enumerate}
+
+  今，一文が$n$個の形態素からなるとする．
+  手順(1)で得られた形態素解析結果を用いて，
+  個々の形態素$m_i (1\leq i\leq n)$にそれぞれ上記のラベルのいずれかを付与する．
+  形態素$m_i$に付与するラベルはコーパスから学習したMEモデルから
+  各ラベルを付与したときの尤もらしさを確率として計算しそれを基に決める．
+  詳しくは，モデルについては \ref{sec:model} 節で，
+  最適解の探索アルゴリズムについては \ref{sec:viterbi} 節で述べる．
+  
+
+\item 書き換え規則による後処理
+
+  JUMANの解析結果における形態素の境界とIREXで定義されている固有表現の境界は
+  必ずしも一致しない．このような一致しない場合に対応するために書き換え規則を
+  自動獲得し，獲得した規則を用いて後処理を行う．
+  例えば，表~\ref{table:ex} の「在米」に対しては
+  以下のような書き換え規則が適用される．
+
+  \vspace*{1em}
+
+    \begin{center}
+      \begin{tabular}[c]{l@{ }|l|}
+        \cline{2-2}
+        見出し語 & 在米 \\
+        品詞(大分類) & 名詞 \\
+        品詞(細分類) & 普通名詞 \\
+        ラベル & OTHER \\
+        \cline{2-2}
+      \end{tabular}
+      $\Rightarrow$
+      \begin{tabular}[c]{|l@{ }l|}
+        \hline
+        在 & 米 \\
+        名詞 & 名詞 \\
+        普通名詞 & 普通名詞 \\ 
+        PRE & LOCATION:SINGLE \\
+        \hline
+      \end{tabular}
+    \end{center}
+
+  \vspace*{1em}
+
+  書き換え規則の自動獲得手法については \ref{sec:post_processing} 節で述べる．
+
+\item ラベルを固有表現のタグに変換
+
+  すべてのラベルが決まったら，それぞれのラベルに対し
+  手順(2)で定義したラベルの定義にしたがって，
+  ラベルからIREX-NEで定義されたタグへと変換する．
+  抽出したい固有表現は表~\ref{table:tag} の8種類なので，
+  最後に解析結果から「OPTIONAL」のタグを取り除く．
+
+\end{enumerate}
+  例えば，表~\ref{table:ex} でスコアが最大であるラベル候補1
+  の場合，手順(3)の操作によって
+  ``在米(OTHER)''の部分が``在(PRE)米(LOCATION:SINGLE)''
+  (括弧内はそれぞれ前の形態素に付与されたラベルの候補)
+  に書き換えられる．そして，ラベルをタグに変換することによって
+  次のような出力を得る．
+
+  \begin{tabular}[c]{l}
+    ``在$<$LOCATION$>$米$</$LOCATION$>$女性を中心に\\
+    「$<$ORGANIZATION$>$人権を考える会$</$ORGANIZATION$>$」
+    ができ，''
+  \end{tabular}
+  
+\subsection{固有表現抽出に用いる確率モデル}
+\label{sec:model}
+
+この節では形態素に付与するラベルの尤もらしさを確率として計算するための
+モデルについて述べる．
+モデルとしては，ME(最大エントロピー法)に基づく確率モデルを採用する．
+まず，MEの基本について説明し，その後，MEに基づく固有表現ラベル付与確率モデル
+およびそのモデルをコーパスから統計的に学習する方法について述べる．
+
+\subsubsection{ME(最大エントロピー)モデル}
+\label{sec:me_model}
+
+一般に確率モデルでは，文脈(観測される情報のこと)とそのときに得られる出力値
+との関係は既知のデータから推定される確率分布によって表される．
+いろいろな状況に対してできるだけ正確に出力値を予測するためには
+文脈を細かく定義する必要があるが，細かくしすぎると既知のデータにおいて
+それぞれの文脈に対応する事例の数が少なくなりデータスパースネスの問題が生じる．
+
+MEモデルでは，文脈は素性と呼ばれる個々の要素によって表され，
+確率分布は素性を引数とした関数として表される．
+そして，各々の素性はトレーニングデータにおける
+確率分布のエントロピーが最大になるように重み付けされる．
+このエントロピーを最大にするという操作によって，
+既知データに観測されなかったような素性あるいは
+まれにしか観測されなかった素性については，
+それぞれの出力値に対して確率値が等確率になるように
+あるいは近付くように重み付けされる．
+このように未知のデータに対して考慮した重み付けがなされるため，
+MEモデルは比較的データスパースネスに強いとされている．
+このモデルは例えば言語現象などのように既知データにすべての現象が現れ得ない
+ような現象を扱うのに適したモデルであると言える．
+
+以上のような性質を持つMEモデルでは，
+確率分布の式は以下のように求められる．
+文脈の集合を$B$，出力値の集合を$A$とするとき，
+文脈$b (\in$$B)$で出力値$a (\in$$A)$となる事象$(a,b)$の確率分布$p(a,b)$を
+MEにより推定することを考える．
+文脈$b$は$k$個の素性$f_j (1\leq j\leq k)$の集合で表す．
+そして，文脈$b$において，素性$f_j$が観測され
+かつ出力値が$a$となるときに1を返す以下のような関数を定義する．
+{\it
+\begin{eqnarray}
+  \label{eq:f}
+  g_{j}(a,b) & = & 
+  \left\{
+    \begin{array}[c]{l}
+      1,\ {\rm if}\ exist(b,f_{j})=1 \ \& \ 出力値=a\\
+      0,\ それ以外
+    \end{array}
+  \right.
+\end{eqnarray}
+}
+これを素性関数と呼ぶ．
+ここで，$exist(b,f_j)$は，文脈$b$において素性$f_j$が観測されるか否かによって
+1あるいは0の値を返す関数とする．
+
+次に，それぞれの素性が既知のデータ中に現れた割合は
+未知のデータも含む全データ中においても変わらないとする制約を加える．
+つまり，推定するべき確率分布$p(a,b)$による素性$f_j$の期待値と，
+既知データにおける経験確率分布$\tilde{p}(a,b)$による
+素性$f_j$の期待値が等しいと仮定する．これは以下の制約式で表せる．
+
+{\it
+\begin{eqnarray}
+  \label{eq:constraint0}
+  \sum_{a\in A,b\in B}p(a,b)g_{j}(a,b) 
+  \ = \sum_{a\in A,b\in B}\tilde{p}(a,b)g_{j}(a,b)\\
+  \ for\ \forall f_{j}\ (1\leq j \leq k) \nonumber
+\end{eqnarray}
+}
+この式で，
+$p(a,b)=p(b)p(a|b)\approx\tilde{p}(b)p(a|b)$という近似を行ない以下の式を得る．
+{\it
+\begin{eqnarray}
+  \label{eq:constraint}
+  \sum_{a\in A,b\in B}\tilde{p}(b)p(a|b)g_{j}(a,b) 
+  \ = \sum_{a\in A,b\in B}\tilde{p}(a,b)g_{j}(a,b)\\
+  \ for\ \forall f_{j}\ (1\leq j \leq k) \nonumber
+\end{eqnarray}
+}
+ここで，$\tilde{p}(b)$，$\tilde{p}(a,b)$は，
+$freq(b)$，$freq(a,b)$をそれぞれ既知データにおける
+事象$b$の出現頻度，出力値$a$と事象$b$の共起頻度として
+以下のように推定する．
+{\it
+\begin{eqnarray}
+  \tilde{p}(b) & = & 
+  \frac{freq(b)}{\displaystyle\sum_{b\in B} freq(b)}\\
+  \tilde{p}(a,b) & = & 
+  \frac{freq(a,b)}{\displaystyle\sum_{a\in A,b\in B} freq(a,b)}
+\end{eqnarray}
+}
+
+次に，式(\ref{eq:constraint})の制約を満たす確率分布$p(a,b)$のうち，
+エントロピー
+{\it
+\begin{eqnarray}
+  \label{eq:entropy}
+  H(p) & = & -\sum_{a\in A,b\in B}\tilde{p}(b)p(a|b)\ log\left(p(a,b)\right)
+\end{eqnarray}
+}
+を最大にする確率分布を推定するべき確率分布とする．
+これは，式(\ref{eq:constraint})の制約を満たす確率分布のうちで
+最も一様な分布となる．
+このような確率分布は唯一存在し，以下の確率分布$p^{*}$として記述される．
+{\it
+\begin{eqnarray}
+  \label{eq:p}
+  p^{*}(a|b) & = & \frac{\prod_{j=1}^{k}\alpha_{a,j}^{g_{j}(a,b)}}
+  {\sum_{a\in A} \prod_{j=1}^{k}\alpha_{a,j}^{g_{j}(a,b)}}\\
+  & & (0\leq \alpha_{a,j}\leq \infty)\nonumber
+\end{eqnarray}
+}
+ただし，
+{\it
+\begin{eqnarray}
+  \label{eq:alpha}
+  \alpha_{a,j} & = & e^{\lambda_{a,j}}
+\end{eqnarray}
+}
+であり，$\lambda_{a,j}$は素性関数$g_{j}(a,b)$の重みである．
+この重みは文脈$b$のもとで出力値$a$となることを予測するのに
+素性$f_{j}$がどれだけ重要な役割を果たすかを表している．
+訓練集合が与えられたとき，$\lambda_{a,j}$の推定には
+Improved Iterative Scaling(IIS)アルゴリズム
+\cite{pietra95}
+などが用いられる．
+式(\ref{eq:p})の導出については文献
+\cite{Jaynes:57,Jaynes:79}
+を参照されたい．
+
+\subsubsection{固有表現ラベル付与確率モデル}
+\label{sec:named_entity_extraction_model}
+
+\ref{sec:overview} 節に，
+個々の形態素に付与すべき固有表現のラベルを定義した．
+以降では，形態素にそれぞれのラベルを付与したときの尤もらしさを表す確率を
+ラベルの付与確率と呼ぶ．
+
+一文が$n$個の形態素からなるとき，
+形態素$m_i (1\leq i\leq n)$にラベル$l_j (0\leq j\leq 39)$を
+付与するときの付与確率は，
+前節で述べたMEモデルの式（\ref{eq:p}）を用いて
+$p^{*}(l_{j}|F_{i})$で求められる．
+ここ\break
+で$F$は「見出し語：人権, 品詞(大分類)：名詞, 品詞(細分類)：普通名詞」
+などの素性の集合であり，
+個々の$m_i$ごとに異なるため$F_i$と表した．
+一文全体の付与確率は個々の確率の積で表す．
+\vspace{-2mm}
+\subsubsection{素性}
+\label{sec:features}
+
+基本的に学習コーパスから得られる形態素情報を素性として用いる．
+実験では，着目している形態素を含む前後2形態素ずつ合計5形態素に関する
+見出し語，品詞(大分類，細分類)とした．
+品詞分類はそれぞれ大分類15個，細分類48個である．
+これはJUMANのものにしたがった．
+学習コーパスに1，2回しか現れないような素性はノイズとなる可能性があるので
+それを避けるために頻度による素性選択を行なう．
+見出し語としては学習コーパス中に5回以上現れたものを用い，
+さらに式(\ref{eq:f})の素性関数としては学習コーパスに3回以上観測された
+ものを用いる．見出し語を5回以上現れたものとしたのはこれ以上少なくすると
+素性の数が増え現在のマシンパワーでは学習できなかったためである．
+素性としては他にもいろいろ考えられるが，
+今回の実験では学習コーパスから得られる情報でかつ着目している形態素の周辺の
+情報のみを用いた場合にどの程度の精度が得られるかを調べることに重きを置いた．
+
+さらに学習コーパス以外から得られる情報の有効性も調べるために
+追加実験として，固有名詞に関する辞書情報を利用し
+その辞書に登録されているかどうかを素性として利用した場合の実験も行なった．
+これについては \ref{sec:exp} 節で実験結果をあげて考察する．
+
+\subsection{ビタビアルゴリズム}
+\label{sec:viterbi}
+
+本節ではラベル付与に用いるビタビアルゴリズムについて説明する．
+このアルゴリズムは，
+スコアが一文全体で最適値となるようにラベルを付与するものである．
+
+形態素$m_i$に対し，\ref{sec:named_entity_extraction_model} 節で述べた
+ラベル$l_{j}$の付与確率$p^{*}(l_{j}|F_{i})$の一文全体における
+掛け算$\sum_{i=1}^{n} p^{*}(l_{j}|F_{i})$が最大になるように
+各ラベルを決める．
+ただし，表~\ref{table:conjunction_rule} の連接規則を満たすようにする．
+この表で，＄(文末)，＃(文頭)は便宜上設けたもので実際に付与するラベルとは
+異なる．表~\ref{table:conjunction_rule} の連接規則は人手で作成した．
+
+  \begin{table*}[htbp]
+    \begin{center}
+      \caption{連接規則}
+      \label{table:conjunction_rule} 
+      \begin{tabular}[c]{|l|p{4.3cm}|p{4.8cm}|}
+        \hline
+        ラベル & 左方に接続可能なラベル & 右方に接続可能なラベル \\
+        \hline
+        $x$ & ＃(文頭), $x$, $y$, $x$:END, $y$:END, PRE, MID 
+        & ＄(文末), $x$, $y$, $x$:BEGIN, $y$:BEGIN, POST, MID \\
+        $x$:BEGIN & ＃(文頭), $x$, $y$, $x$:END, $y$:END, PRE, MID 
+        & $x$:MIDDLE, $x$:END \\
+        $x$:MIDDLE & $x$:BEGIN, $x$:MIDDLE & $x$:MIDDLE, $x$:END \\
+        $x$:END & $x$:BEGIN, $x$:MIDDLE 
+        & ＄(文末), $x$, $y$, $x$:BEGIN,\\ & & $y$:BEGIN, POST, MID \\
+        MID & $x$, $x$:END & $x$, $x$:BEGIN \\
+        PRE & ＃(文頭), POST, OTHER & $x$, $x$:BEGIN \\
+        POST & $x$, $x$:END & ＄(文末), PRE, OTHER \\
+        OTHER & ＃(文頭), POST, OTHER & ＄(文末), PRE, OTHER \\
+        ＄(文末) & $x$, $x$:END, POST, OTHER & \\
+        ＃(文頭) & & $x$, $x$:BEGIN, PRE, OTHER\\
+        \hline
+      \end{tabular}\\
+      \vspace*{1em}
+      ($x$, $y$はIREX-NEで定義された8種類のタグおよび「OPTIONAL」に対応する．)
+    \end{center}
+  \end{table*}
+
+手順は以下の通りである．
+\begin{enumerate}
+\item 文頭の形態素$m_1$に対し各ラベル$l_{j(1)}$の付与確率
+  $p^{*}(l_{j(1)}|F_{1})$ $(0\leq j(1)\leq 39)$を計算し，
+  それぞれ各ラベルごとのスコア$S_{1}(l_{j(1)})$とする．
+  つまり，$S_{1}(l_{1}) = p^{*}(l_{1}|F_{1})$, 
+  $S_{1}(l_{2}) = p^{*}(l_{2}|F_{1})$, 
+  $\ldots$, $S_{1}(l_{39}) = p^{*}(l_{39}|F_{1})$とする．
+\item 次の形態素$m_2$に対し各ラベルの付与確率
+  $p^{*}(l_{j(2)}|F_{2})$ $(0\leq j(2)\leq 39)$を計算し，
+  それぞれ各ラベルごとのスコアを
+  \begin{eqnarray*}
+    S_{2}(l_{j(2)}) 
+    & = & \mathop{max}_{l_{j(1)}}\ 
+    p^{*}(l_{j(2)}|F_{2}) \times S_{1}(l_{j(1)}) 
+  \end{eqnarray*}
+  とする．
+  ただし，$l_{j(1)}$と$l_{j(2)}$が連接規則を満たすものに限る．
+\item さらに次の形態素$m_3$に対しても同様に各ラベルの付与確率
+  $p^{*}(l_{j(3)}|F_{3})$ $(0\leq j(3)\leq 39)$を計算し，
+  それぞれ各ラベルごとのスコアを
+  \begin{eqnarray*}
+    S_{3}(l_{j(3)}) 
+    & = & \mathop{max}_{l_{j(2)}}\ 
+    p^{*}(l_{j(3)}|F_{3}) \times S_{2}(l_{j(2)}) 
+  \end{eqnarray*}
+  とする．ただし，$l_{j(2)}$と$l_{j(3)}$が連接規則を満たすものに限る．
+\item 同様のことを文末まで繰り返し，
+  \begin{eqnarray*}
+    S_{n}(l_{j(n)}) 
+    & = & \mathop{max}_{l_{j(n-1)}}\
+    p^{*}(l_{j(n)}|F_{n}) \times S_{n-1}(l_{j(n-1)}) 
+  \end{eqnarray*}
+  のうち最大のものを選ぶと，最適解である
+  ラベルの並び$l_{j(1)}$, $l_{j(2)}$, $\ldots$, $l_{j(n)}$が得られる．
+\end{enumerate}
+
+\subsection{自動獲得した書き換え規則による後処理}
+\label{sec:post_processing}
+
+MEモデルを用いたラベル付けの処理が終った後で，
+形態素解析により得られる形態素が固有表現より長い場合に対処するため，
+予め用意しておいた書き換え規則を適用する．
+書き換え規則はBrillが品詞タグ付けに用いた\cite{Brill:95}
+のと同様の手法である誤り駆動で獲得する．
+Brillの規則獲得方法との違いはBrillがテンプレートを用いているのに対して
+我々は用いていない点である．
+我々の場合，
+書き換え規則は学習コーパスに対するシステムの解析結果とコーパスの
+正解データとの差異を調べることによって自動獲得することができる．
+差異の中から，コーパスでは同じ文字列に対応しているにもかかわらず形態素の数が
+異なる部分をすべて抽出し書き換え規則として利用する．
+ただし，前件部は同じであるが後件部が異なるような規則が複数獲得された場合は，
+最も頻度の高い規則のみを用いる．最も頻度の高い規則が複数種類ある場合，
+それらの規則はすべて捨てる．
+さらに，ここで獲得した規則を学習コーパスに対するシステムの解析結果に適用し，
+誤りとなる数が正解となる数以上であるものはすべて捨てる．
+例えば，以下のようなものが書き換え規則として獲得される．
+
+  \begin{center}
+    \begin{tabular}[c]{l@{ }|l|}
+      \multicolumn{1}{c}{} & \multicolumn{1}{c}{前件部} \\
+      \cline{2-2}
+      見出し語 & 在日 \\
+      品詞(大分類) & 名詞 \\
+      品詞(細分類) & サ変名詞 \\
+      ラベル & OTHER \\
+      \cline{2-2}
+    \end{tabular}
+    $\Rightarrow$
+    \begin{tabular}[c]{|l@{ }l|}
+      \multicolumn{2}{c}{後件部} \\
+      \hline
+      在 & 日 \\
+      名詞 & 名詞 \\
+      普通名詞 & 普通名詞 \\ 
+      PRE & LOCATION:SINGLE \\
+      \hline
+    \end{tabular}
+  \end{center}
+
+\section{実験と考察}
+\label{sec:exp}
+
+\subsection{実験データ}
+\label{sec:data}
+
+モデルの学習に用いたデータは，CRL(郵政省通信総合研究所)固有表現データ，
+IREX-NE予備試験トレーニングデータ，
+IREX-NE予備試験データ，IREX-NE本試験逮捕トレーニングデータ
+の合計約12,000文である．
+試験に用いたデータはIREX-NE本試験データである
+\footnote{
+  今回学習，試験に用いたデータはすべて
+  IREXのホームページ\cite{irex:homepage}から入手可能である．
+}．
+これらはすべて毎日新聞のデータに対して固有表現のタグが付与されたものである．
+以下で簡単にデータの説明をする．
+
+\subsubsection{学習データ}
+
+学習コーパスの書式はSGML形式で，
+各固有表現には表~\ref{table:tag} のタグが付与されている．
+これらのタグ付コーパスからテキスト部分を取り出して形態素解析し，
+表~\ref{table:trans_rule2} にあげる変換規則を用いて各形態素にラベルが
+付与されたものに変換した後，学習に用いた．
+
+  \begin{table}[htbp]
+    \begin{center}
+      \caption{タグからラベルへの変換規則}
+      \label{table:trans_rule2} 
+      \begin{tabular}[c]{|llclcr@{ }l|}
+        \hline
+        一つ前の & \multicolumn{3}{c}{形態素と}
+        & & \multicolumn{2}{c|}{形態素(ラベル)} \\
+        形態素のラベル & \multicolumn{3}{c}{前後のタグ} & & & \\
+        \hline
+        & $<x>$ & $m$ & $</x>$ & $\Rightarrow$ & $m$ & ($x$:SINGLE) \\
+        & $<x>$ & $m$ & & $\Rightarrow$ & $m$ & ($x$:BEGIN) \\
+        & & $m$ & $</x>$ & $\Rightarrow$ & $m$ & ($x$:END) \\
+        & $</x>$ & $m$ & $<y>$ & $\Rightarrow$ & $m$ & (MID) \\
+        & $</x>$ & $m$ & & $\Rightarrow$ & $m$ & (POST) \\
+        & & $m$ & $<x>$ & $\Rightarrow$ & $m$ & (PRE) \\
+        $x$:BEGIN & & $m$ & & $\Rightarrow$ & $m$ & ($x$:MIDDLE) \\
+        $x$:MIDDLE & & $m$ & & $\Rightarrow$ & $m$ & ($x$:MIDDLE) \\
+        & & $m$ & & $\Rightarrow$ & $m$ & (OTHER) \\
+        \hline
+      \end{tabular}
+    \end{center}
+  \end{table}
+
+\begin{description}
+\item[CRL(郵政省通信総合研究所)固有表現データ] 
+  毎日新聞1995年1月1日から10日までの全記事，約1万文に対して，固有表現を
+  タグ付けしたデータである．固有表現はIREX-NEの1999年2月14日に更新された
+  定義に基づいている．
+\item[IREX-NE予備試験トレーニングデータ] 
+  毎日新聞1994年4月13日の46記事，約500文に対して
+  固有表現をタグ付けしたデータである．
+  固有表現はIREX-NEの1998年10月27日に更新された定義に基づいている．
+\item[IREX-NE予備試験データ] 
+  毎日新聞1994年9月11日の36記事，約500文に対して
+  固有表現をタグ付けしたデータである．
+  固有表現はIREX-NEの1998年10月27日に更新された定義に基づいている．
+\end{description}
+
+IREX-NEの定義は少しずつ更新されている．しかし，それらの定義の違いによる
+ノイズの数は人間が学習データを作成するときに生じるノイズの数とさほど違いは
+ないと考え，すべて学習に用いた．
+
+\subsubsection{本試験データ}
+
+1999年4月14日から5月13日の毎日新聞のデータから選ばれた91記事で，
+ドメインを限らないもの71記事，約400文(以下，「一般ドメイン」と呼ぶ)と
+「逮捕」にドメインを限ったもの20記事，約100文(以下，「限定ドメイン」と呼ぶ)
+の2種類のデータからなる．
+それぞれのドメインのデータにおける固有表現の数は表~\ref{Answer} の通りである．
+
+\begin{table*}[htbp]
+  \begin{center}
+    \caption{IREX-NE本試験データに対する固有表現の内訳}
+    \label{Answer} 
+    \begin{tabular}{|l|r|r|}
+      \hline
+      & \multicolumn{1}{c|}{ARREST} & \multicolumn{1}{c|}{GENERAL}\\
+      \cline{2-3}
+      固有表現(NE) & \multicolumn{1}{c|}{個数 (個)} 
+      & \multicolumn{1}{c|}{個数 (個)} \\
+      \hline      
+      ORGANIZATION &  74 & 361 \\
+      PERSON       &  97 & 338 \\
+      LOCATION     & 106 & 413 \\
+      ARTIFACT     &  13 &  48 \\
+      DATE         &  72 & 260 \\
+      TIME         &  19 &  54 \\
+      MONEY        &   8 &  15 \\
+      PERCENT      &   0 &  21 \\
+      OPTIONAL     &   8 &  86 \\
+      \hline
+      合計 & 389 & 1510 \\
+      \hline
+    \end{tabular}
+  \end{center}
+\end{table*}
+
+\subsection{実験結果}
+\label{sec:experimental_results}
+
+実験に用いた素性は形態素解析結果から得られる情報であり，
+着目している形態素を含む前後2形態素ずつ合計5形態素に関する
+見出し語，品詞(大分類，細分類)である．
+見出し語としては学習コーパス中に5回以上現れた12,368個を用いた．
+品詞分類はJUMANのものにしたがった．それぞれ大分類15個，細分類48個である．
+このうち，式(\ref{eq:f})の素性関数としては学習コーパスに3回以上観測された
+もの27,370個を用いた．
+モデルの重み(式(\ref{eq:alpha})の$\lambda_{a,j}$)の
+学習にはRistadのツール\cite{ristad98}を利用した
+\footnote{
+  現在このツールは公開されていない．
+  参考文献\cite{ristad97}を参照．
+}
+．
+
+次に我々の解析結果を表~\ref{Result} に示す．
+この表で第1列と第2列は書き換え規則を利用したときの
+限定ドメインの試験(ARREST)に対する結果とドメインを限定しない試験(GENERAL)に
+対する結果である．
+第3列と第4列は書き換え規則を利用しなかったときのそれぞれのドメインに対する
+結果である．
+どちらのドメインに対しても特別なチューニングはしなかった．
+精度はどちらのドメインに対しても書き換え規則を用いたときの方が良く，
+F-measure
+\footnote{
+  F-measureとしては以下の定義のものを用いる．
+  \begin{eqnarray*}
+    {\rm F-measure} & = & \frac{2\times 再現率\times 適合率}{再現率+適合率}
+  \end{eqnarray*}
+}は限定ドメインに対して83.91，一般ドメインに対して79.42であった．
+IREX-NEの試験では「OPTIONAL」のタグが振られたものについては，
+その範囲内にシステムがどのような結果を出そうとも，評価には反映されない．
+ただし，範囲外にずれて重なっている場合には不正解とされる．
+本論文においてもこの評価方法にしたがった
+\footnote{
+  OPTIONALを正解とする評価もあり得るが，
+  その場合，タスクは固有表現の抽出ではなく，
+  人間が固有表現かどうか迷う部分の特定ということになる．
+  したがって，その評価は他の固有表現の抽出結果の評価とは
+  別にするべきである．本論文の目的は固有表現の抽出であるため，
+  OPTIONALを正解とする評価は対象外とした．
+}．
+
+{\small
+\begin{table*}[htbp]
+  \begin{center}
+    \caption{実験結果}
+    \label{Result} 
+    \begin{tabular}{|l|r@{ }r|r@{ }r||r@{ }r|r@{ }r|}
+      \hline
+      & \multicolumn{4}{c||}{書き換え規則を利用} 
+      & \multicolumn{4}{c|}{書き換え規則を利用しない} \\
+      \hline
+      & \multicolumn{2}{c|}{ARREST} 
+      & \multicolumn{2}{c||}{GENERAL}
+      & \multicolumn{2}{c|}{ARREST} 
+      & \multicolumn{2}{c|}{GENERAL}\\
+      \cline{2-9}
+      固有表現(NE) & \multicolumn{1}{c}{再現率} 
+      & \multicolumn{1}{c|}{適合率} & \multicolumn{1}{c}{再現率} 
+      & \multicolumn{1}{c||}{適合率} & \multicolumn{1}{c}{再現率} 
+      & \multicolumn{1}{c|}{適合率} & \multicolumn{1}{c}{再現率} 
+      & \multicolumn{1}{c|}{適合率} \\
+      & (\%) & (\%) & (\%) & (\%) & (\%) & (\%) & (\%) & (\%) \\
+      \hline      
+      ORGANIZATION & 59.46 & 81.48 & 59.28 & 79.55 
+      & 59.46 & 81.48 & 58.73 & 81.85 \\
+      PERSON       & 84.54 & 84.54 & 76.92 & 83.87 
+      & 84.54 & 84.54 & 76.92 & 83.87 \\
+      LOCATION     & 83.02 & 81.48 & 76.27 & 84.45
+      & 73.58 & 77.23 & 69.73 & 82.52 \\
+      ARTIFACT     & 61.54 & 66.67 & 35.42 & 50.00 
+      & 61.54 & 66.67 & 35.42 & 50.00 \\
+      DATE         & 97.22 & 97.22 & 91.15 & 94.80 
+      & 97.22 & 97.22 & 90.38 & 94.76 \\
+      TIME         & 94.74 & 100.00 & 87.04 & 94.00 
+      & 94.74 & 100.00 & 87.04 & 94.00 \\
+      MONEY        & 100.00 & 100.00 & 93.33 & 93.33 
+      & 100.00 & 100.00 & 93.33 & 93.33 \\
+      PERCENT      & - & - & 100.00 & 95.45
+      & - & - & 80.95 & 94.44 \\
+      \hline
+      総合 & 81.75 & 86.18 & 74.50 & 85.03 & 79.18 & 85.08 & 72.19 & 84.96 \\
+      \hline
+      \hline
+      F-measure & \multicolumn{2}{c|}{83.91} & \multicolumn{2}{c||}{79.42} 
+      & \multicolumn{2}{c|}{82.02} & \multicolumn{2}{c|}{78.05} \\
+      \hline
+    \end{tabular}
+  \end{center}
+\end{table*}
+}
+
+\subsection{書き換え規則と精度}
+\label{sec:trans_rules_and_accuracy}
+
+書き換え規則の適用対象となる固有表現は形態素単位より短い部分文字列を含む
+もので，本試験データでは限定ドメインに18個，一般ドメインに79個あった．
+いずれも本試験データ全体の約5\%に相当する．
+学習コーパスから得られた書き換え規則の数は362個であり，
+そのうち限定ドメインの試験には9個の規則が延べ11回適用され誤りが1個
+(再現率$56\%(10/18)$，適合率$91\%(10/11)$)，
+一般ドメインの試験には12個の規則が延べ42回適用され誤りが10個
+(再現率$41\%(32/79)$，適合率$76\%(32/42)$)であった．
+誤りは以下のようなものであった．
+\begin{itemize}
+\item 本来抽出するべき固有表現の部分文字列を誤って抽出してしまう場合(1個)．
+
+  「在日米軍横田基地」から「日」だけがLOCATIONとして抽出されていた．
+  これは，IREX-NEの定義によると「在日米軍横田基地」がLOCATIONとして
+  抽出されるべきであるが，  
+  MEモデルを用いたラベル付けによってうまく抽出できなかった結果，
+  書き換え規則が適用され誤って抽出されてしまった例である．
+  このような誤りをなくすためには，
+  MEモデルを用いたラベル付けの精度を向上する必要がある．
+\item 学習コーパスでは固有表現となっていたが，
+  正解データでは固有表現となっていない場合(10個)．
+
+  学習コーパスでは「邦人」の「邦」がLOCATION，
+  「外相会談」の「外」がORGANIZATIONとなっていたが，
+  本試験の正解データでは固有表現とみなされていなかった．
+  このような誤りをなくすためには学習コーパスの整備が必要である．
+\end{itemize}
+
+書き換え規則を用いることにより，
+F-measureで2ポイント(限定ドメイン)および1.5ポイント(一般ドメイン)程度の
+精度向上がみられた．
+ここで用いた書き換え規則は形態素の境界とIREXで定義されている固有表現の境界が
+一致しない場合にのみ対応するために獲得したものである．
+一致する場合についても同様の書き換え規則を適用することは可能であるが，
+そうした場合の追加実験ではF-measureで72.23(限定ドメイン)および
+73.12(一般ドメイン)と書き換え規則を用いない場合に比べてそれぞれ
+10ポイントおよび5ポイント程度精度が悪くなった．これは我々の用いた簡便な
+獲得手法では，MEモデルにより付与したラベルを精度良く書き換えられるほどの
+規則を獲得できないことを示している．しかし，得られた精度向上および
+規則獲得の簡便さを考慮すると，
+MEモデルで抽出できない部分を補う方法としては有効な方法であると言える．
+
+本手法では形態素解析が終った後に固有表現のラベルを推定するが，
+形態素解析の段階で形態素の文法的属性(品詞など)と固有表現のラベルを同時に
+推定するような方法をとることも考えられる．
+この場合でも書き換え規則は形態素解析の後処理として利用されている
+久光らの研究\cite{Hisamitsu:98}と同様にして使えると考えられる．
+
+\subsection{素性と精度}
+\label{sec:features_and_accuracy}
+
+実験に用いた素性の有効性を調べるために，それぞれの素性を削除したときの
+比較実験を行なった．比較実験ではすべて書き換え規則を用いた．
+結果を表~\ref{Result3} にあげる．
+{\small
+\begin{table*}[thbp]
+  \begin{center}
+    \caption{素性と精度の関係(書き換え規則利用)}
+    \label{Result3} 
+    \begin{tabular}{|l|r@{ }rr@{ }r|r@{ }rr@{ }r|}
+      \hline
+      & \multicolumn{4}{c|}{ARREST} 
+      & \multicolumn{4}{c|}{GENERAL}\\
+      \cline{2-9}
+      \multicolumn{1}{|c|}{素性} & \multicolumn{1}{c}{再現率} 
+      & \multicolumn{1}{c}{適合率} & \multicolumn{1}{c}{F} 
+      & \multicolumn{1}{c|}{精度の差}
+      & \multicolumn{1}{c}{再現率} & \multicolumn{1}{c}{適合率} 
+      & \multicolumn{1}{c}{F} & \multicolumn{1}{c|}{精度の差} \\
+      & (\%) & (\%) & & & (\%) & (\%) & &\\
+      \hline      
+      すべて & 81.75 & 86.18 & 83.91 & 0 & 74.50 & 85.03 & 79.42 & 0\\
+      見出し語のみ & 73.26 & 80.97 & 76.92 & -6.99
+      & 62.58 & 74.29 & 67.94 & -11.48\\
+      品詞大分類のみ & 5.40 & 70.00 & 10.02 & -73.89
+      & 2.85 & 42.16 & 5.33 & -74.09\\
+      品詞細分類のみ & 51.41 & 62.50 & 56.42 & -27.49
+      & 45.23 & 61.31 & 52.06 & -27.36\\
+      見出し語削除 & 51.41 & 63.49 & 56.82 & -27.09
+      & 46.16 & 65.45 & 54.14 & -25.28\\
+      品詞大分類削除 & 80.46 & 85.99 & 83.13 & -0.78
+      & 72.91 & 82.29 & 77.32 & -2.10\\
+      品詞細分類削除 & 76.09 & 87.57 & 81.43 & -2.48
+      & 66.89 & 82.72 & 73.97 & -5.45\\
+      \hline
+      (0)のみ & 31.11 & 48.79 & 37.99 & -45.92
+      & 35.56 & 70.57 & 47.29 & -32.13\\
+      (-1)(0)(1) & 76.86 & 84.46 & 80.48 & -3.43
+      & 72.32 & 85.11 & 78.20 & -1.22\\
+      (-2)から(2) 
+      & 81.75 & 86.18 & 83.91 & 0 & 74.50 & 85.03 & 79.42 & 0\\
+      (-3)から(3) & 80.72 & 85.09 & 82.85 & -1.06
+      & 73.38 & 84.19 & 78.41 & -1.01\\
+      \hline
+    \end{tabular}
+  \end{center}
+\end{table*}
+}
+表中のFというのはF-measureのことで，
+精度の差というのは，着目している形態素とその前後2形態素ずつについて，
+見出し語，品詞大分類，品詞細分類のすべての情報を素性として用いたときの精度と
+比べたときの差を意味する．どの素性を削除した場合にも精度が悪くなっており，
+どの素性も精度の向上に貢献していることが分かる．
+特に見出し語は精度向上に著しく貢献している．
+
+表~\ref{Result3} の下から三行は，前後の形態素情報の利用範囲を変更したときの
+結果であり，
+着目している形態素の情報のみ(表では「(0)のみ」と示す．)，
+着目している形態素とその前後の形態素の情報のみ(表では「(-1)(0)(1)」と示す．)，
+着目している形態素とその前後2形態素の情報(表では「(-2)から(2)」と示す．
+表~\ref{Result} に示した結果と同じ．)，
+着目している形態素とその前後3形態素の情報(表では「(-3)から(3)」と示す．)
+をそれぞれ素性として用いたときの精度を表す．
+用いる情報が前後2形態素ずつより多くても少なくても精度が悪くなった．
+用いる情報を多くしたにもかかわらず精度が悪くなるのは，
+データスパースネスの問題が深刻になってくるためであると考えられる．
+
+\subsection{学習コーパスと精度}
+\label{sec:training_corpus_and_accuracy}
+
+この節では，学習コーパスと解析精度の関係について考察する．
+まず，図~\ref{fig:learning_curve:training}，図~\ref{fig:learning_curve:test}
+に学習コーパスとテストコーパスのそれぞれを解析した場合の
+学習コーパスの量と解析精度の関係をあげる．図の横軸は学習コーパスの文数，
+縦軸はF-measureを表す．
+学習コーパスの解析には
+限定ドメインとしてIREX-NE本試験逮捕トレーニングデータ，
+一般ドメインとしてIREX-NE予備試験データを用いた．
+図では限定ドメイン，一般ドメインに対するグラフにはそれぞれ「arrest」，
+「general」，書き換え規則を用いた場合と用いなかった場合にはそれぞれ
+「with\_rules」，「without\_rules」という表記を用いている．
+
+テストコーパスに対する学習曲線(図~\ref{fig:learning_curve:test})を
+見ると，特に一般ドメインに対してはまだ精度は飽和していないようである．
+学習コーパスに対する学習曲線(図~\ref{fig:learning_curve:training})も
+わずかではあるが増加する傾向にある．
+したがって，少なくとも一般ドメインに対しては学習コーパスの量が増えれば
+もう少し精度の向上が期待できそうである．
+
+\begin{figure*}[htbp]
+  \begin{center}
+    \leavevmode
+    \epsfile{file=curve_training.ps,height=8cm}
+    \caption{学習コーパスの量と精度の関係(学習コーパスに対して)}
+    \label{fig:learning_curve:training}
+  \end{center}
+
+  \begin{center}
+    \leavevmode
+    \epsfile{file=curve_testing.ps,height=8cm}
+    \caption{学習コーパスの量と精度の関係(テストコーパスに対して)}
+    \label{fig:learning_curve:test}
+  \end{center}
+\end{figure*}
+
+\subsection{関連研究との比較}
+\label{sec:related_work}
+
+1999年5月13日から17日にかけて，IREX-NEの本試験が行なわれた．
+試験は13日に実行委員長より問題が配布され，17日までに各々のシステムの
+タグ付け結果を電子メイルで送り返すという形式で行なわれた．
+IREX-NE本試験に参加したシステムは15システムであった．
+それらをパターン駆動型，学習型，それらの組み合わせの3種類に分類すると，
+我々のシステムは学習型に分類される．
+本節では主に他の学習型システムとの違いを説明し，
+そのうち重要であると思われる部分については
+追加実験を行なうことによりその違いがどの程度精度に影響を与えるかを調べる．
+
+学習型のシステムのアプローチは我々のものも含めて四つあり，
+どれも基本的に関根らのとったアプローチ\cite{Sekine98_wvlc}に類似している．
+関根らのシステム\cite{Sekine98_wvlc}を
+改良したものにはBorthwickのシステム\cite{borthwick_irex:99}，
+野畑のシステム\cite{nova_irex:99}，
+新納\cite{shinnou_irex:99}のシステムがあり，
+それらと我々のシステムの違いを表にすると表~\ref{Comparison} のようになる
+\footnote{
+  表で比較としてあげた精度(F-measure)はすべて
+  IREXワークショップ予稿集において報告されたものである．
+}．
+違いは主に学習モデル，形態素に付与するラベル(NEラベル)の定義，素性，
+後処理にある．
+
+{\scriptsize
+\begin{table*}[thbp]
+  \begin{center}
+    \caption{関連研究との比較}
+    \label{Comparison} 
+    \begin{tabular}{|p{1.24cm}|p{1.55cm}|p{3.68cm}|p{2cm}|p{1cm}|p{2.3cm}|}
+      \hline
+      & \multicolumn{1}{c|}{学習モデル} & \multicolumn{1}{c|}{NEラベル} 
+      & \multicolumn{1}{c|}{素性} & \multicolumn{1}{c|}{後処理} 
+      & \multicolumn{1}{c|}{F-measure} \\
+      \hline      
+      我々のシステム & MEモデル
+      & 40種類．
+      固有表現タグにOPTIONAL，OTHERを加えた10種類のそれぞれに対し，
+      固有名詞の始まり，中間，終り，単独を表す4種類のラベルを用意する．
+      & 着目している形態素を含む前後2形態素ずつ合計5形態素に関する
+      見出し語，品詞(大分類，細分類)
+      & 自動獲得した書き換え規則 & 83.91(ARREST)\hspace{2mm}，79.42(GENERAL)\\
+      \hline
+      \hline      
+      Borthwickのシステム & MEモデル 
+      & (関根らのシステムと同じ)
+      & (関根らのシステムと同じ)
+      & 人手で作成した書き換え規則 & 85.02(ARREST)\hspace{2mm}，77.37(GENERAL)\\
+      \hline
+      野畑のシステム & 決定木モデル 
+      & 38種類．
+      8種類の固有表現タグそれぞれに対し，
+      固有名詞の始まり，中間，終り，単独を表す4種類のラベルを用意し，
+      固有表現以外に対しOTHERというラベルを用意する．
+      さらに，固有物名(ARTIFACT), 地名(LOCATION), 組織名(ORGANIZATION)を
+      細分類する．
+      & 着目している形態素を含む前後1形態素ずつ合計3形態素に関する
+      品詞(大分類，細分類)，字種情報，単語リスト，統語的情報
+      & なし & 80.37(ARREST)\hspace{2mm}，70.34(GENERAL)\\
+      \hline
+      新納のシステム & n-gramモデル
+      & 形態素ごとではなく文字ごとにラベルを付与する．36種類．
+      固有表現タグに固有表現以外を表すOTHERを加えた9種類のそれぞれに対し，
+      固有名詞の始まり，中間，終り，単独を表す4種類のラベルを用意する．
+      & 着目している文字を含む前後1文字ずつ合計3文字に関する
+      文字，品詞情報
+      & なし & 58.46(ARREST)\hspace{2mm}，60.36(GENERAL)\\
+      \hline
+      \hline
+      関根らのシステム & 決定木モデル 
+      & 33種類．
+      8種類の固有表現タグそれぞれに対し，
+      固有名詞の始まり，中間，終り，単独を表す4種類のラベルを用意し，
+      固有表現以外に対しOTHERというラベルを用意する．
+      & 着目している形態素を含む前後1形態素ずつ合計3形態素に関する
+      見出し語，品詞(大分類，細分類)，字種情報，辞書情報
+      & なし & \\
+      \hline
+    \end{tabular}
+  \end{center}
+\end{table*}
+}
+
+以下では主に表~\ref{Comparison} の違いに着目して考察する．
+
+\subsubsection{形態素に付与するラベル(NEラベル)の定義について}
+
+我々の定義したNEラベルは関根らのシステムに比べると7種類多い．
+これは，関根らのシステムよりさらに
+OPTIONAL(始まり，中間，終り，単独の4種類)および
+PRE，POST，MIDのラベルを考慮したためである．
+OPTIONALはタグ付けが判定者にも困難な場合のために設けられたものであり，
+その性質を学習することによって，例えばLOCATIONかORGANIZATIONの判定が
+困難なものをいずれかのタグに分類してしまうのを避けることができると考えられる．
+PRE, POST, MIDのラベルは固有表現の前後および固有表現の間の形態素に付与する
+ように設けたものである．これは見方を変えると関根らがOTHER(あるいはNONE)
+としていたラベルを固有表現以外の部分の始まり(POSTに対応)，中間(OTHERに対応)，
+終り(PREに対応)，単独(MIDに対応)に細分類したものであるとも言える．
+
+OPTIONALに関する4種類およびPRE，POST，MIDのラベルが
+どの程度精度に影響しているかを調べるために，
+それぞれのラベルをOTHERにマージして追加実験を行なった．
+その結果を表~\ref{Comparison2} 〜表~\ref{Comparison3} にあげる．
+表の括弧内の数値は表~\ref{Result} にあげた精度からの増減を表す．
+これらの実験ではMEモデルによるラベル付けの精度の違いを調べることを
+目的としているためいずれも書き換え規則は用いていない．
+
+{\scriptsize
+\begin{table*}[htbp]
+  \begin{center}
+    \caption{OPTIONALのラベルをOTHERにマージした場合(書き換え規則は用いない)}
+    \label{Comparison2} 
+    \begin{tabular}{|l|r@{ }r|r@{ }r|}
+      \hline
+      & \multicolumn{2}{c|}{ARREST} 
+      & \multicolumn{2}{c|}{GENERAL}\\
+      \cline{2-5}
+      固有表現(NE) & \multicolumn{1}{c}{再現率} 
+      & \multicolumn{1}{c|}{適合率} & \multicolumn{1}{c}{再現率} 
+      & \multicolumn{1}{c|}{適合率} \\
+      & (\%) & (\%) & (\%) & (\%) \\
+      \hline      
+      ORGANIZATION &  58.11 &  81.13 & 59.28 & 82.31\\
+      PERSON       &  82.47 &  84.21 & 76.33 & 83.50\\
+      LOCATION     &  73.58 &  78.00 & 69.98 & 82.81\\
+      ARTIFACT     &  61.54 &  66.67 & 33.33 & 50.00\\
+      DATE         &  97.22 &  97.22 & 90.00 & 95.12\\
+      TIME         &  94.74 & 100.00 & 87.04 & 94.00\\
+      MONEY        & 100.00 &  80.00 & 93.33 & 82.35\\
+      PERCENT      &      - &      - & 80.95 & 94.44\\
+      \hline
+      総合 & 78.41 & 84.72 & 72.12 & 85.01\\
+      & (-0.77) & (-0.36) & (-0.07) & (+0.05) \\
+      \hline
+      \hline
+      F-measure & \multicolumn{2}{c|}{81.44 (-0.58)} 
+      & \multicolumn{2}{c|}{78.04 (-0.01)} \\
+      \hline
+    \end{tabular}
+  \end{center}
+
+  \begin{center}
+    \caption{PRE, POST, MIDのラベルをOTHERにマージした場合
+      (書き換え規則は用いない)}
+    \label{Comparison1} 
+    \begin{tabular}{|l|r@{ }r|r@{ }r|}
+      \hline
+      & \multicolumn{2}{c|}{ARREST} 
+      & \multicolumn{2}{c|}{GENERAL}\\
+      \cline{2-5}
+      固有表現(NE) & \multicolumn{1}{c}{再現率} 
+      & \multicolumn{1}{c|}{適合率} & \multicolumn{1}{c}{再現率} 
+      & \multicolumn{1}{c|}{適合率} \\
+      & (\%) & (\%) & (\%) & (\%) \\
+      \hline      
+      ORGANIZATION &  58.11 &  79.63 &  57.06 &  78.03 \\
+      PERSON       &  86.60 &  88.42 &  74.26 &  83.39 \\
+      LOCATION     &  74.53 &  81.44 &  68.04 &  84.13 \\
+      ARTIFACT     &  53.85 &  63.64 &  31.25 &  48.39 \\
+      DATE         &  97.22 &  95.89 &  88.46 &  93.50 \\
+      TIME         &  94.74 & 100.00 &  94.44 &  98.08 \\
+      MONEY        & 100.00 &  88.89 &  93.33 &  73.68 \\
+      PERCENT      &      - &      - &  80.95 &  94.44 \\
+      \hline
+      総合 & 79.43 & 86.55 & 70.53 & 84.19 \\
+      & (+0.25) & (+1.47) & (-1.66) & (-0.77) \\
+      \hline
+      \hline
+      F-measure & \multicolumn{2}{c|}{82.84 (+0.82)} 
+      & \multicolumn{2}{c|}{76.76 (-1.29)} \\
+      \hline
+    \end{tabular}
+  \end{center}
+
+  \begin{center}
+    \caption{PRE, POST, MID, OPTIONALのラベルをOTHERにマージした場合\\
+      (書き換え規則は用いない)}
+    \label{Comparison3} 
+    \begin{tabular}{|l|r@{ }r|r@{ }r|}
+      \hline
+      & \multicolumn{2}{c|}{ARREST} 
+      & \multicolumn{2}{c|}{GENERAL}\\
+      \cline{2-5}
+      固有表現(NE) & \multicolumn{1}{c}{再現率} 
+      & \multicolumn{1}{c|}{適合率} & \multicolumn{1}{c}{再現率} 
+      & \multicolumn{1}{c|}{適合率} \\
+      & (\%) & (\%) & (\%) & (\%) \\
+      \hline      
+      ORGANIZATION &  58.11 &  81.13 &  56.51 & 78.16 \\
+      PERSON       &  86.60 &  88.42 &  74.56 & 83.44 \\
+      LOCATION     &  75.47 &  80.81 &  68.04 & 84.13 \\
+      ARTIFACT     &  53.85 &  63.64 &  31.25 & 50.00 \\
+      DATE         &  97.22 &  95.89 &  88.08 & 93.47 \\
+      TIME         &  94.74 & 100.00 &  94.44 & 98.08 \\
+      MONEY        & 100.00 &  88.89 &  93.33 & 73.68 \\
+      PERCENT      &      - &      - &  80.95 & 94.44 \\
+      \hline
+      総合 & 79.69 & 86.59 & 70.40 & 84.30 \\
+      & (+0.51) & (+1.51) & (-1.79) & (-0.66) \\
+      \hline
+      \hline
+      F-measure & \multicolumn{2}{c|}{83.00 (+0.98)} 
+      & \multicolumn{2}{c|}{76.72 (-1.33)} \\
+      \hline
+    \end{tabular}
+  \end{center}
+\end{table*}
+}
+
+表から分かるようにOPTIONALに関するラベルは期待していたほど精度に影響を
+与えていなかった．
+PRE，POST，MIDのラベルは一般ドメイン(GENERAL)に対しては精度の向上に
+貢献しているのに対し，限定ドメイン(ARREST)に対してはその利用がかえって
+精度を低下させることになっている．
+固有表現ごとに精度の増減を調べてみると，
+PRE，POST，MIDのラベルをOTHERにマージすることによって
+限定ドメインに対してはPERSONとLOCATIONの精度が良くなっており，
+他の固有表現に対しては悪くなっていることが分かる．
+限定ドメインの内訳(表~\ref{Answer})を見ると
+PERSONとLOCATIONの個数が多く，これらの固有表現に対する抽出精度が良くなったため
+全体の精度も良くなったと考えられる．
+PERSONとLOCATIONに対する精度が良くなったのは
+PREやPOSTなどが数の多いPERSONやLOCATIONの性質に引っ張られて
+PERSONやLOCATIONの前後に位置しやすいラベルとして学習されたためである
+可能性が高い．
+PERSONやLOCATIONについてはPREやPOSTなどをさらに細分類して
+PERSON:PREやPERSON:POSTのようなラベルを考えると良いかも知れない．
+このような細分類は，
+PERSONやLOCATION，特にPERSONは固有表現直後の形態素が「さん」や「氏」など
+特別な語であることが多く，他の固有表現についてそのような傾向は見られない
+\cite{nova_irex2:99}ことからも妥当な方法であると考えられる．
+しかし，抽出精度をもとに細分類を続けると本試験のデータに対しては精度が
+良くなるかもしれないが，他のデータに対しても良くなるとは言えなくなる．
+したがって，これ以上細分類して本試験のデータに対する精度を調べることは
+あまり意味がないと思われる．
+
+Borthwickのシステムとの精度の差(表~\ref{Comparison})は
+主にこのラベルの定義の違いと素性の違いから生じていると考えられる．
+素性の違いについては後で述べる．
+一方，
+野畑はARTIFACT，LOCATION，ORGANIZATIONを細分類してF-measureで2ポイント程度
+精度が向上したと報告している．
+我々のシステムにおいてもどの程度精度に影響するかを調べたいところであるが，
+学習コーパスに付与されたラベルを人手で細分類する必要があるため
+同じ学習コーパスを作成するのは困難であると判断し，
+野畑の細分類に基づいて追加実験をするのは見合わせた．
+新納は形態素ごとではなく文字ごとにNEラベルを付与する方法を提案した．
+この方法は形態素の区切りと固有表現の区切りが一致しない場合でも
+一つのモデルで固有表現を抽出できるという点で優れているが，
+精度は我々に比べてF-measureで20ポイント以上低い．
+この理由は，後に述べる素性に関連することであるが，
+新納の方法が文字3-gramという少ない情報のみを用いてNEラベルを
+推定しているためであると考えられる．3文字ということは多くても3形態素の情報しか
+用いていないということである．
+我々の実験では，\ref{sec:features_and_accuracy} 節でも述べたように
+着目する形態素およびその前後2形態素ずつの情報を用いた場合が
+最も精度が良いことから，新納の方法で我々のシステムと同程度の精度を得るためには
+少なくとも文字5-gram以上の情報を用いる必要があるだろう．しかし，
+文字5-gramを得るには膨大な学習コーパスが必要であり，我々が実験に用いた
+学習コーパスだけでは我々のシステムと同程度の精度は得られないと予想される．
+
+
+\subsubsection{素性について}
+\label{sec:feature}
+
+Borthwickや野畑は我々が用いた素性に加えて字種情報，統語的情報や辞書情報などを
+用いて精度を向上させている．このうち字種情報については我々の素性においても
+形態素の品詞情報としてある程度考慮されている．
+統語的情報については野畑のシステムで
+用いられている方法では人手の介入が必要であり，同じ条件での実験は困難である．
+辞書情報については我々の素性に加えて追加実験を行ない，
+精度に与える影響を調べた．
+
+辞書情報としてはBorthwickや野畑と同様に文献\cite{sekine:homepage}で
+公開されているものを用いた．これは組織名，地名に関する辞書で登録数は
+約1,000である．それに加えて，学習コーパスに3回以上出現した
+固有表現約1,400個(ORGANIZATION: 272個, PERSON: 336個, LOCATION: 339個, 
+ARTIFACT: 45個, DATE: 233個, TIME: 31個, MONEY: 21個, PERCENT: 45個, 
+OPTIONAL: 56個)を取り出しそれぞれの固有表現ごとに9種類の辞書を作成した．
+予めこれらの辞書に登録されている固有表現をJUMANを用いて
+形態素解析し，各形態素に我々の定義したNEラベルを付与しておく．
+素性としては，形態素の見出し語がこれらの辞書中でどのようなNEラベルが
+付与されているかという情報を用いた．
+つまり，我々が定義した40個のラベルの各々について付与されているかいないかの
+それぞれを素性として用いる．
+辞書中の形態素の見出し語の異なり数は合計約10,000個である．
+この素性を，着目している形態素のみについて利用した場合，
+着目している形態素を含む前後1形態素ずつ合計3形態素について利用した場合，
+着目している形態素を含む前後2形態素ずつ合計5形態素について利用した場合
+それぞれについて追加実験を行なった．
+それぞれの実験結果を表~\ref{Comparison5} 〜表~\ref{Comparison7}にあげる．
+結果は着目している形態素のみについて利用した場合が最も精度が良く，
+考慮する前後の形態素の数が増えるにつれて精度は悪くなった．
+これは辞書の登録数が問題になっている可能性が高い．
+辞書に登録されている固有名詞は高々2,400個程度であり，
+そのうち1形態素，2形態素，3形態素，4形態素以上からなるものはそれぞれ
+745個，448個，125個，60個である．
+例えば二つ前の形態素の見出し語が辞書にあるかないか
+という情報(我々が辞書情報の素性として利用したもの)が
+有効なのは辞書に登録されている固有名詞の約8\%，
+185(=125+60)個についてのみであるということになる．
+今回，学習コーパス以外から得た辞書情報としては一般に公開されている1,000語
+程度の辞書を用いたが，一般に利用可能な大規模な固有名詞辞書があれば，
+辞書の登録数と精度の関係も調べてみたい．
+
+{\scriptsize
+\begin{table*}[htbp]
+  \begin{center}
+    \caption{辞書情報を素性として考慮した場合((0)のみ考慮)}
+    \label{Comparison5} 
+    \begin{tabular}{|l|r@{ }r|r@{ }r|}
+      \hline
+      & \multicolumn{2}{c|}{ARREST} 
+      & \multicolumn{2}{c|}{GENERAL}\\
+      \cline{2-5}
+      固有表現(NE) & \multicolumn{1}{c}{再現率} 
+      & \multicolumn{1}{c|}{適合率} & \multicolumn{1}{c}{再現率} 
+      & \multicolumn{1}{c|}{適合率} \\
+      & (\%) & (\%) & (\%) & (\%) \\
+      \hline      
+      ORGANIZATION &  68.92 &  85.00 &  62.33 &  79.79\\
+      PERSON       &  83.51 &  85.26 &  77.22 &  83.92\\
+      LOCATION     &  83.96 &  84.76 &  76.76 &  86.38\\
+      ARTIFACT     &  61.54 &  80.00 &  35.42 &  48.57\\
+      DATE         &  97.22 &  97.22 &  90.77 &  94.78\\
+      TIME         &  94.74 & 100.00 &  90.74 &  94.23\\
+      MONEY        & 100.00 &  88.89 &  93.33 &  82.35\\
+      PERCENT      &      - &      - & 100.00 & 100.00\\
+      \hline
+      総合 & 83.55 & 88.08 & 75.89 & 85.20\\
+      & (+1.80) & (+1.90) & (+1.39) & (+0.17) \\
+      \hline
+      \hline
+      F-measure & \multicolumn{2}{c|}{85.75 (+1.84)} 
+      & \multicolumn{2}{c|}{80.17 (+0.75)} \\
+      \hline
+    \end{tabular}
+  \end{center}
+
+  \begin{center}
+    \caption{辞書情報を素性として考慮した場合\mbox{((-1)(0)(1)を考慮)}}
+    \label{Comparison6} 
+    \begin{tabular}{|l|r@{ }r|r@{ }r|}
+      \hline
+      & \multicolumn{2}{c|}{ARREST} 
+      & \multicolumn{2}{c|}{GENERAL}\\
+      \cline{2-5}
+      固有表現(NE) & \multicolumn{1}{c}{再現率} 
+      & \multicolumn{1}{c|}{適合率} & \multicolumn{1}{c}{再現率} 
+      & \multicolumn{1}{c|}{適合率} \\
+      & (\%) & (\%) & (\%) & (\%) \\
+      \hline      
+      ORGANIZATION &  71.62 &  81.54 &  63.16 &  79.17 \\
+      PERSON       &  78.35 &  86.36 &  74.85 &  84.05 \\
+      LOCATION     &  83.02 &  83.81 &  77.24 &  89.36 \\
+      ARTIFACT     &  46.15 &  75.00 &  31.25 &  53.57 \\
+      DATE         &  95.83 &  95.83 &  90.00 &  92.86 \\
+      TIME         &  94.74 & 100.00 &  90.74 &  92.45 \\
+      MONEY        & 100.00 & 100.00 &  93.33 &  63.64 \\
+      PERCENT      &      - &      - & 100.00 & 100.00 \\
+      \hline
+      総合 & 81.75 & 87.36 & 75.03 & 85.70\\
+      & ($\pm$0) & (+1.18) & (+0.53) & (+0.67) \\
+      \hline
+      \hline
+      F-measure & \multicolumn{2}{c|}{84.46 (+0.55)} 
+      & \multicolumn{2}{c|}{80.01 (+0.59)} \\
+      \hline
+    \end{tabular}
+  \end{center}
+
+  \begin{center}
+    \caption{辞書情報を素性として考慮した場合\mbox{((-2)(-1)(0)(1)(2)を考慮)}}
+    \label{Comparison7} 
+    \begin{tabular}{|l|r@{ }r|r@{ }r|}
+      \hline
+      & \multicolumn{2}{c|}{ARREST} 
+      & \multicolumn{2}{c|}{GENERAL}\\
+      \cline{2-5}
+      固有表現(NE) & \multicolumn{1}{c}{再現率} 
+      & \multicolumn{1}{c|}{適合率} & \multicolumn{1}{c}{再現率} 
+      & \multicolumn{1}{c|}{適合率} \\
+      & (\%) & (\%) & (\%) & (\%) \\
+      \hline      
+      ORGANIZATION &  68.92 &  79.69 &  62.05 &  78.32\\
+      PERSON       &  78.35 &  86.36 &  74.85 &  82.95\\
+      LOCATION     &  81.13 &  83.50 &  75.79 &  88.42\\
+      ARTIFACT     &  46.15 &  75.00 &  33.33 &  53.33\\
+      DATE         &  95.83 &  95.83 &  91.15 &  93.68\\
+      TIME         &  94.74 & 100.00 &  90.74 &  94.23\\
+      MONEY        & 100.00 &  88.89 &  93.33 &  73.68\\
+      PERCENT      &      - &      - & 100.00 & 100.00\\
+      \hline
+      総合 & 80.72 & 86.74 & 74.64 & 85.38\\
+      & (-1.03) & (+0.56) & (+0.14) & (+0.35) \\
+      \hline
+      \hline
+      F-measure & \multicolumn{2}{c|}{83.62 (-0.29)} 
+      & \multicolumn{2}{c|}{79.65 (+0.23)} \\
+      \hline
+    \end{tabular}
+  \end{center}
+\end{table*}
+}
+
+次に，素性として一つ前の形態素に付与したラベルの情報を考慮したときの精度
+を調べた．一般に学習による形態素解析では一つあるいは二つ前の
+形態素に付与したラベルの情報を用いて次のラベルを決定することが多い．
+我々の手法においてこれと同様の情報がどの程度精度に影響を与えるかを
+調べることが目的である．
+
+実験結果を表~\ref{Comparison4} にあげる．
+表から分かるようにどちらのドメインについても精度を下げる結果となった．
+特に再現率の低下が著しい．
+これは学習コーパスではOTHERの隣はOTHERであることが多く，
+この連接関係が他のラベルとの連接に比べて学習されやすいため
+OTHERが連続する場合が最適解となることが多くなるためであると考えられる．
+
+{\scriptsize
+\begin{table*}[htbp]
+  \begin{center}
+    \caption{一つ前の形態素に付与したラベルを素性として考慮した場合}
+    \label{Comparison4} 
+    \begin{tabular}{|l|r@{ }r|r@{ }r|}
+      \hline
+      & \multicolumn{2}{c|}{ARREST} 
+      & \multicolumn{2}{c|}{GENERAL}\\
+      \cline{2-5}
+      固有表現(NE) & \multicolumn{1}{c}{再現率} 
+      & \multicolumn{1}{c|}{適合率} & \multicolumn{1}{c}{再現率} 
+      & \multicolumn{1}{c|}{適合率} \\
+      & (\%) & (\%) & (\%) & (\%) \\
+      \hline      
+      ORGANIZATION &  60.81 &  80.36 & 55.12 &  79.28\\
+      PERSON       &  78.35 &  86.36 & 73.08 &  83.16\\
+      LOCATION     &  83.96 &  88.12 & 74.33 &  85.28\\
+      ARTIFACT     &  53.85 &  58.33 & 29.17 &  33.33\\
+      DATE         &  95.83 &  95.83 & 85.38 &  94.47\\
+      TIME         &  94.74 & 100.00 & 85.19 &  93.88\\
+      MONEY        & 100.00 & 100.00 & 93.33 &  93.33\\
+      PERCENT      &      - &      - & 95.24 &  95.24\\
+      \hline
+      総合 & 80.21 & 87.89 & 70.79 & 84.17\\
+      & (-1.54) & (+1.71) & (-3.71) & (-0.86) \\
+      \hline
+      \hline
+      F-measure & \multicolumn{2}{c|}{83.87 (-0.06)} 
+      & \multicolumn{2}{c|}{76.91 (-2.51)} \\
+      \hline
+    \end{tabular}
+  \end{center}
+\end{table*}
+}
+
+  
+\subsubsection{後処理について}
+
+Borthwickは我々と同様に形態素解析により得られる形態素が固有表現より長い場合に
+対処するために書き換え規則を用いて後処理をしている．
+この後処理により，どちらのシステムも
+F-measureで2ポイント程度精度が向上している．
+違いはBorthwickが日本語を母語とする人が人手で作成した規則を用いているのに
+対し，我々は学習コーパスから誤り駆動で自動獲得した規則を用いている点にある．
+異なるドメインのテキストが与えられたとき，
+できるだけコストを少なく学習し直すためには規則を自動獲得できる方が望ましい．
+
+誤り駆動型学習を用いて固有表現を抽出するシステムには颯々野らのシステム
+\cite{Sassano:99}がある．
+このシステムは後処理として書き換え規則を適用することにより，
+形態素単位より短い文字列を含む固有表現だけでなく
+一つあるいは複数の形態素からなる固有表現も同様の手法を用いて抽出できる．
+彼らがベースラインとして用いているシステムの精度がF-measureで40程度であるため，
+我々のシステムをベースラインとして用いることによってより良い精度が得られる
+可能性が高いと考えられる．
+
+\subsubsection{IREX-NE本試験に参加したシステムの結果との比較}
+
+IREX-NE本試験での結果を表~\ref{table:formalrun_results} にあげる．
+最も良い精度を出したシステムは人手により作成された規則に基づいている．
+我々のシステムは本試験ではシステム番号1223であり，
+精度はF-measureで限定ドメインに対して74.90，一般ドメインに対して72.18であった．
+このように精度が悪かったのは「MIDDLE」に関するラベルの連接規則に
+洩れがあったためである．
+「MIDDLE」に関するラベル同士が連接可能であるという規則が欠如していたため，
+``比例(ARTIFACT:BEGIN)／代表(ARTIFACT:MIDDLE)／
+並立(ARTIFACT:MIDDLE)／制(ARTIFACT:END)''のように
+4形態素以上からなる固有表現は抽出できなくなっていた．
+本論文ではその洩れを埋めたときの精度を示した．
+その精度は最高でF-measureで85.75(限定ドメイン)，80.17(一般ドメイン)であった．
+これはIREX-NE本試験で我々が用いた素性に加えて，
+\ref{sec:feature} 節で述べた人名や組織名などの固有名詞辞書も
+利用したときの精度であり，悪くない精度であると考えている．
+我々の手法は学習コーパスがあれば人手のコストもかからないため，
+さまざまなドメインに対しても低コストでそれなりの精度が得られるものであると
+言える．
+{\scriptsize
+\begin{table}[htbp]
+  \begin{center}
+    \caption{IREX-NE本試験結果}
+    \label{table:formalrun_results} 
+    \begin{tabular}{|c|c|c||c|c|c|}
+      \hline
+      システム & \multicolumn{2}{|c||}{F-measure} 
+      & システム & \multicolumn{2}{|c|}{F-measure} \\
+      \cline{2-3}\cline{5-6}
+      番号 & ARR & GEN & 番号 & ARR & GEN \\
+      \hline
+      1201 & 54.17 & 57.69 & 1229 & 64.81 & 57.63 \\
+      1205 & 78.08 & 80.05 & 1231 & 81.94 & 74.82 \\
+      1213 & 59.87 & 66.60 & 1234 & 72.77 & 71.96 \\
+      1214 & 80.37 & 70.34 & 1240 & 58.46 & 60.96 \\
+      1215 & 74.56 & 66.74 & 1247 & 87.43 & 83.86 \\
+      1223 & 74.90 & 72.18 & 1250a & 70.12 & 69.82 \\
+      1224 & 77.61 & 75.30 & 1250b & 55.24 & 57.76 \\
+      1227 & 85.02 & 77.37 & & & \\
+      \hline
+    \end{tabular}
+  \end{center}
+\end{table}
+}
+
+\section{まとめ}
+
+本論文ではMEモデルと書き換え規則を用いて固有表現を抽出する手法について述べた．
+IREX-NEの定義に基づくと固有表現には一つあるいは複数の形態素からなるものと
+形態素単位より短い部分文字列を含むものの2種類がある．
+前者の固有表現は，
+固有表現の始まり，中間，終りなどを表すラベルを40個用意し，
+それらのラベルを推定することによって抽出する．
+ラベルの推定にはコーパスから学習したMEモデルを用いる．
+後者の固有表現は書き換え規則を用いて抽出する．
+書き換え規則は学習コーパスに対するシステムの解析結果とコーパスの
+正解データとの差異を調べることによって自動獲得することができる．
+
+書き換え規則，素性，学習コーパスの量についての条件を変えた比較実験により，
+形態素解析により得られる形態素が固有表現より長い場合に書き換え規則が
+有効であること，
+我々が考慮した素性，つまり，着目している形態素を含む前後2形態素ずつ
+合計5形態素に関する見出し語，品詞の情報がIREX-NE本試験に用いられたテキスト
+に対して有効であることを示すことができた．
+これらは学習コーパスのみから得られる情報であったが，
+それに加えて一般に公開されている人名や組織名などの固有名詞辞書も
+利用することにより，IREX-NE本試験のデータに対する実験で，F-measure で
+85.75(限定ドメイン)，80.17(一般ドメイン)の精度を得ることができた．
+
+本手法の精度をさらに向上させるために必要であると考えているのは，
+以下の三点である．
+\begin{itemize}
+\item 素性の発見
+
+  今回は利用しなかったような情報，例えば，係り受けの情報や照応関係など
+  を素性として新たに考慮することによって，
+  ラベル推定の精度が向上することが期待される．
+  また，解析と同時に解析の過程で得られた情報を利用することも考えられる．
+  これは今後の重要な課題である．
+\item コーパス，辞書の充実
+
+  今回の実験では書き換え規則を利用したことによる誤り例を考察することで，
+  学習コーパスの誤りが精度に影響することが分かった．
+  また，辞書情報を考慮することで精度が向上することも分かった．
+  コーパス修正や辞書作成にかかるコストを考えると，
+  コーパスの誤りを自動あるいは半自動で修正する方法，
+  辞書情報を自動あるいは半自動で獲得する方法を考案する
+  必要がありそうである．
+\item 特定ドメインへのチューニング
+
+  ドメインを限定すると，そのドメインに固有の固有表現パターンに，
+  より特化した学習が可能であると考えられる．
+  今回は限定ドメインに対して特にチューニングするようなことはしなかったが，
+  限定ドメインに対しどこまでチューニングすることが可能かを調べたい．
+\end{itemize}
+
+\begin{flushleft}
+{\bf 謝辞}  
+\end{flushleft}
+
+本研究を進めるにあたって有意義なコメントを下さったニューヨーク大学の
+関根聡助教授に心から感謝の意を表する．
+また，データの利用を許可して下さった毎日新聞社に感謝する．
+
+
+
+\bibliographystyle{jnlpbbl}
+\bibliography{v07n2_04}
+
+
+\begin{biography}
+\biotitle{略歴}
+\bioauthor{内元 清貴}{
+1994年京都大学工学部卒業．
+1996年同大学院修士課程修了．
+同年郵政省通信総合研究所入所，郵政技官．
+自然言語処理の研究に従事．
+言語処理学会，情報処理学会，ACL，各会員．}
+\bioauthor{馬 青}{
+1983年北京航空航天大学自動制御学部卒業．
+1987年筑波大学大学院理工学研究科修士課程修了．
+1990年同大学院工学研究科博士課程修了．工学博士．
+1990 $\sim$ 93年株式会社小野測器勤務．
+1993年郵政省通信総合研究所入所，主任研究官． 
+人工神経回路網モデル，知識表現，自然言語処理の研究に従事． 
+日本神経回路学会，言語処理学会，電子情報通信学会，各会員．}
+\bioauthor{村田 真樹}{
+1993年京都大学工学部卒業．
+1995年同大学院修士課程修了．
+1997年同大学院博士課程修了，博士（工学）．
+同年，京都大学にて日本学術振興会リサーチ・アソシエイト．
+1998年郵政省通信総合研究所入所．研究官．
+自然言語処理，機械翻訳，情報検索の研究に従事．
+言語処理学会，情報処理学会，人工知能学会，ACL，各会員．}
+\bioauthor{小作 浩美}{
+1985年郵政省電波研究所（現通信総合研究所）入所．研究官．
+自然言語処理の研究に従事．
+言語処理学会，情報処理学会，電子情報通信学会，各会員．}
+\bioauthor{内山 将夫}{
+筑波大学第三学群情報学類卒業(1992)．
+筑波大学大学院工学研究科博士課程修了(1997)．
+信州大学工学部電気電子工学科助手(1997)．
+郵政省通信総合研究所非常勤職員(1999)．
+博士(工学)．}
+\bioauthor{井佐原 均}{
+1978年京都大学工学部電気工学第二学科卒業．
+1980年同大学院修士課程修了．博士（工学）．
+同年通商産業省電子技術総合研究所入所．
+1995年郵政省通信総合研究所
+関西支所知的機能研究室室長．自然言語処理，機械翻訳の研究に従事．
+言語処理学会，情報処理学会，人工知能学会，日本認知科学会，ACL，各会員．}
+
+\bioreceived{受付}
+\biorevised{再受付}
+\bioaccepted{採録}
+
+\end{biography}
+
+\end{document}
+

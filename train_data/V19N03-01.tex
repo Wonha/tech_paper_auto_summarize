@@ -1,0 +1,1209 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+\usepackage{bm}
+\usepackage[TABTOPCAP]{subfigure}
+
+\Volume{19}
+\Number{3}
+\Month{September}
+\Year{2012}
+
+\received{2011}{12}{2}
+\revised{2012}{3}{6}
+\accepted{2012}{5}{14}
+
+\setcounter{page}{121}
+
+\jtitle{テキストの表層情報と潜在情報を利用した適合性フィードバック}
+\jauthor{原島　　純\affiref{Author} \and 黒橋　禎夫\affiref{Author}}
+\jabstract{
+適合性フィードバックの手法の多くは，テキストに表層的に出現する単語の情報
+だけを用いて検索結果をリランキングしている．これに対し，本稿では，テキス
+トに表層的に出現する単語の情報だけでなく，テキストに潜在的に現れうる単語
+の情報も利用する適合性フィードバックの手法を提案する．提案手法では，まず
+検索結果に対して Latent Dirichlet Allocation (LDA) を実行し，各文書に潜在
+する単語の分布を推定する．ユーザからフィードバックが得られたら，これに対
+しても LDA を実行し，フィードバックに潜在する単語の分布を推定する．そして，
+表層的な単語の分布と潜在的な単語の分布の両方を用いてフィードバックと検索
+結果中の各文書との類似度を算出し，これに基づいて検索結果をリランキングす
+る．実験の結果，$2$文書（合計$3,589$単語）から成るフィードバックが与えら
+れたとき，提案手法が初期検索結果の Precision at $10$ (P@10) を$27.6\%$改
+善することが示された．また，提案手法が，フィードバックが少ない状況でも，
+初期検索結果のランキング精度を改善する特性を持つことが示された（e.g.,
+フィードバックに$57$単語しか含まれていなくても，P@10 で$5.3\%$の改善が見
+られた）．
+}
+\jkeywords{情報検索，適合性フィードバック，LDA}
+
+\etitle{Relevance Feedback using Surface \\
+	and Latent Information in Texts}
+\eauthor{Jun Harashima\affiref{Author} \and Sadao Kurohashi\affiref{Author}} 
+\eabstract{
+Most of the previous relevance feedback methods re-rank search results
+using only the information of surface words in texts. In this paper, we
+present a novel method that uses not only the information of surface
+words, but also that of latent words that are highly probable from the
+texts. In the proposed method, we infer the latent word distribution in
+each document in the search results using latent Dirichlet allocation
+(LDA). When user feedback is given, we also infer the latent word
+distribution in the feedback using LDA. We calculate the similarities
+between the user feedback and each document in the search results using
+both the surface and latent word distributions, and then, we re-rank the
+search results based on the similarities. Evaluation results show that
+when user feedback that consists of two documents ($3,589$ words) is
+given, our method improves the initial search results by $27.6\%$ in
+precision at $10$ (P@10). Additionally, it proves that our method has
+the advantage of performing well even when only a small amount of user
+feedback is available (e.g., improvement of $5.3\%$ in P@10 was achieved
+even when user feedback constituted only $57$ words).
+}
+\ekeywords{Information Retrieval, Relevance Feedback, Latent Dirichlet Allocation}
+
+\headauthor{原島，黒橋}
+\headtitle{テキストの表層情報と潜在情報を利用した適合性フィードバック}
+
+\affilabel{Author}{京都大学大学院情報学研究科}{Graduate School of Informatics, Kyoto University}
+
+
+
+\begin{document}
+\maketitle
+
+\section{はじめに} \label{sec:introduction}
+
+検索エンジンの主な目的は，ユーザの情報要求に適合する文書をランキング形式
+でユーザに提供することである．しかし，情報要求に見合うランキングを実現す
+るのは容易ではない．これは，ユーザが入力するクエリが一般的に，短く，曖昧
+であり \cite{Jansen2000}，ユーザの情報要求を推定するのが困難であることに
+起因する．例えば「マック \textvisiblespace \hspace{0.1zw} 価格」というク
+エリは，「Mac（コンピュータ）」の価格とも，「マクドナルド」の価格とも，も
+しくは他の「マック」の価格とも解釈できる．そのため，どの「マック」に関す
+る文書が求められているのか分からなければ，ユーザの情報要求に見合うランキ
+ングを実現するのは難しい．
+
+このような問題を解決する方法の一つとして，適合性フィードバック
+\cite{Rocchio1971} がある．適合性フィードバックでは，ユーザから明示的（も
+しくは擬似的）に得られるフィードバックを利用することで，検索結果のランキ
+ングを修正する．具体的には，次のような手続きに従ってランキングの修正を行
+う．
+\begin{enumerate}
+ \item クエリに対する初期検索結果をユーザに提示する．
+ \item 初期検索結果中から，情報要求に適合する文書をユーザに選択させる．
+ \item 選択された文書（フィードバック）を利用して，初期検索結果のランキン
+       グを修正する．
+\end{enumerate}
+例えば，「Mac（コンピュータ）」の価格に関する文書がフィードバックとして得
+られれば，ユーザがこの話題に関心を持っていると推測できる．そして，この情
+報を基に検索結果のランキングを修正することができる．
+
+適合性フィードバックには，ベースとするランキングアルゴリズムに応じて，様々
+な手法がある．Rocchio の手法 \cite{Rocchio1971}や Ide の手法
+\cite{Ide1971}は，ベクトル空間モデルに基づくランキングアルゴリズム
+\cite{Salton1975}に対する適合性フィードバックの手法として有名である．確率
+モデルに基づくランキングアルゴリズム \cite{SparckJones2000}においては，
+フィードバックを用いて，クエリ中の単語の重みを修正したり，クエリを拡張す
+ることができる．言語モデルに基づくランキングアルゴリズム
+\cite{Ponte1998}に対しては，Zhai らの手法 \cite{Zhai2001}が代表的である．
+
+このように適合性フィードバックには様々な手法があるが，それらの根底にある
+アイディアは同じである．すなわち，適合性フィードバックでは，フィードバッ
+クと類似する文書を検索結果の上位にリランキングする．ここで，既存の手法の
+多くは，テキスト（フィードバック及び検索結果中の各文書）に表層的に出現す
+る単語の情報だけを用いて類似度を算出している．すなわち，テキストに含まれ
+ていない単語の情報は利用していない．しかし，表層的には出現していなくても，
+そのテキストに潜在的に現れうる単語の情報は，リランキングに役に立ちうると
+考えられる．上の「マック」の例であれば，仮にフィードバック（この例では
+「Mac（コンピュータ）」の価格に関する文書）に「CPU」や「ハードディスク」
+などの単語が含まれていなくても，これらの単語はフィードバックとよく関連し
+ており，潜在的にはフィードバックに現れうる．検索結果中の適合文書
+（i.e.,「Mac（コンピュータ）」の価格に関する文書）についても同様のことが
+言える．仮にある適合文書にこれらの単語が含まれていなくても，これらの単語
+は適合文書によく関連しており，潜在的にはその文書に現れうる．このように，
+テキストに現れうる単語の情報があれば，フィードバックと検索結果中の各文書
+との類似度を算出する際に有用であると考えられる．
+
+そこで，本稿では，テキストに表層的に存在する単語の情報だけでなく，テキス
+トに潜在的に現れうる単語の情報も利用する適合性フィードバックの手法を提案
+する．提案手法では，まず Latent Dirichlet Allocation (LDA)
+\cite{Blei2003}を用いて，テキストに潜在するトピックの分布を推定する．次に，
+推定された潜在トピックの分布を基に，各テキストに潜在的に現れうる単語の分
+布を推定する．そして，推定された潜在的な単語の分布とテキストの表層的な単
+語の分布の両方を用いて，フィードバックと検索結果中の各文書との類似度を算
+出し，これを基に検索結果をリランキングする．実験の結果，$2$文書（合計
+$3,589$単語）から成るフィードバックが与えられたとき，提案手法が初期検索結
+果の Precision at $10$ (P@10) を$27.6\%$改善することが示された．また，提
+案手法が，フィードバックが少ない状況でも，初期検索結果のランキング精度を
+改善する特性を持つことが示された（e.g., フィードバックに$57$単語しか含ま
+れていなくても，P@10 で$5.3\%$の改善が見られた）．
+
+以降，本稿では，次の構成に従って議論を進める．\ref{sec:lm_approaches}章で
+は，提案手法の基礎をなす，言語モデルに基づくランキングアルゴリズムについ
+て概説する．\ref{sec:lda}章では，提案手法で使用する LDA について解説する．
+\ref{sec:proposed_method}章では，提案手法について説明する．
+\ref{sec:experiments}章では，提案手法の有効性を調査するために行った実験と，
+その結果について報告する．最後に，\ref{sec:conclusion} 章で，本稿の結論を
+述べる．
+
+
+
+\section{言語モデルに基づくランキング} \label{sec:lm_approaches}
+
+本章では，言語モデルに基づくランキングアルゴリズムについて概説する．ここ
+で紹介する技術は，\ref{sec:proposed_method}章で説明する提案手法の基礎をな
+している．
+
+
+\subsection{概要}
+
+言語モデルに基づくランキングアルゴリズムは，三つのタイプに分類できる．す
+なわち，クエリの尤度に基づく方法 \cite{Ponte1998}，文書の尤度に基づく方法
+\cite{Lavrenko2001}，カルバック・ライブラー情報量に基づく方法
+\cite{Lafferty2001}の三つである．
+
+クエリの尤度に基づく方法では，文書セット中の各文書$\bm{d}_{h} \ (h = 1,
+\dots, H)$について，$\bm{d}_{h}$を表す言語モデル$P_{\bm{d}_{h}}(\cdot)$を
+構築する．ユーザによってクエリ$\bm{q}$が入力されたら，各文書$\bm{d}_{h}$
+について，$P_{\bm{d}_{h}}(\cdot)$がクエリを生成する確率
+$P_{\bm{d}_{h}}(\bm{q})$を計算する．そして，$P_{\bm{d}_{h}}(\bm{q})$が高
+い順に各文書をランキングする．
+
+文書の尤度に基づく方法は，クエリの尤度に基づく方法と逆のアプローチを採る．
+すなわち，クエリ$\bm{q}$を表す言語モデル$P_{\bm{q}}(\cdot)$を構築し，文書
+セット中の各文書$\bm{d}_{h}$について，$P_{\bm{q}}(\bm{d}_{h})$を計算する．
+そして，$P_{\bm{q}}(\bm{d}_{h})$が高い順に各文書をランキングする．
+
+カルバック・ライブラー情報量に基づく方法では，$P_{\bm{q}}(\cdot)$と
+$P_{\bm{d}_{h}}(\cdot)$の両方を構築する．そして，各文書$\bm{d}_{h}$につい
+て，$P_{\bm{q}}(\cdot)$と$P_{\bm{d}_{h}}(\cdot)$のカルバック・ライブラー
+情報量$KL(P_{\bm{q}}(\cdot)||P_{\bm{d}_{h}}(\cdot))$を計算し，これが小さ
+い順に各文書をランキングする．
+
+
+
+\subsection{言語モデルの構築方法} \label{ssec:lm_construction}
+
+クエリや文書を表す言語モデル\footnote{以降，本稿では，クエリを表す言語モ
+デルをクエリモデルと呼ぶ．また，文書を表す言語モデルを文書モデルと呼
+ぶ．}は，Maximum Likelihood Estimation (MLE) や DIRichlet smoothed
+estimation (DIR) \cite{Zhai2004} などの方法を用いて構築する．
+
+MLE では，テキスト$\bm{t}$（$\bm{t}$はクエリや文書）における単語$w$の生起
+確率$P^{MLE}_{\bm{t}}(w)$を次式によって算出する．
+\begin{equation}
+ P^{MLE}_{\bm{t}}(w)
+ =
+ \frac{tf(w,\bm{t})}{|\bm{t}|}
+ \label{equ:mle}
+\end{equation}
+ただし，$tf(w,\bm{t})$は$\bm{t}$における$w$の出現頻度を表す．また，
+$|\bm{t}|$は，$\bm{t}$に含まれる単語数を表す．
+
+一方，DIR では，$\bm{t}$における$w$の生起確率$P^{DIR}_{\bm{t}}(w)$を次式
+によって算出する．
+\begin{equation}
+ P^{DIR}_{\bm{t}}(w)
+ =
+ \frac
+ {tf(w,\bm{t}) + \mu P^{MLE}_{\bm{D}_{all}}(w)}
+ {|\bm{t}| + \mu}
+ \label{equ:dir}
+\end{equation}
+ただし，$\bm{D}_{all}$は文書セットを表す．また，$\mu$はスムージングパラメー
+タを表す．DIR では，MLE と異なり，$\bm{D}_{all}$における$w$の出現頻度が加
+味されており，スムージングが行われている．
+
+
+
+\subsection{代表的な適合性フィードバックの手法}
+
+言語モデルに基づくランキングアルゴリズムに対する代表的な適合性フィードバッ
+クの手法として，Zhai らの手法 \cite{Zhai2001} がある．Zhai らの手法では，
+フィードバックとして与えられた文書集合$\bm{F} = (\bm{f}_{1}, \dots,
+\bm{f}_{G})$に対して，$\bm{F}$を表す言語モデル
+$P_{\bm{F}}(\cdot)$ を構築する\footnote{以降，本稿では，フィードバックを
+表す言語モデルをフィードバックモデルと呼ぶ．}．次に，$P_{\bm{F}}(\cdot)$
+と$P_{\bm{q}}(\cdot)$（初期検索結果を得るために使用したクエリモデル）を足
+し合わせ，新しいクエリモデルを構築する．そして，新しいクエリモデルを用い
+て，初期検索結果のランキングを修正する．
+
+Zhai らの手法は，言語モデルに基づくランキングアルゴリズムに対する基本的な
+適合性フィードバックの手法として重要である．しかし，彼らの手法では，テキ
+ストに表層的に存在する単語の情報しか用いられていない．これに対し，提案手
+法では，テキストに潜在的に現れうる単語の分布を推定し，この情報も用いて適
+合性フィードバックを行う．
+
+
+\section{LDA} \label{sec:lda}
+
+本章では LDA \cite{Blei2003}について解説する．LDA は，提案手法において，
+各単語がテキストに潜在的に現れうる確率を推定するために用いられる．
+
+
+\subsection{概要}
+
+LDA は文書の生成モデルの一つである．LDA では，文書は複数のトピックから生
+成されると仮定する．また，文書中の各単語は，各トピックが持つ単語の分布か
+ら生成されると仮定する．ある文書における各トピックの混合比$\bm{\theta} =
+(\theta_{1}, \dots, \theta_{K})$は，$(K - 1)$単体中の一点を取る．ただし，
+単体中のある一点が選択される確率は，Dirichlet 分布によって決められるとす
+る．
+
+以上の生成過程をまとめると，LDA における文書$\bm{d}$の生成確率は，次のよ
+うにして計算される．
+\begin{equation}
+ P(\bm{d}|\bm{\alpha},\bm{\beta}_{1}, \dots, \bm{\beta}_{K})
+ = \int
+ P(\bm{\theta}|\bm{\alpha})
+ \Biggl(
+ \prod_{j=1}^{J}
+ \biggl(
+ \sum_{k=1}^{K}
+ P(w_{j}|z_{k},\bm{\beta}_{k}) \ P(z_{k}|\bm{\theta})
+ \biggr)
+ ^{tf(w_{j},\bm{d})}
+ \Biggr)
+ d\bm{\theta}
+ \label{equ:lda}
+\end{equation}
+ただし，$P(\bm{\theta}|\bm{\alpha})$は，Dirichlet 分布から得られる
+$\bm{\theta}$の生成確率である．$\bm{\alpha} = (\alpha_{1}, \dots,
+\alpha_{K})$は正の実数から構成される$K$次元ベクトルで，Dirichlet 分布のパ
+ラメータを表す．また，$P(w_{j}|z_{k},\bm{\beta}_{k})$と
+$P(z_{k}|\bm{\theta})$は，多項分布から得られる$w_{j}$と$z_{k}$の生成確率
+である．$z_{k}$ $(k = 1, \dots, K)$はトピックを，$\bm{\beta}_{k}$は
+$z_{k}$が持つ単語の分布を表す．$J$は LDA で考慮する語彙数を表す．
+
+
+
+\subsection{パラメータの推定方法} \label{ssec:parameter_estimation}
+
+LDA では，変分ベイズ法やギブスサンプリングなどを用いてパラメータを推定す
+る \cite{Blei2003,Griffiths2004}．ギブスサンプリングを用いれば，より厳密
+な推定結果が得られる．実装も容易なため，一般的にはギブスサンプリングが用
+いられることが多い．しかし，ギブスサンプリングには推定に時間を要するとい
+う欠点がある．一方，変分ベイズ法は，厳密な推定結果は得られないが，高速に
+動作する．即時性が要求される検索というタスクの性質を考慮し，提案手法では
+変分ベイズ法を用いる．以下，変分ベイズ法による推定方法について説明する．
+
+まず，訓練データ中の各文書$\bm{d}_{i}$ $(i = 1, \dots, I)$について，変分
+パラメータ$\bm{\gamma}_{i} = (\gamma_{i1}, \dots, \gamma_{iK})$と
+$\bm{\phi}_{i} = (\bm{\phi}_{i1}, \dots, \bm{\phi}_{iJ})$を導入する．ただ
+し，$\bm{\phi}_{ij} = (\phi_{ij1}, \dots, \phi_{ijK})$である．そして，式
+(\ref{equ:phi})と式(\ref{equ:gamma})を交互に計算し，これらの値を更新する．
+\begin{align}
+\phi_{ijk}
+ & \propto \beta_{kj} \exp\biggl( \Psi(\gamma_{ik}) -
+ \Psi\Bigl(\sum\limits_{k'=1}^{K} \gamma_{ik'}\Bigr)\biggr)
+ \label{equ:phi}
+ \\
+\gamma_{ik}
+ & = \alpha_{k} + \sum\limits_{j=1}^{J} \phi_{ijk} \ tf(w_{j},\bm{d}_{i})
+ \label{equ:gamma}
+\end{align}
+ただし，$\Psi$はディガンマ関数を表す．
+
+次に，更新された$\bm{\gamma}_{i}$と$\bm{\phi}_{i}$を用いて，$\alpha_{k}$
+と$\bm{\beta}_{k}$を更新する．$\alpha_{k}$と$\bm{\beta}_{k}$の更新には，
+ニュートン-ラフソン法や固定点反復法を用いる\cite{Blei2003,Minka2000}．こ
+こでは固定点反復法による$\alpha_{k}$と$\bm{\beta}_{k}$の更新式を示す．更
+新式は次の通りである．
+\begin{align}
+ \beta_{kj}
+  & \propto \sum\limits_{i=1}^{I} \phi_{ijk} \  tf(w_{j},\bm{d}_{i})
+ \label{equ:beta}
+ \\
+\alpha_{k}
+ & = \frac
+ { \sum_{i=1}^{I} \{ \Psi(\alpha_{k} + n_{ik})  - \Psi(\alpha_{k}) \} }
+ { \sum_{i=1}^{I} \{ \Psi(\alpha_{0} + |\bm{d}_{i}|) - \Psi(\alpha_{0}) \} } \ \alpha_{k}^{old}
+ \label{equ:alpha}
+\end{align}
+ただし，$n_{ik} = \sum_{j=1}^{J} \phi_{ijk}\ tf(w_{j},\bm{d}_{i})$，
+$\alpha_{0} = \sum_{k'=1}^{K} \alpha_{k'}$とする．また，
+$\alpha_{k}^{old}$ は更新前の$\alpha_{k}$を表すものとする．
+
+以降，$\bm{\gamma}_{i}$と$\bm{\phi}_{i}$の更新と，$\alpha_{k}$と
+$\bm{\beta}_{k}$の更新を繰り返すことで，各パラメータの値を推定することが
+できる．$\alpha_{k}$と$\bm{\beta}_{k}$の値が推定されれば，式
+(\ref{equ:lda}) を用いて，文書$\bm{d}_{i}$の生成確率を求めることができる．
+また，$\bm{\gamma}_{i}$の値が推定されれば，次式を用いて，文書
+$\bm{d}_{i}$ における単語$w_{j}$の生起確率$P^{LDA}_{\bm{d}_{i}}(w_{j})$を
+求めることができる．
+\begin{equation}
+ P^{LDA}_{\bm{d}_{i}}(w_{j})
+ \simeq
+ \sum_{k = 1}^{K}
+ \frac{\beta_{kj} \gamma_{ik}}{\sum_{k' = 1}^{K} \gamma_{ik'}}
+ \label{equ:pwd}
+\end{equation}
+ここで，$\gamma_{ik}/\sum_{k'=1}^{K} \gamma_{ik'}$は，$\bm{d}_{i}$に潜在
+するトピックの分布に相当する．これに基づいて$\bm{\beta}_{kj}$を足し合わせ
+ることで，$w_{j}$が$\bm{d}_{i}$に潜在的に現れうる確率を求めることができる．
+
+
+
+\subsection{未知テキストに対する適用} \label{ssec:inference}
+
+LDA は Probabilistic Latent Semantic Analysis (PLSA) \cite{Hofmann1999}を
+ベイズ的に拡張したモデルと位置付けられる．PLSA に対する LDA の長所として，
+LDA は未知テキスト（訓練データ中に含まれないテキスト）に関する確率も推定
+できるという点が挙げられる．未知テキスト$\bm{t}$ にLDA を適用するときは，
+$\bm{t}$に対して変分パラメータ$\bm{\gamma}_{t}$と$\bm{\phi}_{t}$を導入し，
+式$(\ref{equ:phi})$と式$(\ref{equ:gamma})$を用いてこれらの値を推定する．
+ただし，$\alpha_{k}$と$\bm{\beta}_{k}$には，訓練データによって推定された
+値を用いる．$\bm{\gamma}_{t}$が推定されれば，式$(\ref{equ:pwd})$ を用いて，
+未知テキスト$\bm{t}$における単語$w_{j}$の生成確率
+$P_{\bm{t}}^{LDA}(w_{j})$を求めることができる．提案手法では，LDA のこの長
+所を利用して，各単語がフィードバックに潜在的に現れうる確率を求めている．
+
+
+
+\subsection{情報検索におけるLDAの利用}
+
+LDA は，自然言語処理や画像処理，音声認識など，様々な分野で利用されている
+\cite{Blei2003,Fei-Fei2005,Heidel2007}．情報検索の分野では，例えば Wei ら
+が，クエリの尤度に基づくランキング手法に LDA を利用している
+\cite{Wei2006}．また，Yi らは文書の尤度に基づくランキング手法に，Zhou ら
+はカルバック・ライブラー情報量に基づくランキング手法に LDA を利用している
+\cite{Yi2009,Zhou2009}．これらの研究は，LDA を用いて各文書の文書モデルを
+構築し，それぞれのスコア（e.g., クエリの尤度）に基づいてクエリに対する検
+索結果を取得するものである．本研究では，さらに，ユーザからフィードバック
+が得られる問題（i.e., 適合性フィードバックの問題）に焦点を当てる．我々は，
+フィードバックに対しても LDA を用いてその言語モデルを構築し，構築された
+フィードバックモデルを用いて検索結果を修正する．
+
+
+
+\section{提案手法} \label{sec:proposed_method}
+
+本章では，提案手法の概要と，提案手法を構成する各ステップについて詳説する．
+
+
+
+\subsection{概要}
+
+提案手法では，テキストに表層的に存在する単語の情報だけでなく，テキストに
+潜在的に現れうる単語の情報も利用して，検索結果をリランキングする．表層情
+報だけでなく潜在情報も考慮することで，表層的なレベルだけでなく潜在的なレ
+ベルでもフィードバックと類似する文書を検索結果の上位にリランキングする．
+
+図\ref{fig:proposed_method}に提案手法の概要を示す．以降，本稿では，テキス
+ト$\bm{t}$の表層情報と潜在情報の両方を含む言語モデルを
+$P^{HYB}_{\bm{t}}(\cdot)$と表す（HYB は hybrid を表す）．まず，ユーザによっ
+て入力されたクエリ$\bm{q}$に対して，その初期検索結果$\bm{D}_{\bm{q}} =
+(\bm{d}_{1}, \dots, \bm{d}_{I})$を取得する(\textbf{Step 1})．次に，LDA を
+用いて，$\bm{D}_{\bm{q}}$中の各文書$\bm{d}_{i}$ $(i = 1, \dots, I)$につ
+いて，$\bm{d}_{i}$に潜在的に現れうる単語の分布を推定する．そして，
+$\bm{d}_{i}$の表層的な単語の分布と潜在的な単語の分布の両方を考慮した言語
+モデル$P^{HYB}_{\bm{d}_{i}}(\cdot)$を構築する(\textbf{Step 2})．ユーザか
+らフィードバック$\bm{F} = (\bm{f}_{1}, \dots, \bm{f}_{G})$が得られたら，
+$\bm{F}$に対しても LDA を実行し，$\bm{F}$に潜在的に現れうる単語の分布を推
+定する．そして，検索結果中の各文書と同様，$\bm{F}$ に対しても，$\bm{F}$の
+表層的な単語の分布と潜在的な単語の分布の両方を考慮した言語モデル
+$P^{HYB}_{\bm{F}}(\cdot)$を構築する(\textbf{Step 3})．最後に，構築された
+フィードバックモデル$P^{HYB}_{\bm{F}}(\cdot)$と，初期検索結果
+$\bm{D}_{\bm{q}}$を得るために使用したクエリモデル
+$P^{MLE}_{\bm{q}}(\cdot)$を混合し，新しいクエリモデル
+$P^{NEW}_{\bm{q}}(\cdot)$を構築する．そして，検索結果中の各文書
+$\bm{d}_{i}$について，文書モデル$P^{HYB}_{\bm{d}_{i}}(\cdot)$と新しいクエ
+リモデル$P^{NEW}_{\bm{q}}(\cdot)$との類似度を算出し，これに基づいて
+$\bm{D}_{\bm{q}}$をリランキングする (\textbf{Step 4})．次節以降では，各ス
+テップについて詳説する．
+
+\begin{figure}[t]
+ \begin{center}
+  \includegraphics{19-3ia942f1.eps}
+ \end{center}
+  \caption{提案手法の概要}
+  \label{fig:proposed_method}
+\end{figure}
+
+なお，提案手法とはそもそもの検索モデルが異なるが，テキストの潜在情報を利
+用するため，Latent Semantic Analysis (LSA) を用いることも考えられる．すな
+わち，各文書をベクトルで表現し，文書セットに対して LSA を実行する．そして，
+LSA の実行結果を用いて各ベクトルを低次元の意味的空間に射影することで，各
+文書に潜在的に現れうる単語の情報を利用することができる．しかし，この方法
+では，今述べた通り，文書セット全体に対して LSA を実行する必要がある．文書
+セットは時に数千万〜数億文書にも及ぶため，LSA の実行には膨大な時間を要す
+る．さらに，もし文書セットに対する文書の追加や削除があれば，LSA を実行し
+なおさなければならない．一方，提案手法では，検索結果中の各文書に対する
+$P^{LDA}_{\bm{d}_{i}}(\cdot)$やフィードバックに対する
+$P^{LDA}_{\bm{F}}(\cdot)$を構築するため，検索結果に対して LDA を実行する
+必要がある（\ref{ssec:hdm_construction}節及び\ref{ssec:hfm_construction}
+節で後述）．しかし，検索結果は文書セットより明らかに規模が小さく，これに
+要する時間は問題にならない（\ref{ssec:computation_time}節で後述）．このよ
+うに，LSA に基づく手法と提案手法の間には，ベースとする検索モデルや効率の
+面で大きな違いがある．
+
+
+
+\subsection{初期検索結果の取得} \label{ssec:initial_resuls_acquisition}
+
+提案手法では，カルバック・ライブラー情報量に基づいて \cite{Lafferty2001}，
+各文書をランキングする．まず，文書セット$\bm{D}_{all}$中の各文書
+$\bm{d}_{h}$ $(h = 1, \dots, H)$について，DIR に基づく文書モデル
+$P^{DIR}_{\bm{d}_{h}}(\cdot)$をあらかじめ構築しておく．ユーザからクエリ
+$\bm{q}$が与えられると，$\bm{q}$に対してMLE に基づくクエリモデル
+$P^{MLE}_{\bm{q}}(\cdot)$を構築する．そして，$\bm{D}_{all}$中の$\bm{q}$を
+含む各文書について，$P^{MLE}_{\bm{q}}(\cdot)$と
+$P^{DIR}_{\bm{d}_{h}}(\cdot)$ のカルバック・ライブラー情報量を計算する．
+すなわち，クエリ$\bm{q}$に対する文書$\bm{d}_{h}$の重要度は，次式のように
+定義される．
+\begin{equation}
+ initial\_score(\bm{d}_{h},\bm{q})
+ =
+ - KL(P^{MLE}_{\bm{q}}(\cdot)||P^{DIR}_{\bm{d}_{h}}(\cdot))
+ \label{equ:initial_score}
+\end{equation}
+この重要度に従って各文書をランキングし，$\bm{q}$に対する初期検索結果
+$\bm{D_{q}}$を得る．
+
+クエリモデルの構築に MLE を用いたのは，言語モデルに基づくランキングに関す
+る先行研究 (e.g., \cite{Zhai2001}) に倣ってのことである．なお，クエリモデ
+ルの構築に MLE を用いた場合，カルバック・ライブラー情報量に基づくランキン
+グは，クエリの尤度に基づくランキング \cite{Ponte1998}と等価になる．
+
+
+
+\subsection{文書モデル$P^{HYB}_{\bm{d}_{i}}(\cdot)$の構築}
+\label{ssec:hdm_construction}
+
+$\bm{D}_{\bm{q}}$中の各文書$\bm{d}_{i}$ $(i = 1, \dots, I)$について，
+$\bm{d}_{i}$の表層情報と潜在情報の両方を含む言語モデル
+$P^{HYB}_{\bm{d}_{i}}(\cdot)$を構築する．まず，各文書$\bm{d}_{i}$について，
+LDA を用いて，$\bm{d}_{i}$の潜在情報を含む言語モデル
+$P^{LDA}_{\bm{d}_{i}}(\cdot)$を構築する．具体的な手順は次の通りである．ま
+ず，$\bm{D}_{\bm{q}}$に対して LDA を実行し，$\bm{D}_{\bm{q}}$に対する
+LDA のパラメータ$\alpha_{k}$と$\bm{\beta}_{k}$ $(k = 1, \dots, K)$，
+$\bm{\gamma}_{i}$ $(i = 1, \dots, I)$を推定する
+（\ref{ssec:parameter_estimation}節参照）．次に，各文書について，推定され
+た各パラメータ及び式(\ref{equ:pwd})を用いて$P^{LDA}_{\bm{d}_{i}}(\cdot)$
+を構築する．$P^{LDA}_{\bm{d}_{i}}(\cdot)$は，$\bm{d}_{i}$に潜在するトピッ
+クの分布を基に構築されており，各単語が$\bm{d}_{i}$に潜在的に現れうる確率
+の分布になる（式(\ref{equ:pwd})参照）．
+
+次に，構築された$P^{LDA}_{\bm{d}_{i}}(\cdot)$と
+$P^{DIR}_{\bm{d}_{i}}(\cdot)$を次式によって混合し，
+$P^{HYB}_{\bm{d}_{i}}(\cdot)$を構築する．
+\begin{equation}
+ P^{HYB}_{\bm{d_{i}}}(w)
+ = (1 - a) P^{DIR}_{\bm{d_{i}}}(w) + a P^{LDA}_{\bm{d_{i}}}(w)
+ \label{equ:hdm}
+\end{equation}
+ただし，$0 \le a \le 1$とする．$P^{DIR}_{\bm{d}_{i}}(\cdot)$は，各文書の
+表層的な単語の分布を基に構築される（式(\ref{equ:dir})参照）．
+$P^{DIR}_{\bm{d}_{i}}(\cdot)$と$P^{LDA}_{\bm{d}_{i}}(\cdot)$を混合するこ
+とで，$\bm{d}_{i}$の表層情報と潜在情報の両方を含む言語モデルを構築するこ
+とができる．
+
+
+
+\subsection{フィードバックモデル$P^{HYB}_{\bm{F}}(\cdot)$の構築}
+\label{ssec:hfm_construction}
+
+フィードバック$\bm{F}$が得られたら，$\bm{F}$に対しても，$\bm{F}$の表層情
+報と潜在情報の両方を含む言語モデル$P^{HYB}_{\bm{F}}(\cdot)$を構築する．ま
+ず，LDA を用いて，$\bm{F}$の潜在情報を含む言語モデル
+$P^{LDA}_{\bm{F}}(\cdot)$を構築する．具体的な手順は次の通りである．まず，
+Step 2 で訓練された LDA を$\bm{F}$に適用し，$\bm{F}$に対する変分パラメー
+タ$\bm{\gamma}_{\bm{F}}$ を推定する（\ref{ssec:inference}節参照）．次に，
+推定された$\bm{\gamma}_{\bm{F}}$と式(\ref{equ:pwd})を用いて
+$P^{LDA}_{\bm{F}}(\cdot)$を構築する．$P^{LDA}_{\bm{F}}(\cdot)$は，
+$P^{LDA}_{\bm{d}_{i}}(\cdot)$と同様，各単語が$\bm{F}$に潜在的に現れうる確
+率の分布になる．
+
+次に，構築された$P_{\bm{F}}^{LDA}(\cdot)$と$P^{DIR}_{\bm{F}}(\cdot)$を次
+式によって混合し，$P^{HYB}_{\bm{F}}(\cdot)$を構築する．
+\begin{equation}
+ P^{HYB}_{\bm{F}}(w)
+ = (1 - a) P^{DIR}_{\bm{F}}(w) + a P^{LDA}_{\bm{F}}(w)
+ \label{equ:hfm}
+\end{equation}
+ただし，$P^{DIR}_{\bm{F}}(\cdot)$は式(\ref{equ:dir})を用いて構築する．
+$P_{\bm{F}}^{DIR}(\cdot)$と$P^{LDA}_{\bm{d}_{i}}(\cdot)$を混合することで，
+$\bm{F}$の表層情報と潜在情報の両方を含む言語モデルを構築することができる．
+
+
+
+\subsection{リランキング}
+
+$\bm{D}_{\bm{q}}$をリランキングするため，まず新しいクエリモデルを構築する．
+新しいクエリモデル$P^{NEW}_{\bm{q}}(\cdot)$は，$\bm{D}_{\bm{q}}$を得るた
+めに使用したクエリモデル$P^{MLE}_{\bm{q}}(\cdot)$と，Step 3 で構築した
+フィードバックモデル$P^{HYB}_{\bm{F}}(\cdot)$を次式のようにして混合し，構
+築する．
+\begin{equation}
+ P^{NEW}_{\bm{q}}(w)
+ = (1 - b) P^{MLE}_{\bm{q}}(w) + b P^{HYB}_{\bm{F}}(w)
+ \label{equ:nqm}
+\end{equation}
+ただし，$0 \le b \le 1$とする．
+
+最後に，$\bm{D}_{\bm{q}}$中の各文書$\bm{d}_{i}$について，
+$P^{HYB}_{\bm{d}_{i}}(\cdot)$と$P^{NEW}_{\bm{q}}(\cdot)$のカルバック・ラ
+イブラー情報量を算出する．すなわち，クエリ$\bm{q}$とフィードバック
+$\bm{F}$が与えられた下での文書$\bm{d}_{i}$の重要度を次式のように定義する．
+\begin{eqnarray}
+ re\mathchar`-ranking\_score(\bm{d}_{i},\bm{q},\bm{F})
+ =
+ - KL(P^{NEW}_{\bm{q}}(\cdot)||P^{HYB}_{\bm{d}_{i}}(\cdot)) \nonumber
+\end{eqnarray}
+この重要度に従って各文書をリランキングすることで，検索結果のランキングを
+修正する．
+
+
+
+\section{実験} \label{sec:experiments}
+
+本章では，提案手法の有効性を調査するために行った実験と，その結果について
+報告する．
+
+
+
+\subsection{実験データ} \label{ssec:data}
+
+実験は，第$3$回 NTCIR ワークショップ
+\footnote{http://research.nii.ac.jp/ntcir/ntcir-ws3/ws-ja.html}で構築され
+たウェブ検索評価用テストセット\cite{Eguchi2002}を用いて，これを行った．テ
+ストセットは，$11,038,720$ページの日本語ウェブ文書と，$47$個の検索課題か
+ら成る．検索課題ごとに，約$2,000$文書に，その課題に対する適合度が付与され
+ている．ただし，適合度は「高適合」「適合」「部分適合」「不適合」のいずれ
+かである．これらの適合度が付与された文書を用いて，検索結果のランキング精
+度を測ることができる．
+
+図\ref{fig:ntcir_subject}に検索課題の一例を示す．各タグが表す意味内容は次
+の通りである．
+\begin{description}
+ \itemsep=-0.1zw
+ \item[NUM] 課題番号．
+ \item[TITLE] 検索システムに入力するであろう単語．
+課題作成者によって$2$〜$3$語がリストアップされている．左から順に重要．
+ \item[DESC] 課題作成者の情報要求を一文で表したもの．
+ \item[RDOC] 情報要求に適合する代表的な文書の ID．
+課題作成者によって$2$〜$3$個がリストアップされている．
+\end{description}
+
+\begin{figure}[t]
+ \begin{center}
+\includegraphics{19-3ia942f2.eps}
+\end{center}
+\caption{テストセットにおける検索課題の一例}
+\label{fig:ntcir_subject}
+\end{figure}
+
+実験では，$\langle$TITLE$\rangle$タグの単語をクエリとして使用した．ただし，
+提案手法では，検索の質を高めるため，クエリを含む文書（クエリを構成する各
+タームが最低でも$1$回以上出現する文書）のみをスコア付けの対象として収集す
+る（\ref{ssec:initial_resuls_acquisition}節参照）．そのため，
+$\langle$TITLE$\rangle$タグの全ての単語を用いると，多くの検索課題において，
+検索される文書数が極端に少なくなってしまった．例えば，課題番号 0027，
+0047，0058 などは，それぞれ$17$文書，$5$文書，$14$文書しか検索できなかっ
+た．課題番号 0061 に至っては$1$文書も検索できなかった．このように検索され
+る文書が少ないと，適合性フィードバックの有効性が検証しにくい．すなわち，
+実際に適合性フィードバックによって初期検索結果のランキングが改善されても，
+その結果が P@10 などの評価尺度の値に反映されにくく，適合性フィードバック
+が有効に働いたかどうかが判断しづらい．そこで，実験では，この問題を避ける
+ため，十分な検索結果が得られるように，クエリとして使用する単語を
+$\langle$TITLE$\rangle$タグの最初の$2$語のみとした．ただし，「十分」の定
+義は「$100$文書以上」とした．
+
+また，$\langle$RDOC$\rangle$タグの ID が付与された文書を，ユーザのフィー
+ドバックとして使用した．上で述べた通り，これらは課題作成者本人によって選
+択された代表的な適合文書であり，フィードバックとして使用するのに最適と考
+えられる．これらの文書は，提案手法の初期検索結果に含まれるとは限らない．
+初期検索結果に含まれない場合，これらをユーザのフィードバックとして使用す
+るのは奇異に感じられるかもしれない．しかし，これらの文書は，仮に初期検索
+結果に含まれていた場合も，リランキング前後のランキング精度を測定・比較す
+る際，結局ランキングから取り除かれる（\ref{ssec:evaluation_method}節で後
+述）．言い換えれば，これらは，初期検索結果に含まれていた場合も，初期検索
+結果に含まれない場合のように，検索結果中に存在していないものとして扱われ
+る．このように，どちらの場合でも存在していないものとして扱われることを考
+えると，これらの文書が初期検索結果に含まれているか含まれていないかは重要
+ではない．以上を踏まえ，実験では，これらが初期検索結果に含まれているか含
+まれていないかは問題にしなかった．
+
+$47$個の検索課題のうち，$7$個の検索課題（課題番号: 0011, 0018, 0032,
+0040, 0044, 0047, 0061）については，実験で使用しなかった．これは，上で述
+べたようにクエリとして使用する単語を$2$語にしても，十分な文書（i.e.,
+$100$文書）が検索できなかったためである．さらに，残った$40$課題を，開発デー
+タと評価データに分けて使用した．開発データは，提案手法のパラメータを最適
+化するために使用した．評価データは，提案手法のランキング精度を測定するた
+めに使用した．開発データには$8$課題（課題番号：0008〜0017）を，評価デー
+タには$32$課題（課題番号：0018〜0063）を使用した．
+
+
+
+\subsection{実験用検索システム}
+
+実験を行うため，提案手法に従って適合性フィードバックを行う検索システムを
+作成した．実装の詳細は以下の通りである．
+
+検索対象とする文書セット (i.e., $\bm{D}_{all}$) には，テストセットの
+$11,038,720$文書を使用した．また，文書セット中の各文書について，次の手順
+に従って文書モデルを構築した．
+\begin{enumerate}
+ \item Shinzato らの手法\cite{Shinzato2008}を用いて本文を抽出し，JUMAN
+       \cite{Kurohashi1994}を用いて各文を解析する．
+ \item 解析結果及び式(\ref{equ:dir})を用いて，DIR に基づく文書モデルを構
+       築する．ただし，先行研究\cite{Zhai2001,Wei2006,Yi2009}に倣って，
+       $\mu = 1,000$とした．
+\end{enumerate}
+
+クエリが与えられたら，次の手順に従ってクエリモデルを構築した．
+\begin{enumerate}
+ \item JUMAN を用いてクエリを解析する．
+ \item 解析結果及び式(\ref{equ:mle})を用いて，MLE に基づくクエリモデルを
+       構築する．
+\end{enumerate}
+
+LDA の実装については次の通りである．パラメータ$\alpha_{k}$ $(k = 1,
+\dots, K)$の初期値は$1$とした．また，$\bm{\beta}_{k}$ $(k = 1, \dots,
+K)$の初期値にはランダムな値を与えた．$\bm{\gamma}_{i}$と$\bm{\phi}_{i}$を
+更新する際の反復回数と，$\alpha_{k}$と$\bm{\beta}_{k}$を更新する際の反復
+回数は，それぞれ$10$回とした．LDA で考慮する語彙数$J$は$100$とした．ただ
+し，LDA で考慮する語彙は，初期検索結果に対する重要度を基に選出した．ここ
+で，初期検索結果$\bm{D}_{\bm{q}}$に対する単語$w$の重要度は，
+$df(w,\bm{D}_{\bm{q}}) * \log(H / df(w,\bm{D}_{all}))$と定義した．ただし，
+$df(w, \bm{D})$は$\bm{D}$における$w$の文書頻度を表す．
+
+
+
+\subsection{ランキング精度の測定方法} \label{ssec:evaluation_method}
+
+適合性フィードバックの効果は，適合性フィードバック前のランキング（i.e.,
+初期検索結果のランキング）と，適合性フィードバック後のランキングを比較す
+ることで検証できる．このとき，フィードバックとして使用する文書の扱いに気
+を付けなければならない \cite{Hull1993}．
+
+例えば，適合性フィードバック前後のランキングをそのまま比較すると，後者が
+有利になってしまう．これは，フィードバックとして与えられた文書（適合であ
+ることが分かっている文書）が，適合性フィードバック後のランキングの上位に
+含まれやすいためである．
+
+そこで，適合性フィードバック前後のランキングを比較する際，フィードバック
+として与えられた文書を適合性フィードバック後のランキングから取り除くとい
+う方法が考えられる．しかし，この方法だと，適合性フィードバック前のランキ
+ングが有利になってしまう．これは，適合文書が少ないときに特に問題となる．
+
+以上を踏まえ，実験では，ランキングの精度を測定する際，フィードバックとし
+て使用した文書を各ランキングから取り除いた．これにより，適合性フィードバッ
+ク前後のランキングを公平に比較することができる．
+
+ランキング精度の評価尺度には，P@10，Mean Average Precision (MAP)，
+Normalized Discounted Cumulative Gain at $10$ (NDCG@10)
+\cite{Jarvelin2002} を用いた．ただし，P@10 及び MAP を測定する際は，「高
+適合」「適合」「部分適合」の文書を正解，「不適合」及び適合度が付与されて
+いない文書を不正解とした．また，NDCG@10 は，「高適合」の文書を$3$点，「適
+合」の文書を$2$点，「部分適合」の文書を$1$点として算出した．
+
+
+
+\subsection{リランキング性能の調査} \label{ssec:experiment1}
+
+まず，提案手法が初期検索結果のランキング精度をどの程度改善できるか調査し
+た．具体的には，初期検索結果のランキング精度と，提案手法によってリランキ
+ングを行った後のランキング精度を比較し，提案手法の有効性を検証した．実験
+には評価データを使用し，各検索課題の初期検索結果を取得する際は，
+\ref{ssec:data}節で述べたように，$\langle$TITLE$\rangle$タグの最初の$2$単
+語をクエリとして用いた．また，実験では，$initial\_score$（式
+(\ref{equ:initial_score})参照）の上位$100$件を初期検索結果とした．提案手
+法を実行する際は，$\langle$RDOC$\rangle$タグの最初の$2$文書をフィードバッ
+クとして用いた．なお，これらの文書に含まれる単語数は平均$3,589$語であった．
+提案手法に必要な$3$つのパラメータ$a$，$b$，$K$の値は，それぞれ$0.2$，
+$0.9$，$50$とした．これらは，\ref{ssec:experiment0}節で述べる実験の結果を
+基に決定した．
+
+\begin{table}[b]
+\vspace{-0.5\Cvs}
+  \caption{リランキング性能の調査結果}
+  \label{tbl:experiment1}
+\input{01table01.txt}
+\end{table}
+
+結果を表\ref{sbtbl:eRF}に示す．INIT は各検索課題に対する初期検索結果のラ
+ンキング精度の平均値を，OURS は提案手法実行後のランキング精度の平均値を表
+す．比較のため，初期検索結果に対してベースラインとなる手法を実行したとき
+の結果も示した．ZHAI は Zhai らの手法 \cite{Zhai2001}を，OURS ($a =
+0.0$) は提案手法から潜在情報を除いた手法を表す．ただし，ZHAI と OURS ($a
+= 0.0$) は本質的にはほとんど同じ手法である．両手法とも，フィードバックの
+表層の単語分布を文書セット全体の単語分布で補正することでフィードバックモ
+デルを構築し，これを用いてリランキングを行っている．違うのは単語分布の補
+正の仕方だけである（前者は EM アルゴリズムを用い，後者は DIR を用いて補正
+を行っている）．OURS ($a = 0.0$) では，$b = 0.5$とした．これも，
+\ref{ssec:experiment0}節で述べる実験の結果を基に決定した．
+
+DIC もベースラインとなる手法を表す．提案手法の核となるアイディアは，テキ
+スト（フィードバック及び検索結果中の各文書）に潜在的に現れうる単語の情報
+を適合性フィードバックに利用することである．同義語辞書や関連語辞書などの
+知識リソースを用いても，同様のアイディアを実現することができる．DIC では，
+OURS ($a = 0.0$) をベースに，テキスト中の各単語が同義語を持つ場合，その同
+義語もそのテキストに出現しているとみなした上でリランキングを行った．ただ
+し，同義知識は，Shibata らの手法 \cite{Shibata2008}を用いて例会小学国語辞
+典 \cite{Tajika2001}と岩波国語辞典 \cite{Nishio2002}から獲得した．獲得さ
+れた同義知識（e.g.,「コンピュータ」＝「電子計算機」，「ポテト」＝「じゃが
+芋」＝「ばれいしょ」）は$4,597$個であった．
+
+表\ref{sbtbl:eRF}を見ると，すべての尺度において，OURS が INIT を大きく上
+回っている．例えば P@10 は$27.6\%$改善しており，提案手法が初期検索結果を
+うまくリランキングできたことが分かる．また，提案手法は，ZHAI や OURS ($a
+= 0.0$) より高い性能を示した．ZHAI や OURS ($a = 0.0$) は，テキストの表層
+情報だけを用いて適合性フィードバックを行っている．一方，提案手法は，テキ
+ストの表層情報に加え，テキストの潜在情報も用いて適合性フィードバックを行っ
+ている．提案手法がこれらの手法を上回ったことから，潜在情報が適合性フィー
+ドバックに有用であったことが分かる．
+
+さらに，リランキング結果を調査したところ，提案手法が，テキストに表層的に
+は出現しないが潜在的には現れうる単語の情報をうまく利用していることが確認
+できた．図\ref{fig:ntcir_subject}の検索課題を例に取ると，「宗教」や「祝日」
+「聖書」などの単語は，情報要求によく関連するが，フィードバックとして使用
+した文書には含まれていなかった．そのため，ZHAI や OURS ($a = 0.0$) では，
+これらの単語の情報を使用することができなかった．一方，提案手法では，これ
+らの単語がフィードバックにおいてもある程度の確率で現れうると推定できた．
+具体的には，「宗教」「祝日」「聖書」は，それぞれ$0.0046$，$0.0037$，
+$0.0024$の確率で現れうると推定できた．なお，フィードバックに$1$回出現した
+単語として「クリスマス」や「ＥＡＳＴＥＲ」などがあったが，これらの生起確
+率の推定値は，それぞれ$0.0093$，$0.0060$であった．提案手法では，これらの
+推定結果を用いることで，これらの単語を含む検索結果中の適合文書を上位にリ
+ランキングすることができた．
+
+DIC はあまり有効に機能せず，その結果は ZHAI や OURS ($a = 0.0$) の結果を
+少し上回る程度であった．この原因は，我々が構築した同義語辞書のカバレッジ
+にあると思われる．DIC は，よりカバレッジの高い知識リソースが利用できれば
+（同義語や関連語などの知識をより多く利用できれば），より有効に機能する可
+能性を持つ．しかし，そのようなリソースを構築するのは容易ではない．一方，
+提案手法でも，単語と単語が関連するという知識を必要とする．しかし，DIC と
+違って，何のリソースも必要としない．すなわち，提案手法では，LDA を用いる
+ことで，単語と単語が関連するという知識を検索結果から動的に獲得することが
+できる．\ref{sec:introduction}章の「マック{\textvisiblespace} 価格」 とい
+うクエリを例に取ると，このクエリに対する検索結果には「CPU」や「ハードディ
+スク」「ハンバーガー」「ポテト」などの単語が含まれると考えられる．提案手
+法では，検索結果に対して LDA を実行することで，「CPU」と「ハードディスク」
+が関連するという知識や「ハンバーガー」と「ポテト」が関連するという知識を，
+トピックという形で動的に獲得することができる．そして，獲得された知識を用
+いることで，文書に「ハードディスク」という単語が出現していなくても，
+「CPU」という単語が出現していれば，「ハードディスク」も潜在的にはその文書
+に現れうると推測できる．このように，DIC と比べると，（カバレッジの高低に
+関わらず）何のリソースも必要としないという点で，提案手法の方が優れている．
+
+提案手法は擬似適合性フィードバックにも適用可能である．そこで，これに対す
+るリランキング性能も調査した．擬似適合性フィードバックでは，初期検索結果
+の上位$n$文書を適合文書とみなし，適合性フィードバックを行う．実験では，
+$n = 10$として初期検索結果をリランキングし，リランキング前後のランキング
+精度を比較した．ただし，擬似適合性フィードバックでは，明示的なフィードバッ
+ク（適合であることが分かっている文書）は存在しない．そのため，ランキング
+の精度を測る際，他の実験のように，$\langle$RDOC$\rangle$タグの文書を各ラ
+ンキングから除くことはしなかった．
+
+結果を表\ref{sbtbl:pRF}に示す．INIT の値が表\ref{sbtbl:eRF}と違うのは，ラ
+ンキング精度を算出する際，$\langle$RDOC$\rangle$タグの文書を除いていない
+からである．表\ref{sbtbl:pRF}を見ると，普通の適合性フィードバックに比べる
+と改善の度合いは小さいが，P@10 や NDCG@10 の値が上昇している．例えば，
+P@10 では$8.2\%$の改善が見られる．このことから，擬似適合性フィードバック
+においても提案手法がある程度機能することが分かる．
+
+
+\subsection{フィードバックが少ない状況でのリランキング性能}
+\label{ssec:experiment2}
+
+現実的には，ユーザが多くのフィードバックを与えてくれるとは考えにくい．そ
+のため，適合性フィードバックの手法は，フィードバックが少ない状況でも機能
+するべきである．この実験では，このような状況をシミュレートし，フィードバッ
+クが少なくても提案手法が機能するかを調査した．具体的には，提案手法に与え
+るフィードバックを少しずつ減らしていき，リランキング性能がどのように変化
+するかを調査した．提案手法に与えるフィードバックの分量$G$は，$G = 2^{1},
+2^{0}, 2^{-1}, \dots, 2^{-5}$ とした．ただし，例えば$G = 2^{1}$は，フィー
+ドバックとして$2$文書を用いることを意味している．また，例えば$G =
+2^{-1}$ は，フィードバックとして$1$適合文書の半分だけを用いることを意味し
+ている．この場合，適合文書中の単語をランダムに半分抽出し，それらを用いて
+適合性フィードバックを行った．$G < 1$ の場合も調査したのは，フィードバッ
+クとして文書より小さい単位（e.g., 文書のタイトル，スニペット）が与えられ
+た場合を想定し，このような場合にも提案手法が機能するかを調べたかったから
+である．
+
+\begin{figure}[t]
+ \begin{center}
+  \includegraphics{19-3ia942f3.eps}
+ \end{center}
+  \caption{$G$によるリランキング性能の変化}
+  \label{fig:F}
+\end{figure}
+
+
+結果を図\ref{fig:F}に示す．比較のため，提案手法から潜在情報を除いたとき
+(i.e., OURS ($a = 0.0$)) の性能の変化も示した．また，INIT は初期検索結果
+のランキング精度を表す．図から，$G$が小さいときでも，提案手法が高い性能を
+示すことが分かる．例えば$G = 2^{0}$のとき，提案手法は初期検索結果を
+$24.5\%$改善している．さらに，$G = 2^{-5}$ のときでも，$5.3\%$ の改善が見
+られた．なお，$G = 2^{-5}$のとき，フィードバック$\bm{F}$に含まれる単語数
+は平均$57$語であった．一方，OURS ($a = 0.0$) を見ると，$G$が小さくなるに
+つれ，ほとんど改善が見られなくなった．OURS ($a = 0.0$) ではテキストの表層
+情報しか利用していない．そのため，$G$が小さくなるにつれて利用できる情報が
+少なくなり，初期検索結果を改善できなくなったと考えられる．一方，提案手法
+では，表層情報だけでなく潜在情報も利用している．利用できる情報が多い分，
+$G$が小さいときでも，初期検索結果のランキングを改善することができたと考え
+られる．
+
+
+
+\subsection{パラメータとリランキング性能の関係} \label{ssec:experiment0}
+
+提案手法には$3$つのパラメータ$a$，$b$，$K$がある．$a$は
+$P^{DIR}_{\bm{d}_{i}}(\cdot)$ と$P^{LDA}_{\bm{d}_{i}}(\cdot)$の混合比を調
+整するパラメータ（式(\ref{equ:hdm})及び式(\ref{equ:hfm})参照），$b$は
+$P^{MLE}_{\bm{q}}(\cdot)$と$P^{HYB}_{\bm{F}}(\cdot)$の混合比を調整するパ
+ラメータ（式(\ref{equ:nqm})参照），$K$は LDA のトピック数である．
+\ref{ssec:experiment1}節及び\ref{ssec:experiment2}節で述べた実験では，
+OURS のパラメータを$a = 0.2$，$b = 0.9$，$K = 50$とした．また，OURS ($a
+= 0.0$)のパラメータを$b = 0.5$とした．これらの値は予備実験の結果を基に決
+定した．
+
+提案手法の性能を最大限に発揮するためには，パラメータとリランキング性能の
+関係について知る必要がある．予備実験では，この関係を知るため，様々な$(a,
+b, K)$の組み合わせについて提案手法のリランキング性能を調査し，その結果を
+比較した．ただし，$a = 0.0, 0.1, \dots, 1.0$，$b = 0.0, 0.1, \dots, 1.0$，
+$K = 10, 20, \dots, 100$とし，全$1,210$通りの組み合わせについて，調査を行っ
+た．開発データを用いて調査した．
+
+ある$(a, b, K)$の組み合わせに対するリランキング性能は，他の実験と同じよう
+にして，これを測定した．すなわち，開発データ中の各検索課題について初期検
+索結果を取得し，提案手法を用いてこれらをリランキングした後，全課題におけ
+る P@10 の平均値を算出した．他の実験と同様，クエリには
+$\langle$TITLE$\rangle$タグの最初の$2$単語を，フィードバックには
+$\langle$RDOC$\rangle$タグの最初の$2$文書を用いた．
+
+\begin{table}[b]
+  \caption{$(a, b)$とリランキング性能の関係}
+  \label{tbl:experiment0}
+\input{01table02.txt}
+\end{table}
+
+結果を表\ref{tbl:experiment0}及び図\ref{fig:K}に示す．表
+\ref{tbl:experiment0}は，実験結果を$(a, b)$についてまとめたものである．表
+中の各セルの値は，各$(a, b)$の組み合わせについて，各$K$の P@10 を平均した
+ものである．例えば，$(a, b) = (0.1, 0.2)$のセルは，$(a, b, K) = (0.1,
+0.2, 10),$ $(0.1, 0.2, 20), \dots, (0.1, 0.2, 100)$の P@10 の平均値が
+$0.286$であったことを示している．各列においてもっとも P@10 が高いセルは，
+その値を太字で装飾した．また，各行においてもっとも P@10 が高いセルは，そ
+の値に下線を引いた．
+
+表から，$(a, b) = (0.1, 0.9)$ or $(0.2, 0.9)$のとき，リランキング性能がもっ
+とも良いことが分かる．また，$a = 0.0$のとき（潜在情報を考慮しないとき）は，
+$b$が大体$0.3$〜$0.5$のとき，リランキング性能が良い．一方，$a \geq
+0.1$のとき（潜在情報を考慮したとき）は，$b$が大体$0.8$〜$1.0$のとき，リ
+ランキング性能が良い．$a = 0.0$のときより，性能が良くなる$b$の値（及びそ
+のときのランキング精度）が大きくなっている．これは，潜在情報を考慮するこ
+とで，フィードバックモデルの信頼度が増すことを示唆している．
+
+\begin{figure}[t]
+ \begin{center}
+  \includegraphics{19-3ia942f4.eps}
+ \end{center}
+  \caption{$K$によるリランキング性能の変化}
+  \label{fig:K}
+\end{figure}
+
+図\ref{fig:K}は，$K$によるリランキング性能の変化を示している．図では，表
+\ref{tbl:experiment0}においてリランキング性能が良かった$3$つの$(a, b)$の
+組み合わせ$(a, b) = (0.1, 0.9),\ (0.2, 0.9),\ (0.3, 0.9)$について，$K$によ
+る性能の変化を示した．図から，$K$が大体$50$〜$70$のとき，リランキング性
+能が良いことが分かる．
+
+以上の結果をまとめると，提案手法がその性能を発揮するパラメータは，$(a,
+b) = (0.1, 0.9)$ or $(0.2, 0.9)$，$K$は大体$50$〜$70$となる．
+
+
+
+\subsection{LDA の実行時間} \label{ssec:computation_time}
+
+提案手法では，検索結果中の各文書に対する$P^{LDA}_{\bm{d}_{i}}(\cdot)$を構
+築するため，検索結果に対して LDA を実行する．また，フィードバックに対する
+$P^{LDA}_{\bm{F}}(\cdot)$を構築する際は，フィードバックに対して LDA を実
+行する．本節では，これらの処理に要する時間について考察する．
+
+実験では，各検索課題の検索結果（$100$文書）に対して LDA（Perl と C を組み
+合わせて実装）を実行するのに，$13.1$〜$16.0$秒を要した．この程度の時間
+であれば，提案手法を実行する上で，問題にはならない．適合性フィードバック
+は，(1) システムによる検索結果の提示，(2) ユーザによる検索結果の閲覧，適
+合文書の選択，(3) 適合文書を用いた検索結果のリランキングという三つのステッ
+プから成る．ここで，一般的に考えて，(2) には$1$分以上はかかると思われる．
+従って，まずユーザに検索結果を提示し，ユーザが検索結果を閲覧している裏で
+LDA を実行するようなシステムの構成を採れば，(3) に移る前に LDA の実行を終
+えることができる．このように，検索結果が$100$文書程度であれば，LDA の実行
+時間は問題にならない．
+
+一方，検索結果は，より大きくなり得る．検索結果が大きくなると，LDA の実行
+時間も大きくなってしまう．これを解決する一つの方法は，ランキングの上位だ
+けを検索結果とすることである．例えば，多くの文書が検索されても，上位
+$100$文書だけを検索結果とすれば，上述の通り，LDA の実行時間は問題にならな
+い．別の方法として，変分パラメータの推定を並列化することも考えられる．
+LDA の実行時間は，変分パラメータの推定に要する時間が多くを占める．ここで，
+各文書に対する変分パラメータは，他の文書に対する変分パラメータと独立であ
+る．従って，各文書に対する変分パラメータの推定を並列化し，LDA の実行時間
+を削減することができる．例えば，Nallapati らは，$50$ノードのクラスタを用
+いることで LDA の実行時間を$14.5$倍高速化できたと報告している
+\cite{Nallapati2007}．提案手法でも並列化を取り入れることで，LDA の実行時
+間を削減することができると思われる．
+
+最後に，フィードバックに対して LDA を実行するのに要した時間を報告する．こ
+れは$1$秒にも満たないものであった．例えば，フィードバックが$2$文書の場合，
+実行に要した時間は，わずか$0.1$〜$0.2$秒であった．従って，フィードバッ
+クに対する LDA の実行時間も問題にはならない．
+
+
+
+\section{おわりに} \label{sec:conclusion}
+
+本稿では，テキストの表層情報と潜在情報の両方を利用する適合性フィードバッ
+クの手法を提案し，その有効性について議論した．提案手法では，LDA を用いて，
+フィードバックや検索結果中の各文書に潜在的に現れうる単語の分布を推定した．
+そして，表層的な単語の分布と潜在的な単語の分布の両方を用いてフィードバッ
+クと検索結果中の各文書との類似度を算出し，これに基づいて検索結果をリラン
+キングした．実験では，$2$文書（合計約$3,589$単語）から成るフィードバック
+が与えられたとき，提案手法が初期検索結果の P@10 を$27.6\%$改善することを
+示した．また，提案手法が，フィードバックが少ない状況でも，初期検索結果の
+ランキング精度を改善する特性を持つことを示した（e.g.,フィードバックに
+$57$単語しか含まれていなくても，P@10 で$5.3\%$の改善が見られた）．
+
+今後の課題としては，ネガティブフィードバックの利用が挙げられる．提案手法
+は高い性能を示したが，ポジティブフィードバック（ユーザが適合と判定した文
+書）を扱う機構しか持ち合わせていない．ネガティブフィードバック（ユーザが
+不適合と判定した文書）も利用することで，さらに性能を上げることができない
+か検討中である．
+
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Blei, Ng, \BBA\ Jordan}{Blei et~al.}{2003}]{Blei2003}
+Blei, D.~M., Ng, A.~Y., \BBA\ Jordan, M.~I. \BBOP 2003\BBCP.
+\newblock \BBOQ Latent Dirichlet Allocation.\BBCQ\
+\newblock {\Bem Jounal of Machine Learning Research}, {\Bbf 3}, \mbox{\BPGS\
+  993--1022}.
+
+\bibitem[\protect\BCAY{Eguchi, Oyama, Ishida, Kuriyama, \BBA\ Kando}{Eguchi
+  et~al.}{2002}]{Eguchi2002}
+Eguchi, K., Oyama, K., Ishida, E., Kuriyama, K., \BBA\ Kando, N. \BBOP
+  2002\BBCP.
+\newblock \BBOQ The Web Retrieval Task and its Evaluation in the Third NTCIR
+  Workshop.\BBCQ\
+\newblock In {\Bem Proceedings of the 25th Annual International ACM SIGIR
+  Conference on Research and Development in Information Retrieval (SIGIR
+  2002)}, \mbox{\BPGS\ 375--376}.
+
+\bibitem[\protect\BCAY{Fei-Fei \BBA\ Perona}{Fei-Fei \BBA\
+  Perona}{2005}]{Fei-Fei2005}
+Fei-Fei, L.\BBACOMMA\ \BBA\ Perona, P. \BBOP 2005\BBCP.
+\newblock \BBOQ A Bayesian Hierarchical Model for Learning Natural Scene
+  Categories.\BBCQ\
+\newblock In {\Bem Proceedings of the 2005 IEEE Computer Society Conference on
+  Computer Vision and Pattern Recognition (CVPR 2005)}, \mbox{\BPGS\ 524--531}.
+
+\bibitem[\protect\BCAY{Griffiths \BBA\ Steyvers}{Griffiths \BBA\
+  Steyvers}{2004}]{Griffiths2004}
+Griffiths, T.~L.\BBACOMMA\ \BBA\ Steyvers, M. \BBOP 2004\BBCP.
+\newblock \BBOQ Finding scientific topics.\BBCQ\
+\newblock In {\Bem Proceedings of the National Academy of Sciences of the
+  United States of America (NAS)}, \mbox{\BPGS\ 5228--5235}.
+
+\bibitem[\protect\BCAY{Heidel, an~Chang, \BBA\ shan Lee}{Heidel
+  et~al.}{2007}]{Heidel2007}
+Heidel, A., an~Chang, H., \BBA\ shan Lee, L. \BBOP 2007\BBCP.
+\newblock \BBOQ Language Model Adaptation Using Latent Dirichlet Allocation and
+  an Efficient Topic Inference Algorithm.\BBCQ\
+\newblock In {\Bem Proceedings of the 8th Annual Conference of the
+  International Speech Communication Association (INTERSPEECH 2007)},
+  \mbox{\BPGS\ 2361--2364}.
+
+\bibitem[\protect\BCAY{Hofmann}{Hofmann}{1999}]{Hofmann1999}
+Hofmann, T. \BBOP 1999\BBCP.
+\newblock \BBOQ Probabilistic Latent Semantic Analysis.\BBCQ\
+\newblock In {\Bem Proceedings of the 15th Conference on Uncertainty in
+  Artificial Intelligence (UAI 1999)}, \mbox{\BPGS\ 289--296}.
+
+\bibitem[\protect\BCAY{Hull}{Hull}{1993}]{Hull1993}
+Hull, D. \BBOP 1993\BBCP.
+\newblock \BBOQ Using Statistical Testing in the Evaluation of Retrieval
+  Experiments.\BBCQ\
+\newblock In {\Bem Proceedings of the 16th Annual International ACM SIGIR
+  Conference on Research and Development in Information Retrieval (SIGIR
+  1993)}, \mbox{\BPGS\ 329--338}.
+
+\bibitem[\protect\BCAY{Ide}{Ide}{1971}]{Ide1971}
+Ide, E. \BBOP 1971\BBCP.
+\newblock \BBOQ New Experiments in Relevance Feedback.\BBCQ\
+\newblock In {\Bem The SMART Retrieval System: Experiments in Automatic
+  Document Processing}, \mbox{\BPGS\ 337--354}. Prentice-Hall Inc.
+
+\bibitem[\protect\BCAY{Jansen, Spink, \BBA\ Saracevic}{Jansen
+  et~al.}{2000}]{Jansen2000}
+Jansen, B.~J., Spink, A., \BBA\ Saracevic, T. \BBOP 2000\BBCP.
+\newblock \BBOQ Real life, real users, and real needs: a study and analysis of
+  user queries on the web.\BBCQ\
+\newblock {\Bem Information Processing and Management}, {\Bbf 36}  (2),
+  \mbox{\BPGS\ 207--227}.
+
+\bibitem[\protect\BCAY{J{\"{a}}rvelin \BBA\
+  Kek{\"{a}}l{\"{a}}inen}{J{\"{a}}rvelin \BBA\
+  Kek{\"{a}}l{\"{a}}inen}{2002}]{Jarvelin2002}
+J{\"{a}}rvelin, K.\BBACOMMA\ \BBA\ Kek{\"{a}}l{\"{a}}inen, J. \BBOP 2002\BBCP.
+\newblock \BBOQ Cumulated Gain-Based Evaluation of IR Techniques.\BBCQ\
+\newblock {\Bem ACM Transactions on Information Systems}, {\Bbf 20}  (4),
+  \mbox{\BPGS\ 422--446}.
+
+\bibitem[\protect\BCAY{Kurohashi, Nakamura, Matsumoto, \BBA\ Nagao}{Kurohashi
+  et~al.}{1994}]{Kurohashi1994}
+Kurohashi, S., Nakamura, T., Matsumoto, Y., \BBA\ Nagao, M. \BBOP 1994\BBCP.
+\newblock \BBOQ Improvements of Japanese Morphological Analyzer {JUMAN}.\BBCQ\
+\newblock In {\Bem Proceedings of the International Workshop on Sharable
+  Natural Language Resources (SNLR)}, \mbox{\BPGS\ 22--28}.
+
+\bibitem[\protect\BCAY{Lafferty \BBA\ Zhai}{Lafferty \BBA\
+  Zhai}{2001}]{Lafferty2001}
+Lafferty, J.\BBACOMMA\ \BBA\ Zhai, C. \BBOP 2001\BBCP.
+\newblock \BBOQ Document Language Models, Query Models, and Risk Minimization
+  for Information Retrieval.\BBCQ\
+\newblock In {\Bem Proceedings of the 24th Annual International ACM SIGIR
+  Conference on Research and Development in Information Retrieval (SIGIR
+  2001)}, \mbox{\BPGS\ 111--119}.
+
+\bibitem[\protect\BCAY{Lavrenko \BBA\ Croft}{Lavrenko \BBA\
+  Croft}{2001}]{Lavrenko2001}
+Lavrenko, V.\BBACOMMA\ \BBA\ Croft, W.~B. \BBOP 2001\BBCP.
+\newblock \BBOQ Relevance-Based Language Models.\BBCQ\
+\newblock In {\Bem Proceedings of the 24th Annual International ACM SIGIR
+  Conference on Research and Development in Information Retrieval (SIGIR
+  2001)}, \mbox{\BPGS\ 120--127}.
+
+\bibitem[\protect\BCAY{Minka}{Minka}{2000}]{Minka2000}
+Minka, T.~P. \BBOP 2000\BBCP.
+\newblock \BBOQ Estimating a Dirichlet distribution.\BBCQ\
+\newblock \BTR, Microsoft.
+
+\bibitem[\protect\BCAY{Nallapati, Cohen, \BBA\ Lafferty}{Nallapati
+  et~al.}{2007}]{Nallapati2007}
+Nallapati, R., Cohen, W., \BBA\ Lafferty, J. \BBOP 2007\BBCP.
+\newblock \BBOQ Parallelized Variational EM for Latent Dirichlet Allocation: An
+  Experimental Evaluation of Speed and Scalability.\BBCQ\
+\newblock In {\Bem Proceedings of the 7th IEEE International Conference on Data
+  Maining Workshops (ICDMW 2007)}, \mbox{\BPGS\ 349--354}.
+
+\bibitem[\protect\BCAY{Ponte \BBA\ Croft}{Ponte \BBA\ Croft}{1998}]{Ponte1998}
+Ponte, J.~M.\BBACOMMA\ \BBA\ Croft, W.~B. \BBOP 1998\BBCP.
+\newblock \BBOQ A Language Modeling Approach to Information Retrieval.\BBCQ\
+\newblock In {\Bem Proceedings of the 21nd Annual International ACM SIGIR
+  Conference on Research and Development in Information Retrieval (SIGIR
+  1998)}, \mbox{\BPGS\ 275--281}.
+
+\bibitem[\protect\BCAY{Rocchio}{Rocchio}{1971}]{Rocchio1971}
+Rocchio, J.~J. \BBOP {1971}\BBCP.
+\newblock \BBOQ Relevance Feedback in Information Retrieval.\BBCQ\
+\newblock In {\Bem The SMART Retrieval System: Experiments in Automatic
+  Document Processing}, \mbox{\BPGS\ 313--323}. Prentice-Hall Inc.
+
+\bibitem[\protect\BCAY{Salton, Wong, \BBA\ Yang}{Salton
+  et~al.}{1975}]{Salton1975}
+Salton, G., Wong, A., \BBA\ Yang, C.-S. \BBOP 1975\BBCP.
+\newblock \BBOQ A Vector Space Model for Automatic Indexing.\BBCQ\
+\newblock {\Bem Communications of the ACM}, {\Bbf 18}  (11), \mbox{\BPGS\
+  613--620}.
+
+\bibitem[\protect\BCAY{Shibata, Odani, Harashima, Oonishi, \BBA\
+  Kurohashi}{Shibata et~al.}{2008}]{Shibata2008}
+Shibata, T., Odani, M., Harashima, J., Oonishi, T., \BBA\ Kurohashi, S. \BBOP
+  2008\BBCP.
+\newblock \BBOQ {SYNGRAPH}: A Flexible Matching Method based on Synonymous
+  Expression Extraction from an Ordinary Dictionary and a Web Corpus.\BBCQ\
+\newblock In {\Bem Proceedings of the 3rd International Joint Conference on
+  Natural Language Processing (IJCNLP 2008)}, \mbox{\BPGS\ 787--792}.
+
+\bibitem[\protect\BCAY{Shinzato, Kawahara, Hashimoto, \BBA\ Kurohashi}{Shinzato
+  et~al.}{2008}]{Shinzato2008}
+Shinzato, K., Kawahara, D., Hashimoto, C., \BBA\ Kurohashi, S. \BBOP 2008\BBCP.
+\newblock \BBOQ A Large-Scale Web Data Collection as a Natural Language
+  Processing Infrastructure.\BBCQ\
+\newblock In {\Bem Proceedings of the 6th International Conference on Language
+  Resources and Evaluation (LREC 2008)}, \mbox{\BPGS\ 2236--2241}.
+
+\bibitem[\protect\BCAY{{Sp{\"a}rck Jones}, Walker, \BBA\ Robertson}{{Sp{\"a}rck
+  Jones} et~al.}{2000}]{SparckJones2000}
+{Sp{\"a}rck Jones}, K., Walker, S., \BBA\ Robertson, S.~E. \BBOP 2000\BBCP.
+\newblock \BBOQ A Probabilistic Model of Information Retrieval: Development and
+  Comparative Experiments.\BBCQ\
+\newblock {\Bem Information Processing and Management}, {\Bbf 36}  (6),
+  \mbox{\BPGS\ 779--808,\ 809--840}.
+
+\bibitem[\protect\BCAY{Wei \BBA\ Croft}{Wei \BBA\ Croft}{2006}]{Wei2006}
+Wei, X.\BBACOMMA\ \BBA\ Croft, W. \BBOP 2006\BBCP.
+\newblock \BBOQ LDA-Based Document Models for Ad-hoc Retrieval.\BBCQ\
+\newblock In {\Bem Proceedings of the 29th Annual International ACM SIGIR
+  Conference on Research and Development in Information Retrieval (SIGIR
+  2006)}, \mbox{\BPGS\ 178--185}.
+
+\bibitem[\protect\BCAY{Yi \BBA\ Allan}{Yi \BBA\ Allan}{2009}]{Yi2009}
+Yi, X.\BBACOMMA\ \BBA\ Allan, J. \BBOP 2009\BBCP.
+\newblock \BBOQ A Comparative Study of Utilizing Topic Models for Information
+  Retrieval.\BBCQ\
+\newblock In {\Bem Proceedings of the 31st European Conference on Information
+  Retrieval (ECIR 2009)}, \mbox{\BPGS\ 29--41}.
+
+\bibitem[\protect\BCAY{Zhai \BBA\ Lafferty}{Zhai \BBA\
+  Lafferty}{2001}]{Zhai2001}
+Zhai, C.\BBACOMMA\ \BBA\ Lafferty, J. \BBOP 2001\BBCP.
+\newblock \BBOQ Model-based Feedback in the Language Modeling Approach to
+  Information Retrieval.\BBCQ\
+\newblock In {\Bem Proceedings of the 20th ACM Conference on Information and
+  Knowledge Management (CIKM 2001)}, \mbox{\BPGS\ 403--410}.
+
+\bibitem[\protect\BCAY{Zhai \BBA\ Lafferty}{Zhai \BBA\
+  Lafferty}{2004}]{Zhai2004}
+Zhai, C.\BBACOMMA\ \BBA\ Lafferty, J. \BBOP 2004\BBCP.
+\newblock \BBOQ A study of smoothing methods for language models applied to
+  information retrieval.\BBCQ\
+\newblock {\Bem ACM Transactions on Information Systems}, {\Bbf 22}  (2),
+  \mbox{\BPGS\ 179--214}.
+
+\bibitem[\protect\BCAY{Zhou \BBA\ Wade}{Zhou \BBA\ Wade}{2009}]{Zhou2009}
+Zhou, D.\BBACOMMA\ \BBA\ Wade, V. \BBOP 2009\BBCP.
+\newblock \BBOQ Latent Document Re-Ranking.\BBCQ\
+\newblock In {\Bem Proceedings of the 2009 Conference on Empirical Methods in
+  Natural Language Processing (EMNLP 2009)}, \mbox{\BPGS\ 1571--1580}.
+
+\bibitem[\protect\BCAY{西尾\JBA 岩淵\JBA 水谷}{西尾 \Jetal }{2002}]{Nishio2002}
+西尾実\JBA 岩淵悦太郎\JBA 水谷静夫 \BBOP 2002\BBCP.
+\newblock \Jem{岩波国語辞典}.
+\newblock 岩波書店.
+
+\bibitem[\protect\BCAY{田近}{田近}{2001}]{Tajika2001}
+田近洵一 \BBOP 2001\BBCP.
+\newblock \Jem{例解小学国語辞典}.
+\newblock 三省堂.
+
+\end{thebibliography}
+
+
+\begin{biography}
+ \bioauthor{原島　　純}{
+ $2007$年京都大学工学部電気電子工学科卒業．$2009$年同大学院情報学研究科修
+ 士課程修了．現在，同大学院博士後期課程在学中．情報検索の研究に従事．
+ }
+ \bioauthor{黒橋　禎夫}{
+ $1989$年京都大学工学部電気工学第二学科卒業．$1994$年同大学院博士課程修了．
+ 京都大学工学部助手，京都大学大学院情報学研究科講師，東京大学大学院情報理
+ 工学系研究科助教授を経て，$2006$年京都大学大学院情報学研究科教授，現在に
+ 至る．自然言語処理，知識情報処理の研究に従事．
+ }
+\end{biography}
+
+
+\biodate
+
+
+\end{document}
