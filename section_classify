@@ -7,57 +7,85 @@ binmode(STDERR, ":utf8");
 
 # set $log_switch 1 to make log file and section files
 my $log_switch = 1;
-
 $#ARGV >= 0 || die "Usage: ./section_classify [NAME OF DOCS]\n";
-
-# define section's heads and contents 
-my ($head_intro, $body_intro, $head_relstudy, $body_relstudy ,$head_conclusion, $body_conclusion, $head_experiment, $body_experiment, $head_proposedtech, $body_proposedtech);
-# define variables used in logs 
-my ($log_file_name, $intro_file_name, $relstudy_file_name, $experiment_file_name, $conclusion_file_name, $proposedtech_file_name);
 
 # set list of section devider
 my (@list_intro, @list_conclusion, @list_experiment, @list_relstudy);
+# make regular expression form. sample: $re_* = "intro|introduction|introduce";
 my ($re_intro, $re_relstudy, $re_conclusion, $re_experiment);
-@list_intro = qw/はじめに/;
-@list_relstudy = qw/関連研究/;
-@list_experiment = qw/実験/;
-@list_conclusion = qw/結論 おわりに 終わりに/;
-## make regular expression form. sample: $re_* = "intro|introduction|introduce";
-$re_intro = join '|', @list_intro;
-$re_relstudy = join '|', @list_relstudy;
-$re_experiment = join '|', @list_experiment;
-$re_conclusion = join '|', @list_conclusion;
-
+# *** initialize section devider keywork and make Regex form.
+&set_section_devider;
 
 # get list of source files.
 my @src_path_list = <@ARGV>;
 print "input files : ".scalar @src_path_list."\n";
 
+
+# vars about src file
+my ($fh_src, $src_file_lines_origin, $src_file_lines);
+# vars whick hold each section's title and content 
+my ($head_intro, $body_intro, $head_relstudy, $body_relstudy ,$head_conclusion, $body_conclusion, $head_experiment, $body_experiment, $head_proposedtech, $body_proposedtech);
+# vars which hold output file name  
+my ($log_file_name, $intro_file_name, $relstudy_file_name, $experiment_file_name, $conclusion_file_name, $proposedtech_file_name);
+
+
 # start section classifing process for each source file.
 for my $src_path (@src_path_list) {
 
+# get src file name from src file path.
 	my @path_token = split /\//, $src_path;
 	my $src_file_name = pop @path_token;
 	
 	&init_head_body;
 	&init_log($src_file_name) if ($log_switch);
 
-## open read contents from input file, then close
-	my ($fh_src, $src_file_lines_origin, $src_file_lines);
+# read contents from src file
 	open $fh_src, '<:encoding(UTF-8)', $src_path || die "Can't open '$src_path': $!";
 	$src_file_lines_origin = join '', <$fh_src>;
 	$src_file_lines = $src_file_lines_origin;
 	close $fh_src;
 
-## classify section (another implementation method : split operator | use m// in list context | use s/// as condition for for loop : for(initailization; s///;): see p.177 learning perl )
-### classify proposed technique
+# classify process
+	&devide_section;
+
+### make log file and section file
+	&print_log($src_path) if ($log_switch);
+	&print_section if ($log_switch);
+}
+
+
+# subroutines
+sub set_section_devider {
+	@list_intro = qw/はじめに/;
+	@list_relstudy = qw/関連研究/;
+	@list_experiment = qw/実験 評価実験 評定実験/;
+	@list_conclusion = qw/結論 おわりに 終わりに 結び まとめ/;
+## make regular expression form. sample: $re_* = "intro|introduction|introduce";
+	$re_intro = join '|', @list_intro;
+	$re_relstudy = join '|', @list_relstudy;
+	$re_experiment = join '|', @list_experiment;
+	$re_conclusion = join '|', @list_conclusion;
+}
+
+sub init_head_body {
+	$head_intro = ""; $body_intro = ""; 
+	$head_relstudy = ""; $body_relstudy = "";
+	$head_conclusion = ""; $body_conclusion = "";
+	$head_experiment = ""; $body_experiment = "";
+	$head_proposedtech = ""; $body_proposedtech = "";
+}
+
+sub devide_section {
+# classify section (another implementation method : split operator | use m// in list context | use s/// as condition for for loop : for(initailization; s///;): see p.177 learning perl )
+
+# classify proposed technique
 	$body_proposedtech = $src_file_lines;
 
-### classify intro
+# classify intro
 	if( $body_proposedtech =~ s/
-																^(\\section\{(?:$re_intro)[^\n]*?\})
+																(\\section\{(?:$re_intro)[^\n]*?\})
 																(.*?)
-																((?:\\section\{(?:[^\n])+\})|(?:\\end\{document\}))
+																((?:\\section\{(?:[^\n])+\})|(?:\\end\{document\})|(?:\\appendix))
 																/$3/sumx ) {
 		$head_intro = $1;
 		$body_intro = $2;
@@ -65,9 +93,9 @@ for my $src_path (@src_path_list) {
 
 ### classify relative study
 	if( $body_proposedtech =~ s/
-																^(\\section\{(?:$re_relstudy)[^\n]*?\})
+																(\\section\{(?:$re_relstudy)[^\n]*?\})
 																(.*?)
-																((?:\\section\{(?:[^\n])+\})|(?:\\end\{document\}))
+																((?:\\section\{(?:[^\n])+\})|(?:\\end\{document\})|(?:\\appendix))
 																/$3/sumx ) {
 		$head_relstudy = $1;
 		$body_relstudy = $2;
@@ -76,9 +104,9 @@ for my $src_path (@src_path_list) {
 	
 ### classify experiment
 	if( $body_proposedtech =~ s/
-																^(\\section\{(?:$re_experiment)[^\n]*?\})
+																(\\section\{(?:$re_experiment)[^\n]*?\})
 																(.*?)
-																((?:\\section\{(?:[^\n])+\})|(?:\\end\{document\}))
+																((?:\\section\{(?:[^\n])+\})|(?:\\end\{document\})|(?:\\appendix))
 																/$3/sumx ) {
 		$head_experiment = $1;
 		$body_experiment = $2;
@@ -86,30 +114,13 @@ for my $src_path (@src_path_list) {
 
 ### classify conclusion
 	if( $body_proposedtech =~ s/
-																^(\\section\{(?:$re_conclusion)[^\n]*?\})
+																(\\section\{(?:$re_conclusion)[^\n]*?\})
 																(.*?)
-																((?:\\section\{(?:[^\n])+\})|(?:\\end\{document\}))
+																((?:\\section\{(?:[^\n])+\})|(?:\\end\{document\})|(?:\\appendix))
 																/$3/sumx ) {
 		$head_conclusion = $1;
 		$body_conclusion = $2;
-}
-
-
-### make log file and section file
-	&print_log($src_file_name) if ($log_switch);
-	&print_section if ($log_switch);
-}
-
-
-
-
-# subroutines
-sub init_head_body {
-	$head_intro = ""; $body_intro = ""; 
-	$head_relstudy = ""; $body_relstudy = "";
-	$head_conclusion = ""; $body_conclusion = "";
-	$head_experiment = ""; $body_experiment = "";
-	$head_proposedtech = ""; $body_proposedtech = "";
+	}
 }
 
 # subroutines for test 
@@ -135,19 +146,19 @@ sub init_log{
 }
 
 sub print_log{
-	my $src_file_name = $_[0];
+	my $src_path = $_[0];
 	
-	printf STDERR "intro%16s%5s\n", 'found : ', $head_intro if ($log_switch);# change conditional ex as $head_intro nq ""
-	printf STDERR "relstudy%13s%2s\n", 'found : ', $head_relstudy if ($log_switch);
-	printf STDERR "experiment%11s%s\n", 'found : ', $head_experiment if ($log_switch);
-	printf STDERR "conclusion%11s%s\n", 'found : ', $head_conclusion if ($log_switch);
+	printf STDERR "intro%16s%5s\n", 'found : ', $head_intro;
+	printf STDERR "relstudy%13s%2s\n", 'found : ', $head_relstudy;
+	printf STDERR "experiment%11s%s\n", 'found : ', $head_experiment;
+	printf STDERR "conclusion%11s%s\n", 'found : ', $head_conclusion;
 	## print proposed technique section title to log file
-	for ( $body_proposedtech =~ /^\\section\{[^\n]*?\}/umg ) {
+	for ( $body_proposedtech =~ /\\section\{[^\n]*?\}/umg ) {
 		printf STDERR "proposedtech%9s%s\n", 'found : ', $_;
 	}
 	## print fgrep result to log file
 	print STDERR "\nfgrep searched\n"; 
-	system "fgrep \\\\section $src_file_name >> $log_file_name";
+	system "fgrep \\\\section $src_path >> $log_file_name";
 
 }
 

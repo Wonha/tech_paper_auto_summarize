@@ -1,0 +1,299 @@
+\section{評価実験} \label{experiment}
+
+\subsection{実験データセット}
+
+評価実験には
+NAISTテキストコーパス1.4$\beta$ \cite{Iida:2010:JNLP}を用いた．
+これは京都大学テキストコーパス3.0\footnote{\url{http://nlp.ist.i.kyoto-u.ac.jp/nl-resource/corpus/KyotoCorpus3.0.tar.gz}}
+を基にしており，
+述語項構造，事態性名詞の項構造，共参照に関する情報が
+約40,000文の新聞記事にわたって付与されている．
+なお，アノテーションの誤りのため6記事
+\footnote{除外した文書ID :
+951230038, 951225057, 950106156, 950106034, 951221047, 950106211
+}を除外した．
+このコーパスの記事を
+\tblref{tbl:corpus-statics}で示すように
+学習・開発（パラメータチューニング）・評価のために3分割した．
+これは，\newcite{Taira:2008:EMNLP}や\newcite{Yoshikawa:2013:JNLP}と同じ分割方法である．
+\tblref{tbl:corpus-arg-dist}に項の分布の統計情報を示す\footnote{SAME\_BSは項と述語が同一文節であることを示す．}．
+
+\begin{table}[b]
+\caption{NAISTテキストコーパスの統計情報}
+\label{tbl:corpus-statics}
+\input{01table02.tex}
+\end{table}
+\begin{table}[b]
+\caption{NAISTテキストコーパスにおける項の分布}
+\label{tbl:corpus-arg-dist}
+\input{01table03.tex}
+\end{table}
+
+
+\subsection{実験設定}
+                実験では，MeCab0.996・IPADIC-2.7.0-20070801で解析して得られた形態素情報，
+                京都大学テキストコーパス3.0で付与されている文節情報，
+                CaboCha0.66で解析して得られた係り受け関係を用いた．
+項の候補は文節単位で抽出した．
+解析は文頭から文末の順で行い，述語を含む文以降からは項候補を抽出しない．
+なお，ある述語の格についての解析結果は
+同じ述語の他の格についての解析に影響を及ぼさない．
+
+
+本稿では項同定に焦点を絞るため，
+述語同定タスクには取り組まない．
+言い換えると，どれが述語であるかはあらかじめシステムに与えておく．
+述語には軽動詞「する」や複合動詞も含む．
+
+
+
+最尤候補同定には，
+トーナメントモデル\cite{Iida:2004:IPSJ}を用いた．
+その際，
+最尤候補の探索範囲ごとに異なるモデルを作成し，
+モデルの学習方法も\cite{Iida:2004:IPSJ}に従った．
+例えば，提案手法は
+探索フェーズでは
+INTRA\_D, INTRA\_Z, INTERの最尤候補を同定するが，
+それぞれ異なる合計3つの解析モデルを最尤候補同定に
+用いる．
+
+
+\subsection{分類器と素性}
+\label{sec:feature}
+
+探索フェーズ・トーナメントフェーズで用いる分類器には，
+Support Vector Machine \cite{Cortes:1995:ML}を線形カーネルで用いた．
+具体的には
+LIBLINEAR1.93\footnote{\url{http://www.csie.ntu.edu.tw/~cjlin/liblinear/}}の実装を用い，
+開発データを用いたパラメータチューニングを行った．
+
+素性には\citeA{Imamura:2009:ACL}で用いられたものとほぼ同一の素性を用いた．
+
+\begin{itemize}
+\item 述語・項候補の
+主辞・機能語・その他の語
+の出現形・形態素情報
+\item 述語が受け身の助動詞を含むときはその原形
+\item 係り受け木上の述語と項候補の関係
+\footnote{\citeA{Imamura:2009:ACL}では，どのような素性表現に落とし込んだかは詳述されていない．}\\
+係り受け木上の
+項候補ノード$N_a$と
+述語ノード$N_p$からそれぞれROOT方向に辿っていくときに
+初めて交叉するノードを$N_c$とし，
+$N_a$から$N_c$までの道のりに含むノード列を$A_{a \cdots c}$，
+$N_p$から$N_c$までの道のりに含むノード列を$A_{p \cdots c}$とする．
+また，$N_c$から木のROOTまでの道のりに含むノード列を$A_{c_1, c_2, \cdots c_r}$とする．
+本実験では，ノード列の文字列表現として，
+\begin{itemize}
+\item 主辞の原形
+\item 主辞の品詞
+\item 機能語の原形
+\item 機能語の品詞
+\item 機能語の原形$+$機能語の品詞
+\end{itemize}
+の5通りを用いた．
+$A_{a \cdots c}$の文字列表現を$S_{a \cdots c}$，
+$A_{p \cdots c}$の文字列表現を$S_{p \cdots c}$とし，
+それらの連結を
+$S_{a \cdots c} + S_{p \cdots c}$とする．
+
+素性には，
+$S_{a \cdots c} + S_{p \cdots c}$，
+$S_{a \cdots c} + S_{p \cdots c} + S_{c_1}$，
+$S_{a \cdots c} + S_{p \cdots c} + S_{c_1, c_2}$，
+$\cdots$
+$S_{a \cdots c} + S_{p \cdots c} + S_{c_1, c_2, \cdots, c_r}$
+の$r+1$個の文字列を用いた．
+つまり．
+述語と項候補の関係を
+$5(r+1)$個の文字列で表現した．
+\item 係り受け木上の2つの項候補の関係\\
+上と同様の素性表現を行った．
+\item 述語と項候補・2つの項候補間の距離（文節単位・文単位ともに）
+\item 「述語・項候補の主辞・助詞」のコーパス中の共起スコア
+\footnote{\citeA{Imamura:2009:ACL}では，これに相当するものとして，Good Turingスムージングを施した共起確率を用いている．計算はNAISTテキストコーパス相当部分を除いた1991〜2002年の毎日新聞を用いた．}\\
+動詞と項の共起のモデル化は
+\cite{Fujita:2004:IPSJ}に従った．
+名詞$n$が格助詞$c$を介して動詞$v$に係っているときの共起確率
+$P(\langle v, c, n\rangle )$を推定するため，
+$\langle v, c, n\rangle$を
+$\langle v, c\rangle$と$n$の共起とみなす．
+
+共起尺度には自己相互情報量\cite{Hindle:1990:ACL}を用いた．
+\[
+PMI(\langle v, c\rangle , n) = \log \frac{P(\langle v, c, n \rangle)}{P(\langle v, c\rangle ) P(n)}
+\]
+なお，スムージングは行わなかった．
+自己相互情報量の算出には次の2つのコーパスを用い，
+2つの値をそれぞれ二値素性として\footnote{値が$x$以下のときのみ発火する素性．実際には，$x$を$-4$から$4$まで$0.1$刻みで変化させた素性を用いた．}用いた．\\[0.5\Cvs]
+\textbf{NEWS:}
+1995年を除く1991年から2003年までの毎日新聞約1,800万文．
+MeCab0.98\footnote{\url{https://code.google.com/p/mecab/}}で形態素解析を行い
+CaboCha0.60pre4\footnote{\url{https://code.google.com/p/cabocha/}}で係り受け解析を行った．
+辞書はNAIST Japanese Dictionary 0.6.3\footnote{\url{http://sourceforge.jp/projects/naist-jdic/}}を用いた．
+約2,700万対の$\langle$動詞, 格助詞, 名詞$\rangle$の組を抽出した\footnote{動詞が約3万種，名詞が約32万種で，ユニーク数は約700万組．}．\\[0.5\Cvs]
+\textbf{WEB:}
+\newcite{Kawahara:2006:LREC}がウェブから収集した日本語約5億文．
+JUMAN\footnote{\url{http://nlp.ist.i.kyoto-u.ac.jp/index.php?JUMAN}}で形態素解析を行い，
+KNP\footnote{\url{http://nlp.ist.i.kyoto-u.ac.jp/index.php?KNP}}で係り受け解析を行なっている．
+KNPの項構造解析結果から約53億対の$\langle$述語, 格助詞, 項$\rangle$の組を抽出した
+\footnote{動詞が約8億種，項が約2.8億種で，ユニーク数は約1.6億組．}．
+
+\item 項候補が以前の項構造解析で項となったか否かを示す2値情報
+\item 項候補の主辞のSalient Reference List \cite{Nariyama:2002:TMI}における順位
+\end{itemize}
+
+
+\subsection{比較対象}
+
+先行研究では，
+我々のものと異なる素性や機械学習の手法を使っており実験設定が異なる．
+そのため，
+ベースラインモデルとしてIIDA2005，
+比較対象モデルとしてIIDA2007・IIDA2007$+$・PPR$-$
+を実装し，
+位置関係ごとに最尤候補を求めてから最終的な出力を決める
+提案モデルPPR (Preferences based on Positional Relations)と比較する．
+
+\subsubsection{IIDA2005} 
+
+位置関係に関わらずに，全ての候補の中から最尤の候補を
+探索フェーズで1つ選出した後，
+トーナメントフェーズでそれが項としてふさわしいか否かを判断するモデル．
+\cite{Iida:2005:TALIP}の
+探索先行分類型モデルである．
+
+全ての候補の中から1つを選ぶという点で
+\cite{Imamura:2009:ACL}とほぼ同等のモデルである．
+彼らのモデルと異なる主な点は，
+最尤候補同定と照応性判定を異なるモデルで行う点と，
+最尤候補同定時に2候補間の関係性も素性として用いる点である．
+
+このベースラインモデルと
+その他のモデルと比較することで，
+項の位置関係によって探索の優先順序をつけることの効果や，
+位置関係ごとに最尤候補同定モデルを作り最尤候補同士の比較を陽に行う効果を調べる．
+
+
+\subsubsection{IIDA2007} 
+
+文内最尤候補を選出した後，
+分類器が項としてふさわしいと判断すれば
+それを項として出力し，
+そうでなければ同様に文間候補の探索を行うモデル．
+\secref{iida-bact}で述べた
+\cite{Iida:2007:TALIP}の
+文内候補を優先的に探索するモデルである．
+
+彼らのモデルと異なる主な点は，
+最尤候補同定や候補の適格性判定を行う分類器に
+BACTではなくSVMを用いる点である．
+
+
+
+IIDA2005と比較することで，
+文内候補を優先的に探索することの効果を調べる．
+
+\subsubsection{IIDA2007$+$} 
+
+INTRA\_Dの探索後，最尤候補が項としてふさわしいかどうかの判断（適格性判定）を行う．
+適格であればそれを出力し終了する．
+非適格であればINTRA\_Zの探索を行い，同様に適格性判定を行う．
+それも非適格であればINTERの探索を行い，
+適格であればそれを出力し，
+非適格であれば項は無いと判断する．
+IIDA2005とIIDA2007の自然な拡張で，
+述語から統語的な距離の近いものを優先的に探索する．
+
+
+IIDA2007と比較することで，
+文内候補を細かくINTRA\_DとINTRA\_Zに分けて優先順序をつけることの効果を調べる．
+
+
+\subsubsection{PPR$-$}
+
+このモデルは，提案モデルとほぼ同じモデルであるが，
+INTRA\_DとINTRA\_Zを区別せずに，
+位置関係がINTRAとINTERの2グループであると仮定する．
+\figref{fig:anap-tournament-model}の(b)と(c)で示すように
+トーナメントフェーズは2つの2値分類モデルからなる．
+分類器(c)は
+INTRA とINTERの候補のどちらが最尤候補であるかを判断する．
+
+
+PPRと比較することで，
+文内の項の位置関係を細かくINTRA\_DとINTRA\_Zに分けて
+最尤候補同定モデルを作り，
+最尤候補同士の比較を行うことの効果を調べる．
+
+
+\subsubsection{比較対象とする先行研究}
+
+NAISTテキストコーパスを使い，全ての項の位置関係で実験を行なっている
+\cite{Taira:2008:EMNLP}と\cite{Imamura:2009:ACL}
+との比較も行う．
+ただし，本実験とは微妙に実験設定が異なるため，厳密な比較はできないことに注意してほしい．
+
+\citeA{Taira:2008:EMNLP}の実験では
+ 19,501個の述語をテストに，
+  49,527個を学習に，
+  11,023個を開発に使っている．
+また学習では
+京都大学テキストコーパス4.0で付与されている
+係り受け情報と形態素情報を用いていているが，
+テストでは独自の係り受け解析器を用いている．
+
+\citeA{Imamura:2009:ACL}の実験では，
+ 25,500個の述語をテストに，
+  67,145個を学習に，
+  13,594個を開発に使っている．
+我々は京都大学テキストコーパス3.0を用いたが，
+\citeA{Imamura:2009:ACL}は
+京都大学テキストコーパス4.0で付与されている
+係り受け情報と形態素情報を
+学習とテストに用いている．
+
+
+\subsubsection{その他の先行研究}
+
+\citeA{Sasano:IPSJ:2011}は，
+提案システムは表層格の解析を行うことから，
+受け身・使役形である述語は評価から除外しており，
+本稿では比較対象としない．
+
+\citeA{Yoshikawa:2013:JNLP}は，
+文間項は解析対象としていないため，
+本稿では比較対象としない．
+
+\cite{Watanabe:JSAI:2010}は
+述語語義と項の意味役割の依存関係を考慮しながら，
+双方を同時に学習，解析を行う構造予測モデルを提案している．
+しかし，本稿とは異なるデータセットを用いていることから，比較対象とはしない．
+
+\subsection{評価尺度}
+
+Precision, Recall, F値で
+位置関係ごとに評価を行う．
+
+システムが出力した
+位置関係が$T$であるもののうち，
+正しく同定できているものの数を$tp_{(T)}$，
+できていないものの数を$fp_{(T)}$，
+システムに同定されなかった項のうち位置関係が$T$であるものの数を$fn_{(T)}$とすると，
+\[
+Precision = \frac{ tp_{(T)} }{ tp_{(T)} + fp_{(T)} }, \quad
+Recall = \frac{ tp_{(T)} }{ tp_{(T)} + fn_{(T)} }, \quad
+F = \frac{2 \cdot Precision \cdot Recall}{Precision + Recall}
+\label{as}
+\]
+と定義できる．
+
+また，システム全体(ALL)の
+$tp, fp, fn$と
+Precision, Recall, F値も，
+同様に定義できる．
+
+
+
+
