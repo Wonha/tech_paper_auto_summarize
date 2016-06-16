@@ -1,14 +1,21 @@
-考察
+Usage:
+	./section_classify [LIST OF PATH TO SOURCE FILE]
 
-22N01-02
-このファイルではキーワードの後ろになん文字化がつく場合はマッチングと判定したのが良い結果を出した。
+Description:
+	Input:
+		List of path to source file.
+	Output:
+		1. Writing files by section unit to './logs/[FILE_NAME]/[CLASSIFIED_SECTION]'.
+		2. Writing log file of 'section_classify' to './logs/[FILE_NAME]'.
+	PROCESS:
+		1. Read from src path from invoked vars.
+		2. Get src name from src path.
+		3. Initialize necessary vars.
+		4. Read contents from src file.
+		5. Tokenize sections.
+		6. Classify sections.
+		7. Get the logs.
 
-21N03-05
-実験のセクションが２つある
-
-21N03-01
-実験の設定、実験結果セクションなど、実験。。。の形のセクションが複数ある。
-配列を使い、実験セクションが複数ある場合に備えての分類するのは？
 
 
 
