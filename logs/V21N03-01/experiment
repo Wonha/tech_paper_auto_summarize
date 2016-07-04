@@ -1,3 +1,387 @@
+Nグラム一致率に基づく自動評価法の問題点
+
+Nグラム一致率を用いてシステム翻訳を評価する際の問題点を以下に定義する
+BLEUを例として説明する．
+
+システム翻訳文集合を${\mathcal H}$，それに対応する参照翻訳文集合
+\footnote{
+BLEUでは，原文に対して複数の参照翻文があることを想定している．}を
+${\mathcal R}$とする．システム翻訳文$h_i \in \mathcal H$には，対応す
+る参照翻訳文の集合$R_i \in \mathcal R$が割り当てられており，
+$R_i$の$j$番目の参照翻訳文を$r_j$とする．
+なお，$S=|\mathcal H|=|\mathcal R|$とする．ここで，BLEUは，以下の式で定義される．
+\begin{equation}
+ \text{BLEU}(\mathcal{H},\mathcal{R})=\text{BP}\cdot\exp\left(\frac{1}{N}\sum_{n=1}^N \log P_n\right)
+\end{equation}
+
+$N$はNグラムの長さパラメタであり，一般的には$N=4$である．$P_n$は，Nグラム適
+合率であり，以下の式で定義される．
+\begin{equation}
+P_n=\frac{\displaystyle \sum_{i=1}^S\displaystyle\sum_{t_n \in h_i} \min(\text{count}(h_i,t_n),
+	\max\_\text{count}(R_i,t_n))}{\displaystyle \sum_{i=1}^S \displaystyle\sum_{t_n \in h_i}\text{count}(h_i,t_n)}
+\end{equation}
+
+count($h_i$,$t_n$)は，任意のNグラム ($t_n$) のシステム翻訳文$h_i$における出現頻
+度，
+max\_count($R_i$,$t_n$)は，$t_n$の参照翻訳文集合$R_i$における
+出現頻度の最大値，$\max_{r_j \in R_i}\text{count}(r_j,t_n)$
+である．BP (Brevity Penalty) は，短
+いシステム翻訳に対するペナルティであり，以下の式で定義される．
+\begin{equation}
+ \text{BP}=\min \left( 1,\exp \left( 1-\frac{\text{closest}\_\text{len}(\mathcal{R})}{\text{len}(\mathcal{H})}\right)\right)
+\end{equation}
+
+closest\_len($\mathcal R$)は，各$h_i \in {\cal H}$に対し，
+最も近い単語数の参照翻訳文 $r_j \in R_i$を決定した後，それらの単語数を全て
+の$i$で合計したもの，
+len($\mathcal{H}$)は，$h_i$単語数を全ての$i$で合計したものを表す．
+
+いま，原文 ($s$)，参照翻訳 ($r$)，システム翻訳 ($h_1$, $h_2$) が以下の通り与えられた
+としよう．
+
+\begin{description}
+ \item[{\mdseries $s$:}] 雨に濡れたので，彼は風邪をひいた．
+ \item[{\mdseries $r$:}] He caught a cold because he got soaked in the rain.
+ \item[{\mdseries $h_1$:}] He caught a cold because he had gotten wet in the rain.
+ \item[{\mdseries $h_2$:}] He got soaked in the rain because he caught a cold.
+\end{description}
+
+$r$は原文の直訳であり，$h_1$ はほぼそれと等しい訳であるが，$h_2$ は
+「風邪をひいたので，彼は雨に濡れた」という意味であり，原文が表す因果関係
+が逆転している．$h_1$ と $h_2$ を比較すると，
+翻訳としての流暢さ (fluency)，いわゆる言語
+モデル的な確からしさは同程度であ
+るが，内容の適切性 (adequacy)は，$h_1$ が $h_2$ よりも高くならねばならない．
+
+ここで，この2つのシステム翻訳を先に示したBLEUで評価してみよう\footnote{式(1)の定
+義から明らかなようにBLEUは文集合を引数として評価スコアを計算する．
+通常，1文を対象としてそのスコアを計算することはないが，ここでは
+説明のため1文でのBLEUスコアを計算する．}．
+$h_1$，$h_2$ とも$r$よりも長いため，ともに BPは1となる．$h_1$ の$P_1$〜$P_4$はそれぞれ，
+9/12，7/11，5/10，3/9なので，BLEUスコアは0.53となる．一方，$h_2$ の$P_1$〜$P_4$
+はそれぞれ，11/11，9/10，6/9，4/8なので，BLEUスコアは0.74となる．
+この結果は，我々の直感に反しており，BLEUを最大化するようにシステムを最適
+化することが，良い翻訳システムの開発に結びつくかどうかは疑問である．
+
+こうした問題が起こる原因はNグラムという局所的な語の
+並びにのみに着目してスコアを計算することにある．
+短い単語列のみを評価対象とすると，先の例のように，
+参照翻訳の節中のNグラムを保持していれば，節の順番が入れ替わったとして
+も十分高いスコアを獲得する．
+
+
+もちろん，$h_2$ のような翻訳をシステムが出力するようなことはほとんどあり得ない
+のではないかという疑問もあろう．
+確かに語順が似た言語対を対象とする場合や翻訳システムがルールベースで構築
+されている場合には起こりにくい問題であるが，
+語順が大きく異なる言語対を対象とした統計翻訳 (Statistical Machine
+Translation: SMT)
+システムでは十分起こり得る問
+題である．
+以下に Web 上の SMT による翻訳サービスの出力例を示す．
+
+\begin{description}
+ \item[原文：]ボブはメアリに指輪を買うためにジョンの店に行った．
+ \item[参照翻訳：]Bob went to John's store to buy a ring for Mary.
+ \item[SMT出力：]Bob to buy rings, Mary went to John shop.
+\end{description}
+
+SMT出力をみると，訳語という観点では参照翻訳と良く合致しており，バイグラム，
+トライグラムでもある程度の数が一致している．しかし，原文の「店に行く」
+の主体が「ボブ」であるという構造を捉えることができず，
+その主体が「メアリ」となってしまっている．
+SMTシステムでは，大
+きな語順の入れ替えを許すと探索空間は膨大になる．
+よって，現実的な時間で
+翻訳文を生成するため，
+語順の入れ替えにある程度の制限を設けざるを
+得ない．その結果，Nグラムでは参照翻訳と良く合致す
+るものの原文の意味とはかけ離れた翻訳を出力することがある．
+
+このような状況のもと，
+BLEUスコアで翻訳システムを比較すると，
+正しい評価ができない可能性が高い．なお，この問題は BLEU に限ったことでは
+なく，その変種であるNISTスコア，METEOR など Nグラム一致率を利用した自動
+評価法すべてに当てはまる問題である．
+
+
+LCSに基づく自動評価法の問題点
+
+ROUGE-L \cite{ROUGEL}，IMPACT \cite{impact}は，参照翻訳とシステム翻訳と
+の間の最長共通部分単語列 (LCS) に基づき評価スコアを決定する．先に挙げた
+例で説明する．
+
+\begin{description}
+ \item[{\mdseries $s$:}] 雨に濡れたので，彼は風邪をひいた．
+ \item[{\mdseries $r$:}] He caught a cold because he got soaked in the rain.
+ \item[{\mdseries $h_1$:}] He caught a cold because he had gotten wet in the rain.
+ \item[{\mdseries $h_2$:}] He got soaked in the rain because he caught a cold.
+\end{description}
+
+$r$と$h_1$との間のLCSは，``He caught a cold because he in the rain''であり，
+その長さ（単語数）は9である．$r$の長さは11，$h_1$の長さは12であることか
+ら，LCS の適合率は9/12，再現率は9/11となる．一方，$r$と$h_2$との間の
+LCS は，``he got soaked in the rain''であり，その長さは6である．$h_2$の
+長さは11なので，LCS の適合率は6/11，再現率は6/11 となる．ROUGE-L ス
+コアは LCS 適合率と再現率の調和平均，F値なので BLEU とは違い，$h_1$を
+$h_2$より高く評価することができる．
+
+IMPACT は ROUGE-L を改良したものであり，上述の LCS を一度見つけただけで
+やめるのではなく，見つかった LCS を削除した単語列に対し，再度 LCS を探すとい
+うことを繰り返す．つまり，$h_1$の例では，$r$と$h_1$から，
+``He caught a cold because he in the rain''を削除し，
+\begin{description}
+ \item[{\mdseries $r$:}] got soaked
+ \item[{\mdseries $h_1$:}] had gottten wet 
+\end{description}
+から，$h_2$の例では，``he got soaked in the rain''を削除し，
+\begin{description}
+ \item[{\mdseries $r$:}] caught a cold because he
+ \item[{\mdseries $h_2$:}] because he caught a cold
+\end{description}
+から，再度 LCS を探し出すという手順を繰り返す．
+
+これらの手法の問題点は，参照翻訳とシステム翻訳との間の LCS 適合率，再
+現率を計算するため，それらの間で一致しなかった単語を評価の対象に含めてい
+る点にある．例えば，以下のシステム翻訳$h_3$を考えると，$r$と$h_3$との間
+のLCSは，``he caught a cold the rain''となるので，LCS適合率，再現率はそれぞ
+れ，6/13，6/11 となり，適合率が$h_2$の場合より低い値をとってしまい， ROUGE-Lスコ
+アは$h_2$の場合よりも低くなる．
+
+\begin{description}
+ \item[{\mdseries $h_3$:}] He caught a cold as a result of getting hit by the rain
+\end{description}
+
+このように適合率，再現率といった参照翻訳とシステム翻訳との間で一致しない単語を評価
+に含めてしまう尺度を用いると訳語の違いに敏感になり過ぎ，システムを過
+小評価することがある．
+
+
+語順の相関に基づく自動評価法
+
+本稿では，Nグラム一致率に基づく自動評価法の問題点を解決するため，文内の
+局所的な語の並びに着目するのではなく，大局的な語の並びに着目する．
+つまり，参照翻訳とシステム翻訳との間で一致して出現する単語の出現順
+の近さに基づき評価する．さらに，訳語の違いに寛大な評価をするため，システ
+ム翻訳の単語適合率の重みを調整できるようにして別途ペナルティとして用いる．
+
+
+\subsection{単語アラインメント}
+
+
+参照翻訳とシステム翻訳の語順との間の相関を計算するため，双方の翻訳に一致
+して出現する単語を同定しなければならない．これは，参照翻訳とシステム翻訳
+との間の単語アラインメントを決定する問題となる．本稿では，単語の表層での
+一致に基づくアラインメント法を採用した．Algorithm \ref{wordalign}にその
+疑似コードを示す．
+
+\begin{algorithm}[b]
+ \caption{Word Alignment Algorithm}
+ \label{wordalign}
+ \footnotesize
+ \begin{algorithmic}[1]
+  \STATE Read hypothesis sentence $h=w_1^h,w_2^h,\ldots,w_m^h$
+  \STATE Read reference sentence $r=w_1^r,w_2^r,\ldots,w_n^r$
+  \STATE Initialize {\tt worder} with an empty list.
+
+  \FOR{each word $w_i^h$ in $h$}
+
+  \IF {$w_i^h$ appears only once each in $h$ and $r$}
+  \STATE append $j$ s.t. $w_i^h=w_j^r$ to {\tt worder}
+  \ELSIF
+
+
+  \FOR{$\ell$=2 to $m-i$}
+  \IF {$w_i^h,\ldots,w_{i+(\ell-1)}^h$ appears only once each in $h$ and $r$}
+  \STATE append $j$ s.t. $w_i^h,\ldots,w_{i+(\ell-1)}^h=w_j^r,\ldots,w_{j+(\ell-1)}^r$ to {\tt worder}
+  \STATE break the loop
+  \ENDIF
+  \ENDFOR
+  \ELSE
+  \FOR{$\ell$=2 to $i$}
+  \IF {$w_{i-(\ell-1)}^h,\ldots,w_i^h$ appears only once each in $h$ and $r$}
+  \STATE append $j$ s.t. $w_{i-(\ell-1)}^h,\ldots,w_i^h=w_{j-(\ell-1)}^r,\ldots,w_{j}^r$ to {\tt worder}
+  \STATE break the loop
+  \ENDIF
+
+  \ENDFOR
+
+  \ENDIF
+  \ENDFOR
+  \STATE Return {\tt worder}
+ \end{algorithmic}
+\end{algorithm}
+
+システム翻訳を長さ$m$，参照翻訳を長さ$n$の単語リストして読み込み，アライ
+ンメントを格納する配列{\tt worder}を初期化する（1〜3行目）．システム翻訳の
+単語リストの先頭から順に単語$w_i^h$を取り出し，その単語がシステム翻訳，参照翻
+訳の双方にただ1度のみ出現している場合，$i$と単語$w_i^h$の参照翻訳における出現
+位置$j$を対応づける（5, 6行目）．それ以外の場合，$w_i^h$を基準として右側にN
+グラムを伸長させ，システム翻訳と参照翻訳の双方における出現頻度が1となっ
+た時点で$i$と$j$を対応づける（8〜13行目）．それでも対応がつかない場合，
+$w_i^h$を基準として左側にNグラムを伸長させ，システム翻訳
+と参照翻訳の双方における出現頻度が1となった時点で$i$と$j$を対応づける（15〜
+20行目）．これでも曖昧性が残る（システム翻訳と参照翻訳での頻度が1にならな
+い）場合，あるいは対応先が見つからない場合は単語対応付けを行わない．
+図\ref{figalign}に2章の例文に対する単語アラインメントを示す．上段の例か
+ら，\texttt{worder}の1番目の要素，つまり，$h_1$の1単語目
+が$r$の1番目の要素（単語）に対応することがわかる．
+下段の例から，$h_2$の1単語目が$r$の6番目の単語と対応していることがわかる．
+
+ \begin{figure}[t]
+   \begin{center}
+\includegraphics{21-3ia985f1.eps}
+   \end{center}
+    \caption{単語アラインメントの例}
+    \label{figalign}
+\end{figure}
+
+
+\subsection{単語出現順の相関}
+
+1対1の単語アラインメントを決定することができれば，参照翻訳とシステム翻訳
+から単語出現位置IDを要素とするリストを得ることができる．図\ref{figalign}の例では，
+$r$:[1,2,3,4,5,6,9,10,11]，$h_1$:[1,2,3,4,5,6,9,10,11]および
+$r$:[1,2,3,4,5,6,7,8,9,10,11]，$h_2$:[6,7,8,9,10,11,5,1,2,3,4]という2つ
+のリストペアを得る．こうした順序列間の順位相関係数を計算することで参照翻訳とシ
+ステム翻訳との間で一致して出現する単語の出現順の近さを測ることができる．
+本稿では以下に示すKendallの順位相関係数 ($\tau$) \cite{kendall}を採用した．
+順位相関係数としては，Spearman の順位相関係数 ($\rho$) もよく知られ
+ている．しかし，
+$\tau$と比べて$\rho$は，順位の小さな入れ替わりには寛容すぎ，大きな入れ替
+わりには厳しすぎる．
+予備実験の結果では，人間の評価との間の相関が$\tau$よりも低い傾向
+を示したため，
+\pagebreak
+本稿では$\tau$を採用した．
+\begin{equation}
+ \tau =\frac{\displaystyle \sum_{i=1}^{n-1} T_i - \displaystyle \sum_{i=1}^{n-1}U_i}{\frac{n(n-1)}{2}}
+\end{equation}
+
+$T_i$は，アラインメント手続きを用いてシステム翻訳から得た単語出現位置の
+IDリスト (\texttt{worder}) につ
+いて，$i$番目の要素の値よりも大きな要素が$i+1$番目から$n$番目の要
+素までの間に出現
+する数，$U_i$はその逆に，
+$i$番目の要素の値よりも小さな要素が$i+1$番目から$n$番目の要素まで
+の間に出現する数を表す．表\ref{tau}に図\ref{figalign}の$h_2$から得た{\tt
+worder}と$T_i$，$U_i$をそれぞれ示す．この表より，$r$ と $h_2$ との間の語順の
+相関をKendallの$\tau$で計算すると，
+$\tau(r,{h_2})=(21-34)/((11\cdot10)/2)=-0.236$となる．
+同様に図\ref{figalign}の$h_1$から得た \texttt{worder}を用いて$\tau(r,{h_1})$を
+計算すると
+$\tau(r,{h_1})=(36-0)/((9\cdot8)/2)=1$となる．
+$\tau$は参照翻訳と
+システム翻訳との語順が完全一致する場合に1，逆順の場合に$-1$をとる．
+
+\begin{table}[t]
+  \caption{Kendall の順位相関係数の計算例}
+  \label{tau}
+\input{0985table01.txt}
+\end{table}
+
+BLEUでは，$h_2$が$h_1$よりも高いスコアを獲得したが，文全体での語順に着目
+し，システム翻訳と参
+照翻訳との間の語順の順位相関を計算すると，$h_1$が$h_2$よりも高いスコアを獲得
+でき，我々の直感に合致した結果を得ることができた．
+
+ただし，$\tau$は負の値をとり得るため，従来の自動評価法が出力するスコアレ
+ンジと同様[0,1]の値をとるよう以下の式で正規化する．
+\begin{equation}
+ \text{Normalized Kendall's $\tau$: NKT} =\frac{\tau+1}{2}
+\end{equation}
+
+
+\subsection{ペナルティ}
+
+参照翻訳とシステム翻訳との間の語順の相関を
+計算するためには，単語アラインメントを決定し，双方に一致して出現する単語
+のみを評価の対象としなければならない．しかし，
+参照翻訳とシステム翻訳との間で一致する単語のみを評価対象とすることには以
+下の2つ問題がある．
+
+\begin{enumerate}
+ \item システム翻訳の単語数に対し，参照翻訳との間で一致する単語の割合が
+       少ない場合，過剰に高いスコアを与える可能性がある．
+ \item システム翻訳の単語数が少ない場合，過剰に高いスコアを与える可能性
+       がある，
+\end{enumerate}
+
+(1) に関して，以下の例を考えよう．
+
+\begin{description}
+ \item[{\mdseries $r$:}] John went to a restaurant yesterday
+ \item[{\mdseries $h$:}] John read a book yesterday
+\end{description}
+
+$h$は5単語からなる訳であり，そのうち``John''，``a''，``yesterday''
+のみしか参照翻訳と一致していない．しかし，その出現順が参照翻訳と一致していることから
+NKT は1となる． つまり，システムが出力した単語数に関係なく順位相関だけを
+みていると不当に高いスコアを獲得する可能性がある．
+
+次に (2) に関して，以下の例を考えよう．
+
+\begin{description}
+ \item[{\mdseries $r$:}] John went to a restaurant yesterday
+ \item[{\mdseries $h$:}] to a
+\end{description}
+
+システム翻訳は2単語しかない意味の無い訳であるにもかかわらず，
+単語正解率は1であり，2単語の出現順序も参照翻訳と一致しているこ
+とから，NKTも1となる．
+つまり，単語数が少
+ない場合，順位相関と単語正解率だけでは不当に高いスコアを獲得する可能性
+がある．
+
+このように，順位相関係数を用いると，システム翻訳の2単語のみが参照翻訳と
+出現順まで一致すると，不当に高いスコアを獲得する可能性がある．
+よって，
+本稿では，前者に対して単語正解率 ($P$)，後者に対してはBLEUの
+BPをペナルティとして導入する．それぞれの定義を以下に示す．
+\begin{gather}
+ P(h_i,r_i)=\frac{\text{len (\texttt{worder})}}{\text{len}(h_i)} \\
+ \text{BP}_s(h_i,r_i)=\min\left(1,\exp \left(1-\frac{\text{len}(r_i)}{\text{len}(h_i)}\right)\right)
+\end{gather}
+
+単語正解率は，システム翻訳の単語のうちアラインメントをとることが
+できた単語数 (len({\tt worder})) の割合であり，
+len($r$)は，参照翻訳の単語数，len($h$)はシステム翻訳の単語数で
+ある．
+BLEU の BP は文集合全体で計算していたが，ここでは，文単位で
+計算することに注意されたい．
+これらを用いて最終的な自動評価スコアを以下の式(\ref{ribes})で定義する．
+なお，{\bf この手法を RIBES (Rank-based Intuitive Bilingual Evaluation Score) と名付け，
+\url{http://www.kecl.ntt.co.jp/icl/lirg/ribes/}にてオープンソースソフトウェ
+アとして公開している．}
+\begin{equation}
+\mbox{RIBES}(\mathcal{H},\mathcal{R})=\frac{\displaystyle\mathop\sum_{h_i \in \mathcal{H}}
+\max_{r_j \in R_i} \{ \mbox{NKT}(h_i,r_j) \cdot P(h_i,r_j)^{\alpha}\cdot
+\mbox{BP}_s(h_i,r_j)^{\beta}\}}{|\mathcal{H}|}
+\label{ribes}
+\end{equation}
+
+$\alpha (\ge 0)$は単語適合率の重みであり，$\alpha$が大きいほど訳語の違い
+に敏感になる．
+
+\begin{itemize}
+ \item 参照翻訳が1つしかない場合，参照翻訳にはない訳語をシステムが出力す
+       る可能性が高いため，$\alpha$は小さめに設定した方がよいだろう．
+ \item 参照翻訳が複数の場合，参照翻訳のいずれかに出現する単語をシステム
+       が出力する可能性が高くなる．そこで，不適切な訳語を厳しく採点するため
+       $\alpha$は高めに設定した方がよいだろう．
+\end{itemize}
+
+$\beta (\ge 0)$は BP の重みであり，$\beta$が大きいほど訳文の長さに敏感に
+なる．
+
+\begin{itemize}
+ \item 参照翻訳が1つしかない場合，それよりも短い翻訳があり得る可能性が高
+       いので，$\beta$は小さめに設定してよいだろう．
+ \item 参照翻訳が複数ある場合，一番短い翻訳を基準にして考えれば，$\beta$
+       を高めに設定してよいだろう．
+\end{itemize}
+
+
 実験の設定
 
 
