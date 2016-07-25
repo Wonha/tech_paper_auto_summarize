@@ -1,0 +1,799 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvipdfm]{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{hangcaption_jnlp}
+
+\usepackage{bm}
+\usepackage{multirow}
+\usepackage{circle}
+
+\Volume{22}
+\Number{1}
+\Month{March}
+\Year{2015}
+
+\received{2014}{8}{29}
+\revised{2014}{11}{21}
+\accepted{2014}{12}{26}
+
+\setcounter{page}{27}
+
+\jtitle{対をなす二文書間における文対応関係の推定}
+\jauthor{角田　孝昭\affiref{Author_1} \and 乾　　孝司\affiref{Author_1} \and 山本　幹雄\affiref{Author_1}}
+\jabstract{
+本論文では，手紙文書とそれに対する応答文書など対となる二つの文書間における文レベルでの対応関係を推定する課題を提案し，解決手法を検討する．これまで，単一の文書内における文同士の関係や対話における発話同士の関係を対象とした研究は盛んに行われて来たのに対し，二文書間における文書を跨いだ文対応関係にはあまり注目されて来なかった．このような関係の例として，質問と応答，依頼と回答などが挙げられる．文対応関係を用いることで文書によるコミュニケーションをより細かい単位で説明できることから，本関係の推定が実現すれば様々な応用が期待できる．一例として，文書対の群から対応を持つ文を抽出すれば，各文書対でどのようなコミュニケーションが行われているかを提示することが可能となる．我々は文対応関係の自動推定を実現するため，本課題を文対応の有無を判定する分類問題とみなして条件付確率場を用いる手法を提案する．具体的には，推定した文の種類を文対応推定に活用する対話文書を対象とした従来手法を，本論文の課題に適用する手法を示す．加えて，文種類の推定と文対応の推定を同時に行う拡張モデルによる手法を提案する．実際の宿泊予約ウェブサイトにおけるレビュー・返答対を対象とした評価実験の結果，拡張モデルは拡張前のモデルよりも高い性能である適合率 46.6\%, 再現率 61.0\%の推定性能を得た．}
+\jkeywords{二文書，文間関係，談話分析，条件付確率場}
+
+\etitle{Identification of Cross-Document Sentence Relations \\ from Document Pairs}
+\eauthor{Takaaki Tsunoda\affiref{Author_1} \and Takashi Inui\affiref{Author_1} \and Mikio Yamamoto\affiref{Author_1}} 
+\eabstract{
+  We propose a novel task that identifies cross-document sentence relations from document pairs. Although there are numerous studies that focus on finding sentence relations from just one document or conversation, only few studies are proposed for cross-documents. Examples of cross-document sentence relations are question--answer relations, request--response relations, and so on. Finding such relations will lead to many applications since the cross-document sentence relations are useful to explain document-based conversations on a more fine-grained level. For instance, we can extract communications from cross-documents by accumulating sentences having relations. To detect such relations, we regard this task as the classification problem and employ the conditional random fields. In particular, we modify a previous method that focuses on finding relations from conversations using sentence types to our task. Furthermore, we propose a combined model that simultaneously estimates sentence types and relations. The experiments are performed on review and reply on an internet service for hotel reservation, and the results show that our proposed model achieves 46.6\% precision and 61.0\% recall, which outperforms previous models.}
+\ekeywords{cross-document, sentence dependency, discourse analysis, conditional random fields}
+
+\headauthor{角田，乾，山本}
+\headtitle{対をなす二文書間における文対応関係の推定}
+
+\affilabel{Author_1}{筑波大学システム情報工学研究科コンピュータサイエンス専攻}{Department of Computer Science, Graduate school of SIE, University of Tsukuba}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+
+今日までに，人間による言語使用の仕組みを解明する試みが単語・文・発話・文書など様々な単位に注目して行われて来た．特に，これらの種類や相互関係（例えば単語であれば品詞や係り受け関係，文であれば文役割や修辞構造など）にどのようなものがあるか，どのように利用されているかを明らかにする研究が精力的になされて来た．計算機が普及した現代では，これらを数理モデル化して考えることで自動推定を実現する研究も広く行われており，言語学的な有用性にとどまらず様々な工学的応用を可能にしている．
+
+例えば，ある一文書内に登場する節という単位に注目すると，主な研究として Mann \& Thompson による修辞構造理論 (Rhetorical Structure Theory; RST) がある \cite{Mann1987,Mann1992}．修辞構造理論では文書中の各節が核 (nucleus) と衛星 (satelite) の 2 種類に分類できるとし，さらに核と衛星の間にみられる関係を21種類に，核と核の間にみられる関係（多核関係）を3種類に分類している．このような分類を用いて，節同士の関係を自動推定する研究も古くから行われている \cite{Marcu1997a,田村直良:1998-01-10}．さらに，推定した関係を別タスクに利用する研究も盛んに行われている \cite{Marcu99discoursetrees,比留間正樹:1999-07-10,Marcu2000,平尾:2013,tu-zhou-zong:2013:Short}．例えば，Marcu \citeyear{Marcu99discoursetrees}・比留間ら\citeyear{比留間正樹:1999-07-10}・平尾ら \citeyear{平尾:2013} は，節の種類や節同士の関係を手がかりに重要と考えられる文のみを選択することで自動要約への応用を示している．また，Marcu ら \citeyear{Marcu2000}・Tu ら \citeyear{tu-zhou-zong:2013:Short} は，機械翻訳においてこれらの情報を考慮することで性能向上を実現している．
+
+一方，我々は従来研究の主な対象であった一文書や対話ではなく，ある文書（往信文書）とそれに呼応して書かれた文書（返信文書）の対を対象とし，往信文書中のある文と返信文書中のある文との間における文レベルでの呼応関係（以下，\textbf{文対応}と呼ぶ）に注目する．このような文書対の例として「電子メールと返信」，「電子掲示板の投稿と返信」，「ブログコメントの投稿と返信」，「質問応答ウェブサイトの質問投稿と応答投稿」，「サービスや商品に対するレビュー投稿とサービス提供者の返答投稿」などがあり，様々な文書対が存在する（なお，本論文において文書対は異なる書き手によって書かれたものとする）．具体的に文書対として最も典型的な例であるメール文書と返信文書における実際の文対応の例を図 \ref{fig:ex-dependency} に示す．図中の文同士を結ぶ直線が文対応を示しており，例えば返信文「講義を楽しんで頂けて何よりです。」は往信文「本日の講義も楽しく拝聴させて頂きました。」を受けて書かれた文である．同様に，返信文「まず、課題提出日ですが…」と「失礼しました。」はいずれも往信文「また、課題提出日が…」を受けて書かれた文である．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{22-1ia2f1.eps}
+\end{center}
+\caption{メール文書における文対応の例．文同士を結ぶ直線が文対応を示している．}
+\label{fig:ex-dependency}
+\vspace{-0.5\Cvs}
+\end{figure}
+
+本論文では，文書レベルで往信・返信の対応が予め分かっている文書対を入力とし，以上に述べたような文対応を自動で推定する課題を新たに提案し，解決方法について検討する．これら文書対における文対応の自動推定が実現すれば，様々な応用が期待できる点で有用である．応用例について，本研究の実験では「サービスに対するレビュー投稿とサービス提供者の返答投稿」を文書対として用いているため，レビュー文書・返答文書対における文対応推定の応用例を中心に説明する．
+
+\begin{enumerate}
+\renewcommand{\labelenumi}{}
+\item \textbf{文書対群の情報整理}：複数の文書対から，文対応が存在する文対のみを抽出することでこれら文書対の情報整理が可能になる．例えば，「このサービス提供者は（または要望，苦情など）に対してこのように対応しています」といった一覧を提示できる．これを更に応用すれば，将来的には FAQ の（半）自動生成や，要望・苦情への対応率・対応傾向の提示などへ繋げられると考えている．
+\item \textbf{未対応文の検出による返信文書作成の支援}：往信文書と返信文書を入力して自動で文対応を特定できるということは，逆に考えると往信文書の中で対応が存在しない文が発見できることでもある．この推定結果を利用し，ユーザが返信文書を作成している際に「往信文書中の対応がない文」を提示することで，返信すべき事項に漏れがないかを確認できる文書作成支援システムが実現できる．このシステムは，レビュー文書・返答文書対に適用した場合は顧客への質問・クレームへの対応支援に活用できる他，例えば質問応答サイトのデータに適用した場合は応答作成支援などにも利用できる．
+\item \textbf{定型的返信文の自動生成}：(2) の考えを更に推し進めると，文対応を大量に収集したデータを用いることで，将来的には定型的な返信文の自動生成が可能になると期待できる．大規模な文対応データを利用した自動生成手法は，例えば Ritter ら・長谷川らが提案している \cite{Ritter2011,長谷川貴之:2013}が，いずれも文対応が既知のデータ（これらの研究の場合はマイクロブログの投稿と返信）の存在が前提である．しかし，実際には文対応が既知のデータは限られており，未知のデータに対して自動生成が可能となるだけの分量を人手でタグ付けするのは非常に高いコストを要する．これに対し，本研究が完成すればレビュー文書・返答文書対をはじめとした文対応が未知のデータに対しても自動で文対応を付与できるため，先に挙げた様々な文書において往信文からの定型的な返信文の自動生成システムが実現できる．定型的な返信文には，挨拶などに加え，同一の書き手が過去に類似した質問や要望に対して繰り返し同様の返信をしている場合などが含まれる．
+  \item \textbf{非定形的返信文の返答例提示}：(3) の手法の場合，自動生成できるのは定型的な文に限られる．一方，例えば要望や苦情などの個別案件に対する返答文作成の支援は，完全な自動生成の代わりに複数の返答例を提示することで実現できると考えている．これを実現する方法として，現在返答しようとしている往信文に類似した往信文を文書対のデータベースから検索し，類似往信文と対応している返信文を複数提示する手法がある．返信文の書き手は，返答文例の中から書き手の方針と合致したものを利用ないし参考にすることで返信文作成の労力を削減できる．
+\end{enumerate}
+
+一方で，文書対における文対応の自動推定課題は以下のような特徴を持つ．
+
+\begin{enumerate}
+  \renewcommand{\labelenumi}{}
+  \item \textbf{対応する文同士は必ずしも類似しない}：例えば図 \ref{fig:ex-dependency} の例で，往信文「本日の講義も楽しく拝聴させて頂きました。」と返信文「講義を楽しんで頂けて何よりです。」は「講義」という単語を共有しているが，往信文「また、課題提出日が…」と返信文「失礼しました。」は共有する単語を一つも持たないにも関わらず文対応が存在する．このように，文対応がある文同士は必ずしも類似の表現を用いているとは限らない．そのため，単純な文の類似度によらない推定手法が必要となる．
+  \item \textbf{文の出現順序と文対応の出現位置は必ずしも一致しない}：例えば図 \ref{fig:ex-dependency} の例で対応が逆転している（文対応を示す直線が交差している）ように，返信文書の書き手は往信文書の並びと対応させて返信文書を書くとは限らない．そのため，文書中の出現位置に依存しない推定手法が必要となる．
+\end{enumerate}
+
+我々は，以上の特徴を踏まえて文対応の自動推定を実現するために，本課題を文対応の有無を判定する二値分類問題と考える．すなわち，存在しうる全ての文対応（例えば図 \ref{fig:ex-dependency} であれば $6 \times 6=36$ 通り）のそれぞれについて文対応が存在するかを判定する分類器を作成する．
+
+本論文では，最初に Qu \& Liu の対話における発話の対応関係を推定する手法 \cite{Zhonghua2012} を本課題に適用する．彼らは文種類（対象が質問応答なので「挨拶」「質問」「回答」など）を推定した後に，この文種類推定結果を発話文対応推定の素性として用いることで高い性能で文対応推定が実現したことを報告している．本論文ではこれに倣って文種類の推定結果を利用した文対応の推定を行うが，我々の対象とする文書対とは次のような点で異なっているため文種類・文対応の推定手法に多少の変更を加える．すなわち，彼らが対象とする対話では対応関係が有向性を持つが，我々が対象とする文書対では返信文から往信文へ向かう一方向のみである．また，対話は発話の連鎖で構成されているが，文書対は一組の往信文書・返信文書の対で構成されている点でも異なる．
+
+更に，我々は文対応の推定性能をより向上させるために，彼らの手法を発展させた新たな推定モデルを提案する．彼らの手法では，文対応の素性に推定された文種類を利用しているが，文種類推定に誤りが含まれていた場合に文対応推定結果がその誤りに影響されてしまう問題がある．そこで，我々は文種類と文対応を同時に推定するモデルを提案し，より高い性能で文対応の推定が実現できることを示す．
+
+本論文の構成は次の通りである．まず，2章で関連研究について概観する．次に，3章で文対応の自動推定を行う提案手法について述べる．4章では評価実験について述べる．5章で本論文のまとめを行う．
+
+
+\section{関連研究}
+
+二文書以上の文書間において，文書を跨いだ文同士の関係に踏み込んだ研究は新聞記事を対象としたものが多い \cite{Radev2000,宮部:2005,宮部:2006,難波:2005}．Radev は新聞記事間に観察できる文間関係を「同等 (Equivalence)」「反対 (Contradiction)」など24種類に分類する Cross-Document Structure Theory を提案した \cite{Radev2000}．これら文間関係のうち，宮部らは「同等」「推移」関係の特定に \cite{宮部:2005,宮部:2006}，難波らは「推移」「更新」関係の特定に特化した自動推定手法を提案している \cite{難波:2005}．これらの各研究では「同等」「推移」「更新」関係を特定するために文同士が類似しているなどの特徴を利用している．これらの研究と我々の研究を比較すると，まず，これらの研究が扱う新聞記事間における文対応と我々が扱う往信-返信文書間における文対応は異なった傾向を持っている．すなわち，新聞記事では同じ事象に対して複数の書き手が記事を作成したり，事象の経過により状況が異なったりすることで文書間や文書を跨いだ文間に対応が発生するのに対し，往信-返信文書ではコミュニケーションという目的を達成するために文対応が発生するという違いがある．また，我々が対象としている往信-返信文書対における文対応では，先に見た通り類似しない文同士にも文対応が存在することもあり，対応する文同士が類似していることを前提にせずに推定を行う必要がある．
+
+新聞記事以外では，地方自治体間の条例を対象とした研究 \cite{竹中要一:2012-09-30}，料理レシピと対応するレビュー文書を対象とした研究 \cite{Druck2012} がある．竹中・若尾は地方自治体間で異なる条例を条文単位で比較する条文対応表を作成するために，条文間の対応を自動で推定する手法を提案している \cite{竹中要一:2012-09-30}．また Druck \& Pang は，レシピに対応するレビュー文書に含まれる作り方や材料に対する改善提案文の抽出を目的とし，その最終過程で提案文をレシピの手順と対応付ける手法を提案している \cite{Druck2012}．ただし，推定するべき対応が類似していることを前提としている（すなわち，竹中・若尾の場合は同一の事柄に関する条例を対応付ける手法であり，Druck \& Pang の場合はレシピ手順とレビュー文を対応付ける手法である）ため，これらの手法も対応する文の間に同じ単語や表現が出現していることを前提としている．
+
+対話を対象とした研究には，Boyer らによる対話における発話対応関係の分析がある \cite{Boyer2009}．彼女らは，対話における隣接対 (adjacency pair) 構造を隠れマルコフモデル (Hidden Markov Model; HMM) を用いてモデル化している．ただし，彼女らの分析では，隣接対の場合は多くが位置的に隣接している可能性が高いことを前提としている\footnote{隣接対の多くは位置的に隣接しているが，位置的に隣接していない場合もある．例えば，挿入連鎖（隣接対の間に別の隣接対が挿入されるような構造）の場合は，位置的には離れた隣接対が観察される．}．これに対し，我々の研究の対象である文書対における文対応ではこういった傾向を利用できないという違いがあるため，単純に彼女らの分析手法を我々が対象としている文対応に適用することはできない．
+
+我々の研究と最も近い研究として，Qu \& Liu の質問応答ウェブサイトにおける文依存関係（sentence dependency; 質問に対する回答，回答に対する解決報告など）を推定する研究がある \cite{Zhonghua2012}．彼らは条件付確率場 (Conditional Random Fields; CRF) \cite{Lafferty2001} による分類器を利用することで，隠れマルコフモデルよりも高い性能で文依存関係を特定できたとしている．ただし，彼らの対象としているウェブサイトは図 \ref{fig:ex-dependency-c} に示すように対話に近い形で問題解決を図るという特徴を持っているため，我々の対象とする文書対とは若干の違いがある．そこで，本論文では最初に彼らの手法に変形を加えることで，我々の対象である往信-返信文書間の文対応推定が実現できることを示す．次に，彼らの手法の中心である文種類推定モデルと文対応推定モデルを発展させた文種類・文対応を同時に推定する統合モデルを提案し，文対応推定が更に高い性能で実現できることを示す．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{22-1ia2f2.eps}
+\end{center}
+\caption{Qu \& Liu が扱う文依存関係の例}
+\label{fig:ex-dependency-c}
+\end{figure}
+
+
+
+\section{提案手法}
+
+\subsection{文対応}
+
+文対応推定のための提案手法を説明する前に，本論文で扱う文対応について改めて定義する．本研究では，「文書（往信文書）とそれに対する返信文書が与えられた時，ある返信文がある往信文を原因として生起している関係」を\textbf{文対応}と定義し，この関係の有無を推定することを目的とする．なお，文対応は返信文書中の1文から，往信文書中の複数の文へ対応することを許す．また，返信文書中の異なる文から，往信文書中の同一の文への対応も許す．
+
+例えば図 \ref{fig:ex-dependency} の「講義を楽しんでいただけて何よりです。」という返信文は，「本日の講義も楽しく拝聴させて頂きました。」という往信文を原因として書かれた文であるため，文対応を持つ．同様に，返信文「まず、課題提出日ですが…」「失礼しました。」はいずれも往信文「また、課題提出日が…」を原因として書かれた文であるため，両方の対とも文対応を持つ．
+
+なお，我々が扱う文対応関係と Qu \& Liu \citeyear{Zhonghua2012} が扱う文依存関係 (sentence dependency) とは次の点で異なる．すなわち，我々の扱う文対応は返信文から往信文へ向かう一方向のみであるが，彼らの扱う文依存関係は任意の対話文から対話文への関係を持ちうる\footnote{ただし，ほぼ全ての文依存関係は後に出現する文から前に出現した文へ向かう方向であると予想できる．Qu \& Liu が論文中で示す例に登場する文依存関係も，後の文から前の文へ向かう関係のみであった \cite{Zhonghua2012}．}．以降，本論文では Qu \& Liu が扱う対応関係を\textbf{文依存関係}と呼び，我々が扱う文対応関係と区別する．
+
+
+\subsection{文種類}
+
+次に，文対応推定に用いる素性の一つである文種類についても説明する．本研究では，「ある文がどのような目的で書かれているかによる分類」を\textbf{文種類}と定義する．
+
+どのような文種類の集合を用いるかは対象とする文書によって異なるが，例えば図 \ref{fig:ex-dependency} のようなメール文書対を対象とする場合は「挨拶」「質問」「謝罪」「回答」などが文種類として考えられる．一方，質問応答ウェブサイトを対象とした Qu \& Liu は，「質問」「回答」「挨拶」など，13種類の文種類を定義している \cite{Zhonghua2012}．本研究の実験では，対象をレビュー文書とその応答文書としているため，これらの文書における文種類の分類を行っている大沢らの先行研究 \cite{大沢:2010} を元にして文種類を定義した．具体的な変更点と文種類については評価実験の章（4章）で議論する．
+
+
+\subsection{因子グラフと CRF} \label{sec:factor-graph}
+
+以降の節では，各 CRF モデルの説明に Kschischang らが提案した因子グラフ (factor graph) を用いる \cite{Kschischang2001}．そのため，ここで因子グラフについて Sutton \& McCallum (2012) の解説を参考にして簡単に説明する．
+
+因子グラフは，ある複数の変数に依存する関数を一部の変数のみに依存する複数の関数（因子）の積に分解した際に，どのような分解が行われているかを表現する二部グラフである．因子グラフでは，因子が依存する変数を正方形の因子ノード ■ からのリンクによって表す．また，変数のうち観測変数と隠れ変数を区別する必要がある場合は，観測変数を灰色（色付き）ノード，隠れ変数を白色（無色）ノードで表す．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-1ia2f3.eps}
+\end{center}
+\hangcaption{因子グラフの例．対数線形モデルにより $P(\bm{y}|\bm{x})$ をモデル化した場合の Linear-chain CRF に相当する．}
+\label{fig:L-CRF}
+\end{figure}
+
+実際の因子グラフの例を図 \ref{fig:L-CRF} に示す．図 \ref{fig:L-CRF} は，観測変数 $\bm{x}$，隠れ変数 $\bm{y}$ を引数に持つようなある関数 $F(\bm{x},\bm{y})$ を次のように因数分解することを示している．
+\begin{equation}
+  F(\bm{x},\bm{y}) = \prod_{i=1}^{|\bm{y}|} f_i(\bm{x},y_i) \cdot \prod_{j=1}^{|\bm{y}|-1} g_i(\bm{x},y_{j},y_{j+1})
+\end{equation}
+
+以降，因子グラフを数式で表現するために，因子グラフ $\mathcal{G}$ を，変数ノードの集合 $\mathcal{V}$・因子ノードの集合 $\mathcal{F}$・エッジの集合 $\mathcal{E}$ の3つを用いて $\mathcal{G} = (\mathcal{V},\mathcal{F},\mathcal{E})$ のように表現する．なお，集合の表記を簡便にするため次のような記法を導入する．例えば，$\{ y_i \}_{i=1}^{5}$ のように書いた場合，これは $\{ y_i ~|~ 1 \leq i \leq 5 \wedge i \in \mathbb{N} \} = \{ y_1, \dots, y_5 \}$ を意味する．この記法を用いれば，図 \ref{fig:L-CRF} の因子グラフを $\mathcal{G} = (\mathcal{V},\mathcal{F},\mathcal{E})$  とすると $\mathcal{V},\mathcal{F},\mathcal{E}$ は次のように表現できる．
+\begin{equation}
+\begin{split}
+  \mathcal{V} &= \{ \bm{x} \} \cup \{ y_i \}_{i=1}^{5} \\ 
+  \mathcal{F} &= \{ f_i \}_{i=1}^{5} \cup \{ g_j \}_{j=1}^{4} \\ 
+  \mathcal{E} &= \{ (f_i, \bm{x}) \}_{i=1}^{5} \cup \{ (f_i, y_i) \}_{i=1}^{5} \cup \{ (g_j, \bm{x}) \}_{j=1}^{4} \cup \{ (g_j, y_j) \}_{j=1}^{4} \cup \{ (g_j, y_{j+1}) \}_{j=1}^{4}
+\end{split}
+\end{equation}
+
+次に，因子グラフに基づいた CRF モデルを構築する方法について説明する．因子グラフ自体は因子が具体的にどのような関数であるかを規定しないが，関数 $F$ を対数線形モデルによりモデル化した $P(\bm{y}|\bm{x})$ とすると，因子グラフに基づいた CRF モデルが構築できる．具体的に，因子を $\Psi_a$，因子 $\Psi_a$ が依存する変数を $\bm{x}_a, \bm{y}_a$ と置くと $P(\bm{y}|\bm{x})$ は次のようにモデル化される．
+\begin{align}
+  P(\bm{y}|\bm{x}; \bm{\theta}) & = \frac{1}{Z} \prod_a \Psi_a (\bm{x}_a, \bm{y}_a; \bm{\theta}_a) \\
+                   & = \frac{1}{Z} \prod_a \exp \left\{ \sum_k \theta_{ak} f_{ak} (\bm{x}_a, \bm{y}_a) \right\}
+\end{align}
+ここで $Z$ は正規化項，$\theta_{ak}$ は素性関数 $f_{ak}$ に対応した重みとなる．なお，同様のモデル化を図~\ref{fig:L-CRF} に行った場合が Linear-chain CRF に相当する．
+
+本論文では，各モデルは CRF によってモデル化されることとする．各モデルの因子と変数間の依存関係については，それぞれ元となる因子グラフによって示す．
+
+
+\subsection{文対応推定手法の概要}
+
+本論文で提案する文対応推定手法は，Qu \& Liu が提案した文依存関係推定手法 \cite{Zhonghua2012} を我々の課題に併せて変形を加えた手法と，彼らの推定モデルを発展させた新たな推定モデルによる手法の二種類である．ここで最初に，彼らの手法の概要と我々が提案する手法との相違点について説明する．
+
+Qu \& Liu の手法では，文依存関係を推定する問題を系列ラベリング問題と考え，Linear-chain CRF 又は 2D CRF を用いて推定を行う．これは，ある返信文から往信文への依存関係が存在している時，同じ返信文から隣接する往信文へも依存する可能性が高いという傾向，または逆にある往信文へ依存している返信文がある時，隣接する返信文から同じ往信文へも依存する可能性が高いという傾向を活用するためである．また，彼らは特に文依存関係分類器の素性に注目し，文の種類を素性として利用することを提案している．これは，例えば「質問」や「要求」を述べている文は通常「回答」と対応するが「挨拶」とは対応しないなど，文種類が特定できれば文依存関係の推定に有用であるという観察に基づく．ただし，このような文種類が予め分かっている状況は稀であるため，各発話の種類を推定するための分類器を別途作成する．この文種類分類器を利用する手法では，与えられた対話文書に対して事前に文種類分類器を適用して文種類を推定しておき，対話文書と文種類推定結果を文依存関係分類器に入力することで最終的に文依存関係を得る．
+
+我々の課題に合わせて彼らの手法を変形する手法では，文対応推定問題を系列ラベリング問題と考える点や文種類を利用する点で同一である．異なるのは，彼らが文種類推定器を一つしか用意せずにどの発話者による発話文に対しても同じ文種類推定器を用いていたのに対し，我々は往信文書・返信文書のそれぞれに対して別の文種類推定器を用意する点である．これは，往信文書・返信文書ではそれぞれに特有な文種類が存在するなどの異なった傾向が存在するという仮定に基づく．また，彼らが提案する文対応推定モデルは，「返信文が同じで往信文が隣接する対応」の連接性を考慮したモデルと「返信文が同じで往信文が隣接する対応」「往信文が同じで返信文が隣接する対応」双方の連接性を考慮したモデルの二種類であったが，我々は「往信文が同じで返信文が隣接する対応」のみの連接性を考慮したモデルについても検討を加える点でも異なる．
+
+また，彼らの手法と我々が新たに提案する推定モデルによる手法の違いは，彼らが文種類・文依存関係推定モデルを別々に用意して文種類推定・文依存関係推定の二段階の手順を踏むのに対し，我々は文種類・文対応推定モデルを統合した一つのモデルで一度に推定する点である．
+
+以降，\ref{sec:qu-liu}節で Qu \& Liu の推定モデルについて説明し，\ref{sec:proposal-simple}節以降で提案手法について順次説明する．
+
+
+\subsection{Qu \& Liu による文依存関係推定手法の概要} \label{sec:qu-liu}
+
+Qu \& Liu が提案した対話文書における文依存関係を推定する手法 \cite{Zhonghua2012} では，文種類推定器と文依存関係分類器の二種類を用意する．そこで，最初に文種類推定器について説明し，次に文依存関係分類器について説明する．ここで，説明のために以下の記号を導入する．
+
+\vspace{0.25zh}
+\begin{tabular}{rl}
+$N$                    & 対話文の文数 \\
+$\bm{x}$               & 対話文の列 $x_1, x_2, \dots x_N$ \\
+$\bm{t}$               & 対話文の種類の列 $t_1, t_2, \dots t_N$ \\
+$y_{i,j}$              & 対話文 $x_i$ から $x_j$ への文依存関係の存在有無（二値） \\
+$\bm{y}$               & 全ての文依存関係 $y_{i,j}$ からなる集合 $\{ y_{i,j} ~|~ 1 \leq i \leq N,~ 1 \leq j \leq N \}$ \\
+\end{tabular}
+\vspace{0.25zh}
+
+\noindent
+ここで，$y_{i,j}$ は対話文 $x_i$ から $x_j$ の間に文依存関係が存在すれば1，しなければ0の二値を取る変数である\footnote{なお，Qu \& Liu は同じ文への依存関係 ($i=j$) に関して特に触れていないが \cite{Zhonghua2012}，同じ文への依存関係はないものと考えられる．}．
+
+各文の種類を推定する問題は，文 $\bm{x}$ を観測変数，文種類 $\bm{t}$ を隠れ変数と考えると，系列ラベリング問題とみなすことができる．そこで，彼らは Linear-chain CRF \cite{Lafferty2001} を利用することで文種類推定器を実現する．
+
+各文間の文対応を推定する問題も，文 $\bm{x}$ を観測変数，文依存関係 $\bm{y}$ を隠れ変数としたラベリング問題と考えることができる．ここで，予め文種類推定器により推定した文種類 $\hat{\bm{t}}$ を素性の一つに投入することで，文種類を考慮した文依存関係の推定を実現する．ただし，文依存関係 $\bm{y}$ は文種類系列とは異なり二次元の構造を持つため，このままでは一次元の系列を対象とする Linear-chain CRF を用いることはできない．そこで，彼らは二次元構造の行ごとに順次推定を行うことで Linear-chain CRF を適用する手法と，二次元構造を一度に推定できる 2D CRF \cite{Zhu2005} を適用する手法を提案している．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-1ia2f4.eps}
+\end{center}
+\caption{Linear-chain CRF により文依存関係を推定する手順．k は注目している文の位置を示す．}
+\label{fig:L-CRFc}
+\end{figure}
+
+Linear-chain CRF を繰り返し適用して文依存関係を推定する過程を図 \ref{fig:L-CRFc} に示す．まず最初に注目する文 $x_k ~ (1 \leq k \leq N)$ を固定し，$x_k$ から全ての $x_1, x_2, \dots x_N$ への文依存関係 $y_{k,\Circle[f]} ~ (1 \leq \Circle[f] \leq N)$ について考える．これにより，$y_{k,\Circle[f]}$ は一次元の系列となるため，Linear-chain CRF を適用可能になる．この処理を全ての $x_k$ に対して繰り返し適用することで，$\bm{y}$ 全体の推定が実現する．この Linear-chain CRF においては連接確率 $P(y_{i,j}|y_{i,j-1},\bm{x})$ が考慮されることになる．これにより，依存元が同じで依存先が隣接する $y_{i,j}, y_{i,j-1}$ の片方が依存関係にあればもう片方にも依存関係が存在することが多い傾向を活用できる\footnote{この場合とは逆に，依存先が同じで依存元が隣接する $y_{i,j}, y_{i-1,j}$ の連接性についても，Linear-chain CRF を $y_{\Circle[f],j}$ に順次適用することで考慮でき結果として全体の推定が実現するが，Qu \& Liu はこの場合については検討を行っていない \cite{Zhonghua2012}．本論文が対象とする文対応推定の際には，この場合に相当する文対応推定器も作成して性能の比較検討を行う．}．
+
+これに対し，2D CRF を適用して推定する手法では $\bm{y}$ 全体を一度に推定できる．ここで 2D CRF について，2D CRF を因子グラフで表現した図 \ref{fig:2D-CRFc}を用いて説明する．Linear-chain CRF を繰り返し適用する手法は，図 \ref{fig:2D-CRFc} の因子のうち各 $y$ を横方向 $y_{i,j}, y_{i,j-1}$ を結ぶ因子のみを残した場合に相当し，各行 $y_{i,\Circle[f]}$ ごとに推定を行う．一方 2D CRF では，各 $y$ を縦方向 $y_{i,j}, y_{i-1,j}$ に結ぶ因子が加わる．これにより，Linear-chain CRF では依存元が同じで依存先が隣接する $y_{i,j}, y_{i,j-1}$ の連接性のみを考慮していたが，依存先が同じで依存元が隣接する $y_{i-1,j}, y_{i,j}$ についての連接性も同時に考慮されるようになる．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{22-1ia2f5.eps}
+\end{center}
+\hangcaption{2D CRF の因子グラフ（$\bm{y}$ が $3 \times 3$ の場合の例．$\bm{x}$ からすべての各因子へはリンクが接続されるが，図が煩雑になるため描画を省略した）．実線は隣接する $y_{i,j}$ 同士を結ぶ因子に関わる変数に，点線は一つの $y_{i,j}$ を直接結ぶ因子に関わる変数に接続している．}
+\label{fig:2D-CRFc}
+\end{figure}
+
+Qu \& Liu によると，2D CRF による文依存推定モデルの方が Linear-chain CRF を繰り返し適用する推定モデルよりも性能が向上したことを報告している．
+
+
+\subsection{文種類・文依存関係推定モデルの本問題への適用} \label{sec:proposal-simple}
+
+次に，以上に述べた Qu \& Liu による文依存関係推定モデル \cite{Zhonghua2012} を，本論文の目的である二文書間の文対応推定へ適用する提案手法について説明する．本提案手法も彼らと同じく文種類推定器・文対応推定器の二種類を用意して順次推定する手法であり，以下でそれぞれについて順に説明する．ここで，説明のために以下の記号を改めて導入する．
+
+\vspace{0.25zh}
+\begin{tabular}{rl}
+$N$                    & 往信文の文数 \\
+$M$                    & 返信文の文数 \\
+$\bm{x}^{\rm org}$     & 往信文の列 ${x^{\rm o}}_1, {x^{\rm o}}_2, \dots, {x^{\rm o}}_N$ \\
+$\bm{x}^{\rm rep}$     & 返信文の列 ${x^{\rm r}}_1, {x^{\rm r}}_2, \dots, {x^{\rm r}}_M$ \\
+$\bm{t}^{\rm org}$     & 各往信文の種類の列 ${t^{\rm o}}_1, {t^{\rm o}}_2, \dots, {t^{\rm o}}_N$ \\
+$\bm{t}^{\rm rep}$     & 各返信文の種類の列 ${t^{\rm r}}_1, {t^{\rm r}}_2, \dots, {t^{\rm r}}_M$ \\
+$y_{i,j}$              & 往信文 ${x^{\rm o}}_i$ と返信文 ${x^{\rm r}}_j$ の間における文対応存在の有無（二値） \\
+$\bm{y}$               & 全ての文対応 $y_{i,j}$ からなる集合 $\{ y_{i,j} ~|~ 1 \leq i \leq N,~ 1 \leq j \leq M \}$ \\
+\end{tabular}
+\vspace{0.25zh}
+
+\noindent
+ここで，$y_{i,j}$ は往信文 ${x^{\rm o}}_i$ から返信文 ${x^{\rm r}}_j$ の間に文対応関係が存在すれば1，しなければ0の二値を取る変数である．
+
+各文の種類を推定する問題は，文 $\bm{x}^{\rm org}$（又は $\bm{x}^{\rm rep}$）を観測変数，文種類 $\bm{t}^{\rm org}$（又は $\bm{t}^{\rm rep}$）を隠れ変数とした系列ラベリング問題と考えることができる．ここで，我々は往信文書・返信文書ではそれぞれに特有な文種類が存在し，それぞれの文書で文種類の連接について異なった傾向があると予想した．例えば，一般に往信文書は人に向けて文書を新たに発信する動機である「質問」や「要望」が含まれる可能性が高いのに対し，返信文書はそれに対する「回答」が含まれる可能性が高い．そこで，我々は Qu \& Liu とは異なり，文種類分類器を往信文書用・返信文書用に別々に用意することにした．なお，いずれの分類器についても Linear-chain CRF \cite{Lafferty2001} を利用する．以降，これらのモデルをそれぞれ往信文種類モデル・返信文種類モデルと呼ぶ．
+
+各文間の文対応を推定する問題は，二文書 $\bm{x}^{\rm org}, \bm{x}^{\rm rep}$ を観測変数，文対応 $\bm{y}$ を隠れ変数と考えることができる\footnote{ただし，Qu \& Liu が扱う文依存関係とは，往信文同士の間や返信文同士の間についての関係については考えない点，文対応は一方向の関係である点で異なる．前者については，文依存関係に対して「発話者が異なる文間のみ」という制約を陽に加えた場合とみなすこともできる．}．本提案手法でも文種類分類器により推定した $\hat{\bm{t}}^{\rm org}, \hat{\bm{t}}^{\rm rep}$ を素性の一つに投入し，文種類を考慮した文対応の推定を実現する．以下，前節と同様に Linear-chain CRF を繰り返し適用する手法と，2D CRF を適用する手法について順次説明する．
+
+文対応の推定では，注目する文を固定すれば Linear-chain CRF を繰り返し適用することで文対応 $\bm{y}$ 全体の推定が可能である．ここで，往信文 ${x^{\rm o}}_i$ と返信文 ${x^{\rm r}}_j$ のどちらを固定し，どちらの文対応連接性に注目するかで異なった分類器を作成することができる．これに対し，往信文間における対応の連接性を考慮する（返信文を固定し，$y_{\Circle[f],j}$ を順次推定する）手法を L-CRF$_{\rm{org}}$，返信文間における対応の連接性を考慮する（往信文を固定し，$y_{i,\Circle[f]}$ を順次推定する）手法を L-CRF$_{\rm{rep}}$ とする．それぞれの手法の推定過程を図 \ref{fig:L-CRFinitproc}, \ref{fig:L-CRFrepproc} に示す．なお，Qu \& Liu が Linear-chain CRF を文依存関係推定に用いた場合が，本手法の L-CRF$_{\rm{org}}$ と対応している．
+
+\begin{figure}[t]
+\begin{minipage}{0.49\hsize}
+\begin{center}
+\includegraphics{22-1ia2f6.eps}
+\end{center}
+\caption{L-CRF$_{\rm{org}}$ での文対応推定手順}
+\label{fig:L-CRFinitproc}
+\end{minipage}
+\begin{minipage}{0.49\hsize}
+\begin{center}
+\includegraphics{22-1ia2f7.eps}
+\end{center}
+\caption{L-CRF$_{\rm{rep}}$ での文対応推定手順}
+\label{fig:L-CRFrepproc}
+\end{minipage}
+\end{figure}
+
+また，2D CRF を用いた文対応の推定も可能である．この場合，Qu \& Liu の場合とほぼ同様に推定が可能である．このモデルは，往信文間・返信文間それぞれにおける対応の連接性を同時に考慮できるという特徴を持っている．
+
+
+\subsection{文種類・文依存関係推定モデルの統合} \label{sec:proposal-combine}
+
+以上までに説明した提案手法は Qu \& Liu の手法と同様，最初に推定した文種類情報を文対応推定の素性として用いる．しかし，文種類を全て正しく推定することは困難であり，推定した文種類情報にはいくらかの誤りが含まれる可能性が高い．そのため，文種類推定時の誤りはそのまま文対応推定に影響を与える．そこで，我々は文種類と文対応を推定するモデルを統合し，両者を同時に推定することで文対応推定誤りの影響の抑制を狙った統合モデルを提案する．
+
+本論文では統合の元となるモデルとして，文種類推定に Linear-chain CRF を用いた往信文種類モデル・返信文種類モデル，文対応推定に 2D CRF を用いた文対応モデルを考える．これらのモデルに対し，文種類変数と文対応変数に依存する因子関数を新たに加えることで，統合モデルを実現する．以下，具体的な統合方法について因子グラフを用いながら説明する．
+
+まず最初に，統合の元となる各モデルの因子グラフを図 \ref{fig:model-before} に示す．ここで，各モデルの因子グラフ構造を \ref{sec:factor-graph} 節の記法を用いて記述すると，以下の通りである．
+\vspace{1\Cvs}
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-1ia2f8.eps}
+\end{center}
+\hangcaption{統合前のモデル（往信文・返信文が共に2文の場合．$\bm{x}$ から各因子への接続は省略している）．左から順に，往信文種類モデル，文対応モデル (2D CRF)，返信文種類モデル．}
+\label{fig:model-before}
+\end{figure}
+
+\begin{description}
+\item[往信文種類モデル] \mbox{} \\
+  Linear-chain CRF により往信文種類を推定する．観測変数は往信文 $\bm{x}^{\rm org}$，隠れ変数は往信文種類 $\bm{t}^{\rm org}$ である．観測変数と隠れ変数を結ぶ因子を ${f^o}_i$，隠れ変数同士を結ぶ因子を ${g^o}_j$ とする ($1 \leq i \leq N,~ 1 \leq j \leq N-1$)．
+  モデルの因子グラフを $\mathcal{G}_{\rm otype} = \{ \mathcal{V}_{\rm otype}, \mathcal{F}_{\rm otype}, \mathcal{E}_{\rm otype} \}$ とすると，$\mathcal{V}_{\rm otype}, \mathcal{F}_{\rm otype}, \mathcal{E}_{\rm otype}$ はそれぞれ以下の通りである．因子グラフを図 \ref{fig:model-before}（左）に示す．
+\begin{equation}
+ \begin{split}
+  \mathcal{V}_{\rm otype} &= \{ \bm{x}^{\rm org}\} \cup \{ {t^o}_i \}_{i=1}^{N}  \\
+  \mathcal{F}_{\rm otype} &= \{ {f^o}_i \}_{i=1}^{N} \cup \{ {g^o}_j \}_{j=1}^{N-1}  \\
+  \mathcal{E}_{\rm otype} &= \{ ({f^o}_i, \bm{x}^{\rm org}) \}_{i=1}^{N} \cup \{ ({f^o}_i, {t^o}_i) \}_{i=1}^{N} \\
+    & \qquad \cup \{ ({g^o}_j, {\bm{x}^{\rm org}}) \}_{j=1}^{N-1} 
+	\cup \{ ({g^o}_j, {t^o}_j) \}_{j=1}^{N-1} \cup \{ ({g^o}_j, {t^o}_{j+1}) \}_{j=1}^{N-1}
+ \end{split}
+\end{equation}
+  
+\item[返信文種類モデル] \mbox{} \\
+  Linear-chain CRF により返信文種類を推定する．観測変数は往信文 $\bm{x}^{\rm rep}$，隠れ変数は往信文種類 $\bm{t}^{\rm rep}$ である．観測変数と隠れ変数を結ぶ因子を ${f^r}_i$，隠れ変数同士を結ぶ因子を ${g^r}_j$ とする ($1 \leq i \leq M,~ 1 \leq j \leq M-1$)．
+  モデルの因子グラフを $\mathcal{G}_{\rm rtype} = \{ \mathcal{V}_{\rm rtype}, \mathcal{F}_{\rm rtype}, \mathcal{E}_{\rm rtype} \}$ とすると，$\mathcal{V}_{\rm rtype}, \mathcal{F}_{\rm rtype}, \mathcal{E}_{\rm rtype}$ はそれぞれ以下の通りである．因子グラフを図 \ref{fig:model-before}（右）に示す．
+\begin{equation}
+ \begin{split}
+  \mathcal{V}_{\rm rtype} &= \{ \bm{x}^{\rm rep} \} \cup \{ {t^r}_i \}_{i=1}^{M}  \\
+  \mathcal{F}_{\rm rtype} &= \{ {f^r}_i \}_{i=1}^{M} \cup \{ {g^r}_j \}_{j=1}^{M-1}  \\
+  \mathcal{E}_{\rm rtype} &= \{ ({f^r}_i, \bm{x}^{\rm rep}) \}_{i=1}^{M} \cup \{ ({f^r}_i, {t^r}_i) \}_{i=1}^{M} \\
+     & \qquad \cup \{ ({g^r}_j, {\bm{x}^{\rm rep}}) \}_{j=1}^{M-1} \cup \{ ({g^r}_j, {t^r}_j) \}_{j=1}^{M-1} 
+	\cup \{ ({g^r}_j, {t^r}_{j+1}) \}_{j=1}^{M-1}
+ \end{split}
+\end{equation}
+
+\item[文対応モデル] \mbox{} \\
+  2D CRF により文対応を推定する．観測変数は往信文 $\bm{x}^{\rm org}$ 及び返信文 $\bm{x}^{\rm rep}$（これらをまとめて $\bm{x}$ とする），隠れ変数は文対応 $\bm{y}$ である．観測変数と隠れ変数を結ぶ因子を $f_{i,j}$，隠れ変数同士を結ぶ因子のうち，往信文を固定して隣接する返信文への対応間を考慮する（$y_{i,j}$ を横に結ぶ）因子を $g_{k,l}$，返信文を固定して隣接する往信文からの対応間を考慮する（$y_{i,j}$ を縦に結ぶ）因子を $h_{k,l}$ とする ($1 \leq i \leq N,~ 1 \leq j \leq M,~ 1 \leq k \leq N-1,~ 1 \leq l \leq M-1$)．因子グラフを図 \ref{fig:model-before}（中央）に示す．
+
+モデルの因子グラフを $\mathcal{G}_{\rm relation} = \{ \mathcal{V}_{\rm relation}, \mathcal{F}_{\rm relation}, \mathcal{E}_{\rm relation} \}$ とすると，\\ $\mathcal{V}_{\rm relation}, \mathcal{F}_{\rm relation}, \mathcal{E}_{\rm relation}$ はそれぞれ以下の通りである．
+\begin{equation}
+\begin{split}
+\mathcal{V}_{\rm relation} &= \{ \bm{x} \} \cup \{ {y}_{i,j} \}_{i=1,j=1}^{i=N,j=M} \\
+\mathcal{F}_{\rm relation} &= \{ {f}_{i,j} \}_{i=1,j=1}^{i=N,j=M} \cup \{ {g}_{k,l} \}_{k=1,l=1}^{k=N-1,l=M-1} 
+	\cup \{ {h}_{k,l} \}_{k=1,l=1}^{k=N-1,l=M-1} \\
+\mathcal{E}_{\rm relation} &= \{ ({f}_{i,j}, \bm{x}) \}_{i=1,j=1}^{i=N,j=M} \cup \{ ({f}_{i,j}, y_{i,j}) \}_{i=1,j=1}^{i=N,j=M} \\
+  & \qquad \cup \{ ({g}_{k,l}, \bm{x}) \}_{k=1,l=1}^{k=N-1,l=M-1} 
+	\cup \{ ({h}_{k,l}, \bm{x}) \}_{k=1,l=1}^{k=N-1,l=M-1} \\
+  & \qquad \cup \{ ({g}_{k,l}, {y}_{k,l}) \}_{k=1,l=1}^{k=N-1,l=M-1} \cup \{ ({g}_{k,l}, {y}_{k,l+1}) \}_{k=1,l=1}^{k=N-1,l=M-1} \\
+  & \qquad \cup \{ ({h}_{k,l}, {y}_{k,l}) \}_{k=1,l=1}^{k=N-1,l=M-1} \cup \{ ({h}_{k,l}, {y}_{k+1,l}) \}_{k=1,l=1}^{k=N-1,l=M-1}
+ \end{split}
+\end{equation}
+\end{description}
+
+次に，以上の3モデルを統合した新たな提案モデルについて説明する．このモデルでは，文種類・文対応推定を同一のモデルで扱うために，新たに二文の文種類変数と，それと対応する文対応変数に依存する因子関数 $F_{i,j} ~ (1 \leq i \leq N,~ 1 \leq j \leq M)$ を新たに加える．これにより，往信文 ${x^{\rm o}}_{i}$ と返信文 ${x^{\rm r}}_{j}$ に対応する往信文種類 ${t^{\rm o}}_{i}$・返信文種類 ${t^{\rm r}}_{j}$・文対応 $y_{i,j}$ が非独立的に扱われるようになり，文種類・文対応を同時に推定を行うことが可能になる．提案手法全体のグラフ構造を図 \ref{fig:model-after} に示す．因子グラフ構造を具体的な式で記述すると，以下の通りである．以下，必要に応じて統合したモデルを combine と呼ぶ．
+\vspace{1\Cvs}
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{22-1ia2f9.eps}
+\end{center}
+\hangcaption{統合後のモデル（combine; 往信文・返信文が共に2文の場合．$\bm{x}$ から各因子への接続は省略している）．実線は新たに加えた因子を結ぶリンク．}
+\label{fig:model-after}
+\end{figure}
+
+\begin{description}
+\item[統合モデル (combine)] \mbox{} \\
+   観測変数は往信文 $\bm{x}^{\rm org}$ 及び返信文 $\bm{x}^{\rm rep}$（これらをまとめて $\bm{x}$ とする），隠れ変数は往信文種類 ${\bm{t}^{\rm org}}$・返信文種類 ${\bm{t}^{\rm rep}}$・文対応 $\bm{y}$ である．新たに導入する因子を $F_{i,j}$ とする  ($1 \leq i \leq N,~ 1 \leq j \leq M$)．その他の因子は統合前の各モデルと同様である．
+
+  モデルの因子グラフを $\mathcal{G}_{\rm combine} = \{ \mathcal{V}_{\rm combine}, \mathcal{F}_{\rm combine}, \mathcal{E}_{\rm combine} \}$ とすると，\\ $\mathcal{V}_{\rm combine}, \mathcal{F}_{\rm combine}, \mathcal{E}_{\rm combine}$ はそれぞれ以下の通りである（新たに加わった因子に関わる部分を下線によって強調している）．因子グラフを図 \ref{fig:model-after} に示す．
+\begin{equation}
+ \begin{split}
+  \mathcal{V}_{\rm combine} &= \{ \bm{x} \} \cup \{ {t^o}_i \}_{i=1}^{N} \cup \{ {t^r}_i \}_{j=1}^{M} \cup\{ {y}_{i,j} \}_{i=1,j=1}^{i=N,j=M} \\
+  \mathcal{F}_{\rm combine} &= \mathcal{F}_{\rm otype} \cup \mathcal{F}_{\rm rtype} 
+	\cup \mathcal{F}_{\rm relation} \cup \underline{\{ {F}_{i,j} \}_{i=1,j=1}^{i=N,j=M}} \\
+  \mathcal{E}_{\rm combine} &= \mathcal{E}_{\rm otype} \cup \mathcal{E}_{\rm rtype} \cup \mathcal{E}_{\rm relation} \\
+   & \qquad \cup \underline{\{ ({F}_{i,j}, \bm{x}) \}_{i=1,j=1}^{i=N,j=M} \cup \{ ({F}_{i,j}, {t^{\rm o}}_{i}) \}_{i=1,j=1}^{i=N,j=M} 
+	\cup \{ ({F}_{i,j}, {t^{\rm o}}_{j}) \}_{i=1,j=1}^{i=N,j=M}}
+ \end{split}
+\end{equation}
+\end{description}
+
+なお，Linear-chain CRF などでは各隠れ変数の周辺確率 $P(y|\mathbf{x})$ を Forward-Backward アルゴリズムにより効率的に求めることができるが，統合モデルのように閉路を含む因子グラフ上の CRF には適用することができない．そのため，Tree Based reParameterization (TRP) \cite{Wainwright2001b} などにより近似的に求める必要がある．
+
+
+\section{評価実験}
+
+\subsection{実験条件}
+
+実験には「楽天データ公開\footnote{楽天データ公開：http://rit.rakuten.co.jp/rdr/ データは2010年時点の公開データを用いた．}」に収録されている楽天トラベル\footnote{楽天トラベル：http://travel.rakuten.co.jp/} のレビューを用いた．楽天トラベルのレビューでは，宿泊施設に対するユーザのレビュー文書に対して宿泊施設提供者が返答することによって文書対が構成されている．典型的な文書対と文対応を示した例を図 \ref{fig:dependency-example} に示す．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-1ia2f10.eps}
+\end{center}
+\caption{宿泊予約ウェブサイトのレビュー・応答文書における文対応の例}
+\label{fig:dependency-example}
+\end{figure}
+
+実際には楽天トラベルのレビュー 348,564 件のうち，レビュー文書・応答文書の双方が存在する 276,562 件からランダムサンプリングした 1,000 文書対を用いた．この各文書を簡易的なヒューリスティックによって文単位に分割し，レビュー文 4,813文・応答文 6,160文を得た．この 1,000 文書対に対して5分割交差検定を適用して評価を行う．
+
+宿泊予約サイトの文種類の定義は，レビュー文書・応答文書ごとに文種類の分類に詳しい大沢らの先行研究を参考にした \cite{大沢:2010}．大沢らは本実験と同じウェブサイトである楽天トラベルの「クチコミ・お客さまの声」を分析し，レビュー文を8種類，応答文を14種類に分類している．本研究では文種類が特定できれば文対応の特定が容易になるよう，レビュー文を12種類，返答文を20種類に再分類した\footnote{レビュー文書の中には，末尾に「【ご利用の宿泊プラン】」に続いて宿泊プランの名称が書かれている文が存在した．この記述は，おそらく楽天トラベルのレビューを投稿する際に自動で挿入される文であると考えている．}．この分類を表 \ref{tb:review-discourse} 及び 表 \ref{tb:reply-discourse} に示す．また，大沢らの分析からの主な変更点とその理由を以下に示す．
+
+\begin{enumerate}
+  \renewcommand{\labelenumi}{}
+  \item \textbf{レビュー文種類— ＜ポジ／ネガ感想＞ の追加}：一文にポジティブ・ネガティブな感想を双方含むレビュー文は，複数の応答文と対応することがあるため．
+  \item \textbf{応答文種類 — ＜対応明示＞ ＜検討明示＞ の具体性による細分化}：具体性のある対応・検討明示文はそれぞれレビュー文で書かれた一つの事情と対応するが，抽象的なものはレビュー文で書かれた複数の事情と対応することがあるため．
+\end{enumerate}
+
+\begin{table}[t]
+\caption{レビュー文書を構成する文の種類（大沢らによる分類を参考に再構成）}
+\label{tb:review-discourse}
+\input{02table01.txt}
+\end{table}
+
+以上の文種類の定義に基づき，人手で文種類及び文対応の有無をタグ付けした．その結果，1,000 文書対全体では 4,492 通りの文対応が得られた．また，文種類について，各文種類の出現数と各文種類ごとに文対応がどの程度存在するかを調査したデータを表 \ref{tb:review-dep-exists}, \ref{tb:reply-dep-exists} に示す\footnote{なお，「その他」は例えば文書が英語で書かれているため分類が不可能であった文などである．}．表中の「対応（平均数）」は一文から見たときの平均対応文数を示しており，「対応（存在率）」は一つでも対応が存在する割合を示している．表 \ref{tb:review-dep-exists}, \ref{tb:reply-dep-exists} より，例えばレビュー文種類では ＜ネガティブ感想＞ や ＜要求・要望＞ が，応答文種類では ＜お詫び＞ や ＜具体的対応明示＞ などの文種類で対応存在率が高いなど，文種類によって対応の平均数や対応存在率が大きく異なることが分かる．
+
+\begin{table}[p]
+\caption{応答文書を構成する文の種類（大沢らによる分類を参考に再構成）}
+\label{tb:reply-discourse}
+\input{02table02.txt}
+\end{table}
+
+次に，文対応が交差する割合を示す．交差割合の計算は，各文書対において「文書対内において交差を持つ文対応の数／文書対内における全ての文対応の数」により求めた．結果，交差割合の平均は 0.249 であることから，本データにおいても文の出現順序と文対応の出現位置は必ずしも一致しないことが分かる．
+
+\begin{table}[t]
+\begin{minipage}[t]{.49\hsize}
+\caption{レビュー文の各文ごとの対応数・対応存在率}
+\label{tb:review-dep-exists}
+\input{02table03.txt}
+\end{minipage}
+\hfill
+\begin{minipage}[t]{.49\hsize}
+\caption{応答文の各文ごとの対応数・対応存在率}
+\label{tb:reply-dep-exists}
+\input{02table04.txt}
+\end{center}
+\end{minipage}
+\end{table}
+
+最後に，文対応の有無別にコサイン類似度の分布を表したヒストグラムを図 \ref{fig:cossim-dist-f}, \ref{fig:cossim-dist-t} に示す（なお，コサイン類似度が 0.3--1.0 である文対応の割合は少なかったため省略している）．なお，コサイン類似度は，各文における stop-word を除く単語の出現頻度を値に持つベクトルを用いて計算した値である．文対応を持つ文間の方が比較的高いコサイン類似度が高い傾向がある一方，文対応が存在する文対のうち 53.56\% はコサイン類似度が 0 であった．そのため，本データにおいても対応する文同士は必ずしも類似しないことが分かる．
+
+実験で比較する手法は次の5つである．まず，\ref{sec:proposal-simple} 節で説明した L-CRF$_{\rm org}$, L-CRF$_{\rm rep}$, 2D CRF の3種類を用いる．また，\ref{sec:proposal-combine} 節 で説明した統合モデル combine を用いる．加えて，系列ラベリング問題ではなく二値分類問題と考えるモデルとしてロジスティック回帰 (Logistic) でも性能を調査する．ロジスティック回帰は，L-CRF や 2D CRF において隣接する出力変数間の依存関係を考慮しないモデルに相当する．
+
+\begin{figure}[t]
+\begin{minipage}[b]{0.49\hsize}
+\begin{center}
+\includegraphics{22-1ia2f11.eps}
+\end{center}
+\caption{コサイン類似度の分布（文対応なし）}
+\label{fig:cossim-dist-f}
+\end{minipage}
+\begin{minipage}[b]{0.49\hsize}
+\begin{center}
+\includegraphics{22-1ia2f12.eps}
+\end{center}
+\caption{コサイン類似度の分布（文対応あり）}
+\label{fig:cossim-dist-t}
+\end{minipage}
+\end{figure}
+
+CRF の各モデルのパラメータ学習・利用には MALLET 2.0.7 \cite{McCallumMALLET2002} 中の GRMM \cite{GRMM2006} を用いた．GRMM に用いたパラメータはデフォルト（TRP の最大 iteration 回数1,000回，TRP の収束判定用の値 0.01）とし，周辺確率の計算には TRP \cite{Wainwright2001b} を利用した．なお，GRMM は CRF 学習パラメータの正則化に L2 正則化 \cite{Chen99agaussian} を利用している．また，ロジスティック回帰のパラメータ学習・利用には scikit-learn 0.15.1 \cite{scikit-learn} を用い，正則化には L2 正則化を利用した．
+
+文種類の推定には，文を構成する unigram（単語の表層形）を素性として用いる．また，文対応の推定，及び combine モデルにおいて新たに追加した因子には以下の素性を用いる．なお，単語分割には MeCab 0.994 \cite{kudo-yamamoto-matsumoto:2004:EMNLP} を利用した．
+\begin{itemize}
+  \item レビュー文を構成する unigram
+  \item 応答文を構成する unigram
+  \item レビュー文・応答文のコサイン類似度（0〜1 の値）
+  \item 予め文種類モデルで推定したレビュー文・応答文の種類（combine モデル以外\footnote{combine モデルの場合は，レビュー文種類・応答文種類は文対応と同時に推定されるため，これらを陽に素性として追加する必要はない．combine モデルにおいては文種類と文対応を同時に考慮する因子が存在するため，文種類を考慮した文対応推定が実現できる．}）
+\end{itemize}
+また，unigram 素性及びコサイン類似度の計算に利用する単語からは予め stop-word を除去しており\footnote{本実験では，品詞が「助詞」「助動詞」「記号」の単語を stop-word とした．}，1,000文書対全体では9,300種類の単語が存在した．
+
+文対応推定性能の評価は，適合率 (Precision)・再現率 (Recall)，及びそれらの調和平均であるF値から行う．すなわち，考えうる全ての文対応の可能性から正しい文対応を探す課題とみなし，次の式で計算する．
+\pagebreak
+\begin{align*}
+\text{Recall} & = \frac{正しく推定できた対応数}{評価データ中に存在する文対応数} \\[0.5zw]
+\text{Precision} & =  \frac{正しく推定できた文対応数}{システムが文対応有りと出力した文対応数}
+\end{align*}
+
+本実験では，以下に説明する手法により適合率・再現率を調整し，これらの性能がどのように変化するかを調査する．具体的には，文同士が対応する確率 $P(y_{i,j}=1)$ と対応しない確率 $P(y_{i,j}=0)$ の比率を取り，閾値を与えて閾値以上か否かで文対応の有無の出力を変更する．すなわち，文対応 $y_{i,j}$ の最終的な出力 $\hat{y}_{i,j}$ は閾値 $\alpha$ を用いて次の式 (\ref{eq:alpha}) のようにする．
+\begin{equation} \label{eq:alpha}
+  \hat{y_{ij}} = \left\{
+  \begin{array}{cl}
+     1 & ~~ \rm{if} ~~ \log \frac{P(y_{i,j}=1 | \mathbf{x})}{P(y_{i,j}=0 | \mathbf{x})} > \alpha \\
+     0 & ~~ \rm{otherwise} \\
+  \end{array}
+  \right.
+\end{equation}
+
+
+\subsection{実験結果と考察}
+
+実験結果を表 \ref{tb:result} に示す．各数値は適合率・再現率を調整した際に学習データにおいてF値が最大となる点を用い，5分割交差検定でのマイクロ平均値を計算した数値である．なお，表 \ref{tb:result} に示す結果のF値に対してブートストラップ検定で得られたp値を Holm 法 \cite{Holm1979} によって調整した有意水準と比較することで多重比較を行い，統合モデル combine は他手法全てに対して統計的有意差があることを確認している（有意水準5\%）{\kern-0.5zw}\footnote{ブートストラップ検定におけるブートストラップ回数は1,000回とした．}．併せて，閾値を変化させた際のPrecision-Recall 曲線を図 \ref{fig:pr} に示す．
+
+\begin{table}[b]
+  \caption{実験結果（分割交差検定でのF値最大点におけるマイクロ平均値）}
+  \label{tb:result}
+\input{02table05.txt}
+\vspace{-1\Cvs}
+\end{table}
+
+表 \ref{tb:result} から，統合モデル combine は文種類・文対応を別々に推定する各手法よりも高い性能となった．また，図 \ref{fig:pr} より中程度の再現率 (Recall: 0.25〜0.75) でも combine は概ね他手法よりも高い適合率であり，多くの場合において高い性能であったといえる．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-1ia2f13.eps}
+\end{center}
+\caption{実験結果の Precision-Recall 曲線}
+\label{fig:pr}
+\end{figure}
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-1ia2f14.eps}
+\end{center}
+\hangcaption{平均コサイン類似度値-Recall 曲線．各 Recall 値において推定された全ての文対応に対しコサイン類似度を計算し，平均を取った値の変化を示す．}
+\label{fig:recall-vs-avgcossim}
+\vspace{-0.5\Cvs}
+\end{figure}
+
+
+一方で，低再現率 (Recall: 0.0〜0.25) では，中再現率で高い適合率であった combine よりもロジスティック回帰や L-CRF$_{\rm rep}$ の方が高い性能であった．この原因を調べるため，低再現率と中再現率においてどのような文対応が推定できているかをコサイン類似度の観点から調査した．ここで，各 Recall 値の性能時において推定できた全ての文対応に対しコサイン類似度を計算し，平均を取った値の変化をグラフにした図を図 \ref{fig:recall-vs-avgcossim} に示す．図 \ref{fig:recall-vs-avgcossim} より，いずれの手法においても低い再現率値においてはコサイン類似度の平均が高く，徐々にコサイン類似度の平均は下がって行くことが分かる．中でも combine は低再現率においてコサイン類似度の平均が他手法に比較すると特に低いことから，コサイン類似度の重要性を低く見ているために高類似度の文間に見られる文対応を見落としていると考えている\footnote{なお，例えば再現率 10\% において推定された文対応のコサイン類似度について，ロジスティック回帰の分散は 0.052，combine の分散は 0.035 であった．特に，コサイン類似度が 0 であった文対の割合は，ロジスティック回帰の場合は 12.3\% であったのに対し，combine の場合は 48.8\% と大きな差があった．}．これに対しては，combine では他の手法よりも単純な単語マッチなどでは推定が困難な文対応もある程度発見できるという特徴を持つことでもあるため，コサイン類似度の値によって推定手法を切り替えるなどで様々な文対にも対応可能になると考えている．すなわち，コサイン類似度が高い文対ではロジスティック回帰やL-CRF$_{\rm rep}$など，低い文対では combine を用いることで，より推定性能が向上すると考えている．
+
+\begin{table}[b]
+\begin{minipage}[t]{205pt}
+\setlength{\captionwidth}{190pt}
+\hangcaption{提案モデル combine におけるレビュー文種類ごとの文対応推定性能（F値最大点）}
+\label{tb:rvl-pr}
+\input{02table06.txt}
+\end{minipage}
+\begin{minipage}[t]{205pt}
+\setlength{\captionwidth}{190pt}
+\hangcaption{提案モデル combine における応答文種類ごとの文対応推定性能（F値最大点）}
+\label{tb:rpl-pr}
+\input{02table07.txt}
+\end{minipage}
+\end{table}
+
+次に，combine モデルにおける文種類ごとの推定性能を表 \ref{tb:rvl-pr}, \ref{tb:rpl-pr} に示す\footnote{表 \ref{tb:rpl-pr} で全ての項目が「---」となっている文種類（＜結びでの感謝＞ ＜署名・フッター＞）は今回のデータには該当する文種類に文対応がなかったもの，F値が「---」となっている文種類（＜定型的挨拶＞）は推定結果が全て false-positive であったものである．}．いずれの文書を基準にしても文種類によって性能に大きな差があるが，この主な理由は学習データ量の差によるものと考えている．すなわち，一部の文種類はほとんど文対応を持たないことや，そもそも当該文種類を持つ文の出現回数が少ないことに起因して学習が難しくなっている．特に前者については，例えばレビュー文種類 ＜感謝・応援＞＜プラン名＞ や応答文種類 ＜投稿御礼＞ について表 \ref{tb:review-dep-exists}, \ref{tb:reply-dep-exists} を見ると，登場する回数は多いものの文対応を持つものは極めて少ないことが分かる．これらの文種類については再現率が高いものの適合率が極めて低いことから，過剰に対応有りと推定してしまっていることが分かる．このように対応する可能性が低い文種類については，推定後に予め人手で作成したルールによりフィルタリングするなどにより解決できると考えている．
+
+次に，実際の combine モデルの出力例を図 \ref{fig:result-ex} に示す（表 \ref{tb:result} に示すF値最大点における出力結果）．図中の実線が推定によって得られた正しい文対応を示し，実線に $\times$ 記号があるものは対応有りと推定されたが実際には対応していないもの，破線は対応無しと推定されたが実際には対応しているものを示す．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-1ia2f15.eps}
+\end{center}
+\hangcaption{combine モデルによる推定例．実線は対応有りと推定された正しい文対応を示す．実線に $\times$ 記号があるものは対応有りと推定されたが実際には対応していないもの，破線は対応無しと推定されたが実際には対応しているものを示す．}
+\label{fig:result-ex}
+\end{figure}
+
+図 \ref{fig:result-ex} 左側は誤りなく文対応を推定できた例である．例えばレビュー文「フロントの係の方や…」「駅から歩いて5分程…」はいずれも対応先の応答文「また、温かな嬉しいお言葉…」と共通する内容語が存在しないが，正しく文対応が推定できている．これは，それぞれの文種類を ＜ポジティブ感想＞ ＜ほめへの感謝＞ と正しく推定できており，加えて「気持ちよく」「おいしい」「便利」といった語が現れる文と「御礼」といった言葉が現れる文の間には対応する可能性が高いといった傾向をうまく学習できたことによると考えている．
+
+また，図 \ref{fig:result-ex} 右側は誤った推定が含まれている例である．例えばレビュー文「夜遅かったので…」は応答文「また、フロントスタッフに対しても…」と対応していると推定して誤っている．これは逆に，文種類がそれぞれ ＜ポジティブ感想＞ ＜ほめへの感謝＞ であることや，レビュー文中に「チェックアウト」が，応答文中に「フロント」「スタッフ」などの語が出現すると対応しやすいという傾向に影響されているためであると考えている．この場合，それぞれの文で触れられている対象が，チェックアウト時刻そのものなのか，チェックアウト時のスタッフの対応なのかを区別できればより正確な推定が可能になる．同様に，「夜遅かったので…」に対して応答文「当ホテルでは…」「クリスマスシーズン…」の間の文対応を発見することができなかった問題についても，それぞれの文でチェックアウト時刻に触れられていることを特定できれば対応を発見できる可能性が向上すると考えている．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{22-1ia2f16.eps}
+\end{center}
+\caption{combine モデルと 2D CRF モデルの推定例．左が combine，右が 2D CRF．}
+\label{fig:result-ex-comparison}
+\end{figure}
+
+最後に，combine モデルと 2D CRF モデルによる出力の比較例を図 \ref{fig:result-ex-comparison} に示す（表 \ref{tb:result} に示すF値最大点における出力結果）．この例では，2D CRF モデルでは誤って対応ありと出力したペアに対しても，combine モデルでは正しく対応がないと出力できている．2D CRF モデルが誤った理由の一つとして，文対応推定の前提処理である文種類推定の誤りによる影響があると考えている．この例では，応答文「今回はサラダのある…」及び「次回宿泊時には…」に対して文種類 ＜情報追加＞ が誤って推定されているが（正しくは ＜お詫び＞ 及び ＜対話＞），\mbox{＜情}報追加＞ は関連した語が登場するレビュー文と対応を持ちやすいという傾向があるため，過剰に対応有りと出力されていると考えている．これに対し，combine モデルでは文種類と文対応を同時に推定するため，事前の文種類推定における誤りに影響されるといったことはないため正しく推定できている．
+
+
+\section{まとめと今後の課題}
+
+本論文では，対応する二文書間において文対応を自動で推定するタスクを提案した．また，対話文書を対象とした従来手法を本タスクに適用すると共に，文種類と文対応を推定するモデルを統合した新しいモデルを提案した．実際に文対応の推定性能について比較実験を行い，中再現率において統合モデルは他モデルよりも高い適合率であること，特にF値最大点では最も高いF値であることを確認した．
+
+今後の課題として，以下の項目を考えている．
+
+本論文の実験では，文対応推定に利用した素性は適用する文書対の分野に依存しないものに限られていた．そのため，文書対によっては分野に合わせた素性を投入することで性能が向上する可能性がある．特に，宿泊予約サイトのレビュー・応答文書対に合わせた素性を検討することを考えている．
+
+また，本研究では二文書の対に限っていたが，メールや掲示板等では「返信の返信」のように三文書以上が関係する場合もある．ここで，往信文書を文書A，文書Aに対する返信文書を文書B，文書Bに対する再返信文書を文書Cとした場合，文書Bでは文書Aに対する返信文に加え，文書Cへの往信文が登場するという性質を持つ．例えば，文書Bにおける回答は文書Aと対応し，文書Bにおける質問は文書Cと対応する．また，文書Bにおける回答文に対して文書Cでフィードバックが行われている場合など，文書Bのある一文が文書A, C双方と関係を持つ場合もある．この場合，文書A-文書B及び文書B-文書Cのそれぞれで本研究での提案手法を繰り返し適用する素朴な方法も考えられる．この際，文書Bの文種類をそれぞれの推定手順で返信文種類集合，往信文種類集合に切り替えて別々に推定するという方法もあるが，新たに往信文書・返信文書のいずれでもあるような文書のための文種類を新たに定義するという方法もある．更に，繰り返し推定するのではなく，文書A,B,Cの文種類・文対応を同時に推定するモデルに拡張するという方法も考えられる．加えて，本研究で扱う文対応の定義からは外れるものの，文書Bを経由せずに文書Aと文書Cで関連しているといった，三文書以上が関わることで初めて観察される関係もある．例えば，文書Aでした質問のいくつかが文書Bで答えられなかった場合に，文書Cで再度質問に触れる場合などがある．今後，三文書以上になることで新たに発生する事象についてはこのような関係も含めて分析を行い，三文書以上における文対応推定に最適な手法を検討したいと考えている．
+
+加えて，本論文の冒頭で紹介したような応用についても取り掛かりたいと考えている．今回対象となったデータセットであるレビュー文書・応答文書対についても様々な応用が考えられるため，応答文書の書き手の支援にとどまらず，ウェブサイトの利用者全体にとって有用なアプリケーションも実現したいと考えている．
+
+\acknowledgment
+本論文の実験にあたり，楽天データ公開において公開された楽天トラベル「お客さまの声・クチコミ」データを使用させて頂きました．データを公開して頂きました楽天株式会社に感謝致します．
+
+
+
+\bibliographystyle{./jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Boyer, Phillips, Ha, Wallis, Vouk, \BBA\ Lester}{Boyer
+  et~al.}{2009}]{Boyer2009}
+Boyer, K.~E., Phillips, R., Ha, E.~Y., Wallis, M.~D., Vouk, M.~A., \BBA\
+  Lester, J.~C. \BBOP 2009\BBCP.
+\newblock \BBOQ {Modeling Dialogue Structure with Adjacency Pair Analysis and
+  Hidden Markov Models}.\BBCQ\
+\newblock In {\Bem Proceedings of Human Language Technologies: The 2009 Annual
+  Conference of the North American Chapter of the Association for Computational
+  Linguistics (NAACL-HLT-2009)}, \mbox{\BPGS\ 49--52}.
+
+\bibitem[\protect\BCAY{Chen \BBA\ Rosenfeld}{Chen \BBA\
+  Rosenfeld}{1999}]{Chen99agaussian}
+Chen, S.~F.\BBACOMMA\ \BBA\ Rosenfeld, R. \BBOP 1999\BBCP.
+\newblock \BBOQ {A Gaussian Prior for Smoothing Maximum Entropy Models}.\BBCQ\
+\newblock \BTR, Carnegie Mellon University.
+
+\bibitem[\protect\BCAY{Druck \BBA\ Pang}{Druck \BBA\ Pang}{2012}]{Druck2012}
+Druck, G.\BBACOMMA\ \BBA\ Pang, B. \BBOP 2012\BBCP.
+\newblock \BBOQ {Spice it Up?: Mining Refinements to Online Instructions from
+  User Generated Content}.\BBCQ\
+\newblock In {\Bem Proceedings of the 50th Annual Meeting of the Association of
+  Computational Linguistics (ACL-2012)}, \mbox{\BPGS\ 545--553}.
+
+\bibitem[\protect\BCAY{長谷川\JBA 鍜治\JBA 吉永\JBA 豊田}{長谷川 \Jetal
+  }{2013}]{長谷川貴之:2013}
+長谷川貴之\JBA 鍜治伸裕\JBA 吉永直樹\JBA 豊田正史 \BBOP 2013\BBCP.
+\newblock 聞き手の感情を喚起する発話応答生成.\
+\newblock \Jem{言語処理学会第19回年次大会発表論文集}, \mbox{\BPGS\ 150--153}.
+
+\bibitem[\protect\BCAY{平尾\JBA 西野\JBA 安田\JBA 永田}{平尾 \Jetal
+  }{2013}]{平尾:2013}
+平尾努\JBA 西野正彬\JBA 安田宜仁\JBA 永田昌明 \BBOP 2013\BBCP.
+\newblock 談話構造に基づく単一文書要約.\
+\newblock \Jem{言語処理学会第19回年次大会発表論文集}, \mbox{\BPGS\ 492--495}.
+
+\bibitem[\protect\BCAY{比留間\JBA 山下\JBA 奈良\JBA 田村}{比留間 \Jetal
+  }{1999}]{比留間正樹:1999-07-10}
+比留間正樹\JBA 山下卓規\JBA 奈良雅雄\JBA 田村直良 \BBOP 1999\BBCP.
+\newblock 文章の構造化による修辞情報を利用した自動抄録と文章要約.\
+\newblock \Jem{自然言語処理}, {\Bbf 6}  (6), \mbox{\BPGS\ 113--129}.
+\bibitem[\protect\BCAY{Holm}{Holm}{1979}]{Holm1979}
+Holm, S. \BBOP 1979\BBCP.
+\newblock \BBOQ {A Simple Sequentially Rejective Multiple Test
+  Procedure}.\BBCQ\
+\newblock {\Bem Scandinavian Journal of Statistics}, {\Bbf 6}  (2),
+  \mbox{\BPGS\ 65--70}.
+
+\bibitem[\protect\BCAY{Kschischang, Frey, \BBA\ Loeliger}{Kschischang
+  et~al.}{2001}]{Kschischang2001}
+Kschischang, F.~R., Frey, B.~J., \BBA\ Loeliger, H.~A. \BBOP 2001\BBCP.
+\newblock \BBOQ {Factor Graphs and the Sum-product Algorithm}.\BBCQ\
+\newblock {\Bem IEEE Transactions on Information Theory}, {\Bbf 47}  (2),
+  \mbox{\BPGS\ 498--519}.
+
+\bibitem[\protect\BCAY{Kudo, Yamamoto, \BBA\ Matsumoto}{Kudo
+  et~al.}{2004}]{kudo-yamamoto-matsumoto:2004:EMNLP}
+Kudo, T., Yamamoto, K., \BBA\ Matsumoto, Y. \BBOP 2004\BBCP.
+\newblock \BBOQ {Applying Conditional Random Fields to Japanese Morphological
+  Analysis}.\BBCQ\
+\newblock In Lin, D.\BBACOMMA\ \BBA\ Wu, D.\BEDS, {\Bem Proceedings of the 2004
+  Conference on Empirical Methods in Natural Language Processing (EMNLP-2004)},
+  \mbox{\BPGS\ 230--237}.
+
+\bibitem[\protect\BCAY{Lafferty, McCallum, \BBA\ Pereira}{Lafferty
+  et~al.}{2001}]{Lafferty2001}
+Lafferty, J., McCallum, A., \BBA\ Pereira, F. \BBOP 2001\BBCP.
+\newblock \BBOQ {Conditional Random Fields: Probabilistic Models for Segmenting
+  and Labeling Sequence Data}.\BBCQ\
+\newblock In {\Bem Proceedings of the 18th International Conference on Machine
+  Learning (ICML-2001)}, \mbox{\BPGS\ 282--289}.
+
+\bibitem[\protect\BCAY{Mann, Matthiessen, \BBA\ Thompson}{Mann
+  et~al.}{1992}]{Mann1992}
+Mann, W.~C., Matthiessen, C.~M., \BBA\ Thompson, S.~A. \BBOP 1992\BBCP.
+\newblock \BBOQ {Rhetorical Structure Theory and Text Analysis}.\BBCQ\
+\newblock In Mann, W.~C.\BBACOMMA\ \BBA\ Thompson, S.~A.\BEDS, {\Bem Discourse
+  Description: Diverse Linguistic Analyses of a Fund-raising Text},
+  \mbox{\BPGS\ 39--78}. John Benjamins Publishing.
+
+\bibitem[\protect\BCAY{Mann \BBA\ Thompson}{Mann \BBA\
+  Thompson}{1987}]{Mann1987}
+Mann, W.~C.\BBACOMMA\ \BBA\ Thompson, S.~A. \BBOP 1987\BBCP.
+\newblock \BBOQ {Rhetorical Structure Theory: Description and Construction of
+  Text Structures}.\BBCQ\
+\newblock In Kempen, G.\BED, {\Bem Natural Language Generation}, \BCH~7,
+  \mbox{\BPGS\ 85--95}. Springer Netherlands.
+
+\bibitem[\protect\BCAY{Marcu}{Marcu}{1997}]{Marcu1997a}
+Marcu, D. \BBOP 1997\BBCP.
+\newblock \BBOQ {The Rhetorical Parsing of Natural Language Texts}.\BBCQ\
+\newblock In {\Bem Proceedings of the 35th Annual Meeting of the Association
+  for Computational Linguistics (ACL-1997)}, \mbox{\BPGS\ 96--103}.
+
+\bibitem[\protect\BCAY{Marcu}{Marcu}{1999}]{Marcu99discoursetrees}
+Marcu, D. \BBOP 1999\BBCP.
+\newblock \BBOQ {Discourse Trees Are Good Indicators of Importance in
+  Text}.\BBCQ\
+\newblock In Mani, I.\BBACOMMA\ \BBA\ Maybury, M.~T.\BEDS, {\Bem Advances in
+  Automatic Text Summarization}, \mbox{\BPGS\ 123--136}. The MIT Press.
+
+\bibitem[\protect\BCAY{Marcu, Carlson, \BBA\ Watanabe}{Marcu
+  et~al.}{2000}]{Marcu2000}
+Marcu, D., Carlson, L., \BBA\ Watanabe, M. \BBOP 2000\BBCP.
+\newblock \BBOQ {The Automatic Translation of Discourse Structures}.\BBCQ\
+\newblock In {\Bem Proceedings of the 1st North American chapter of the
+  Association for Computational Linguistics Conference (NAACL-2000)},
+  \mbox{\BPGS\ 9--17}.
+
+\bibitem[\protect\BCAY{McCallum}{McCallum}{2002}]{McCallumMALLET2002}
+McCallum, A.~K. \BBOP 2002\BBCP.
+\newblock \BBOQ {MALLET: A Machine Learning for Language Toolkit}.\BBCQ \\
+\newblock \texttt{http://mallet.cs.umass.edu/}.
+
+\bibitem[\protect\BCAY{大沢\JBA 郷亜\JBA 安田}{大沢 \Jetal }{2010}]{大沢:2010}
+大沢裕子\JBA 郷亜里沙\JBA 安田励子 \BBOP 2010\BBCP.
+\newblock {Webサイトにおけるクチコミの苦情と返答—「宿泊予約サイト」を対象に—}.\
+\newblock \Jem{言語処理学会第16回年次大会発表論文集}, \mbox{\BPGS\ 322--325}.
+
+\bibitem[\protect\BCAY{宮部\JBA 高村\JBA 奥村}{宮部 \Jetal }{2005}]{宮部:2005}
+宮部泰成\JBA 高村大也\JBA 奥村学 \BBOP 2005\BBCP.
+\newblock 異なる文書中の文間関係の特定.\
+\newblock \Jem{情報処理学会研究報告, 自然言語処理研究会}, {\Bbf 2005}  (NL-17),
+  \mbox{\BPGS\ 97--104}.
+
+\bibitem[\protect\BCAY{宮部\JBA 高村\JBA 奥村}{宮部 \Jetal }{2006}]{宮部:2006}
+宮部泰成\JBA 高村大也\JBA 奥村学 \BBOP 2006\BBCP.
+\newblock 文書横断文間関係の特定.\
+\newblock \Jem{言語処理学会第12回年次大会発表論文集}, \mbox{\BPGS\ 496--499}.
+
+\bibitem[\protect\BCAY{難波\JBA 国政\JBA 福島\JBA 相沢\JBA 奥村}{難波 \Jetal
+  }{2005}]{難波:2005}
+難波英嗣\JBA 国政美伸\JBA 福島志穂\JBA 相沢輝昭\JBA 奥村学 \BBOP 2005\BBCP.
+\newblock 文書横断文間関係を考慮した動向情報の抽出と可視化.\
+\newblock \Jem{情報処理学会研究報告, 自然言語処理研究会}, {\Bbf 2005}
+  (NL-169), \mbox{\BPGS\ 67--74}.
+
+\bibitem[\protect\BCAY{Pedregosa, Varoquaux, Gramfort, Michel, Thirion, Grisel,
+  Blondel, Prettenhofer, Weiss, Dubourg, Vanderplas, Passos, Cournapeau,
+  Brucher, Perrot, \BBA\ Duchesnay}{Pedregosa et~al.}{2011}]{scikit-learn}
+Pedregosa, F., Varoquaux, G., Gramfort, A., Michel, V., Thirion, B., Grisel,
+  O., Blondel, M., Prettenhofer, P., Weiss, R., Dubourg, V., Vanderplas, J.,
+  Passos, A., Cournapeau, D., Brucher, M., Perrot, M., \BBA\ Duchesnay, E.
+  \BBOP 2011\BBCP.
+\newblock \BBOQ {Scikit-learn: Machine Learning in Python}.\BBCQ\
+\newblock {\Bem Journal of Machine Learning Research}, {\Bbf 12}, \mbox{\BPGS\
+  2825--2830}.
+
+\bibitem[\protect\BCAY{Qu \BBA\ Liu}{Qu \BBA\ Liu}{2012}]{Zhonghua2012}
+Qu, Z.\BBACOMMA\ \BBA\ Liu, Y. \BBOP 2012\BBCP.
+\newblock \BBOQ {Sentence Dependency Tagging in Online Question Answering
+  Forums}.\BBCQ\
+\newblock In {\Bem Proceedings of the 50th Annual Meeting of the Association of
+  Computational Linguistics (ACL-2012)}, \mbox{\BPGS\ 554--562}.
+
+\bibitem[\protect\BCAY{Radev}{Radev}{2000}]{Radev2000}
+Radev, D.~R. \BBOP 2000\BBCP.
+\newblock \BBOQ {A Common Theory of Information Fusion from Multiple Text
+  Sources Step One}.\BBCQ\
+\newblock In {\Bem Proceedings of the 1st SIGdial Workshop on Discourse and
+  Dialogue}, \lowercase{\BVOL}~10, \mbox{\BPGS\ 74--83}.
+
+\bibitem[\protect\BCAY{Ritter, Cherry, \BBA\ Dolan}{Ritter
+  et~al.}{2011}]{Ritter2011}
+Ritter, A., Cherry, C., \BBA\ Dolan, W.~B. \BBOP 2011\BBCP.
+\newblock \BBOQ {Data-driven Response Generation in Social Media}.\BBCQ\
+\newblock In {\Bem Proceedings of the 2011 Conference on Empirical Methods in
+  Natural Language Processing (EMNLP-2011)}, \mbox{\BPGS\ 583--593}.
+
+\bibitem[\protect\BCAY{Sutton}{Sutton}{2006}]{GRMM2006}
+Sutton, C. \BBOP 2006\BBCP.
+\newblock \BBOQ {GRMM: GRaphical Models in Mallet}.\BBCQ \\
+\newblock \texttt{http://mallet.cs.umass.edu/grmm/}.
+
+\bibitem[\protect\BCAY{Sutton \BBA\ McCallum}{Sutton \BBA\
+  McCallum}{2012}]{Sutton2012}
+Sutton, C.\BBACOMMA\ \BBA\ McCallum, A. \BBOP 2012\BBCP.
+\newblock \BBOQ {An Introduction to Conditional Random Fields}.\BBCQ\
+\newblock {\Bem Foundations and Trends in Machine Learning}, {\Bbf 4}  (4),
+  \mbox{\BPGS\ 267--373}.
+
+\bibitem[\protect\BCAY{竹中\JBA 若尾}{竹中\JBA
+  若尾}{2012}]{竹中要一:2012-09-30}
+竹中要一\JBA 若尾岳志 \BBOP 2012\BBCP.
+\newblock 地方自治体の例規比較に用いる条文対応表の作成支援.\
+\newblock \Jem{自然言語処理}, {\Bbf 19}  (3), \mbox{\BPGS\ 193--212}.
+
+\bibitem[\protect\BCAY{田村\JBA 和田}{田村\JBA
+  和田}{1998}]{田村直良:1998-01-10}
+田村直良\JBA 和田啓二 \BBOP 1998\BBCP.
+\newblock セグメントの分割と統合による文章の構造解析.\
+\newblock \Jem{自然言語処理}, {\Bbf 5}  (1), \mbox{\BPGS\ 59--78}.
+
+\bibitem[\protect\BCAY{Tu, Zhou, \BBA\ Zong}{Tu
+  et~al.}{2013}]{tu-zhou-zong:2013:Short}
+Tu, M., Zhou, Y., \BBA\ Zong, C. \BBOP 2013\BBCP.
+\newblock \BBOQ {A Novel Translation Framework Based on Rhetorical Structure
+  Theory}.\BBCQ\
+\newblock In {\Bem Proceedings of the 51st Annual Meeting of the Association
+  for Computational Linguistics (ACL-2013)},
+  \mbox{\BPGS\ 370--374}.
+
+\bibitem[\protect\BCAY{Wainwright, Jaakkola, \BBA\ Willsky}{Wainwright
+  et~al.}{2001}]{Wainwright2001b}
+Wainwright, M., Jaakkola, T., \BBA\ Willsky, A. \BBOP 2001\BBCP.
+\newblock \BBOQ {Tree-based Reparameterization for Approximate Inference on
+  Loopy Graphs}.\BBCQ\
+\newblock In {\Bem Advances in Neural Information Processing System
+  (NIPS-2001)}, \mbox{\BPGS\ 1001--1008}.
+
+\bibitem[\protect\BCAY{Zhu, Nie, Wen, Zhang, \BBA\ Ma}{Zhu
+  et~al.}{2005}]{Zhu2005}
+Zhu, J., Nie, Z., Wen, J.-R., Zhang, B., \BBA\ Ma, W.-Y. \BBOP 2005\BBCP.
+\newblock \BBOQ {2D Conditional Random Fields for Web Information
+  Extraction}.\BBCQ\
+\newblock In {\Bem Proceedings of the 22nd International Conference on Machine
+  Learning (ICML-2005)}, \mbox{\BPGS\ 1044--1051}.
+
+
+\end{thebibliography}
+
+\begin{biography}
+\bioauthor{角田　孝昭}{
+2011年筑波大学情報学群情報メディア創成学類卒業．2013年同大学大学院システム情報工学研究科コンピュータサイエンス専攻博士前期課程修了．現在，同大学博士後期課程在学中．修士（工学）．自然言語処理の研究に従事．
+}
+\bioauthor{乾　　孝司}{
+2004年奈良先端科学技術大学院大学情報科学研究科博士課程修了．日本学術振興会特別研究員，東京工業大学統合研究院特任助教等を経て，2009年筑波大学大学院システム情報工学研究科助教．現在に至る．博士（工学）．近年はCGMテキストに対する評判分析に興味をもつ．
+}
+\bioauthor{山本　幹雄}{
+1986年豊橋技術科学大学大学院修士課程了．同年株式会社沖テクノシステムズラボラトリ研究開発員．1988年豊橋技術科学大学情報工学系教務職員．1991年同助手．1995年筑波大学電子・情報工学系講師. 1998年同助教授．2008年筑波大学システム情報工学研究科教授．博士（工学）．自然言語処理の研究に従事．
+}
+ 
+\end{biography}
+
+
+\biodate
+
+
+
+\end{document}

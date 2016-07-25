@@ -1,0 +1,785 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+\usepackage{amssymb} 
+
+
+
+
+\Volume{19}
+\Number{5}
+\Month{December}
+\Year{2012}
+
+\received{2012}{5}{7}
+\revised{2012}{7}{31}
+\accepted{2012}{9}{10}
+
+\setcounter{page}{419}
+
+\jtitle{文章分類と疾患モデルの融合による\\ソーシャルメディアからの感染症把握}
+\jauthor{荒牧　英治\affiref{TOKYO}\affiref{JST} \and 増川佐知子\affiref{TOKYO} \and 森田　瑞樹\affiref{TOKYO}\affiref{NIBIO}}
+\jabstract{
+近年，ウェブの情報を用いて，感染症などの疾病状態を監視するシステム
+に注目が集まっている．
+本研究では，ソーシャルメディアを用いたインフルエンザ・サーベイランスに注目する．  これまでの多くのシステムは，単純な単語の頻度情報をもとに患
+  者の状態を調査するというものであった．しかし，この方法では，実際に疾
+  患にかかっていない場合の発言を収集してしまう恐れがある．また，そもそ
+  も，医療者でない個人の自発的な発言の集計が，必ずしもインフルエンザの
+  流行と一致するとは限らない．本研究では，前者の問題に対応するため， 発
+  言者が実際にインフルエンザにかかっているもののみを抽出し集計を行う．
+  後者の問題に対して，発言と流行の時間的なずれを吸収するための感染症モ
+  デルを提案する．実験においては，Twitterの発言を材料にした
+  インフルエンザ流行の推定値は，感染症情報センターの患者数と相関係数0.910という高い相関を示し，その有効性を示した．
+  本研究により，ソーシャルメディア上の情報をそのまま用いるのではなく，文章分類や疾患モデルと組み合わせて用いることで，さらに精度を向上できることが示された．
+}
+\jkeywords{情報抽出，医療情報，ソーシャルメディア，感染症モデル，ツィッター}
+
+\etitle{Microblog-based Infectious Disease Detection using Document  Classification and Infectious \\Disease Model}
+\eauthor{Eiji Aramaki\affiref{TOKYO}\affiref{JST} \and Sachiko Masukawa\affiref{TOKYO} \and Mizuki Morita\affiref{TOKYO}\affiref{NIBIO}} 
+\eabstract{
+  With the recent rise in popularity and size of social media, there
+  is a growing need for systems that can extract useful information
+  from this amount of data. We address an issue of detecting
+  influenza epidemics.  Although previous methods rely 
+   mainly on the
+  frequencies of the influenza related words, such methods had
+  suffered from the noisy tweets that do not express influenza symptoms. To
+  deal with this problem, this study proposed two methods. First,
+  the sentence classifier judges whether a person really catches the
+  influenza or not. Next, the infectious model closes a time gap
+  between the people web activity and the illness period. In the
+  experiments, the combination of two techniques achieved 
+  the high performance (correlation coefficient 0.910 to the number of the 
+  influenza patients).
+  This result suggests that not only natural language processing but
+  also disease study contributes to social media based surveillance.
+}
+\ekeywords{Information Extraction, Medical Informatics, Social Media, Infectious Model, Twitter}
+
+\headauthor{荒牧，増川，森田}
+\headtitle{文章分類と疾患モデルの融合によるソーシャルメディアからの感染症把握}
+
+\affilabel{TOKYO}{東京大学知の構造化センター}{Center for Knowledge Structuring, The University of Tokyo}
+\affilabel{JST}{独立行政法人科学技術振興機構さきがけ}{PRESTO (Precursory Research for Embryonic Science and Technology)}
+\affilabel{NIBIO}{独立行政法人医薬基盤研究所}{NIBIO (The National Institute of Biomedical Innovation)}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+
+感染症の流行は，毎年，百万人を越える患者を出
+しており，重要な国家的課題となってい
+る\cite{国立感染症研究所2006}．
+特に，インフルエンザ
+は事前に適切なワクチンを準備することにより，重篤な状態を避けることが可能なため，
+感染状態の把握は各国における重要なミッションとなってい
+る\cite{Ferguson2005}．
+この把握は\textbf{ インフルエンザ・サーベイランス}と呼ばれ，膨大なコストをかけて調査・集計が行われてきた．
+
+本邦においてもインフルエンザが流行したことによって総死亡がどの程度増加したかを示す推定値（{\bf 超過死亡概念による死者数}）は毎年 1 万人を超えてお
+り\cite{大日2003}，国立感染症研究所を中心にインフルエンザ・サーベイランスが実施され，その結果はウェブでも閲覧することができる\footnote{https://hasseidoko.mhlw.go.jp/Hasseidoko/Levelmap/flu/index.html}．
+
+しかし，これらの従来型の集計方式は，集計に時間がかかり，また，過疎
+部における収集が困難だという問題が指摘されてきた\footnote{http://sankei.jp.msn.com/life/news/110112/bdy11011222430044-n1.htm}．
+このような背景のもと，近年，ウェブを用いた感染症サーベイランスに注目が集まっている．
+これらは現行の調査法と比べて，次のような利点がある．
+
+\begin{enumerate}
+\item {\bf 大規模}：例えば，日本語単語「インフルエンザ」を含ん
+  だTwitter上での発言は平均1,000発言/日を超えている（2008年11月）．このデー
+  タのボリュームは，これまでの調査手法，例えば，本邦における医療機関の
+  定点観測の集計を圧倒する大規模な情報収集を可能とする．
+\item {\bf 即時性}：ユーザの情報を直接収集するため，これまでにない早い
+  速度での情報収集が可能である．早期発見が重視される感染症の流行予測に
+  おいては即時性が極めて重要な性質である．
+\end{enumerate}
+
+以上のように，ウェブを用いた手法は，感染症サーベイランスと相性が高い．ウェブを用いた手法は，ウェブのどのようなサービスを材料にするかで，様々なバリエーションがあるが，本研究では近年急速に広まりつつあるソーシャルメディアのひとつであるTwitterに注目する．
+しかしながら，実際にTwitterからインフルエンザに関する情報を収集するのは容易ではない．例えば，単語「インフルエンザ」を含む発言を収集すると，以下のような発言を抽出してしまう：
+\begin{enumerate}
+\item カンボジアで鳥インフルエンザのヒト感染例、6歳女児が死亡 （インフ
+  ルエンザに関するニュース）
+\item インフルエンザ怖いので予防注射してきました （インフルエンザ予防に関する発言）
+\item  やっと．．．　インフルエンザが治った！ （インフルエンザ完治後の発言）
+\end{enumerate}
+
+上記の例のように，単純な単語の集計では，実際に発言者がインフルエンザにかかっている本人
+（本稿では，{\bf 当事者} と呼ぶ）かどうかが区別されない．
+本研究では，これを文書分類の一種とみなして，Support Vector Machine
+(SVM) \cite{Vapnik1999}を用いた分類器を用いて解決する．
+
+さらに，この当事者を区別できたとしても，はたして一般の人々のつぶやきが
+正確にインフルエンザの流行を反映しているのかという情報の正確性の問題が
+残る．例えば，インフルエンザにかかった人間が，常にその病態をソーシャル
+メディアでつぶやくとは限らない．また，つぶやくとしても時間のずれがあ
+るかもしれない．このように，不正確なセンサーとしてソーシャルメディアは機能
+していると考えられる．この不正確性は医師の診断をベースに集計する従来型
+のサーベイランスとの大きな違いである．実際に実験結果では，人々は流行前
+に過敏に反応し，流行後は反応が鈍る傾向があることが確認された．すなわち，
+ウェブ情報をリソースとした場合，現実の流行よりも前倒しに流行を検出して
+しまう恐れがある．本研究では，この時間のずれを吸収するために，感染症モ
+デル\cite{Kermack1927}を適応し補正を行う．
+
+本論文のポイントは次の2点である：
+\begin{enumerate}
+\item ソーシャルメディアの情報はノイズを含んでいる．よって，文章分類手
+  法にてこれを解決する．
+\item ソーシャルメディアのインフルエンザ報告は不正確である．これにより
+  生じる時間的なずれを補正するためのモデルを提案する．
+\end{enumerate}
+
+
+
+本稿の構成は，以下のとおりである．
+2節では，関連研究を紹介する．
+3節では，構築したコーパスについて紹介する．
+4節では，提案する手法／モデルについて説明する．
+5節では，実験について報告する．
+6節に結論を述べる．
+
+
+
+\section{関連研究}
+
+これまで，インフルエンザの流行予測は，政府主導のトップダウンな集計が中
+心であったが（2.1節），現在では，ICT技術を用いた大規模な調査方法が検討さ
+れている（2.2節）．近年では，検索クエリやソーシャルメディアなどウェブの情
+報を利用した研究が行われている（2.3節）．
+
+
+\subsection{現在行われている調査方法}
+
+インフルエンザの流行に対しては，事前の十分なワクチン準備が必須の対応と
+なるため，世界各国で共通の課題として対策が行われてきた．このため，多く
+の国で，自国の感染症調査のための機関が組織されている．例えば，アメリカ
+ではCenters for Disease Control and Prevention
+(CDC)\footnote{http://www.cdc.gov/}，EU は EU Influenza Surveillance
+Scheme
+(EISS)\footnote{http://ecdc.europa.eu/en/activities/surveillance/EISN/Pages/index.aspx}
+を運営している．本邦では，国立感染症研究所 (Infection Disease Surveillance Center; IDSC) 
+の感染症情報センター\footnote{http://idsc.nih.go.jp/}がこの役目を担っている．これらの機
+関は主としてウイルスの遺伝子解析，国民の抗体保有状況や協力体制にある医
+療機関からの報告に頼って集計を行っている．例えば，IDSCは全国約5,000の診
+療所から情報を集め，集計結果を発表している．ただし，この集計には時間が
+かかるため，1週間前の流行状況が発表される．この遅延のため，発表時にはす
+でに流行入りしている可能性があり，より迅速な情報収集への期待が高まって
+いる．
+
+
+
+\subsection{新しい調査方法}
+
+より早くインフルエンザの流行を捉えるため様々な手法が提案されてい
+る．Espino et al. \cite{Espino2003}は電話トリアージ・アドバイス（電話を通じて
+医療アドバイスを行う公共サービス）に注目し，一日の電話コールの回数が
+インフルエンザの流行と相関していることを明らかにした．後の追試でもその
+有効性は確かめられている\cite{Yih2009}．Magruder \citeyear{Magruder2003}は，
+インフルエンザ市販薬の販売量 (over-the-counter drug sales) に注目した．た
+だし，本邦ではインフルエンザ薬の購入には処方が必要となっているように，
+この手法は万国で有効な手段ではない．このため，近年，薬事法など国ごとの
+制度に依存しない手法としてウェブが注目されている．
+
+
+\subsubsection{ログ・ベースの手法}
+
+近年，もっとも注目されている手法はGoogleのウェブ検索クエリを用いた手
+法\cite{Ginsberg2009}である．彼らはインフルエンザ流行と相関のある検索ク
+エリ（相関係数の高い上位50語）を調査し，それらをモニタリングすることで，
+インフルエンザの予測を行っている．彼らの予測は，アメリカのCDC報告との相
+関係数0.97（最小値0.92；最大値0.99）という高い精度を報告している．同様の
+アイデアにもとづいた研究は他にも報告されている．例え
+ば，Polgreen et al. はYahoo! のクエリを用いて同精度の予測を行っ
+た\cite{Polgreen2009}．Hulth et al. はスイス国内のウェブ検索会社のクエリを用い
+た\cite{Hulth2009}．Johnson et al. は健康情報に関するウェブサイト「HealthLink」
+の閲覧のアクセスログを用いた\cite{Johnson2004}．
+
+これらは，それぞれ異なった情報源を用いているものの，患者の行動を直接調
+査するという観点からは同様のアプローチであるとみなせる．このアプローチ
+は，多くの情報を即時的に収集することができるが，これを実現可能
+なのは，サービス・プロバイダのみという問題が残る．例えば，ウェブ検索クエ
+リをリアルタイムに利用できる機関はGoogle，Yahoo! やMicrosoftといったいく
+つかのサービス・プロバイダに限定されてしまう．
+
+
+\subsubsection{ソーシャルメディアベースの手法}
+
+前述したように，ログ・ベースの手法はサービス・プロバイダに依存してしまうため，より利用が容易であるソーシャルメディアを情報源とした手法も2010年から開始されている．その中でも特にTwitterは，1.2億ユーザが参加しており，550万ツイートが毎日やりとりされている（2011年3月現在）．このデータ量と即時性はクエリログに匹敵するため，感染症の把握について多くの研究が行われてき
+た\cite{Lampos2010,Culotta2010,Paul2011,Aramaki2011,Tanida2011}．
+これらの研究は，表\ref{t_relwork}のように，単語選択，発言の分類などの観点から分類できる．
+
+\begin{table}[b]
+\caption{ソーシャルメディア・ベースの疾患サーベイランス研究の分類}
+\label{t_relwork}
+\input{04table01.txt}
+\end{table}
+
+まず，この単語選択の問題に対しては，経験則で「風邪」や「インフルエ
+ンザ」などのキーワードとなる単語を選択し，その頻度を集計することが考え
+られ，これまでの多くの先行研究はこの手法をとってい
+る\cite{Culotta2010,Aramaki2011}．
+これに対し，最近では統計的に単語の選択を行った手法が模索されている．
+例えば，
+L1正規化を用いて単語の次元を圧縮する方法\cite{Lampos2010}，
+疾患をある種のトピックとみたてトピックモデルを用いる方法\cite{Paul2011}や，
+素性選択の手法を適応する研究\cite{Tanida2011}が試みられた．
+本研究では，これらの最新の単語選択手法を用いず，経験的に語を決めている
+が，単語選択と組み合わせることで，さらに精度を高めることが可能であり，
+今後の課題としたい．
+
+次に，いかに罹患した発言を集計するかという問題（分類問題）がある．この
+問題に対しては，高橋ら \citeyear{Takahashi2011}が Boostingを用いた文章分
+類，Aramaki et~al. \citeyear{Aramaki2011}がSVMによる分類手法を提案している．
+本研究では後者を用いた．
+
+以上の2つの単語選択問題と分類問題が，これまでの研究で扱われてきた主な問
+題であった．これに加え，本研究では，1節にて指摘したように，そもそもウェ
+ブから得られる情報は不正確である可能性に注目し，これを補正するために感
+染症モデルを用いる．
+
+
+\section{インフルエンザ・コーパス}
+
+実際に発言者がインフルエンザにかかっている当事者かどうかを
+分類するためには，コーパスが必要となる．本節ではこのコーパスの構築方法
+とその統計について述べる．
+
+まず，材料として，2008 年11月から2010年7月にかけてTwitter APIを用い
+て30億発言を収集した．次に，そこから「インフルエンザ」という語を含む発言を抽出し
+た．この結果40万発言が得られ，データを次の2つの領域に分割した．
+\begin{enumerate}
+\item {\bf トレーニング・データ}：2008年11月から無作為に5,000発言．
+それぞれの発言について人手で，発言者が実際にインフルエンザにかかっているかどうか（当事者かどうか）を判定した．
+判定の結果，発言者が実際にインフルエンザにかかっている場合を
+ポジティブな発言とみなし（本稿では{\bf 陽性発言}と呼ぶ），逆にインフルエンザに
+かかっていない場合をネガティブな発言（{\bf 陰性発言}）とみなす．
+
+\item {\bf テスト・データ}：残りのデータ．後述する実験に用いる．
+\end{enumerate}
+
+
+陽性発言と陰性発言の区別は，以下の除外基準に照らし1つでも該当するものがあれば
+陰性発言とみなした．
+\begin{enumerate}
+\item {\bf 非当事者}：
+発言者（または，発言者と同一都道府県近郊の人間）のインフルエンザについてのみ扱い，それ以外の発言は除外する（陰性発言とみなす）．
+居住地が正確に分からない場合は陰性発言とみなす． 
+
+例えば，「インフルエンザが実家で流行っている」では，「実家」の所在が不正確であるので，陰性発言とみなす．
+\item {\bf 不適切な時制}：
+現在または近い過去のインフルエンザのみ扱い，それ以外の発言は除外する．
+ここでいう「近い過去」とは24時間以内とする．
+
+例えば，「{\bf 昨年}はひどいインフルエンザで参加できなかった」は，陰性発言とみなす．
+
+\item {\bf 否定／不適切なモダリティ}：
+「インフルエンザでなかった」等の否定の表現（ネゲーション）は除外する．
+  また，疑問文や「かもしれない」と不確定な発言は基準を満たさないものとする．
+  ここでいうモダリティとは狭義のモデリティの他に法（仮定法），表現類型（疑問文，
+  命令文），価値判断（必要，許可）をも含む．
+
+例えば，「インフルにでもかかってしまえ」（命令文）や，「インフルエンザだとしても，熱がないのが不思議 」（仮定法）は陰性発言とみなす．
+\item {\bf 比喩的表現}：
+  実際の疾患としての「インフルエンザ」を指さない表現は除外する．
+
+  例えば，「インフルエンザ的な感染力じゃないですか！ RT @■■■：朝から PC の調子が悪く困っています」におけるインフルエンザは，コンピューターウィルスをインフルエンザと比喩しており陰性発言とみなす．
+\end{enumerate}
+
+詳細な基準についてはアノテーション・ガイドラインを公開し，実際の用例とともに参照できるようにしている\footnote{http://www.mednlp.jp/resources/}．また，構築したコーパスについても同サイトにて配布している．なお，陽性発言／陰性発言のアノテーター間（3人）の平均一致率は84\%であった．
+
+トレーニング・データについてアノテートした結果，およそ半数の発言が陰性発言となった．すなわち，発言分類を行わない場合，半分近い発言はノイズとなっていることになる．ここで，陰性発言の一部（546発言）について，原因の割合を調査した（表\ref{t_内訳}）．陰性発言となる主要な要因は広告であることが分かる．
+
+\begin{table}[t]
+\caption{コーパスの分類結果}
+\label{t_内訳}
+\input{04table02.txt}
+\end{table}
+
+
+\section{提案手法}
+
+提案手法は，陽性発言と陰性発言を分類する手法（4.1節）と，集計の時間的なずれを補正する手法（4.2節）の2つからなる．
+
+\subsection{文章分類器を用いた発言の分類}
+
+前節にて述べたように，Twitterの発言の約半数は陰性発言となってしまう．
+そこで，前章にて述べたコーパスを用いて，発言を分類することでこれを解決する．
+このタスクは，スパムメール・フィルタリングや評価表現分析といった文の分
+類タスクと類似しており，本研究では，これらの研究で一般的な手法である機
+械学習による手法を用いる．
+
+\begin{description}
+\item {\bf 【学習アルゴリズム】} 
+学習アルゴリズムは先行研究 (Aramaki et al. 2011) で使われていた SVM を用いた．
+先行研究では，モダリティごとにアノーテションを行い，これを複数のSVMを用いて学習する手法が提案されていたが，陰性発言を区別せず，単一のSVMで学習した場合と比べ，必ずしも精度を向上させず，また，コーパス作成が高コストになった．
+したがって，本研究では，陰性発言の種類を区別せず，一様に扱った．
+なお，SVMのカーネルは2次の多項カーネルとした．他のパラメータは用いたパッケージのデフォルト値\footnote{http://chasen.org/~taku/software/TinySVM/}を用いた．
+\item {\bf 【素性の種類】}
+素性は注目している単語「インフルエンザ」または「インフル」とその周辺の形態素とした．この際，
+形態素解析器\footnote{http://nlp.ist.i.kyoto-u.ac.jp/index.php?JUMAN}を用い，原形，読み，品詞を用いた（表\ref{t_素性}）．
+\item {\bf 【素性の範囲】} 周辺文脈の範囲（ウィンドウ・サイズ）は予備実
+  験によって調査した．予備実験は前節のトレーニング・データを10分割交差
+  検定することによって行った．パフォーマンスはウィンドウ・サイズに依存
+  する．表\ref{f_win_size.eps}にウィンドウ・サイズと精度（F値）の関係を
+  示す．最もよいパフォーマンスは左右両方のコンテキストを6形態素までみる
+  設定（表中の $\text{BOTH}=6$）で得られたため，以降の実験ではこの値を用いた．
+\end{description}
+
+\begin{table}[t]
+\caption{素性}
+\label{t_素性}
+\input{04table03.txt}
+\end{table}
+\begin{table}[t]
+\caption{ウィンドウ・サイズと精度（F値）}
+\label{f_win_size.eps}
+\input{04table04.txt}
+\end{table}
+
+素性の範囲を決める予備実験が示すように約74\%程度の精度で陰性発言を分類で
+きる．この精度が，実際のインフルエンザ推定にとって有用かどうか
+は5節の実験にて検証する．
+
+
+
+\subsection{感染症モデルを用いた補正}
+
+前節では発言から陰性発言を取り除く手法について述べた．しかし，たとえ全
+てのノイズが取り除かれても，個々の発言が必ずしも正確にインフルエンザを
+報告しているわけではない．例えば，インフルエンザにかかってしまっても，あま
+りに症状がひどいとTwitterを使って発言している余裕がないことも考えられる．
+このような過誤が起こっているのならば，正しく発言を収集したとしても，実
+際の流行と集計結果との間にずれが生じてしまう．そこで，本研究では，この
+時間のずれを吸収するために，感染症の流行モデルである{\bf SIRモデ
+  ル} \cite{Kermack1927}をソーシャルメディア用に修正したモデルを用い
+る．
+
+
+SIRモデル\cite{Kermack1927}は，感染症流行の古典的な計算モデルである．こ
+のモデルでは人間は下記の3つの状態のうちのいずれかをとっていると仮定し，
+各状態間の遷移確率を定義することで感染シミュレーションを行う．
+
+\begin{enumerate}
+\item {\bf 状態S} (Susceptible): 感染症に対して免疫を持たない者，
+\item {\bf 状態I} (Infectious): 発症者，
+\item {\bf 状態R} (Recovered): 感染症から回復し免疫を獲得した者．
+\end{enumerate}
+
+状態Sから状態Iの遷移は，健康な人に感染者が接触し感染が拡大する過程，状態Iから状態Rは感染者が回復する過程とみなせる．なお，感染症から回復して状態Rにいたった者は免疫を獲得したものとし再び感染しないものとする．また，各状態の総和，$\mathrm{S}(t)+\mathrm{I}(t)+\mathrm{R}(t)$, は人口全体であり定数とみなす．
+
+ここで，異なる状態にある個人同士の接触には，S-I, S-R, I-Rの3通りが
+あるが，感染が広がるのは，発症者と免疫を持たない者の接触であるS-Iだけで
+ある．すなわち，SとIが多いと感染は速く広がることになり，逆に少ないと感
+染は遅くなる．これを考慮して，状態Sと状態Iの量に比例した割合でSが感染するとみなす．
+\begin{equation}
+\frac{d\mathrm{S}}{dt}=- \beta \mathrm{IS} 
+\end{equation}
+
+また，状態Iの者は単位時間あたり一定確率で回復し，状態Rに遷移すると考え
+る．
+\begin{gather}
+\frac{d\mathrm{I}}{dt}= \beta \mathrm{IS} - \gamma \mathrm{I}\\
+\frac{d\mathrm{R}}{dt}= \gamma \mathrm{I}
+\end{gather}
+
+ここで $\beta$ は，状態Sから状態Iへの遷移確率であり，感染率とみなせる．同様
+に，$\gamma$ は状態Iから状態Rへの遷移確率であり，回復率とみなせる．それぞれの遷
+移確率は1日ごとの確率とする．つまり，感染者が100人いる状態で $\gamma$ が0.1とす
+ると翌日には，10人が回復し，90人が依然としてインフルエンザ状態のままで
+あることを意味する．
+
+以上3つの式を用いることで，感染者が増えてからピークを迎えやがて収束する
+インフルエンザの流行がシミュレーション可能となる．
+前述のオリジナルのSIRモデルをソーシャルメディアに適応させるため，本研究
+では次の3点の修正を行った．
+
+\begin{enumerate}
+\item インフルエンザに感染した患者（状態S--状態Iへの遷移）がウェブを通じ
+  て観測されるものとする．したがって，式(1)と式(2)で用いられる$\Delta$S (=$\beta$IS)が
+  実数として，直接集計されるものとする．
+\item 状態I--状態R間の遷移確率（変数 $\gamma$）はインフルエンザの先行研究\cite{Anderson1979}において報告されていた値 $(\gamma=0.38)$ を用いる．
+\item 各シーズンの開始時は，感染症はまったく流行していないものと仮定する $(\mathrm{I}(0)=0)$．
+\end{enumerate}
+
+
+
+\section{実験}
+
+\subsection{実験期間}
+
+テストデータのうち，インフルエンザ流行が起こりうる冬季（2009年と2010年
+の10月1日から3月31日まで）を実験対象とした．正解データとして，感染症情報
+センター(IDSC)から報告されているインフルエンザの定点当たりの患者数を用
+いた．これは週1回の報告であるので，各年24点（6ヶ月×4週）のデータポ
+イントが含まれる\footnote{提案手法は日単位での集計が可能であるが，正解データの
+間隔に合わせた．}．
+
+
+
+\subsection{比較手法}
+
+提案手法の精度と比較するため以下の6つの手法を用意した．本研究の提案であ
+る(1)発言の分類と(2)SIRモデルによる補正のうち，後者に関しては，他のウェブベースの手法にも適応
+可能であり，Twitterだけでなく，Googleインフルトレンドを用いての検証を行っ
+た．
+
+\begin{description}
+\item {\bf TWITTER}: Twitter上での単語「インフルエンザ」の頻度を用いた
+  手法．単なる単語頻度をそのまま出力する（ベースライン）．
+\item  {\bf TWITTER+SVM}: 上記手法TWITTERにSVMによる発言の分類を適応した手法．陽性と分類された発言のみが集計される．
+\item  {\bf TWITTER+SIR}: ベースラインの手法TWITTERにSIRモデルを適応した手法．
+\item  {\bf TWITTER+SVM+SIR}: ベースラインの手法TWITTERにSVMのよる発言の分類と
+SIRモデルの両方を適応した手法（提案手法）．
+\item {\bf GOOGLE}: Google検索サービスのクエリログを用いた手法\cite{Ginsberg2009}．Googleインフルトレンドのサイトにおいて，過去の推
+  定値は公開されており\footnote{http://www.google.org/flutrends/jp/}，そのデータ
+  をそのまま比較手法として用いた．
+\item  {\bf GOOGLE+SIR}: 上記手法GOOGLEにSIRモデルを適応した手法．
+\end{description}
+
+SIRモデルの挙動はパラメータ $\gamma$ に依存する．パラメータ $\gamma$ はその季節に流行す
+るインフルエンザによって異なるが，本実験では，先行研究\cite{Anderson1979}において報告されている値 $(\gamma=0.38)$ と，もっともパフォーマンスの高い値であった0.20を参考値として用いた．
+
+
+\subsection{評価}
+
+評価方法は正解データとシステムの出力値の相関係数（ピアソンの相関係数）を用いた．
+この評価法は，クエリログを用いた先行研究\cite{Ginsberg2009}やTwitter
+を用いた研究\cite{Aramaki2011}と共通である．
+なお，上記の各手法の出力する値のスケール（最小値や最大値）はそれぞれ異なるが，相関係数
+で評価することで，スケールの差異はキャンセルされる．
+
+
+
+\subsection{結果と考察}
+
+各種法の結果を表\ref{t_result}に示す．
+文章分類手法を用いたTWITTER+SVM（相関係数0.902）は，TWITTER（相関係数0.850）よりも精度を向上させている（統計的には有意ではない）．
+
+\begin{table}[b]
+\caption{各手法の推定精度}
+\label{t_result}
+\input{04table05.txt}
+\end{table}
+
+次に，SIRモデルは，すべての手法（TWITTER+SIR や GOOGLE+SIR）において精度を向上させている．
+特に，GOOGLE+SIR は $\gamma=0.2$ と $\gamma=0.38$ の両方で有意な精度向上となっている．他の場合も，いずれも精度を向上させており，SIRモデルは応用範囲が広い手法であると言える．
+
+さらに，文章分類手法とSIRモデルの両方を組み合わせて用いた場合
+(TWITTER+SVM+SIR) には，それぞれを個別に用いたよりも高い
+精度が得られた．
+特に，$\gamma=0.2$ の時に相関係数0.850から0.919へ有意な $(p=0.10)$ 精度向上が見られた．
+
+この結果により，ソーシャルメディア上の情報をそのまま用いるのではなく，文章分類や疾患モデルと組み合わせて用いることで，さらにサーベイランス精度を向上できることが示された．本研究はインフルエンザを対象としたが，
+インフルエンザのみならず，熱中症，食中毒など，全貌の把握は困難であるが，
+各個人については把握が可能な疾患は数多く存在する．このような疾患においても，
+提案手法のパラメータを調整することで，対応できる可能性があることを強調
+したい．
+
+
+
+\subsection{誤り分析}
+
+発言の分類精度は，前節の実験で示されたようにF値74\%にすぎず（表\ref{f_win_size.eps}），4回に1回程度は誤っていることになる．どのように誤っているか表\ref{t_confusion}に示す．
+表に示されるように，陽性発言や否定や広告など定型的な表現はうまく判定できているが，不適切な時制や非当事者などは一部しか除外できていない．この理由は，時制の判定においては過去の程度（24時間以内かどうか）という判定が高度であること，また，当事者の判定においては，
+省略された主語の推定が困難なことなど，種々の原因が考えられる．
+このような課題はあるものの発言の分類はインフルエンザ流行推定という最終
+的な精度を向上できており，今後，より深い言語処理を導入することへの動機
+となりうる．
+
+\begin{table}[b]
+\caption{コンフュージョン・マトリクス}
+\label{t_confusion}
+\input{04table06.txt}
+\end{table}
+
+SIRモデルにおいても，改良の余地がある．
+推定値を可視化した結果を図\ref{f_result.eps}に示す．
+図に示されるように，TWITTERやGOOGLEの集計結果では，流行前に多めに推定
+し，流行後は少なめに推定するという傾向がある．これに対して，SIRモデ
+ルは，流行前の発言を後ろにずらして集計し，精度を高めることに成功してい
+る．
+しかし，SIRモデルにおいて，もっとも，高い推定値であったのは $\gamma=0.20$ であ
+り，先験的なパラメータ $(\gamma=0.38)$ から外れていた．
+このベストパラメータ $(\gamma=0.20)$ を用いた場合，相関係数0.919が得られるはずであり，これがモデルの上限値となる．
+今後，いかに，ベストパラメータを事前に設定するかが問題となる．
+
+なお，このパラメータ $\gamma$ は，実験期間におけるインフルエンザ流行型の特質を示している
+と考えられ，シーズンを通して不変である可能性がある．この仮定が成り立つ
+ならば，シーズン開始時に正解データと誤差を最小化するようにし，最適なパ
+ラメータを得られる可能性があり，今後の課題としたい．
+
+
+
+
+
+\subsection{提案手法の有効性}
+
+本稿の冒頭にて，ウェブを用いた感染症サーベイランスの利点として，大規模性と即時性の2つの利点を挙げた．
+本節では，提案システムをウェブ・サービス\footnote{http://www.mednlp.jp/influ/}として運用した結果をもとに，これら2つの利点について実証的に議論する．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{19-5ia6f1.eps}
+\end{center}
+\caption{各手法により推定された流行の可視化}
+\label{f_result.eps}
+\centerline{\footnotesize * Y軸は相対頻度を示す（最大値で正規化している）．X軸は時間軸を示す．}
+\end{figure}
+\begin{figure}[b]
+\begin{center}
+\includegraphics{19-5ia6f2.eps}
+\end{center}
+\caption{東日本災害時の福島県のサーベイランス結果（提案手法のサービスのスクリーン・ショット）}
+\label{f_result2}
+\footnotesize{* Y軸は既存手法については患者数（左目盛り），提案手法については陽性発言数を示す（右目盛り）．X軸は時間軸を示す．}
+\end{figure}
+
+\begin{enumerate}
+\item{既存手法との比較：}
+既存手法では全国約5,000の診療所から情報を集め，集計結果を発表している．ただし，その分布は均一でなく，過疎地については，少数の診療所からの情報に頼っている．
+このため，地震などの災害時には，流行把握が不可能な地域が生じてしまう事がある．
+例えば，東日本大震災時には，3月の中旬と下旬の2度にわたって，福島県からの報告が途絶えた（図2）．
+一方，提案手法は，GPS発信情報が付加された発言をもとに，福島県のインフルエンザ・サーベイランスが可能であった．
+
+さらに，既存の手法では，1週間前の流行しか把握できない．
+一方，提案手法では，つねに現状の流行をタイム・ラグなしに把握が可能である．
+
+\item{クエリ・ベースの手法（Googleインフルトレンド）との比較：}
+クエリ・ベースの手法であるGoogleインフルトレンドは，提案手法と同じくウェブを活用し，提案手法と同等の即時性と大規模性を持つ．
+ただし，根幹となるリソースの検索クエリは非公開であり，サービスを第三者が構築／拡張できないという問題がある．
+具体的には，Googleインフルトレンドの集計は，平成24年7月現在，国単位の集計にとどまっており，都道府県単位の集計を行っていない．この拡張を行う事はサービス・プロバイダ (Google) 以外は不可能である．
+一方，提案手法のリソースであるTwitterは，公開されたAPIを通じて柔軟にサービスの開発が可能である．
+\end{enumerate}
+
+以上のように，提案手法は，既存手法と比較し，大規模性と即時性の両方において上回っている．
+また，クエリ・ベースの手法と比較し，同程度の大規模性と即時性を持つものの，サービスの拡張性という点では，ソーシャル・メディアが優位である．
+
+ただし，実用的には，両者のうち優位な方のみを利用するのではなく，いずれかが利用困難な場合でも，残った手法が稼働できる可能性があり，両者を併用することで頑健なサーベイランスを実現していくのが有効だと考えられる．
+
+
+\section{おわりに}
+
+本研究ではソーシャルメディアを材料に，インフルエンザの流行の推定に注目した．これまでの多くのシステムは，単純に単語の頻度情報をもとに患者の状態を調査するというものであった．しかし，Twitterの情報はノイズを含んでおり，実際に疾患にかかっていない場合の発言を収集してしまう恐れがある．また，そもそも，ウェブの情報が必ずしもインフルエンザの流行を反映しているとは限らない．これらの問題に対応するため，発言者が実際にインフルエンザにかかっているかどうかの分類を行った．また，現実とウェブ情報の時間の差を吸収するための感染症モデルを適応した．
+
+実験の結果，前者はTwitterベースのシステムの精度を向上させた．また，後者はTwitterベースのシステムのみならず，Googleインフルトレンドの精度も向上させた．また，これらの両手法は独立した現象を扱っており，両方を組み合わせて用いた場合，Twitterにおいて感染症情報センター報告の患者数と相関係数0.910という高い推定精度を示すことができた．
+
+本研究により，ソーシャルメディア上の単語頻度を単純に用いるのではなく，文章分類や疾患モデルを組み合わせることで，さらに精度の向上が可能であることが示された．
+
+
+\acknowledgment
+
+本研究は，JST 戦略的創造研究推進事業さきがけ「情報環境と人」領域「 自然言語処理による診断支援技術の開発」，科研費補助金若手研究A「表記ゆれ及びそれに類する現象の包括的言語処理に関する研究」，および科研費補助金挑戦的萌芽研究「ダミー診療録の構築および自動構造化に関する研究」による．
+
+本論文を書くにあたって有益な議論をいただいた東京大学知の構造化センター宮部真衣氏，東京大学医学部附属病院篠原恵美子氏に謹んで感謝の意を表する．
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Anderson \BBA\ May}{Anderson \BBA\
+  May}{1979}]{Anderson1979}
+Anderson, R.~M.\BBACOMMA\ \BBA\ May, R.~M. \BBOP 1979\BBCP.
+\newblock \BBOQ Population Biology of Infectious-Diseases.\BBCQ\
+\newblock {\Bem Nature}, {\Bbf 280}  (361).
+
+\bibitem[\protect\BCAY{Aramaki, Maskawa, \BBA\ Morita}{Aramaki
+  et~al.}{2011}]{Aramaki2011}
+Aramaki, E., Maskawa, S., \BBA\ Morita, M. \BBOP 2011\BBCP.
+\newblock \BBOQ Twitter Catches The Flu: Detecting Influenza Epidemics using
+  Twitter.\BBCQ\
+\newblock In {\Bem Proceedings of the Conference on Empirical Methods in
+  Natural Language Processing (EMNLP2011)}, \mbox{\BPGS\ 1568--1576}.
+
+\bibitem[\protect\BCAY{Carbonell \BBA\ Goldstein}{Carbonell \BBA\
+  Goldstein}{1998}]{Carbonell1998}
+Carbonell, J.\BBACOMMA\ \BBA\ Goldstein, J. \BBOP 1998\BBCP.
+\newblock \BBOQ The use of MMR, diversity-based reranking for reordering
+  documents and producing summaries.\BBCQ\
+\newblock In {\Bem Proceedings of the SIGIR}.
+
+\bibitem[\protect\BCAY{Culotta}{Culotta}{2010}]{Culotta2010}
+Culotta, A. \BBOP 2010\BBCP.
+\newblock \BBOQ Detecting influenza outbreaks by analysing Twitter
+  messages.\BBCQ\
+\newblock {\Bem CoRR}, {\Bbf abs/1007.4748}.
+
+\bibitem[\protect\BCAY{Espino, Hogan, \BBA\ Wagner}{Espino
+  et~al.}{2003}]{Espino2003}
+Espino, J., Hogan, W., \BBA\ Wagner, M. \BBOP 2003\BBCP.
+\newblock \BBOQ Telephone triage: A timely data source for surveillance of
+  influenza-like diseases.\BBCQ\
+\newblock In {\Bem Proceedings of the AMIA Annual Symposium}, \mbox{\BPGS\
+  215--219}.
+
+\bibitem[\protect\BCAY{Ferguson, Cummings, Cauchemez, Fraser, Riley, Meeyai,
+  Iamsirithaworn, \BBA\ Burke}{Ferguson et~al.}{2005}]{Ferguson2005}
+Ferguson, N.~M., Cummings, D. A.~T., Cauchemez, S., Fraser, C., Riley, S.,
+  Meeyai, A., Iamsirithaworn, S., \BBA\ Burke, D.~S. \BBOP 2005\BBCP.
+\newblock \BBOQ Strategies for containing an emerging influenza pandemic in
+  Southeast Asia.\BBCQ\
+\newblock {\Bem Nature}, {\Bbf 437}  (7056), \mbox{\BPGS\ 209--214}.
+
+\bibitem[\protect\BCAY{Ginsberg, Mohebbi, Patel, Brammer, Smolinski, \BBA\
+  Brilliant}{Ginsberg et~al.}{2009}]{Ginsberg2009}
+Ginsberg, J., Mohebbi, M.~H., Patel, R.~S., Brammer, L., Smolinski, M.~S.,
+  \BBA\ Brilliant, L. \BBOP 2009\BBCP.
+\newblock \BBOQ Detecting influenza epidemics using search engine query
+  data.\BBCQ\
+\newblock {\Bem Nature}, {\Bbf 457}  (7232), \mbox{\BPGS\ 1012--1014}.
+
+\bibitem[\protect\BCAY{Hulth, Rydevik, \BBA\ Linde}{Hulth
+  et~al.}{2009}]{Hulth2009}
+Hulth, A., Rydevik, G., \BBA\ Linde, A. \BBOP 2009\BBCP.
+\newblock \BBOQ Web Queries as a Source for Syndromic Surveillance.\BBCQ\
+\newblock {\Bem PLoS ONE}, {\Bbf 4}  (2), \mbox{\BPG\ e4378}.
+
+\bibitem[\protect\BCAY{Iwakura \BBA\ Okamoto}{Iwakura \BBA\
+  Okamoto}{2008}]{Iwakura2008}
+Iwakura, T.\BBACOMMA\ \BBA\ Okamoto, S. \BBOP 2008\BBCP.
+\newblock \BBOQ A fast boosting-based learner for feature-rich tagging and
+  chunking.\BBCQ\
+\newblock In {\Bem Proceedings of the Twelfth Conference on Computational
+  Natural Language Learning (CoNLL)}, \mbox{\BPGS\ 17--24}.
+
+\bibitem[\protect\BCAY{Johnson, Wagner, Hogan, Chapman, Olszewski, Dowling,
+  \BBA\ Barnas}{Johnson et~al.}{2009}]{Johnson2004}
+Johnson, H., Wagner, M., Hogan, W., Chapman, W., Olszewski, R., Dowling, J.,
+  \BBA\ Barnas, G. \BBOP 2009\BBCP.
+\newblock \BBOQ Analysis of Web access logs for surveillance of
+  influenza.\BBCQ\
+\newblock {\Bem Studies in Health Technology and Informatics}, {\Bbf 107},
+  \mbox{\BPGS\ 1202--1206}.
+
+\bibitem[\protect\BCAY{Kermack \BBA\ McKendrick}{Kermack \BBA\
+  McKendrick}{1927}]{Kermack1927}
+Kermack, W.~O.\BBACOMMA\ \BBA\ McKendrick, A.~G. \BBOP 1927\BBCP.
+\newblock \BBOQ A Contribution to the Mathematical Theory of Epidemics.\BBCQ\
+\newblock In {\Bem The Royal Society of London}, \mbox{\BPGS\ 700--721}.
+
+\bibitem[\protect\BCAY{国立感染症研究所}{国立感染症研究所}{2006}]{国立感染症研
+究所2006}
+国立感染症研究所 \BBOP 2006\BBCP.
+\newblock \Jem{インフルエンザ・パンデミックに関する Q＆A（2006.12
+  改訂版）\inhibitglue}.
+\newblock 国立感染症研究所 感染症情報センター.
+
+\bibitem[\protect\BCAY{Kwak \BBA\ Choi}{Kwak \BBA\ Choi}{2002}]{Kwak2002}
+Kwak, N.\BBACOMMA\ \BBA\ Choi, C.-H. \BBOP 2002\BBCP.
+\newblock \BBOQ Input feature selection for classification problems.\BBCQ\
+\newblock {\Bem Neural Networks}, {\Bbf 13}  (2).
+
+\bibitem[\protect\BCAY{Lampos \BBA\ Cristianini}{Lampos \BBA\
+  Cristianini}{2010}]{Lampos2010}
+Lampos, V.\BBACOMMA\ \BBA\ Cristianini, N. \BBOP 2010\BBCP.
+\newblock \BBOQ Tracking the flu pandemic by monitoring the social web.\BBCQ\
+\newblock In {\Bem Cognitive Information Processing (CIP), 2010 2nd
+  International Workshop on}, \mbox{\BPGS\ 411--416}.
+
+\bibitem[\protect\BCAY{Magruder}{Magruder}{2003}]{Magruder2003}
+Magruder, S. \BBOP 2003\BBCP.
+\newblock \BBOQ Evaluation of over-the-counter pharmaceutical sales as a
+  possible early warning indicator of human disease.\BBCQ\
+\newblock In {\Bem Johns Hopkins University APL Technical Digest (24)}.
+
+\bibitem[\protect\BCAY{大日\JBA 重松\JBA 谷口\JBA 岡部}{大日 \Jetal
+  }{2003}]{大日2003}
+大日康史\JBA 重松美加\JBA 谷口清州\JBA 岡部信彦 \BBOP 2003\BBCP.
+\newblock インフルエンザ超過死亡「感染研モデル」2002／03シーズン報告.\
+\newblock {\Bem Infectious Agents Surveillance Report}, {\Bbf 23}  (11).
+
+\bibitem[\protect\BCAY{Paul \BBA\ Dredze}{Paul \BBA\ Dredze}{2011}]{Paul2011}
+Paul, M.~J.\BBACOMMA\ \BBA\ Dredze, M. \BBOP 2011\BBCP.
+\newblock \BBOQ You Are What You Tweet: Analysing Twitter for Public
+  Health.\BBCQ\
+\newblock In {\Bem Processing of the Fifth International AAAI Conference on
+  Weblogs and Social Media (ICWSM)}.
+
+\bibitem[\protect\BCAY{Peng, Long, \BBA\ Ding}{Peng et~al.}{2005}]{Peng2005}
+Peng, H., Long, F., \BBA\ Ding, C. \BBOP 2005\BBCP.
+\newblock \BBOQ Feature selection based on mutual information: Criteria of
+  max-dependency, max-relevance, and min-redundancy.\BBCQ\
+\newblock {\Bem Pattern Analysis and Machine Intelligence}, {\Bbf 27}  (18).
+
+\bibitem[\protect\BCAY{Polgreen, Chen, Pennock, Nelson, \BBA\
+  Weinstein}{Polgreen et~al.}{2009}]{Polgreen2009}
+Polgreen, P.~M., Chen, Y., Pennock, D.~M., Nelson, F.~D., \BBA\ Weinstein,
+  R.~A. \BBOP 2009\BBCP.
+\newblock \BBOQ Using Internet Searches for Influenza Surveillance.\BBCQ\
+\newblock {\Bem Clinical Infectious Diseases}, {\Bbf 47}  (11), \mbox{\BPGS\
+  1443--1448}.
+
+\bibitem[\protect\BCAY{高橋\JBA 野田}{高橋\JBA 野田}{2011}]{Takahashi2011}
+高橋哲朗\JBA 野田雄也 \BBOP 2011\BBCP.
+\newblock 実世界のセンサーとしてのTwitterの可能性.\
+\newblock \Jem{電子情報通信学会 情報・システムソサ イエティ
+  言語理解とコミュニケーション研究会}.
+
+\bibitem[\protect\BCAY{谷田\JBA 荒牧\JBA 佐藤\JBA 吉田\JBA 中川}{谷田 \Jetal
+  }{2011}]{Tanida2011}
+谷田和章\JBA 荒牧英治\JBA 佐藤一誠\JBA 吉田稔\JBA 中川裕志 \BBOP 2011\BBCP.
+\newblock Twitterによる風邪流行の推測.\
+\newblock \Jem{マイニングツールの統合と活用＆情報編纂研究会}.
+
+\bibitem[\protect\BCAY{Vapnik}{Vapnik}{1999}]{Vapnik1999}
+Vapnik, V. \BBOP 1999\BBCP.
+\newblock {\Bem The Nature of Statistical Learning Theory}.
+\newblock Springer-Verlag.
+
+\bibitem[\protect\BCAY{Yih, Teates, Abrams, Kleinman, Kulldorff, Pinner,
+  Harmon, Wang, \BBA\ Platt}{Yih et~al.}{2009}]{Yih2009}
+Yih, W.~K., Teates, K.~S., Abrams, A., Kleinman, K., Kulldorff, M., Pinner, R.,
+  Harmon, R., Wang, S., \BBA\ Platt, R. \BBOP 2009\BBCP.
+\newblock \BBOQ Telephone Triage Service Data for Detection of Influenza-Like
+  Illness.\BBCQ\
+\newblock {\Bem PLoS ONE}, {\Bbf 4}  (4), \mbox{\BPG\ e5260}.
+
+\end{thebibliography}
+
+
+\begin{biography}
+
+\bioauthor{荒牧　英治}{
+2000年京都大学総合人間学部卒業．
+2002年京都大学大学院情報学研究科修士課程修了．
+2005年東京大学大学院情報理工系研究科博士課程修了（情報理工学博士）．
+以降，東京大学医学部附属病院企画情報運営部特任助教 を経て，
+現在，東京大学知の構造化センター特任講師，科学技術振興機構さきがけ研究員（兼任）．
+自然言語処理の研究に従事．
+}
+
+\bioauthor{増川佐知子}{
+1989年お茶の水女子大学理学部物理学科卒業．
+1991年お茶の水女子大学大学院理学研究科物理学専攻修士課程修了．
+同年花王株式会社入社数理科学研究所配属．
+以降，国立福山病院附属看護学校，福山平成大学，福山市立女子短期大学非常勤講師を経て，
+2010年より，東京大学知の構造化センター学術支援専門職員．
+医療情報および自然言語処理の研究に従事．
+}
+
+\bioauthor{森田　瑞樹}{
+2003年東京工業大学生命理工学部卒業．
+2005年東京工業大学大学院生命理工学研究科修士課程修了．
+2008年東京大学大学院農学生命科学研究科博士課程修了．
+同年東京大学大学院農学生命科学研究科特任助教．
+2009年医薬基盤研究所特任研究員．
+2012年東京大学知の構造化センター特任研究員．
+現在に至る．生命情報科学，医療分野における自然言語処理の研究に従事．
+}
+
+\end{biography}
+
+\biodate
+
+
+
+\end{document}

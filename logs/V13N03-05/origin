@@ -1,0 +1,1013 @@
+    \documentstyle[graphicx,jnlpbbl]{jnlp_j_b5_2e}
+
+\setcounter{page}{113}
+\setcounter{巻数}{13}
+\setcounter{号数}{3}
+\setcounter{年}{2006}
+\setcounter{月}{7}
+\受付{2005}{11}{16}
+\再受付{2006}{2}{22}
+\採録{2006}{3}{28}
+
+\setcounter{secnumdepth}{2}
+
+\title{動詞項構造辞書への大規模用例付与}
+\authorC{平野 徹\affiref{KUEE} \and 飯田 龍\affiref{KUEE} \and 藤田 篤\affiref{KUEE} \and 乾 健太郎\affiref{KUEE} \and 松本 裕治\affiref{KUEE}}
+\headauthor{平野，飯田，藤田，乾，松本}
+\headtitle{動詞項構造辞書への大規模用例付与}
+\affilabel{KUEE}{奈良先端科学技術大学院大学情報科学研究科}
+	{Graduate School of Information Science, Nara Institute of Science and Technology}
+\jabstract{
+本論文では，述語項構造解析の精度向上のために必要となる大規模な
+項構造タグ付き事例を
+効率的に作成する方法について議論する．
+項構造タグ付き事例の効率的な作成方法にはさまざまな方法が考えられるが，本論文では
+大規模平文コーパスから抽出した表層格パターンの用例集合を
+クラスタリングし，得られたクラスタに項構造タグを付与することで
+タグ付与コストを削減する手法を提案する．
+提案手法では，(i)表層格パターン同士の類似性と(ii)動詞間の類似性という2種類の類似性を利用してクラスタリングを行う．
+評価実験では，
+実際に提案手法を用いて8つの動詞の項構造タグ付き事例を作成し，
+それを用いた項構造解析の実験を行うことによって，提案手法の
+クラスタリングの性能や，人手でタグ付き事例を作成するコストと項構造解析精度の関係
+を調査した．
+}
+\jkeywords{項構造解析，交替，用例クラスタリング}
+
+\etitle{Augmenting a Semantic Verb Lexicon with\\ a Large Scale Collection of Example Sentences}
+\eauthor{Toru Hirano\affiref{KUEE} \and Ryu Iida\affiref{KUEE} \and Atsushi Fujita\affiref{KUEE} \and Kentaro Inui\affiref{KUEE} \and Yuji Matsumoto\affiref{KUEE}} 
+\eabstract{
+In this paper, we propose a method of reducing the cost of annotating examples with argument structure
+ in order to increase accuracy of argument structure analysis.
+First, a large raw corpus is parsed, and a large scale collection of example sentences is constructed
+ from predicate-argument examples in the parsing results. Second, the collection of example sentences
+ is clustered by using two similarities about verb. Finally, the acquired clusters are annotated with
+ argument structure by human. We report preliminary experiments using our proposed method, and show that
+ the method is effective in reducing the cost of annotating.
+}
+\ekeywords{Argument Structure Analysis, Alternations, Example Clustering}
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+
+\section{はじめに}
+
+述語項構造とは述語とその項の間の意味的な関係を表現する構造の一つであ
+る．例えば，「彼が扉をひらく」という文中の述語「ひらく」の項構造は[agent, theme]の
+ように表すことができる．agent, themeは項が述語に対してどのような意味的関係となっているかを表す意味役割である．
+また，所与の文章中の各述語に対して，(1)述語が取り得る項構造のうち最も文の解釈に
+適った項構造を選択し，(2)その構造の各項に対応する要素を同定することで述語項構造を出力する処理を
+項構造解析と呼ぶ．
+例えば，文「彼が扉をひらく」を述語項構造解析する場合には，述語「ひらく」に対して
+図\ref{fig:arg_dic}\,に示すような項構造辞書
+から対応する項構造を選択し，入力文の格要素
+を各項に割り当てて構造[agent:彼，theme:扉]を得る．
+項構造解析を高精度で実現すれば，「彼が扉をひらく」$\Leftrightarrow$ 「扉がひらく」のような交替に代表される表現の多様性を吸収でき，
+言い換えや情報抽出，
+質問応答などの自然言語処理技術を高度化できる．
+
+
+述語の項構造に関する研究は，\citeA{Fil:68}の格文
+法など古くから関心を集めている．
+これらの研究は，項構造辞書の作成，項構造タグ付きコーパスの作成，項構造解析の三つの研究に大別でき，
+項構造辞書作成
+の研究では，近年，\citeA{Dorr:97}によって項構造辞書作成の方法論が開発されている．
+この研究成果から大規模な項構造辞書を作成する基盤ができてきた．
+また
+項構造情報を含む詳細な動詞辞書FrameNet \cite{Frame:98}や
+項構造タグ付きコーパスPropBank \cite{Prop:02}
+も報告されている．
+項構造解析の研究は
+国際会議CoNLLにおけるShared Task\footnote{http://www.lsi.upc.edu/\~{}srlconll/}として取り上げられるなど
+関心が集まっており，
+近年提案されている主な手法は教師なし手法と教師あり手法に大別できる．
+現状では，PropBankのような項構造タグ付きコーパスが作成されたこともあり，教師あり手法の研究が盛んである．
+教師なし手法では，\citeA{Lapata:Brew:99}のように
+項構造辞書の下位範疇化の構造を利用して擬似的に訓練事例を作成する手法などが提案されているが，一般に解析精度が低い．
+これに対して，
+\citeA{gildea:02:c}，
+Haciogluら\citeyear{Kadri:03}や
+Thompsonら\citeyear{Cyn:03}
+の提案する
+教師あり手法では，
+項構造タグが付与された学習コーパスから述語と文章中の要素との構文構造における位置関係などを素性として利用しており，
+教師なし手法よりも精度が高いという利点を持つ．しかし学習に用いるコーパス中の各述語に対し(i)取り得る項構造と項構造
+辞書中の項構造の対応付け，および(ii)選択した項構造の各項と文章中の要素
+の対応付け，という人手による項構造タグ付与作業が必要であるため作業コストが高いという
+問題がある．
+
+そこで本研究では，項構造タグ付き事例を効率的に作成する方法について議論する．
+項構造タグ付き事例の効率的な作成方法にはさまざまな方法が考えられるが，本論文では，
+学習に用いるコーパス中の各述語に項構造タグを付与する過程で生じる類似用例への冗長なタグ付与作業の問題に着目する．
+具体的には，
+大規模平文コーパスから抽出した表層格パターンの用例集合を
+クラスタリングし，得られたクラスタに項構造タグを付与することで
+タグ付与コストを削減する手法を提案する．
+提案手法では，(A)表層格パターン同士の類似性と(B)動詞間の類似性という2種類の類似性を利用してクラスタリングを行う．
+評価実験では，
+実際に提案手法を用いて8つの動詞の項構造タグ付き事例を作成し，
+それを用いた項構造解析の実験を行うことによって，提案手法の
+クラスタリングの性能や，人手でタグ付き事例を作成するコストと項構造解析精度の関係
+を調査した．
+
+\begin{figure}[t]
+  \begin{center}
+      \includegraphics[width=0.85\hsize]{clip013.eps}
+  \end{center}
+  \caption{動詞項構造辞書の一例（「ひらく」について）}
+  \label{fig:arg_dic}
+\end{figure}
+
+
+\section{用例の類似性に基づく項構造タグ付与の効率化}
+\label{sec:third}
+
+入力文の各動詞の項構造を解析するタスクには，
+次の5種類の曖昧性の解消が必要である．
+
+\begin{description}
+\item[曖昧性(1) 「は」，「も」，「無格\footnotemark」が兼務する表層格の曖昧性]　\\
+\footnotetext{無格とは，「明日東京に行く」の「明日」のように助詞のない格．}
+「は」，「も」，「無格」が表層「ガ格」，「ヲ格」，もしくはそれ以外となる曖昧性．
+
+\item[曖昧性(2) 連体修飾節に関する曖昧性]　\\
+連体修飾節の述語と被修飾名詞との間に格関係がない外の関係（例えば，「魚を焼くにおい」の「焼く」と「におい」）と
+格関係がある内の関係（「魚を焼く男」の「焼く」と「男」）の曖昧性．さらに，内の関係における被修飾名詞の表層格の曖昧性．
+
+\item[曖昧性(3) 述語の取る項構造の曖昧性]　\\
+動詞「話す」のように，項構造[agent, theme, beneficiary]や[agent, beneficiary, content]などの
+複数の項構造を持つ述語が存在するために生じる曖昧性．
+例えば，「女性が悲鳴をあげる」と「彼が彼女にプレゼントをあげる」の
+動詞「あげる」のように，複数の語義を持つことによる曖昧性も含む．
+
+\item[曖昧性(4) 格の意味役割の曖昧性]　\\
+同じ述語の同じ表層格でも項構造中の意味役割が一意に決まらないという曖昧性．
+例えば，「彼が扉をひらく」の表層ガ格「彼」は項構造中のagentに対応するのに対し，
+「扉がひらく」の表層ガ格「扉」はthemeに対応する．
+また表層「ニ格」のように時間，目的地，場所などさまざまな意味役割を担う表層格がある．
+
+\item[曖昧性(5) 接尾辞を伴うことによる格交替の曖昧性]　\\
+受身「れる，られる」や使役「せる，させる」によって項構造の意味役割と表層格の対応関係が
+変化することによって生じる曖昧性．
+
+\end{description}
+
+
+
+この5種類の曖昧性のうち曖昧性(1)，(2)は，表層格レベルの問題であるため，河原ら\citeyear{kawahara:02:a}
+の手法のように全自動で収集した用例を使って解消できる可能性がある．すなわち，
+必ずしも
+項構造情報を教示したデータが必要とならない．
+一方，曖昧性(3)，(4)，(5)を解消するには述語の取り得る項構造と入力文とを照らし合わせるために，項構造情報のタグを付与したデータが必要となる．
+本論文では曖昧性(3)，(4)の解消に
+焦点をあて，
+項構造タグ付与作業の
+効率化を図る．
+具体的には，同じ項構造に対応する用例を自動的にひとまとめにすることで
+タグ付与作業のコスト削減を目指す．
+曖昧性（5）は，本論文では取り扱わないが，各接尾辞で項構造の意味役割と表層格の対応関係に規則性があり
+本論文で扱う項構造解析手法を拡張し解消できると考えられる．
+
+問題設定として，
+大量のタグなし用例と項構造辞書が与えられていると仮定する．
+ここで，用例とは係り受け解析結果から述語とその係り受けを取り出したものを指す．
+タグなし用例は，大規模な生コーパスの文書を係り受け解析することによって収集可能である．
+また，図\ref{fig:arg_dic}\,に示すような項構造辞書を仮定する．
+このような辞書は，Dorrの交替現象に基づいた大規模項構造辞書作成の研究により基盤ができているため，作成可能であると期待できる．
+この項構造辞書では，
+各述語に一つ以上の項構造が定義されており，各項構造に取りうる表層格パタンと小規模の用例が記述されているものとする．
+
+以上の仮定のもとで，
+大規模用例集合を次の二つの類似性に基づいてクラスタリングする．
+
+\begin{description}
+\item[類似性A：]ある動詞について同じ項構造を持つ用例は，格の出現パタンとそれぞれの格要素が類似している．
+例えば，2つの用例「女性が悲鳴をあげる」と「こどもが大声をあげる」で
+格の出現パタン「が，を」や対応する格の格要素（「女性」と「こども」，「悲鳴」と「大声」）が類似している性質をいう．
+\item[類似性B：]意味的な類似性がある二つの動詞は，格の出現パタンとそれぞれの格要素が類似している．
+これは，\citeA{levin:93}が提案する交替現象に基づく動詞分類の基本的な考え方であり，
+意味的に類似する動詞「公表する」と「発表する」の用例「大統領が98年に計画を公表する」と「首相が10月にプランを発表する」において，
+格の出現パタン「が，に，を」とそれぞれの対応する格の格要素「大統領」と「首相」，「98年」と「10月」，「計画」と「プラン」が類似するという性質をいう．
+
+\end{description}
+
+
+
+本論文では，類似性Aと
+類似性Bに基づいて用例をクラスタリングする．
+そしてクラスタに項構造を付与する作業はクラスタを代表する用例に対して項構造タグを付与し，それをクラスタの項構造タグと考える．
+つまり用例クラスタリングで
+得られたクラスタに対して人手でタグを付与するため，
+いかにして異なる項構造を持つ用例を1つのクラスタに含めることなく，できるだけ少数のクラスタに用例をまとめあげるかが課題となる．
+\ref{ssec:cla}\,で類似性A，
+\ref{ssec:clb}\,で類似性Bに基づく用例クラスタリングについて述べる．
+
+
+
+\subsection{格要素ベースクラスタリング}
+\label{ssec:cla}
+
+格要素ベースクラスタリングでは，
+{\bf 類似性A}を利用することで，格の出現パタンや格要素が
+類似する用例（例えば，「女性が悲鳴をあげる」と「こどもが大声をあげる」）
+を自動的にまとめる．
+\citeA{kawahara:02:a}の大規模平文コーパスから表層格フレーム辞書を自動構築する研究は
+「動詞の用法を決定する重要な格要素は動詞の直前にくることが多く，
+動詞と直前の格要素をペアにして考
+えると動詞の用法はほとんど一意に決定される」という考えに基づいている．
+本論文でも，彼らと同様にこの考えに基づき，
+次の3つのステップでクラスタリングを行う．
+
+\begin{enumerate}
+\item {\bf 直前格とその要素が同じ}用例のクラスタリング
+\item {\bf 直前格が同じ}用例のクラスタリング
+\item {\bf 直前格が異なる}用例のクラスタリング
+\end{enumerate}
+
+各ステップで対象のクラスタ（用例）間の類似度を計算し，
+設定する閾値を超えるクラスタ（用例）の組みの中で最も類似度の高い2つのクラスタをマージするボトムアップクラスタリングを行う．
+また，クラスタ（用例）間の類似度として用例収集に用いた大規模平文コーパス中での用例の出現回数を考慮した類似度計算式
+（詳細は付録\ref{sec:furoku}\,を参照）を用いる．この式は河原らによって提案されたものである．
+上の順序で段階的にクラスタリングを行うことで，常に動詞の直前格の出現回数が直前格以外の格の出現回数よりも多くなるように処理を進めることができる．
+その結果，類似度計算における動詞の直前格の重みが大きくなり，
+動詞の直前格を重視した用例クラスタリングが可能となる．
+
+クラスタリングの各ステップを例を用いて説明する．
+最初に，ステップ1では例1に示すように直前格要素が同じ用例だけを対象にクラスタリングする．例1では，
+一つ目の用例と二つ目の用例の類似度が高くこれらをマージした結果を示している．\\
+\\
+例1）\\
+$
+\left.
+\begin{array}{rrr}
+月:に & \underline{{\bf 案:を}} & 発表する\\
+中旬:に & \underline{{\bf 案:を}} & 発表する\\
+久しぶり:に & \underline{{\bf 案:を}} & 発表する
+\end{array}
+\right\}
+\Longrightarrow 
+\left\{
+\begin{array}{rrr}
+\{月,中旬\}:に & \underline{{\bf 案:を}} & 発表する\\
+久しぶり:に & \underline{{\bf 案:を}} & 発表する
+\end{array}
+\right.
+$
+
+\ \\
+
+次に，ステップ2ではステップ1の結果を入力とし，例2に示すように直前格が同じ用例だけを対象にクラスタリングする．
+クラスタリングの例を例2に示す．\\
+\\
+例2）\\
+$
+\left.
+\begin{array}{rrrr}
+ & \{月,中旬\}:に & 案:\underline{{\bf を}} & 発表する\\
+大統領:が & \{年,初め\}:に & 計画:\underline{{\bf を}} & 発表する
+\end{array}
+\right\}
+$
+\begin{flushright}
+$
+\Longrightarrow 
+\begin{array}{rrrr}
+大統領:が & \{月,中旬,年,初め\}:に & \{案,計画\}:\underline{{\bf を}} & 発表する
+\end{array}
+$\\
+\end{flushright}
+
+最後に，ステップ3ではステップ2の結果を入力とし，例3に示すように直前格が異なる用例だけを対象にクラスタリングする．
+このステップ3のクラスタリングによって，例3に示すような
+表層格の出現順が「に，を」「を，に」と順序が異なっている用例をマージ例えばできる．\\
+\\
+例3）\\
+$
+\left.
+\begin{array}{rrrr}
+大領領:が & \{月,中旬,年,初め\}:に & \{案,計画\}:\underline{{\bf を}} & 発表する\\
+ & \{プラン,計画\}:を & \{年,月\}:\underline{{\bf に}} & 発表する\\
+\end{array}
+\right\}
+$
+\begin{flushright}
+$
+\Longrightarrow 
+\begin{array}{rrrr}
+大統領:が & \{月,中旬,年,初め\}:\underline{{\bf に}} & \{案,計画,プラン\}:\underline{{\bf を}} & 発表する\\
+\end{array}
+$\\
+\end{flushright}
+
+正確に言えば，このクラスタリングは河原らが提案したクラスタリングとは異なる．
+本クラスタリング手法と河原らが提案した手法の主な異なりはステップ(1)の存在であり，河原らの手法にはステップ(2)と(3)しか存在しない．
+河原らの手法では動詞，動詞の直前格とその要素を最小単位と考えクラスタリングを開始する．
+つまり動詞，動詞の直前格とその要素が同じならば同じクラスタであると判断している．
+河原らは大規模平文コーパスからの表層格フレーム辞書自動構築を目的にクラスタリング手法を提案しており，
+このように判断することは大きな問題にならない．
+しかし，
+我々の目的は項構造を考慮したクラスタリングであり，動詞，動詞の直前格とその要素が同じならば同じクラスタであると判断することが大きな問題となる．
+そのためにステップ(1)を導入した．これ以外にも異なる項構造を持つ用例やクラスタが誤ってマージされないようにいくつか工夫する必要がある．
+詳細は\ref{sssec:cl1}\,節で述べる．
+
+
+\subsection{動詞ベースクラスタリング}
+\label{ssec:clb}
+
+動詞ベースクラスタリングでは，
+{\bf 類似性B}に基づき，同じ項構造に対応する意味的に類似する動詞の用例（例えば，「大統領が98年に計画を公表する」と「首相が10月にプランを発表する」）
+を自動的にまとめる．
+具体的には，動詞$T$の用例をクラスタリングするのに動詞$T$と類似する動詞$S=\{S_{1},S_{2},...,S_{n}\}$の用例を利用する．
+動詞集合$S$をどのように選択するか，また各動詞$S_{i}$の用例をどのように利用するかにはさまざまな方法が考えられるが，
+今回は動詞を1つだけ用いることにしてクラスタリング手法を検討する．
+また，本クラスタリングは類似する動詞の一方の用例に項構造タグを付与した結果を利用する．
+つまり，すでに人手で項構造タグが用例に付与された動詞$S_{a}$を用いて，動詞$S_{a}$と類似する動詞$T$の用例集合を
+次の3つのステップでクラスタリングする．
+なお，本クラスタリングの入力は格要素ベースクラスタリングの結果である．\\
+
+\begin{enumerate}
+\item 表層格が最も多い用例
+を動詞$T$のクラスタを代表する用
+例として選択する．
+\item (1)で選択された用例と動詞$S_{a}$の用例の中で表層格パタンが同じでかつ最
+も類似する用例を対応付ける． 
+\item 動詞$T$の異なるクラスタに属する用例が動詞$S_{a}$の同じ項構造の用例に
+対応付けられた場合に，動詞$T$側の2つのクラスタをマージする．\\
+\end{enumerate}
+
+\begin{figure}[t]
+  \begin{center}
+        \includegraphics[width=0.85\columnwidth,keepaspectratio]{clip021.eps}
+  \end{center}
+  \caption{動詞の類似性に基づくクラスタリング}
+  \label{fig:step3}
+\end{figure}
+
+まずステップ1では，格要素ベースクラスタリングによってできたクラスタにおいて，
+各クラスタを構成する用例で最も多くの表層格を持つ用例をそのクラスタを代表する用例とする．
+例えば，「首相が10月にプランを発表する」と「5月に計画を発表する」の用例で構成されるクラスタの例を考える．
+これらの用例の表層格はそれぞれ「が，に，を」と「に，を」であり，表層格数は前者が3，後者が2であるため，前者の用例をこのクラスタを
+代表する用例として選択する．
+図\ref{fig:step3}\,では，
+ステップ1で動詞$T$の1番目のクラスタの代表用例を$T_{1}$，2番目のクラスタの代表用例を$T_{2}$として選択したとする．ステッ
+プ2で$T_{1}$，$T_{2}$のそれぞれと最も類似度の高い用例を動詞$S_{a}$側の用例集合から選択
+し対応付ける．ここではそれぞれ用例$S_{a1}$と用例$S_{a2}$が対応付けられたとする．最
+後に，動詞$S_{a}$側で用例$S_{a1}$，$S_{a2}$が同じ項構造であるというタグ付与情報を利用し
+て，1番目と2番目のクラスタをマージする．
+動詞ベースクラスタリングにおいても，用例間（動詞$T$の用例と動詞$S_{a}$の用例）の類似度計算式として，
+格要素ベースクラスタリングと同じ計算式を用いる．但し本クラスタリングにおいては，表層格パタンが
+同一の用例のみを類似度計算の対象とした．
+
+動詞ベースクラスタリングでポイントとなるのはステップ3であり，本クラスタリングの狙いは次のとおりである．
+格要素クラスタリングでは対応する格の格要素の類似度だけを考慮しているが，
+実際には同じ項構造となる用例のなかには類似しない格要素を持つ用例も多い．
+つまり，述語とある意味的な関係を持つ要素の集合は，
+その要素自身が持つ意味だけでは表現することができないのである．
+例えば，図\ref{fig:step3}\,の用例$T_{1}$「首相が10月にプランを発表する」と$T_{2}$「自衛隊が結果を発表する」は格要素の類似度に基づいたクラスタリングでは，
+マージされなかった用例である．しかしながら，我々人間には同じ項構造であることがわかる．
+このような格要素の類似性だけではマージできない用例を，類似した他の動詞の用例に人間が項構造を付与することで
+与えた情報を利用してクラスタリングを行なうのが動詞ベースクラスタリングの狙いである．
+
+
+
+
+
+
+
+\section{評価実験}
+\label{sec:fourth}
+
+前節で述べたクラスタリングの効果および
+大規模な訓練事例を利用することがどの程度項構造解析の精度向上に寄与するかを調査した．
+まず，両実験で使用する実験データと訓練事例作成のための用例クラスタリングの設定，
+項構造解析モデルについて説明し，最後に実験結果を示す．
+
+\subsection{評価実験データ}
+\label{ssec:data}
+
+4つの動詞（「話す」，「発表する」，「発売する」，「増える」）
+を用いて評価した．
+これらの動詞は後述のテストデータのコーパス中に頻出する動詞であり，
+それぞれの動詞が持つ項構造数は「話す：5」，「発売する：1」，「発表する：3」，「増える：2」である．
+例として，
+表\ref{tab:arg_dic_2}\,に「話す」の項構造辞書の項目を示す\footnote{その他の動詞の項構造辞書の項目は付録\ref{sec:sonota}\,を参照}．
+この項構造辞書は
+IPAL動詞辞書\cite{IPAL}を基に
+今回収集した用例を参考に，それらの格交替を考慮しながら
+作成したものである．
+この4つの動詞に対して，毎日新聞社の新聞記事でテストデータ作成に用いた1ヶ月分を除いた，13年分の新聞記事
+から
+用例異なりを除いた8385用例を抽出した（抽出条件は\ref{ssec:class}\,の用例の収集を参照）．
+この用例をクラスタリングし，各クラスタに項構造を対応付けて，項構造解析の訓練事例とした．
+
+項構造解析実験のテストデータとして，
+上の13年分の新聞記事から抜き出したある月の新聞記事から
+対象動詞の用例を抽出し，用例異なりを除いた220用例にひとつずつ人手で項構造タグを付与したものを用いる．
+ただし，
+\ref{sec:third}\,節で述べたように(1)「は」，「も」，「無格」が兼務する表層格の曖昧性，
+および(2)連体修飾節に関する曖昧性は
+表層格パターンを用いてある程度解析可能であると考えられるため，今回のテストデータについては
+「は」，「も」，「無格」の曖昧性は人手で解消し，
+連体修飾節の被修飾名詞は取り除き
+(3)，(4)の曖昧性の解消に焦点を当てて評価する．
+また，(5)の接尾辞を伴うことによる格交替の曖昧性については，
+文書中の約1割の述語が格交替を生じる接尾辞を伴って出現したが，訓練事例の抽出と同様に今回はそれらを除いて
+評価実験を行った．
+なお訓練事例，テストデータともに用例に項構造タグを付与する際，可能な項構造が複数あれば複数のタグを付与した．また項構造解析時には，
+\ref{ssec:asa}\,の項構造解析モデルで複数のタグを持つ用例が選択された場合，複数の項構造解析結果を出力する．
+表\ref{tab:train}\,に訓練事例，表\ref{tab:test}\,にテストデータ中の動詞とその項構造の出現回数を示す．
+各動詞の項構造番号は，表\ref{tab:arg_dic_2}\,や付録\ref{sec:sonota}\,に示した動詞項構造辞書の項目番号と対応している．
+評価実験では，動詞「増える」の場合，システムが出力すべき項構造の数は142個（5+7+65×2）である（表\ref{tab:test}\,参照）．
+
+\begin{table}[tbp]
+\begin{center}
+\caption{動詞「話す」の項構造辞書の項目}
+\small
+\begin{tabular}{||llll|ll||} \hline\hline
+\multicolumn{5}{||l}{述語:話す} &  \\
+\multicolumn{1}{||l}{} & \multicolumn{4}{l}{語義:口に出して，ある事を人に知らせる．} &  \\
+\multicolumn{1}{||l}{} & \multicolumn{1}{l}{} & \multicolumn{3}{l}{項構造 1 [agent, theme, beneficiary]} &  \\
+\multicolumn{1}{||l}{} & \multicolumn{1}{l}{} &  & 表層格パタン & 用例 &  \\\cline{4-5}
+\multicolumn{1}{||l}{} & \multicolumn{1}{l}{} & \multicolumn{1}{l}{} & が，を，に & 彼が 用件を 先方に 話す． &  \\
+\multicolumn{1}{||l}{} & \multicolumn{1}{l}{} & \multicolumn{1}{l}{} & が，について，に & 彼が 事件について 警察に 話す． &  \\
+\multicolumn{1}{||l}{} & \multicolumn{1}{l}{} & \multicolumn{1}{l}{} & が，まで，に & 先生が そんなことまで 生徒に 話す． &  \\
+\multicolumn{1}{||l}{} & \multicolumn{1}{l}{} & \multicolumn{1}{l}{} & から，について，に & 私から 結婚について 親に 話す． &  \\
+\multicolumn{1}{||l}{} & \multicolumn{1}{l}{} & \multicolumn{1}{l}{} & から，を，に & 彼女から 将来のことを 彼氏に 話す． &  \\
+\multicolumn{1}{||l}{} & \multicolumn{1}{l}{} & \multicolumn{3}{l}{項構造 2 [agent, beneficiary, content]} &  \\
+\multicolumn{1}{||l}{} & \multicolumn{1}{l}{} &  & 表層格パタン & 用例 &  \\\cline{4-5}
+\multicolumn{1}{||l}{} & \multicolumn{1}{l}{} &  & が，に，と & 彼が 母に 明日出発すると 話す． &  \\
+\multicolumn{1}{||l}{} & \multicolumn{1}{l}{} & \multicolumn{3}{l}{項構造 3 [agent, beneficiary, theme,  content]} &  \\
+\multicolumn{1}{||l}{} & \multicolumn{1}{l}{} &  & 表層格パタン & 用例 &  \\\cline{4-5}
+\multicolumn{1}{||l}{} & \multicolumn{1}{l}{} & \multicolumn{1}{l}{} & が，に，を，と & 妻が 私に 映画を すばらしかったと 話す． &  \\
+\multicolumn{1}{||l}{} & \multicolumn{1}{l}{} & \multicolumn{1}{l}{} & が，に，について，と & 警察が 市民に 事件について 解決したと 話す． &  \\
+\multicolumn{1}{||l}{} & \multicolumn{4}{l}{語義:複数の者で会話，討議する．} &  \\
+\multicolumn{1}{||l}{} & \multicolumn{1}{l}{} & \multicolumn{3}{l}{項構造 4 [agent, theme]} &  \\
+\multicolumn{1}{||l}{} & \multicolumn{1}{l}{} &  & 表層格パタン & 用例 &  \\\cline{4-5}
+\multicolumn{1}{||l}{} & \multicolumn{1}{l}{} & \multicolumn{1}{l}{} & が，を & 政治家が 貿易摩擦問題を 話す． &  \\
+\multicolumn{1}{||l}{} & \multicolumn{1}{l}{} & \multicolumn{1}{l}{} & が，について & 先生らが いじめについて 話す．  &  \\
+\multicolumn{1}{||l}{} & \multicolumn{4}{l}{語義:ある言語を用いる．} &  \\
+\multicolumn{1}{||l}{} & \multicolumn{1}{l}{} & \multicolumn{3}{l}{項構造 5 [agent, theme]} &  \\
+\multicolumn{1}{||l}{} & \multicolumn{1}{l}{} &  & 表層格パタン & 用例 &  \\\cline{4-5}
+\multicolumn{1}{||l}{} & \multicolumn{1}{l}{} &  & が，を & 彼が 英語を 話す． &  \\\hline \hline
+\end{tabular}
+\label{tab:arg_dic_2}
+\end{center}
+\end{table}
+
+
+\begin{table}[htbp]
+\begin{center}
+\caption{訓練事例中の動詞とその項構造の出現回数}
+\small
+\begin{tabular}{|l||l|l|l|} \hline
+動詞 & 出現回数 & 項構造の種類 & 各項構造の出現回数（項構造番号：出現回数） \\\hline\hline
+話す & 1867 & 5 & 1：105，2：22，3：133，4：232，5：62，1+2+3：155， \\
+ &  &  & 1+3：194，1+3+4：364，2+3：214，1+2+3+4+5：386 \\\hline
+発表する & 2822 & 3 & 3：60，1+3：1286，2+3：918，1+2+3：558 \\\hline
+発売する & 635 & 1 & 1：635 \\\hline
+増える & 3061 & 2 & 1：138，2：232，1+2：2691 \\\hline
+\end{tabular}
+\label{tab:train}
+\end{center}
+
+\begin{center}
+\caption{テストデータ中の動詞とその項構造の出現回数}
+\small
+\begin{tabular}{|l|l|l|l|} \hline
+\multicolumn{1}{|l||}{動詞} & \multicolumn{1}{l|}{出現回数} & 項構造の種類 & 各項構造の出現回数（項構造番号：出現回数） \\\hline\hline
+話す & 57 & 5 & 1：4，3：5，4：8，5：2，1+2+3：4，1+3：5，\ \ \ \ \ \ \ \  \ \ \ \ \\
+ &  &  & 1+3+4：10，2+3：7，1+2+3+4+5：12 \\\hline
+発表する & 76 & 3 & 3：4，1+3：33，2+3：24，1+2+3：15 \\\hline
+発売する & 10 & 1 & 1：10 \\\hline
+増える & 77 & 2 & 1：5，2：7，1+2：65 \\\hline
+\end{tabular}
+\label{tab:test}
+\end{center}
+\end{table}
+
+
+\subsection{用例クラスタリングの設定}
+\label{ssec:class}
+
+\subsubsection{用例の収集}
+
+項構造と対応付けるために収集できる用例には「は」，「も」，「無格」
+を伴った用例があるが，これらは兼務する表層格の曖昧性があるため訓練事例としては収集しない．
+また，格交替が生じる可能性のある接尾辞「れる」，「られる」，「せる」，「させる」，「たい」，「ほしい」，「もらう」，
+「いただく」，「くれる」，「くださる」，「やる」，「あげる」，「できる」を伴う述語の用例や連体修飾節の被修飾名詞も
+訓練事例としては収集しない．
+
+\subsubsection{格要素ベースクラスタリング}
+\label{sssec:cl1}
+
+用例間の類似度の計算式は河原ら\citeyear{kawahara:02:a}の提案した
+計算式\footnote{
+用例間の対応する格の割合と，対応する格要素の類似度による計算式．詳しくは付録\ref{sec:furoku}\,を参照．
+}
+を用いた．ただし，異なる項構造の用例を誤ってマージしないように
+次の制約を加えた．\\
+
+\begin{description}
+\item[・]一方の用例の格パタンが他方の用例の表層格パタンを包含する場合のみマージする．この制約により，
+用例「彼\underline{が} 結婚について 両親に 話す」と
+「私\underline{から} 結婚について 両親に 話す」を「彼\underline{が} 私\underline{から} 結婚について 両親に 話す」のように
+「話す」のagentが2つ存在するといった誤ったマージを避ける．
+\item[・]ボトムアップクラスタリングの際に類似度を再計算する用例ペアとして各ステップの初めの類似度計算で設定した閾値を
+超えた用例ペアだけを対象にする．この制約により，
+直前格を重要視しすぎないないように制御する．
+\end{description}
+
+格要素ベースクラスタリングでは，
+3ステップのそれぞれで閾値を設定する必要がある．
+今回は0.9，0.85，0.8とした．
+
+
+\subsubsection{動詞ベースクラスタリング}
+
+4つの動詞「話す」，「発表する」，「発売する」，「増える」（図\ref{fig:step3}\,における未知の動詞$T$）の用例クラスタリングに
+「語る」，「公表する」，「売り出す」，「減る」（図\ref{fig:step3}\,における既知の動詞$S$）のタグ付き用例4551個を利用する．
+このタグ付き用例は格要素ベースクラスタリングの結果に人手で
+項構造タグを付与し作成したものである．
+
+動詞ベースクラスタリングのステップ2の用例間の類似度計算には，格要素ベースクラスタリングと同じ類似度計算式を用いた．
+ただし，用例の表層格パタンが同一のもののみ対象とし，閾値は0.85に設定した．
+
+
+\subsection{項構造解析モデル}
+\label{ssec:asa}
+
+項構造解析モデルとしては，用例に対応する項構造候補の選択に最近傍法を用い，また
+用例間の近さを計算するのにKurohashiら\citeyear{Kurohashi:94}が提案する計算方法を用いた．
+この計算方法は分類語彙表\cite{BGH:93}を利用して名詞間の類似度を定め，また用例間の類似度に名詞間の類似度の和を用いている．
+項構造解析の処理を説明する．\\
+
+\begin{enumerate}
+\item 入力文の格要素とタグ付き用例の対応付けを行う
+\item 対応付けられたそれぞれの格要素について，入力文の名詞とタグ付き用例との間の類似度を計算する．
+類似度の値は分類語彙表\cite{BGH:93}における2つの名詞の分類コードの一致するレベル
+によって決定する．一致するレベルと類似度との関係を表\ref{level2}\,に示す．
+\item 式1に従ってタグ付き用例と入力文の対応の評価値を計算し評価値の高い用例の持つ項構造から順に選択する．
+\end{enumerate}
+
+\begin{eqnarray}
+評価値 = \left\{ \begin{array}{ll}
+0 & if　l > n \\
+sum \times \sqrt[]{\mathstrut \frac{1}{m}}  & otherwise
+\end{array}
+\right.
+\end{eqnarray}
+$n$：対応付けられた格要素数 \\
+$l$：$n$ + (入力文側の対応付けられいない格要素数) \\
+$m$：$n$ + (タグ付き用例側の対応付けられいない格要素数) \\
+$sum$：対応付けられた格要素の類似度の和 \\
+
+\begin{table}[t]
+\begin{center}
+\caption{黒橋らが提案した名詞間の類似度}
+\begin{tabular}{|c|cccccccc|} \hline
+レベル & 0 & 1 & 2 & 3 & 4 & 5 & 6 & 一致 \\
+\hline
+類似度 & 0 & 0 & 5 & 7 & 8 & 9 & 10 & 11
+\\
+\hline
+\end{tabular}
+\label{level2}
+\end{center}
+\end{table}
+
+
+\subsection{提案手法の有用性の評価実験}
+\label{ssec:eva1}
+提案手法の有用性を示すために次の3点を経験的に明らかにする．
+
+\paragraph{(a)項構造タグ付与作業のコスト}
+訓練事例作成のために，クラスタリングの結果得られるクラスタに項構造タグを人手で付与する必要がある．
+今回の実験では，クラスタに項構造を付与する作業はクラスタを代表する用例に対して項構造タグを付与し，それをクラスタの項構造タグと考える．
+そのため\textbf{クラスタリング結果のクラスタ数}でタグ付与作業のコストを評価する．
+\paragraph{(b)タグ付与の品質}
+項構造タグ付与誤りを調査するために，人手で各用例に項構造
+タグを付与した．
+また提案手法によって得られたクラスタに項構造を付与する作業は
+クラスタを代表する用例に対して項構造タグを付与し，それをクラスタの項構造と考える．
+これらの結果を比較し，
+\textbf{タグ付与誤りの割合}でタグ付与の品質を評価する．
+\paragraph{(c)項構造解析精度}
+項構造解析は一文ごとに処理を行うため，省略などによって文脈を見なくては項構造を一意に決定することができない．
+省略のある入力に対しては可能な項構造解析結果を漏れなく出力することが望まれる．そこで項構造解析の評価尺度として，
+類似度の順で解析結果を出力していき，正解を漏れなく答えたときの精度で評価する．
+つまり，{\bf 再現率が100％のときの精度}
+\footnote{再現率＝出力された正解項構造数/正解項構造数，精度＝出力された正解項構造数/出力された項構造数}
+で項構造解析を評価する．
+なお評価は事例単位でなく，項構造単位で再現率と精度を計算した．
+例えば，入力「父が事件について話す」の項構造は，
+表\ref{tab:arg_dic_2}\,に示すように，項構造1[agent，theme，beneficiary]と項構造3[agent，beneficiary，theme，content]の可能性がある．
+このような入力に関して，項構造1と項構造3の両方の答えを出力するまでの解析結果の精度で評価する．
+ただし，タグ付き用例集合が入力文の正解を網羅していない場合は，その入力に対して可能なすべての項構造をシステムの出力とする．\\
+
+上の(a)項構造タグ付与作業のコスト，(b)タグ付与の品質，(c)項構造解析精度について
+以下の3つの手法を用いて訓練事例を作成し比較実験を行なった結果を表\ref{tab:res1}\,に示す．
+
+
+\begin{enumerate}
+\item ベースライン\\各用例に項構造タグを付与し訓練事例を作成．
+\item 格要素ベースクラスタリング\\類似性A（ある動詞について同じ項構造を持つ用例は，格の出現パタンとそれぞれの格要素が類似している）に基づいた用例クラスタリングの結果に項構造タグを付与し訓練事例を作成．
+\item 動詞ベースクラスタリング\\格要素ベースクラスタリングに加え，類似性B（意味的な類似性がある二つの動詞は，格の出現パタンとそれぞれの格要素が類似している）に基づいた用例クラスタリングの結果に項構造タグを付与し訓練事例を作成．
+\end{enumerate}
+
+\begin{table}[t]
+\begin{center}
+\caption{提案手法の作業コスト，品質と項構造解析精度}
+\begin{tabular}{|l||c|c|c|} \hline
+ & (a)\ [個] & (b)\ [％] & (c)\ [％] \\\hline\hline
+{\footnotesize (1)ベースライン} & 8385 & 0.00 & 99.3 \\\hline
+{\footnotesize (2)格要素ベースクラスタリング} & 2745 & 0.31 & 97.7 \\\hline
+{\footnotesize (3)動詞ベースクラスタリング} & {\bf 1505} & 0.70 & 97.3 \\\hline
+\end{tabular}
+\label{tab:res1}
+\end{center}
+\end{table}
+
+
+表\ref{tab:res1}\,の(a)項構造タグ付与作業のコストが示すように，格要素ベースクラスタリングによってベースラインの作業コストを約3分の1 (2745/8385)に削減し，
+動詞ベースクラスタリングを用いてさらに半減（1505/2745）できた．
+この結果より，用例のクラスタリングに一般的な名詞の
+類似度を用いた手法に加え，類似する動詞のタグ付き用例を利用して，
+未知の動詞の用例をさらにマージすることができたと言える．
+また，動詞ベースクラスタリングは格要素ベースクラスタリングと比べ，タグ付与品質では
+多少の低下が見られるものの，項構造解析の精度にはほとんど影響しなかった．
+この結果から，項構造タグ付与作業済みの動詞が増えると，
+ある動詞と意味的に類似する動詞が増加するので，より多くの動詞ベースクラスタリングが可能になり，
+項構造解析精度を保ったままタグ付与作業のコストをさらに削減できると考えられる．
+また，ベースラインと格要素ベースクラスタリングにおける項構造解析精度の差は，
+\ref{ssec:clb}\,節で動詞ベースクラスタリングのねらいとして述べたように，
+述語とその項の間の意味的な関係を示す項構造の項となる要素の集合は，
+その要素自身が持つ意味だけでは表現することができないことを示す結果になっている．
+
+
+\begin{figure}[t]
+\begin{center}
+         \includegraphics[width=\columnwidth,keepaspectratio]{20060219_0.eps}
+    \caption{用例規模に対する用例異なり数とクラスタ数，項構造解析精度（テストデータ）}
+    \label{fig:res2}
+\end{center}
+\end{figure}
+
+\subsection{用例規模の異なりによる評価実験}
+\label{ssec:eva2}
+大規模な訓練事例を利用することがどの程度項構造解析精度の向上に寄与するかを評価する
+ため，
+用例集合の規模を変化させたときの(a)クラスタ数と(c)項構造解析精度の
+変化を調べた．
+
+
+図\ref{fig:res2}，\ref{fig:res4}\,は動詞ベースクラスタリングまで施したときの結果である．
+横軸は用例の規模（年単位）であり，
+棒グラフはそれぞれ用例異なり数とそれをクラスタリングすることによって得られるクラスタ数を示している．
+また折れ線グラフは項構造解析精度（図\ref{fig:res2}：テストデータの220用例に対する結果，図\ref{fig:res4}：訓練事例の8385用例の10分割交差検定の結果）である．
+なお図\ref{fig:res4}\,のクラスタ数，項構造解析精度は交差検定の結果の平均を示している．
+図\ref{fig:res2}，\ref{fig:res4}\,を見ると，用例規模が増加すると収集できる用例異なり数は増加し続けているのに対し，
+得られるクラスタ数は収束しつつある．
+すなわち，用例規模を増やしたときに得られる新規の用例は収集済みの用例と
+類似している可能性が高いため，項構造解析の精度向上に寄与する保証は必ず
+しもない．しかし，異なるデータセットを用いた実験の結果，図3，4に示すよ
+うに，用例規模を増やせば項構造解析精度が向上するということが経験的に明
+らかになった．
+これは，項構造解析においてはクラスタの重心ではなく，最近傍の用例を参照
+しているためである．すなわち，用例規模を変化させたときのクラスタリング
+の結果に大きな違いがないとしても，クラスタの外延的定義はより緻密になっ
+ており，複数のクラスタ間の用例に対する類似度がより正確に見積もられてい
+ると解釈できる．
+
+ちなみに，「は」，「も」，「無格」の曖昧性を人手で解消せずに，Kurohashiら\citeyear{Kurohashi:94}の手法で項構造解析と
+表層格の曖昧性解消を行った結果，項構造解析精度は90.8％であり，人手で曖昧性を解消した結果と比べ約7％低下している．この結果より，項構造解析精度を改善するにはこの種の多義性解消の問題に取り組む必要があることが明らかになった．
+「は」，「も」，「無格」の曖昧性を解消するためには，
+単純に用例を増やすだけでなく，
+ゼロ照応解析や連体修飾の解析との統合について検討すべきであると考えられる．
+
+\begin{figure}[t]
+\begin{center}
+         \includegraphics[width=\columnwidth,keepaspectratio]{20060219_1.eps}
+    \caption{用例規模に対する用例異なり数とクラスタ数，項構造解析精度（交差検定）}
+    \label{fig:res4}
+\end{center}
+\end{figure}
+
+
+
+
+\section{おわりに}
+\label{sec:fifth}
+
+本論文では，項構造解析の精度向上を目指して，用例と項構造を対応付けるタグ付
+与作業コストの削減について議論した．また，動詞に関する2種類の類似性に
+基づき用例をクラスタリングすることで作業コストを削減する一手法を提案し
+た．
+提案手法を用いて実際にタグ付与作業を行ったところ，タグ付与の品質や項構
+造解析の精度を保ったまま，作業コストを約2割に削減できた．また，
+最近傍法を用いた項構造解析では，タグ付与された事例を増やすことで精度を
+向上できた．この結果より，解析精度の向上にはいかにコストをかけずに
+大規模な項構造タグ付き用例
+を収集するかが主要な問題であることがわかり，我々の提案手法はその問題の一つの解決策となっていることが確認できた．
+
+ただし，動詞それぞれについて網羅的に大規模な用例を作成するためには，項
+構造解析精度を低下させることなく選択的に用例をサンプリングするための評
+価尺度について検討したり，能動学習を採り入れるなど，さらなるコスト削減の方法を考える必要があ
+る．
+そこで，提案した手法によって得られたクラスタすべてにタグを付与せず，
+クラスタを選択的にサンプリングし，
+一部の代表的なクラスタにタグを付与することで作業コストをさらに削減することを試みた．
+選択的サンプリングでは「いかに項構造解析に貢献するクラスタを選択するか」が課題となる．
+サンプルの選択基準
+は多々あるが，
+今回は動詞ベースクラスタリングの結果を利用し，
+サイズの大きいクラスタ（多くの用例から構成さているクラスタ）を優先した．
+\ref{sec:fourth}\,節の評価実験と同じ評価データ，クラスタリングの設定，項構造解析モデルで評価実験を行なった．
+結果を図\ref{fig:res3}\,に示す．
+タグ付与を行ったクラスタ数（横軸）に対する，項構造解析精度とタグ付けされる用例数の変化を表している．
+結果から
+単にクラスタサイズに基づいてサンプリングするだけでは
+さらなるコスト削減の方法として必ずしも良い結果が得られないことがわかった．
+今後，どのような基準でサンプリングするか，およびタグ付与作業の終了条件について検討を重ねる必要がある．
+
+
+\begin{figure}[t]
+\begin{center}
+        \includegraphics[width=\columnwidth,keepaspectratio]{selective005.eps}
+    \caption{選択的サンプリングによる項構造解析精度}
+    \label{fig:res3}
+\end{center}
+\end{figure}
+
+
+また項構造解析精度を向上させるには「は」，「も」などの表層格の曖昧性解消や
+接尾辞を伴うことによる格交替の曖昧性の解消に今後取り組む必要がある．
+接尾辞を伴うことによる交替現象はある程度の文法規則によってとらえられると考えられるが，
+「は」，「も」の曖昧性は
+単純に用例を増やすだけでは解消できないことが今回の実験結果からわかる．
+この曖昧性を高精度で解析するためには
+ゼロ照応解析や連体修飾の解析
+も視野に入れた解析手法が必要であり，今後その問題にも取り組みたい．
+
+
+
+\bibliographystyle{jnlpbbl}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Baker, Filmore, \BBA\ Lowe}{Baker
+  et~al.}{1998}]{Frame:98}
+Baker, C.~F., Filmore, C.~J., \BBA\ Lowe, J.~B. \BBOP 1998\BBCP.
+\newblock \BBOQ The Berkeley FrameNet Project\BBCQ\
+\newblock In {\Bem Proceedings of the 36th Annual Meeting of the Association
+  for Computational Linguistics and 17th International Conference on
+  Computational Linguistics (COLING-ACL)}, \mbox{\BPGS\ 86--90}.
+
+\bibitem[\protect\BCAY{Dorr}{Dorr}{1997}]{Dorr:97}
+Dorr, B.~J. \BBOP 1997\BBCP.
+\newblock \BBOQ Large-Scale Acquisition of LCS-Based Lexicons for Foreign
+  Language Tutoring\BBCQ\
+\newblock In {\Bem Proceedings of the 5th Conference on Applied Natural
+  Language Processing}, \mbox{\BPGS\ 139--146}.
+
+\bibitem[\protect\BCAY{Filmore}{Filmore}{1968}]{Fil:68}
+Filmore, C.~J. \BBOP 1968\BBCP.
+\newblock \BBOQ The case for case\BBCQ\
+\newblock In {\Bem Universals in Linguistic Theory}, \mbox{\BPGS\ 1--88}.
+
+\bibitem[\protect\BCAY{Gildea \BBA\ Jurafsky}{Gildea \BBA\
+  Jurafsky}{2002}]{gildea:02:c}
+Gildea, D.\BBACOMMA\ \BBA\ Jurafsky, D. \BBOP 2002\BBCP.
+\newblock \BBOQ Automatic labeling of semantic roles\BBCQ\
+\newblock {\Bem Computational Linguistics}, {\Bbf 28}  (3), \mbox{\BPGS\
+  245--288}.
+
+\bibitem[\protect\BCAY{Hacioglu \BBA\ Ward}{Hacioglu \BBA\
+  Ward}{2003}]{Kadri:03}
+Hacioglu, K.\BBACOMMA\ \BBA\ Ward, W. \BBOP 2003\BBCP.
+\newblock \BBOQ Target Word Detection and Semantic Role Chunking using Support
+  Vector Machines\BBCQ\
+\newblock In {\Bem HLT-NAACL 2003: Human Language Technology Conference of the
+  North American Chapter of the Association for Computational Linguistics,
+  Companion Volume: Short papers}, \mbox{\BPGS\ 25--27}.
+
+\bibitem[\protect\BCAY{池原\JBA 宮崎\JBA 白井\JBA 横尾\JBA 中岩\JBA 小倉\JBA
+  大山\JBA 林}{池原\Jetal }{1997}]{NTT:97}
+池原悟\JBA 宮崎正弘\JBA 白井諭\JBA 横尾昭男\JBA 中岩浩巳\JBA 小倉健太郎\JBA
+  大山芳史\JBA 林良彦\JEDS\ \BBOP 1997\BBCP.
+\newblock \Jem{日本語語彙大系: CD-ROM版}.
+\newblock 岩波書店.
+
+\bibitem[\protect\BCAY{情報処理振興事業協会技術センター}{情報処理振興事業協会
+技術センター}{1987}]{IPAL}
+情報処理振興事業協会技術センター \BBOP 1987\BBCP.
+\newblock \Jem{計算機用日本語基本動詞辞書IPAL(Basic Verbs) 辞書編}.
+
+\bibitem[\protect\BCAY{河原\JBA 黒橋}{河原\JBA 黒橋}{2002}]{kawahara:02:a}
+河原大輔\JBA 黒橋禎夫 \BBOP 2002\BBCP.
+\newblock \JBOQ 用言と直前の格要素の組を単位とする格フレームの自動構築\JBCQ\
+\newblock \Jem{自然言語処理}, {\Bbf 9}  (1), \mbox{\BPGS\ 3--19}.
+
+\bibitem[\protect\BCAY{Kingsbury \BBA\ Palmer}{Kingsbury \BBA\
+  Palmer}{2002}]{Prop:02}
+Kingsbury, P.\BBACOMMA\ \BBA\ Palmer, M. \BBOP 2002\BBCP.
+\newblock \BBOQ From TreeBank to PropBank\BBCQ\
+\newblock In {\Bem Proceedings of the 3rd International Conference on Language
+  Resources and Evaluation (LREC)}, \mbox{\BPGS\ 1989--1993}.
+
+\bibitem[\protect\BCAY{国立国語研究所}{国立国語研究所}{1993}]{BGH:93}
+国立国語研究所 \BBOP 1993\BBCP.
+\newblock \Jem{分類語彙表}, \Jem{国立国語研究所資料集}, 6\JVOL.
+\newblock 秀英出版.
+
+\bibitem[\protect\BCAY{Kurohashi \BBA\ Nagao}{Kurohashi \BBA\
+  Nagao}{1994}]{Kurohashi:94}
+Kurohashi, S.\BBACOMMA\ \BBA\ Nagao, M. \BBOP 1994\BBCP.
+\newblock \BBOQ A Method of Case Structure Analysis for Japanese Sentences
+  based on Examples in Case Frame Dictionary\BBCQ\
+\newblock {\Bem IEICE Transactions on Information and Systems}, {\Bbf E77-D}
+  (2), \mbox{\BPGS\ 227--239}.
+
+\bibitem[\protect\BCAY{Lapata \BBA\ Brew}{Lapata \BBA\
+  Brew}{1999}]{Lapata:Brew:99}
+Lapata, M.\BBACOMMA\ \BBA\ Brew, C. \BBOP 1999\BBCP.
+\newblock \BBOQ Using Subcategorization to Resolve Verb Class Ambiguity\BBCQ\
+\newblock In {\Bem Proceedings of the Joint SIGDAT Conference on Empirical
+  Methods in Natural Language Processing and Very Large Corpora}, \mbox{\BPGS\
+  266--274}.
+
+\bibitem[\protect\BCAY{Levin}{Levin}{1993}]{levin:93}
+Levin, B. \BBOP 1993\BBCP.
+\newblock {\Bem English Verb Classes and Alternations: A Preliminary
+  Investigation}.
+\newblock Chicago Press.
+
+\bibitem[\protect\BCAY{Thompson, Levy, \BBA\ Manning}{Thompson
+  et~al.}{2003}]{Cyn:03}
+Thompson, C.~A., Levy, R., \BBA\ Manning, C.~D. \BBOP 2003\BBCP.
+\newblock \BBOQ A Generative Model for Semantic Role Labeling\BBCQ\
+\newblock In {\Bem Machine Learning: ECML 2003}, \mbox{\BPGS\ 397--408}.
+
+\end{thebibliography}
+
+\appendix
+
+\section{用例間の類似度計算}
+\label{sec:furoku}
+
+\citeA{kawahara:02:a}は以下の類似度計算式を提案した．\\
+単語$e_{1},e_{2}$の類似度$sim(e_{1},e_{2})$を，日本語語彙大系\cite{NTT:97}のシソーラスを利用して
+以下のように定義する．
+\begin{eqnarray}
+sim_{e}(e_{1},e_{2}) &=& max_{x\in s_{1},y\in s_{2}} sim(x,y) \nonumber \\
+sim(x,y) &=& \frac{2L}{l_{x}+l_{y}} \nonumber
+\end{eqnarray}
+
+ここで，$x,y$は意味属性を表し，
+$s_{i}$（$i\in$ {1,2}）は単語$e_{i}$の
+意味属性の集合を表す
+\footnote{日本語語彙大系では，曖昧性を持つ単語を複数の意味属性に登録している．}
+．
+$sim(x,y)$は意味属性の$x,y$間の類似度であり，
+$l_{x},l_{y}$は
+それぞれ名詞意味属性の階層の根から$x,y$までの深さを表し，
+$L$は根から$x,y$までの共通している
+階層の深さを表す．
+類似度$sim(x,y)$は0から1の値をとる．
+
+用例$P_{1},P_{2}$の格の一致度$cs$は，$P_{1},P_{2}$に含まれるすべての格パタンに対する，$P_{1},P_{2}$の共通格に
+含まれている格パタンの割合とし，
+\begin{eqnarray}
+cs &=& \frac{\sum^{n}_{i=1}\mid E_{1cc_{i}}\mid + \sum^{n}_{i=1}\mid E_{2cc_{i}}\mid}
+{\sum^{l}_{i=1}\mid E_{1c1_{i}}\mid + \sum^{m}_{i=1}\mid E_{2c2_{i}}\mid} \nonumber
+\end{eqnarray}
+と定義する．ただし用例$P_{1}$中の格を$c1_{1}$,$c1_{2}$,$\cdots$,$c1_{l}$，用例$P_{2}$中の格を
+$c2_{1}$,$c2_{2}$,$\cdots$,\\$c2_{m}$，$P_{1}$と$P_{2}$の共通格を$cc_{1}$,$cc_{2}$,$\cdots$,$cc_{n}$とする．また，$E_{1cc_{i}}$は
+$P_{1}$内の格$cc_{i}$に含まれる格用例群であり，$E_{2cc_{i}}$,$E_{1c1_{i}}$,$E_{2c2_{i}}$も同様である．$\mid E_{1cc_{i}} \mid$
+は$E_{1cc_{i}}$の頻度を表す．
+
+用例$P_{1},P_{2}$の共通格に含まれる格用例群の類似度$sim_{E}(P_{1},P_{2})$は，格用例の類似度の和を正規化したもので，
+\begin{eqnarray}
+sim_{E}(P_{1},P_{2}) = \frac{\sum^{n}_{i=1} \sum^{}_{e_{1}\in E_{1cc_{i}}} \sum^{}_{e_{2}\in E_{2cc_{i}}} \mid e_{1}\mid \mid e_{2}\mid sim_{e}(e_{1},e_{2})}
+{\sum^{n}_{i=1} \sum^{}_{e_{1}\in E_{1cc_{i}}} \sum^{}_{e_{2}\in E_{2cc_{i}}} \mid e_{1}\mid \mid e_{2}\mid} \nonumber
+\end{eqnarray}
+とする．
+
+
+用例$P_{1},P_{2}$間の類似度は，格の一致度$cs$と$P_{1},P_{2}$の共通格の格用例群間の類似度の積とし，次のようにして計算する．
+\begin{eqnarray}
+類似度 &=& cs \cdot sim_{E}(P_{1},P_{2}) \nonumber
+\end{eqnarray}
+
+\newpage
+
+\section{その他の動詞の項構造辞書の項目}
+\label{sec:sonota}
+
+\begin{table}[htbp]
+\begin{center}
+\caption{動詞「発表する」項構造辞書の項目}
+\small
+\begin{tabular}{||llll|p{7cm}l||} \hline\hline
+\multicolumn{5}{||l}{述語:発表する} &  \\
+ & \multicolumn{4}{l}{語義:新しい事実や考えなどを，広く世間に知らせる．} &  \\
+ &  & \multicolumn{3}{l}{項構造 1 [agent, theme]} &  \\
+ &  &  & 表層格パタン & 用例 &  \\\cline{4-5}
+ &  &  & が，を & 研究者が 論文を 発表する． &  \\
+ &  & \multicolumn{3}{l}{項構造 2 [agent, content]} &  \\
+ &  &  & 表層格パタン & 用例 &  \\\cline{4-5}
+ &  &  & が，と & 政府が 自衛隊を派遣すると 発表する． &  \\
+ &  & \multicolumn{3}{l}{項構造 3 [agent, theme, content]} &  \\
+ &  &  & 表層格パタン & 用例 &  \\\cline{4-5}
+ &  &  & が，を，と & 政治家が 結果を 残念だと 発表する． &  \\\hline\hline
+\end{tabular}
+\label{tab:pred2}
+\end{center}
+
+\begin{center}
+\caption{動詞「発売する」項構造辞書の項目}
+\small
+\begin{tabular}{||llll|p{7cm}l||} \hline\hline
+\multicolumn{5}{||l}{述語:発売する} &  \\
+ & \multicolumn{4}{l}{語義:売り出すこと．} &  \\
+ &  & \multicolumn{3}{l}{項構造 1 [agent, theme]} &  \\
+ &  &  & 表層格パタン & 用例 &  \\\cline{4-5}
+ &  &  & が，を & SONYが 商品を 発売する． &  \\\hline\hline
+\end{tabular}
+\label{tab:pred3}
+\end{center}
+
+\begin{center}
+\caption{動詞「増える」項構造辞書の項目}
+\small
+\begin{tabular}{||llll|p{7cm}l||} \hline\hline
+\multicolumn{5}{||l}{述語:増える} &  \\
+ & \multicolumn{4}{l}{語義:数量が多くなる．} &  \\
+ &  & \multicolumn{3}{l}{項構造 1 [theme]} &  \\
+ &  &  & 表層格パタン & 用例 &  \\\cline{4-5}
+ &  &  & が & 映画館が 増える． &  \\
+ &  & \multicolumn{3}{l}{項構造 2 [theme, goal]} &  \\
+ &  &  & 表層格パタン & 用例 &  \\\cline{4-5}
+ &  &  & が，に & 体重が 100\,kgに 増える． &  \\
+ &  &  & が，まで & 川の水が 腰の位置まで 増える． &  \\
+ &  &  & が，へ & 予算が 一千万円へ 増える． &  \\\hline\hline
+\end{tabular}
+\label{tab:pred4}
+\end{center}
+\end{table}
+
+
+\begin{biography}
+\biotitle{略歴}
+
+\bioauthor{平野 徹}{
+2003年和歌山大学システム工学部情報通信システム学科卒業．
+2005年奈良先端科学技術大学院大学情報科学研究科博士前期課程修了．
+同年日本電信電話株式会社入社．
+現在に至る．
+自然言語処理の研究に従事．}
+
+\bioauthor{飯田 龍}{
+2002年九州工業大学情報工学部知能情報工学科卒業．
+現在，奈良先端科学技術大学院大学情報科学研究科博士後期課程在学中．
+情報処理学会学生会員．
+自然言語処理，特に照応解析の研究に従事．}
+
+\bioauthor{藤田 篤（正会員）}{
+2005年奈良先端科学技術大学院大学情報科学研究科博士後期課程修了．
+京都大学情報学研究科産学官連携研究員を経て，
+2006年より名古屋大学大学院工学研究科助手．
+現在に至る．
+博士（工学）．
+自然言語処理，特にテキストの自動言い換えの研究に従事．
+情報処理学会，ACL各会員．}
+
+\bioauthor{乾 健太郎（正会員）}{
+1995年東京工業大学大学院情報理工学研究科博士課程修了．
+同年より同研究科助手．
+1998年より九州工業大学情報工学部助教授．
+1998年〜2001年科学技術振興事業団さきがけ研究21研究員を兼任．
+2001年より奈良先端科学技術大学院大学情報科学研究科助教授．
+2004年文部科学省長期在外研究員として英国サセックス大学に滞在．
+現在に至る．
+博士（工学）．
+自然言語処理の研究に従事．
+情報処理学会，人工知能学会，ACL各会員．}
+
+\bioauthor{松本 裕治（正会員）}{
+1977年京都大学工学部情報工学科卒．
+1979年同大学大学院工学研究科修士課程情報工学専攻修了．
+同年電子技術総合研究所入所．
+1984〜85年英国インペリアルカレッジ客員研究員．
+1985〜87年(財)新世代コンピュータ技術開発機構に出向．
+京都大学助教授を経て，1993年より奈良先端科学技術大学院大学教授，
+現在に至る．工学博士．専門は自然言語処理．
+情報処理学会，人工知能学会，日本ソフトウェア科学会，認知科学会，
+AAAI, ACL, ACM各会員．}
+
+\bioreceived{受付}
+\biorevised{再受付}
+\bioaccepted{採録}
+
+\end{biography}
+
+\end{document}

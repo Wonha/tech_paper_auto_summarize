@@ -1,0 +1,991 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+\usepackage{thebiblio}
+\renewcommand{\labelenumi}{}
+
+
+\Volume{17}
+\Number{4}
+\Month{July}
+\Year{2010}
+
+
+\received{2009}{6}{13}
+\revised{2009}{11}{9}
+\accepted{2009}{12}{15}
+
+\setcounter{page}{155}
+
+
+\jtitle{統計翻訳における人手で作成された\\
+	大規模フレーズテーブルの効果}
+\jauthor{村上　仁一\affiref{TottoriUv} \and 鏡味　良太\affiref{TottoriUv} \and 徳久　雅人\affiref{TottoriUv} \and 池原　　悟\affiref{TottoriUv}}
+\jabstract{
+現在，機械翻訳システムの分野において，対訳データから自動的に翻訳モデル
+と言語モデルを獲得し，翻訳を行う統計翻訳が注目されている．翻訳モデルで
+は，原言語の単語列から目的言語の単語列への翻訳を，フレーズテーブルで管
+理する．しかしフレーズテーブルはプログラムで自動作成するため，カバー率
+は高いが信頼性は低いと考えられる．一方，手作業で作成した翻訳対は，信頼
+性は高いがカバー率は低いと考えられる．そこで，それぞれの長所を生かすた
+めに，プログラムで自動作成したフレーズ対に手作業で作成した翻訳対を追加
+することで翻訳精度が向上すると考えた．
+
+実験では，手作業で作成された約13万の翻訳対に翻訳確率を与え，プログラム
+で自動作成したフレーズテーブルに追加した．翻訳実験の結果，BLEUスコア
+が，日英翻訳の単文では0.9\%，重複文では0.8\%向上した．また人間による対
+比較実験を行ったところ，有効性が確認された．
+
+以上の結果から，統計翻訳において手作業で作成した翻訳対を追加する提案手
+法は有効であることが示された．
+}
+\jkeywords{統計翻訳，Phrase Table, 手作業}
+
+\etitle{SMT with Handmade  Phrase Table}
+\eauthor{Jin'ichi Murakami\affiref{TottoriUv} \and Ryouta Kagami\affiref{TottoriUv} \and Masato Tokuhisa\affiref{TottoriUv} \and Satoru Ikehara\affiref{TottoriUv}} 
+\eabstract{
+Recently, the statistical machine translation (SMT) method is very
+popular for machine translation. This SMT method uses an automatically
+calculated translation model and language model for large translation
+pair sentences. The translation model provides the probability that
+the foreign string is the translation of the native string and is
+normally controlled using a phrase table.
+
+However, the phrase table is automatically made; it has high coverage
+but low reliability.  On the other side, there are many translation
+word pairs made by hand, especially in Japanese English
+translation. These translation word pairs have low coverage but high
+reliability. Therefore, we added these handmade translation word pairs
+into the automatically made phrase table.
+
+In this paper, we used 130,000 translation word
+pairs and the phrase table with added word pairs. As a result of
+the experiments, we obtained a BLUE score of 13.4\% for simple
+sentences and 8.5\% for complex sentences. On the other side,
+with the base line system, the score was 12.5\% for simple sentences
+and 7.7\% for complex sentences. We also studied an ABX
+test. In simple sentences, 5 sentences were good using the base line,
+and 23 sentences were good using the proposed method. In complex
+sentences, 15 sentences were good using the base line, and 35
+sentences were good using the proposed method.
+
+As a result of these experiments, the effectiveness of the
+proposed method was shown.
+}
+\ekeywords{SMT, Phrase Table, Handmade}
+
+\headauthor{村上，鏡味，徳久，池原}
+\headtitle{統計翻訳における人手で作成された大規模フレーズテーブルの効果}
+
+
+\affilabel{TottoriUv}{鳥取大学工学部知能情報工学科}{Faculty of Engineering, Tottori University}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+
+現在，機械翻訳システムの分野において，対訳データから自動的に翻訳モデル
+と言語モデルを獲得し統計的に翻訳を行う，統計翻訳が注目されている．翻訳
+モデルは，原言語の単語列から目的言語の単語列への翻訳を確率的に表現する
+モデルである．言語モデルは，目的言語の単語列に対して，それらが起こる確
+率を与えるモデルである．翻訳モデルには，大きくわけて語に基づく翻訳モデ
+ルと句に基づく翻訳モデルがある．初期の統計翻訳は，語に基づく翻訳モデル
+であった．語に基づく翻訳モデルでは，原言語の単語から目的言語の単語の対
+応表を作成する．対応する単語が無い場合はNULL MODELに対応させる~\cite{IBM}．しかし，翻訳文を生成する時，NULL MODELに対して，全ての単語
+の出現を仮定する必要がある．これが翻訳精度が低下する原因の一つになって
+いた．そのため現在では句に基づく翻訳モデルが主流になっている~\cite{PSMT}．
+
+句に基づく翻訳モデルは，原言語の単語列から目的言語の単語列の翻訳に対し
+て確率を付与する．また，NULL MODEL は使用しない．そして，原言語の単語列
+から目的言語の単語列への翻訳を，フレーズテーブルで管理する．しかし，フ
+レーズテーブルのフレーズ対はヒューリスティクを用いて自動作成されるた
+め，一般にカバー率は高いが信頼性は低いと考えられる．また，フレーズテー
+ブルのフレーズ対は，確率値の信頼性を高めるため，短いフレーズ対に分割さ
+れる．そのため，長いフレーズ対は少ない．
+
+ところで，日英翻訳では，過去に手作業で作成した日本語の単語列から英語の
+単語列への翻訳対が大量に作成されている．この翻訳対の信頼性は高いと考え
+られる．しかし自動作成されたフレーズ対と比較すると，カバー率は低い．そ
+こで，本研究では，それぞれの長所を生かすために，プログラムで自動作成し
+たフレーズ対に手作業で作成された翻訳対を追加することで翻訳精度の向上を
+目指した．
+
+本研究では，手作業で作成した原言語の単語列から目的言語の単語列への翻訳
+対を，自動的に作成したフレーズテーブルに追加する．この追加されたフレー
+ズテーブルを利用して日英翻訳の精度向上を試みる．実験では，日英重複文文
+型パターン辞書~\cite{tori}の対訳文対から得られた翻訳対を利用する．手作業
+で作成された約13万の翻訳対に翻訳確率を与え，プログラムで自動作成したフ
+レーズテーブルに追加する．この結果，BLEUスコアが，単文では12.5\%から
+13.4\%に0.9\%向上した．また重複文では7.7\%から8.5\%に0.8\%向上した．ま
+た得られた英文100文に対し，人間による対比較実験を行ったところ，単文で
+は，従来法が5文であるのに対し提案法では23文，また重複文では，従来法が
+15文であるのに対し提案法では35文，翻訳精度が良いと判断された．
+
+これらの結果から，自動作成されたフレーズテーブルに手作業で作成された翻
+訳対を追加する，提案手法の有効性が示された．
+
+\section{統計翻訳システム}
+
+\subsection{基本概念}
+
+日英の統計翻訳は，日本語文$j$が与えられたとき，全ての組合せの中から確率
+が最大になる英語文$\hat{e}$を探索することで翻訳を行う~\cite{IBM}．以下に
+その基本式を示す．
+\[
+\hat{e}=argmax_{e}P(j|e)P(e)
+\]
+
+$P(j|e)$は翻訳モデル，$P(e)$は言語モデルと呼ぶ．翻訳モデルは日本語と英
+語が対になった対訳コーパスから学習して作成する．また，言語モデルは，出
+力文側の言語である英語コーパスから学習して作成する．デコーダは言語モデ
+ルと翻訳モデルを用いて，尤度の最も高い英文を生成する．
+
+
+\subsection{翻訳モデル}
+
+\begin{table}[b]
+\caption{フレーズテーブルの例}
+\label{tbl:フレーズテーブルの例}
+\input{09table01.txt}
+\end{table}
+
+翻訳モデルは，日本語の単語列から英語の単語列または英語の単語列から日本
+語の単語列へ，確率的に翻訳を行うモデルである．翻訳モデルには，大きくわ
+けて語に基づく翻訳モデルと句に基づく翻訳モデルがある．初期の統計翻訳
+では，語に基づく翻訳モデルを用いていたが，現在は句に基づく
+翻訳モデルが翻訳精度が高いため主流になっている．句に基づく翻訳モデルでは，日本語や英
+語の単語列と確率は，フレーズテーブルで管理される~\cite{moses}．
+表\ref{tbl:フレーズテーブルの例}にフレーズテーブルの例を示す．
+
+
+
+このテーブルは，左から，``日本語フレーズ''，``英語フレーズ''，``フレー
+ズの英日翻訳確率$P(j|e)$''，``英日方向の単語の翻訳確率の積''，``フレー
+ズの日英翻訳確率$P(e|j)$''，``日英方向の単語の翻訳確率の積''である．
+
+
+\subsection{フレーズテーブルの作成法}
+
+句に基づく翻訳モデルは，原言語の単語列から目的言語の単語列の翻訳に対し
+て確率を付与する．これをフレーズテーブルで管理する．以下に作成手順につ
+いて説明する．
+
+
+
+\begin{description}
+
+\item[手順1] 単語alignmentの計算（日英，英日）
+
+まず，IBMモデル~\cite{IBM}を利用することで，単語alignmentを得る．これを
+英日，日英の両方向に対して行う．つまり，学習データに対して，英日方向の
+単語alignmentと日英方向の単語alignmentを計算する．このtoolとして
+GIZA++~\cite{giza}が用いられる．
+
+
+\item[手順2] 単語列alignmentの計算（union と intersection）
+
+次に，英日・日英両方向の単語alignmentから，英日・日英両方向に1対多の対
+応を認めた単語列alignmentを求める．この単語列alignmentは英日・日英両方
+向の単語対応の積集合(intersection)と和集合(union)を利用してヒューリス
+ティックスで求める~\cite{Och}．尚，積集合(intersection)は，両方向ともに
+単語alignmentが存在する場合のみ単語列alignmentを残し，和集合(union)は，
+少なくとも片方向に単語alignmentが存在する場合に単語列alignmentを残す．
+対称な単語列対応を求めるヒューリスティックス(grow-diag-final)は，まず積
+集合から始まり，和集合にしかない単語対応が妥当であるかを判断しながら，
+単語対応を徐々に加える~\cite{tsukuba}．なお通常の統計翻訳では，
+grow-diag-finalが利用されている．
+
+\begin{table}[b]
+\caption{対訳文の例}
+\label{対訳文の例}
+\input{09table02.txt}
+\end{table}
+
+\item[手順3] フレーズテーブルの抽出
+
+単語列alignmentから，ヒューリステックを用いて日本語単語列と英語単語列の
+フレーズ対を得る．そのフレーズ対に対して翻訳確率を計算してフレーズテー
+ブルを作成する．表\ref{対訳文の例}を学習データとしたとき，
+grow-diag-finalで作成されたフレーズテーブルを表\ref{tbl:作成されたフレー
+  ズテーブルの例(grow-diag-final)}に示す．また，intersectionで作成され
+たフレーズテーブルを表\ref{tbl:作成されたフレーズテーブルの例
+  (intersection)}に示す．
+
+パラメータintersectionで作成したフレーズテーブルは，多くのフレーズ対を
+持ち，かつ長いフレーズ対を含むことが分かる．
+
+\end{description}
+
+
+
+
+\begin{table}[t]
+\caption{grow-diag-finalで作成されたフレーズテーブル（全12フレーズ）}
+\label{tbl:作成されたフレーズテーブルの例(grow-diag-final)}
+\input{09table03.txt}
+\end{table}
+\begin{table}[t]
+\caption{intersectionで作成したフレーズテーブルの例（全185フレーズから一部抜粋）}
+\label{tbl:作成されたフレーズテーブルの例(intersection)}
+\input{09table04.txt}
+\end{table}
+
+
+
+
+
+\subsection{言語モデル}
+
+言語モデルは，目的言語の単語列に対して，それらが起こる確率を与えるモデ
+ルである．日英翻訳では，より英語らしい文に対して高い確率を与えること
+で，翻訳モデルで翻訳された訳文候補の中から英語として自然な文を選出す
+る．言語モデルとしては$N$-gramモデルが代表的である．
+
+尚，学習データに表れない単語連鎖確率値を0.0とすると，テストデータにおい
+て，目的言語の全ての単語列の確率が0.0になって，単語列が出力されないこと
+がある．そのため，学習データに存在しない単語連鎖確率は，スムージングに
+よって0.0以外の確率を割り当てる．代表的なスムージング法として，Backoff
+やKneser-Neyがある．これらは高次の$N$-gramに，低次の$N$-gramと閾値を掛
+けて利用する．
+
+\subsection{デコーダ}
+
+デコーダは翻訳モデルと言語モデルの確率が最大となる文を探索し，出力
+する．デコーダとしてmoses~\cite{moses}が代表的である．mosesはいくつかの
+パラメータを設定することが出来る．mosesで設定できるパラメータの例を以下
+に示す．
+
+\begin{itemize}
+\item weight-l…言語モデルの重み 
+\item weight-t…翻訳モデルの重み
+\item weight-d…単語の移動の距離の重み
+\item weight-w…目的言語の長さに関するペナルティ
+\item distortion-limit…フレーズの並び変えの範囲の制限値
+\end{itemize}
+
+これらのパラメータは，パラメータチューニング（\ref{sec:papametertuning}節）
+を行うことで最適値を求めることが出来る．
+
+\subsection{パラメータチューニング}
+\label{sec:papametertuning}
+
+正解があるdevelopmentデータに対して評価値を最大にするように，デコー
+ダのパラメータを最適化することができる．これをパラメータチューニングと
+呼ぶ．この方法として，Minimum Error Rate Training (MERT)~\cite{mert}が一
+般的によく利用される．MERTは， developmentデータの，各文について上位
+$N$個（通常100個） の翻訳候補を出力し，目的の評価値（通常BLEU）を最大に
+するようにデコーダのパラメータの値を調節する．
+
+通常，パラメータチューニングを行うと，テストデータのBLEUスコアは上
+昇する．しかし，実験条件を変更するたびに，パラメータチューニングを行うと，
+多くの時間がかかる．また，本研究では，全ての実験において，実験
+条件を同一にする必要がある．そのため，パラメータの最適化は行わない．
+
+
+\section{自動的に作成したフレーズテーブルへの翻訳対の追加（提案方法）}
+
+\subsection{翻訳対への翻訳確率の付与}
+
+手作業で作成された翻訳対を，自動的に作成したフレーズテーブルに追加するた
+めに，翻訳対に翻訳確率を付与する必要がある．この翻訳確率として，自動作
+成したフレーズテーブルの翻訳確率を利用する．ただし，フレーズテーブルを
+作成するときにパラメータgrow-diag-finalを用いると，確率が付与される翻訳対
+は少ない．そこで，翻訳確率を与えるためのフレーズテーブルには，多くのフレー
+ズ対を作成するパラメータintersectionを用いて作成する．
+
+
+\subsection{翻訳対の追加手順}
+
+手作業で作成した翻訳対をフレーズテーブルに追加する手順を
+図\ref{fig:手作業で作成したフレーズ対への確率値の付与方法}に示す．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{17-4ia9f1.eps}
+\end{center}
+\caption{手作業で作成したフレーズ対への確率値の付与方法}
+\label{fig:手作業で作成したフレーズ対への確率値の付与方法}
+\end{figure}
+
+
+手作業で作成した翻訳対をフレーズテーブルに追加する手順を以下に示す．
+
+\begin{table}[t]
+\caption{パラメータintersectionで作成したフレーズテーブルの例}
+\label{tbl:パラメータintersectionで作成したフレーズテーブルの例}
+\input{09table05.txt}
+\end{table}
+
+\begin{description}
+
+\item[手順1] 前処理
+
+日英重複文文型パターン辞書~\cite{tori}から対訳文を抽出し
+``chasen~\cite{chasen}''で形態素解析を行う．英語文に対しては大文字の小文
+字化を行う．また，句読点の前にスペースを入れる．
+前処理を行った後の対訳文の具体例を表\ref{tbl:対訳文の例}に示す．
+
+\item[手順2] intersectionを用いたフレーズテーブルの作成
+
+手順1で抽出した対訳文を用いてフレーズテーブルを作成する．作成時のパラメー
+タにはintersectionを用いる．作成したフレーズテーブルの例を表\ref{tbl:パ
+ラメータintersectionで作成したフレーズテーブルの例}に示す．
+
+\item[手順3] 手作業で作成した翻訳対への翻訳確率値を付与
+
+手順2で作成したフレーズテーブルを参照して，手作業で作成した翻訳対に翻訳
+確率値を付与する．翻訳対が``オーバー コート を 脱ぎ捨て $|||$ flung his coat
+off''の場合は1行目のフレーズ対の翻訳確率値``0.5 3.88199e-08 0.5
+6.46865e-06''を付与する．
+
+
+\item[手順4] grow-diag-finalをもちいたフレーズテーブルの作成
+
+手順1で抽出した対訳文を用いてフレーズテーブルを作成する．作成時のパラ
+メータにはgrow-diag-finalを用いる．作成したフレーズテーブルの例を表
+\ref{tbl:パラメータgrow-diag-finalで作成したフレーズテーブルの例}に示す．
+
+\item[手順5] フレーズテーブルの追加
+
+\pagebreak
+手順4で作成したフレーズテーブルに，手順3で作成した翻訳確率を付与した翻訳
+対を追加する．
+
+\end{description} 
+
+\begin{table}[t]
+\caption{パラメータgrow-diag-finalで作成したフレーズテーブルの例}
+\label{tbl:パラメータgrow-diag-finalで作成したフレーズテーブルの例}
+\input{09table06.txt}
+\end{table}
+\begin{table}[t]
+\caption{確率値を付与した翻訳対を追加したフレーズテーブルの例}
+\label{tbl:確率値を付与した翻訳対を追加したフレーズテーブルの例}
+\input{09table07.txt}
+\end{table}
+
+尚，本稿では，手順4で作成したフレーズテーブルを用いた翻訳をベースライン
+と呼び，手順5のフレーズテーブルを用いた翻訳を提案手法と呼ぶ．
+
+
+
+\section{翻訳実験}
+\label{翻訳実験の結果}
+
+翻訳実験は，単文と重複文の2種類で行う．
+
+\subsection{学習データ}
+\label{sec:trainingdata}
+
+単文の翻訳実験には，電子辞書などから抽出した単文10万文対~\cite{murakami}を学習データとして用いる．重複文の翻訳実験には日英重複文
+文型パターン辞書~\cite{tori}から抽出した対訳文対，121,913文対を用いる．
+尚，単文10万文は，日本語が単文であるが，対訳英文は単文とは限らず複文の
+場合もある．重複文121,913文は，日本文が重文もしくは複文であるが，英文は
+複文とは限らず単文である場合もある．
+
+前処理[手順1]を行った対訳文の例を表\ref{tbl:対訳文の例}に示す．
+
+
+
+\subsection{手作業で作成された翻訳対}
+\label{sec:translationpair}
+
+手作業で作成された翻訳対は，日英重複文文型パターン辞書~\cite{tori}から抽
+出した対訳コーパスから作成された翻訳対261,453個を用いる． この翻訳対
+は，プロの翻訳者が手動で作成した対訳対で，単語，句，節の単位で対応づけ
+られている．また，この翻訳対は日本語文が重複文で英語が単文もしくは重複
+文である対訳コーパスから抽出されている．文献~\cite{ikehara} に，この翻
+訳対の詳しい説明がある．基本的には，日本語文と英語文の対訳文から日本語パターンと英語パターンを
+作成する．このとき，作成できる日英翻訳対を利用する．
+翻訳対の抽出において，長さの制限は行っていない．
+また，重複する句は抽出していない．
+例を表\ref{tbl:翻訳対の作成例}に示す．
+
+\begin{table}[t]
+\caption{対訳文の例}
+\label{tbl:対訳文の例}
+\input{09table08.txt}
+\end{table}
+\begin{table}[t]
+\caption{翻訳対の作成例}
+\label{tbl:翻訳対の作成例}
+\input{09table09.txt}
+\end{table}
+
+手作業で作成された翻訳対の例を
+表{\ref{tbl:手作業で作成された翻訳対の例}}に示す．
+翻訳対の分布図を図{\ref{fig:手作業で作成した翻訳対の単語数の分布図}}に示す．
+この図では，縦軸が全体
+に占める割合で，横軸が1つの翻訳対における単語数である．日本語における
+単語数を■，英語における単語数を□で示している．これからわかるよう
+に，2単語のフレーズが最も多く，単語数と，その単語数がしめる割合
+は，zipfの法則に沿っていることがわかる．なお，本稿では，手作業で作成さ
+れた単語列の対訳対を翻訳対と呼ぶ．
+
+
+\subsection{テストデータ}
+\label{sec:testdata}
+
+テストデータには，電子辞書などから抽出した単文1,000文対~\cite{murakami}を用
+いる．重複文の翻訳実験には日英重複文文型パターン辞書~\cite{tori}から抽出
+した対訳文対1,000文対を用いる．ただし，テストデータは
+学習データ（\ref{sec:trainingdata}節）や
+手作業で作成された翻訳対（\ref{sec:translationpair}節）と，
+別の辞書を利用する．従って，テストデータは，学習データや
+翻訳対に対してopen dataとなる．
+
+\begin{table}[t]
+\caption{手作業で作成された翻訳対の例}
+\label{tbl:手作業で作成された翻訳対の例}
+\input{09table10.txt}
+\end{table}
+\begin{figure}[t]
+\begin{center}
+\includegraphics{17-4ia9f2.eps}
+\end{center}
+\caption{手作業で作成した翻訳対の単語数の分布図}
+\label{fig:手作業で作成した翻訳対の単語数の分布図}
+\vspace{-1\baselineskip}
+\end{figure}
+
+
+
+
+\subsection{翻訳モデルと言語モデルとデコーダ}
+
+\begin{enumerate}
+
+\item{フレーズテーブルの作成}
+
+翻訳モデルはフレーズテーブルで管理される．フレーズテーブルの作成に
+は，train-phrase-model.perl~\cite{pharaoh}を用いて自動的に作成する．尚，
+本稿では，プログラムで自動作成した単語列の対訳対をフレーズ対と呼ぶ．ま
+た，フレーズ対の最大の単語数を決めるmax phrase lengthは20とする．
+
+
+\item{$N$-gram モデルの学習} 
+
+言語モデルには，
+$N$-gramモデルを用いる．$N$-gramモデルの学習には，
+``SRILM~\cite{srilm}''を用いる．本研究では5-gramモデルを用いる．また，ス
+ムージングのパラメータには，Kneser-Neyである``-ukndiscount''を用いる．
+
+
+\item{デコーダ}
+
+デコーダは``moses~\cite{moses}''を用いる．また，翻訳モデルには，日英翻訳
+確率と英日翻訳確率の相互情報を用いる~\cite{closs}．したがって，翻訳モデ
+ルの重み``weight-t''は``0.5 0 0.5 0 0''とする．また，翻訳時にフレーズの
+位置の変化に柔軟に対応するため，単語の移動重み``weight-d''は0.2とする．
+また単語の移動距離の制限``distortion-limit''は，$-1$（無制限を意味）とす
+る．その他は，default値とする．
+
+\end{enumerate}
+
+
+\subsection{評価方法}
+
+評価は，コンピュータによる自動評価と人間による評価の，2種類で行う．
+
+\begin{enumerate}
+
+\item{自動評価}
+
+機械翻訳システムの翻訳精度を自動評価する手法として，あらかじめ実験者が
+用意した正解文と，翻訳システムが出力した文とを比較する手法が利用されて
+いる．この自動評価法には多くの方法が提案されている．本研究では，
+$N$-gramを用いたBLEU~\cite{BLEU}と類似単語辞書を用いた
+METEOR~\cite{METEOR}を用いる．
+
+\item{人間による評価}
+
+人間による評価として，対比較実験を行う．得られた英文から100文をラン
+ダムに抽出し，ベースラインの翻訳結果と提案手法の翻訳結果のどちらの翻訳
+結果が優れているかを人間で判断する．その際，本研究において固有名詞の未知
+語はローマ字変換して評価し，それ以外の未知語は存在しないとして評価
+を行う．
+
+\end{enumerate}
+
+
+\begin{table}[b]
+\vspace{-1\baselineskip}
+\caption{総フレーズ数}
+\label{tbl:総フレーズ数}
+\input{09table11.txt}
+\end{table}
+
+
+\subsection{実験結果　フレーズテーブルの増加数}
+
+ベースラインのフレーズ数，確率値が付与できた翻訳対の数，
+最終的に作成されたフレーズ数を表\ref{tbl:総フレーズ数}に示す．
+
+手作業で作成された翻訳対は，261,453対であった．しかし約半数以上に対して
+確率値を付与できなくて，削除されていることがわかる．また，提案法におけ
+るフレーズテーブルのフレーズ数は，ベースラインと比較すると約2割増加して
+いる．
+
+確率が付与された翻訳対の例を表\ref{tbl:確率値が付与された翻訳対の例}に示す．
+
+
+\subsection{実験結果　翻訳精度の評価}
+\label{subsec:翻訳精度の評価}
+
+\begin{enumerate}
+\item{自動評価}
+
+日英翻訳のテストデータには，単文1,000文と重複文1,000文を用いる．ベー
+スラインと提案手法の翻訳精度の自動評価の結果を表\ref{tbl:日英翻訳の実験結果（テストデータ1,000文）}に示す．
+
+結果から，単文，重複文のいずれの翻訳においても提案手法の翻訳精度が向
+上していることが分かる．
+
+\begin{table}[b]
+\caption{確率値が付与された翻訳対の例}
+\label{tbl:確率値が付与された翻訳対の例}
+\input{09table12.txt}
+\end{table}
+\begin{table}[b]
+\caption{実験結果（テストデータ1,000文）}
+\label{tbl:日英翻訳の実験結果（テストデータ1,000文）}
+\input{09table13.txt}
+\end{table}
+\begin{table}[b]
+\caption{対比較実験の結果}
+\label{tbl:対比較実験の結果}
+\input{09table14.txt}
+\end{table}
+
+
+\item{人間による対比較実験}
+\label{sec:対比較実験}
+
+表\ref{tbl:日英翻訳の実験結果（テストデータ1,000文）}の日英翻訳結果からラン
+ダムに抽出した100文に対して，人間による対比較実験を行う．
+対比較実験において，
+ベースラインの翻
+訳結果の方が，優れていると評価した文を，``提案手法 ×''とする．提案手法
+の翻訳結果が，ベースラインの翻訳結果より優れていると評価した文を，``提案
+手法 ○''とする．また，ベースラインと提案手法で翻訳結果が変化しなかった文
+を``変化無し''とする．
+対比較実験の結果を表\ref{tbl:対比較実験の結果}に示す．
+
+
+
+結果から，全ての翻訳において，提案手法が優れている割合が高くなっている
+ことが分かる．
+
+\end{enumerate}
+
+
+
+\section{翻訳対の翻訳確率の重みの最適化}
+\label{sec:翻訳対の翻訳確率の重みの最適化}
+
+
+\ref{翻訳実験の結果}章の実験では，手作業によって作成した翻訳対
+に，パラメータintersectionで作成した翻訳確率を付与した．しかし，手作業
+で作成された翻訳対は信頼性が高いと考えられる．そこで，翻訳対に付与する
+翻訳確率の重みを大きくした方が翻訳精度が向上すると考えられる．そこで，
+翻訳対に付与する翻訳確率の重みを大きくした実験を行う．
+
+
+\subsection{翻訳確率の重みを変えた翻訳実験}
+
+単文および重複文の翻訳実験において，手作業で作成した翻訳対の翻訳確率の
+重みを2倍，4倍，8倍に変化させたときの，BLEUスコアとMETEORの変化を調査す
+る．結果を表\ref{tbl:翻訳確率の重みを変化させた時の翻訳実験結果}に示す．
+
+\begin{table}[b]
+\caption{翻訳確率の重みを変化させた時の翻訳実験結果}
+\label{tbl:翻訳確率の重みを変化させた時の翻訳実験結果}
+\input{09table15.txt}
+\end{table}
+\begin{table}[b]
+\caption{対比較実験の結果}
+\label{tbl1:対比較実験の結果}
+\input{09table16.txt}
+\end{table}
+
+
+
+日英の翻訳において，単文の翻訳時には翻訳確率の重みを2倍，重複文の翻訳
+時には8倍にした時に翻訳精度がもっとも良かった．最適な翻訳確率の重みを用い
+たときの提案手法の翻訳精度と，ベースラインの翻訳精度の差を比較した場合，
+BLEUでは，単文で0.9\%，重複文で0.8\%向上していることがわかる．
+
+
+\subsection{対比較実験}
+\label{sec1:対比較実験}
+
+表\ref{tbl:翻訳確率の重みを変化させた時の翻訳実験結果}の翻訳結果100文に
+対して，表\ref{tbl:対比較実験の結果}と同じ条件で対
+比較実験を行った結果を表\ref{tbl1:対比較実験の結果}に示す．
+
+表\ref{tbl:対比較実験の結果}と比較すると，特に重複文において改善が見られる．
+
+\subsection{対比較実験の解析}
+
+表\ref{tbl1:対比較実験の結果}における対比較実験の例文を以下に示す．
+
+\begin{enumerate}
+
+\item{提案手法が優れている例}
+
+提案手法が優れていると評価した例を
+表\ref{tbl1:対比較実験の結果 提案手法が優れていると評価した例（日英翻訳の単文）}
+に示す．
+
+
+\begin{table}[b]
+\caption{提案手法が優れていると評価した例}
+\label{tbl1:対比較実験の結果 提案手法が優れていると評価した例（日英翻訳の単文）}
+\input{09table17.txt}
+\end{table}
+
+
+
+\item{提案手法が劣っていると評価した例}
+
+提案手法が劣っていると評価した例を
+表\ref{tb11:対比較実験の結果 提案手法が劣ると評価した例（日英翻訳の単文）}に示す．
+
+
+\end{enumerate}
+
+\begin{table}[t]
+\caption{提案手法が劣ると評価した例}
+\label{tb11:対比較実験の結果 提案手法が劣ると評価した例（日英翻訳の単文）}
+\input{09table18.txt}
+\end{table}
+
+
+
+\subsection{パラメータを最適化した翻訳実験}
+
+\begin{enumerate}
+
+\item{パラメータの最適化}
+
+通常，統計翻訳においては，翻訳精度の向上を目的として，パラメータの最適
+化を行う．この節では，パラメータの最適化を行ったときの，提案方法の
+有効性を調査する．パラメータの最適化には，Minimum Error Rate
+Training (MERT)~\cite{mert} を用いる．尚，フレーズテーブルの作成には
+mosesに付属しているtrain-factored-phrase-model.perlを用いる．ま
+た，reorderingモデルも組み込む．
+
+\item{developmentデータ}
+
+developmentデータは，単文の実験も重複文の実験も，テストデータ
+（\ref{sec:testdata}節）と同一の辞書から抽出したデータを利用する．単文
+の翻訳実験には，developmentデータに単文100文を使用してパラメータの最適
+化を行う．重複文の翻訳実験にはdevelopmentデータに重複文1,000文を使用し
+てパラメータの最適化を行う．
+
+
+\item{翻訳実験の結果}
+
+翻訳実験の結果を表\ref{tbl:最適化したパラメータを用いた実験結果}に示す．
+
+
+
+表{\ref{tbl:最適化したパラメータを用いた実験結果}}の結果から，パラメー
+タの最適化を行った翻訳実験においても，BLEUが単文において0.9\%，重複文に
+おいて0.2\%上昇し，提案手法の有効性が示された．
+
+\end{enumerate}
+
+\begin{table}[t]
+\caption{パラメータチューニングを行った実験結果}
+\label{tbl:最適化したパラメータを用いた実験結果}
+\input{09table19.txt}
+\end{table}
+
+
+
+
+\section{考察}
+
+\subsection{提案手法の効果の分析}
+
+表\ref{sec1:対比較実験}の対比較実験の結果において，翻訳結果が変化した78文
+中，58文が提案手法が優れていると評価した．この評価の理由として，妥当な語
+順による向上と未知語の減少に分けることが出来る．以下にその分析結果を述べ
+る．
+
+\begin{enumerate}
+
+\item{妥当な語順による向上}
+
+提案手法の翻訳結果がベースラインと比較して，妥当な語順となって文質が
+向上したと判断した例を表\ref{tbl:妥当な語順の例 日英翻訳}に示す．
+
+
+\item{未知語の減少}
+
+未知語が減少したことにより翻訳精度が向上した例を表\ref{tbl:未知語が減少
+した例 日英翻訳}に示す．
+
+
+
+\item{妥当な語順になった文と未知語が減少した文の比較}
+
+提案手法が優れていると評価した58文において，未知語が減少した文数と，妥当
+な語順になった文数を表\ref{tbl:文質が向上した文数と未知語が減少した文数の
+比較}に示す．
+
+
+表\ref{tbl:文質が向上した文数と未知語が減少した文数の比較}から， 約8割
+の文が，未知語の減少よりも妥当な語順になって翻訳精度が向上していると判
+断された．つまり，提案手法の有効性は，主に妥当な語順になった文の増加に
+あると言える．
+
+\end{enumerate}
+
+\begin{table}[t]
+\caption{妥当な語順による向上例}
+\label{tbl:妥当な語順の例 日英翻訳}
+\input{09table20.txt}
+\end{table}
+
+
+
+
+
+\subsection{今後の課題}
+
+今後の課題として，以下の項目がある．
+
+\begin{enumerate}
+
+\item{手作業で作成された翻訳対の翻訳確率の最適化}
+
+手作業で作成された翻訳対は信頼性が高いため，翻訳確率値が大きい方が，高
+い翻訳精度が得られると考え，第\ref{sec:翻訳対の翻訳確率の重みの最適化}
+章において翻訳対に付与した翻訳確率の重みを変化させて翻訳実験を行った．
+この結果，翻訳精度が向上した（表\ref{tbl:翻訳確率の重みを変化させた時の
+  翻訳実験結果}）．しかし，重みを大きすぎると翻訳精度が低下した．この結
+果から，重みの最適化が必要であると考えている．そ
+して，この重みの最適化にMERTが使用できると考えている．
+
+\item{翻訳確率値を付与できなかった翻訳対の追加}
+
+本研究では約26万個の手作業で作成された翻訳対のうち，約13万個の翻訳対に
+翻訳確率値を付与できた．そして，翻訳確率値を付与できなかった翻訳対約13
+万個は，削除した．そこで，翻訳確率値を付与できなかった翻訳対約13万個に
+対して，翻訳確率として閾値を与えて，翻訳実験を行った．しかし，どのよう
+な閾値を与えても，BLEU, METEORともに低下した．今後，確率を付与できなかっ
+た翻訳対の，確率の付け方を考えてみたい．
+
+
+\item{述語節に関する翻訳対の追加}
+
+翻訳において，述語節が正しく翻訳されているか否かは，人間の評価において
+重要な判断要素となりやすい．つまり，述語節が正しく翻訳されると，文の意
+味が分かりやすくなり，人間による翻訳精度の評価が向上する，そこで，今後
+は特に，述語節に関する翻訳対を追加し，翻訳精度の調査を行いたいと考えて
+いる．また，英辞郎~\cite{eijiro}には，手作業によって作成された200万以上
+の日英の翻訳対がある．これを利用することでさらに翻訳精度が向上すると考
+えている．
+
+\end{enumerate}
+
+\begin{table}[t]
+\caption{未知語が減少した例}
+\label{tbl:未知語が減少した例 日英翻訳}
+\input{09table21.txt}
+\end{table}
+\begin{table}[t]
+\caption{妥当な語順になった文数と未知語が減少した文数の比較}
+\label{tbl:文質が向上した文数と未知語が減少した文数の比較}
+\input{09table22.txt}
+\end{table}
+
+
+\section{おわりに}
+
+本研究では，手作業で作成した信頼性の高い翻訳対を，プログラムで自動作成
+したフレーズテーブルに追加して，単文と重複文における日英翻訳の精度評価
+を行った．約13万の翻訳対を追加し，追加した翻訳対の翻訳確率の重みを変え
+た結果，BLEUスコアが日英翻訳において，単文では12.5\%から13.4\%に0.9\%向
+上した．また重複文では7.7\%から8.5\%に0.8\%向上した．また出力英文100文
+に対し人間による対比較実験を行ったところ，単文では，従来法が良いと判断
+された文が5文であるのに対し，提案法では23文，また重複文では，従来法が良
+いと判断された文が15文であるのに対し，提案法では35文となった．
+
+以上の結果から，提案手法の有効性が示された．今回の実験では日英重複文文
+型パターン辞書~\cite{tori}の対訳文対から，手作業で作成した翻訳対を追加し
+た．今後は他の辞書の翻訳対も追加して，翻訳精度の調査をすることを考えて
+いる．また，追加する翻訳対の翻訳確率値に対する重みの最適化の方法につい
+ても考えていく．
+
+\acknowledgment
+
+日英重複文文型パターン辞書の対訳文対や，この対訳対から得られる翻訳対の
+作成には，多くの方の協力を得ました．基本的には鳥バンクの作成において関
+連した方々です．特に，以下の人に厚くお礼を申し上げます（順不同）．
+
+白井諭，藤波進，小見佳恵，阿部さつき，木村淳子，竹内奈央，小船園望（以
+  上NTT-AT），池田尚志（岐阜大学），佐良木昌（長崎純心大），新田義彦
+（日本大学），柴田勝征（福岡大学），山本理恵（鳥取大学工学部：事務
+  局），大山芳史（NTT-CS研），衛藤純司（ランゲージウエア）
+
+
+
+
+
+\begin{thebibliography}{99}
+
+\bibitem{IBM} 
+Brown, Peter F., John Cocke, Stephen Della Pietra,
+  Vincent J. Della Pietra, Frederick Jelinek, John D.  Lafferty,
+  Robert L. Mercer, and Paul S. Roossin (1990). ``A Statistical Approach to
+  Machine Translation.'' \textit{Computational Linguistics}, \textbf{16} (2), pp.~7985.
+
+\bibitem{PSMT}
+Philipp Koehn, Franz J. Och, and Daniel Marcu (2003).
+``Statistical phrase-based translation'', \textit{HLT-NAACL 2003}, pp.~127--133.
+
+\bibitem{tori} 
+鳥バンク, 
+``http://unicorn.ike.tottori-u.ac.jp/toribank/'',  2007.
+
+\bibitem{moses}
+ Philipp Koehn, Marcello Federico, Brooke Cowan,
+  Richard Zens, Chris Dyer, Ondej Bojar, Alexandra Constantin, and Evan
+  Herbst (2007). ``Moses: Open Source Toolkit for Statistical Machine
+  Translation'', In \textit{Proceedings of the ACL 2007 Demo and Poster Sessions},
+  pp.~177--180.
+
+\bibitem{giza}
+ Franz Josef Och, and Hermann Ney (2003). ``A Systematic Comparison
+  of Various Statistical Alignment Models.'' \textit{Computational
+  Linguistics}, \textbf{29} (1), pp.~19--51, 2003.
+
+\bibitem{Och} 
+Franz Josef Och and Hermann Ney (2003). ``A systematic
+comparison of various statistical alignment models.'' 
+\textit{Computational Linguistics}, \textbf{29} (1), pp.~19--51.
+
+\bibitem{tsukuba} 
+山本幹雄，藤井敦，内山将夫，宇津呂武仁 (2007). 統計的機械翻訳における特許文翻訳に関する講習会, pp.~11.
+
+\bibitem{mert}
+Franz Josef Och (2003). ``Minimum Error Rate Training in Statistical Machine
+Translation.'' 
+In \textit{Proceedings of the 41st Annual Meeting of the Association
+for Computational Linguistics}, pp.~160--167.
+
+\bibitem{chasen}
+松本裕治 (2000). 形態素解析システム「茶筌」，情報処理 \textbf{41} (11), pp.~1208--1214.
+
+\bibitem{ikehara}
+池原悟 (2009). 非線形言語モデルによる自然言語処理, 岩波書店, ISBN978-4-00-005882-7,
+pp.~220--242.
+
+
+\bibitem{murakami}
+村上仁一, 池原悟, 徳久雅人 (2002). 日本語英語の文対応の対訳データベースの作成, 第7回 「言語，認識，表現」年次研究会.
+
+
+\bibitem{pharaoh}
+NAACL (2006). ``Workshop on Statistical Machine Translation
+Shared Task, Exploiting Parallel Texts for Statistical Machine Translation
+Shared Task Baseline System,  training-release-1.3.tgz''. http://www.statmt.org/wmt06/shared-task/baseline.html
+
+\bibitem{srilm}
+ Andreas Stolcke (2002). ``SRILM---An Extensible Language
+  Modeling Toolkit'', In \textit{Proceedigns Intl. Conf. Spoken Language Processing},
+  Denver, Colorado.
+
+\bibitem{closs}
+Jin'ichi Murakami, Masato Tokuhisa, and Satoru Ikehara (2007). ``Statistical
+Machine Translation using Large J/E Parallel Corpus and Long Phrase
+Tables'', In \textit{International Workshop on Spoken Language Translation 2007},
+pp.~151--155.
+
+\bibitem{BLEU} 
+Papineni, K., Roukos, S., Ward, T., and Zhu, W.~J. (2002). 
+``BLEU: a method for automatic evaluation of machine translation'', 
+In \textit{40th Annual meeting of the Association for Computational Linguistics}
+pp.~311--318.
+
+\bibitem{METEOR}
+ Banerjee, S. and Lavie, A. (2005). ``METEOR: An Automatic
+  Metric for MT Evaluation with Improved Correlation with Human
+  Judgments'', In \textit{Proceedings of Workshop on Intrinsic and Extrinsic
+  Evaluation Measures for MT and/or Summarization at the 43th Annual
+  Meeting of the Association of Computational Linguistics (ACL-2005)}.
+
+\bibitem{eijiro} 
+EDP編集 (2008). 英辞郎　第4版, 株式会社アルク, ISBN 4757414560.
+
+\bibitem{nlp}
+ 鏡味良太，村上仁一，徳久雅人，池原悟 (2009). 統計翻訳における
+  人手で作成された大規模フレーズテーブルの効果，言語処理学会第15回年
+  次大会, pp.~224--227.
+
+\end{thebibliography}
+
+
+
+\begin{biography}
+\bioauthor{村上　仁一}{
+1984年筑波大学第3学群基礎工学類卒業．
+1986年筑波大学大学院修士課程理工学研究科理工学専攻修了．
+同年NTTに入社．NTT情報通信処理研究所に勤務．
+1991年国際通信基礎研究所(ATR)自動翻訳電話研究所に出向．
+1995年NTT情報通信網研究所に復帰．
+1997年豊橋技術科学大学にて博士（工学）．
+1998年鳥取大学工学部知能情報工学科に転職．
+現在に至る．
+主に音声認識のための言語処理の研究を行う．
+最近は統計翻訳の研究に従事．
+電子情報通信学会，日本音響学会，言語処理学会各会員．
+}
+\bioauthor{鏡味　良太}{
+2009年鳥取大学工学部知能情報工学科卒業．
+同年エヌデック株式会社に入社．
+現在に至る．
+}
+
+\bioauthor{徳久　雅人}{
+1995年九州工業大学大学院情報工学研究科博士前期課程修了．博士（工学）．
+同年同大学情報工学部知能情報工学科助手，2002年鳥取大学工学部知能情報工学科
+助手，現在，同大学大学院工学研究科情報エレクトロニクス専攻講師．情報処理学会，電子情報通信学会，人工知能学会，言語処理学会各
+会員．
+}
+
+\bioauthor{池原　　悟}{
+1967年大阪大学基礎工学部電気工学科卒業.
+1969年同大学院修士課程終了．工学博士．同年日本電信電話公社に入社.
+1982年情報処理学会論文賞．
+1993年情報処理学会研究賞．
+1995年日本科学技術情報センター賞．
+1995年人工知能学会論文賞．
+1996年スタンフォード大学客員教授．
+1996年鳥取大学工学部教授.
+2002年電気通信普及財団賞受賞．
+2006年文部科学大臣表彰 科学技術賞．
+2009年12月逝去．
+数式処理,トラフィック理論,自然言語処理の研究に従事.
+}
+\end{biography}
+
+
+\biodate
+
+
+
+
+\end{document}
+

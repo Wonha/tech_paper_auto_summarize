@@ -1,0 +1,993 @@
+\documentstyle[epsbox,jnlpbbl]{jnlp_j_b5}
+\setcounter{page}{27}
+\setcounter{巻数}{7}
+\setcounter{号数}{2}
+\setcounter{年}{2000}
+\setcounter{月}{4}
+\受付{1999}{6}{3}
+\再受付{1999}{10}{8}
+\採録{2000}{1}{7}
+
+\newcommand{\KEYE}{}
+\newcommand{\KEY}{}
+\newcommand{\KEYC}{}
+
+\newcounter{algocounter}
+\newcounter{algocnt}[algocounter]
+\newenvironment{ALGO}{}{}
+
+\newenvironment{LIST}{}{}
+
+\newenvironment{RULE}[1]{}{}
+
+\newcounter{headlinecounter}
+\newenvironment{HEADLINE2}{}{}
+
+\newenvironment{HEADLINE}{}{}
+
+\newenvironment{HEADLINE-FT}{}{}
+
+\newcounter{condcounter}
+\newenvironment{COND}{}{}
+
+\setcounter{secnumdepth}{2}
+\setlength{\parindent}{\jspaceskip}
+
+\title{英字新聞記事見出し翻訳の自動前編集による改良}
+\author{吉見 毅彦\affiref{SHARP} \and 佐田 いち子\affiref{SHARP}}
+
+\headauthor{吉見，佐田}
+\headtitle{英字新聞記事見出し翻訳の自動前編集による改良}
+
+\affilabel{SHARP}{シャープ(株) ソフト事業推進センター}
+{Software Business Development Center, SHARP Corp.}
+
+\jabstract{英字新聞記事の見出しは通常の文の表現形式とは異なる特有の形式
+をしているため，従来の英日機械翻訳システムによる見出しの翻訳の品質はあま
+り高くない．
+この問題に対して本研究では，見出しを通常の表現形式に書き換える自動前編
+集系を既存のシステムに追加することによる解決を目指している．
+見出しを通常の表現形式に書き換えれば，より品質の高い翻訳が，システムの
+既存部分にほとんど変更を加えることなく得られる．
+例えば``Sales up sharply in June''という見出しは通常のシステムには受理
+されない可能性が高いが，``Sales {\it were} up sharply in June''のように
+be動詞``were''を補えば従来のシステムでも適切な翻訳が得られるようになる．
+本稿では，見出し特有表現の典型例の一つであるbe動詞の省略現象を対象とし，
+be動詞が省略されている見出しにbe動詞を正しく補うための書き換え規則を，
+形態素解析と粗い構文解析によって得られる情報に基づいて記述する．
+この方法を，我々が開発している英日翻訳支援システムPower E/Jに組み込み，
+未知データの見出し312件を対象として実験を行なったところ，再現率81.2\%，
+適合率92.0\%の精度が得られた．}
+
+\jkeywords{機械翻訳，自動前編集，原文書き換え，新聞記事見出し}
+
+\etitle{Improvement of Translation Quality \\
+of English Newspaper Headlines \\
+by Automatic Preediting}
+\eauthor{Takehiko Yoshimi\affiref{SHARP} \and
+Ichiko Sata\affiref{SHARP}} 
+
+\eabstract{Since the headlines of English news articles have a characteristic
+style, different from the styles which prevail in ordinary sentences, it 
+is difficult for MT systems to generate high quality translations for 
+headlines.
+We try to solve this problem by adding to an existing system a
+preediting module which rewrites the headlines to ordinary expressions.
+Rewriting of headlines makes it possible to generate better translations 
+which would not otherwise be generated, with little or no changes to the 
+existing parts of the system. 
+While most MT systems would not probably accept, for example, the
+headline ``Sales up sharply in June'', they would be able to generate
+a satisfactory translation of the expression ``Sales {\it were} up
+sharply in June'' where the verb ``were'' has been inserted.
+Focusing on a conspicuous phenomenon, the absence of a form of the
+verb of `be', we have described rewriting rules for putting properly the 
+verb `be' into the headlines, based on information obtained by morpholexical 
+and rough syntactic analysis.
+We have incorporated the proposed method into our English-to-Japanese
+MT system {\it Power E/J}, and carried out an experiment with 312
+headlines as unknown data.
+Our method has satisfactorily marked 81.2\% recall and 92.0\%
+precision.}
+
+\ekeywords{Machine Translation, Automatic Preediting, Rewriting, Headline}
+
+\begin{document}
+\maketitle
+
+\section{はじめに}
+\label{sec:introduction}
+
+近年，WWWを通じて英字新聞記事に接する機会が増えてきたことに伴い，より
+正確に英文記事を日本語に翻訳する必要性が高まってきている．
+新聞記事は見出しと本文から構成されるが，見出しは記事の最も重要な情報を
+伝える表現である
+\footnote{テキストから重要な文を選択するテキスト抄録システムにおいて，
+見出しを最も重要な文であるとみなす考え方\cite{Nakao97,Yoshimi99}がある．}
+ため，見出しを正確に翻訳することは他の表現の翻訳に比べてより一層重要で
+ある．
+
+英字新聞記事の見出しは，できるだけ少ない文字数でできるだけ多くの情報を
+伝えるためや，読者の注意を引くために，通常の文の表現形式とは異なる特有
+の形式をしている．
+このため，従来の英日機械翻訳システムでは適切に翻訳できない場合が多い．
+その原因は主に，見出し特有表現の構文解析を適切に行なうための構文解析規
+則が，様々な種類や分野のテキストを扱うことを前提に開発された機械翻訳シ
+ステムでは記述されていないことにあると考えられる．
+
+既存の構文解析規則で適切に扱えない表現への対応策の選択肢としては，特
+殊な表現形式が扱えるように構文解析規則を拡張するアプローチと，既存の
+構文解析規則は変更せず，既存の規則でも適切に処理できるように原言語の表
+現を書き換える新たなモジュールを設けるアプローチが考えられる．
+後者のアプローチとして，長い文の構文解析が失敗しやすいという問題に，長
+文を複数の短文に分割することによって対処する方法\cite{Kim94}や，
+書き換えを行なうべきかどうかの判定精度を高めるために，完全な構文情報
+が得られる構文解析終了後にまで書き換え規則の適用を遅らせる方法
+\footnote{この方法は，日英間の構造的な差異を調整し，より自然な翻訳を生
+成するために構文構造を書き換える方法\cite{Nagao85a}に近いと考えられる．}
+\cite{Shirai95}
+などがこれまでに示されている．
+
+実際に運用されている機械翻訳システムでは構文解析規則の規模は非常に大き
+くなっているため，既存の規則との整合性を保ちながら新たな規則を追加する
+ことは容易ではない．
+また，特殊な表現を扱うための規則を追加すると規則の汎用性が損なわれる恐
+れがある．
+これに対して，既存の規則には手を加えず，原言語の表現を書き換える前編集
+系を新たに開発する方が，書き換え結果が既存の構文解析規則で正しく解析で
+きるかどうかを人手で判断することは比較的容易であるという点や，規則の汎
+用性を維持することができるという点でシステムの開発，維持上望ましい．
+
+本研究では，従来の機械翻訳システムによる新聞記事見出し翻訳の品質が低いと
+いう問題に対して自動前編集モジュールを設けるアプローチを採り，浅いレベル
+の手がかりに基づいて原言語の表現を書き換えることによってこの問題を解決す
+ることを目指している．
+自動前編集による見出し翻訳の品質改善の一例として本稿では，見出し特有表現
+のうち比較的高い頻度
+\footnote{284件の見出しを対象とした我々の調査で確認された見出し特有の表
+現\cite{Uenoda78}は，
+be動詞の省略を含むものが73件(25.7\%)，
+等位接続詞のコンマでの代用を含むものが25件(8.8\%)，
+``say''のコロンでの代用を含むものが4件(1.4\%)
+などである.
+ただし，現在形で過去の事象を表す表現や冠詞の省略などは今回の調査では考慮
+しなかった．}
+で見られるbe動詞の省略現象に対象を絞り，be動詞が省略されている見出しにbe
+動詞を正しく補うための書き換え規則を，形態素解析と粗い構文解析
+\footnote{具体的には，\ref{sec:preeditHeadline:cond}\,節で述べる手続き
+による処理を指す．}
+によって得られる情報に基づいて記述し，これらの書き換え規則によって適切
+な書き換えが行なえることを示す．
+
+本稿の対象は英字新聞記事見出しという限定されたものであるが，英字新聞記事
+は英日機械翻訳システムの一般利用者が日々接することが多いテキストの一つで
+あるため，実用的なシステムにおける見出し解析の重要性は高い．
+また，本稿の目的はbe動詞を補うことによって見出し解析の精度を向上させるこ
+とにあり，書き換えた見出しの翻訳が日本語新聞記事の見出しの文体に照らし合
+わせて適切であるかどうかは本稿の対象外である．
+
+\section{英々変換系}
+\label{sec:preedit}
+
+\subsection{英々変換の枠組}
+\label{sec:preedit:flow}
+
+本節で述べる自動前編集系(英々変換系)を組み込んだ機械翻訳システムにおけ
+る解析の流れを図\ref{fig:flow}\,に示す．
+このシステムでは，形態素解析終了後に英々変換を実行して
+英語表現を書き換えた後，書き換えた部分の形態素解析を行ない，表現全体の
+形態素解析結果を構文解析系に送る．
+一度目の書き換え結果に対する構文解析に失敗した場合
+\footnote{本稿では，入力表現全体を覆う構文構造が生成できないことを構文
+解析の失敗と呼ぶ．}，
+処理の制御は英々変換に戻る．
+再度英々変換を行なう場合には，各書き換え規則に記述されている規則の信頼
+度(後述)に従って，一度目の英々変換では用いなかった規則を新たに適用した
+り，逆に一度目の処理で行なった書き換えを取り消したりする
+\footnote{二度目の構文解析に失敗した場合には，断片的な構文構造を内部表
+現とする．}．
+\begin{figure}[htbp]
+\begin{center}
+\fbox{\epsfile{file=flow2.eps,width=0.6\columnwidth}}	
+\end{center}
+\caption{解析の流れ}
+\label{fig:flow}
+\end{figure}
+
+英々変換系での処理は，形態素解析結果に対して先頭から順に書き換え規則の
+適用条件との照合を行なっていき，適用条件が満たされる部分を順次書き換え
+ていく．
+この英々変換系は，新聞記事見出しの書き換え専用に設計したものではなく，
+通常の表現も対象とした一般的な枠組である．実際，見出し以外の表現に対す
+る書き換え規則として，挿入語句を識別する
+規則や長い表現を分割する規則などが記述されている．
+
+\subsection{書き換え規則の形式}
+\label{sec:preedit:ruleformat}
+
+書き換え規則には，次に示すように，適用条件と書き換え操作の他，制御情報
+として適用抑制規則集合と信頼度を記述することができる．
+\[ (\,識別番号，適用条件，書き換え操作，適用抑制規則集合，信頼度\,) \]
+
+書き換え対象候補が適用条件を満たすかどうかの判定は，書き換え対象候補の
+形態素語彙属性や構文属性を調べる手続きを用いて行なう．
+
+書き換え操作には，英語表現を追加，削除，置換する操作と，システム固有の
+編集記号を付加する操作がある．
+実験に用いたシステムでは，利用可能な編集記号として，多品詞語の品詞を指
+定する記号や，節や句の範囲や従属先を指定する記号など54種類が定義されて
+いる．
+編集記号の付加によって解釈の曖昧性が減るため，解析の精度と速度の向上が
+期待できる．
+
+ある規則$R$に与えられている適用抑制規則集合は$R$の適用を抑える他の規
+則に関するメタ条件を表し，規則$R$はその適用抑制規則集合に記述されてい
+る識別番号の規則が既に適用されている場合には適用されない．
+規則$R$の適用抑制規則集合には，$R$の書き換え対象と重複する部分を書き換
+えようとする規則だけでなく，書き換え対象が$R$のものと重複しない規則を
+含めてもよい．
+
+規則には，その信頼性が高く，規則の適用によって翻訳品質が向上すること
+がほぼ確実な規則もあれば，信頼性があまり高くない規則もある．
+信頼度は，このようなことを考慮して，信頼性があまり高くない規則による悪
+影響を抑えるために設定したものである．
+各規則には，その信頼性に応じてA，B，Cのいずれかの信頼度を与える．
+信頼度Aの規則は最初の構文解析の前に適用し，構文解析に失敗してもこの規
+則による書き換えは取り消さない．
+規則に信頼度Aを与えるのは，この規則を適用しないと構文解析に失敗するこ
+とがほぼ確実であり，たとえこの規則によって書き換えた表現の構文解析に失
+敗して断片的な構文構造しか得られなかったとしても，この規則を適用しない
+場合の(断片的な)構文構造から生成される翻訳よりも高い品質の翻訳が生成さ
+れると期待される場合である．
+信頼度Bの規則は最初の構文解析の前に適用するが，最初の構文解析に失敗し
+た場合，この規則による書き換えは取り消す．
+信頼度Cの規則は最初の構文解析の前には適用せず，最初の構文解析に失敗し
+た場合に初めて適用する．
+
+簡単な書き換え規則の例を図\ref{fig:EtoE_rule}\,に示す．
+この規則は新聞記事見出しの書き換え用ではないが，倒置文の構文解析が失敗す
+ることに対処するためのものである．
+この規則は，現在着目している語が入力文の先頭語であり(\verb+p == 1+)，
+着目語の(細分類)品詞候補として過去分詞の可能性があるが名詞の可能性がなく，
+さらに着目語の直後の語が``is''であるときに適用される．
+この適用条件が満たされると，着目語の先頭文字を小文字に変換し，``What is''
+という語句を着目語の直前に挿入する．
+この処理によって，例えば
+``Affiliated is the parent company of Globe Newspaper Co.''という文が
+``What is affiliated is the parent company of Globe Newspaper Co.''に書
+き換えられる．
+\begin{figure}[tbhp]
+\begin{RULE}{0.9\textwidth}
+\begin{verbatim}
+(301,
+ (p == 1 &&
+  word_class(p, past_participle) == TRUE &&
+  word_class(p, noun) == FALSE &&
+  word(p+1, "is") == TRUE),
+ (to_lower(p), insert(p-1, "What is")),
+ (),
+ A)
+\end{verbatim}
+\end{RULE}
+\caption{書き換え規則の例}
+\label{fig:EtoE_rule}
+\end{figure}
+
+\section{英字新聞記事見出しの調査}
+\label{sec:investigation}
+
+英字新聞記事の見出しでは，述語の時制や態などに関する情報の省略や，冠詞の
+省略，略語の使用，等位接続詞のコンマでの代用など文字数を節約するための様
+々な工夫がなされている\cite{Uenoda78}．
+本研究では，これら見出し特有の現象のうち時制情報などの省略に関連する
+be動詞の省略現象を扱うことにし，ロイター記事\cite{Lewis97}の見出し
+284件を対象として次の四項目の調査を行なった． 
+\begin{enumerate}
+\item
+be動詞が省略されているのはどのような場合か．\label{enum:key}
+\item
+be動詞が省略されている見出しをそのまま我々の実験システムで翻訳した場合
+の翻訳品質はどの程度か．\label{enum:quality} 
+\item
+be動詞が省略されている見出しにbe動詞が適切に補われた場合，項目
+(\ref{enum:quality})の翻訳に比べてどの程度品質が改善されるか．
+\label{enum:improve}
+\item
+形態素語彙，構文上のどのような現象が，be動詞が省略されている見出しと
+そうでない見出しを区別する手がかりとなるか．\label{enum:feats}
+\end{enumerate}
+本節では項目(\ref{enum:key})，(\ref{enum:quality})，
+(\ref{enum:improve})についての調査結果を示し，項目(\ref{enum:feats})に
+ついては\ref{sec:preeditHeadline:cond}\,節で述べる．
+
+\subsection{\protect\KEY の種類}
+\label{sec:investigation:key}
+
+be動詞の省略は調査対象の見出し284件のうち73件において見られた．
+一般にbe動詞の省略は一つの見出しにおいて複数箇所で行なわれうるが，これ
+ら73件の見出しでは一箇所での省略しか行なわれていなかった．
+通常の表現形式ではbe動詞と結び付けられ全体で定形述語と解釈される表現を
+ここでは\KEY と呼ぶ．
+73件の見出しに出現した\KEY は，受動態用法の過去分詞，to不定詞，現在分
+詞，叙述用法の形容詞，前置詞句，複合動詞の構成素の六種類であった．
+ここで複合動詞の構成素とは，be動詞と結合して複合動詞となる語句を意味し， 
+例えば``be up''における``up''などである．
+各\KEY ごとに，それが出現した見出しの例(上段)と，省略箇所に人手でbe動
+詞を補った表現(下段)，さらに出現件数を表\ref{tab:stat}\,に示す． 
+表\ref{tab:stat}\,では，\KEY に下線を付し，人手で補ったbe動詞を斜字体
+で示している．
+\begin{table}[htbp]
+\caption{be動詞が省略されている見出しの例と件数}
+\label{tab:stat}
+\begin{center}
+\begin{tabular}{|l||l|r|}\hline
+\multicolumn{1}{|c||}{\KEY} & \multicolumn{1}{|c|}{例} &
+\multicolumn{1}{|c|}{件数}\\\hline\hline
+過去分詞 &
+\begin{minipage}{0.6\columnwidth}\vspace*{1mm}
+\begin{HEADLINE2}
+\headlineA Calabrian bank \underline{taken} over by commissioners
+\headlineB Calabrian bank {\it was} \underline{taken} over by commissioners
+\label{HEADLINE2:taken}
+\end{HEADLINE2}
+\vspace*{0mm}\end{minipage}
+& 24 \\\hline
+to不定詞 &
+\begin{minipage}{0.6\columnwidth}\vspace*{1mm}
+\begin{HEADLINE2}
+\headlineA U.S. official \underline{to visit} Japan as trade row grows
+\headlineB U.S. official {\it is} \underline{to visit} Japan as trade
+row grows
+\label{HEADLINE2:visit}
+\end{HEADLINE2}
+\vspace*{0mm}\end{minipage}
+& 17 \\\hline
+現在分詞 &
+\begin{minipage}{0.6\columnwidth}\vspace*{1mm}
+\begin{HEADLINE2}
+\headlineA Senate \underline{preparing} for new U.S. budget battle
+\headlineB Senate {\it is} \underline{preparing} for new U.S. budget battle
+\label{HEADLINE2:preparing}
+\end{HEADLINE2}
+\vspace*{0mm}\end{minipage}
+& 12 \\\hline
+形容詞 &
+\begin{minipage}{0.6\columnwidth}\vspace*{1mm}
+\begin{HEADLINE2}
+\headlineA Early gulf cash soybeans slightly \underline{firmer}
+\headlineB Early gulf cash soybeans {\it are} slightly \underline{firmer}
+\label{HEADLINE2:firmer}
+\end{HEADLINE2}
+\vspace*{0mm}\end{minipage}
+& 11 \\\hline
+前置詞句 &
+\begin{minipage}{0.6\columnwidth}\vspace*{1mm}
+\begin{HEADLINE2}
+\headlineA No prospect \underline{in sight of EC budget accord}
+\headlineB No prospect {\it is} \underline{in sight of EC budget accord}
+\label{HEADLINE2:insightof}
+\end{HEADLINE2}
+\vspace*{0mm}\end{minipage}
+&  6 \\\hline
+複合動詞の構成素 &
+\begin{minipage}{0.6\columnwidth}\vspace*{1mm}
+\begin{HEADLINE2}
+\headlineA Pan Am February load factor \underline{up}
+\headlineB Pan Am February load factor {\it was} \underline{up}
+\label{HEADLINE2:up}
+\end{HEADLINE2}
+\vspace*{0mm}\end{minipage}
+& 3  \\\hline
+\multicolumn{1}{|c||}{合計} & & 73 \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\subsection{従来システムによる見出し翻訳の品質}
+\label{sec:investigation:quality}
+
+従来システムによる見出し翻訳の問題点を明らかにしておくために，be動詞が
+省略されている73件の見出しをそのまま我々の実験システムで処理し，その結
+果を評価した．
+評価の際に翻訳のどの部分を対象とするかに関して，見出し全体を対象とする
+ことと，\KEY に直接関連がある部分だけを対象とすることが考えられる．
+ここではbe動詞の省略が翻訳品質に及ぼす影響に関心があるため，
+後者の局所的な評価を行なった．
+評価値は合格か不合格かの二値とした．
+合否判定は，翻訳が文法的であるかという観点と，文法的な翻訳の場合，翻訳
+の意味が元の見出しの意味と一致しているかという観点から行なった．
+翻訳の文体が新聞記事見出しとして適切であるかどうかは考慮しなかった．
+合格と認める翻訳は文法的であり意味的に等価なものである．
+be動詞が省略されいることが原因で文法的でないか意味的に等価でない翻訳が
+生成された場合は不合格とした．
+\begin{table}[htbp]
+\vspace{-3mm}
+\caption{be動詞が省略されている見出しの翻訳品質}
+\label{tab:quality}
+\begin{center}
+\begin{tabular}{|l||r|r|}\hline
+\multicolumn{1}{|c||}{\KEY}&
+\multicolumn{1}{|c|}{合格}&
+\multicolumn{1}{|c|}{不合格}\\\hline\hline
+過去分詞                    & 16 &  8 \\
+to不定詞                    &  1 & 16 \\
+現在分詞                    & 10 &  2 \\
+形容詞                      &  6 &  5 \\
+前置詞句                    &  2 &  4 \\
+複合動詞の構成素            &  1 &  2 \\\hline
+\multicolumn{1}{|c||}{合計} & 36 & 37 \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+評価結果を表\ref{tab:quality}\,に示す．
+\KEY 全体では，合格と不合格の件数はそれぞれ36件と37件でほぼ同じである
+が，\KEY 別に見ると，現在分詞の場合には12件中10件が合格したのに対して
+to不定詞の場合には17件中16件とほとんどが不合格となった．
+
+\KEY が現在分詞である場合にほとんどが合格となるのは，\KEY をその前方に
+存在する名詞句に従属させた解釈が，be動詞を補った場合の翻訳とほぼ等しい
+意味を伝えている場合，その解釈を合格としたためである．
+例えば表\ref{tab:stat}\,の見出し(H\ref{HEADLINE2:preparing})は本来
+be動詞を補って(H\ref{HEADLINE2:preparing}')のように解釈されるべきであ
+るが，(H\ref{HEADLINE2:preparing})の翻訳「新しい米国の予算の戦いに備え
+て準備している上院」は，(H\ref{HEADLINE2:preparing}')の翻訳「上院は，
+新しい米国の予算の戦いに備えて準備している」と意味的に等しいので合格と
+した．
+他の\KEY についてもこのような場合には合格とした．
+
+\KEY がto不定詞の場合には，\KEY をその前方の名詞句に従属させると，be動
+詞を補った場合とは意味が大きく異なる翻訳が生成された．
+不合格となった16件はすべて，to不定詞が「$\cdots$するための」と訳され，
+本来伝えられるべき予定や運命などの意味に解釈することができなかった．
+例えば表\ref{tab:stat}\,の見出し(H\ref{HEADLINE2:visit})は予定を表す文
+と解釈しなければならないが，(H\ref{HEADLINE2:visit})の翻訳「日本を訪
+問するための米国の職員」はそのように解釈できない．
+
+元の意味と大きく異なる意味を伝える翻訳が生成されたもう一つの例は，過去
+分詞形と解釈されるべき\KEY が定形(現在形または過去形)と解釈された場合
+である．
+例えば次の見出し(H\ref{HEADLINE:sued})では``sued''が過去形とみなされ，
+対象格と解釈されるべき``Three''が主格と解釈された．
+\begin{HEADLINE}
+\headline Three \underline{sued} over ball valves for nine mile point
+\label{HEADLINE:sued}
+\end{HEADLINE}
+規則動詞や一部の不規則動詞の過去分詞形は定形と表記が同一であるため，
+このような誤りが生じる見出しの件数は少なくない．
+
+不合格と判定された37件の見出しを正しく翻訳するためには，be動詞を補わな
+ければならない．
+これに対して，合格と認められた36件については，
+be動詞を補った場合の翻訳とほぼ等しい意味を伝える翻訳が生成されるので，
+英日翻訳の見地からはbe動詞補完は可能ではあるが必要ではないという捉え方
+もできるかも知れない．
+しかし，これら36件の見出しも読者には通常be動詞を補って理解されるので，
+本研究では見出しの構文的解釈の見地からbe動詞を補う対象に含める．
+従って本稿では，be動詞が省略された見出しとは，be動詞を補うべき見出しと
+be動詞を補うことができる見出しを合わせたものを指している．
+
+\subsection{期待される改善度}
+\label{sec:investigation:improve}
+
+be動詞を補うことによってどの程度の品質改善が期待できるかをあらかじめ確
+認しておくために，73件の見出しに人手でbe動詞で補った表現を実験システム
+で処理し，be動詞が補われていない見出しの翻訳と比較した．
+評価値は，改善，同等，改悪の三値とした．
+\ref{sec:investigation:quality}\,節の評価で合格となった見出しの翻訳が
+改善されているとは，be動詞を補うことによって\KEY とその前方の名詞句
+との構文的関係が改善されたことを意味する．
+例えば見出し(H\ref{HEADLINE2:preparing})の翻訳
+「新しい米国の予算の戦いに備えて準備している上院」と比較して，be動詞を
+補った表現(H\ref{HEADLINE2:preparing}')の翻訳「上院は，新しい米国の予
+算の戦いに備えて準備している」はより適切であるとみなす．
+改善箇所と改悪箇所の両方が存在している場合，あるいは改善も改悪も見られ
+ない場合には同等とする．
+
+\begin{table}[htbp]
+\caption{be動詞補完による翻訳品質の改善度}
+\label{tab:improve}
+\begin{center}
+\begin{tabular}{|l||r|r|r|r|r|r|}\hline
+&\multicolumn{3}{|c|}{合格}&\multicolumn{3}{|c|}{不合格}\\\cline{2-7}
+\multicolumn{1}{|c||}{\raisebox{1.5ex}[0pt]{\KEY}}&
+\multicolumn{1}{|c|}{改善}&\multicolumn{1}{|c|}{同等}
+&\multicolumn{1}{|c|}{改悪}&\multicolumn{1}{|c|}{改善}
+&\multicolumn{1}{|c|}{同等}&\multicolumn{1}{|c|}{改悪}\\\hline\hline
+過去分詞                    & 14 & 0 & 2 &  7 & 1 & 0 \\
+to不定詞                    &  1 & 0 & 0 & 16 & 0 & 0 \\
+現在分詞                    &  9 & 0 & 1 &  1 & 1 & 0 \\
+形容詞                      &  5 & 0 & 1 &  5 & 0 & 0 \\
+前置詞句                    &  2 & 0 & 0 &  4 & 0 & 0 \\
+複合動詞の構成素            &  1 & 0 & 0 &  2 & 0 & 0 \\\hline
+\multicolumn{1}{|c||}{合計} & 32 & 0 & 4 & 35 & 2 & 0 \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+評価結果を表\ref{tab:improve}\,に示す．
+\ref{sec:investigation:quality}\,節の評価で合格となった見出し36件のう
+ち32件と，不合格となった見出し37件のうち35件について，より適切な翻訳が
+得られている．
+このことから，英々変換によってbe動詞を正しく補うことができれば，システム
+の既存部分に変更を加えることなく見出し翻訳の品質が改善されると期待できる．
+なお，合格となった見出し36件のうち4件の翻訳品質が低下しているが，この原
+因は辞書または構文解析規則の不備であり，本稿の主要目的であるbe動詞の補完
+とは直接の関係はない．
+
+\section{be動詞補完規則の記述}
+\label{sec:preeditHeadline}
+
+be動詞補完精度の評価指標には，補完漏れ件数の少なさを示す再現率と不要な
+補完件数の少なさを示す適合率を用いるが，規則の記述方針として，漏れを減
+らすことよりも不要な補完を抑えることを重視した．
+その理由は，不要な補完が行なわれた場合，構文構造と意味が大きく変化する
+ため悪影響が出るのに対して，\ref{sec:investigation:quality}\,節で述べ
+たように，be動詞が省略されている見出し73件のうち36件については補完漏れ
+が生じた場合でもある程度の品質の翻訳が得られることなどである．
+
+\subsection{適用条件}
+\label{sec:preeditHeadline:cond}
+
+本研究で設定した適用条件は，be動詞が省略されている見出しとそうでない見
+出しを区別する一般的な手がかりになりうる現象を284件の見出しにおいて
+分析した結果に基づいており，以下で説明する形態素語彙，構文上の四条件か
+ら主に構成されている．
+適用条件には，これら一般的な条件の他に，例えば``of''など特定の前置詞で
+導かれる前置詞句を処理対象外とする条件など，語彙に依存した個別条件も若
+干含まれる． 
+
+\subsubsection{\KEY 前方での名詞句の存在}
+
+be動詞が省略されている見出しでは，\KEY の前方に名詞句が存在する．
+より具体的には名詞句は，表\ref{tab:stat}\,の見出し
+(H\ref{HEADLINE2:taken})などのように\KEY の直前に現れるか，見出し
+(H\ref{HEADLINE2:firmer})のように\KEY の直前に副詞が存在しその副詞の直
+前に現れる場合がほとんどであるので，次の条件\ref{COND:leftnp}\,を設け
+る．
+\begin{COND}
+\cond \KEYC の直前に，あるいは\KEYC 直前の副詞の直前に名詞句が存在する．
+\label{COND:leftnp}
+\end{COND}
+
+見出しに現れる名詞句は比較的単純な構造をしていることが多いので，次のよ
+うな構造を持つ名詞句NPを検出する手続きを記述した．
+\begin{eqnarray*}
+\mbox{NP} &=& \mbox{NP0}\ (\mbox{P}\ \mbox{NP0})^? \\
+\mbox{NP0} &=& (\mbox{AV}^?
+\ \{\mbox{AJ}|\mbox{Ven}|\mbox{Ving}\})^?\ \mbox{N}^+
+\end{eqnarray*}
+ここで，P，AV，AJ，Ven，Ving，Nはそれぞれ前置詞，副詞，形容詞，過去分詞，
+現在分詞，名詞を表し，上付き記号?と+はそれぞれ一回以下，一回以上の出現を
+意味する．
+
+\subsubsection{潜在節と競合する節の非存在}
+
+be動詞と\KEYC を組み合わせると定形述語が復元され，それまで通常の構文
+解析で節と解釈できなかった部分が節と解釈できるようになる．
+このような節をここでは潜在節と呼ぶ．
+潜在節の主語になる名詞句は，前述の条件\ref{COND:leftnp}\,を満たす名詞
+句である．
+例えば表\ref{tab:stat}\,の見出し(H\ref{HEADLINE2:preparing})にbe動詞を
+補うと，(H\ref{HEADLINE2:preparing}')のように定形述語
+``{\it is} preparing''が復元され，見出し全体が名詞句``Senate''を主語と
+する一つの節になる．
+
+be動詞補完の可否を決める手がかりの一つとして，潜在節と構文的に競合する
+節の有無に着目する．
+be動詞が省略されている見出し(H\ref{HEADLINE2:taken})ないし
+(H\ref{HEADLINE2:up})では潜在節と構文的に競合する節は存在しない．
+これに対して，次の見出し(H\ref{HEADLINE:lift})では潜在節と構文的に競合
+する節が存在する．
+\begin{HEADLINE}
+\headline Reagan hopes to lift Japan sanctions soon
+\label{HEADLINE:lift}
+\end{HEADLINE}
+この見出しにおける潜在節は``{\it are} to lift''を主辞とし``Reagan
+hopes''を主語とする節であるが，この解釈は既存の定形述語``hopes''を主辞
+とし``Reagan''を主語とする通常の節としての解釈と構文的に競合する．
+このような場合には経験的に，通常の節としての解釈を優先することにする．
+
+次の見出し(H\ref{HEADLINE:lost})では，``lost''の直前にbe動詞を挿
+入することは構文的に不可能であり，``was carrying''を主辞とする通常の節
+としての解釈しか許されない．
+\begin{HEADLINE}
+\headline Vessel lost in Pacific was carrying lead
+\label{HEADLINE:lost}
+\end{HEADLINE}
+
+見出し中に節が存在しても，それが潜在節と構文的に競合しない場合にはbe動
+詞を補う．
+例えば表\ref{tab:stat}\,の見出し(H\ref{HEADLINE2:visit})には節
+``trade row grows''が存在するが， この節と潜在節
+``U.S. official {\it is} to visit Japan''とは節境界を示す接続詞``as''
+によって分離されており競合しないので，(H\ref{HEADLINE2:visit})は
+(H\ref{HEADLINE2:visit}')のように書き換える．
+
+このような考察に基づき，潜在節と構文的に競合する節が存在しない場合に限
+り見出しにbe動詞を補うことにし，次の条件\ref{COND:sbjpred}\,を設ける．
+\begin{COND}
+\cond 潜在節と構文的に競合する節が存在しない．
+\label{COND:sbjpred}
+\end{COND}
+
+\ref{sec:investigation:quality}\,節の見出し(H\ref{HEADLINE:sued})では，
+``sued''を過去分詞形と解釈しbe動詞を補った潜在節
+``Three {\it were} sued $\cdots$''と，``sued''を過去形と解釈した節
+``Three sued $\cdots$''が構文的に競合する．
+このように，定形と同一表記の過去分詞が\KEYC であり，この\KEYC を定形と
+解釈した動詞を主辞とする節が潜在節と構文的に競合する場合には，条件
+\ref{COND:sbjpred}\,ではなく，後述する条件\ref{COND:pastpart}\,に従う
+ものとする．
+
+節境界は接続詞や関係詞やコンマなどの節境界標識によって明示されている場
+合もあれば明示されていない場合もあるが，接続詞で明示されている場合のみ
+を扱う．
+さらに，見出しは高々二つの節から構成され，かつ一方が他方の中央埋め込み
+節ではないものと仮定する．
+条件\ref{COND:sbjpred}\,が満たされるかどうかを厳密に判定するためには
+構文解析を行なう必要があるが，ここでは次のような手順で行なう．
+\setcounter{algocounter}{0}
+\begin{ALGO}
+\step
+見出し中に節境界標識の接続詞が存在し，それによって見出しが二分される場
+合，そのうち着目している\KEYC を含む部分を
+ステップ\ref{ALGO:sbjpred:parse}\,の処理対象とする． 
+節境界標識が存在しない場合，見出し全体を
+ステップ\ref{ALGO:sbjpred:parse}\,の処理対象とする．
+\step
+処理対象の先頭から順に，述語になり得る定形動詞を探していく．
+もし見つかれば，その述語候補と人称，数が一致する名詞を主辞とする名詞句
+がその前方に存在するかどうかを調べる
+\footnote{名詞句の検索は条件\ref{COND:leftnp}\,の判定で用いる
+手続きと同じ手続きを用いて行なう．}．
+もしそのような名詞句が存在すれば，それを主語とみなし，
+条件\ref{COND:sbjpred}\,が満たされないものとする．
+ただし，着目している\KEYC が定形と同一表記の過去分詞である場合，この
+\KEYC を定形と解釈した動詞を述語候補とはしない．
+\label{ALGO:sbjpred:parse}
+\end{ALGO}
+
+\subsubsection{過去分詞に関する条件}
+
+\KEYC に定形か過去分詞形かの曖昧性がある場合，\KEYC を定形と解釈すれば，
+この\KEYC を主辞とし潜在節と構文的に競合する節が存在することになるため，
+条件\ref{COND:sbjpred}\,に従うと，見出し(H\ref{HEADLINE:sued})などのよ
+うにbe動詞を補うべき見出しにbe動詞が補われない．
+
+この曖昧性の解消をここでは，\KEYC 直後の名詞句の有無と，\KEYC の動詞
+型\cite{Hornby77}に基づいて行なう．
+\KEYC を定形と解釈することは動詞の態を能動とみなすことであり，過去分詞
+形と解釈することは\KEYC とbe動詞を組み合わせて受動態とみなすことである
+が，\KEYC が動詞型としてSVOO型もSVOC型も持たない場合，\KEYC の目的語が
+存在すれば，受動態と解釈することは構文的に不可能である．
+ここでは\KEYC 直後の名詞句を目的語とみなし，\KEYC の直後に名詞句が存在
+しなければ受動態と解釈してbe動詞を補う．
+
+\KEYC が動詞型としてSVOO型かSVOC型を持つ場合は，\KEYC の直後に名詞句が
+存在しても受動態と解釈できることがあるが，正確に判定するためには，
+\KEYC 直後の名詞句だけでなく，さらにその後方の名詞句の有無も認識する必
+要がある．
+定形か過去分詞形かの曖昧性に関しては，見出しではほとんどの場合後者と解
+釈していよいという経験則\cite{Uenoda78}があることと，粗い構文解析しか
+行なわない方針であることから，ここでは\KEYC がSVOO型かSVOC型を持つなら
+ばbe動詞を補うことにし，次の条件\ref{COND:pastpart}\,を設ける．
+\begin{COND}
+\cond \KEYC に定形か過去分詞形かの曖昧性がある場合，\KEYC の直後に名詞
+句が存在しないか，\KEYC がSVOO型かSVOC型を持つ動詞である．
+\label{COND:pastpart}
+\end{COND}
+この条件に従えば，見出し(H\ref{HEADLINE:sued})では``sued''の直後にその
+目的語となる名詞句が存在しないので，be動詞が補われる．
+また，次の見出し(H\ref{HEADLINE:offered})では``offered''の直後に名詞
+句が存在するが``offered''はSVOO型を持つので，be動詞が補われる．
+\begin{HEADLINE}
+\headline U.K. money market \underline{offered} early assistance
+\label{HEADLINE:offered}
+\end{HEADLINE}
+
+\subsubsection{固定的表現の非存在}
+
+\KEYC とその前方に存在する名詞句が連語や慣用句のように固定的な表現を構
+成する場合be動詞を補わない方がよいと考えられるので，次の条件
+\ref{COND:idiom}\,を設ける．
+\begin{COND}
+\cond \KEYC が固定的表現の構成要素でない．
+\label{COND:idiom}
+\end{COND}
+例えば次の見出し(H\ref{HEADLINE:need})では，``need''とto不定詞
+の間に結び付きがあると辞書に記述されているので，この結び付きを優先する．
+\begin{HEADLINE}
+\headline No need to state U.K. support for system --- Lawson
+\label{HEADLINE:need}
+\end{HEADLINE}
+
+ここでいう固定的表現とは，\KEYC の辞書項目または条件
+\ref{COND:leftnp}\,を満たす名詞句の主辞の辞書項目に記述されている表現
+だけでなく，``for $\cdots$ to $\cdots$''や
+``too $\cdots$ to $\cdots$''などのような相関語句も含む．
+従って，例えばto不定詞が\KEYC でありその前方に``for''や``too''などの語
+が存在する場合be動詞を補わない．
+
+\subsection{be動詞の屈折形生成}
+\label{sec:preeditHeadline:inflex}
+
+適切なbe動詞補完を行なうためには，主語候補の直後すなわち条件
+\ref{COND:leftnp}\,を満たす名詞句の直後にbe動詞を挿入すべきかどうかを
+判定するだけでなく，挿入する場合にはbe動詞の屈折形を決定する必要がある．
+屈折形は，人称，数，時制，相情報などに基づいて決めなければならないが，
+ここでは，時制は現在とし，主語候補の主辞の人称と数に従う区別だけを行な
+うことにし，``am''，``are''，``is''のいずれかとする．
+新聞記事見出しでは過去の事柄が現在形で表されることも少なくない
+\cite{Shirai97,Uenoda78}ので，現在時制とすることはそれほど不自然ではな
+いと考えられる．
+
+\subsection{規則の制御情報}
+\label{sec:preeditHeadline:ctrl}
+
+調査対象の73件の見出しでは複数箇所でbe動詞が省略されている例は存在しな
+かった．
+このため，形態素解析結果に対して先頭から順に適用条件との照合を行なって
+いき，ある\KEYC に関してbe動詞補完が行なわれた場合，他の\KEYC に関する
+補完を行なわないようにする．
+すなわち，\ref{sec:preedit}\,節で述べた，ある\KEYC に関する規則に与え
+る適用抑制規則集合の要素は，その規則以外のすべての\KEYC に関する規則の
+識別番号とする．
+
+規則の信頼度は，すべてのbe動詞補完規則についてBとし，be動詞を
+補った見出しの構文解析に失敗した場合には補完を取り消して元の表現に戻す．
+
+\section{実験と考察}
+\label{sec:experiment}
+
+本節では，be動詞補完規則作成のために調査した訓練データの見出し284件を対
+象として行なった実験の結果と，訓練データとは異なる試験データの見出し312
+件を対象として行なった実験の結果を示し，be動詞補完が正しく行なえなかった
+見出しについてその原因を分析する．
+さらに，試験データにおいて正しくbe動詞が補えた見出しについて，その翻訳品
+質がどの程度改善されたかを検証する．
+\ref{sec:preeditHeadline:inflex}\,節で述べたように，be動詞の屈折形
+の決定は，時制などを考慮せず，主語候補の主辞の人称と数だけに基づいて行
+なっている．
+このため今回の評価では，システムが生成したbe動詞と人間が補ったbe動詞と
+で，人称と数がそれぞれ一致していれば，時制などが適切でない場合でも正解
+とみなす．
+
+\subsection{実験結果}
+
+実験結果を表\ref{tab:result_rec_pre}\,に示す．
+表\ref{tab:result_rec_pre}\,によれば，訓練データで再現率89.0\%，適合率
+97.0\%の精度が得られ，試験データで再現率81.2\%，適合率92.0\%の精度が得
+られており，比較的簡単な規則でほぼ適切な補完が行なえている．
+
+不要な補完は訓練データで2箇所，試験データで6箇所生じているが，これらは補
+完漏れ(訓練データで8箇所，試験データで16箇所)に比べて少なく，全体として
+は，不要な補完の抑制を優先するという\ref{sec:preeditHeadline}\,節で述べ
+た規則記述における所期の目標が達成されている．
+\KEY 別に見ると，訓練データにおいても試験データにおいても前置詞句の場合
+の適合率が最も低い．
+\begin{table}
+\caption{実験結果}
+\label{tab:result_rec_pre}
+\begin{center}
+\begin{tabular}{|l||r@{}c|r@{}c|r@{}c|r@{}c|}\hline
+&\multicolumn{4}{|c|}{訓練データ}&\multicolumn{4}{|c|}{試験データ}\\\cline{2-9}
+\multicolumn{1}{|c||}{\raisebox{1.5ex}[0pt]{\KEYC}}&
+\multicolumn{2}{|c|}{再現率} & \multicolumn{2}{|c|}{適合率}&
+\multicolumn{2}{|c|}{再現率} & \multicolumn{2}{|c|}{適合率} \\\hline\hline
+過去分詞       & 87.5\% & (21/24) & 100\%  & (21/21) & 87.8\% & (36/41) & 94.7\% & (36/38) \\
+to不定詞       & 100\%  & (17/17) & 100\%  & (17/17) & 88.2\% & (15/17) & 88.2\% & (15/17) \\
+現在分詞       & 91.7\% & (11/12) & 100\%  & (11/11)   & 62.5\% & (5/8)   & 100\% & (5/5) \\
+形容詞         & 81.8\% & (9/11)  & 90.0\% & (9/10)  & 69.2\% & (9/13)  & 90.0\% & (9/10) \\
+前置詞句       & 83.3\% & (5/6)   & 83.3\% & (5/6)   & 66.7\% & (2/3)   & 66.7\% & (2/3) \\
+複合動詞の構成素 & 66.7\% & (2/3)   & 100\%  & (2/2)   & 66.7\% & (2/3)   & 100\% & (2/2) \\\hline
+\multicolumn{1}{|c||}{合計}
+& 89.0\% & (65/73) & 97.0\% & (65/67) & 81.2\% & (69/85) & 92.0\% & (69/75) \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\subsection{失敗原因の分析}
+
+訓練データと試験データのそれぞれについて，補完漏れと不要な補完が生じた原
+因を調べた結果を表\ref{tab:error_cause}\,に示す．
+\begin{table}[htbp]
+\caption{失敗原因の分析}
+\label{tab:error_cause}
+\begin{center}
+\begin{tabular}{|l||r|r|r|r|}\hline
+&\multicolumn{2}{|c|}{訓練データ}&\multicolumn{2}{|c|}{試験データ}
+\\\cline{2-5}
+\multicolumn{1}{|c||}{\raisebox{1.5ex}[0pt]{原因}}&
+\multicolumn{1}{|c|}{補完漏れ} & \multicolumn{1}{|c|}{不要補完}&
+\multicolumn{1}{|c|}{補完漏れ} & \multicolumn{1}{|c|}{不要補完} \\\hline\hline
+形態素解析                         & 1 & 0 &  3 & 3 \\
+条件\ref{COND:leftnp}              & 1 & 0 &  0 & 0 \\
+条件\ref{COND:sbjpred}\,(多品詞語) & 2 & 1 &  2 & 0 \\
+条件\ref{COND:sbjpred}\,(節境界)   & 3 & 0 &  7 & 0 \\
+条件\ref{COND:pastpart}            & 0 & 0 &  0 & 1 \\
+条件\ref{COND:idiom}               & 0 & 1 &  0 & 2 \\
+その他の条件                       & 1 & 0 &  4 & 0 \\\hline
+\multicolumn{1}{|c||}{合計}         & 8 & 2 & 16 & 6 \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\subsubsection{補完漏れの原因}
+
+訓練データで生じた8箇所での補完漏れのうち1箇所は，キーになるべき語が辞
+書未登録語であったことによる形態素解析での問題であり，残りの7箇所での
+補完漏れがbe動詞補完規則の不備によるものであった．
+
+7箇所のうち5箇所は条件\ref{COND:sbjpred}\,が満たされるかどうかの判定を
+誤ったことによるものであった．
+その5箇所中2箇所は多品詞語の品詞解釈を誤ったことによるものであった．
+例えば次の見出し(H\ref{HEADLINE:down})では，この場合名詞と解釈すべき
+``imports''を動詞とみなし，``U.S. sugar''をその主語とみなす誤りが生じ
+ていたため，潜在節と競合する節が存在すると解釈された．
+\begin{HEADLINE}
+\headline U.S. sugar imports \underline{down} in week --- USDA
+\label{HEADLINE:down}
+\end{HEADLINE}
+このような誤りに対しては品詞推定法\cite{Takeda93,Takeda95}を導入するこ
+とによって改善が可能であると考えられる．
+
+5箇所中残りの3箇所についての原因は節境界が正しく認識できないことにあっ
+た．
+条件\ref{COND:sbjpred}\,の判定で用いた節境界認識手続きでは一部の接続詞
+だけを節境界標識とみなしているために，次の見出し
+(H\ref{HEADLINE:unable})のように節境界がコンマによって示される場合に，
+実際には二つの節から構成される見出しが一つの節から成ると誤解釈され，潜
+在節``Africa {\it is} unable to pay its debts''と競合しない節
+``OAU chief says''が競合すると判定されていた．
+\begin{HEADLINE}
+\headline Africa \underline{unable} to pay its debts, OAU chief says
+\label{HEADLINE:unable}
+\end{HEADLINE}
+
+試験データで生じた16箇所での補完漏れの原因の内訳は，辞書未登録語など形
+態素解析での問題によるものが3箇所，be動詞補完規則の不備によるものが13
+箇所であった．
+13箇所中9箇所は条件\ref{COND:sbjpred}\,の判定誤りによるものであり，そ
+の9箇所のうち7箇所については節境界を正しく捉えられないことが原因であっ
+た．
+
+訓練データにおいても試験データにおいても，条件\ref{COND:sbjpred}\,の判
+定誤りが補完漏れの原因の半数以上を占めているので，
+この判定精度の向上に重点的に取り組んでいく必要がある．
+
+\subsubsection{不要な補完の原因}
+
+訓練データで生じた2箇所での不要な補完のうち1箇所は，多品詞語の品詞解釈
+を誤ったため，実際には潜在節と競合する節を検出することができなかったこ
+とによるものであった．
+残りの1箇所は，慣用句と解釈すべき表現をそのように解釈できなかったもの
+である．
+
+試験データにおいてbe動詞補完規則の不備が原因で生じた3箇所での不要な補
+完のうち1箇所は，定形か過去分詞形かの曖昧性がある場合過去分詞形と解釈
+するという経験則に反する例であった．
+残りの2箇所は慣用句の解釈を誤ったものである．
+
+\subsection{規則の制御情報について}
+
+\ref{sec:preeditHeadline:ctrl}\,節で述べたように，be動詞補完は一見出し
+について一箇所でしか行なっていない．
+訓練データには二箇所以上でbe動詞が省略されている見出しは含まれていなかっ
+たが，試験データには次の見出し(H\ref{HEADLINE:updown})のように二箇所で
+be動詞が省略されている見出しが2件含まれており，後方の\KEY に対してbe動
+詞を補うことができなかった
+\footnote{
+これら2件の見出しでは節境界がコンマによって示されているため，
+複数箇所での補完ができるように適用抑制規則集合を変更しても，条件
+\ref{COND:sbjpred}\,の節境界の認識が正しく行なえない．
+このため，表\ref{tab:error_cause}\,では「条件\ref{COND:sbjpred}\,(節境
+界)」に含めた．}．
+\begin{HEADLINE}
+\headline Swissair January traffic \underline{up}, revenue
+\underline{down}
+\label{HEADLINE:updown}
+\end{HEADLINE}
+
+be動詞補完規則にはすべて信頼度Bを与えているため，補完結果に対する
+構文解析が失敗すると，一度行なった補完が取り消されるが，今回の実験
+では，取り消しが生じた見出しは訓練データ，試験データいずれにおいても存
+在しなかった．
+
+\subsection{be動詞補完による翻訳品質の改善度}
+
+be動詞を補うことによって実際にどの程度の品質改善が達成されたかを確認する
+ために，試験データにおいて正しくbe動詞が補えた67件
+\footnote{見出し(H\ref{HEADLINE:updown})のように二箇所への補完が必要な2
+件を69件から除く．}
+の見出しについて，be動詞補完前と補完後の翻訳を比較した.
+\ref{sec:investigation:improve}\,節の評価基準と同じ基準で評価した結果を
+表\ref{tab:improve_unknown}\,に示す．
+表\ref{tab:improve_unknown}\,によれば，67件のうち61件について翻訳品質が
+改善されており，be動詞補完による新聞記事見出し翻訳の品質改善効果が確認さ
+れた．
+なお，4件の品質低下の原因は実験システムの既存部分の不備であり，be動詞の
+補完とは無関係である．
+\begin{table}[htbp]
+\caption{試験データでの翻訳品質の改善度}
+\label{tab:improve_unknown}
+\begin{center}
+\begin{tabular}{|l||r|r|r|}\hline
+\multicolumn{1}{|c||}{\KEY}&\multicolumn{1}{|c|}{改善}&
+\multicolumn{1}{|c|}{同等}&\multicolumn{1}{|c|}{改悪}\\\hline\hline
+過去分詞                    & 32 & 2 & 2 \\
+to不定詞                    & 15 & 0 & 0 \\
+現在分詞                    &  3 & 0 & 1 \\
+形容詞                      &  8 & 0 & 1 \\
+前置詞句                    &  2 & 0 & 0 \\
+複合動詞の構成素            &  1 & 0 & 0 \\\hline
+\multicolumn{1}{|c||}{合計} & 61 & 2 & 4 \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\section{おわりに}
+
+本稿では，標準的な表現を主な対象とした機械翻訳システムには適切な翻訳を
+生成することが難しい英字新聞記事見出しを通常の表現に書き換えることによっ
+て翻訳品質を改善する方法を示した．
+見出し特有の表現形式のうち比較的高い頻度で見られるbe動詞の省略現象に対
+処するための規則を記述し，小規模ではあるが実験を行なった結果，試験デー
+タに対して再現率81.2\%，適合率92.0\%の精度が得られ，提案した方法の有効
+性が確認できた．
+
+今後取り組むべき課題として次のような点が挙げられる．
+\begin{enumerate}
+\item
+be動詞の省略現象に次いで頻繁に見られる見出し特有の現象はコンマが等位接
+続詞として用いられることであり，これが原因で適切な翻訳が得られないこと
+も多い．
+また，単にbe動詞を補うだけでは翻訳品質の向上が不十分であり，コンマを等
+位接続詞に書き換える処理も同時に行なって初めて適切な翻訳が得られる見出
+しも存在する．
+従って，コンマに関する書き換え規則を記述するなど規則の拡張を行なう必要
+がある．
+\item
+提案した方法では，記事本文から得られる手がかりを利用せずに書き換えを行
+なっている．
+しかし，より高い精度の書き換えを実現するためには，記事の本文特に第一文
+から得られる手がかりに基づく処理を行なうことが有効であると考えられる．
+例えば本稿では適切に行なえていない時制や相の決定に必要な情報が本文中に
+明示されている可能性は高い．
+\item
+本稿では，処理対象の表現は新聞記事の見出しであることを前提として書き換
+えを行なっているが，提案した方法を実際の機械翻訳システムに組み込んで利
+用する場合には，処理対象表現が新聞記事の見出しであるかどうかを判定する
+処理を実現する必要がある．
+\end{enumerate}
+
+\acknowledgment
+
+英々変換系の初期の実装を行なって頂いたシャープ(株)ソフト事業推進センター
+の関谷正明さん(現在，同社設計技術開発センター)と，
+議論に参加頂いた英日機械翻訳グループの諸氏に感謝します．
+また，本稿の改善に非常に有益なコメントを頂いた査読者の方に感謝いたします．
+
+\bibliographystyle{jnlpbbl}
+\bibliography{v07n2_02}
+
+\begin{biography}
+\biotitle{略歴}
+\bioauthor{吉見 毅彦}
+{1987年電気通信大学大学院計算機科学専攻修士課程修了．
+1987年よりシャープ(株)にて機械翻訳システムの研究開発に従事．
+1999年神戸大学大学院自然科学研究科博士課程修了．}
+
+\bioauthor{佐田 いち子}
+{1984年北九州大学文学部英文学科卒業．
+同年シャープ(株)に入社．
+現在，同社情報システム事業本部ソフト事業推進センター係長．
+1985年より機械翻訳システムの研究開発に従事．}
+
+\bioreceived{受付}
+\biorevised{再受付}
+\bioaccepted{採録}
+
+\end{biography}
+
+\end{document}

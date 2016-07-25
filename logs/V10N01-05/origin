@@ -1,0 +1,1565 @@
+\documentstyle[tascmac,epsf,jnlpbbl]{jnlp_j_b5}
+
+\setcounter{page}{81}
+\setcounter{巻数}{10}
+\setcounter{号数}{1}
+\setcounter{年}{2003} 
+\setcounter{月}{1}
+\受付{2002}{6}{5}
+\再受付{2002}{8}{8}
+\採録{2002}{10}{4}
+
+\setcounter{secnumdepth}{3}
+
+\title{機械学習による複数文書からの重要文抽出}
+\author{平尾 努\affiref{NTT} \and 賀沢 秀人\affiref{NTT} \and 磯崎 秀樹\affiref{NTT} \and 前田 英作\affiref{NTT}\and 松本 裕治\affiref{NAIST}}
+
+\headauthor{平尾，賀沢，磯崎，前田，松本}
+\headtitle{機械学習による複数文書からの重要文抽出}
+
+\affilabel{NTT}{日本電信電話株式会社 NTTコミュニケーション科学基礎研究所}{NTT Communication Science Laboratories, NTT Corporation}
+\affilabel{NAIST}{奈良先端科学技術大学院大学情報科学研究科}{Graduate School of Information Science, Nara Institute of Science and Technology}
+
+\jabstract{
+近年，インターネットや大容量の磁気デバイスの普及によって，大量の電子化文
+書が氾濫している．こうした状況を背景として，文書要約技術に対する期待
+が高まってきている．
+特に，ある話題に関連する一連の文書集合をまとめて要約することが可能とな
+れば，人間の
+負担を大きく軽減することができる．
+そこで本稿では，特定の話題に直接関連する文書集合を対象とし，
+機械学習手法を用いることによって重要文を抽出する手法を提案する．重要文
+抽出の手法としては近年，自
+然言語処理研究の分野でも注目されている機械学習手法の1種である Support
+Vector Machine を用いた手法を提案する．
+毎日新聞99年1年分より選んだ
+12話題の文書集合を用意し，それぞれの話題から総文数の10\,\%，30\,\%，
+50\,\%の要約率に応じて人手により重要文を抽出した正解データセットを異なる
+被験者により3種作成した．
+このデータセットを用いて評価実験を行った結果，提案手法の重要文抽出精度
+は，Lead手法，TF$\cdot$IDF手法よりも高いことがわかった．また，従来
+より複数文書要約に有効とされる冗長性の削減が，文を単位とした場合には，
+必ずしも有効でないこともわかった．
+}
+
+\jkeywords{複数文書要約，重要文抽出，機械学習，Support Vector Machines}
+
+\etitle{Machine Learning Approach to\\
+Multi-Document Summarization}
+
+\eauthor{Tsutomu Hirao\affiref{NTT} \and Hideto Kazawa\affiref{NTT} \and Hideki Isozaki\affiref{NTT} \and Eisaku Maeda\affiref{NTT} \and Yuji Matsumoto\affiref{NTT}}
+
+\eabstract{
+Due to the rapid growth of the Internet and the emergence of low-price
+and large-capacity storage devices, the number of online documents is 
+exploding.
+Automatic summarization is the key handling this situation.
+The cost of manual work demands that we be able to summarize a 
+document set related to a certain event.
+This paper proposes a method of extracting important sentences from 
+document sets.
+The method is based on Support Vector Machines, a technology that is 
+attracting attention in the field of natural language processing.
+We conducted experiments using three document sets formed from twelve 
+events published in the MAINICHI newspaper of 1999.
+These sets were manually processed by newspaper editors.
+Tests using this corpus show that our method has better performance 
+than either the Lead-based method or the TF$\cdot$IDF method.
+Moreover, we clarify that reducing redundancy is not always effective 
+for extracting important sentences from a set of multiple documents 
+taken from a single source.
+}
+
+\ekeywords{Multi-document summarization, Important sentence extraction, Machine learning, Support Vector Machines}
+
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+
+\section{はじめに}
+
+大量の電子化文書が氾濫する情報の洪水という状況に我々は直面している．こう
+した状況を背景として，情報の取捨選択を効率的に行うための様々な手法が研究
+されて
+いる．近年，それらの研究の一つとして文書要約技術が注目を集めている．
+特にある話題に関連する複数の文書をまとめて要約する複数文書要約と
+いわれ
+る技術が関心を集めており，検索技術などと組み合わせることにより効率的に情
+報を得ることが期待できる．
+Document Understanding Conference
+(DUC)\footnote{
+http://duc.nist.gov
+}
+や，Text Summarization Challenge (TSC)\footnote{
+http://lr-www.pi.titech.ac.jp/tsc
+} \cite{article32}
+といった評価型ワークショップ
+においても複数文書要約タスクが設定されており，その注目度は高い．
+
+複数文書要約も含め自動要約では，文書中から重要な情報
+を持つ文を抽出する重要文抽出技術用いて，その出力をそのまま要約とする手法
+\cite{article25,article38,article39}や，その出力から不要な表現の削除や置換，
+あるいは，新たな
+表現の挿入を行い，より自然な要約にする手法がある\cite{article47,article40}．
+いずれの場合にも，重要文抽出は中心的な役割を担っている．そこ
+で本稿では，複数文書を対象とした重要文抽出に着目する．
+
+複数文書からの重要文抽出も，単一文書からの重要文抽出と同様に，あ
+る手がかりに基いて文の重要度を決定し，重要度の高い文から順に，要約率で指
+定された文数までを重要文として抽出する．この際，複数の
+手
+がかりを扱うことが効果的であるが，手がかりの数が多くなると，人手によって
+適
+切な重みを見つけることが難しいという問題がある．
+本稿では，汎化能力が高いとされる機械学習手法の一種である Support Vector
+Machine を用いて，複数の手がかりを効率的に扱い，特定の話題に関連す
+る複数文書から重要文を抽出する手法を提案する．
+
+評価用のテストセットとして12話題に関する文書集合を用意し，文書集合
+の総文数に対して10\,\%，30\,\%，50\,\%の要約率で
+重要文抽出による要約の正解データを作成した．
+人間による重要文の選択の揺れを考慮するた
+め，1話題に対し3名が独立に正解データを作成した．このデータセットを用いた
+評価実
+験の結果，提案手法は，Lead 手法，TF$\cdot$IDF手
+法よりも性能が高いことがわかった．
+さらに，文を単位とした冗長性の削減は，情報源が一つである場合の複数文書か
+らの重要文抽出には，必ずしも有効でないことを確認した．
+
+以下，2章では本稿における重要文抽出の対象となる複数文書の性質につ
+いて説明し，3章では Support Vector Machine を用いた複数文書からの重要文抽
+出手法を説明する．4章では評価実験の結果を示し，考察を行う．5章では
+Maximum Marginal Relevance (MMR) \cite{article48}
+を用いて抽出された文集合から冗長性を削減することの効果について議論する．
+
+\section{対象とする複数文書}
+
+複数文書要約において，これまでに処理対象とされている文書集合は以下の2種
+に大別できる\cite{article8}．
+
+\begin{enumerate}
+ \item[(1)] 情報検索結果である文書集合
+ \item[(2)] ある特定の話題(トピック)に関する文書集合
+\end{enumerate}
+
+(1)の分類を対象とした複数文書要約の研究としては，
+\cite{article41}などがある．
+(1)では，ユーザが入力した検索要求(すなわち，単語群)を含む全ての文書が該当
+する．
+このため，要約の対象となる文書の数が多い．
+また，検索結果には，様々な出来事を扱った文書が多く含まれるだけでなく，ユー
+ザが必要としない文書も多く含まれる可能性も高い．
+こうした多様で大量の文書集合に対して，理想的な要約を作成することは困難で
+あるという問題がある．
+
+一方，(2)の分類を対象とした複数文書要約の研究としては，
+\cite{article38,article39,article40}などがある．
+TSC，DUC で扱われている複数文書もこの範疇に入る． また，こうした文書集合
+を
+抽出するための研究は Topic Detection and Tracking (TDT)\cite{article37}
+などで盛んに行われている．
+(2)の分類に属する文書集合は，特定の話題(出来事)に関連する文書集合であるの
+で，一つのまとまったストーリが形成されていると考えられる．
+こうした文書集合は，意味的に良くまとまっているという特徴を持っているので，
+要約対象とする文書集合としても適している．
+
+本稿では，理想的な要約を作成することが比較的，容易であると考えられる分類
+(2)に属する文書集合から重要文を抽出する手法を提案する．特に，
+McKeownの分類\cite{article51}や野畑らの分類\cite{article42}による
+Single-Event に属する文書集合を処理の対象とする．
+
+\section{Support Vector Machine に基づく複数文書からの重要文抽出手法}
+
+\subsection{SVM による文のランキング}
+
+SVM は，Vapnik によって提案された
+2値分類のための教師あり学習アルゴリズムである\cite{article12}．
+近年，様々な自然言語処理のタスクに適用され，その有効性が報告されている
+\cite{article13,article14,article15,article16}．SVM は既に自然言語処理
+の分野でもよく知られているので，本稿では詳しい説明を省略する．
+解説記事\cite{article52}などを参照されたい．
+
+SVMでは，学習データを${\bf x}_i(1 \le i \le n)$としたときに，テストデー
+タ${\bf x}$を判別す
+る判別関数$f({\bf x})={\rm sgn}(g({\bf x}))$が以下の式で与えられる．
+
+\begin{equation}
+ g({\bf x})  =    \sum_{i=1}^n w_i K ({\bf x}_i,{\bf x}) + b 
+\end{equation}
+
+$w_i$，$b$は定数である．
+ここで，$w_i \ne 0$となるベクトルはサポートベクトルと呼ばれ，学習データ
+中の正例，負例を代表する．結局，判別関数はサポートベクトルのみで記述
+される．$K({\bf x}_i,{\bf x})$はカーネル関数と呼ばれる．様々なカーネル関
+数が提案されているが，本稿では多項式カーネル(式2)を用いる．
+
+\begin{equation}
+ K({\bf x},{\bf y})  =   ({\bf x} \cdot {\bf y} +1)^d 
+\end{equation}
+
+重要文抽出は，
+要約率で指定された重要文の数を$Num$とした時に，重要度の高い上位$Num$件の
+文を重要文とみなし，それ以外を非重要文と見なす2値分類問題と考えることが
+できる．
+しかし，重要文抽出では，指定された要約率に応じた数だけ文を抽出する必要が
+ある．
+判別関数$f({\bf x})$を用いて重要文であるかどうかの判断を行った場合には，
+重要文と判定された文の数が要約率で指定された文の数をみたすとは限らず，問
+題となる．
+そこで本稿では，入力となる複数文書集合に含まれる全ての文に対して
+$g({\bf x})$の値を用いてランキングを行い，指定された要約率をみたすように
+文を抽出する．
+
+\subsection{素性}
+
+複数文書からの重要文抽出は，話題に関する文書集合を連結して
+1文書とみなせば，従来
+の単一文書からの重要文抽出と同等である．
+しかし，文書集合中の任意の文が，それが属する文書において重要かどうかとい
+う観点だけでなく，文書集合全体において重要かどうかという観点も扱う必要が
+ある．
+よって本稿では，
+1文書のみで決定することのできる素性(単一文書用素性)と文書集合が与えられ
+たときに決定することのできる素性(複数文書用素性)
+の2種の素性を用いる．以下に詳細を述べる．
+
+また，素性ベクトル${\bf x}_j$の各要素は0か1の2値となるように${\bf x}_j$
+を定義した．2値とならない素性は，$[0,1]$の値に正規化\footnote{
+単一文書用の素性は文書内での最大値で割ることによって正規化する．複数文書
+用の素性は，文書集合内での最大値や後述するクラスタ内での最大値で割るこ
+とによって正規化する．
+}し，その後，正規化した値が$[0,1]$を10分割した区間
+$[0.0,0.1)$,$[0.1,0.2)$,$\cdots$,$[0.9,1.0]$のどこに属するかを表す10次元
+の2値ベクトルに変換した．たとえば，文$S_j$のある素性$F(S_j)が0.75$であれば，
+これが
+ベクトル$0000000100$に変換され，素性ベクトル${\bf x}_j$の要素の内の10
+個となる．こうして，最終的に，各文の素性ベクトル${\bf x}_j$の次元は 583
+となる．
+
+\subsubsection{単一文書用素性}
+
+従来より，単一文書からの重要文抽出において，多くの文の素性が過去の研究に
+より報告されている．本稿ではこうした素性を参考にするだけでなく，
+文に出現する固有表現と係り受け構造を考慮したTF$\cdot$IDFを文の素性とし
+て導入した．
+
+
+\subsubsection*{文の位置\cite{article2}}
+
+特定の話題に関する文書集合を$E$とし，$E$に含まれる任意の文書を$D_i$，
+$D_i$に含ま
+れる任意の文を$S_j$，任意のパラグラフを$P_k$とする．
+ここで，
+文$S_j$の位置を表す素性として，$D_i$における$S_j$の位置
+$\mbox{Posd}(S_j)$と$P_{k}$における$S_j$の位置$\mbox{Posp}(S_j)$を以下
+の式で定義する．
+
+\begin{eqnarray}
+ \mbox{Posd}(S_j) &=& 1 - \mbox{BD}_i(S_j)/M(D_i) \nonumber\\
+ \mbox{Posp}(S_{j}) &=& 1 - \mbox{BP}_{k}(S_j)/M(P_{k}) \nonumber
+\end{eqnarray}
+
+ここで，$M(D_i)$は$D_i$の文字数，$\mbox{BD}_i(S_j)$は，文
+書の先頭から$S_j$までの文字数である．$M(P_{k})$は$P_{k}$の
+文字数，$\mbox{BP}_{k}(S_j)$はそのパラグラフの先頭から$S_j$までの
+文字数を表す．
+
+\subsubsection*{文の長さ\cite{article27}}
+
+文$S_j$の長さを表わす素性として，$\mbox{Len}(S_j)$を以下の式で定義する．
+
+\[
+ \mbox{Len}(S_j) = M(S_j)
+\]
+
+\noindent ただし，$M(S_j)$は文$S_j$の文字数を表す．
+
+\subsubsection*{{\bf {\rm TF$\cdot$IDF}}\cite{article4}}
+
+文$S_j$に含まれる単語の重み(TF$\cdot$IDF値)に基づいた素性として，
+$\mbox{Score}(S_j)$を以下の式で定義する．
+なお，本稿では，
+形態素解析器「茶筌」\cite{chasen}を用いて解析した結果，
+名詞および未知語と判定されたものを処理対象とした．以下の記述におい
+て，単語とは名詞および未知語を指すものとする．
+
+\[
+ \mbox{Score}(S_j) = \sum_{t \in T(S_j)} tf(t,S_j) \cdot w(t,D_i)
+\]
+
+ここで，$T(S_j)$は$S_j$に出現する単語の集合である．
+$tf(t,S_j)$は$S_j$における単語$t$の出現頻度であり，$w(t,D_i)$は文
+書$D_i$における単語$t$のTF$\cdot$IDF値である．$w(t,D_i)$は 
+SMART で用いられている以下の式で定義する．
+
+\[
+ w(t,D_i) = 0.5 \left(1+\frac{tf(t,D_i)}{tf_{max}(D_i)}\right) \cdot \mbox{log} \left( \frac{N}{df(t)} \right)
+\]
+
+$tf(t,D_i)$は，単語$t$の文書$D_i$における出現頻度，$tf_{max}(D_i)$は文書
+$D_i$に
+含まれる単語の最大頻度，$df(t)$は，データベースにおいて単語$t$を含む文書
+の数である．
+$N$はデータベースとする文書集合に含まれる文書数である．
+本稿では，データベースとは毎日新聞99年の1年分(112401文書)をさす．
+
+\subsubsection*{キーワード密度\cite{article25}}
+
+まず，$D_i$に出現する単語の集合を$T(D_i)$とする．$T(D_i)$に含まれる全て
+の単語に対して$w(t',D_i)$を求め，それらの平均と標準偏差を$\mu$，$\sigma$
+とした場合に$\mu+0.5\sigma \le w(t',D_i)$をみたした$t'$の集合を$T_{sig}$
+とする．ここで，$T_{sig}$に含まれる単語の密度に基づいた$S_j$の素性を
+\cite{article29}で提案された以下の式を用いて定義する．
+
+\[
+ \mbox{Den}(S_j) = \frac{\sum_{t \in T_{sig}} w(t,D_i)}{d(S_j)}
+\]
+
+$T_{sig}$に含まれる単語でかつ$S_j$に出現する単語集合を$T_{sig}(S_j)$とし，
+$k(\ge 2)$番目に出現した$t'' \in T_{sig}(S_j)$と$k-1$番目に出
+現した$t''\in T_{sig}(S_j)$の距離(何単語離れているか)を$dist_k$として，
+$d(S_j)$は，以下の式で定義される．
+
+\[
+ d(S_j) = \frac{\sqrt{\sum_{k=2}^{|T_{sig}(S_j)|} (dist_k)^2}}{|T_{sig}(S_j)|-1} 
+\]
+
+$d(S_j)$は$S_j$に出現する単語$t \in T_{sig}(S_j)$の2乗平均距離を表しており，
+これが小さいことは，それらが密集して出現していることを意味する．
+
+
+\subsubsection*{タイトルとの類似度\cite{article2}}
+
+文$S_j$と$S_j$を含む文書$D_i$のタイトル$H_l$との類似度
+$\mbox{Sim}(S_j,H_l)$を以下の cosine measure を用いて定義し，これを$S_j$
+の素性とする．
+
+
+\[
+ \mbox{Sim}(S_j,H_l) = \frac{\vec v(S_j) \cdot \vec v(H_l)}{ \left \Vert \vec v(S_j)
+ \right \Vert \left \Vert \vec v(H_l) \right \Vert}
+\]
+
+ここで，$\vec v(S_j)$，$\vec v(H_l)$は，単語を素性としてその有無を素性の
+値とする2値ベクトルである．
+
+\subsubsection*{係り受け関係を考慮したTF$\cdot$IDF}
+
+文の構文的な構造に着目し，述語を修飾する文節集合に含まれる単語の重みを考
+慮したTF$\cdot$IDFを定義する．
+述語を修飾する文節の中で最も多くの
+情報を持っていると考えられる文節集合の重要度$\mbox{Score}_{d}$，
+述語を直接修飾する文節集合の重要度$\mbox{Score}_{w}$として，以下の式で定
+義する．
+
+\begin{eqnarray}
+ \mbox{Score}_{d}(S_j) &=& \sum_{t \in T_d(S_j)} w(t,D_i)\nonumber\\
+ \mbox{Score}_{w}(S_j) &=& \sum_{t \in T_w(S_j)} w(t,D_i)\nonumber
+\end{eqnarray}
+
+$\mbox{Score}_{d}$は，係り受け構造木の最長パスを形成する文節集合に含まれ
+る単
+語の集合$T_{d}(S_j)$に着目したTF$\cdot$IDF値の総和，$\mbox{Score}_{w}$は，
+最終文節に直接係る文節集合に含まれる単語の集合$T_{w}(S_j)$に着目したTF
+$\cdot$IDF値の総和である．
+なお，係り受け解析には
+Cabocha\footnote{
+http://cl.aist-nara.ac.jp/\~{}taku-ku/software/cabocha
+}を用いた．
+
+\subsubsection*{固有表現}
+
+Nobataら\cite{article5}は，文書のタイトルに出現する固有表現に着目した重
+要文抽出手法を提案している．しかし，
+文書中に出現する全ての固有表現が文の重要度に影響を与えると予想されるので，
+本稿では
+$S_j$に特定の種類の固有表現が存在する場合に1，存在しない場合に0をとる2値
+の素性を定義する．
+\cite{article1}でも固有表現を素性として用いているが，本稿での分類
+のように詳細ではない．
+ここでの固有表現とは Information Retrieval and Extraction Exercise
+(IREX) \cite{article35} の固有表現基準による固有
+表現および数値表現を指し，以下の8種に分類される．固有表現の抽出には磯崎
+のアルゴリズム\cite{article7}を用いた．
+
+\begin{quote}
+ PERSON，LOCATION，ORGANIZATION，ARTIFACT，DATE，MONEY，PERCENT，TIME
+\end{quote}
+
+\subsubsection*{接続詞\cite{article3}}
+
+$S_j$に特定の接続詞が出現した場合に1，出現しなかった場合に0
+をとる2値の素性を定義する．
+接続詞は50種である．
+
+\subsubsection*{助詞\cite{article3}}
+
+$S_j$に特定の助詞が出現した場合に1，出現しなかった場合に0
+をとる2値の素性を定義した．
+助詞は，``格助詞$-$一般''(11種)とトピックマーカとされる係助詞(「は」，
+「も」)の計13種である．
+
+\subsubsection*{文末表現(小分類および大分類)\cite{article3,article6}}
+
+$S_j$に特定の小分類に属する文末表現が出現した場合に1，出現しなかった場合
+に0をとる2値の素性を定
+義し，大分類についても同じく2値の素性を定義する．
+
+文末表現の分類については，福本らの分類\cite{article30}に加え
+「特殊」，「署名」，「その他」を加えた21種を用いた．「特殊」は会話文
+などのかぎ括弧で終わる文，「署名」は文
+書の著者を示す文を指す．
+大分類については，福本らの分類\cite{article30}，
+田村らの分類\cite{article31}に「その他」を加
+えた4種を用いた．分類ルールについては，文献\cite{article30,article31}を
+参照されたい．分類の詳細を以下に示す．
+
+大分類:~意見
+\begin{quote}
+ 小分類:~意見，問掛，要望
+\end{quote}
+
+大分類:~断定
+\begin{quote}
+ 小分類:~断定，推量，理由，判断，義務
+\end{quote}
+
+大分類:~叙述
+\begin{quote}
+ 小分類:~叙述，可能，伝聞，様態，存在，継続，状態，使役，現在，過去
+\end{quote}
+
+大分類:~その他
+\begin{quote}
+ 小分類:~特殊，署名，その他
+\end{quote}
+
+\subsubsection*{修辞関係\cite{article34}}
+
+田村らの手法\cite{article31}を用いて
+$S_j$の修辞関係(計4種)を決定し，$S_j$が$S_{j-1}$に対して特定の
+修辞関係である場合に1，そうでない場合に0をとる2値の素性を定義する．
+修辞関係は，
+「順接」，「転換」，「結論」，「説明」の4種である．
+修辞関係の決定ルールについては
+文献\cite{article30,article31}を参照されたい．
+
+\subsubsection*{用言}
+
+$S_j$に出現する用言を日本語語彙大系\cite{article18}を用いて分類し，
+$S_j$に特定の分類の用言が出現したときに1，出現しなかった場合に0をとる素
+性を定義する．日本語語
+彙大系における用言の基本分類は36であるが，多義語は複数の基本分類に属する．
+よって，多義を考慮して「基本分類の組」も一つの分類とみなし，合計366分類
+とした．
+
+\subsubsection{複数文書用の素性}
+
+任意の文$S_j$に対し，複数の文書が与えられた場合に定義できる素性として，
+以下の3種の素性を定義した．
+
+\subsubsection*{文書集合全体における位置}
+
+文$S_j$の位置を表す素性として，文書集合$E$における位置
+$\mbox{Post}(S_j)$を以下の式で定義する．
+
+\begin{eqnarray}
+ \mbox{Post}(S_j) &=& 1 - \mbox{BE}(S_j)/M(E) \nonumber
+\end{eqnarray}
+
+ただし，$M(E)$は文書集合に含まれる文書の文字数の合計，$\mbox{BE}(S_j)$
+は，$E$中の文書を時系列\footnote{
+文書番号と時系列は一致していると仮定した．
+}でソートした後，文書ごとの区切りを無視して1
+文書とみなした場合の先頭から$S_j$までの文字数である．
+
+
+\subsubsection*{文書集合に特徴的な単語によるTF$\cdot$IDF}
+
+本稿で対象とする複数文書は何らかの観点に基づいて集められた文書集合である．
+よって，これらの文書集合に特徴的な単語は重要文抽出のための手がかりとして
+有効である．
+文書集合に特徴的な単語としては，文書集合を得るための検索要求に含まれる
+単語であると考えること
+も可能
+であるが，検索要求に含まれる単語だけでは情報が少ないという問題がある．さ
+らに，本稿では検索は用いていない．
+そこで，本稿では
+与えられた文書集合の情報を用いて特徴的な語を認定する手法を採る．
+
+従来より，
+母集団となる文書集合からある特定の文書集合を抽出した場合，取り出した文書
+集合に特徴的な単
+語を認定する手法として，$\chi^2$検定を用いた手法\cite{article43,article45}やAICを
+用いた手法\cite{article44}が提案されている．本稿では，これらの手法を拡張し
+て MDL 原理を用いて入力とする文書集合に特徴的な単語を認定する．
+
+\begin{table}[t]
+ \begin{center}
+  \caption{$2 \times 2$ 分割表}
+  \label{tab01}
+  \begin{tabular}{l|l|l}
+   \hline
+   \hline
+   & $c$  & $\neg c$ \\
+   \hline
+   $t$ &$n_{11}$ & $n_{12}$\\
+   $\neg t$ & $n_{21}$& $n_{22}$\\
+   \hline
+  \end{tabular}
+ \end{center}
+\end{table}
+
+まず，ある文書集合$c$に出現する全ての単語$t$に対して，表\ref{tab01}に示す$2
+\times 2$分割表を得る．ここで，$n_{11}$は，文書集合$c$において$t$
+が出現する文書数，$n_{12}$は，$c$以外の文書集合において$t$が出現する文書
+数である．$n_{21}$は，
+$c$において$t$が出現しない文書数，$n_{22}$は，$c$以外の文書集合におい
+て$t$が出現しない文
+書数である．この時，$t$と$c$の間に依存関係があるとするモデル(DM)と独立で
+あるとするモデル(IM)を考え，$t$がどちらに良く当てはまる
+かを調べることで$t$が$c$に特徴的な語かどうかの判断をする．
+
+DM，IM に対する MDL 値はそれぞれ以下の式で求まる．
+
+\begin{eqnarray}
+ \mbox{MDL}_{DM}(t,c) &=& - \mbox{MLL}_{DM}(t,c) - \frac{k_{DM}}{2} \mbox{log}N \\
+ \mbox{MDL}_{IM}(t,c) &=& - \mbox{MLL}_{IM}(t,c) - \frac{k_{IM}}{2} \mbox{log}N
+\end{eqnarray}
+
+\noindent ただし，$k_{DM}$，$k_{IM}$はそれぞれのモデルにおける自由パラメー
+タの数であり，$k_{DM}=3$，$k_{IM}=2$である\cite{article50}．$N$は先述し
+たデータベース中の全文書
+数であり，$N=n_{11}+n_{12}+n_{21}+n_{22}$である．さらに，$\mbox{MLL}_{DM}$，
+$\mbox{MLL}_{IM}$はそれぞれのモデルにおける最大対数尤度であり，以下の式
+で求まる\cite{article50}．
+
+\begin{eqnarray}
+ \mbox{MLL}_{DM}(t,c) &=& (n_{11}+n_{12})\log(n_{11}+n_{12})+(n_{11}+n_{21})\log(n_{11}+n_{21}) \nonumber\\
+ &+& (n_{21}+n_{22})\log(n_{21}+n_{22})+(n_{12}+n_{22})\log(n_{12}+n_{22}) \nonumber\\
+&-& 2N \log N \nonumber\\
+ \mbox{MLL}_{IM}(t,c) &=& n_{11}\log n_{11} +n_{12}\log n_{12}+n_{21}\log n_{21}+n_{22}\log n_{22} -N \log N \nonumber
+\end{eqnarray}
+
+MDL の値は小さいほど優れたモデルである．
+ここで，AICの場合\cite{article49}と同様に2つのモデルの差が1以上ならば有意な差であると考えた．よって，以下の式をみたす$t$
+を$c$に特徴的な語として認定する．
+
+\[
+ \mbox{MDL}_{IM}(t,c) - \mbox{MDL}_{DM}(t,c) \ge 1
+\]
+
+ここで，$c$として文書集合$E$，$E$において，同日に出現した文書の集合
+$C_{i}$の2つを考える．$C_i$を考える理由は時間が進むにつれて新たに出現す
+る単語を認定するためである．
+$c=E$の時に上記条件をみたす単語集合を
+$T'(E)$，$c=C_i$の時に$T'(C_i)$とする．それぞれの場合の文$S_j$の素性を
+以下の式で定義する．
+
+\[
+ \mbox{Score}_{E}(S_j) = \sum_{t \in T(S_j) \cap T'(E)}tf(t,S_j) \cdot w(t,D_i)
+\]
+
+\[
+ \mbox{Score}_{C}(S_j) = \sum_{t \in T(S_j) \cap T'(C_i)}tf(t,S_j) \cdot w(t,D_i)
+\]
+
+\noindent ただし，$S_j \in C_i$．上式はそれぞれ，文書集合$E$に特徴的な単
+語，$E$の部分文書集合$C_i$に特徴的な単語にのみ着目した単語重要度の総和で
+ある．
+
+
+\subsubsection*{文書のジャンル}
+
+重要文抽出の対象となる文書集合には様々なジャンルの文書が含まれる場合があ
+る．この時，あるジャンルの文書には重要文が少ないなど文書のジャン
+ルが文の重要度に影響を与えることが考えられる．
+そこで，
+本稿では$S_j$が特定のジャンルの文書に属する場合に1，属さない場合に0とす
+る2値の素性
+を定義する．ここでのジャンルとは新聞記事の紙面の情報をもとにした下記の分
+類である．
+
+\begin{quote}
+ 報道，社説，解説，読書，総合，特集，科学
+\end{quote}
+
+
+\section{評価実験}
+
+\subsection{コーパス}
+
+まず，評価実験のために毎日新聞99年から12個の話題に関連する文書集合を記者
+経験のある人物1名が作成した．
+話題に関連する文書は，基本的に各話題の開始記事か続報記事であり，コラムな
+どは含まれない．表\ref{tab02}にデータの詳細を示す．
+次に，それぞれの文書集合の総文数に対して10\,\%，30\,\%，50\,\%の要約率を設定し，
+重要文抽出による要約の評価用データを人手によって作成した．
+重要文抽出データの作成には，新聞記事の編集などに深くかかわったことのある
+6名があたり，1つの話題に対して異なる3名によるデータを作成した．
+それぞれをセットA，セットB，セットCとよぶ．
+
+
+\begin{table}[t]
+ \begin{center}
+  \caption{評価用データセット}
+  \label{tab02}
+  \begin{tabular}{l|c|c|c|c|ccc}
+   \hline
+   \hline
+\raisebox{-1.8ex}[0pt][0pt]{話題} & {開始} &{終了} &\raisebox{-1.8ex}[0pt][0pt]{総文書数} & \raisebox{-1.8ex}[0pt][0pt]{総文数} & \multicolumn{3}{|c}{重要文数} \\   
+   \cline{6-8}
+   & (月/日)& (月/日)&  &  & 10\,\% & 30\,\% & 50\,\% \\
+   \hline
+   奈良で最古の貨幣出土 & 01/20& 12/26&12 & 165 & 17 & 50 & 83\\
+   ブラジル通貨切り下げ & 01/14& 11/04&23 & 445 & 45 & 134 & 228\\
+   フセイン国王，骨髄移植へ & 02/03& 02/08&17 & 320 & 32 & 96 & 160\\
+   プリマコフ解任 & 05/13 & 05/20&16 & 213 & 22 & 64 & 107\\
+   北朝鮮警備艇が韓国艇と接触& 06/10& 08/27&18 & 179 & 18 & 54 & 90\\
+   サミット開幕 & 06/19& 06/22&8 & 160 & 16 & 48 & 80\\
+   ステパーシン解任 & 08/10& 08/13&11 & 282 & 29 & 85 & 141\\
+   トンネルでコンクリート落下 & 10/09 & 10/31&14 & 281 & 29 & 85 & 142\\
+   日本海に2不審船 & 03/24& 12/19&35 & 652 & 62 & 185 & 307\\
+   インドミサイル実験成功 & 04/12& 08/16&16 & 232 & 24 & 70 & 116\\
+   パキスタン軍が官邸占領 & 10/13& 12/01&35 & 605 & 66 & 197 & 328\\
+   H2ロケット打ち上げ失敗 & 11/16& 12/28&26 & 479 & 49 & 145 & 241\\
+   \hline
+   \multicolumn{3}{c|}{合計}& 231 & 4013& 409 &  1213& 2023\\
+   \hline
+  \end{tabular}
+ \end{center}
+\end{table}
+
+
+\begin{table}[t]
+ \begin{center}
+  \caption{被験者間の一致率}
+  \label{tab03}
+  \begin{tabular}{l|ll|ll|ll}
+   \hline
+   \hline
+   \raisebox{-1.8ex}[0pt][0pt]{組み合わせ$\setminus$要約率} & \multicolumn{2}{|c|}{10\,\%} &
+   \multicolumn{2}{|c|}{30\,\%} & \multicolumn{2}{|c}{50\,\%}\\   
+   \cline{2-7}
+    & 一致率 & $K値$ & 一致率 & $K値$ & 一致率 & $K値$\\
+   \hline
+   A $\cap$ B & 0.465 & 0.40 & 0.521 & 0.32 & 0.661 &0.32 \\
+   B $\cap$ C & 0.517 & 0.46 & 0.560 & 0.37 & 0.686 &0.37\\
+   C $\cap$ A & 0.451 & 0.39 & 0.474 & 0.25 & 0.603 &0.20\\
+   A $\cap$ B $\cap$ C & 0.328 & 0.42 & 0.341 & 0.31 & 0.461 &0.30 \\
+   \hline
+  \end{tabular}
+ \end{center}
+\end{table}
+
+\begin{table}[t]
+ \begin{center}
+  \caption{$K$値の解釈}
+  \label{tab030}
+  \begin{tabular}{rll}
+   \hline
+   \hline
+   \multicolumn{2}{c}{$K$値}  & 信頼性\\
+   \hline
+    &$<$ 0 & POOR\\
+   0.0 &$-$ 0.20 & SLIGHT\\
+   0.21 &$-$ 0.40 & FAIR\\
+   0.41 &$-$ 0.60 & MODERATE\\
+   0.61 &$-$ 0.80 & SUBSTANTIAL\\
+   0.81 &$-$ 1.0 & NEAR PERFECT\\
+   \hline
+  \end{tabular}
+ \end{center}
+\end{table}
+
+まず，被験者が抽出した重要文間の一致率，つまり，表\ref{tab02}の重要文数に対す
+る被験者間で共通な重要文の割合を調べた．
+次に，被験者間の重要文の一致を Kappa 統計値($K$値)で調べた．
+詳細を表\ref{tab03}に示す．$K$値の解釈については，表\ref{tab030}となる
+\cite{article54}．
+
+表\ref{tab03}より，被験者間で一致する重要文の割合は，要約率が高くなる
+につれ大きくなる．これは，要約率が高くなるにつれ，
+被験者が抽出する文の数も多くなるので当然と言える．
+2つのセットの組み合わせでは，BとCの一致の割合が高い．
+これに比べ，AとCでは一致の割合は低い．
+しかし，$K$値でみた場合には，低い要約率の方が被験者間の一致に対する信頼性
+は高いという結果となった．
+表\ref{tab030}より，信頼性が高いとは言えないが，10\,\%の要約率では適度
+(MODERATE)な一致であると言える．30\,\%，50\,\%の要約率では信頼性は低
+くなる傾向にある．
+
+過去の重要文抽出の研究例である野本らのデータ\cite{article6}では，報道記
+事の10\,\%要約率における$K値$は0.34であった．よって，
+単一文書，複数文書という違いはあるが，低い要約率における
+データの信頼性は本稿のデータがやや高い．
+
+\subsection{実験結果と考察}
+
+提案手法の有効性を検証するために，先に説明したデータセットを用いて評価実
+験を行った．Lead 手法，TF$\cdot$IDF手法を比較手法として提案手法の性能
+評価を行った．
+
+Lead 手法は文書の先頭から順に与えられた要約率をみたすまで文を抽
+出する手法である．
+ここで，複数文書要約におけるLead手法をどう定義するかが問題となる．
+本稿では，
+それぞれの話題に含まれる全ての文に対して 3章で説明した
+Posd を計算し，その値の大きい文から順に与えられた要約率をみたすまでを重要
+文として採用した．
+
+TF$\cdot$IDF手法としては，話題に関する文書集合に特徴
+的な単語のみに着目した手法である$\mbox{Score}_E$を用いた．Lead手法と同様
+に値
+の大きい文から順に要約率をみたすまでを重要文として抽出した．この手法を以
+下TF$\cdot$IDFと略記する．
+
+提案手法では，2次の多項式カーネルを用い，コストパラメータは
+$C=0.001$に設定した
+\footnote{
+コストパラメータ$C$はTSCの単一文書の重要文抽出データを用
+いて最適値を決定した．
+}
+．$g({\bf x})$の値が大きい文から順に要約率をみたすま
+でを重要文として抽出した．以下，この手法を SVM と略記する．プロ
+グラムには
+TinySVM\footnote{http://cl.aist-nara.ac.jp/\~{}taku-ku/software/TinySVM}
+を利用した．
+
+なお，評価指標は TSC の重要文抽出タスクに従った．つまり，文書
+集合に対して要約率によって抽出すべき文の数を設定し，各手法がその数だけ抽
+出した重要文に含まれる正解重要文の数の割合(Precision)で評価を行う．いま，
+システ
+ムが抽出した重要文の数を$a$，システムが抽出した重要文のうち正解の数を$b$
+とすると，$\mbox{Precision}= b/a \times 100 $となる．
+
+\begin{table*}[tb]
+\small
+ \begin{center}
+  \caption{各手法の性能評価}
+  \label{tab04}
+  \begin{tabular}{l|l|ccc}
+   \hline\hline
+   \raisebox{-1.8ex}[0pt][0pt]{要約率} & \raisebox{-1.8ex}[0pt][0pt]{手
+   法} & \multicolumn{3}{|c}{Precision} \\   
+   \cline{3-5}
+   & & セットA& セットB & セットC\\
+   \hline
+    & Lead &  39.2 & 38.4 & 45.7\\
+   10\,\%&TF$\cdot$IDF & 39.7 & 36.9 &37.6\\
+    & SVM & {\bf 51.1} & {\bf 46.6} &{\bf 50.7}\\
+   \hline
+    & Lead & 43.3 &  42.3&  44.1\\
+   30\,\% & TF$\cdot$IDF &47.3 & 43.6 & 46.8 \\
+    & SVM & {\bf 52.0} & {\bf 50.1} & {\bf 49.3}\\
+   \hline
+    & Lead & 58.6 & 59.9 & 57.2\\
+   50\,\% & TF$\cdot$IDF & 63.2 &  60.6& 64.6\\
+    & SVM & {\bf 67.5} & {\bf 66.3} & {\bf 67.0}\\
+   \hline
+  \end{tabular}
+ \end{center}
+\end{table*}
+
+\subsubsection{各手法の性能比較}
+
+表\ref{tab04}~にそれぞれの手法の各要約率における重要文の抽出精度を示
+す．なお，SVM はA〜Cの各セットに対して，学習用の11話題とテスト用の1話題
+に分けて評価を行い，これを12回繰り返した結果の平均値である．
+
+表\ref{tab04}~より，どのセットと要約率の組
+み合わせにおいても SVM の抽出精度が高い．10\,\%の要約率では，SVMに続いて
+Lead手法，TF$\cdot$IDFの順となり，30\,\%，50\,\%の要約率では，TF$\cdot$IDF，
+Lead 手法の順となる．特に，SVM はデータの信頼性が高い10\,\%の要約率
+において，他の2手法との抽出精度の差が大きい．
+利用したデータや素性が異なるため，正確な比較とは言えないが，Lead
+手法とSVM
+の差は単一文書(TSCの報道記事)の場合\cite{article53}と比較して大きくなっ
+ている．
+
+\begin{table}[t]
+ \begin{center}
+  \caption{A $\cap$ Bに対して各手法の重要文が占める割合}
+  \label{tab05}
+  \begin{tabular}{c|c|c|c}
+   \hline
+   \hline
+   手法  $\setminus$ 要約率& 10\,\%  & 30\,\% & 50\,\% \\
+   \hline
+   Lead & 63.9 & 53.6 & 63.7\\
+   TF$\cdot$IDF & 57.6 & 57.4 & 69.0\\
+   \hline
+   SVM(A) & 73.8 &  62.9& 70.7\\ 
+   SVM(B) & 73.1 &  61.1& 72.5\\ 
+   SVM(C) & 73.2 &  58.9 & 70.1\\ 
+   \hline
+  \end{tabular}
+ \end{center}
+\end{table}
+
+\begin{table}[t]
+ \begin{center}
+  \caption{B $\cap$ Cに対して各手法の重要文が占める割合}
+  \label{tab06}
+  \begin{tabular}{c|c|c|c}
+   \hline
+   \hline
+   手法  $\setminus$ 要約率& 10\,\%  & 30\,\% & 50\,\% \\
+   \hline
+   Lead & 61.5 & 53.9 & 63.2\\
+   TF$\cdot$IDF & 55.9 & 54.4 & 69.2\\
+   \hline
+   SVM(A) & 69.5 &  58.0 & 66.7\\ 
+   SVM(B) & 69.4 &  60.6 & 73.1\\ 
+   SVM(C) & 72.0 &  59.0 & 73.5\\ 
+   \hline
+  \end{tabular}
+ \end{center}
+\end{table}
+
+\begin{table}[t]
+ \begin{center}
+  \caption{C $\cap$ Aに対して各手法の重要文が占める割合}
+  \label{tab07}
+  \begin{tabular}{c|c|c|c}
+   \hline
+   \hline
+   手法  $\setminus$ 要約率& 10\,\%  & 30\,\% & 50\,\% \\
+   \hline
+   Lead & 75.3 & 58.1 & 63.2\\
+   TF$\cdot$IDF & 62.0 & 64.0 & 74.1\\
+   \hline
+   SVM(A) &  82.0 &  65.7 & 73.4\\ 
+   SVM(B) &  80.7 &  63.8 & 75.8\\ 
+   SVM(C) &  83.0 &  64.7 & 75.0\\ 
+   \hline
+  \end{tabular}
+ \end{center}
+\end{table}
+
+\begin{table}[t]
+ \begin{center}
+  \caption{A $\cap$ B $\cap$ Cに対して各手法の重要文が占める割合}
+  \label{tab08}
+  \begin{tabular}{c|c|c|c}
+   \hline
+   \hline
+   手法  $\setminus$ 要約率& 10\,\%  & 30\,\% & 50\,\% \\
+   \hline
+   Lead & 78.2 & 65.0 & 67.2\\
+   TF$\cdot$IDF & 66.9 & 69.2 & 77.3\\
+   \hline
+   SVM(A) & 85.1 & 72.7 & 76.0\\ 
+   SVM(B) & 86.7 & 70.6 & 78.3\\ 
+   SVM(C) & 85.5 & 70.3 & 79.8\\ 
+   \hline
+  \end{tabular}
+ \end{center}
+\end{table}
+
+
+また，被験者間で一致した重要文に対して各手法が抽出した重要文の占める割合
+を調べた．
+表\ref{tab05}〜表\ref{tab08}にその結果を示す．なお，SVM(A)，
+SVM(B)，SVM(C)はそれぞれA，B，Cによる正解を学習に用いた結果を表す．
+各表より，どの正解セットの組み合わせに対しても，被験者間で共通な重要文に
+対する各手法の抽出した重要文の占める割合はSVMが高い．
+特に，10\,\%，30\,\%の要約率で他の2手法との
+差も大きい．
+また，セットA，Cを学習に用いた場合が，セットBを用いた場合よりもやや高い
+割合であることがわかる．今回のデータセットの中で$K$値の高い組み合わせ，
+B $\cap$ Cの要約
+率10\,\%，A $\cap$ B $\cap$ Cの要約率10\,\%においても
+SVM は高い割合で被験者間で共通な重要文を抽出しており，他の手法との差も大
+きい．
+
+以上より，提案手法は Lead 手法，TF$\cdot$IDFと比較して成績が良いことが
+わかった．
+さらに，被験者間
+で一致する重要文についても，提案手法は他の手法よりも高い割合で抽出できて
+いることがわかった．
+
+\subsubsection{有効な素性に関する考察}
+
+\begin{table*}[tb]
+\scriptsize
+ \begin{center}
+  \caption{高い重みの素性(正)}
+  \label{F_pair_pos}
+ \begin{tabular}{l|l|l}
+  \multicolumn{3}{c}{セットA} \\
+   \hline
+   \hline
+\multicolumn{1}{c|}{要約率=10\,\%}  & \multicolumn{1}{c|}{要約率=30\,\%} &
+  \multicolumn{1}{c}{要約率=50\,\%} \\
+   \hline
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{NE:DATE}$ & 
+$0.9 {\le} \mbox{Sim} {\le}1.0$ & 
+$\mbox{文末(大):叙述}  \land \mbox{{\bf ジャンル:報道}}$\\ 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land 0.9 {\le} \mbox{Len} {\le}1.0$ & 
+$0.9 {\le} \mbox{Sim} {\le}1.0 \land \mbox{助詞:「を」}$  & 
+$\mbox{助詞:「は」} \land \mbox{{\bf ジャンル:報道}}$\\ 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{NE:LOC}$ & 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{NE:DATE}$ & 
+$\mbox{文末(小):過去} \land \mbox{{\bf ジャンル:報道}}$\\ 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land 0.9 {\le} \mbox{Score} {\le}1.0$ &
+$0.9 {\le} \mbox{Sim} {\le}1.0 \land \mbox{助詞:「は」}$& 
+$\mbox{助詞:「は」} \land \mbox{文末(大):その他}$\\ 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{NE:PERSON}$ & 
+$0.9 {\le} \mbox{Sim} {\le}1.0 \land \mbox{{\bf ジャンル:報道}} $ & 
+$\mbox{助詞:「は」} $\\ 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{文末(小):過去}$&
+$0.8 {<} \mbox{Posd} {\le}0.9 \land \mbox{{\bf ジャンル:報道}}$&
+$\mbox{助詞:「は」} \land \mbox{文末(小):その他}$\\ 
+$0.9 {\le} \mbox{Len} {\le}1.0 \land 0.9 {\le} \mbox{Den} {\le}1.0$&
+$0.9 {\le} \mbox{Sim} {\le} 1.0 \land \mbox{文末(大):叙述}$&
+$0.2 {<} \mbox{Sim} {\le}0.3 \land 0.1 {<} \mbox{{\bf Post}} {\le}0.2$\\ 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land 0.9 {\le} \mbox{Score}_d {\le}1.0$&
+$0.9 {\le} \mbox{{\bf Post}} {\le}1.0$& 
+$0.1 {<} \mbox{{\bf Post}} {\le}0.2 $\\ 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{助詞:「を」}$&
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{NE:LOC}$&
+$0.4 {<} \mbox{Sim} {\le} 0.5 \land 0.6 {<} \mbox{{\bf Post}} {\le}0.7$\\ 
+$0.9 {\le} \mbox{Sim} {\le}1.0 \land \mbox{NE:PERSON}$&
+$0.6 {<} \mbox{{\bf Post}} {\le}0.7 \land \mbox{文末(小):過去}$&
+$0.9 {\le} \mbox{{\bf Post}} {\le}1.0$\\ 
+\hline
+  \multicolumn{3}{c}{ } \\
+  \multicolumn{3}{c}{セットB} \\
+   \hline
+   \hline
+\multicolumn{1}{c|}{要約率=10\,\%}  & \multicolumn{1}{c|}{要約率=30\,\%} &
+  \multicolumn{1}{c}{要約率=50\,\%} \\
+   \hline
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{NE:DATE}$ & 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{NE:DATE}$ & 
+$\mbox{助詞:「は」}$\\
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land 0.9 {\le} \mbox{Score} {\le}1.0$ & 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land 0.9 {\le} \mbox{Posp} {\le}1.0$  & 
+$\mbox{助詞:「は」} \land \mbox{文末(大):その他}$\\
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land 0.9 {\le} \mbox{Len} {\le}1.0$ & 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{NE:PERSON}$ & 
+$\mbox{助詞:「は」} \land \mbox{文末(少):その他} $\\
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land 0.9 {\le} \mbox{Posp} {\le}1.0$ & 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{助詞:「を」}$& 
+$\mbox{助詞:「が」}$\\
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land 0.9 {\le} \mbox{Sim} {\le}1.0$ &
+$0.9 {\le} \mbox{Posd} {\le}1.0$ & 
+$\mbox{助詞:「は」} \land 0.0 {\le} \mbox{{\bf Post}} {\le}0.1$\\
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land 0.9 {\le} \mbox{Score}_d {\le}1.0$&
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{NE:LOC}$&
+$0.9 {\le} \mbox{Posp} {\le}1.0 \land \mbox{助詞:「は」}$\\
+$0.9 {\le} \mbox{Len} {\le}1.0 \land 0.9 {\le} \mbox{Sim} {\le}1.0$&
+$\mbox{NE:LOC} \land \mbox{助詞:「を」}$&
+$0.3 {<} \mbox{Score} {\le}0.4 \land 0.0 {\le} \mbox{Den} {\le} 0.1$\\
+$0.9 {\le} \mbox{Posd} {\le} 1.0 \land \mbox{NE:PERSON}$&
+$0.9 {\le} \mbox{Posd} {\le} 1.0 \land 0.9 {\le} \mbox{Score} {\le}1.0$&
+$0.1 {<} \mbox{Den} {\le}0.2 \land \mbox{助詞:「が」}$\\
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{助詞:「を」}$&
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{助詞:「は」}$&
+$\mbox{NE:PERSON} \land \mbox{助詞:「は」}$\\
+$0.9 {\le} \mbox{Score} {\le}1.0 \land 0.9 {\le} \mbox{Sim} {\le}1.0$&
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{{\bf ジャンル:報道}}$&
+$0.0 {\le} \mbox{{\bf Score}}_{\bf E} {\le}0.1 \land 0.1 {<} \mbox{{\bf Score}}_{\bf C} {\le}0.2 $\\
+\hline
+  \multicolumn{3}{c}{ } \\
+  \multicolumn{3}{c}{セットC} \\
+   \hline
+   \hline
+\multicolumn{1}{c|}{要約率=10\,\%}  & \multicolumn{1}{c|}{要約率=30\,\%} &
+  \multicolumn{1}{c}{要約率=50\,\%} \\
+   \hline
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{NE:DATE}$ & 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{NE:LOC}$ & 
+$0.9 {\le} \mbox{Posp} {\le}1.0 \land \mbox{助詞:「は」} $\\ 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{文末(小):過去}$ & 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{文末(小):過去}$& 
+$\mbox{助詞:「は」}$\\ 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land 0.9 {\le} \mbox{Posp} {\le}1.0$ & 
+$0.9 {\le} \mbox{Posd} {\le}1.0$ & 
+$\mbox{助詞:「に」} $\\%3
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{NE:LOC}$& 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{NE:DATE}$&
+$0.4 {<} \mbox{Score} {\le}0.5 \land 0.0 {\le} \mbox{Den} {\le}0.1$\\%4
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land 0.9 {\le} \mbox{Sim} {\le}1.0$& 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{{\bf ジャンル:報道}}$ & 
+$\mbox{助詞:「は」} \land \mbox{助詞:「に」}$\\%5
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land 0.9 {\le} \mbox{Score} {\le}1.0$&
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{助詞:「は」}$&
+$\mbox{NE:PERSON} \land \mbox{{\bf ジャンル:社説}}$\\%6
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land 0.9 {\le} \mbox{Len} {\le}1.0$&
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{助詞:「を」}$&
+$\mbox{文末(大):叙述}$\\%7L
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{NE:PERSON}$&
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{文末(大):叙述}$&
+$0.9 {\le} \mbox{Posp} {\le}1.0 \land 0.2 {<} \mbox{{\bf Score}}_{\bf C} {\le} 0.3$\\%8
+$0.9 {\le} \mbox{Sim} {\le}1.0 \land \mbox{NE:DATE}$&
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land 0.9 {\le} \mbox{Posp} {\le}1.0$&
+$\mbox{文末(小):過去}$\\%9
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{文末(大):叙述}$&
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{助詞:「が」}$&
+$0.9 {\le} \mbox{Score} {\le}1.0$\\%10
+\hline
+\end{tabular}
+\end{center}
+\end{table*}
+
+
+\begin{table*}[tb]
+\scriptsize
+ \begin{center}
+  \caption{高い重みの素性(負)}
+  \label{F_pair_neg}
+  \tabcolsep=3pt 
+ \begin{tabular}{l|l|l}
+  \multicolumn{3}{c}{セットA} \\
+   \hline
+   \hline
+\multicolumn{1}{c|}{要約率=10\,\%}  & \multicolumn{1}{c|}{要約率=30\,\%} &
+  \multicolumn{1}{c}{要約率=50\,\%} \\
+   \hline
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land 0.1 {<} \mbox{{\bf Score}}_{\bf E} {\le}0.2$ & 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land 0.1 {<} \mbox{{\bf Score}}_{\bf E} {\le}0.2$ & 
+$0.2 {<}   \mbox{Sim}  {\le} 0.3 \land \mbox{{\bf ジャンル:報道}}$ \\ 
+$0.9 {\le} \mbox{Score} {\le}1.0 \land \mbox{助詞:「は」} $ & 
+$0.5 {<} \mbox{Posd} {\le} 0.6 \land \mbox{助詞:「に」}$ & 
+$\mbox{{\bf ジャンル:社説}}$ \\ 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{修辞:順接}$ & 
+$ \mbox{{\bf ジャンル:特集}}$ & 
+$0.7 {<} \mbox{{\bf Post}} {\le}0.8$  \\ 
+$0.9 {\le} \mbox{Score}_d {\le}1.0 \land \mbox{NE:ORG} $ & 
+$0.2 {<} \mbox{{\bf Score}}_{\bf E} {\le} 0.3 \land \mbox{助詞:「に」} $ & 
+$\mbox{文末(小):叙述} \land \mbox{{\bf ジャンル:特集}}$  \\ 
+$0.1 {<} \mbox{{\bf Score}}_{\bf E} {\le}0.2 \land \mbox{NE:LOC}$ & 
+$0.1 {<} \mbox{{\bf Score}}_{\bf E} {\le} 0.2 \land \mbox{助詞:「で」} $ & 
+$0.0 {\le} \mbox{{\bf Score}}_{\bf E} {\le}0.1 $  \\ 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land 0.0 {\le} \mbox{Den} {\le}0.1$ & 
+$0.2 {<} \mbox{{\bf Post}} {\le}0.3 $& 
+$\mbox{文末(小):過去} \land \mbox{{\bf ジャンル:特集}}$  \\ 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land 0.1 {<} \mbox{{\bf Score}}_{\bf C} {\le}0.2$ & 
+$0.0 {\le} \mbox{Score} {\le}0.1 $ & 
+$\mbox{文末(小):その他} \land \mbox{{\bf ジャンル:報道}}$  \\ 
+$0.5  {<} \mbox{Score} {\le} 0.6 \land 0.9 {\le} \mbox{Sim} {\le}1.0$ & 
+$\mbox{助詞:「に」} \land \mbox{修辞:順接} $ & 
+$0.2 {<} \mbox{Sim} {\le}0.3 $  \\ 
+$0.0 {\le} \mbox{Den} {\le}0.1 \land 0.9 {\le} \mbox{Sim} {\le}1.0$ & 
+$0.3 {<} \mbox{Sim} {\le}0.4 \land \mbox{{\bf ジャンル:報道}} $& 
+$0.0 {\le} \mbox{Posd} {\le}0.1 $\\ 
+$\mbox{{\bf ジャンル:社説}} $ & 
+$0.9 {\le} \mbox{Posp} {\le}1.0 \land \mbox{修辞:順接}$ & 
+$\mbox{助詞:「は」} \land \mbox{{\bf ジャンル:特集}} $ \\ 
+\hline
+  \multicolumn{3}{c}{ } \\
+  \multicolumn{3}{c}{セットB} \\
+   \hline
+   \hline
+\multicolumn{1}{c|}{要約率=10\,\%}  & \multicolumn{1}{c|}{要約率=30\,\%} &
+  \multicolumn{1}{c}{要約率=50\,\%} \\
+   \hline
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land 0.0 {\le} \mbox{Den} {\le}0.1$ & 
+$0.1 {<} \mbox{{\bf Score}}_{\bf E} {\le} 0.2 \land 0.1 {<} \mbox{{\bf Score}}_{\bf C} {\le}0.2$ & 
+$\mbox{{\bf ジャンル:報道}}$ \\ 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land 0.4 {<} \mbox{Len} {\le}0.5$ & 
+$0.3 {<} \mbox{{\bf Score}}_{\bf E} {\le} 0.4 \land \mbox{助詞:「が」}$ & 
+$0.0 {\le} \mbox{Posd} {\le}0.1 \land \mbox{文末(大):その他}$ \\ 
+$0.9 {\le} \mbox{Den} {\le}1.0 \land 0.8 {\le} \mbox{Sim} {\le}0.9$ & 
+$0.9 {\le} \mbox{Posp} {\le} 1.0 \land 0.0 {\le} \mbox{{\bf Post}} {\le}0.1$ & 
+$0.0 {\le} \mbox{Posd} {\le}0.1 \land \mbox{文末(小):その他}$  \\ 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land 0.0 {\le} \mbox{{\bf Score}}_{\bf E} {\le}0.1$ & 
+$0.5 {<} \mbox{Sim} {\le} 0.6 \land 0.9 {\le} \mbox{{\bf Post}} {\le}1.0$ & 
+$0.0 {\le} \mbox{Posd} {\le}0.1 \land 0.9 {\le} \mbox{Posp} {\le}1.0$  \\ 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{修辞:順接}$ & 
+$0.3 {<} \mbox{Posd} {\le}0.4 \land \mbox{NE:PERSON}$ & 
+$0.0 {\le} \mbox{Posd} {\le}0.1 $  \\ 
+$0.9 {\le} \mbox{Den} {\le}1.0 \land 0.4 {<} \mbox{{\bf Post}} {\le}0.5$ & 
+$0.0 {\le} \mbox{Sim} {\le}0.1 $& 
+$0.0 {\le} \mbox{Posp} {\le}0.1 \land \mbox{文末(大):その他}$ \\ 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land 0.6 {<} \mbox{{\bf Post}} {\le}0.7$ & 
+$0.7 {<} \mbox{Posd} {\le}0.8 \land \mbox{NE:LOC}$ & 
+$0.0 {\le} \mbox{Posp} {\le}0.1 \land \mbox{文末(小):その他}$  \\ 
+$\mbox{助詞:「で」} \land \mbox{助詞:「も」}$ & 
+$\mbox{NE:ORG} \land \mbox{助詞:「は」}$ & 
+$0.1 {<} \mbox{{\bf Score}}_{\bf E} {\le}0.2 \land 0.1 {<} \mbox{{\bf Score}}_{\bf C} {\le} 0.2$  \\ 
+$0.9 {\le} \mbox{Sim} {\le}1.0 \land 0.3 {<} \mbox{{\bf Score}}_{\bf C} {\le}0.4$ & 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land 0.0 {\le} \mbox{Den} {\le}0.1 $& 
+$0.0 {\le} \mbox{{\bf Score}}_{\bf E} {\le}0.1 \land \mbox{{\bf ジャンル:報道}}$\\ 
+$0.9 {\le} \mbox{Score} {\le}1.0 \land 0.8 {<} \mbox{Sim} {\le}0.9$ & 
+$\mbox{NE:ORG} \land \mbox{NE:LOC}$ & 
+$0.0 {\le} \mbox{{\bf Score}}_{\bf E} {\le}0.1$ \\ 
+\hline
+  \multicolumn{3}{c}{ } \\
+  \multicolumn{3}{c}{セットC} \\
+   \hline
+   \hline
+\multicolumn{1}{c|}{要約率=10\,\%}  & \multicolumn{1}{c|}{要約率=30\,\%} &
+  \multicolumn{1}{c}{要約率=50\,\%} \\
+   \hline
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land 0.1 {<} \mbox{{\bf Score}}_{\bf E} {\le}0.2$ & 
+$0.5 {<} \mbox{Posd} {\le} 0.6 \land \mbox{NE:LOC}$ & 
+$0.0 {\le} \mbox{{\bf Score}}_{\bf E} {\le} 0.1$ \\ 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{修辞:順接}$ & 
+$ \mbox{{\bf ジャンル:特集}}$ & 
+$0.1 {<} \mbox{Score} {\le}0.2 $ \\ 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land 0.1 {<} \mbox{{\bf Score}}_{\bf C} {\le}0.2$ & 
+$0.6 {<} \mbox{Sim} {\le} 0.7 \land \mbox{NE:LOC} $ & 
+$0.0 {\le} \mbox{Posd} {\le}0.1$  \\ 
+$0.9 {\le} \mbox{Sim} {\le}1.0 \land \mbox{修辞:順接} $ & 
+$0.9 {\le} \mbox{Posd} {\le} 1.0 \land 0.1 {<} \mbox{Score} {\le}0.2$ & 
+$0.3 {<} \mbox{Len} {\le}0.4 $  \\ 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{文末(大):その他}$ & 
+$ \mbox{文末(大):叙述} \land \mbox{修辞:順接}$ & 
+$0.0 {\le} \mbox{Posd} {\le}0.1 \land \mbox{{\bf ジャンル:報道}}$  \\ 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land \mbox{文末(小):その他}$ & 
+$\mbox{NE:PERSON} \land \mbox{助詞:「を」}  $& 
+$\mbox{{\bf ジャンル:特集}}$ \\ 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land 0.3 {<} \mbox{Len} {\le}0.4$ & 
+$\mbox{文末(小):過去} \land \mbox{修辞:順接}$ & 
+$0.0 {\le} \mbox{{\bf Score}}_{\bf C} {\le}0.1$  \\ 
+$\mbox{NE:LOC} \land \mbox{修辞:順接}$ & 
+$\mbox{NE:PERSON} \land \mbox{{\bf ジャンル:報道}}$ & 
+$\mbox{NE:PERSON} \land \mbox{{\bf ジャンル:報道}} $  \\ 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land 0.3 {<} \mbox{Score} {\le}0.4$ & 
+$0.9 {\le} \mbox{Posd} {\le}1.0 \land 0.1 {<} \mbox{{\bf Score}}_{\bf C} {\le}0.2 $& 
+$0.3 {<} \mbox{Len} {\le}0.4 \land \mbox{助詞:「を」}$\\ 
+$0.9 {\le} \mbox{Posp} {\le}1.0 \land \mbox{修辞:順接}$ & 
+$0.3 {<} \mbox{{\bf Post}} {\le} 0.4 \land \mbox{助詞:「を」}$ & 
+$0.2 {<} \mbox{Score} {\le}0.3$ \\ 
+\hline
+\end{tabular}
+\end{center}
+\end{table*}
+
+
+本稿で用いた各素性の有効性についての考察を行う．
+2次の多項式カーネルを用いた場合，テストデータを$ \vec x =
+(x[1],\cdots,x[J]])$とすると，$g(\vec x)$は，
+式(1)の内積を展開して計算すると以下の式となる．
+
+\begin{equation}
+g(\vec x) = b + \sum_{i=1}^{n} w_i + 2 \sum_{i=1}^{n} w_i \sum_{k=1}^J x_i[k] x[k] + \sum_{i=1}^{n} w_i \sum_{h=1}^{J}\sum_{k=1}^J x_i[h] x_i[k] x[h]
+x[k]
+\end{equation}
+
+\noindent 更に，$ \vec x$が2値ベクトルであることを利用すると以下のように
+書き直すことができる．
+
+\begin{equation}
+g(\vec x) = W_0 + \sum_{k=1}^J W_1[k] x[k] + \sum_{h=1}^{J-1}\sum_{k=h+1}^J W_2[k,h] x[h] x[k]
+\end{equation}
+
+\noindent ただし，
+
+\[
+W_0 = b+\sum_{i=1}^{n} w_i,~~~W_1[k] = 3\sum_{i=1}^{n}w_i
+x_i[k],~~~W_2[h,k] = 2\sum_{i=1}^{n} w_i x_i[h] x_i[k]
+\]
+
+\noindent である．ここで，$W_1[k]$は，単独の素性$k$に対する重み，
+$W_2[h,k]$は素性の組$h \land k$に対する重みである．この時，判別関数$g({\bf
+x})$は$k$，$h \land k$という素性に関するスコア関数と考えることができる．よって，
+$W_1[k]$，$W_2[h,k]$の絶対値の大きい素性$k$，$h \land k$はスコアに与える影響が
+大きい素性であり，重要文の判定に影響を与える．セットA〜Cの全てのデータを
+用いて学習した結果から，絶対値の大きい上位10個の素性を表\ref{F_pair_pos}，
+表\ref{F_pair_neg}に示す．
+
+表\ref{F_pair_pos}は，文が重要文となるために必要な素性の一部を示しており，
+表\ref{F_pair_pos}に示す素性を含む文は重要文となる場合が多い．
+
+要約率10\,\%では，文が文書の先頭付近に出現することを表す素性に加え，
+以下の素性の組み合わせに高い重みが与えられていることがわかる．
+
+\begin{itemize}
+ \item TF$\cdot$IDF値(バリエーションを含む)が高いことを表す素性
+ \item 記事のタイトルとの類似度が高いことを表す素性
+ \item 固有表現(DATE，LOCATION，PERSON)が出現することを表す素性
+ \item 文末表現が叙述や過去であることを表す素性
+\end{itemize}
+
+\noindent これは，文書集合を構成する記事の多くが報道記事であるため，文書
+の先頭付近に話題に関する重要事項が客観的に記述されており，それを人間が重
+要文として抽出する傾向があるからである．特に，実験に用いた文書集合はある
+話題(出来事)に関する文書であるので，その時系列情報を表す固有表現(DATE)や
+場所の情報を表す固有表現(LOCATION)が重要であることがわかる．また，特定の
+人物に関する話題も多いので人物名の固有表現(PERSON)も重要である．
+
+要約率30\,\%でも要約率10\,\%の場合とほぼ同等の傾向であるが，セットAに関して
+はタイトルとの類似度が高いことを表す素性の重要度が増している．また，全て
+のセットに共通して文書のジャンルを表す素性が重要な素性として新たに加わっ
+ている．
+
+要約率50\,\%では，要約率10\,\%，30\,\%の場合と異なり，特定の助詞が出現すること
+を表す素性が単独で高い重みを獲得している．「は」や「が」は大胆な省略がし
+ばしば行われる新聞記事において，新たな情報を導入する際に用いられることが
+多いからであると考える．
+
+一方，表\ref{F_pair_neg}は，重要文らしさのスコアを下げる素性の一部を表し
+ている．
+上位を占めているものをみると，
+文書の先頭付近に出現しながら重要でない文に特徴的な素性に高い重みがついて
+いることがわかる．
+文書の先頭付近に出現する文でも全てが重要文となるわけではないことを示している．
+文書の位置以外
+の実数値(スコア)を取る素性はその値が小さい場合には，重要文とならない傾向
+が強い．
+
+以上より，
+各セットにより，わずかに違いはあるが，重要文であるために必要な素性は，文
+の位置が文書の先頭付近であること，固有表現が出現すること，TF$\cdot$IDFの
+スコアが高いこと等の組み合わせであることがわかった．更に実数値をとる素性
+はその値が低い場合には重要文とならない場合が多いこともわかった．また，本
+稿で新たに導入した複数文書用の素性である$\mbox{Score}_{E}$や
+$\mbox{Score}_{C}$に対しても高い重みが与えられており有効性がわかった．
+
+\subsubsection{複数文書用の素性の有効性}
+
+
+本稿で用いた複数文書用素性の有効性についての詳しい考察を行う．評価実験に
+用い
+た素性から 3.2.2節で説明した複数文書用素性を取り除いた後に学習と評価を行った．
+SVM
+の抽出精度を表\ref{tab09}，図\ref{isozakiS}〜図\ref{isozakiL}に示す．な
+お，図中の1は$\mbox{Post}$，2は$\mbox{Score}_{E}$，3は$\mbox{Score}_{C}$，4
+は$\mbox{Genre}$に対応する．
+
+\begin{table}[tb]
+ \begin{center}
+  \caption{複数文書用の素性を除いたときの SVM の抽出精度}
+  \label{tab09}
+  \begin{tabular}{l|lll|lll|lll}
+   \hline
+   \hline
+   \raisebox{-1.8ex}[0pt][0pt]{取り除いた素性} & \multicolumn{3}{|c|}{要約率=10\,\%} & \multicolumn{3}{c|}{要約率=30\,\%} & \multicolumn{3}{c}{要約率=50\,\%} \\
+\cline{2-10}
+   & A & B & C & A & B & C & A & B & C \\
+\hline
+Post & 49.9 & 46.6 & 47.4 & 51.5 & 46.6 & 48.5 & 67.8 & 65.4 & 63.1 \\
+$\mbox{Score}_E$ & 50.9 & 46.0 & 48.1 & 51.9 & 47.1 & 46.8 & 67.6 & 65.7 & 63.1 \\
+$\mbox{Score}_C$ & 51.1 & 46.9 & 47.1 & 51.4 & 47.3 & 47.3 & 68.1 & 66.5 & 63.1 \\
+Genre & 49.2 & 46.6 & 46.9 & 52.1 & 47.6 & 47.7 & 67.0 & 66.8 & 63.5 \\
+\hline
+Post + $\mbox{Score}_E$ & 50.8 & 46.8 & 46.9 & 50.1 & 46.6 & 46.5 & 67.8 & 64.8 & 63.1 \\
+Post + $\mbox{Score}_C$ & 50.1 & 47.2 & 46.0 & 51.1 & 46.8 & 47.9 & 68.1 & 65.4 & 63.3 \\
+Post + Genre & 48.5 & 46.2 & 47.1 & 51.4 & 46.8 & 47.8 & 67.9 & 65.8 & 64.0 \\
+$\mbox{Score}_E$ + $\mbox{Score}_C$ & 50.9 & 45.8 & 47.0 & 50.4 & 47.3 & 46.9 & 67.8 & 65.7 & 62.6 \\
+$\mbox{Score}_E$ + Genre & 49.4 & 45.5 & 47.7 & 51.8 & 47.1 & 46.5 & 67.0 & 66.5 & 63.3 \\
+$\mbox{Score}_C$ + Genre & 48.6 & 47.1 & 46.7 & 52.3 & 48.3 & 48.1 & 67.5 & 66.7 & 64.0 \\
+\hline
+Post + $\mbox{Score}_E$ & \raisebox{-1.8ex}[0pt][0pt]{50.4} & \raisebox{-1.8ex}[0pt][0pt]{47.2} & \raisebox{-1.8ex}[0pt][0pt]{45.3} & \raisebox{-1.8ex}[0pt][0pt]{50.6} & \raisebox{-1.8ex}[0pt][0pt]{46.3} & \raisebox{-1.8ex}[0pt][0pt]{45.8} & \raisebox{-1.8ex}[0pt][0pt]{67.8} & \raisebox{-1.8ex}[0pt][0pt]{64.4} & \raisebox{-1.8ex}[0pt][0pt]{63.2} \\
++ $\mbox{Score}_C$ &  &  &  &  &  &  &  &  &  \\
+Post + $\mbox{Score}_E$ & \raisebox{-1.8ex}[0pt][0pt]{48.9} & \raisebox{-1.8ex}[0pt][0pt]{46.0} & \raisebox{-1.8ex}[0pt][0pt]{46.5} & \raisebox{-1.8ex}[0pt][0pt]{49.9} & \raisebox{-1.8ex}[0pt][0pt]{46.1} & \raisebox{-1.8ex}[0pt][0pt]{46.3} & \raisebox{-1.8ex}[0pt][0pt]{67.5} & \raisebox{-1.8ex}[0pt][0pt]{65.3} & \raisebox{-1.8ex}[0pt][0pt]{63.0} \\
++ Genre &  &  &  &  &  &  &  &  &  \\
+$\mbox{Score}_E$ + $\mbox{Score}_C$ & \raisebox{-1.8ex}[0pt][0pt]{50.2} & \raisebox{-1.8ex}[0pt][0pt]{45.2} & \raisebox{-1.8ex}[0pt][0pt]{46.8} & \raisebox{-1.8ex}[0pt][0pt]{51.0} & \raisebox{-1.8ex}[0pt][0pt]{47.9} & \raisebox{-1.8ex}[0pt][0pt]{47.2} & \raisebox{-1.8ex}[0pt][0pt]{69.9} & \raisebox{-1.8ex}[0pt][0pt]{66.4} & \raisebox{-1.8ex}[0pt][0pt]{63.3} \\
++ Genre &  &  &  &  &  &  &  &  &  \\
+Post + $\mbox{Score}_C$ & \raisebox{-1.8ex}[0pt][0pt]{49.1} & \raisebox{-1.8ex}[0pt][0pt]{46.7} & \raisebox{-1.8ex}[0pt][0pt]{46.1} & \raisebox{-1.8ex}[0pt][0pt]{51.7} & \raisebox{-1.8ex}[0pt][0pt]{46.5} & \raisebox{-1.8ex}[0pt][0pt]{47.4} & \raisebox{-1.8ex}[0pt][0pt]{68.2} & \raisebox{-1.8ex}[0pt][0pt]{65.9} & \raisebox{-1.8ex}[0pt][0pt]{63.6} \\
++ Genre &  &  &  &  &  &  &  &  &  \\
+\hline
+Post + $\mbox{Score}_E$ & \raisebox{-1.8ex}[0pt][0pt]{48.5} & \raisebox{-1.8ex}[0pt][0pt]{46.3} & \raisebox{-1.8ex}[0pt][0pt]{50.0} & \raisebox{-1.8ex}[0pt][0pt]{50.8} & \raisebox{-1.8ex}[0pt][0pt]{48.0} & \raisebox{-1.8ex}[0pt][0pt]{48.6} & \raisebox{-1.8ex}[0pt][0pt]{67.5} & \raisebox{-1.8ex}[0pt][0pt]{65.7} & \raisebox{-1.8ex}[0pt][0pt]{67.0} \\
+$\mbox{Score}_C$ + Genre &  &  &  &  &  &  &  &  &  \\
+   \hline
+  \end{tabular}
+ \end{center}
+\end{table}
+
+\begin{figure}[tb]
+ \begin{center}
+  \begin{tabular}{c}
+ \epsfile{file=graph2/Small.eps,scale=0.6}\\
+  \end{tabular}
+  \caption{各素性を取り除いたときの抽出精度(要約率10\,\%)}
+  \label{isozakiS}
+ \end{center}
+\end{figure}
+
+\begin{figure}[tb]
+ \begin{center}
+  \begin{tabular}{c}
+ \epsfile{file=graph2/Medium.eps,scale=0.6}\\
+  \end{tabular}
+  \caption{各素性を取り除いたときの抽出精度(要約率30\,\%)}
+  \label{isozakiM}
+ \end{center}
+\end{figure}
+
+\begin{figure}[tb]
+ \begin{center}
+  \begin{tabular}{c}
+ \epsfile{file=graph2/Large.eps,scale=0.6}\\
+  \end{tabular}
+  \caption{各素性を取り除いたときの抽出精度(要約率50\,\%)}
+  \label{isozakiL}
+ \end{center}
+\end{figure}
+
+
+表\ref{tab09}，図\ref{isozakiS}〜図\ref{isozakiL}より，全体の傾向として
+は，複数文書用の素性を取り除くことによって抽出精度が低下している．特に
+10\,\%，30\,\%の要約率ではその傾向が強い．
+ただし，複数文書用の全ての素性を取り除くよりも2つか3つの素性の組み合わせ
+を取り除いた場合に最も抽出精度が低下している．
+特にセットCはどの要約率においても，TF$\cdot$IDFのバリエーションを組み合
+わせて素性を取り除いたときに抽出精度の低下が大きい．
+これに対し，セットA，セットBでは，セットC程大きな抽出精度の低下はみられ
+ないが，文書のジャンルと組み合わせて素性を取り除いたときに抽出精度の低下
+が大きい．また，セットCの要約率10\,\%では最も低い抽出精度の時には，Lead 手
+法
+よりもわずかに低い成績であったが，それ以外の場合では，最も低い抽出精度で
+あっても Lead 手法より高い成績であった．
+一方，セットBの10\,\%要約率，セットAの50\,\%要約率ではある組み合わせの素性を
+取り除くことによって，約2\,\%の抽出精度の向上がみられた．
+複数文書用の全ての素性を取り除いた場合には，10\,\%，30\,\%の要約率では表
+\ref{tab04}よりも
+やや抽出精度が低下し，50\,\%の要約率ではほぼ同等の抽出精度である．
+
+一般的には，取り除く素性の数を増やすことによって抽出精度が低下することが
+予測されるが，実験結果では逆に抽出精度がわずかながら向上するなど揺れがみ
+られた．これは，データ(話題数)の規模が小さく分散が大きいこ
+とと実験に
+用
+いた素性間に従属関係があること
+が原因であると考え
+る．例えば，Post は，Posd との関連が強く，$\mbox{Score}_E$，
+$\mbox{Score}_C$といった素性は単一文書のTF$\cdot$IDFとの関連が強い．この
+ように従属関係にある素性がある場合には，一方の素性を取り除いても他方が残っ
+ている場合には抽出精度が低下しないことも考えられる．
+
+以上より，複数文書用の素性を組み合わせて取り除くことで抽出精度の低下が起
+ること，複数文書用の全ての素性を取り除くことでわずかであるが抽出精度の低
+下が起ることがわかった．
+この結果より，本稿での評価実験において，
+複数文書用の素性を用いることは効果は小さいが有効であることがわかった．
+
+複数文書用の素性の効果が小さかった原因としては，
+対象とした
+文書集合に含まれる文書がすべて単一の話題を主題としている文書であっ
+たとい
+うこと
+が考えられる．
+たとえば，「奈良で最古の貨幣出土」という話題を考えた場合，対象文書集合に
+含まれる全文書は「奈良で最古の貨幣出土」という話題を主題としており，
+各文書における
+重要文がそのま
+ま文書集合全体での重要文になる可能性が高い．
+このように単一文書での重要文が複数文書での重要文になることが多い
+場合では，複数の文書であることを考慮することの効果が小さ
+いと考える．
+
+
+
+\section{冗長性削減の有効性}
+
+\begin{figure}[tb]
+ \begin{center}
+  \begin{minipage}{.75\linewidth}
+   \begin{screen}
+   $A = \{\}$;\\
+   $R = \{S_1,S_2,\cdots,S_\ell\}$;\\
+   $N = 出力すべき文数$;\\
+   $\mbox{While}(|A| < N)\{$
+   \begin{quote}
+    $S^* = \mbox{MMR}(A,R)$;\\
+    $A = A \cup \{S^*\}$;\\
+    $R = R - \{S^*\}$;
+   \end{quote}
+   \}\\
+   Aを出力．\\
+  ただし，\noindent
+   \[
+   \mbox{MMR}(A,R) =
+   \left\{ \begin{array}{ll}
+   \displaystyle
+    \mathop{\rm argmax}_{S_i \in R} s(g(S_i))\\
+   \displaystyle
+    \mathop{\rm argmax}_{S_i \in R} \lambda s(g(S_i)) - (1- \lambda)\mathop{\rm max}_{S_j \in A}\mbox{Sim}(S_i,S_j)\\
+	   \end{array} \right.
+   \]
+   \end{screen}
+  \end{minipage}
+ \end{center}
+   \caption{MMR による文の再ランキング}
+   \label{fig01}
+\end{figure}
+
+一般的に，複数文書からの重要文を抽出した場合，抽出された文間で内容が重
+複する可能性があるということが言われている\cite{article8}．重要文として抽
+出された文集合から
+このような冗長性を削減する方法として，Carbonell らは，Maximum Marginal
+Relevance (MMR) という指標を用いて，ある観点でランキングされた文に別の観
+点を導入し，再ラン
+キングする手法を提案している\cite{article48}．
+本稿でも MMR を使った場合に SVM の重要文の抽出精度がどのように変化するか
+を調べる．
+
+MMR を用いた文の再ランキングアルゴリズムを図\ref{fig01}に示す．$R$は文集
+集合に含まれる文の集合を表し，$A$は出力となる文集合を表す．$s(x)$は，
+シグモイド関数$s(x)= 1/(1+\mbox{exp}(-\beta x))$を表し，$\beta=1$とした．
+$s(g(S_i))$は，式(1)の値を0〜1
+に正規化した値となる．$\mbox{Sim}(S_i,S_j)$は，文$S_i$と$S_j$の単語の重
+複度を cosine measure で表した指標である．3.2.1節のタイトルとの類似度と
+同様に計算する．
+ここでの MMR は SVM の判別関数の値から既に選択した文との重
+複度をペナルティとして引いたものである．$\lambda$はそれぞれの項の重みを
+決めるパラメータである．
+MMR を用いることで，冗長性の低い(重複の少ない)文集合を得られることが期待
+できる．図\ref{fig02}に$\lambda$を1〜0.8まで0.05刻で変化させた場合の SVM
+の抽出精度を示す．
+
+\begin{figure}[p]
+ \begin{center}
+  \vspace*{-1em}
+  \begin{tabular}{c}
+   要約率10\,\%\\
+ \epsfile{file=graph3/Small.eps,scale=1.1}\\
+   要約率30\,\%\\
+  \epsfile{file=graph3/Medium.eps,scale=1.1}\\
+   要約率50\,\%\\
+  \epsfile{file=graph3/Large.eps,scale=1.1}\\
+  \end{tabular}
+  \caption{MMR を用いた場合の抽出精度の変化}
+  \label{fig02}
+ \end{center}
+\end{figure}
+
+図\ref{fig02}より，どのセットに対しても10\,\%，30\,\%の要約率では
+SVMの抽出精度は低下するだけであり，MMR が有効でないことがわ
+かる．これは，10\,\%，30\,\%の要約率では，SVM による抽出結果に文単位での
+冗長性が無いことを示している．
+複数の文書からの重要文抽出では冗長性を削減することが有効で
+あるといわれていたが，今回の実験では10\,\%，30\,\%の低い要約率では有効でない
+という結果となった．
+この傾向は SVM だけでなく，Lead 手法，TF$\cdot$IDFでも同様であった．
+このような結果の原因として，重要文の抽出もととなる文集合に文を単位とした
+冗長性が少な
+いため，抽出された文にも結果として冗長性が少なかったということが考えられる．
+特に，評価実験の対象とした文集合が全て単一の情報源(毎日新聞)から得られた
+ものであることの影響が大きい．
+
+このような文を単位とした冗長性が少ないデータに対して MMR が及ぼす悪影
+響の原因について考える．
+$\mbox{Sim}(S_i,S_j)$は2文間に共通する単語に依存する．ここで，ある文集合
+において
+全く冗長性が無い(文の意味的な内容に重複がない)ことをどの2文間にも共通す
+る単語が無いことと捉える．この
+場合，$\mbox{Sim}(S_i,S_j)$は常に0となり，ランキングに対する MMR の悪影
+響は無い．
+しかし，実際には，文の意味としては異なるが，共通する単語は存在するような
+文の組は多数存在する．よって，$\mbox{Sim}(S_i,S_j)$が0とならず，再ランキ
+ングに悪影響を及ぼす．
+ただし，複数の情報源から得た文集合であれば，類似度の高い2文はほぼ同
+一の意味を持つ傾向が強いと予想されるので，MMRによる再ランキングは有効に
+働くと考える．
+
+一方，50\,\%の要約率ではわずかではあるが，抽出精度の向上が見られた．特に，
+SVM(C)では1.5\,\%程度，抽出精度が向上している．
+以下にSVM(C)において MMR が
+有効に働いた例を示す．上の文が正解文として残った文で下の文が上の文
+に対して類似していることで削除(下位にランク)された文である．
+
+\begin{itemize}
+ \item 16、チェルノブイリ原子力発電所を2000年までに閉鎖するという
+       ウクライナが行った新たな約束を歓迎する。
+ \item また、声明には、ウクライナのチェルノブイリ原子力発電所を来年まで
+       に閉鎖することを改めて確認、金融犯罪への取り組み強化も盛り込んだ。
+\end{itemize}
+
+このように2文間に共通する単語が多く，意味的にも類似した文の組がある場合
+には，MMR は有効である．先にも述べたが，今回の実験に用いたデータにはこう
+した例は少ない．よって，多数の文を抽出する50\,\%の要約率でしか効果が確認で
+きなかったと考える．
+
+ただし，文を単位とした冗長性は少ないが，語句単位での冗長性は数多く見られ
+た．一例を以下に示す．
+
+\begin{quote}
+ {\bf ブラジルの通貨レアルの切り下げ}と中央銀行総裁の辞任によるショック
+ が，$\cdots$．\\
+ 宮沢喜一蔵相は14日の閣議後会見で，{\bf ブラジルの通貨レアル切り下げ}
+ で$\cdots$．\\
+ {\bf ブラジルの通貨レアル切り下げ}を受けた中南米は13日，$\cdots$．
+\end{quote}
+
+\noindent このように語句を単位とした冗長性は多く存在するので，単一の情報
+源を対象とした場合には，文を単位とした冗長性ではなく，語句を単位とした冗
+長性を削減する手法を考える必要がある．
+
+\section{まとめ}
+
+本稿では，機械学習手法の1種である Support Vector Machine を用いた複数文
+書からの重要文抽出手法について述べた．評価実験の結果，提案手法が Lead 手
+法，TF$\cdot$IDF手法よりも重要文の抽出精度が高いことを実証し，有効性を示
+した．
+また，わずかではあるが，複数の文書を考慮した素性を用いることで重要文の抽
+出精度が向上することがわかった．
+さらに，単一の情報源から得た複数の文書を対象とし
+た場合，低い要約率では文を単位とした冗長性の削減法 (MMR) が有効でないこ
+とがわかった．
+
+今後の課題としては，複数の情報源から得た複数文書を対象とした場合の MMR
+の効果の確認，文を単位とした冗長性だけでなく，語句を対象とした冗長性削減
+手法の研究がある．
+
+\acknowledgment
+
+評価法について有益なコメントをいただいた通信総合研究所の竹内和広氏に感謝
+いたします．
+また，データの使用を許諾してくださった毎日新聞社に感謝いたします．
+
+
+\bibliographystyle{jnlpbbl}
+\bibliography{ipsjpaper}
+
+\begin{biography}
+\biotitle{略歴}
+\bioauthor{平尾 努}{
+1995年 関西大学工学部電気工学科卒業．
+1997年 奈良先端科学技術大学院大学情報科学研究科博士前期過程修了．
+同年，NTTデータ通信株式会社（現，株式会社NTTデータ）入社．
+2000年よりNTT コミュニケーション科学基礎研究所に所
+属．博士（工学）．
+自然言語処理の研究に従事．情報処理学会，ACL 各会員．}
+\bioauthor{賀沢 秀人}{
+1995年 東京大学理学部物理学科卒業．
+1997年 同大学院理学系研究科修士課程修了．
+同年，日本電信電話（株）入社．
+現在，NTT コミュニケーション科学基礎研究所に所属．
+主として自然言語処理，機械学習の研究に従事．
+情報処理学会，ACM，IEEE 各会員．
+}
+\bioauthor{磯崎 秀樹}{
+1983年 東京大学工学部計数工学科卒業．
+1986年 同工学系大学院修士課程修了．
+同年，日本電信電話（株）入社．
+1990〜91年スタンフォード大学ロボティクス研究所客員研究員．
+現在，NTTコミュニケーション科学基礎研究所特別研究員．
+博士（工学）．
+人工知能・自然言語処理の研究に従事．電子情報通信学会，情報処理学会，
+人工知能学会，AAAI，ACL 各会員．
+}
+\bioauthor{前田 英作}{
+1984年 東京大学理学部動物学科卒業．
+1986年 同大学院理学系研究科修士課程修了．
+同年，日本電信電話（株）入社．
+現在，NTTコミュニケーション科学基礎研究所
+知能情報研究部知識処理研究グループリーダ．工学博士．
+1995〜96年ケンブリッジ大学（英国）客員研究員．
+主としてパターン認識，統計的機械学習，生物情報処理の研究に従事．
+IEEE，情報処理学会，日本バイオインフォマティックス学会 各会員．
+}
+\bioauthor{松本 裕治}{
+1977年京都大学工学部情報工学科卒業．
+1979年同大学大学院工学研究科修士課程情報工学専攻修了．
+同年電子技術総合研究所入所．
+1984〜85年英国インペリアルカレッジ客員研究員．
+1985〜87年（財）新世代コンピュータ技術開発機構に出向．
+京都大学助教授を経て，1993年より奈良先端科学記述大学院大学教授，現在に至
+ る．工学博士．
+情報処理学会，人工知能学会，日本ソフトウェア科学会，認知科学会，AAAI，
+ ACL，ACM 各会員．
+}
+
+\bioreceived{受付}
+\biorevised{再受付}
+\bioaccepted{採録}
+\end{biography}
+
+\end{document}

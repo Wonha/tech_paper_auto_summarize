@@ -1,0 +1,818 @@
+
+
+
+
+
+\documentstyle[jnlpbbl,epsf]{jnlp_j}
+
+
+\setcounter{page}{101}
+\setcounter{巻数}{9}
+\setcounter{号数}{1}
+\setcounter{年}{2002} 
+\setcounter{月}{1}
+\受付{2001}{7}{16}
+\再受付{2001}{9}{19}
+\採録{2001}{9}{28}
+
+\setcounter{secnumdepth}{2}
+
+\title{最大エントロピー法を用いた対訳単語対の抽出}
+\author{佐藤 健吾\affiref{KEIOCS} \and 斎藤 博昭\affiref{KEIOICS}}
+
+\headauthor{佐藤,斎藤}
+
+\headtitle{最大エントロピー法を用いた対訳単語対の抽出}
+
+\affilabel{KEIOCS}{慶應義塾大学大学院理工学研究科計算機科学専攻}{Department of Computer Science,Keio University}
+
+\affilabel{KEIOICS}{慶應義塾大学理工学部情報工学科}{Department of Information and Computer Science,Keio University}
+
+\jabstract{
+機械翻訳などの多言語間自然言語処理で用いられる対訳辞書は現在，人手によっ
+て作成されることが多い．しかし，人手による作成には一貫性・網羅性などの
+点で限界があることから対訳コーパスから自動的に対訳辞書を作成しようとす
+る研究が近年盛んに行われている．
+本論文では，最大エントロピー法を用いて対訳コーパス上に対訳関係の確率モ
+デルを推定し，自動的に対訳単語対を抽出する手法を提案する．
+素性関数として共起情報を用いるモデルと品詞情報を用いるモデルを定義した．
+共起情報により対訳関係にある単語の意味を制約し，品詞情報により対訳関係
+にある単語の品詞を制約する．
+本手法の有効性を示すために日英対訳コーパスを用いた対訳単語対の抽出実験
+を行い，本論文で提案した手法が従来の手法よりも精度・再現率において優れ
+た結果となり，また，テストコーパスによる実験では学習コーパスに出現しな
+かった単語対に関しても学習データに現れたものとほぼ同等の精度・再現率で
+抽出できることを示した．}
+
+\jkeywords{対訳辞書，機械翻訳，最大エントロピー法}
+
+\etitle{Extracting Bilingual Word Pairs \\ with Maximum Entropy Modeling}
+\eauthor{Kengo SATO\affiref{KEIOCS} \and Hiroaki SAITO\affiref{KEIOICS}}
+
+\eabstract{
+  Translation dictionaries used in multilingual natural
+  language processing such as machine translation have been made
+  manually, but a great deal of labor is required for this work and it
+  is difficult to keep the description of the dictionaries
+  consistent. Therefore, researches of extracting bilingual word pairs
+  from parallel corpora automatically become active recently.
+  In this paper, we propose a learning and extracting method of
+  bilingual word pairs from aligned parallel corpora with the maximum
+  entropy modeling.
+  We define a probabilistic model of bilingual word pairs and four
+  types of feature functions which express statistical and linguistic
+  properties such as co-occurrence information and morphlogical
+  information. Co-occurrence information restricts the sense of
+  words. Morphlogical information restricts the part-of-speech of
+  words.
+  Experiment results in which Japanese and English parallel corpora
+  are used show that our method performs better than the previous
+  methods and can extract the bilingual word pairs which do not appear
+  in the training corpus with almost the same accuracy as the appeared
+  pairs due to the property of the maximum entropy modeling.}
+
+
+\ekeywords{
+  translation dictionary,
+  machine translation,
+  maximum entropy modeling
+}
+
+
+\begin{document}
+
+\thispagestyle{plain}
+\maketitle
+
+\section{はじめに}
+\label{sec:intro}
+
+機械翻訳などの多言語間システムの構築において対訳辞書は必要不可欠で
+あり，その品質がシステム全体の性能を左右する．これらに用いられる対訳辞書
+は現在，人手によって作成されることが多い．しかし，人手による作成には限界
+があり，品質を向上するためには膨大な労力が必要であること，辞書の記述の一
+貫性を保つことが困難であることが問題となる．このことからコーパスから自動
+的に対訳辞書を作成しようとする研究が近年盛んに行われている
+\cite{gale_91,kaji_96,kitamura_96,fung_97,melamed_97}．
+
+本論文では，最大エントロピー法を用いて対訳コーパス上に対訳単語対の確率
+モデルを推定し，自動的に対訳単語対を抽出する手法を提案する．本論文では
+対訳関係にある単語の組を対訳単語対と呼ぶ．最大エントロピー法は，与えら
+れた制約の中でエントロピーを最大化するようなモデルを推定するという最大
+エントロピー原理に基づいており，未知データに対しても確率値をなるべく一
+様に配分するため，自然言語処理においてしばしば問題となるデータスパース
+ネスに比較的強いという特徴を持っている．このため，構文解析
+\cite{ratnaparkhi_97,wojciech_98,uchimoto_99}，文境界の同定
+\cite{reynar_97}，動詞の下位範疇化モデル\cite{utsuro_97b} などに応用さ
+れている．
+また我々の手法は，既存の対訳辞書を必要とせず，文対応の付いた対訳コーパ
+スさえあれば，対訳コーパスの分野を限定することなく対訳単語対を抽出でき
+るという特徴を持つ．
+
+本論文の構成は以下の通りである．
+\ref{sec:ME_method} 節では最大エントロピー法について説明し，
+\ref{sec:MEdict} 節では最大エントロピー法を用いて対訳単語対を抽出する
+手法を述べる．
+\ref{sec:experiment_discussion} 節では我々が提案した手法の有効性を示す
+ために行った実験の結果とそれに対する考察を述べ，関連研究との比較を行う．
+\ref{sec:future} 節でまとめを述べる．
+
+\section{最大エントロピー法}
+\label{sec:ME_method}
+
+一般に確率モデルは，履歴とその時の出力の関係を既知のデータから推定され
+る確率分布によって表す．この際，履歴の種類を多くすればより正確に出力を
+予測することができるが，履歴の種類を多くしすぎるとそれぞれの履歴におけ
+る既知データの数が少なくなり，データスパースネスに陥ってしまう．
+
+最大エントロピー法では履歴と出力の関係を素性関数で表し，それぞれの素性
+関数に関して既知データにおける確率分布の期待値と推定すべき確率分布の期
+待値が等しくなるという制約のもとで，確率分布のエントロピーが最大となる
+ようなモデルを推定する．この操作は，既知データにおいて出現しなかったも
+の，あるいは稀であったものに対しても一様分布に近づいていくということを
+意味しており，このため最大エントロピー法はデータスパースネスに対して比
+較的強いとされている．この性質は，言語モデルのように既知データにおいて
+全ての事象を扱うことが難しい現象を扱うのに適したものであると言える．
+
+最大エントロピー法では，以下のように確率分布を推定する．
+$X$ を履歴の集合，$Y$ を出力の集合とする時，既知データの集合
+$\{(x_i,y_i)\ |\  x_i \in X, y_i \in Y\}$ から確率分布 $P(y|x)$ を推定
+することを考える．
+まず，求めたい確率モデルの統計的特性 (素性) によって集合 $X \times Y$
+を二つの集合に分割する 2 値関数 $f: X \times Y \rightarrow \{0,1\}$ を
+定義する．このような関数は素性関数と呼ばれる．
+
+この時，既知データにおける確率分布 $\tilde{P}(x,y)$ に関する $f$ の期待
+値と推定すべき確率分布 $P(y|x)$ に関する $f$ の期待値が等しくなるとい
+う制約を与える．
+\begin{equation}
+  \label{eq:constraint}
+  \sum_{x,y} \tilde{P}(x,y) f(x,y) = \sum_{x,y} P(x) P(y|x) f(x,y)
+\end{equation}
+計算量の観点から右辺の $P(x)$ の代わりに $\tilde{P}(x)$ で近似すること
+が多い．
+ここで，$\tilde{P}(x,y)$, $\tilde{P}(x)$ は既知データにおける $(x,y)$,
+$x$ の出現頻度 $c(x,y)$, $c(x)$ から得られる相対頻度を用いる．
+\[ \tilde{P}(x,y) = \frac{c(x,y)}{\sum_{v,w} c(v,w)} \]
+\[ \tilde{P}(x) = \frac{c(x)}{\sum_v c(v)} \]
+
+モデル化の過程において重要であると思われる $n$ 個の素性関数 $f_i$ があ
+る時，すべての $f_i$ について式(\ref{eq:constraint})を満たすような確率
+分布は一般的には複数存在するため，これらの中から最も一様な確率分布を選
+択するのが自然である．条件付き確率分布 $P(y|x)$ の一様性の数学的な尺度
+としては条件付きエントロピーがよく用いられ，これを最大とする確率分布が
+求めるべき確率分布となる．
+\begin{equation}
+  \label{eq:cond_entropy}
+  H(P) = - \sum_{x,y} \tilde{P}(x) P(y|x) \log P(y|x)
+\end{equation}
+
+このような確率分布は唯一存在し，以下のような $\lambda_i$ をパラメータ
+とする形式で表すことができる．
+\begin{eqnarray}
+  \label{eq:gibbs}
+  P_\lambda(y|x) = \frac{1}{Z_\lambda(x)} \exp \left( \sum_i \lambda_i
+  f_i(x,y) \right)\\
+  Z_\lambda(x) = \sum_y \exp \left( \sum_i \lambda_i f_i(x,y) \right)
+  \nonumber
+\end{eqnarray}
+パラメータ $\lambda_i$ の推定には Improved Iterative Scaling アルゴリ
+ズム\cite{berger_96}などが用いられる．
+
+\section{最大エントロピー法による対訳単語対の抽出}
+\label{sec:MEdict}
+
+本節では，最大エントロピー法を対訳単語対の抽出に適用する手法を述べる．
+まず，確率分布の事象の定義を行い，次に対訳単語対の確率分布を推定する際
+に用いる素性関数を定義する．最後に，得られた確率分布を用いて対訳単語対
+を抽出する手法を述べる．
+
+\subsection{事象の定義}
+\label{sec:problem_setting}
+
+原言語のコーパス $X$, 目的言語のコーパス $Y$ が対訳となっており，それ
+らの間で単語間の対訳関係
+が観測されたと
+する．この時，観測値から得られる同時出現確率は以下の式で表される．
+\begin{equation}
+  \label{eq:em_joint}
+  \tilde{P}(x,y) = \frac{c(x,y)}{\sum_{v \in X, w \in Y} c(v,w)}
+\end{equation}
+ここで $c(x,y)$ は単語 $x$ と $y$ が対訳関係で出現した回数である．
+
+しかし実際には対訳コーパスから単語間の対訳関係を計数することは膨大な労
+力が必要であるため，文対応があらかじめ
+付いている対訳コーパスを用いた場合は対訳文の単語数に応じて出現回数を均等
+に割り振り，式 (\ref{eq:article_joint}) のように出現回数を近似する．
+\begin{equation}
+  \label{eq:article_joint}
+  c(x,y) = \sum_i \frac{c'_i(x,y)}{|X_i| |Y_i|}
+\end{equation}
+ここで，$X_i$ は原言語のコーパス $X$ の $i$ 番目の文，$Y_i$ は目的言語
+のコーパス $Y$ の $i$ 番目の文を表す．すなわち $X_i$ と $Y_i$ は対訳関
+係にあるものとする．また，$|X_i|$,$|Y_i|$ はそれぞれ $X_i$,$Y_i$ の文
+中に含まれる単語数を表し，$c'_i(x,y)$ は $i$ 番目の文において $x$ と
+$y$ が出現した回数である．
+
+このようにして観測値から得られた $\tilde{P}(x,y)$ から，原言語の中に 
+$x$ が出現した時に目的言語において $x$ が $y$ に翻訳される確率
+$P(y|x)$ を推定する．
+
+\subsection{素性関数の定義}
+\label{sec:def_feature}
+
+どのような素性関数を定義するかという問題は最大エントロピー法によるモデ
+ル化において最も重要である．本論文では以下の 4 種類のモデルの素性関数を定
+義した．
+
+\subsubsection{対訳文中に現れる単語対の情報を用いた素性関数 (素性タイ
+  プ 1)}
+\label{sec:model1}
+
+対訳コーパスにおいて対応する文で出現したことのある単語対 $x,y$ は対訳
+関係にある可能性がある．これを確率モデルに反映させるために以下のような
+素性関数を定義する．
+\begin{equation}
+  \label{eq:model1}	
+  f_x(x,y) = \left\{
+    \begin{array}{ll}
+      1 & \left( \parbox{4.5cm}{
+          \begin{flushleft}
+            $x \in X_i$, $ y \in Y_i$\\
+            を満たすような $i$ が存在する
+          \end{flushleft}}
+        \right)\\
+      0 & {\rm (それ以外)}
+    \end{array} \right.
+\end{equation}
+
+\subsubsection{原言語における共起情報を用いた素性関数 (素性タイプ 2)}
+\label{sec:model2}
+
+一般に，単語はそれと共起する単語によってある程度意味を限定することができ
+る．このことを利用し，原言語のコーパス $X$ における単語の共起情報を用
+いて素性関数を定義する．
+\begin{equation}
+  \label{eq:model2}
+  f_w(x,y) = \left\{
+    \begin{array}{ll}
+      1 & \left( \parbox{5cm}{
+          \begin{flushleft}
+            $x,w \in X_i$, $y \in Y_i$, $x \in W(d,w)$\\
+            を満たすような $i$ が存在する
+          \end{flushleft}}
+        \right)\\
+      0 & {\rm (それ以外)}
+    \end{array} \right.
+\end{equation}
+ただし $W(d,w)$ はコーパス中で $w \in X$ から $d$ 語以内に出現する単語
+の集合である．今回の実験では $d=5$ とした．$f_w(x,y)$ は $x$ が $y$ に翻
+訳されることに対して $x$ と共起関係にある $w$ が予測力を持っているかどう
+かということを表す (図 \ref{fig:cooccurance})．
+\begin{figure}[htbp]
+  \begin{center}
+\atari(88,37)
+    \caption{原言語における共起情報を用いた素性関数}
+    \label{fig:cooccurance}
+  \end{center}
+\end{figure}
+
+\subsubsection{原言語と目的言語における共起情報を用いた素性関数 (素性
+  タイプ 3)}
+\label{sec:model3}
+
+\ref{sec:model2}節で述べた素性関数に目的言語のコーパス $Y$ における共
+起情報を付け加えたものを定義する．
+\begin{equation}
+  \label{eq:model3}
+  f_{w,v}(x,y) = \left\{
+    \begin{array}{ll}
+      1 & \left( \parbox{7.2cm}{
+          \begin{flushleft}
+            $x,w \in X_i$, $y,v \in Y_i$, $x \in W(d,w)$, $y \in W(d,v)$\\
+            を満たすような $i$ が存在する
+          \end{flushleft}}
+        \right)\\
+      0 & {\rm (それ以外)}
+    \end{array} \right.
+\end{equation}
+$f_{w,v}(x,y)$ は $x$ が $y$ に翻訳されることに対して $x$ と共起関係に
+ある $w$ と $y$ と共起関係にある$v$ が予測力を持っているかどうかという
+ことを表す (図 \ref{fig:cooccurance2})．
+\begin{figure}[htbp]
+\begin{center}
+\atari(89,37)
+  \caption{原言語と目的言語における共起情報を用いた素性関数}
+  \label{fig:cooccurance2}
+\end{center}
+\end{figure}
+
+\subsubsection{品詞情報を用いた素性関数 (素性タイプ 4)}
+\label{sec:model4}
+
+対訳文において対訳関係にある単語同士は同じような形態素的意味を持つ品詞で
+あることが望ましい．しかし，それぞれの言語における形態素解析器の品詞タグ
+セットが全く同じであることは稀である．そこで本論文では各言語の形態素解析
+器が出力する品詞タグ情報をそのまま使用し，その組み合わせで素性関数を定
+義する．
+\begin{equation}
+  \label{eq:model4}
+  f_{t,s}(x,y) = \left\{
+    \begin{array}{ll}
+      1 & \left( \parbox{6.5cm}{
+          \begin{flushleft}
+            $x \in X_i, y \in Y_i$, $POS(x) = t$, $POS(y) = s$\\
+            を満たすような $i$ が存在する
+          \end{flushleft}} \right)\\
+      0 & {\rm (それ以外)}
+    \end{array} \right.
+\end{equation}
+ここで $POS(x)$ は言語 $X$ における単語 $x$ の品詞タグ，$POS(y)$ は言語
+$Y$ における単語 $y$ の品詞タグである．$f_{t,s}(x,y)$ は $x$ が $y$
+に翻訳されることに対して$x$ に割り当てられた品詞 $t$ と $y$ に割り当てら
+れた品詞 $s$ が予測力を持っているかどうかということを表す
+(図 \ref{fig:morphological})．
+\begin{figure}[htbp]
+  \begin{center}
+\atari(88,42)
+    \caption{品詞情報を用いた素性関数}
+    \label{fig:morphological}
+  \end{center}
+\end{figure}
+
+\subsection{対訳単語対の抽出アルゴリズム}
+\label{sec:extracting}
+
+本節では，前節までに述べた手法によって得られた確率モデルを用いて対訳単
+語対を抽出する手法を述べる．本手法では 1 単語対 1 単語の対訳関係を仮定
+し，Competitive Linking Algorithm \cite{melamed_97} と類似した抽出アル
+ゴリズム\footnote{Competitive Linking Algorithm とは対訳単語対の対応度
+  の計算方法が異なる点を除き，本質的には同じアルゴリズムである．}
+を採用する．
+  \begin{enumerate}
+  \item[1.]
+    閾値 $th \in [0,1]$ を決める．
+  \item[2.]
+    すべての $(x,y) \in X \times Y$ について $P(y|x)$ を計算し，
+    $P(y|x) \geq th$ となる $(x,y)$ をリストに保持する．
+  \item[3.]
+    リストを $P(y|x)$ について降順にソートする．
+  \item[4.]\label{enum:rep}
+    $P(y|x)$ が最大となる (すなわちリストの先頭にある) $(x',y')$ を対
+    訳単語対として抽出する．
+  \item[5.]
+    本手法では 1 単語対 1 単語の対訳関係を仮定しているので，$x'$ や
+    $y'$ を含む単語対は二度と抽出されない．したがって $\left\{(x',v) |
+      v \in Y \right\}$ や $\left\{(w,y') |  w \in X \right\}$ に含ま
+    れるような単語対をリストから削除する．
+  \item[6.]
+    抽出すべき単語対がまだ存在すれば 4. へ戻る．
+  \end{enumerate}
+
+
+\section{実験と考察}
+\label{sec:experiment_discussion}
+本節では本論文で述べた手法による実験結果を示し，それに対する考察を述べ
+る．最後に関連研究との比較を行う．
+\subsection{実験結果}
+\label{sec:result}
+
+本論文でここまで述べた手法を用いて英語 $\cdot$ 日本語間の対訳単語対を抽
+出する実験を行った．今回の実験では対訳コーパスとして通産省電子技術総合
+研究所\footnote{現在は独立行政法人産業技術総合研究所}において電子化さ
+れた講談社和英辞典に含まれる例文のうち 30,287 文を用い，原言語のコーパ
+ス $X$ として英語文，目的言語のコーパス $Y$ として日本語文を使用した．
+そのうち，学習コーパスとして 27,258 文，テストコーパスとして 3,029 文
+を用いた．日英対訳例文に対して
+日本語文は茶筌\footnote{{\tt http://chasen.aist-nara.ac.jp/}}
+\cite{chasen20}，
+英語文は Brill
+Tagger\footnote{{\tt http://www.cs.jhu.edu/$\sim$brill/code.html}}
+\cite{brill_94}
+を用いて形態素解析を行った．
+助詞，助動詞などの機能語，出現回数が極めて多い単語 (出現回数 1,000 回
+以上)，出現回数が極めて少ない単語 (出現回数 3 回以下) を推定から除外し
+た．その結果今回の実験の対象となる単語の語彙数は表\ref{tab:corpus}の通
+りとなった．
+\begin{table}[htbp]
+  \centering
+  \caption{コーパスの語彙数}
+  \label{tab:corpus}
+  \begin{tabular}{l|r|r|r} \hline
+    & \multicolumn{1}{c|}{文数} &
+    \multicolumn{1}{c|}{英語語彙数} &
+    \multicolumn{1}{c}{日本語語彙数} \\ \hline
+    学習コーパス & 27,258 & 4,664 & 6,796 \\
+    テストコーパス & 3,029 & 3,540 & 5,753 \\ \hline
+  \end{tabular}
+\end{table}
+
+学習コーパス中で観測された素性の総数はおよそ 4,350 万個であった．その
+うち確率モデルの推定には学習コーパスで 5 回以上観測された素性 12,368
+個を用いた．表\ref{tab:feature} にその内訳を示す．
+\begin{table}[htbp]
+  \centering
+  \caption{学習に使用した素性}
+  \label{tab:feature}
+  \begin{tabular}{c|l|r} \hline
+    \multicolumn{1}{c|}{素性タイプ} &
+    \multicolumn{1}{c|}{素性の種類} &
+    \multicolumn{1}{c}{個数} \\ \hline
+
+    1 &
+    対訳文中に現れる単語対 (\ref{sec:model1}節) &
+    4,086 \\
+
+    2 &
+    原言語における共起情報 (\ref{sec:model2}節) &
+    3,112 \\
+
+    3 &
+    両言語における共起情報 (\ref{sec:model3}節) &
+    5,011 \\
+
+    4 &
+    品詞情報 (\ref{sec:model4}節) &
+    159 \\ \hline
+  \end{tabular}
+\end{table}
+これらの素性を用いて最大エントロピー法により対訳単語対の確率分布の推定を
+行った．その際のパラメータ推定には Improved Iterative Scaling を採用し，
+その反復回数は 400 回に設定した．
+
+表\ref{tab:ME_result}に本手法による対訳単語対抽出の実験結果を示す．
+対訳単語対の抽出の際に用いる閾値 $th$ は $0.5$ からはじめ，$0.1$ 刻み
+に $0.1$ まで下げた．閾値の段階別に対訳単語対として抽出された総抽出数，
+そのうちの正解数，精度 ($=\rm{正解数} /\rm{総抽出数}$)，再現率
+($=\rm{正解数} / \rm{日本語語彙数}$) を記す．
+対訳単語対が正解であるかどうかは既存の辞書を用いて人手により判定した．
+表の左側は学習コーパスにおける抽出結果である．
+右側は学習コーパスで学習したパラメータを使用してテストコーパスに対して
+抽出アルゴリズムを適用したときの結果である．
+\begin{table}[htbp]
+\begin{center}
+  \caption{最大エントロピー法による抽出結果}
+  \label{tab:ME_result}
+  \begin{tabular}{r|rr|rr||rr|rr} \hline
+    &
+    \multicolumn{4}{c||}{学習コーパス} &
+    \multicolumn{4}{c}{テストコーパス} \\ \hline
+    \multicolumn{1}{c|}{閾値} &
+    \multicolumn{1}{c}{正解数} &
+    \multicolumn{1}{c|}{総抽出数} &
+    \multicolumn{1}{c}{精度(\%)} &
+    \multicolumn{1}{c||}{再現率(\%)} &
+    \multicolumn{1}{c}{正解数} &
+    \multicolumn{1}{c|}{総抽出数} &
+    \multicolumn{1}{c}{精度(\%)} &
+    \multicolumn{1}{c}{再現率(\%)} \\ \hline
+
+    0.5 &
+    4 & 5 & 80.00 & 0.06 &
+    33 & 51 & 64.71 & 0.57 \\
+
+    0.4 &
+    24 & 29 & 82.76 & 0.35 &
+    55 & 90 & 61.11 & 0.96 \\
+
+    0.3 &
+    154 & 181 & 85.08 & 2.27 &
+    252 & 387 & 65.12 & 4.38 \\
+
+    0.2 &
+    486 & 604 & 80.46 & 7.15 &
+    759 & 1,224 & 62.01 & 13.19 \\
+
+    0.1 &
+    1,481 & 2,011 & 73.64 & 21.79 &
+    1,397 & 2,329 & 59.98 & 24.28 \\ \hline
+  \end{tabular}
+\end{center}
+\end{table}
+表\ref{tab:correct}に本手法による対訳単語対抽出の実験によって抽出され
+た対訳単語対の正解例を示す．
+\begin{table}[htbp]
+  \centering
+  \caption{本手法で抽出した対訳単語対の正解例}
+  \label{tab:correct}
+  \begin{tabular}{l|l|l||l|l|l} \hline
+    \multicolumn{1}{c|}{英語 $x$} &
+    \multicolumn{1}{c|}{日本語 $y$} &
+    \multicolumn{1}{c||}{$P(y|x)$} &
+    \multicolumn{1}{c|}{英語 $x$} &
+    \multicolumn{1}{c|}{日本語 $y$} &
+    \multicolumn{1}{c}{$P(y|x)$} \\ \hline
+
+    sturdy & たくましい & 0.6194 &
+    hat & 帽子 & 0.4400 \\
+
+    snore & ねむれる & 0.5128 &
+    chair & いす & 0.4304 \\
+
+    trouser & ズボン & 0.4907 &
+    ambassador & 大使 & 0.4236 \\
+
+    battery & バッテリー & 0.4808 &
+    library & 図書館 & 0.4211 \\
+
+    negotiation & 交渉 & 0.4634 &
+    explanation & 説明 & 0.4209 \\
+
+    taxi & タクシー & 0.4599 &
+    film & 映画 & 0.4197 \\
+
+    fish & 魚 & 0.4515 &
+    pneumonia & 肺炎 & 0.4195 \\
+
+    rally & たちなおる & 0.4195 &
+    baseball & 野球 & 0.4068 \\
+
+    dog & 犬 & 0.4134 &
+    music & 音楽 & 0.4035 \\
+
+    criminal & 犯人 & 0.4100 &
+    fuel & 燃料 & 0.4028 \\
+
+    pistol & ピストル & 0.4087 &
+    toy & おもちゃ & 0.3975 \\ \hline
+  \end{tabular}
+\end{table}
+\vspace{1em}
+\subsection{未知語と解析精度}
+\label{sec:unknown}
+
+本論文で提案した手法によるテストコーパスにおける抽出実験において，テスト
+コーパスにのみ現れた未知の日本語単語と学習コーパスにも現れた日本語単語
+に分けて精度と再現率を計算した結果を表 \ref{tab:test_corpus} に示す．
+抽出アルゴリズムにおける閾値 $th$ は $0.1$ を用いた．未知語の場合でも，
+既知の単語とほぼ同等の精度と再現率が得られることが分かる．最大エントロピー
+法では履歴と出力の関係を素性で表すため，学習データにおいて現れなかった
+事象でも素性さえ観測できれば確率値を計算することができる．したがって，
+学習コーパスに特化しない素性を用いてパラメータ推定を行い，その結果を使っ
+て対訳単語対の抽出を行えばテストコーパスにおいてもほぼ同等の抽出結果を
+得ることができるということをこの結果は示している．
+\begin{table}[tbp]
+  \centering
+  \caption{テストコーパスにおける抽出結果の内訳}
+  \label{tab:test_corpus}
+  \begin{tabular}{l|r|rr|rr} \hline
+    &
+    \multicolumn{1}{c|}{\small{語彙数}} &
+    \multicolumn{1}{c}{\small{正解数}} &
+    \multicolumn{1}{c|}{\small{総抽出数}} &
+    \multicolumn{1}{c}{\small{精度(\%)}} &
+    \multicolumn{1}{c}{\small{再現率(\%)}} \\ \hline
+    
+    テストコーパスのみ現れた単語 &
+    2,536 &
+    595 & 1,010 &
+    58.91 & 23.46 \\
+    
+    学習コーパスにも現れた単語 &
+    3,217 &
+    802 & 1,319 &
+    60.80 & 24.93 \\ \hline
+
+    合計 &
+    5,737 &
+    1,397 & 2,329 &
+    59.98 & 24.28 \\ \hline
+  \end{tabular}
+\end{table}
+
+\subsection{抽出誤りについて}
+\label{sec:correspondance_j_e}
+
+学習コーパスでの対訳単語対の抽出結果において誤りとなったものから無作為に
+100 個を選び，それぞれについて誤りとなった原因を調べた．
+抽出アルゴリズムにおける閾値 $th$ は $0.1$ を用いた．
+以下は誤った単語対の英単語側に着目した時の誤った原因の内訳である．
+
+\begin{enumerate}
+\item[1.] 訳語が抽出対象コーパスに一回も出現しない $\cdots$ 10 個
+\item[2.] 訳語が抽出対象コーパスには存在するが，抽出対象には含まれない
+  $\cdots$ 49 個
+\item[3.] 形態素の区切りが異なる $\cdots$ 15 個
+\item[4.] 形態素解析誤り $\cdots$ 4 個
+\item[5.] その他 $\cdots$ 22 個
+\end{enumerate}
+
+1. はある英単語に対応する日本語単語が抽出対象コーパス中に一回も出現し
+ていない場合である．対訳文を見ると，以下のようないわゆる「意訳」に近い
+ものであったり慣用句的な表現であった．
+\begin{flushleft}
+  \begin{quote}
+    $ \left\{
+      \begin{array}{l}
+        ${\rm The taxi driver demanded an unreasonable fare.}$\\
+        \rm{タクシーに乗ったら法外な料金をとられた．}\\
+      \end{array}
+    \right. $
+  \end{quote}
+\end{flushleft}
+この例の場合では ``driver'' の訳として ``運転手'' あるいは ``ドライバー
+'' を推定するためには意味解析などのより高度な解析が必要になることから，
+現時点ではこのような対訳文だけから正しい対訳単語対を抽出することは難し
+いと思われる．
+
+2. はある英単語に対応する日本語単語が抽出対象コーパス中には出現するが，出
+現回数の制限により抽出対象である $6,796$ 語に含まれない場合である．対
+訳文を見ると，日本語単語の表記の揺れにより出現回数が分散してしまうこと
+が原因であった．例えば ``solemnly'' の訳語候補として ``厳粛に'', ``粛々
+と'', ``荘厳に'' のように複数の正しい訳語が対訳文中に現れているが，
+出現回数がそれぞれに分散し出現回数の閾値の下限を下回り実験対象
+に含まれない．これに対しては，日本語のシソーラスを利用して複数の訳語を
+同一視することで抽出が可能になると思われる．
+
+3. は英単語と日本語単語の形態素の区切りが異なる場合である．
+``shoulder'' に対する訳語は ``肩'' となるべきであるが，日本語コーパス
+の形態素解析の結果には ``肩'' という単語は含まれていなかったため，``右
+肩'' という単語が出力される結果となった．本手法が 1 単語対 1 単語の
+対訳関係を仮定していることが原因であると考えられる．
+\cite{kumiko_SIGNL97,yamamoto_00} では統計情報から得られる連語や係り受
+け解析結果から得られる文節を単位として対訳関係を推定することにより精度
+を上げており，統計的 $\cdot$ 意味的にまとまりのある単位で対応付けを行
+う方が良いことを示している．対訳文においては，形態素単位では対応が取れ
+ない場合であっても統計的 $\cdot$ 意味的にまとまりのある単位では対応が
+取れることが多いと考えられる．したがって本手法でも，単語単位でなく連語
+や文節を単位として推定を行うことで精度が向上すると思われる．
+
+\subsection{素性と解析精度}
+\label{sec:feature_accuracy}
+
+表 \ref{tab:feature2} に，それぞれの素性を削除したことによる精
+度と再現率の増減を示した．括弧内は素性一個あたりの増減である．抽出アル
+ゴリズムにおける閾値 $th$ は $0.1$ を用いた．
+\begin{table}[htbp]
+  \centering
+  \caption{素性を削除したときの精度と再現率の増減}
+  \label{tab:feature2}
+  \begin{tabular}{c|r|rr|rr} \hline
+    \multicolumn{1}{c|}{素性タイプ} &
+    \multicolumn{1}{c|}{個数} &
+    \multicolumn{2}{c|}{精度 (\%)} &
+    \multicolumn{2}{c}{再現率 (\%)} \\ \hline
+    
+    1 & 4,086 &
+    $-1.55$ & $(-3.79 \times 10^{-4})$ &
+    $-0.85$ & $(-2.08 \times 10^{-4})$ \\
+    
+    2 & 3,112 &
+    $-5.03$ & $(-1.62 \times 10^{-3})$ &
+    $-7.93$ & $(-2.54 \times 10^{-3})$ \\
+    
+    3 & 5,011 &
+    $-4.66$ & $(-9.30 \times 10^{-4})$ &
+    $-16.23$ & $(-3.24 \times 10^{-3})$ \\
+    
+    4 & 159 &
+    $-0.50$ & $(-3.14 \times 10^{-3})$ &
+    $-3.15$ & $(-1.98 \times 10^{-2})$ \\ \hline
+  \end{tabular}
+\end{table}
+
+素性一個あたりでもっとも抽出結果に影響していると考えられるのは，品詞情
+報を用いた素性関数 (素性タイプ 4) であることがこの表からわかる．このこ
+とは翻訳候補を選択する際には品詞情報が重要であるという直感的な判断と合
+致する．逆にもっとも影響していないと考えられるのは，対訳文中に現れる単
+語対のみを用いた素性 (素性タイプ 1) である．他の素性は共起情報や品詞情
+報によって単語対に対して制約を与えているのに対して，タイプ 1 の素性は
+対訳文中に現れたことがあるかどうかということのみを扱うため，翻訳候補を
+選択するには制約が弱いと考えられる．このことから，係り受け情報やシソー
+ラスの情報などによる制約を素性として表し，それらを加えていくことにより
+抽出結果の改善を期待することができる．ただし，必要以上に素性を増やして
+いくことは過学習の危険があるので注意が必要である．
+
+\subsection{関連研究との比較}
+\label{sec:related}
+
+本手法と同様に対訳文の文対応が既に付いていることを前提にしている研究に
+は \cite{gale_91,kitamura_96,melamed_97} があげられる．
+\cite{gale_91} は単語対の対応度として $\phi^2$ 統計を用い，相互情報量
+より有用であることを示している．
+\cite{kitamura_96} は Dice 係数\cite{kay_93} に対して単語対の出現頻度
+の対数で重み付けする重み付き Dice 係数を提案し，これを単語対の対応度と
+して採用した．
+\cite{melamed_97} は Competitive Linking Algorithm と 2 つのパラメータ
+に対する山登り法を組み合わせて単語対の対応度を求める手法を提案した．
+これらの研究に共通する特徴は，単語対の対応度の計算手法において単語対の
+共起頻度がベースになっているために未知語に弱いということである．学習コー
+パスと異なるコーパスでは未知語が出現するために単語対の対応度を計算する
+ことは不可能となり，対訳単語対を抽出するためには新たに学習しなおさなけ
+ればならない．
+これに対して本論文で提案している手法では \ref{sec:unknown} 節で述べた
+ように，注目している単語対の前後の文脈や品詞情報を用いた素性を用いてい
+るため，未知語の場合にも既知の単語と同様に対応度の計算を行うことができ
+る．
+
+本手法と異なり，対訳文の文対応が付いていることを前提としない代わりに，
+既存の対訳辞書を用いている研究には \cite{kaji_96,fung_97} があげられる．
+これらの手法は一方の言語で共起する単語の訳語は他方の言語でも共起するこ
+とを仮定している．
+\cite{kaji_96} では既存の辞書に含まれる単語との共起集合間の共通部分の
+大きさで対応度を計算している．
+\cite{fung_97} では既存の辞書に含まれる単語との重み付き相互情報量を要
+素とするベクトルを計算し，その内積を対応度として採用している．
+現状では文対応の付いた対訳コーパスはあまり多くないため，文対応を前提と
+しないこれらの手法は適用できる範囲は広いが，文対応が付いたコーパスを用
+いた手法よりも精度が劣る．一方，本手法の前提となって
+いる文対応済の対訳コーパスは，原文に忠実に翻訳した対訳コーパスであれば，
+\cite{kay_93,utsuro_94,sukehiro_95} で提案されている手法
+により作成することができる．対応する文がなかったり，1 つの文が複数の文
+に対応している場合には人手による後編集が必要になるが，その労力は全て人
+手による対応付けに比べて比較にならないほど少ないと考えられる．
+
+学習コーパスを用いて相対頻度\footnote{
+  相対頻度は学習コーパス中における対訳単語対の出現頻度 (式
+  (\ref{eq:article_joint})) から
+  \[ \tilde{P}(y|x) = \frac{c(x,y)}{\sum_{v \in Y} c(x,v)} \]
+  と計算し，抽出アルゴリズムにおいて $P(y|x)$ の代わりに
+  $\tilde{P}(y|x)$ を使用して対訳単語対の抽出を行った．}
+と重み付き Dice 係数\footnote{
+  重み付き Dice 係数は以下のように計算される．
+  \[
+  sim(x,y) = \left(\log_2 f(x,y)\right) \frac{2 f(x,y)}{f_X(x)+f_Y(y)}
+  \]
+  ここで $f(x,y)$ は $x$ と $y$ が対訳文中に出現した回数，$f_X(x)$,
+  $f_Y(y)$ はそれぞれコーパス $X$, $Y$ 内で $x$, $y$ が出現した回数で
+  ある．抽出アルゴリズムにおいて $P(y|x)$ の代わりに $sim(x,y)$ を使用
+  して対訳単語対の抽出を行った．\cite{kitamura_96} で使用されている
+  対訳単語対抽出アルゴリズムは本論文で示した手法とは異なるが，比較のた
+  めに本論文で示した手法と同じ抽出アルゴリズムを用いた．
+}
+による比較実験を行った．図\ref{fig:compare}
+\begin{figure}[tbp]
+\begin{center}
+\begin{tabular}{cc}
+\framebox(160,115){} & \framebox(160,115){}
+\vspace*{1em}
+\end{tabular}
+  \caption{各手法における抽出結果の比較}
+  \label{fig:compare}
+\end{center}
+\end{figure}
+は，抽出アルゴリズムの閾値
+を徐々に下げていきながら対訳単語対を抽出した時の，抽出された対訳単語対
+100 個ごとの精度 (左) と再現率 (右) を示したグラフである．重み付き
+Dice 係数は単語対の共起回数が 2 回以下の場合は対応度が 0 になってしま
+うため，2,700 個までしか抽出することができなかった．このグラフを見ると
+大体の場合において本手法がもっとも良い結果となっていることがわかる．相
+対頻度による抽出は本手法や重み付き Dice 係数に比べて悪い結果となってい
+る．対訳単語対 $(x,y)$ について考えた時，$x$ とよく共起する単語 $x'$
+が存在すると $(x',y)$ の対応度も高くなり $(x',y)$ が抽出されてしまう誤
+りが多く見られ，これが原因であると考えられる．この問題に対して，重み付
+き Dice 係数による抽出では単語対の出現回数の対数によって重み付けし，
+$(x,y)$ と $(x',y)$ の対応度の差をより広げることによって対処している．
+本論文で提案した手法では，共起情報や品詞情報を素性として用いてより多く
+の制約を与えることによりこの問題による誤りを減少させていると考えられる．
+
+\section{おわりに}
+\label{sec:future}
+
+本論文では，最大エントロピー法を用いて対訳コーパス上の対訳単語対の確率モ
+デルを推定し，自動的にこれを抽出する手法を提案した．素性関数と
+して共起情報を用いるモデルと品詞情報を用いるモデルを定義した．
+本手法の有効性を示すために日英対訳コーパスを用いた対訳単語対の抽出実験
+を行い，本論文で提案した手法が相対頻度や重み付き Dice 係数による手法より
+も精度・再現率において優れた結果となった．また，テストコーパスによる実
+験では学習コーパスに出現しなかった単語対に関しても学習データに現れたも
+のとほぼ同等の精度・再現率で抽出できることが分かった．
+
+しかし，対訳コーパス中に現れる意訳，単語の表記の揺れ，2 言語間の形態素
+の分かち方の違いに対しては有効ではない．これらを克服するために，連語や
+係り受け解析結果から得られる文節を単位としたりシソーラスを利用して対訳
+関係を抽出することが今後の課題である．
+
+\acknowledgment
+
+元慶應義塾大学教授の故中西正和先生に深く感謝致します．
+電子化された講談社和英辞典の研究使用を許諾してくださった旧通産省電子技
+術総合研究所に感謝致します．
+
+\normalsize
+\bibliographystyle{jnlpbbl}
+\bibliography{jpaper}
+\nocite{satoken_Coling98}
+
+\newpage
+
+\normalsize
+\begin{biography}
+\biotitle{略歴}
+\bioauthor{佐藤 健吾}{
+平成 7 年慶應義塾大学理工学部数理科学科卒業．平成 9 年同大学大学院理
+工学研究科修士課程計算機科学専攻修了．現在，同大学大学院理工学研究科
+後期博士課程計算機科学専攻に在学中．自然言語処理，確率的言語モデルな
+どに興味を持つ．情報処理学会，言語処理学会各会員．}
+\bioauthor{斎藤 博昭}{
+昭和 58 年慶應義塾大学工学部数理工学科卒業．現在同大理工学部情報工学
+科専任講師．工学博士．昭和 59 年よりカーネギーメロン大学に訪問研究員
+として滞在し，機械翻訳および音声認識の研究に従事．情報処理学会，言語
+処理学会，ACL各会員．}
+\bioreceived{受付}
+\biorevised{再受付}
+\bioaccepted{採録}
+\end{biography}
+
+\end{document}
+

@@ -1,0 +1,626 @@
+
+\documentstyle[epsf,jnlpbbl]{jnlp_j_b5}
+
+\setcounter{page}{73}
+\setcounter{巻数}{4}
+\setcounter{号数}{4}
+\setcounter{年}{1997}
+\setcounter{月}{10}
+\受付{1996}{8}{27}
+\採録{1997}{5}{6}
+
+\setcounter{secnumdepth}{2}
+
+\title{発話タイプ付きコーパスを用いた確率的対話モデルの\\自動生成}
+\author{北 研二\affiref{TU} \and 福井 義和\affiref{TU}
+        \and 永田 昌明\affiref{NTT} \and 森元 逞\affiref{ATR}}
+
+\headauthor{北 研二・福井 義和・永田 昌明・森元 逞}
+\headtitle{発話タイプ付きコーパスを用いた確率的対話モデルの自動生成}
+
+\affilabel{TU}{徳島大学工学部 知能情報工学科}
+{Faculty of Engineering, Tokushima University}
+\affilabel{NTT}{NTT 情報通信研究所}
+{NTT Information and Communication Systems Laboratories}
+\affilabel{ATR}{ATR 音声翻訳通信研究所}
+{ATR Interpreting Telecommunications Research Laboratories}
+
+\jabstract{
+コーパスに基づく確率的言語モデルとして，従来は主に語彙統語論的な
+モデルが扱われてきた．
+我々は，より高次の言語情報である対話に対する確率的モデルを，
+コーパスから自動的に生成するための研究を行った．
+本研究で用いたコーパスは，ATR 対話データベース中の「国際会議参加登録」
+に関する対話データであり，各発話文には，発話者のラベルおよび
+陳述・命令・約束などの発話行為タイプが付与されている．
+本技術資料では，これらのコーパスから，２種類の方法を用いて，
+確率的な対話モデルを生成する．
+まず初めに，エルゴード HMM (Hidden Markov Model)を用いて，
+コーパス中の話者ラベルおよび発話行為タイプの系列をモデル化した．
+次に，ALERGIA アルゴリズムと呼ばれる，状態マージング手法に基づいた
+学習アルゴリズムを用いて，話者ラベルおよび発話行為タイプの系列を
+モデル化した．
+エルゴード HMM の場合には，確率モデルの学習に先立ち，
+モデルの状態数をあらかじめ決めておく必要があるが，
+ALERGIA アルゴリズムでは，状態の統合化を繰り返すことにより，
+最適な状態数を持つモデルを自動的に構成することが可能である．
+エルゴード HMM あるいは ALERGIA アルゴリズムを用いることにより，
+話者の交替や質問・応答・確認と
+いった会話の基本的な構造を確率・統計的にモデル化することができた．
+また，得られた確率的対話モデルを，情報理論的な観点から評価した．}
+
+\jkeywords{対話モデル，発話行為タイプ，コーパス，隠れマルコフモデル，\\
+ALERGIA アルゴリズム}
+
+\etitle{Automatically Deducing Probabilistic Dialogue \\Models
+from an IFT-Annotated Dialogue Corpus}
+\eauthor{Kenji Kita\affiref{TU} \and Yoshikazu Fukui\affiref{TU}
+        \and Masaaki Nagata\affiref{NTT} \and Tsuyoshi Morimoto\affiref{ATR}}
+
+\eabstract{
+One of the most interesting issues in corpus-based studies
+is deriving linguistic knowledge via automated procedures.
+Most works, however, have focused on deriving lexico-syntactic knowledge.
+In the work described here,
+we automatically deduce dialogue models from a corpus
+with probabilistic methods.
+The corpus is a subset of the ATR Dialogue Database, and consists of
+simulated dialogues between a secretary and a questioner at international conferences.
+Each utterance is annotated with a speaker label and an utterance type,
+called IFT (Illocutionary Force Type), which is an abstraction of
+the speaker's intention in terms of the type of action the speaker
+intends by the utterance.
+We use two kinds of probabilistic methods
+to model the speaker-IFT sequences of the corpus:
+(1) an Ergodic HMM (Hidden Markov Model) and (2) the ALERGIA algorithm,
+an algorithm for learning probabilistic automata by means of
+state merging.
+By analyzing the derived dialogue models,
+we see that both methods capture the basic characteristics
+of the local discourse structure, such as turn-taking and speech act sequencing.
+We also describe the quality measurement of the dialogue models
+from the information-theoretic viewpoint.}
+
+\ekeywords{dialogue model, illocutionary force type, corpus, hidden Markov model,\\
+ALERGIA algorithm}
+
+\begin{document}
+\thispagestyle{myheadings}
+\maketitle
+
+
+\section{はじめに}
+
+話し言葉や対話における特徴として，旧情報や述語の一部が省略されるなど，
+断片的で不完全な発話が多く現れるという点をあげることができる．
+このような断片的あるいは不完全な発話を正しく認識／理解するためには，
+対話に対する適切なモデルが必要となる．
+また，話し言葉や対話の音声認識を考えた場合，
+認識候補の中には統語的にも意味的にも正しいが，対話の文脈の中では不適切な認識候補が
+存在する場合もある．
+例えば，文末の述語「〜ですか」と「〜ですが」は，お互いに誤認識されやすいが，
+対話モデルを用いることにより，このような誤認識を避けられたり，
+あるいは誤り訂正が可能となることが期待できる．
+
+文献\cite{Nagata92,Nagata94}では，発話行為タイプ(Illocutionary Force Type; IFT)
+のラベルが付いたコーパスから，IFT のマルコフモデルを学習し，
+このモデルが対話のエントロピーを大きく減少させることを示している．
+我々は，同様の IFT 付きコーパスを用いて，
+対話構造を表す確率モデルを自動生成する研究を行なった．
+
+我々の研究においては，確率的対話モデルの生成に２種類の独立な方法を用いた．
+最初の方法では，
+IFT 付きコーパスの話者ラベルおよび発話行為タイプの系列を，
+エルゴード HMM (Hidden Markov Model)を用いてモデル化した．
+この方法では，モデルの構造(状態数)をあらかじめ定めておき，
+次にモデルのパラメータ(状態遷移確率，シンボル出力確率，および初期状態確率分布)
+を学習データから推定した．
+２番目の方法では，状態の統合化を繰り返すことにより，
+最適な状態数を持つモデルを自動的に生成することのできる
+状態マージング手法を用いた．
+近年，状態マージング手法に基づく確率モデルの学習アルゴリズムが
+いくつか提案されているが\cite{Stolcke94a,Stolcke94b}，
+我々は Carrasco らによる ALERGIA アルゴリズム\cite{Carrasco94} を用いた．
+
+以下では，２節で IFT 付きコーパスの概要について説明する．
+３節でエルゴード HMM による対話構造のモデル化について述べ，
+４節で状態マージング手法による対話構造のモデル化について述べる．
+
+
+\section{IFT 付きコーパス}
+
+対話モデル作成のための基礎データとして，
+発話行為タイプ(Illocutionary Force Type; IFT)付きコーパス
+\cite{Nagata92,Nagata94,Suzuki93}を用いた．
+これは，ATR 対話データベース中の「国際会議参加登録のタスク」の
+対話の各発話について，その発語内行為を分析し，
+陳述・命令・約束などの発話のタイプが付けられたコーパスである．
+このコーパスで用いられている IFT は，
+表層の統語的パターンと比較的直接的な対応がとれる
+表層 IFT(Surface Illocutionary Force Type)と呼ばれるものである．
+また，各発話文には，発話者(事務局または質問者)を示すラベルが付与されている．
+IFT 付きコーパスで用いられている表層 IFT の種類
+および各 IFT に属する例文を表\ref{Tab:IFTdef} に，
+IFT 付きコーパスの例を図\ref{Fig:IFT-Corpus} に示す．
+本研究における評価実験では，IFT 付きコーパスの中から，
+モデル会話 10 対話(222 文)とキーボード会話 50 対話(1686 文)
+を用いた．
+
+
+\begin{table}[p]
+\caption{表層 IFT の分類および例}
+\label{Tab:IFTdef}
+\begin{center}
+\begin{tabular}{@{$\;$}l|p{6cm}|p{5.5cm}@{$\;$}}
+\hline
+表層 IFT        &  定義         &  例文         \\ \hline
+\hline
+phatic          & 挨拶などで用いられるイディオム的な表現
+                & もしもし，\newline 失礼します \\ \hline
+expressive      & 話者の感情表現に関するイディオム的な表現
+                & ありがとうございます，\newline
+                よろしくお願いします \\ \hline
+response        & 質問などに対する応答や合いづち
+                & はい，\newline わかりました \\ \hline
+promise         & 話し手がある行為をすることを約束する表現
+                & 登録用紙を送らせていただきます \\ \hline
+request         & 話し手が聞き手に行為をすることを依頼する表現
+                & 地下鉄で北大路駅まで行って下さい \\ \hline
+inform          & 情報の伝達
+                & 今回は割り引きを行なっておりません \\ \hline
+questionif      & 真偽疑問文
+                & 会議の案内書はお持ちですか \\ \hline
+questionref     & 疑問語疑問文
+                & どうすればよろしいですか \\ \hline
+questionconf    & 確認
+                & 既に登録料を振り込まれておられますね \\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+
+\begin{figure}[p]
+\begin{verbatim}
+質問者
+phatic: もしもし
+questionif: そちらは会議事務局ですか
+
+事務局
+response: はい
+response: そうです
+questionref: どのようなご用件でしょうか
+
+質問者
+inform: 会議に申し込みたいのですが
+questionref: どのような手続きをすればよろしいのでしょうか
+
+事務局
+request: 登録用紙で手続きをして下さい
+questionif: 登録用紙は既にお持ちでしょうか
+
+質問者
+response: いいえ
+inform: まだです
+\end{verbatim}
+\caption{IFT 付き対話コーパスの例}
+\label{Fig:IFT-Corpus}
+\end{figure}
+
+
+\section{エルゴード HMM による対話構造のモデル化}
+
+IFT 付きコーパスの各発話には，話者ラベルおよび IFT が
+付与されている．
+話者の交替や質問・応答・確認のような対話の基本的な構造を
+確率・統計的にモデル化するために，
+コーパス中の話者ラベルおよび IFT の系列をエルゴード HMM により
+モデル化することを試みた．
+なお，エルゴード HMM とは，自己遷移も含めすべての状態間の遷移を許す
+全遷移型の HMM である．
+
+本実験では，あらかじめ HMM の状態数を決めておき，
+Baum-Welch の再推定アルゴリズムにより，
+エルゴード HMM の学習を行なった．
+初期モデルとしては，初期状態分布確率を均等確率に，
+また状態遷移確率および出力確率は確率値の総計が１になるようなランダムな
+値で初期化した．
+
+エルゴード HMM の学習データとして，
+モデル会話およびキーボード会話中から，
+以下の２つの系列を抽出した．
+\begin{itemize}
+\item[(1)]      IFT のみの系列
+\item[(2)]      話者ラベルと IFT を組み合わせたラベルの系列
+\end{itemize}
+IFT の総数は９個であり，対話コーパス中の発話者は２名(事務局あるいは質問者)
+であるので，上記(2)の場合のシンボル数は 18 個である．
+
+実験では，エルゴード HMM の構造として状態数 2〜14 のものを用いて
+学習を行なった．
+表\ref{Tab:HMMEntropy} に，状態数 2, 4, 6, 8, 10, 12, 14 の場合のモデルのエントロピーを
+示す．
+表\ref{Tab:HMMEntropy} で，IFT と示されているのは IFT のみの系列を用いた
+ときの結果であり，
+SP-IFT は話者ラベルと IFT を組み合わせたラベルの系列を用いたときの結果である．
+一般的な傾向として，状態数が増えるに従いエントロピーが小さくなり，
+同じ状態数では話者ラベルを併用したものの方がエントロピー値が大きくなっている．
+
+\begin{table}
+\caption{Ergodic HMM のエントロピー}
+\label{Tab:HMMEntropy}
+\begin{center}
+\begin{tabular}{c|cc|cc}
+\hline
+HMMの   & \multicolumn{2}{c|}{モデル会話}       & \multicolumn{2}{c}{キーボード会話} \\
+        \cline{2-3} \cline{4-5}
+状態数  & IFT   & SP-IFT        & IFT   & SP-IFT        \\ \hline
+2       & 2.12  & 2.72          & 2.38  & 3.02          \\ \hline
+4       & 1.86  & 2.27          & 1.89  & 2.78          \\ \hline
+6       & 1.17  & 1.81          & 1.91  & 2.49          \\ \hline
+8       & 1.35  & 1.64          & 1.88  & 2.40          \\ \hline
+10      & 1.21  & 1.60          & 1.60  & 2.27          \\ \hline
+12      & 0.91  &  1.29  &  1.63  & 1.95  \\ \hline
+14      & 0.92  &  1.24  &  1.72  & 2.11  \\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+
+文献\cite{Nagata94}の結果では，trigram モデルを使った場合，
+モデル会話での SP-IFT のエントロピー値は 1.26，
+キーボード会話での SP-IFT の値は 2.19 と報告している．
+本実験では，12〜14 状態のエルゴード HMM の場合が，trigram のエントロピー値と
+ほぼ同等になっている．
+
+学習後の HMM の構造(状態数 5 の場合)を図\ref{Fig:HMM-IFT} および
+図\ref{Fig:HMM-IFT-SP} に示す．
+図\ref{Fig:HMM-IFT} は IFT のみの系列から得られたモデルであり，
+図\ref{Fig:HMM-IFT-SP} は話者ラベルと IFT を組み合わせたラベルの系列
+から得られたモデルである．
+図には，遷移確率および出力確率が 0.1 以上のもののみを記しており，
+矢印の太いものほど大きな遷移確率を持っていることを示している．
+状態遷移の一番上に書かれている確率が遷移確率であり，
+その下に各シンボル(IFT)の出力確率が記されている．
+図\ref{Fig:HMM-IFT-SP} で，S で始まるシンボルは
+事務局側の発話であることを，
+また Q で始まるシンボルは質問者側の発話であることを示している．
+
+例えば，図\ref{Fig:HMM-IFT-SP} では，状態 1 が初期状態であり，
+質問者が最初の発話「もしもし」を発話すると Qphatic を出力する遷移を
+たどることになる．
+これは，状態 1 での自己ループあるいは
+状態 1 から 状態 2 への遷移に対応している．
+「国際会議参加登録のタスク」では，
+事務局の「こちらは会議事務局です」という発話により対話が始まる場合もある．
+この場合には Sinform を出力する遷移である状態 1 での自己ループとなる．
+また，図\ref{Fig:HMM-IFT-SP} では，
+状態遷移が事務局側の発話と質問者側の発話で比較的きれいに分かれている．
+例えば，状態 3 から状態 2 への遷移は質問者側の発話によって起こり，
+しかもこの遷移は事務局に対する質問や依頼に対応していることが分かる．
+この質問や依頼に対し，状態 2 から状態 0 の遷移で事務局が
+応答(Sresponse, Sinform)する確率が非常に高いことも読みとることができる．
+以上のように，発話行為タイプ付きコーパスから得られたエルゴード HMM は，
+質問・応答といった基本的な構造を抽出しているということができる．
+
+
+\begin{figure}
+\begin{center}
+\epsfile{file=fig1.eps,width=100mm}
+\end{center}
+\caption{IFT のみの系列から得られた 5 状態エルゴード HMM}
+\label{Fig:HMM-IFT}
+\end{figure}
+
+\begin{figure}
+\begin{center}
+\epsfile{file=fig2.eps,width=100mm}
+\end{center}
+\caption{話者ラベルと IFT を組み合わせたラベルの系列から得られた 5 状態エルゴード HMM}
+\label{Fig:HMM-IFT-SP}
+\end{figure}
+
+\section{状態マージング手法による対話構造のモデル化}
+
+エルゴード HMM によるモデル化では，
+確率モデルの学習に先立ち，モデルの構造(状態数)をあらかじめ決めておく必要がある．
+これに対し，近年，状態マージング手法を用いて，学習データに対し最適な
+構造を持つモデルを自動的に構築する研究がいくつか行なわれている\cite{Stolcke94a,Stolcke94b}．
+我々は，
+Carrasco らによる ALERGIA アルゴリズム\cite{Carrasco94} を用いて，
+対話構造のモデルを構築することを試みた．
+
+\subsection{ALERGIA アルゴリズム}
+
+ALERGIA アルゴリズムは，与えられた学習データを受理する確率決定性有限オートマトンを
+構成するアルゴリズムである．
+詳細なアルゴリズムは，文献\cite{Carrasco94}に説明されている．
+以下では，ALERGIA アルゴリズムの概要について述べる．
+
+
+\subsubsection*{(1) 接頭木アクセプタの作成}
+
+学習データから接頭木アクセプタ(Prefix Tree Acceptor；PTA)を作る．
+なお，接頭木アクセプタとは，学習データ中のシンボル列を受理する
+決定性有限オートマトンであり，
+トライのようにシンボル系列の接頭部分が同じものを
+共通の状態によって表現したものである．
+例えば，学習データ $S = \{ \lambda, 00, 10, 110 \}$ ($\lambda$ は空列)に対する
+PTA は，図\ref{Fig:PTA} のようになる．
+
+\begin{figure}[h]
+\begin{center}
+\epsfile{file=fig3.eps,width=70mm}
+\end{center}
+\caption{接頭木アクセプタの例}
+\label{Fig:PTA}
+\end{figure}
+
+\subsubsection*{(2) 状態遷移確率の計算}
+
+$n_{i}$ を学習データが接頭木アクセプタの各状態 $q_{i}$ を訪れた回数とする．
+もし学習データが状態 $q_{i}$ で受理されれば，受理されたデータの個数を
+$f_{i}(\#)$ とする．
+状態 $q_{i}$ で受理されなければ，次の状態へ遷移するが，
+このとき状態遷移 $\delta_{i}(a)$
+(状態 $q_{i}$ でシンボル $a$ がきたときの遷移)をたどった回数を
+$f_{i}(a)$ とする．
+状態遷移 $\delta_{i}(a)$ の遷移確率は，次のようにして求められる．
+\begin{equation}
+P_{i}(a) = \frac{f_{i}(a)}{n_{i}}
+\end{equation}
+なお，$P_{i}(\#)$ は，データが状態 $q_{i}$ で受理される確率を表している．
+
+
+\subsubsection*{(3) 状態のマージ}
+
+接頭木アクセプタの状態 $q_{i}$ と $q_{j}$ が等価($q_{i} \equiv q_{j}$)であれば，
+これら２つの状態をマージする．
+ここで，状態 $q_{i}$ と $q_{j}$ が等価であるとは，
+すべてのシンボル $a \in \Sigma$ について，遷移確率 $P_{i}(a)$ と
+$P_{j}(a)$ が等しく，遷移後の状態も等価であるときをいう．
+即ち，状態 $q_{i}$ と $q_{j}$ が等価であれば，次が成り立つ．
+\begin{equation}
+q_{i} \equiv q_{j} \Longrightarrow
+        \forall a \in \Sigma \left \{ \begin{array}{l}
+                P_{i}(a) = P_{j}(a) \\
+                \delta_{i}(a) \equiv \delta_{j}(a)
+        \end{array}
+        \right .
+\end{equation}
+なお，状態の等価性を判断する場合，学習データに対する統計的な揺れを伴うので，
+２つの遷移確率の差が許容範囲にあるときに等価であるとする．
+
+ALERGIA アルゴリズムでは，以下のようにして状態の等価性を決めている．
+確率 $p$ のベルヌイ確率変数があり，$n$ 回の試行のうち $f$ 回
+この事象が起こったとすると，次式が成り立つ．
+\begin{equation}
+        P \left ( \left | p - \frac{f}{n} \right | < \sqrt{\frac{1}{2n} \log \frac{2}{\alpha}} \right ) \geq 1 - \alpha
+\end{equation}
+ALERGIA アルゴリズムでは，学習データから推定された２つの遷移確率の差が，
+信頼範囲 $\sqrt{\frac{1}{2n} \log \frac{2}{\alpha}}$
+の和の範囲内にあるときに，２つの状態を等価であるとしている．
+即ち，状態 $i$ と状態 $j$ が等価であるとは，
+すべてのシンボル $a \in \Sigma$ について，
+次式が成り立つことである．
+\begin{equation}
+        \left | \frac{f_{i}(a)}{n_{i}} - \frac{f_{j}(a)}{n_{j}} \right |
+        \leq \sqrt{\frac{1}{2} \log \frac{2}{\alpha}}
+                \left ( \frac{1}{\sqrt{n_{i}}} + \frac{1}{\sqrt{n_{j}}} \right )
+\label{Eq:AlergiaStateEq}
+\end{equation}
+
+\subsection{ALERGIA アルゴリズムの動作例}
+
+\begin{figure}
+\begin{center}
+\epsfile{file=fig4.eps,width=130mm}
+\end{center}
+\caption{ALERGIA アルゴリズムの動作例}
+\label{Fig:ExampleAlergia}
+\end{figure}
+
+ALERGIA アルゴリズムの動作を，簡単な例で説明する\cite{Carrasco94}．
+いま，学習データとして，次の集合 $S$ が与えられたとする．
+\begin{equation}
+  S = \{ 110, \lambda, \lambda, \lambda, 0, \lambda, 00, 00,
+        \lambda, \lambda, \lambda, 10110, \lambda, \lambda, 100 \}
+\end{equation}
+また，$\alpha = 0.8$ と仮定する．
+
+\subsubsection*{(1) PTA の作成}
+
+学習データから，図\ref{Fig:ExampleAlergia} (a) の PTA を作成する．
+図\ref{Fig:ExampleAlergia} では，各状態の下に，その状態に到達したデータの個数および
+その状態で受理されたデータの個数が示されている．
+また，各状態遷移には，その遷移を引き起こしたシンボル(0 あるいは 1)と
+データ数が示されている．
+
+\subsubsection*{(2) 状態 $(2,1)$ の等価性チェック}
+
+まず，状態 2 と状態 1 の等価性について考える．
+２つの状態での受理確率の差は，
+\begin{equation}
+        \left | \frac{1}{3} - \frac{9}{15} \right |     
+        = 0.26 <
+        \sqrt{\frac{1}{2} \log \frac{2}{\alpha}}
+        \left ( \frac{1}{\sqrt{3}} + \frac{1}{\sqrt{15}} \right )
+        = 0.55
+\end{equation}
+また，シンボル 0 による遷移確率についても，
+\begin{equation}
+        \left | \frac{2}{3} - \frac{3}{15} \right |
+        = 0.46 < 0.55
+\end{equation}
+となる．
+状態 2 と状態 1 が等価であるためには，
+更にこれらの状態の遷移先である状態 4 と状態 2 も等価である必要があるが，
+同様の計算により，状態 4 と状態 2 の等価性も示すことができる．
+状態 4 と状態 2 をマージし，更に状態 2 と状態 1 をマージすると，
+図 (b) のオートマトンを得る．
+
+\subsubsection*{(3) 状態 $(3,1)$ の等価性チェック}
+
+次に，状態 3 と状態 1 について考えると，
+両者の受理確率の差は，
+\begin{equation}
+        \left | \frac{0}{3} - \frac{12}{20} \right |
+        = 0.6
+        >
+        \sqrt{\frac{1}{2} \log \frac{2}{\alpha}}
+        \left ( \frac{1}{\sqrt{3}} + \frac{1}{\sqrt{20}} \right )
+        = 0.53
+\end{equation}
+となり，等価でないことが分かる．
+従って，状態 3 と状態 1 をマージすることはできない．
+
+\subsubsection*{(4) 状態 $(5,1)$ の等価性チェック}
+
+以上の計算と同様にして，状態 5 と状態 1 の等価性も示すことができる．
+また，状態 $(5,1)$ の等価性を調べる過程において，
+状態 $(7,1)$, $(8,3)$, $(10,6)$, $(11,9)$ の等価性も同時に示される．
+これらの状態をマージすると，
+図 (c) のオートマトンを得る．
+
+\subsubsection*{(5) 状態 $(6,3)$ の等価性チェック}
+
+同様にして，状態 6 と状態 3 の等価性も示すことができる．
+状態 $(6,3)$ をマージすると，図 (d) のオートマトンを得る．
+受理確率および遷移確率を計算して，
+最終的に図 (e) のオートマトンを得る．
+
+\subsection{対話構造のモデル化}
+
+\begin{figure}
+\begin{center}
+\epsfile{file=fig5.eps,width=104mm}
+\end{center}
+\caption{状態数とパープレキシティの関係}
+\label{Fig:ALERGIA-STATE-ENTROPY}
+\end{figure}
+
+\begin{figure}
+\begin{center}
+\epsfile{file=fig6.eps,width=140mm}
+\end{center}
+\caption{ALERGIA アルゴリズムにより得られたオートマトンの一部}
+\label{Fig:ALERGIA-IFT}
+\end{figure}
+
+上述の ALERGIA アルゴリズムを用いて，
+IFT 付きコーパスから対話構造をモデル化する実験を行なった．
+学習データとしては，
+キーボード会話 50 対話(1686 文)を用いた．
+
+ALERGIA アルゴリズムでは，
+状態の等価性は式(\ref{Eq:AlergiaStateEq})により判定されるが，
+式(\ref{Eq:AlergiaStateEq})の右辺の値(定数 $\alpha$ の値)を変えることにより，
+様々な状態数を持つオートマトンを学習データから構成することができる．
+図\ref{Fig:ALERGIA-STATE-ENTROPY} に，
+ALERGIA アルゴリズムにより得られたオートマトンの状態数と
+パープレキシティの関係を示す．
+パープレキシティの値は，学習データに対するテストセット・パープレキシティ
+を用いている．
+状態数の増加にともないパープレキシティは減少している．
+
+パープレキシティ $P$ とエントロピー $H$ の間には，
+\begin{equation}
+        P = 2^{H} \label{Eq:PerpEnt}
+\end{equation}
+なる関係があるが，式(\ref{Eq:PerpEnt})より，
+ALERGIA アルゴリズムで得られたモデルのエントロピーを算出してみると，
+エルゴード HMM と同程度の精度を達成するためには，
+エルゴード HMM の場合よりもはるかに多くの状態が必要となることが分かる．
+これは，HMM が非決定性の有限オートマトンと等価であるのに対し，
+ALERGIA アルゴリズムにより得られるモデルが決定性の有限オートマトンであるためである．
+
+図\ref{Fig:ALERGIA-IFT} は，
+話者ラベルと IFT を組み合わせたラベルの系列から得られた
+30 状態のオートマトンの一部(16 個の状態)である．
+このオートマトンの初期状態は状態 0 であり，最終状態は状態 22 である．
+図の左側には，初期状態 0 から状態遷移する確率の高い 11 個の状態
+(状態 0, 4, 7, 9, 10, 11, 12, 17, 20, 27, 28)
+が示されている．
+状態 0 から始まり再び状態 0 に至る状態遷移系列
+(例えば，0 → 7 → 4 や 0 → 7 → 27 → 28 など)
+が，質問・応答・確認などの対話の基本サイクルを表していると
+考えることができる．
+
+また，図の右側に，最終状態 22 に状態遷移する確率の高い 5 個の状態
+(状態 1, 16, 21, 22, 23)が示されている．
+例えば，状態 27 あるいは 28 で，
+expressive (例：「ありがとうございました」)
+に対応する発話が現れると，最終状態へ向かう状態遷移が選択されるということが分かる．
+しかし，国際会議参加登録のタスクでは，
+expressive や phatic という IFT の出現頻度は IFT 全体の数パーセントにしか
+過ぎないので，状態 27 あるいは 28 から状態 21 へ遷移する確率は
+低くなっている(図中，遷移確率の小さいものは破線で示されている)．
+
+\vspace*{-3mm}
+
+\section{おわりに}
+
+\vspace*{-2mm}
+
+本技術資料では，コーパスからの確率的対話モデルの自動生成に関する研究として，
+エルゴード HMM による対話構造のモデル化と
+ALERGIA アルゴリズムによる対話構造のモデル化の
+２種類の方法について述べた．
+モデル化実験では，ATR 対話データベース中の「国際会議参加登録」
+に関する対話データの各発話文に発話者のラベルおよび
+陳述・命令・約束などの発話行為タイプを付与したものを用いた．
+エルゴード HMM および ALERIGIA アルゴリズムを用いて，
+上記コーパス中の発話者のラベルおよび発話行為タイプの時系列のモデル化を行なうことにより，
+話者の交替や質問・応答・確認といった会話の基本的な構造を確率・統計的に反映した
+確率的対話モデルを構築した．
+今後は，同様の手法を用いて，対話における話題の遷移等を
+モデル化するための研究を行ないたいと考えている．
+
+\vspace*{-2mm}
+
+
+\bibliographystyle{jnlpbbl}
+\bibliography{kita}
+
+\begin{biography}
+\biotitle{略歴}
+\bioauthor{北 研二}{
+1981年早稲田大学理工学部数学科卒業．
+1983年から 1992年まで沖電気工業(株)勤務．
+この間，1987年から 1992年まで ATR 自動翻訳電話研究所に出向．
+1992年 9月から徳島大学工学部勤務．現在，同助教授．工学博士．
+確率・統計的自然言語処理，音声認識等の研究に従事．
+情報処理学会，電子情報通信学会，日本音響学会，日本言語学会，
+計量国語学会，ACL 各会員．}
+
+\bioauthor{福井 義和}{
+1994年徳島大学工学部知能情報工学科卒業．
+1996年同大学院博士前期課程修了．
+在学中，確率・統計的自然言語処理の研究に従事．
+現在，富士通徳島システムエンジニアリング勤務．}
+
+\bioauthor{永田 昌明}{
+1985年京都大学工学部情報工学科卒業．1987年同大学院修士課程修了．
+同年，日本電信電話株式会社入社．
+1989年ATR自動翻訳電話研究所へ出向．
+1993年日本電信電話株式会社へ復帰．
+現在，情報通信研究所勤務．
+音声翻訳，統計的自然言語処理の研究に従事．
+平成7年度情報処理学会論文賞受賞．
+情報処理学会，電子情報通信学会，人工知能学会，ACL 各会員．}
+
+
+\bioauthor{森元 逞}{
+1968年九州大学工学部電子工学科卒業．1970年同大大学院修士課程修了．
+同年，日本電信電話公社に入社．
+以来，同社電気通信研究所にて，オペレーティングシステム等の研究開発に従事．
+1987年より ATR 自動翻訳電話研究所へ出向．
+音声言語翻訳システム，特に，音声言語統合方式，音声言語翻訳方式の研究に従事．
+現在，ATR 音声翻訳通信研究所，第４研究室室長．
+電子情報通信学会，情報処理学会，人工知能学会，各会員．工博．}
+
+\bioreceived{受付}
+\bioaccepted{採録}
+
+\end{biography}
+
+\end{document}

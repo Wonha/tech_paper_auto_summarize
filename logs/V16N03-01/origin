@@ -1,0 +1,927 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.1}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+\usepackage[T1]{fontenc}
+
+\Volume{16}
+\Number{3}
+\Month{July}
+\Year{2009}
+
+\received{2008}{10}{16}
+\revised{2008}{12}{28}
+\accepted{2009}{1}{28}
+
+\setcounter{page}{3}
+
+\jtitle{Wikipediaの記事構造からの上位下位関係抽出}
+\jauthor{隅田　飛鳥\affiref{JAIST}\affiref{NAIST} \and 吉永　直樹\affiref{UT} \and 鳥澤健太郎\affiref{NICT}}
+\jabstract{
+  本稿では，Wikipediaの記事構造を知識源として，高精度で大量の上位
+  下位関係を自動獲得する手法について述べる．上位下位関係は情報検索
+  や Webディレクトリなど，膨大な Web 文書へのアクセスを容易にする様々な
+  技術への応用が期待されており，これまでにも様々な上位下位関係の抽出手
+  法が開発されてきた．本稿では，Wikipedia の記事構造に含まれる節や箇条
+  書きの見出しから，大量の上位下位関係候補を抽出し，機械学習を用いてフィ
+  ルタリングすることで高精度の上位下位関係を
+  獲得する手法を開発した．実験では，2007年3月の日本語版Wikipedia 2.2~GB
+  から，約77万語を含む約135万対の上位下位関係を精度90\%で獲
+  得することができた．
+}
+
+\jkeywords{上位下位関係，Wikipedia, SVM, 半構造情報，記事構造}
+
+\etitle{ Hyponymy Relation Acquisition from Hierarchical Layouts in Wikipedia }
+\eauthor{Asuka Sumida\affiref{JAIST}\affiref{NAIST} \and Naoki Yoshinaga\affiref{UT} \and Kentaro Torisawa\affiref{NICT}} 
+
+\eabstract{
+This paper describes a method of extracting a large set of hyponymy
+relations with a high precision from hierarchical layouts in Wikipedia articles. Hyponymy relation has been studied as one of the principal
+knowledge for information retrieval and web directory, which helps
+users to access the growing web. Various methods have been proposed to
+automatically acquire hyponymy relations. In this article, we first
+extract hyponymy relation candidates from sections and itemizations in
+hierarchical layouts of Wikipedia articles, and then filter out
+irrelevant candidates by using a machine learning technique. In
+experiments, we successfully extracted more than 1.35 million relations
+from the hierarchical layouts in the Japanese version of Wikipedia,
+with a precision of 90\%. 
+}
+
+\ekeywords{hyponymy {\upshape(\textsc{is-a})} relation, Wikipedia, SVM, semi-structured information,\\ hierarchical layouts}
+
+\affilabel{JAIST}{北陸先端科学技術大学院大学情報科学研究科}{Japan Advanced Institute of Science and Technology School of Information Science}
+\affilabel{NAIST}{奈良先端科学技術大学院大学情報科学研究科}{Nara Institute of Science and Technology Graduate School of Information Science}
+\affilabel{UT}{東京大学生産技術研究所}{Institute of Industrial Science, University of Tokyo}
+\affilabel{NICT}{独立行政法人情報通信研究機構}{National of Information and Communications Technology}
+
+\headtitle{Wikipediaの記事構造からの上位下位関係抽出}
+\headauthor{隅田，吉永，鳥澤}
+
+
+
+\begin{document}
+
+\maketitle
+
+\section{まえがき}
+本稿では，大量の上位下位関係をWikipediaから効率的に自動獲得する手法を提
+案する．ここで「単語Aが単語Bの上位語である（または，単語Bが単語Aの下位
+語である）」とは，Miller の定義\cite{wordnet-book_1998}に従
+い，「AはBの一種，あるいは一つである (B is a (kind
+of) A)」とネイティブスピーカーがいえるときであると定義する．例
+  えば，「邦画」は「映画」の，また「イチロー」は「野球選手」のそれぞれ
+  下位語であるといえ，「映画／邦画」，「野球選手／イチロー」はそれぞれ一
+  つの上位下位関係である．以降，「A／B」はAを上位語，Bを下位語とする上位
+  下位関係（候補）を示す．一般的に上位下位関係獲得タスクは，上位下位関
+  係にある表現のペアをどちらが上位語でどちらが下位語かという区別も行っ
+  た上で獲得するタスクであり，本稿でもそれに従う．本稿では概念—具体物関
+  係（ex. 野球選手／イチロー）を概念間の上位下位関係（ex. スポーツ選
+  手／野球選手）と区別せず，合わせて上位下位関係として獲得する．
+
+上位下位関係は様々な自然言語処理アプリケーションでより知的な処理を行う
+ために利用されている\cite{Fleischman_2003,Torisawa_2008}．例え
+ば，Fleischmanらは質問文中の語句の上位語を解答とするシステムを構築し
+た\cite{Fleischman_2003}．また鳥澤らはキーワード想起支援を目的とし
+たWebディレクトリを上位下位関係をもとに構築した\cite{Torisawa_2008}．し
+かしながら，このような知的なアプリケーションを実現するためには，人手で
+書き尽くすことが困難な具体物を下位語とする上位下位関係を網羅的に収集す
+ることが重要になってくる．
+
+そこで本稿では，Wikipediaの記事中の節や箇条書き表現の見出しをノードとす
+るグラフ構造（以降，\textbf{記事構造}とよぶ）から大量の上位下位関係を効
+率的に獲得する手法を提案する．具体的には，まず記事構造上でノードを上位
+語候補，子孫関係にある全てのノードをそれぞれ下位語候補とみなし，上位下
+位関係候補{を}抽出する．例えば，図~\ref{fig:wiki}（b）のWikipediaの記事
+からは~\ref{sec:wikipedia}節で述べる手続きにより，図~\ref{fig:wiki}（c）
+のような記事構造が抽出できる．この記事構造上のノード「紅茶ブランド」に
+は，その子孫ノードとして「Lipton」，「Wedgwood」，「Fauchon」，「イギリ
+ス」，「フランス」が列挙されている．提案手法をこの記事構造に適用すると，
+「紅茶ブランド」を上位語候補として，その子孫ノードを下位語候補群とする
+上位下位関係候補を獲得できる．しかしながら獲得した下位語候補には，
+「Wedgwood」，「Fauchon」のように下位語として適切な語が存在する一方，
+「イギリス」，「フランス」のような誤りも存在する．この例のように，記事
+構造は適切な上位下位関係を多く含む一方，誤りの関係も含むため，機械学習
+を用いて不適切な上位下位関係を取り除く．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{16-3ia1f1.eps}
+\end{center}
+\caption{「紅茶」に関するWikipediaの記事の例}
+\label{fig:wiki}
+\end{figure}
+
+以下，\ref{sec:bib}節で関連研究と本研究とを比較す
+る．\ref{sec:wikipedia}節で提案手法で入力源とするWikipediaの記事構造に
+触れ，\ref{sec:method}節で提案手法について詳細に述べる．\ref{sec:exp}節
+では提案手法を日本語版Wikpediaに適用し，獲得された上位下位関係の評価を
+行う．最後に\ref{sec:matome}節で本稿のまとめと今後の展望について述べ
+る．
+
+
+\section{関連研究}\label{sec:bib}
+
+本節では，既存の上位下位関係の自動獲得手法について説明する．上位下位関
+係の獲得は，1990年代にHearstが語彙統語パターンを用いて新聞記事から上位
+下位関係を獲得する手法を提案し\cite{hearst_1992}，以後各言語への応用が
+みられた\cite{JImasumi,JAndo,Pantel_2006,Sumida_2006,Oishi_06}．その
+後Webの発達に伴い，箇条書き表現などのWeb文書特有の手がかりを用いた獲得
+手法が提案されてきた\cite{Shinzato_2004,Etzioni_2005}が，近年，具体物を
+含む概念間の知識を密に記述したWikipediaに注目が集まってい
+る
+\cite{Ruiz-Casado_2005,Pasca_2006,Herbelot_2006,Suchanek_2007,Kazama_2007}
+．以下では，まず新聞記事やWeb文書を対象とした上位下位関係の獲得手法につ
+いて紹介し，その後Wikipediaに特化した上位下位関係の獲得手法について述べ
+る．以下，各手法について提案手法との違いについて述べる．
+
+
+\subsection{新聞記事・Web文書からの上位下位関係獲得}
+
+まず，語彙統語パターンを利用した研究として，
+\cite{hearst_1992,JImasumi,JAndo,Sumida_2006}があげられる．Hearstは英語
+の新聞記事を対象に，“〈上位語〉such as 〈下位語〉”などのパ
+ターンを用いて上位下位関係を獲得した\cite{hearst_1992}．安藤らはHearst
+に倣い，日本語の新聞記事コーパスを構文解析した結果から，“〈下位語1〉
+（や〈下位語2〉）*という〈上位語〉”などの同格・並列表現を含む語彙統語
+パターンを用い上位下位関係を獲得した\cite{JAndo}．また今角は日本語の新
+聞記事コーパスに対して“〈上位語〉「〈下位語〉」” のような括弧を用いた
+パターンを適用している\cite{JImasumi}．この括弧を用いたパターンと名詞連
+続パターンを利用して，SumidaらはWeb文書から上位下位関係を獲得した
+\cite{Sumida_2006}．これらの手法では，信頼性の高いパターンを用いること
+で比較的高い精度で上位下位関係を獲得できるが，そのようなパターンで文書
+中に出現しない上位下位関係も数多く存在し，語彙統語パターンのみで大量の
+上位下位関係を獲得するのは本質的に難しい．
+
+そこで，語彙統語パターンにマッチしない上位下位関係を獲得するため，Web文
+書に頻出する箇条書き表現の文書構造を用いる手法が，ShinzatoらやEtzioniら
+によって提案されてい
+る\cite{Shinzato_2004,Etzioni_2005}．ShinzatoらはWeb文書中に繰り返し出
+現するHTMLタグに囲まれた語の群を1つの単語クラスと見なし，この単語クラス
+に上位語を付与することで，上位下位関係を獲得する手法を提案し
+た\cite{Shinzato_2004}．またEtzioniらは語彙統語パターンを用いて抽出した
+上位下位関係をより広範な下位語に対応させるため，抽出した下位語を多く含
+むリスト構造を用いて，未知の下位語に上位語を割り当てる手法を提案し
+た\cite{Etzioni_2005}．これらの手法でリソースとして用いているWeb文書の
+箇条書き表現は，上位下位関係の記述に限らず様々な用途に用いられるためノイズが多く，高い精度を保ったまま大量の上位下位関係を獲得する
+ことは難しい．これらの手法では箇条書き表現を基本的に下位語候補を収集す
+るためにのみ用いており，上位語候補は別途獲得する必要があるが，我々の手
+法では上位語も含めて文書構造から獲得している点が異なる．
+
+{本研究と同様に分類器を用いて上位下位関係候補の正誤を判断する手
+  法としては，Web からタグ構造を手がかりに収集した見出し語（用語）とそ
+  の説明文（見出し語を含む段落）の組を入力として，見出し語間の上位下位
+  関係を判定する手法を大石らが提案している}\cite{Oishi_06}．{彼
+  らが説明文中に含まれる単語を素性としているのに対し，我々は上位語候補／
+  下位語候補自体に関する情報（例えば形態素）を主に素性として用いており，
+  それぞれの手法の素性セットはほぼ独立である．また，彼らの手法の評価は
+  コンピュータに関する用語のシソーラスを利用して人工的に作成したテスト
+  セットでの識別性能評価に止まっており，見出し語集合から生成した上位下
+  位関係候補の分類精度は評価できていない．さらに，彼らの手法では上
+  位語候補／下位語候補は説明文が獲得できている用語に限定されるため，具
+  体物を下位語とするような上位下位関係を大量に獲得することは難しいと考
+  えられる．}
+
+また，以上の新聞記事・Web文書を対象に上位下位関係を獲得する手法は，十分
+な量の関係を獲得するために，大量の文書が扱えるストレージやそれを処理す
+るための高速な計算機などの大規模な計算機資源が必要となる．{例え
+  ば，}\cite{Sumida_2006}{の手法を用いた場合，約700~GBのHTML文書
+  を処理して獲得できる上位下位関係の数は，約40万対であるが，我々の手法
+  ではわずか2.2~GBのWikipedia文書から同程度の精度で約135万対の上位下位関
+  係を獲得できている（詳しくは節}\ref{sec:exp_result}{の実験結果
+    を参照のこと）．}
+
+
+\subsection{Wikipediaからの上位下位関係獲得}
+
+Wikipediaからの上位下位関係獲得についても新聞記事やWeb文書からの上位下
+位関係獲得のときと同様に語彙統語パターンを用いる手法が開発されてい
+る\cite{Ruiz-Casado_2005,Herbelot_2006,Toral_06,Kazama_2007}．これらの
+手法では，Wikipediaの記事に概念の定義を記述する定義文が多く含まれること
+に注目し定義文から上位下位関係を獲得している．図~\ref{fig:wiki}（b）では
+「紅茶とは，摘み取った茶を乾燥させ，もみ込んで完全発酵させた茶葉。」と
+いう定義文が含まれており，紅茶の上位語（の一つ）である茶葉を用いて紅茶が
+説明されている．この文に対し“とは*〈上位語〉。”というパターンを適用
+することで紅茶の上位語である茶葉を抽出することができる．Kazamaらは，英
+語の固有表現抽出タスクのために，Wikipediaの記事の見出し語を下位語として
+記事の冒頭の一文を定義文とみなし，その定義文中の特定の語彙統語パターン
+にマッチする表現を上位語として獲得した\cite{Kazama_2007}．ま
+たHerbelotらは，Wikipediaの記事の全文を意味解析し，定義文に対応する項構
+造を認識することで，約88.5\%の精度で上位下位関係を獲得してい
+る\cite{Herbelot_2006}．Ruiz-Casadoらは
+WordNet~\cite{wordnet-book_1998}を利用して学習された上位下位関係からパ
+ターンを学習・適用することで，69\%の精度で上位下位関係が獲得できたと
+報告している\cite{Ruiz-Casado_2005}．これらの手法は，Wikipediaに頻出す
+る語彙統語パターンに着目した上位下位関係獲得手法であり，前節で述べた上
+位下位関係手法と同様に精度が高い一方で{Wikipediaの記事数と同程
+度の数の下位語に関する上位下位関係しか}獲得できないという問題がある．
+
+一方，SuchanekらはWikipediaの各記事の見出し語に対し，記事に付与されたカ
+テゴリのラベルを上位語として上位下位関係を獲得する手法を提案してい
+る\cite{Suchanek_2007}．彼らは，英語特有の経験則を用いてカテゴリを選別
+し，外的知識としてWordNetを利用することで，約95\%と高精度で上位下位関係
+を獲得している．提案手法では，WordNetなどの外的な言語資源を用いることな
+く，機械学習のみで高精度の上位下位関係を大量に獲得することを目指す．ま
+たKazamaらやSuchanekらの手法のように，下位語候補が記事の見出し語に制限
+されないため，より網羅的な上位下位関係が獲得できると期待される．
+
+また，本研究と同様にWikipediaの記事構造を用いた研究とし
+て\cite{Watanabe_2008}が存在する．渡邉らは Wikipediaの記事構造か
+らWikipediaのアンカーリンク間の関係を元に条件付確率場を学習し，そのモデ
+ルを適用することでアンカーリンクから固有表現を抽出し
+た\cite{Watanabe_2008}．本提案手法では記事構造から直接上位下位関係を獲
+得するのに対し，渡邉らの手法では記事構造をアンカー間の関係が同じカテゴ
+リか，関連語か，部分全体関係かどうかの判定に用いており，異なる手法とい
+える．
+
+
+
+\section{Wikipediaの記事構造}\label{sec:wikipedia}
+
+本節では提案手法について述べる前に本研究で知識源として利用す
+るWikipediaの記事構造について述べる．Wikipediaは，様々な事物に関する常
+識的知識が密に記述されたフリーの多言語百科事典である．図~\ref{fig:wiki}（b）は
+見出し語「紅茶」に対する記事の例である．Wikipediaの記事は，明確な構造を
+もつMediaWiki構文により記述されており，多段の箇条書きを含む．この例のよ
+うに，Wikipedia の記事には典型的なある概念（または具体物）の辞書的な定
+義に加えて，関連する概念（または具体物）の列挙を箇条書きとして含むこと
+が多い．
+
+\begin{table}[b]
+\vspace{-1\baselineskip}
+\caption{記事構造に関する修飾記号}
+\label{tab:mediawiki_syntax}
+\input{01table01.txt}
+\end{table}
+
+本稿ではWikipediaの記事から上位下位関係候補を抽出するための媒体とし
+て，MediaWiki構文で記事のレイアウト情報を扱う表~\ref{tab:mediawiki_syntax}の
+修飾記号に注目し，記事から見出し（表~\ref{tab:mediawiki_syntax}では$title$と標記）をノードとするグラフ構
+造（記事構造）を抽出する．具体的には，$title$に付与されている修飾記号の
+優先度が高く修飾記号の{繰り返し数}が{少ない}ほど，グラフ
+構造上の高い位置にノードを配置する．このとき，修飾記号の優先度は記号
+の{繰り返し数}より優先される．例えば，「\verb!*! リプトン」より
+「\verb!==! イギリス \verb!==!」の修飾記号の優先度が高いので，グラフ構
+造上で「イギリス」が「リプトン」より高い位置に配置される．また，
+「\verb!==! イギリス \verb!==!」は「\verb!=! 主な紅茶ブランド \verb!=!」
+と比較し修飾記号{（この場合は ``\verb!=!''）の繰り返し数}が{多い}の
+で，「主な紅茶ブランド」よりグラフ構造上で低い位置に配置される．ただし，
+ルートノードは記事名とし，その修飾記号は{繰り返し数}0の
+「\verb!=!」とする．図~\ref{fig:wiki}（b）の記事に対応する
+図~\ref{fig:wiki}（a）のMediaWikiコードをもとに，図~\ref{fig:wiki}（c）
+のような記事構造が抽出できる．
+
+
+
+\section{提案手法}\label{sec:method}
+
+本節では，\ref{sec:wikipedia}節の手続きでWikipediaの各記事から構築した記事
+構造を知識源として，上位下位関係を獲得する手法を提案する．
+提案手法は以下の2ステップからなる．
+\begin{description}
+      \item[Step1 Wikipediaの記事構造からの上位下位関係候補の抽出] 
+    \ref{sec:wikipedia}節で説明した記事構造に含まれるノード間の先祖—子孫関係に注目して上位下位関係候補を抽出する．
+      \item[Step2 機械学習によるフィルタリング] SVM\cite{Vapnik}を用い
+    て，Step1で抽出された上位下位関係候補から不適切な関係を取り除く．
+\end{description}
+
+以下，提案手法について詳しく述べる．
+
+
+
+\subsection{Step1: Wikipediaの記事構造からの上位下位関係候補の抽出}
+
+このステップでは，記事構造の各ノード{を上位語候補，}子孫関係にあるノー
+ド{を下位語候補とする}全ての組み合わせを上位下位関係候補として抽出
+する．
+例えば，図~\ref{fig:wiki}（c）の記事構造からは，「ブレンドティー／チャイ」
+や，「紅茶／リプトン」などの上位下位関係候補が抽出できる．
+
+ここで，訓練データの記事構造から得られる上位語候補を調べたところ，階
+層構造中で上位語候補に対して箇条書きで下位語候補が列挙されるときには，上位語に
+箇条書き特有の修飾語が付くことが分かった．このような修飾語としては，主
+観で一部の下位語を選んで列挙していることを示す「主な〜」や「代表的な
+〜」などの接頭語，箇条書きが下位語の列挙であることを陽に示す「〜のリス
+ト」や「〜の一覧」などの接尾語などがあり，基本的に上位語を箇条書きのタ
+イトルとするために付けられたものであるため，適切な上位語を得るためには
+取り除く必要がある．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{16-3ia1f2.eps}
+\end{center}
+\caption{上位語候補の不要な修飾語を取り除くためのパターン}
+\label{fig:list_pattern}
+\end{figure}
+
+そこで我々は，抽出された上位語候補が図~\ref{fig:list_pattern}のパターン
+をもつ場合，パターン中の$X$以外の部分を取り除いた．パターン中の$X$は任
+意の文字列を示す．{ただし，複数のパターンに一致した場合には，そ
+  の中で，パターンの具体的な文字列部分（ex.「代表的な}$X${」であれば「代
+  表的な」）が最長一致するパターンを適用した．}例えば，上位語「主な紅茶
+ブランド」はパターン「主な$X$」を適用することで，「紅茶ブランド」と置換
+される．
+
+
+
+
+このようにして得られる上位下位関係候補には，明らかに
+誤りとみなせる上位下位関係候補や，上位語または下位語に記号などの不要語
+を含む上位下位関係候補が含まれていたため，図~\ref{fig:huyou}のルールに
+従って上位下位関係候補を削除，あるいは訂正した．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{16-3ia1f3.eps}
+\end{center}
+        \caption{上位下位関係候補の削除・訂正ルール}
+        \label{fig:huyou}
+\end{figure}
+
+
+
+\subsection{Step2: 機械学習によるフィルタリング}
+
+Step1の手続きで得られた上位下位関係候補は多くの適切な関係を含む一方で，
+「生産地／インド」，「紅茶ブランド／イギリス」のような誤りも含む．Step2で
+は，Step1で抽出した上位下位関係候補から教師あり機械学習を用い不適切な関
+係を取り除く．本稿では上位下位関係候補が適切な上位下位関係か否かを判定
+するため，Support Vector Machine (SVM)\cite{Vapnik}で学習された分類器を
+用いて上位下位関係候補を選別する．
+
+{SVM で各上位下位関係候補（上位語候補—下位語候補のペア）が適切
+  な上位下位関係であるかどうかを判定するには，分類対象の上位下位関係候
+  補を，素性ベクトルと呼ばれる分類対象の特徴（素性）を数値で表現したベ
+  クトルに変換する必要がある．この素性ベクトル（上位下位関係候補）に正
+  解（適切な上位下位関係か否か）をつけたものを学習データとして，Step2で
+  用いる分類器 (SVM) を得る．
+}
+
+{本研究では素性として，上位下位関係候補がある条件（特徴）を満た
+  すかどうかを一つの素性として表現し，素性ごとに設定された条件を入力の
+  上位下位関係候補が満たせば，対応する素性ベクトルの次元の値に1をセット
+  し，満たさなければ0をセットする．実際に使用した素性をまとめたリストを
+  表}\ref{tab:feature}{に示す．表の各列は左から素性の種類，各素
+  性に対応する素性ベクトルの次元の値を1にセットする条件，
+  図}\ref{fig:wiki}{から抽出した上位下位関係候補「紅茶ブラン
+  ド／Lipton」で実際に1にセットされる素性を表している．} ただし，同じ表
+現の上位下位関係候補が異なる記事構造から抽出された場合，全ての抽出元の
+記事構造について生成した素性ベクトル{の論理和を用いる．}次に生成
+した素性ベクトルをSVMに入力し，その結果得られたSVMのスコアが閾値以上の
+上位下位関係候補を正しい上位下位関係とみなす．以下で，各素性{の
+  設計方針}について説明する．
+
+\begin{table}[t]
+\caption{素性リスト}
+\label{tab:feature}
+\input{01table02.txt}
+\end{table}
+
+
+\begin{description}
+      \item[POS] まず上位語候補・下位語候補の品詞は，誤りの判定に有効で
+    ある．例えば，「木次線／管轄」のように上位語に固有名詞を含み，下位
+    語に固有名詞を含まない場合，誤りの関係と推定できる．ここでは，品詞
+    として{IPA辞
+      書}\footnote{http://sourceforge.jp/projects/ipadic/}{の}品
+    詞細分類レベル（ex. 名詞—固有名詞など）まで考慮する．
+
+    また上位語候補・下位語候補に含まれる品詞のうち，主辞の品詞は語の意味的な特
+    徴をよく捉えているため特に重要である．例えば，上位語候補の主
+    辞の品詞が動詞であれば多くの場合その上位下位関係候補は誤り
+    である．本稿では上位語候補・下位語候補の末尾の形態素を主辞とし，主
+    辞の品詞を他の品詞と区別するように素性を設計した．
+
+      \item[MORPH] {品詞と同様に}，上位語候補・下位語候補中の形
+    態素の表層文字列は上位下位関係らしさの判定に有効である．例えば，
+    「アメリカ映画／ウエスト・サイド物語」のように頻度が少ない，あるいは
+    未知の上位語候補・下位語候補であっても，「映画」や「物語」などのよ
+    り頻度が高い形態素に注目することで上位語らしさ・下位語らしさを判定
+    することが出来る．また品詞と同様に上位語候補・下位語候補の主辞の表
+    層文字列は適切な上位下位関係であるかどうかの手がかりとなりやすいの
+    で，他の形態素と区別する．
+
+      \item[EXP] 上位語候補，下位語候補にはStep1の不要語処理ではカバー
+    しきれない，「背景」や「あ行」などの不要語が多く存在する．これら不
+    要語の特徴を捉えるため，上位語候補，下位語候補の表層文字列ごとに次
+    元を割り当てるように素性を設計した．
+
+      \item[ATTR] 上位語候補，あるいは下位語候補が属性語である上位下位
+    関係候補は誤りの関係となりやすい．ここで属性語とは，その単語につい
+    てユーザが知りたい観点を指す単語である\cite{JTokunaga_2006}．例えば，
+    「紅茶」の属性語としては「生産量」や「価格」があげられ
+    る．{このような属性語を含む関係（例えば，}「紅茶／生産量」や
+    「生産量／1位インド」など）{は多くの場合，}属性語と概念（ま
+    たは具体物）間の関係となり上位下位関係となることは少ない．そこでこ
+    の素性ではあらかじめ抽出しておいた{属性語リストの各語に固
+      有の次元を割りあてるように設計した．}
+
+    本研究では，属性語は以下のような手順で抽出した．まず各記事構造から
+    根ノード以外のノードを抽出する．つぎに，抽出したノードのう
+    ち，Wikipedia中の複数の記事に出現するノードを属性とみなす．例えば
+    「紅茶」と「タバコ」という記事の両方に「生産量」が見出しとして出現
+    する場合，「生産量」を属性語とみなす．前述の上位語候補・下位語候補
+    の表層文字列を素性とする素性EXPもこの素性と同{じく不要語らし
+      さ}を扱うことができるがこの素性では教師無しで構築された属性語リス
+    トを用いることで，より被覆率高く{不要語}を検出することが可能
+    であることに注意されたい．
+
+     \item[LAYER] 記事構造の箇条書き表現から抽出された下位語候補をもつ
+   上位下位関係は適切な関係になりやすい．例えば，図~\ref{fig:wiki}（c）の
+   記事構造の箇条書き表現には「Lipton」，「Wedgwood」などの固有名詞が列
+   挙されており，これらは上位ノード「紅茶ブランド」の下位語として適切で
+   ある．このような傾向を捉えるために，この素性では記事構造から抽出され
+   た上位語候補あるいは下位語候補のノードに付与されている修飾記号の種
+   類（節見出し，定義の箇条書き，番号付き箇条書き，番号なし箇条書き）ごと
+   に次元を割りあてた．
+     \item[DIST] 記事構造で上位語候補と下位語候補との間の距離が近ければ近いほど，正
+   しい上位下位関係であることが多い．そこで，記事構造中における上位語
+   候補・下位語候補間の距離を素性とすることで，この傾向を捉える．
+   本稿では，上位語候補，下位語候補間の距離を記事構造中で上位語候補と下
+   位語候補間に存在する辺の数とする．例えば，図~\ref{fig:wiki}（c）の記事構
+   造上で「Wedgwood」と「紅茶ブランド」間の距離は2である．
+   
+   素性DISTでは，上位語候補と下位語候補間の距離が2以上か否かと
+   いう2つの状態にそれぞれ異なる次元を割りあてた．
+   
+     \item[PAT] 上位語候補がStep1の時点で図~\ref{fig:list_pattern}のパ
+   ターンにマッチしていた場合，子孫ノードに適切な下位語が列挙されやすい
+   傾向がある．例えば，図~\ref{fig:wiki}（c）中の「主な紅茶ブランド」とい
+   うノードは下位階層に「Lipton」，「Wedgwood」などの適切な下位語が列挙
+   されており，上位語がStep1のパターンにマッチしていれば，その上位下位
+   関係は適切だろうと推定できる．素性PATでは，Step1の時点で上位語候補が
+   パターンにマッチしている場合{この素性に対応する素性ベクトルの次元の値を1にセットするように設計した}．
+
+     \item[LCHAR] 素性MORPHでは，形態素間の類似性を判断しているため，「高校」
+   や「公立校」のように形態素の一部が一致する語の類似性はないと判断してしまう欠点が存在する．
+   
+   そこで上記のような事例を扱えるようにするため，素性LCHARでは，上位語
+   候補と下位語候補の末尾の1文字が共通する複合語に意味的に似た語が多い
+   特徴を利用し，素性MORPHの欠点を補う．具体的には，上位語候補と下位語
+   候補の末尾が同じとき，{この素性に対応する素性ベクトルの次元の値を1にセットするように設計した}．
+
+\end{description}
+
+
+\section{実験}\label{sec:exp}
+
+\subsection{実験設定}
+
+提案手法の有効性を評価するため，2007年3月の日本語
+版WikipediaからWikipedia内部向けの記事を取り除いた276,323記事に対して，
+提案手法を適用した．{Wikipedia内部向けのページは，
+  ユーザページ，特別ページ，テンプレート，リダイレクション，カテゴリ，曖
+  昧さ回避ページを指すものとする．}本稿では，形態素解析
+にMeCab\footnote{http://mecab.sourceforge.net/}を利用しその辞書とし
+てIPA辞書\footnote{http://chasen.naist.jp/chasen/distribution.html.ja}
+を用いた．
+SVMにはTinySVM\footnote{http://chasen.org/\~{}
+  taku/software/TinySVM/}を利用した．SVMのカーネルには予備実験結果か
+ら2次の多項式カーネルを用いた．またWikipediaからStep2で必要となる属性語
+リストを抽出した結果，40,733個の属性語が獲得でき，ランダムに取り出し
+た200語を\cite{JTokunaga_2006}の厳密な属性語を判定するための基準に従い評価
+したところ，精度は73.0\%だった．
+
+まずWikipediaの記事にStep1を適用し，記事構造から{重複を除い
+  て}6,564,317対の上位下位関係候補を獲得した．{以降に示す全ての
+  上位下位関係数は重複を除いた数を示す．}次に，得られた上位下位関係候補
+からランダムに1,000対取り出してテストデータとした．続いて，テスト用デー
+タを除いた上位下位関係候補からランダムに9,000対，抽出元の記事構造中で上
+位語と下位語が直接の親子関係にあった候補から9,000対，
+図~\ref{fig:list_pattern}のパターンにマッチしていた上位下位関係候補か
+ら10,000対，図~\ref{fig:list_pattern}のパターンにマッチしなかった上位下
+位関係候補から2,000対をそれぞれランダムに取り出し，人手で正解をつけた．
+これらから重複を除いて得られた29,900対を訓練データとして用い
+た．{訓練データのうち19,476対は，素性を決定するための予備実験に
+  利用した．上位下位関係の正解付け
+  は，Miller ら}\cite{wordnet-book_1998}{の基準に従い1名で行っ{た\nobreak．}
+  具体的には，各上位下位関係候補（上位語候補の表現Aと下位語候補の表
+  現Bのペア）につい{て\nobreak，}「BはAの一種あるいは1つである」という文が適切で
+  あるとき正解とした．}
+
+
+
+
+
+
+
+\subsection{比較手法}\label{sec:altermethod}
+
+提案手法の有効性を確認するため，\ref{sec:bib}節で説明した既存の語彙統語パターンに基づく上位下位
+関係獲得手法\cite{Sumida_2006}，および既存のWikipediaからの上位下位関係
+獲得手法\cite{Kazama_2007,Suchanek_2007}と比較を行う．
+Wikipediaからの上位下位関係の獲得手法は，英語版Wikipediaに特化したものであるため，以下で日本語版Wikipediaに応用する際に変更した点を記載する．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{16-3ia1f4.eps}
+\end{center}
+    \caption{定義文に適用する語彙統語パターンの一例}
+    \label{fig:def_pattern}
+\end{figure}
+
+\paragraph{Wikipediaの定義文からの上位下位関係の獲得}\label{sec:definition}~~
+
+Kazamaらの手法は英語版Wikipediaのための手法であるため，ここでは
+国語辞書の語釈文から上位下位関係を獲得したTsurumaruらの手法を参考に人手で図~\ref{fig:def_pattern}の
+ような語彙統語パターンを1,334パターン用意した\cite{Tsurumaru_1986,Kazama_2007}．図中の〈上位語〉は任意の
+名詞の連続，〈数字〉は0〜9までの数字の連続，〈漢数字〉は〇〜九などの漢数字の連続
+を示す．このパターンを定義文に適用することで見出し語を下位語，パターン
+で認識された〈上位語〉を上位語とする上位下位関係を獲得する．
+
+
+\paragraph{Wikipediaのカテゴリからの上位下位関係の抽出}~~
+
+Suchanekらの手法に従い，各記事に付与されているカテゴリを上位語候補，記事の
+見出し語を下位語候補として上位下位関係候補を獲得する．例えば，
+図~\ref{fig:wiki}（b）の記事からは，「茶／紅茶」という上位下位関係候補が
+得られる．Wikipediaのカテゴリから獲得できる関係には上位下位関係以外に
+「喫茶文化／紅茶」などのように見出し語とその関連語間の関係も多く含まれ
+る．Suchanekらの手法では，英語による経験則を用いて，さらに獲得した関係を選別しているが，日本語には適用できないため，ここではカテゴリ
+から抽出できた全ての関係候補を上位下位関係とみなす．
+
+
+\subsection{実験結果}\label{sec:exp_result}
+
+\begin{table}[b]
+\caption{提案手法と比較手法により獲得した上位下位関係の比較}
+\label{tab:Method1Result}
+\input{01table03.txt}
+\end{table}
+
+表\ref{tab:Method1Result}に提案手法と節~\ref{sec:altermethod}に述べた比
+較手法と\cite{Sumida_2006}の手法を比較した結果を示す．
+表\ref{tab:Method1Result}の各列は左から順に手法の種類，リソース，SVMの
+閾値，精度，SVMにより選別された上位下位関係数，およびこれらより求めた期
+待される正しい上位下位関係の数を示す．{ここでは以下のような評価尺度を用いた．}
+{\allowdisplaybreaks
+\begin{gather*}
+\begin{split}
+\mbox{精度 (Precision) } & = \frac{\mbox{SVMにより選別された上位下位関係のうち正解の関係の数}}{\mbox{SVMにより選別された上位下位関係数}}\\[0.5zw]
+\mbox{再現率 (Recall)} & =  \frac{\mbox{SVMにより選別された上位下位関係のうち正解の関係の数}}{\mbox{評価データ中に存在する正しい上位下位関係数}}\\[0.5zw]
+\mbox{正解率 (Accuracy)} & =  \frac{\mbox{SVMにより正しく正例・負例を識別できた関係の数}}{\mbox{評価データ中の関係候補の数}}
+\end{split}\\
+\mbox{期待される正しい上位下位関係数} = \mbox{抽出できた上位下位関係数} \times \mbox{精度}    
+\end{gather*}
+}
+
+比較手法カテゴリ，定義文
+は\ref{sec:altermethod}節で記述した手法を用い，提案手法で利用し
+たWikipediaと同じデータを利用し，評価サンプル数は1,000対である．また比
+較手法\cite{Sumida_2006}は，Webから無作為に収集した約700~GB（HTMLタグ含
+む）のWeb文書に\cite{Sumida_2006}を適用した結果を示し，評価サンプル数
+は200対である．表より提案手法はWikipediaを入力源とする手法と比較し，大
+量の上位下位関係を獲得することに成功した．また，提案手法と比較手
+法\cite{Sumida_2006}を比べると，提案手法は小さなリソース（2.2~GBのXML文
+書）から上位下位関係を抽出したにもかかわらず，より大量の上位下位関係
+（933,782語を含む約174万対）を獲得できた．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{16-3ia1f5.eps}
+\end{center}
+    \caption{精度と再現率とのトレードオフ}
+    \label{fig:rp}
+\end{figure}
+
+獲得される上位下位関係の精度については，SVMの分類時の閾値を変更すること
+であげることが可能である．精度と再現率とのトレードオフの関係を
+図\ref{fig:rp}に示す．横軸は再現率，縦軸は精度を表す．このグラフよ
+り，SVMの閾値を大きくすることで，より信頼性の高い上位下位関係を獲得でき
+ることが確認できる．例えば閾値を0.36にすると，テストデータでの精度
+は90\%まで向上する（表~\ref{tab:Method1Result}）．この精度でも，他の比
+較手法より獲得できた上位下位関係は多く，またこの関係に含まれる語数は
+774,135語であった．
+
+\begin{table}[p]
+    \caption{各素性による効果}
+    \label{tab:ResultSVM}
+\input{01table04.txt}
+\end{table}
+\begin{figure}[p]
+\begin{center}
+\includegraphics{16-3ia1f6.eps}
+\end{center}
+    \caption{再現率—精度グラフによる素性の比較}
+    \label{fig:rp_feature}
+\end{figure}
+
+次にStep2で利用した素性の効果を調べるために，各素性を除いたときの精度の
+比較を表~\ref{tab:ResultSVM}に示す．表~\ref{tab:ResultSVM}の各列は左か
+ら順に素性の種類，正解率，精度，再現率，F値を表す．またこのときの精度と再現
+率とのトレードオフの関係を図~\ref{fig:rp_feature}に示す．各素性は本稿で
+提案した全ての素性を含む素性セットをALL，ALLから素性$X$を除いた素性セッ
+トを$\text{ALL-}X$とした．また（）内は素性セット$\text{ALL-}X$の精度から素性セットALLの
+精度を引いた結果であり，この値が低ければ低いほど，素性$X$が提案手法の性
+能の向上に役立っていることを意味する．これらの結果より，全ての素性
+がStep2のフィルタリング性能の向上に役立っていることが確認できた．また表より全
+ての素性が精度の向上に寄与しており，特に素性MORPHによる効果が大きいこ
+とがわかった．一方，再現率の向上には素性POS，MORPH，LAYER，LCHARが寄与し
+ており，特に素性LCHARが最も高い効果をもつことがわかった．
+
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{16-3ia1f7.eps}
+\end{center}
+    \caption{訓練データの量による性能の変化}
+    \label{fig:learning_curve}
+\end{figure}
+
+つづいて，訓練データの量を変化させたときの提案手法の性能の変化を調べた．
+訓練データはStep1の結果からランダムに抽出した9,000対を利用し，1,000対から9,000対まで3,000対ごとに評価を行った．その結果を
+図~\ref{fig:learning_curve}（a），（b）に示す．
+図~\ref{fig:learning_curve}（a）はSVMの分類時の閾値を0に固定したグラフで，
+横軸は訓練データの量，縦軸は精度，再現率，F値を示す．また
+図~\ref{fig:learning_curve}（b）はSVM分類時の閾値を変化させ精度と再現率
+のトレードオフを調べたグラフで，横軸は再現率，縦軸は精度を示す．
+図~\ref{fig:learning_curve}（a）より訓練データの量を増やすことで再現率の
+性能が向上する傾向がわかった．また図~\ref{fig:learning_curve}（b）よ
+り，SVMの閾値を変化させた場合でも，訓練データのサイズを増やすことで，性
+能が向上する傾向にあることが確認できた．この結果は訓練データをさらに増
+やせば提案手法の性能がさらに向上する可能性を示唆している．
+
+
+\subsection{考察}
+
+提案手法により得られた上位下位関係の例を表~\ref{tab:sample}に示す．ここ
+では，人手で選んだ25語についてランダムに10対の下位語を選択した．表中の
+${}^\ast$は上位下位関係が誤りの例を，${}^\#$は{小説や映画などの
+  フィクション上でなりたつ}架空の上位下位関係を示す．{ このよう
+  な架空の上位{語\nobreak，}あるいは下位語は，フィクション自体に関する記述（感想）
+  や，比喩表現として日常的に用いられることも多いため，本稿ではそれ以外
+  の上位下位関係と特に区別せず，有用な上位下位関係知識とみなし
+  Millerら}\cite{wordnet-book_1998}{の基準で正解か誤りかを判断し
+  た．これらの架空の上位下位関係とそうでない上位下位関係を識別すること
+  は今後の課題の一つである．} また表の各列は左から人手で選んだ上位語と
+その下位語の例を示している．{この例より，ほとんどの上位下位関係
+  は，上位語ごとに多少の精度の偏りがみられるものの正しく認識できているこ
+  とが確認できる．}
+  
+
+\begin{table}[p]
+    \caption{獲得した上位下位関係の例}
+\label{tab:sample}
+\input{01table05.txt}
+\end{table}
+
+
+最後に，提案手法の性能を悪化させている原因を探るべく，SVM分類器により誤
+りとされた上位下位関係候補を人手で分析した．テストデータ，訓練データ以外の上
+位下位関係候補からランダムに1,000対抽出し，人手で評価した．誤り分析用デー
+タに提案手法を適用した結果，その精度は89.1\%であり，この内訳は内訳は陽
+性が233対，陰性が658対，偽陽性が22対，偽陰性が87対であった．
+
+\begin{table}[t]
+    \caption{偽陽性の分類結果}
+    \label{tab:false_positive}
+\input{01table06.txt}
+\end{table}
+\begin{table}[t]
+    \caption{陰性の分類結果}
+    \label{tab:true_negative}
+\input{01table07.txt}
+\end{table}
+
+表~\ref{tab:false_positive}に偽陽性の分類結果を示す．表の各列は，左から
+分類の種類，数，SVMスコアの平均，例を示す．この結果から，部分全体関係が
+最も頻出する誤りであるうえに，SVMスコアの平均から最も除去しにくい誤りで
+あることがわかった．このような誤りを取り除くことは今後の課題である．
+また，精度を低下させる原因として，属性・属性値とfacetを含む関係を上位下
+位関係と誤判定する問題が多いことも分かった．ここでいうfacetとはインスタ
+ンスを分類するための属性の値である．例えば，図~\ref{fig:wiki}（c）の記事
+構造中の「主な紅茶ブランド」と「Wedgwood」との間に挿入されている「イギ
+リス」は「Wedgwood」などのブランドを国別で分類するためのfacetであるとい
+える．提案手法では自動抽出した属性リストを用いてこのような誤りの除去を
+試みたが，表~\ref{tab:false_positive}より提案手法の対策だけでは不十分で
+あり，新たに記事構造中の他のノードの情報を素性とするなど改善が必要であ
+ることがわかった．また「プロレス技／代表的な技」のように，素性LCHARが悪
+影響を及ぼしていると思われる例も存在した．
+
+つづいて，陽性と偽陰性と判定された関係の上位語が訓練データ中に存在した
+か否かを調査した．陽性では66.6\%，偽陰性では16.7\%の上位語が訓練データ
+中に存在していることがわかった．未知の上位語であっても正しく判定できる
+ようにするために，より上位の語や同義語の利用を考えている．
+
+最後に，表~\ref{tab:true_negative}に陰性を人手で分類した結果を示す．表
+の各列は左から誤りの分類，数を示す．ここでは，上位下位関係以外の何ら
+かの概念間関係に分類できるかどうかに注目して分類した．この結果，
+約80\%については何らかの概念間関係になっていることが分かった．これらに
+ついては，正しく分類できれば語彙知識として有用である．本稿では上位下位
+関係に注目し，二値分類の分類器を用いたが，適切な関係に分類する多値分類
+を構築することで，Wikipediaの記事構造を余すことなく，語彙知識に変換する
+ことができそうである．
+
+
+\section{まとめ}\label{sec:matome}
+
+本稿では，Wikipedia の記事構造を知識源とした上位下位関係獲得手法を提案
+した．提案手法は，「Wikipediaの記事構造中のノード間の関係は多くの上位下
+位関係を含む」という仮定と機械学習を併用することにより，約135万対の上位
+下位関係を精度90\%で獲得することに成功した．本稿では2007年3月時点で
+のWikipediaから上位下位関係を獲得したが，Wikipediaは現在も成長を続けて
+おり提案手法を最新のWikipediaデータに適用することでさらに多くの上位下位
+関係を獲得することも可能であると考えられる．
+
+実験結果より，Wikipedia の記事構造は上位下位関係だけでなく，属性—属性値
+の関係，部分全体関係などの記述にも頻繁に使われていることがわかった．今
+後の課題として，上位下位関係だけでなく部分全体関係や属性—属性値の関係を
+獲得したいと考えている．{また}\ref{sec:exp}{節で述べたよ
+  うに獲得した上位下位関係には，フィクションの世界でのみ成り立つ架空の
+  上位下位関係が含まれている．これらの架空の世界でのみ成り立つ上位下位
+  関係を識別することは今後の課題である．} 更に，Wikipediaの記事に
+は他の言語で記述された記事へのリンクが執筆者によって付与されており，こ
+れらのリンクを利用して様々な言語の上位下位関係を獲得することも考えてい
+る．
+
+    \bibliographystyle{jnlpbbl_1.3}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Bunescu \BBA\ Pa\c{s}ca}{Bunescu \BBA\
+  Pa\c{s}ca}{2006}]{Pasca_2006}
+Bunescu, R.~C.\BBACOMMA\ \BBA\ Pa\c{s}ca, M. \BBOP 2006\BBCP.
+\newblock \BBOQ Using encyclopedic knowledge for named entity
+  disambiguation\BBCQ\
+\newblock In {\Bem Proceedings of the 11th Conference of the European Chapter
+  of the Association for Computational Linguistics}, \mbox{\BPGS\ 9--16}.
+
+\bibitem[\protect\BCAY{Etzioni, Cafarella, Downey, Popescu, Shaked, Soderland,
+  Weld, \BBA\ Yates}{Etzioni et~al.}{2005}]{Etzioni_2005}
+Etzioni, O., Cafarella, M., Downey, D., Popescu, A.-M., Shaked, T., Soderland,
+  S., Weld, D.~S., \BBA\ Yates, A. \BBOP 2005\BBCP.
+\newblock \BBOQ Unsupervised named-entity extraction from the web: An
+  experimental study\BBCQ\
+\newblock {\Bem Artificial Intelligence}, {\Bbf 165}  (1), \mbox{\BPGS\
+  91--134}.
+
+\bibitem[\protect\BCAY{Fellbaum}{Fellbaum}{1998}]{wordnet-book_1998}
+Fellbaum, C.\BED\ \BBOP 1998\BBCP.
+\newblock {\Bem WordNet: An electronic lexical database}.
+\newblock MIT Press.
+
+\bibitem[\protect\BCAY{Fleischman, Hovy, \BBA\ Echihabi}{Fleischman
+  et~al.}{2003}]{Fleischman_2003}
+Fleischman, M., Hovy, E., \BBA\ Echihabi, A. \BBOP 2003\BBCP.
+\newblock \BBOQ Offline strategies for online question answering: Answering
+  questions before they are asked\BBCQ\
+\newblock In {\Bem Proceedings of the 41st Annual Meeting on Association for
+  Computational Linguistics}, \mbox{\BPGS\ 1--7}.
+
+\bibitem[\protect\BCAY{Hearst}{Hearst}{1992}]{hearst_1992}
+Hearst, M.~A. \BBOP 1992\BBCP.
+\newblock \BBOQ Automatic acquisition of hyponyms from large text corpora\BBCQ\
+\newblock In {\Bem Proceedings of the 14th International Conference on
+  Computational Linguistics}, \mbox{\BPGS\ 539--545}.
+
+\bibitem[\protect\BCAY{Herbelot \BBA\ Copestake}{Herbelot \BBA\
+  Copestake}{2006}]{Herbelot_2006}
+Herbelot, A.\BBACOMMA\ \BBA\ Copestake, A. \BBOP 2006\BBCP.
+\newblock \BBOQ Acquiring ontological relationships from Wikipedia using
+  RMRS\BBCQ\
+\newblock In {\Bem Proceedings of Web Content Mining with Human Language
+  Technologies workshop on the fifth International Semantic Web Conference}.
+
+\bibitem[\protect\BCAY{Kazama \BBA\ Torisawa}{Kazama \BBA\
+  Torisawa}{2007}]{Kazama_2007}
+Kazama, J.\BBACOMMA\ \BBA\ Torisawa, K. \BBOP 2007\BBCP.
+\newblock \BBOQ Exploiting Wikipedia as external knowledge for named entity
+  recognition\BBCQ\
+\newblock In {\Bem Proceedings of the 2007 Joint Conference on Empirical
+  Methods in Natural Language Processing and Computational Natural Language
+  Learning}, \mbox{\BPGS\ 698--707}.
+
+\bibitem[\protect\BCAY{Pantel \BBA\ Pennacchiotti}{Pantel \BBA\
+  Pennacchiotti}{2006}]{Pantel_2006}
+Pantel, P.\BBACOMMA\ \BBA\ Pennacchiotti, M. \BBOP 2006\BBCP.
+\newblock \BBOQ Espresso: Leveraging generic patterns for automatically
+  harvesting semantic relations\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on
+  Computational Linguistics and the 44th Annual Meeting of the Association for
+  Computational Linguistics}, \mbox{\BPGS\ 113--120}.
+
+\bibitem[\protect\BCAY{Ruiz-Casado, Alfonseca, \BBA\ Castells}{Ruiz-Casado
+  et~al.}{2005}]{Ruiz-Casado_2005}
+Ruiz-Casado, M., Alfonseca, E., \BBA\ Castells, P. \BBOP 2005\BBCP.
+\newblock \BBOQ Automatic extraction of semantic relationships for WordNet by
+  means of pattern learning from Wikipedia\BBCQ\
+\newblock In {\Bem Proceedings of the 10th International Conference on
+  Applications of Natural Language to Information Systems}, \mbox{\BPGS\
+  67--79}.
+
+\bibitem[\protect\BCAY{Shinzato \BBA\ Torisawa}{Shinzato \BBA\
+  Torisawa}{2004}]{Shinzato_2004}
+Shinzato, K.\BBACOMMA\ \BBA\ Torisawa, K. \BBOP 2004\BBCP.
+\newblock \BBOQ Acquiring hyponymy relations from web documents\BBCQ\
+\newblock In {\Bem Proceedings of the 20th International Conference on
+  Computational Linguistics}, \mbox{\BPGS\ 73--80}.
+
+\bibitem[\protect\BCAY{Suchanek, Kasneci, \BBA\ Weikum}{Suchanek
+  et~al.}{2007}]{Suchanek_2007}
+Suchanek, F.~M., Kasneci, G., \BBA\ Weikum, G. \BBOP 2007\BBCP.
+\newblock \BBOQ YAGO: A core of semantic knowledge unifying WordNet and
+  Wikipedia\BBCQ\
+\newblock In {\Bem Proceedings of the 16th International World Wide Web
+  Conference}.
+
+\bibitem[\protect\BCAY{Sumida, Torisawa, \BBA\ Shinzato}{Sumida
+  et~al.}{2006}]{Sumida_2006}
+Sumida, A., Torisawa, K., \BBA\ Shinzato, K. \BBOP 2006\BBCP.
+\newblock \BBOQ Concept-instance relation extraction from simple noun sequences
+  using a search engine on a web repository\BBCQ\
+\newblock In {\Bem Proceedings of the Web Content Mining with Human Language
+  Technologies workshop on the fifth International Semantic Web Conference}.
+
+\bibitem[\protect\BCAY{Toral \BBA\ Mu{\~n}oz}{Toral \BBA\
+  Mu{\~n}oz}{2006}]{Toral_06}
+Toral, A.\BBACOMMA\ \BBA\ Mu{\~n}oz, R. \BBOP 2006\BBCP.
+\newblock \BBOQ A proposal to automatically build and maintain gazetteers for
+  named entity recognition by using Wikipedia\BBCQ\
+\newblock In {\Bem Proceedings of Workshop on New Text held at the 11th
+  Conference of the European Chapter of the Association for Computational
+  Linguistics}.
+
+\bibitem[\protect\BCAY{Tsurumaru, Hitaka, \BBA\ Yoshida}{Tsurumaru
+  et~al.}{1986}]{Tsurumaru_1986}
+Tsurumaru, H., Hitaka, T., \BBA\ Yoshida, S. \BBOP 1986\BBCP.
+\newblock \BBOQ An attempt to automatic thesaurus construction from an ordinary
+  Japanese language dictionary\BBCQ\
+\newblock In {\Bem Proceedings of the 11th International Conference on
+  Computational Linguistics}, \mbox{\BPGS\ 445--447}.
+
+\bibitem[\protect\BCAY{Vapnik}{Vapnik}{1998}]{Vapnik}
+Vapnik, V.~N. \BBOP 1998\BBCP.
+\newblock {\Bem Statistical Learning Theory}.
+\newblock Wiley-Interscience.
+
+\bibitem[\protect\BCAY{安藤\JBA 関根\JBA 石崎}{安藤\Jetal }{2003}]{JAndo}
+安藤まや\JBA 関根聡\JBA 石崎俊 \BBOP 2003\BBCP.
+\newblock \JBOQ 定型表現を利用した新聞記事からの下位概念単語の自動抽出\JBCQ\
+\newblock \Jem{情報処理学会研究報告 2003-NL-157}, \mbox{\BPGS\ 77--82}.
+
+\bibitem[\protect\BCAY{今角}{今角}{2001}]{JImasumi}
+今角恭祐 \BBOP 2001\BBCP.
+\newblock \JBOQ 並列名詞句と同格表現に着目した上位下位関係の自動獲得\JBCQ\
+\newblock Master's thesis, 九州工業大学.
+
+\bibitem[\protect\BCAY{大石\JBA 伊藤\JBA 武田\JBA 藤井}{大石\Jetal
+  }{2006}]{Oishi_06}
+大石康智\JBA 伊藤克亘\JBA 武田一哉\JBA 藤井敦 \BBOP 2006\BBCP.
+\newblock \JBOQ
+  単語の共起関係と構文情報を利用した単語階層関係の統計的自動識別\JBCQ\
+\newblock \Jem{情報処理学会研究報告 2006-SLP-61}, \mbox{\BPGS\ 25--30}.
+
+\bibitem[\protect\BCAY{徳永\JBA 風間\JBA 鳥澤}{徳永\Jetal
+  }{2006}]{JTokunaga_2006}
+徳永耕亮\JBA 風間淳一\JBA 鳥澤健太郎 \BBOP 2006\BBCP.
+\newblock \JBOQ 属性語のWeb文書からの自動獲得と人手評価のための基準\JBCQ\
+\newblock \Jem{自然言語処理}, {\Bbf 13}  (4), \mbox{\BPGS\ 49--67}.
+
+\bibitem[\protect\BCAY{鳥澤\JBA 隅田\JBA 野口\JBA 風間}{鳥澤\Jetal
+  }{2008}]{Torisawa_2008}
+鳥澤健太郎\JBA 隅田飛鳥\JBA 野口大輔\JBA 風間淳一 \BBOP 2008\BBCP.
+\newblock \JBOQ 自動生成された検索ディレクトリ「鳥式」の現状\JBCQ\
+\newblock \Jem{言語処理学会第14回年次大会 発表論文集}, \mbox{\BPGS\ 729--732}.
+
+\bibitem[\protect\BCAY{渡邉\JBA 浅原\JBA 松本}{渡邉\Jetal
+  }{2008}]{Watanabe_2008}
+渡邉陽太郎\JBA 浅原正幸\JBA 松本裕治 \BBOP 2008\BBCP.
+\newblock \JBOQ
+  グラフ構造を持つ条件付確率場によるWikipedia文書中の固有表現分類\JBCQ\
+\newblock \Jem{人工知能学会論文誌}, {\Bbf 23}  (4), \mbox{\BPGS\ 245--254}.
+
+\end{thebibliography}
+
+\begin{biography}
+    \bioauthor{隅田　飛鳥}{
+      2007年北陸先端科学技術大学院大学情報科学研究科前期課程終
+      了．現在，同大学情報科学研究科後期課程在学中．
+      修士（情報科学）．自然言語処理の研究に従事．
+    }
+
+    \bioauthor{吉永　直樹}{
+      2005年東京大学大学院情報理工学系研究科博士課程修了．2002年よ
+      り2008年まで日本学術振興会特別研究員 (DC1，PD)．2008年4月より東
+      京大学生産技術研究所特任助教．博士（情報理工学）．自然言語処理の研
+      究に従事．
+    }
+    
+    \bioauthor{鳥澤健太郎}{
+      1995年東京大学大学院理学系研究科情報科学専攻博士課程中退，同年同
+      専攻助手．北陸先端科学技術大学院大学助教授を経て，2008年よ
+      り（独）情報通信研究機構・MASTARプロジェクト・言語基盤グループ・
+      グループリーダー．博士（理学）．自然言語処理の研究に従事．
+    }
+\end{biography}
+
+
+\biodate
+
+
+
+\end{document}

@@ -1,0 +1,938 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.3}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+\newcounter{stepctr}
+\newenvironment{stepenumerate}{}{}
+
+
+\Volume{17}
+\Number{4}
+\Month{July}
+\Year{2010}
+
+
+\received{2009}{9}{24}
+\revised{2009}{11}{27}
+\rerevised{2010}{2}{2}
+\accepted{2010}{2}{6}
+
+
+\setcounter{page}{3}
+
+
+
+
+
+\jtitle{タグ信頼度に基づく半自動自己更新型固有表現抽出}
+\jauthor{齋藤　邦子\affiref{NTT-SP} \and 今村　賢治\affiref{NTT-SP}}
+\jabstract{
+本稿では条件付確率場に基づく固有表現抽出において，新たなドメインにモデ
+ルを適応するためのモデル学習コスト—正解データ作成コスト—を低減する2
+つの学習手法を提案する．本手法では，タグ単位の事後確率をタグ信頼度とみ
+なし，信頼度の低いタグをシステムの解析誤りとして自動的に検出する．そし
+て検出された解析誤りタグのみを修正の対象とするため，文全体の事後確率を
+利用する場合と比較して，修正が必要である箇所に効率よくコストを注力させ
+ることが可能となる．\\
+第1の学習手法として，能動学習に本手法を適用すると，システム出力の信頼
+度が低いタグのみを検出して人手修正対象とすることにより，従来手法と比較
+して修正コストが1/3に低減した．\\
+また，第2の学習手法として正解固有表現リストを利用したブートストラップ
+型学習に適用すると，解析誤りとして検出されたタグの上位候補から半自動的
+に正解タグを発見可能であった．この学習法では，大量のプレーンテキストか
+ら，半自動で正解データを作成できるため，更に学習コストを低減させる効果
+がある．}
+\jkeywords{固有表現抽出，信頼度，事後確率，能動学習，ブートストラップ，
+学習コスト}
+
+\etitle{Tag Confidence Measure for Semi-Automatically \\ Updating Named
+Entity Recognition}
+\eauthor{Kuniko Saito\affiref{NTT-SP} \and Kenji Imamura\affiref{NTT-SP}} 
+\eabstract{
+We present two techniques to reduce machine learning cost, i.e., cost
+of manually annotating unlabeled data, for adapting existing CRF-based
+named entity recognition (NER) systems to new texts or domains. We
+introduce the tag posterior probability as the tag confidence measure
+of an individual NE tag determined by the base model. Dubious tags are
+automatically detected as recognition errors, and regarded as targets
+of manual correction. Compared to entire sentence posterior
+probability, tag posterior probability has the advantage of minimizing
+system cost by focusing on those parts of the sentence that require
+manual correction. Using the tag confidence measure, the first
+technique, known as active learning, asks the editor to assign correct
+NE tags only to those parts that the base model could not assign tags
+confidently. Active learning reduces the learning cost by 66\%,
+compared to the conventional method. As the second technique, we
+propose bootstrapping NER, which semi-automatically corrects dubious
+tags and updates its model. }
+\ekeywords{Named entity recognition, Confidence measure, Posterior
+probability, Active learning, Bootstrap, Learning cost}
+
+\headauthor{齋藤，今村}
+\headtitle{タグ信頼度に基づく半自動自己更新型固有表現抽出}
+
+\affilabel{NTT-SP}{日本電信電話株式会社，NTT サイバースペース研究所}{NTT Cyber Space Laboratories, NTT Corporation}
+
+
+
+\begin{document}
+\maketitle
+
+
+
+\section{はじめに}
+
+近年，様々な言語処理タスクにおいて，大量の正解データから学習した統計的
+言語モデルを解析に用いる教師あり機械学習のアプローチが広く普及している．
+このアプローチでは，言語の文法的な知識を統計的な特徴量として捉えること
+ができ，形態素解析や固有表現抽出，機械翻訳などの自然言語処理で広く活用
+されている．本稿では固有表現抽出タスクに焦点をあてる．
+
+固有表現抽出は，形態素解析済みの各単語に対して，「どの種類の固有表現か」
+というタグを付与することにより実現されている．近年では，条件付確率場
+ (Conditional Random Fields; CRF) \cite{Lafferty:CRF2001,suzuki-mcdermott-isozaki:2006:COLACL}に基づく系
+列ラベリングが好成績を収めている．しかし，これらの教師あり機械学習に基
+づく言語処理では，モデルを学習するための正解データを構築するコストが極
+めて高いことが常に課題となっている．
+
+一方，情報検索や情報抽出の分野では，近年ブログなどのConsumer Generated
+Media (CGM)を対象とした研究も多くなってきている．CGMは，テキストそのも
+のが日々変化してゆくため，新しい語や話題が常に出現するという特徴がある．
+このような日々変化するテキストにモデルを適応させる確実な方法は，正解の
+追加データを作成することである．しかし，人手コスト問題のため，迅速に対
+応させるのは困難であった．
+
+これらの人手コストを削減するための従来研究として，能動学習
+\cite{shen-EtAl:2004:ACL,laws-schutze:2008:PAPERS}，半教師あり機械学習
+\cite{suzuki-isozaki:2008:ACLMain}，ブートストラップ型学習
+\cite{Etzioni2005}などが提案されてきた．能動学習は，膨大なプレーンテキ
+スト集から学習効果の高いデータを取捨選択し，正解は選択されたデータのみ
+に対して人手で付与する手法であり，人手コストを効果的に集中させることに
+着眼している．そのため，能動学習では学習効果の高いデータ（文）を選択す
+るという，データセレクションが最も重要なポイントとなる
+\footnote{本来の能動学習では，少ないデータ量で統計モデルの精度を向上さ
+せるため，データの取捨選択を行っているが，目的の一つは，大規模正解デー
+タで学習したモデルと同等の精度を，少ない作業量で達成するためである．そ
+のため，本稿では，人手作業コストを削減するデータセレクション→人手修正
+→モデル再学習の一連の手順を能動学習と呼ぶ．}．
+ここでのデータセレクションの単位は常に文である．
+
+一方，もしシステムの解析結果をそのまま正解データとして利用できれば，人
+手コストは大幅に削減可能である．しかし，現実には解析結果には解析誤りが
+存在するため，その解析誤りを一つ一つ人手で確認修正する作業が必要である．
+データセレクションの単位が文である限り，どこに解析誤りが存在するか明白
+ではないため，全てのタグをチェックする必要がある．しかし，実際には大部
+分のタグが正解であることが多いため，文全体の全てのタグを確認するコスト
+は無駄が多い．
+
+本稿では，タグ単位の事後確率に基づいて算出したタグ信頼度を導入する．こ
+の手法では，文単位の信頼度ではなく，各単語に付与されうる全てのタグにつ
+いてのタグ信頼度を計算する．そしてタグ信頼度に基づいて解析誤りタグを自
+動的に検出する．自動的に検出された解析誤り箇所だけを人手チェック・修正
+の対象とすれば，能動学習の学習効率は更に高まる．
+
+更に，もし検出された解析誤りを自動的に正解に修正できれば，更に学習コス
+トを削減できる．本稿では，シードとなる正解固有表現リストを利用してブー
+トストラップ的に正解データ
+を収集する半自動自己更新型固有表現抽出を提案する．この手法では，予め人
+手でシードを準備するだけで，膨大なテキストからシードに存在する固有表現
+を含む正解データ
+\footnote{本稿では「正解データ」と呼ぶが，自動で固有表現を
+認識しているため，実際には少量の誤りも含んだ擬似正解データである．} 
+を自動的に収集し，モデル更新をすることが可能となる．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{17-4ia2f1.eps}
+\end{center}
+\caption{本稿で提案する学習手法の模式図}
+\label{fig-overall}
+\end{figure}
+
+
+本稿で提案する2つの学習手法の模式図を図\ref{fig-overall}に示す．タグ信
+頼度に基づいて大規模平文データからシステム解析誤りを自動検出し，誤りタ
+グの有無でデータセレクションを実施する．誤りタグを人手で修正する能動学
+習（\ref{sec-active-learning}章）と，半自動で修正する自己更新型固有表
+現抽出UpdateNER（\ref{sec-bootstrapping}章）を本稿では提案する．
+
+以下，第\ref{sec-ner}章では固有表現抽出タスクについて述べ，第
+\ref{sec-confidence-measure}章では，今回提案するタグ信頼度について説明
+する．第\ref{sec-active-learning}章では，タグ信頼度を能動学習に適応し
+たときの効果を示し，第\ref{sec-bootstrapping}章では半自動自己更新型固
+有表現抽出について説明する．第\ref{sec-related-works}章で関連研究につ
+いて述べ，第\ref{sec-conclusion}章でまとめる．
+
+
+\section{固有表現抽出}
+\label{sec-ner}
+
+固有表現抽出とは，テキストに含まれる人名，地名，組織名などの固有表現を
+抽出するタスクである．本稿では，表\ref{tbl-irex-tags}に示すとおり，
+IREX \cite{IREX1999}で定義される8種の固有表現を抽出対象とし，
+IOB2方式\cite{Sang:IOB1999} に基づいて17種類のタグを使用する．
+
+
+\begin{table}[b]
+\caption{固有表現タイプとタグ}
+\label{tbl-irex-tags}
+\input{02table01.txt}
+\end{table}
+
+
+例えば，``東京/都/に''という文は次のようにタグ付けされる：
+
+\begin{center}
+``東京/B-$<$LOC$>$ 都/I-$<$LOC$>$ に/O''
+\end{center}
+
+
+このタスクは単語列$W = w_1 \ldots w_n$に対して固有表現の種類を表す固有
+表現タグ列$T = t_1 \ldots t_n$を付与する系列ラベリング問題として考える
+ことができる．近年，系列ラベリング問題では
+CRF\cite{Lafferty:CRF2001,suzuki-mcdermott-isozaki:2006:COLACL}などの
+識別モデルが成功を収めている．本稿ではlinear-chain CRFを利用し，固有表
+現タグ列の事後確率を以下の式で算出する．
+\begin{align}
+P(T|W) & =  \frac{1}{Z(W)} 
+\exp \left\{ \sum_{i=1}^{n} \left( \sum_{a} \lambda_{a} \cdot f_{a}(t_i,w_i) +
+\sum_{b} \lambda_{b} \cdot f_{b}(t_{i-1},t_{i}) \right) \right\} 
+\label{eqn-sentence-prob}\\
+Z(W) & =  \sum_{T}
+\exp \left\{ \sum_{i=1}^{n} \left( \sum_{a} \lambda_{a} \cdot f_{a}(t_i,w_i) +
+\sum_{b} \lambda_{b} \cdot f_{b}(t_{i-1},t_{i}) \right) \right\}
+\end{align}
+
+$w_i$と$t_i$は位置$i$に置ける単語（周辺単語を含む）と固有表現タグ，
+$f_{a}(t_i,w_i)$，$f_{b}(t_{i-1},t_{i})$は当該単語及び固有表現タグがあ
+る条件を満たす時に1となる素性関数
+\footnote{本稿では素性として，windowサイズ5単語での表記と品詞に関するn 
+グラム (n=1, 2, 3)と，固有表現タグの2グラムを利用する．} である．
+$\lambda_{a}$，$\lambda_{b}$は素性関数の重みであり，正解データから推定
+される．$Z(W)$は正規化項である．(\ref{eqn-sentence-prob}) 式を最大化す
+るタグ列が最尤タグ列であり，Viterbiアルゴリズムを利用して求められる．
+
+
+
+\section{タグ信頼度に基づく解析誤り検出}
+\label{sec-confidence-measure}
+
+
+\subsection{タグ事後確率}
+
+(\ref{eqn-sentence-prob})式から，文全体の事後確率をタグ列全体の信頼度
+として利用することは自然であり，従来の能動学習では，通常，文全体の事後
+確率からデータ選択のための信頼度を算出していた．本稿では，文ではなくタ
+グ単位の事後確率に着目し，この値をタグ自体の信頼度とみなす．そしてタグ
+信頼度の値を利用して解析誤りであるタグを自動的に判定する．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{17-4ia2f2.eps}
+\end{center}
+\caption{タグ信頼度計算の模式図}
+\label{fig-confidence-measure}
+\end{figure}
+
+
+図\ref{fig-confidence-measure}はタグ信頼度計算の模式図である．単語
+$w_i$のタグ候補$t_{i,j}$についての信頼度は，次式のように計算される．
+\begin{equation}
+P(t_{i,j}|W)  =  \sum_{T} P(t_{i,j},T|W)
+\label{eqn-tag-prob}
+\end{equation}
+
+ここで$\sum_{T} P(t_{i,j},T|W)$はタグ候補$t_{i,j}$を通る全てのタグ列の
+事後確率を総和したものであり，周辺確率 (marginal probability) とも呼ば
+れる．なお，$j=1,\ldots,k$は表\ref{tbl-irex-tags}に示す固有表現タグの
+全種類に対応するものであり，本稿では$k=17$である．タグ候補 の信頼度は，
+前向きおよび後向きアルゴリズム\cite{FSNLP1999}により以下のように効率的
+に算出することができる．
+\begin{equation}
+P(t_{i,j}|W)  =  \frac{1}{Z(W)} \alpha_{i,j} \cdot \beta_{i,j}
+\end{equation}
+
+ここで
+{\allowdisplaybreaks
+\begin{align}
+\alpha_{i,j} & = 
+\sum_{k} \left\{ \alpha_{i-1,k} \cdot \exp 
+\left( \sum_{a} \lambda_{a} \cdot f_{a}(t_i,w_i) + 
+\sum_{b} \lambda_{b} \cdot f_{b}(t_{i-1},t_{i}) \right) \right\} \\
+\beta_{i,j} & = 
+\sum_{k} \left\{ \beta_{i+1,k} \cdot \exp 
+\left( \sum_{a} \lambda_{a} \cdot f_{a}(t_{i+1},w_{i+1}) + 
+\sum_{b} \lambda_{b} \cdot f_{b}(t_{i},t_{i+1}) \right) \right\} \\
+\alpha_{0,j} & = 1 \\
+\beta_{n+1,j} & = 1
+\end{align}
+}
+
+以上のようにして，文中の各単語に付与されうる全てのタグに関して信頼度が
+得られる．
+
+
+\subsection{リジェクター}
+\label{sec-rejector}
+
+リジェクターは，タグ信頼度を参照し，システム出力の解析誤りを自動で検出
+する．各単語において，デコーダが出力した最尤タグ$t_d$と信頼度1位タグ
+$t_1$を参照し，以下のような手順で各固有表現タグが正解か不正解かを判定
+する．なお，最尤タグ$t_d$は，(\ref{eqn-sentence-prob})式を最大化するタ
+グであり，信頼度1位タグ$t_1$は(\ref{eqn-tag-prob})式を最大化するタグで
+ある．
+
+\begin{stepenumerate}
+\item 最尤タグ $t_d$ が信頼度1位タグ$t_1$と不一致ならば，最尤タグ$t_d$
+を解析誤りとしてリジェクトする
+\footnote{最尤タグ$t_d$ は稀に信頼度1位タグ$t_1$と一致しない．これは
+CRFの特徴に由来する．}
+\label{step-reject1}
+\item {[\ref{step-reject1}]}でアクセプトされた場合，信頼度1位タグ$t_1$
+の信頼度$cs_1$が閾値$\theta$以下ならば最尤タグ$t_d$ を解析誤りとしてリ
+ジェクトする
+\item それ以外であれば最尤タグ$t_d$ を正解としてアクセプトする
+\end{stepenumerate}
+
+閾値が高ければリジェクトされるタグ数が増え，人手のチェック・修正コスト
+が増加する．実際の運用では，開発データにてリジェクト・アクセプトの判定
+誤り率が最小となるような閾値を設定すればよい．このようにして，タグ信頼
+度を利用することにより，タグを単位として解析誤りを検出することが可能と
+なる．
+
+
+\section{能動学習}
+\label{sec-active-learning}
+
+タグ単位での誤り検出は能動学習のデータセレクションに有効である．もし，
+文中にリジェクトタグが1つでも含まれれば，その文は，現在のモデル（ベー
+スモデル）が確信を持って解析できない，何か新しい事象が存在していること
+を意味する．すなわち，このような文を優先的にモデル学習の対象とすること
+で高い学習効果を期待できる．そこでここでの能動学習では，文中にリジェク
+トタグを含むか否かに基づいたデータセレクションを採用する．また，選別さ
+れた文について，全てのタグを人手でチェック・修正する必要は無く，リジェ
+クトされたタグのみを対象としてチェック・修正すればよい．図
+\ref{fig-active-learning}は本稿で提案する能動学習のスキームを示したも
+のである．固有表現抽出デコーダでは，初期正解データから学習したベースモ
+デルに基づいて最尤タグが出力される．続いて\ref{sec-confidence-measure} 
+章で示した手順で最尤タグの解析誤りを検出する．このステップでは，同じベー
+スモデルを利用してタグ信頼度を計算し，その結果を参照してリジェクターで
+誤り検出を実行する．データセレクションにて少なくとも1つ以上のリジェク
+トタグを含む文のみを選別し，検出された誤りタグ（リジェクトタグ）のみを
+人手でチェック・修正する．最終的に，人手修正済みデータを初期正解データ
+に追加し，モデルを再学習して更新する．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{17-4ia2f3.eps}
+\end{center}
+\caption{提案する能動学習スキーム}
+\label{fig-active-learning}
+\end{figure}
+
+
+\subsection{評価実験}
+
+\begin{table}[b]
+\caption{能動学習でのデータ構成}
+\label{tbl-al-corpus}
+\input{02table02.txt}
+\end{table}
+
+今回，本稿で提案する能動学習の効果を学習コストの面から評価した．実験用
+にブログデータ（45,694文）をWebから収集し，表\ref{tbl-al-corpus}に示す
+とおり4つのセグメントに分割した．全データに対して予め人手で正解となる
+固有表現タグを付与したが，追加平文データに関しては，これらの正解タグは
+隠しておき，プレーンテキストとして扱う．そして人手修正を模する際にこの
+正解タグの情報を利用する．開発データは\ref{sec-rejector}節で述べたリジェ
+クター判定に利用する閾値を最適化する際に利用した．
+
+学習コストは人手でタグをチェック・修正した単語の割合 (WCR: Word Check
+Rate) とみなした．WCRは，追加平文データに含まれる総単語数に対するチェッ
+クされた単語数の割合であり，次式で表される．
+\begin{displaymath}
+WCR = チェックした単語数 / 総単語数
+\end{displaymath}
+
+本方式は，リジェクターの閾値に依存して，検出されるリジェクトタグ数が変
+化するため，閾値を0.1から1.0の範囲で0.1ずつ段階的に変更し，リジェクト
+タグを含む文のみをデータセレクションで選別して，誤り検出済みデータとし
+た．それぞれの閾値で得られた誤り検出済みデータのうち，リジェクトタグだ
+けを予め付与していた正解タグと変換した．この手順は，人手修正を模したも
+のである．修正後のデータを初期正解データに追加し，ベースモデルを再学習
+する．
+
+この能動学習と比較するため，タグ単位ではなく文単位の信頼度に基づくデー
+タセレクションによる能動学習と比較した．文全体の事後確率を信頼度とみな
+し，低信頼度の文を優先的に選択する能動学習である．本稿で提案するタグ単
+位の信頼度に基づく能動学習と異なり，文単位の信頼度の能動学習では，選択
+された文は全ての単語についてタグのチェックが必要であるとみなされる．
+
+以上，2つの能動学習について，再学習したモデルの精度と学習コスト (WCR) 
+の関係を評価した．モデルの精度は評価データにおけるF値を利用した．
+\begin{equation}
+F  =  \frac{2 \times recall \times precision}{recall + precision}
+\end{equation}
+
+
+
+\subsection{結果と考察}
+
+\subsubsection{学習曲線と精度：}
+
+図\ref{fig-learning-curve}に提案手法でのタグ単位のデータセレクションに
+よる能動学習と，文単位のデータセレクションによる能動学習での学習曲線を
+示す．再学習後のモデルの精度がF値で0.76となるために，文単位での能動学
+習では全データの60\%を人手でチェックするコストが必要だが，タグ単位での
+能動学習では，わずか20\%で済む．言い換えると，タグ単位の能動学習は従来
+の文単位の能動学習と比較して学習コストを1/3に低減したことを意味する．
+
+また，図\ref{fig-learning-curve} に，追加平文データのタグをまったく修
+正しないで，モデルを再学習して測定した精度も併せて示す．ベースモデルで
+はF値0.612であったものが，タグ修正なしの追加平文データをすべて加えた場
+合はF値0.602に若干低下した．タグ修正なしデータには誤りタグが多く残存し
+ており，そのためF値が低下したと考えられる．このように，ベースモデルに
+よるデコード結果を単純に加えただけでは，学習データ量が増えても精度向上
+には寄与せず，悪化する場合もある．
+
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{17-4ia2f4.eps}
+\end{center}
+\caption{能動学習の学習曲線}
+\label{fig-learning-curve}
+\end{figure}
+
+
+\subsubsection{タグ修正内容の分析：}
+
+更にタグ単位の能動学習の効果を調べるために，リジェクトタグに対して実施
+されたタグ修正の内容を以下の4タイプに分類して内訳を分析した．
+
+\begin{itemize}
+\item {\bf No Change:} リジェクトタグが修正不要
+\item {\bf OtoBI:} リジェクトタグがOタグであり，B-又はI-タグに置換
+\item {\bf BItoO:} リジェクトタグがB-又はI-タグであり，Oタグに置換
+\item {\bf BItoBI:} リジェクトタグがB-又はI-タグであり，別のB-又はI-タグに置換
+\end{itemize}
+
+\begin{table}[b]
+\caption{リジェクトタグの置換タイプ分布}
+\label{tbl-rejected-tags}
+\input{02table03.txt}
+\end{table}
+
+
+表\ref{tbl-rejected-tags}はリジェクター閾値が0.5の時のリジェクトタグに
+ついて，上記4タイプの分類の分布を示している．この閾値は開発データで，
+リジェクターの判定誤り率が最低となる値である．
+
+表からわかるとおり，{\bf No Change}タイプの割合が最も多い．これはリジェ
+クターが本来修正の必要の無いタグまで過剰にリジェクトしていることを意味
+する．この結果は，更新するモデルの精度そのものには悪影響を及ぼさないが，
+学習コストの面では無駄が含まれていることを示している．
+
+続いて{\bf OtoBI}タイプが2番目に割合が多く，全体の1/3を占める．実質的
+な変化のなかった{\bf No Change}タイプを除き，何かしらの修正が加わった3
+つのタイプ ({\bf OtoBI}，{\bf BItoO}，{\bf BItoBI}) だけを考慮すると，
+{\bf OtoBI}タイプは全修正の約60\%を占める．つまり，ベースモデルでは固
+有表現として認識できなかったものが，固有表現に修正されたケースが最も多
+い．このことは，誤り検出済みデータ中には，初期正解データにはない，新し
+い固有表現が多く含まれていることを示唆している．
+
+
+\section{ブートストラップ型固有表現抽出}
+\label{sec-bootstrapping}
+
+\ref{sec-active-learning}章で述べた通り，実際の修正では約60\%がOタグ
+をB-またはI-タグに変更する必要がある．この事実は固有表現抽出タスクの特
+徴に由来するものと推察される．つまり，固有表現抽出タスクでは，全コーパ
+スの殆どはOタグで占められている．実際，\ref{sec-active-learning}章で
+我々が整備した追加平文データにおいても，91\%がOタグであった．そのため
+固有表現の新語が文中に出現すると，ベースモデルではOタグが付与されてし
+まうことが多い．
+
+\begin{table}[b]
+\caption{上位2位のタグ精度}
+\label{tbl-second-accuracy}
+\input{02table04.txt}
+\end{table}
+
+
+このようにOタグが支配的であるという傾向があるならば，OタグではないB-
+またはI-タグの候補の可能性を考慮することが必要である．即ち，Oタグがリ
+ジェクトされたときに，次に信頼度の高いタグは何かを調べることは意味があ
+ると考えられる．
+
+そこで，閾値0.5の時のタグ信頼度が上位2位までのタグについて，その精度を
+分析したものを表\ref{tbl-second-accuracy}に示す．信頼度1位のタグ（1位
+タグ）がアクセプトとされた時，その精度は94\%と高い．一方，1位タグがリ
+ジェクトされた時，1位タグの精度はわずか43\%であった．しかし，信頼度2位
+のタグ（2位タグ）の精度は29\%であり，1位タグと2位タグをどちらも考慮す
+ると，いずれかに正解タグが存在する可能性が72\%まで高まる．このことから，
+上位2位のタグまでを考慮することにより，システム出力のリジェクト箇所を
+自動的に修正できる可能性があることがわかる．
+
+図\ref{fig-tag-graph}に，閾値0.5で1位タグがリジェクトされる場合は2位タ
+グまで考慮するときのタグの状況を示す．以後，本稿ではこのラティス構造
+をタググラフと呼ぶ．``3丁目の夕日''という映画タイトル（固有物名ART）を1
+位タグだけでは正しく固有表現として認識できていない．しかし，2位タグま
+で考慮すると，正しいタグ列が存在していることがわかる．もしこの正解のタ
+グ列を自動的にシステムが発見できれば，この正しいタグ列情報を人手修正し
+た正解データと同等のものとして利用できる．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{17-4ia2f5.eps}
+\end{center}
+\caption{タググラフ}
+\label{fig-tag-graph}
+\end{figure}
+
+
+\subsection{半自動自己更新型固有表現抽出}
+
+以上の考察をふまえ，新しい学習スキームである半自動自己更新型固有表現抽
+出 (UpdateNER) を提案する．これは，予め用意する固有表現リストをシード
+とし，そのシードを利用してタググラフから正解のタグ列を発見する方式であ
+り，シードを利用して新しいインスタンスを取得するブートストラップ型の学
+習に類似している．図\ref{fig-update-ner}にUpdateNERの概要を示す．リジェ
+クターでは，タグ信頼度に基づいてリジェクト／アクセプト判定をした後，適
+宜2位までのタグを考慮したタググラフを出力する．ここでリジェクターは
+\ref{sec-active-learning}章で述べた処理手続きを以下のように変更して動
+作する．
+
+\begin{stepenumerate}
+\item 1位タグの信頼度スコア$cs_1$が閾値以上であれば，1位タグ$t_1$のみ
+をアクセプトする．それ以外は[\ref{step-second-accept}]の処理へ進む
+\item $cs_1$ が閾値より小さければ，1位タグ$t_1$と更に2位タグ$t_2$をア
+クセプトする
+\label{step-second-accept}
+\end{stepenumerate}
+
+後続のデータセレクションでは，2位までのタグ候補を有するタググラフ構造
+を持つ文を抽出する．そして，コンテキスト抽出にて以下の手順で正解タグ列
+が存在するかを調べ，該当するタグ列が存在すればそのタグ列を抽出する．
+
+\begin{stepenumerate}
+\item タググラフ内で最長となる固有表現が成立するタグ列を選択する
+\label{step-longest-match}
+\item 該固有表現が別途準備するシードリストである固有表現リストに存在し
+ていれば文全体のタグ列を正解タグ列として抽出する
+\label{step-seed-comparison}
+\end{stepenumerate}
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{17-4ia2f6.eps}
+\end{center}
+\caption{UpdateNERの概要}
+\label{fig-update-ner}
+\end{figure}
+
+
+ステップ[\ref{step-longest-match}]では，タググラフの中から最も有望と思
+われるタグ列を選ぶことを意図して，最長となる固有表現が成立するルートを
+選択する．例えば，図\ref{fig-tag-graph}で示すタググラフの場合，``3''，
+``丁目''，``の''，``夕日''の4単語が2位タグまでの候補を有しているため，
+16通りのタグ列が存在する．例えば，``B I I I''，``B I I O''，``B I O
+O''，``O O O I''，``O O O O'' などである．しかし，ここでは``B I I I''
+のタグ列で最長の固有表現（``3丁目の夕日''で固有物名ART）が構成できるた
+め，このタグ列を選択する．他の部分文字列からなる固有表現，例えば，
+``3''， ``3丁目''，``3丁目の''でいずれも固有物名ARTとなるようなタグ列
+は全て無視される．
+
+ステップ[\ref{step-seed-comparison}]では，ステップ
+[\ref{step-longest-match}]で選択した有望なタグ列が本当に正解であるとみ
+なしてよいかを判定する．タグ列の確からしさを判定するための手がかりが必
+要となるので，ここではシードとなる固有表現リストを準備し，表記と対応す
+る固有表現タイプを記載しておく．このリストは，人手で必要な固有表現を登
+録しても良いし，辞書のような外部DBを利用して自動的に構築しても良い．も
+し同じ固有表現がステップ[\ref{step-longest-match}]で選択されたタグ列お
+よび固有表現リストに存在していれば，このタグ列は正解であると判断されて
+正解データとして抽出される．そして，このようにして抽出されたデータを初
+期正解データに追加し，モデルを再学習する．
+
+以上のようにUpdateNERでは，シードを与えるだけで学習データの収集・構築
+を実行できるため，日々増大する固有表現にモデルを追随させることが可能と
+なる枠組みを備えている．
+
+
+\subsection{評価実験}
+
+UpdateNERで1週間分のブログテキストからどの程度効果的にモデル更新ができ
+るか評価した．表\ref{tbl-update-corpus}に実験でのデータ内訳を示す．モ
+デルの性能評価を行う評価データは2006年12月のブログを利用する．また，ベー
+スモデルの学習に利用する初期正解データは評価データより半年以上古いもの
+である．そのため，評価データにはベースモデルでは未知の固有表現が存在す
+ることが予想される．評価データと同時期の2006年12月から1週間分のブログ
+を収集して追加平文データとし，ここからシードを使ってブートストラップ的
+に正解データを収集する．なお，評価データのうち，追加平文データと重複す
+るものは予め削除してある．
+
+\begin{table}[b]
+\caption{UpdateNER評価実験でのデータ内訳}
+\label{tbl-update-corpus}
+\input{02table05.txt}
+\end{table}
+
+リジェクターの閾値を0.5に設定し，追加平文データから2位までのタググラフ
+を含む文を選別した．シードとなる固有表現リストは日本語Wikipediaのエン
+トリから自動的に収集した．Wikipediaには，世間で注目される人や固有物が
+次々とエントリに登場するため，話題語や新語を獲得する上では貴重な言語資
+源であると言える．本実験では，Wikipediaの記事タイトルを表記とし，固有
+表現タイプは各記事のカテゴリー情報から予め設定したルールにより自動的に
+推定した．最終的に104,296エントリの固有表現リストを得た．
+
+UpdateNERではこのシードを利用して，ブログ記事からシードの固有表現を含
+むタグ列を自動的に探索する．もし同じ固有表現を発見したら，そのタグ列を
+正解データとして抽出する．このようにして自動修正したデータを初期正解デー
+タに追加し，モデルの再学習を行う．なお，タググラフ探索時には，5.1節で
+述べた最長固有表現列を採用したが，異なるタイプの固有表現列に展開可能な
+場合は，複数の候補を別の文として扱い，追加データとした．
+
+今回，比較のために，シードそのものの効果を調査した．ここでは，シードと
+同じ単語列を文中に発見したら必ず固有表現と認識するような固有表現抽出シ
+ステムを想定する．なお他の単語列の部分はベースモデルに基づいて確率的に
+固有表現を抽出する．このシステムは，ベースモデルの他に，ユーザが固有表
+現として認識したいリストをユーザ辞書（シード）として装備したシステムと
+捉えることができるため，以後，ユーザ辞書システム (user dic.) と呼ぶ．
+
+更新後のモデルの精度を再現率 (rec.) と適合率 (prec.) で評価した．
+
+
+
+\subsection{結果}
+
+実験の結果，のべ2,100文が追加データとして抽出された．このデータのうち，
+6,125タグが誤りと推定されたリジェクトタグで，その中で2,038個は信頼度2 
+位のタグが採用された．タググラフ付きデータが73,563文あったことを考える
+と，得られた文数は少ない．
+
+表\ref{tbl-update-results}に，人名(PSN)，地名(LOC)，組織名(ORG)，固有
+物名(ART)での解析精度について，ベースモデル，ユーザ辞書システム (user
+dic.)，UpdateNERの結果をそれぞれ示す．
+
+
+\begin{table}[b]
+\caption{解析精度}
+\label{tbl-update-results}
+\input{02table06.txt}
+\end{table}
+
+
+シードをユーザ辞書として扱う場合，再現率は向上するが，適合率は殆ど変化
+しないか，むしろARTでは0.667から0.620へと低下
+している．これはユーザ辞書を単に追加するだけでは固有表現抽出システムの
+性能を向上するには十分ではないことを示唆している．ユーザ辞書の枠組みで
+は，周囲のコンテキストを利用せず単に同一の単語列（表記）を発見すれば一
+意に固有表現と認定してしまうため，過剰に固有表現を抽出する危険があるか
+らである．
+
+一方，UpdateNERでは再現率と適合率ともに向上している．例えば，ARTでは再
+現率が0.321から0.370，適合率が
+0.667から0.698へと向上している．この結果から，
+シードに存在する固有表現だけでなく，その固有表現の周囲の文全体のタグ列
+の情報がモデルの再学習には必須であると解釈できる．UpdateNERでは，シー
+ドの固有表現が出現する文全体でのタグ列，即ち，固有表現とそのコンテキス
+トのうち，有望で確からしいものを自動的に発見して抽出すると言う点で優れ
+ている．シードを準備するには多少の人手コストが必要ではあるが，そのコス
+トは正解データそのものを作成するコストと比較すれば極めて小さい．そのた
+め，このUpdateNERの学習スキームは，実際に固有表現抽出システムを運用す
+る場面においては学習コストを抑える1つの有望な手法であると考える．
+
+表\ref{tbl-update-results}で示す通り，ユーザ辞書システムもUpdateNERも
+ORGに対しては効果が見られなかった．これはシードに含まれる固有表現の分
+布によるものと考えられる．Wikipediaから自動作成したシードでは，PSNの固
+有表現が74\%と最も多かった．一方ORGはわずか11\%しか存在せず，UpdateNER
+ではORGについての正解データを抽出する機会が十分になかったものと考えら
+れる．また，同じ表記でもORGとPSNの曖昧性が生じるケースはもともと多いた
+め，PSNが支配的なシードを利用したUpdateNERではORGをPSNに過剰に学習して
+しまっている可能性もある．今後，シードの分布とその学習効果への影響は検
+討を進めたい．
+
+なお，UpdateNERでは，初期正解データへの追加データには誤りが含まれる可
+能性があることを指摘しておく．実験では，追加したデータにどの程度の誤り
+が含まれていたかは調査できていない．ただし，第
+\ref{sec-active-learning} 章の実験では誤りタグを含むデータを追加して再
+学習することは精度を若干低下させることが示されていることと，本実験にお
+いて精度の低下があまり見られないことを考え合わせると，本手法で追加する
+データには，モデルの性能に悪影響を与えるような誤りはほとんど含まれない
+と推察される．
+
+
+\subsection{考察}
+
+従来の機械学習の手法と比較して，UpdateNERの一番の特徴は1位タグが信頼で
+きない時に2位タグまで考慮する点にある．これにより特に固有表現抽出タス
+クのようにベースモデルではOタグであると認識されたとき，次点の候補が何
+であるかを考慮することが可能となった．
+
+しかしUpdateNERには，2つの大きな制約がある．1つは2位タグまでに正解が存
+在しなければ自動的に正解データとして抽出することができない，という点で
+ある．もう1つはその固有表現がシードにも存在していなければならない，と
+いう点である．これらの2つの制約があるため，UpdateNERが自動的に収集・修
+正できる正解データの範囲は狭いと考えられる．
+
+この弱点を克服するには，実運用にてUpdateNERとタグ単位でのデータセレク
+ションによる能動学習を組み合わせる手法が有望であると考えている．能動学
+習の場合，2位までに正解が存在しなければならないという制約はないため，
+単純に解析誤りを人手で優先的に修正して学習対象とすることが可能である．
+即ち，能動学習ではベースモデルが解析誤りをするデータ全般を学習対象とす
+ることとなり，その学習範囲はUpdateNERよりも広い．そのため，能動学習で
+はベースモデルの精度を底上げするような学習に向いていると考えられる．一
+方，UpdateNERは日々増大する膨大なテキストから半自動で正解データを収集
+できるという利点があり，新語への追随学習には向いていると言える．そこで，
+例えば，短期的にはUpdateNERで毎週モデルの新語追随学習を実行し，中期的
+には1ヵ月或いは半年といった間隔で能動学習を行ってベースモデルの底上げ
+をする，というような運用形態が考えられる．今後，実際のシステム運用上で
+の本手法の効果について，評価を実施したい．
+
+
+\section{関連研究}
+\label{sec-related-works}
+
+能動学習は固有表現抽出タスクへの適応
+\cite{shen-EtAl:2004:ACL,laws-schutze:2008:PAPERS}に限らず，様々な自然
+言語処理タスクへの適応が研究されており，品詞タグ付け
+\cite{argamonengelson99committeebased}，テキスト分類
+\cite{Lewis94heterogeneousuncertainty}，構文解析
+\cite{Hwa:ActiveLearning2000}，単語選択での曖昧性解消
+\cite{banko_ACL_2001}など数多くの関連研究がある．いずれの場合も信頼度
+や情報量といった何かしらの指標に基づいて学習効果の高いデータを選択する
+ことが重要であり，その指標の算出やデータセレクションの単位は基本的に文，
+もしくは一定の語数以上の単語列であった．今回我々が提案する能動学習では，
+モデル出力の信頼度を指標とするが，その算出単位は文単位ではなく，タグ単
+位である点が従来研究とは異なる．更にデータセレクションも文単位ではなく，
+タグ単位でリジェクト／アクセプトを決定し，リジェクトタグのみを修正箇所
+対象として絞っているため，更なる学習コストの削減に繋がった．なお，
+\cite{tomanek-hahn:2009:ACLIJCNLP}では，本稿と同様にタグ単位の信頼度に
+基づいた能動学習を英語の固有表現抽出タスクで評価しており，本稿と同程度
+のコスト削減効果を報告している．今回，我々は更にタグ単位の信頼度を利用
+して半自動で誤り修正を行うUpdateNERの提案および評価を実施した点が新し
+い．
+
+一方，特に機械学習の分野において，正解データだけでなく膨大な量のプレー
+ンテキストを利用する半教師あり学習の研究も進められている．自然言語処理
+タスクでは，語義曖昧性解消\cite{Yarowsky:WSD1995}，テキスト分類
+\cite{Fujino:SemiSupervised2008}，チャンキング・固有表現抽出
+\cite{suzuki-isozaki:2008:ACLMain}などへも適応されている．特に近年は，
+Giga Word単位のプレーンテキストも入手可能になってきたため，このデータ
+を正解データと組み合わせてモデル学習することにより従来技術の性能限界を
+超える可能性が示唆されている．ただし，今回我々がターゲットとしているの
+は，日々語彙や話題の変化が激しいブログなどのCGMドメインにおいて，モデ
+ルを低コストで再学習するタスクであり，このような状況を反映するような
+Giga Word単位のプレーンテキストを入手するのは困難であると考えられる．
+そのため，膨大な量のプレーンテキストを利用する半教師あり学習をそのまま
+適応することは現実的ではない．
+
+プレーンテキストを利用するという点で半教師あり学習と類似する手法にブー
+トストラップ学習の研究がある
+\cite{Etzioni2005,pantel-pennacchiotti:2006:COLACL}．これは，少量のシー
+ドを準備して，シードと同じカテゴリに属する新しいインスタンスをプレーン
+テキストから自動獲得する学習法である．本稿のUpdateNERはシードを準備す
+るだけで，データセレクションとその修正・抽出までを自動的に実行するブー
+トストラップ学習とみなすことができる．しかし，従来のブートストラップは
+新しいインスタンスを獲得して辞書（シソーラス）を構築することを目的とし
+ているのに対し，本手法では，固有表現単体ではなく，固有表現を含むタグ列，
+即ちコンテキスト全体を獲得している点が異なる．モデルの再学習のためには
+固有表現辞書だけではなく，固有表現を含むコンテキストそのものが必要であ
+る．UpdateNERではブートストラップ学習を適用して最終的には教師あり学習
+の枠組みでモデル更新を実現するという点が新しい．この学習コストはシード
+を準備する部分のみのため，能動学習と比較しても極めて低く抑えられるとい
+う利点もあり，本手法は有効である．
+
+\section{おわりに}
+\label{sec-conclusion}
+
+本稿では，タグ単位の事後確率から算出したタグ信頼度を利用してモデルの学
+習コストを削減する2つの手法を提案した．本手法ではタグ信頼度から解析誤
+りタグを自動的に判定することが可能である．そしてタグ単位でデータセレク
+ションを行うことでベースモデルが学習対象とすべき箇所を効果的に発見でき，
+かつ，人手のコストを解析誤り箇所のみに集中させることが可能となった．
+
+まず始めに，本手法を能動学習に適応して評価した結果，従来の文単位でデー
+タセレクション・修正する能動学習と比較して，学習コストを1/3まで低減で
+きた．能動学習はベースモデルが解析誤りするデータ全般を学習対象とできる
+ため，モデル全体の精度向上を狙った学習に効果があると考えられる．
+
+次に，本手法を利用して半自動自己更新型固有表現抽出 (UpdateNER) を提案
+した．この手法はシードと2位までのタグ候補を利用してブートストラップ的
+に正解データを自動生成するものである．この手法では，予めシードを準備す
+るだけで膨大なテキストから正解データを自動的に収集・構築することが可能
+となった．この学習では，日々増大する膨大なテキストを利用してモデルを新
+語追随させることを狙った学習に効果がある．能動学習とUpdateNERを組み合
+わせることでモデル更新の学習コストを抑えた固有表現抽出システムの運用が
+可能となる．
+
+
+
+
+
+\bibliographystyle{jnlpbbl_1.5}
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Argamon-Engelson \BBA\ Dagan}{Argamon-Engelson \BBA\
+  Dagan}{1999}]{argamonengelson99committeebased}
+Argamon-Engelson, S.\BBACOMMA\ \BBA\ Dagan, I. \BBOP 1999\BBCP.
+\newblock \BBOQ Committee-based sample selection for probabilistic
+  classifiers.\BBCQ\
+\newblock {\Bem Journal of Artificial Intelligence Research}, {\Bbf 11},
+  \mbox{\BPGS\ 335--360}.
+
+\bibitem[\protect\BCAY{Banko \BBA\ Brill}{Banko \BBA\
+  Brill}{2001}]{banko_ACL_2001}
+Banko, M.\BBACOMMA\ \BBA\ Brill, E. \BBOP 2001\BBCP.
+\newblock \BBOQ Scaling to Very Very Large Corpora for Natural Language
+  Disambiguation.\BBCQ\
+\newblock In {\Bem Proceedings of 39th Annual Meeting of the Association for
+  Computational Linguistics}, \mbox{\BPGS\ 26--33}.
+
+\bibitem[\protect\BCAY{Etzioni, Cafarella, Downey, Popescu, Shaked, Soderland,
+  Weld, \BBA\ Yates}{Etzioni et~al.}{2005}]{Etzioni2005}
+Etzioni, O., Cafarella, M., Downey, D., Popescu, A.-M., Shaked, T., Soderland,
+  S., Weld, D.~S., \BBA\ Yates, A. \BBOP 2005\BBCP.
+\newblock \BBOQ Unsupervised named-entity extraction from the web: an
+  experimental study.\BBCQ\
+\newblock {\Bem Artificial Intelligence}, {\Bbf 165}  (1), \mbox{\BPGS\
+  91--134}.
+
+\bibitem[\protect\BCAY{Fujino, Ueda, \BBA\ Saito}{Fujino
+  et~al.}{2008}]{Fujino:SemiSupervised2008}
+Fujino, A., Ueda, N., \BBA\ Saito, K. \BBOP 2008\BBCP.
+\newblock \BBOQ Semisupervised learning for a hybrid generative/discriminative
+  classifier based on the maximum entropy principle.\BBCQ\
+\newblock {\Bem IEEE Transactions on Pattern Analysis and Machine Intelligence
+  (TPAMI)}, {\Bbf 30}  (3), \mbox{\BPGS\ 424--437}.
+
+\bibitem[\protect\BCAY{Hwa}{Hwa}{2000}]{Hwa:ActiveLearning2000}
+Hwa, R. \BBOP 2000\BBCP.
+\newblock \BBOQ Sample Selection for Statistical Grammar Induction.\BBCQ\
+\newblock In {\Bem Proceedings 5${}^{th}$ EMNLP/VLC}, \mbox{\BPGS\ 45--52}.
+
+\bibitem[\protect\BCAY{{IREX Committee}}{{IREX Committee}}{1999}]{IREX1999}
+{IREX Committee} \BBOP 1999\BBCP.
+\newblock \BBOQ The IREX workshop.\BBCQ\ http://nlp.cs.nyu.edu/irex/.
+
+\bibitem[\protect\BCAY{Lafferty, McCallum, \BBA\ Pereira}{Lafferty
+  et~al.}{2001}]{Lafferty:CRF2001}
+Lafferty, J., McCallum, A., \BBA\ Pereira, F. \BBOP 2001\BBCP.
+\newblock \BBOQ Conditional Random Fields: Probabilistic Models for Segmenting
+  and Labeling Sequence Data.\BBCQ\
+\newblock In {\Bem Proceedings of the 18th International Conference on Machine
+  Learning (ICML-2001)}, \mbox{\BPGS\ 282--289}.
+
+\bibitem[\protect\BCAY{Laws \BBA\ Sch\"{u}tze}{Laws \BBA\
+  Sch\"{u}tze}{2008}]{laws-schutze:2008:PAPERS}
+Laws, F.\BBACOMMA\ \BBA\ Sch\"{u}tze, H. \BBOP 2008\BBCP.
+\newblock \BBOQ Stopping Criteria for Active Learning of Named Entity
+  Recognition.\BBCQ\
+\newblock In {\Bem Proceedings of the 22nd International Conference on
+  Computational Linguistics (Coling 2008)}, \mbox{\BPGS\ 465--472}, Manchester,
+  UK. Coling 2008 Organizing Committee.
+
+\bibitem[\protect\BCAY{Lewis \BBA\ Catlett}{Lewis \BBA\
+  Catlett}{1994}]{Lewis94heterogeneousuncertainty}
+Lewis, D.~D.\BBACOMMA\ \BBA\ Catlett, J. \BBOP 1994\BBCP.
+\newblock \BBOQ Heterogeneous Uncertainty Sampling for Supervised
+  Learning.\BBCQ\
+\newblock In {\Bem In Proceedings of the Eleventh International Conference on
+  Machine Learning}, \mbox{\BPGS\ 148--156}. Morgan Kaufmann.
+
+\bibitem[\protect\BCAY{Manning \BBA\ Sch\"{u}tze}{Manning \BBA\
+  Sch\"{u}tze}{1999}]{FSNLP1999}
+Manning, C.~D.\BBACOMMA\ \BBA\ Sch\"{u}tze, H. \BBOP 1999\BBCP.
+\newblock {\Bem Foundations of Statistical Natural Language Processing}.
+\newblock The MIT Press, Cambridge, Massachusetts.
+
+\bibitem[\protect\BCAY{Pantel \BBA\ Pennacchiotti}{Pantel \BBA\
+  Pennacchiotti}{2006}]{pantel-pennacchiotti:2006:COLACL}
+Pantel, P.\BBACOMMA\ \BBA\ Pennacchiotti, M. \BBOP 2006\BBCP.
+\newblock \BBOQ Espresso: Leveraging Generic Patterns for Automatically
+  Harvesting Semantic Relations.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on
+  Computational Linguistics and 44th Annual Meeting of the Association for
+  Computational Linguistics}, \mbox{\BPGS\ 113--120}, Sydney, Australia.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Sang \BBA\ Veenstra}{Sang \BBA\
+  Veenstra}{1999}]{Sang:IOB1999}
+Sang, E. F. T.~K.\BBACOMMA\ \BBA\ Veenstra, J. \BBOP 1999\BBCP.
+\newblock \BBOQ Representing Text Chunks.\BBCQ\
+\newblock In {\Bem Proceedings of the Ninth Conference of the European Chapter
+  of the Association for Computational Linguistics (EACL'99)}, \mbox{\BPGS\
+  173--179}, Bergen, Norway.
+
+\bibitem[\protect\BCAY{Shen, Zhang, Su, Zhou, \BBA\ Tan}{Shen
+  et~al.}{2004}]{shen-EtAl:2004:ACL}
+Shen, D., Zhang, J., Su, J., Zhou, G., \BBA\ Tan, C.-L. \BBOP 2004\BBCP.
+\newblock \BBOQ Multi-Criteria-based Active Learning for Named Entity
+  Recognition.\BBCQ\
+\newblock In {\Bem Proceedings of the 42nd Meeting of the Association for
+  Computational Linguistics (ACL'04), Main Volume}, \mbox{\BPGS\ 589--596},
+  Barcelona, Spain.
+
+\bibitem[\protect\BCAY{Suzuki \BBA\ Isozaki}{Suzuki \BBA\
+  Isozaki}{2008}]{suzuki-isozaki:2008:ACLMain}
+Suzuki, J.\BBACOMMA\ \BBA\ Isozaki, H. \BBOP 2008\BBCP.
+\newblock \BBOQ Semi-Supervised Sequential Labeling and Segmentation Using
+  Giga-Word Scale Unlabeled Data.\BBCQ\
+\newblock In {\Bem Proceedings of ACL-08: HLT}, \mbox{\BPGS\ 665--673},
+  Columbus, Ohio. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Suzuki, McDermott, \BBA\ Isozaki}{Suzuki
+  et~al.}{2006}]{suzuki-mcdermott-isozaki:2006:COLACL}
+Suzuki, J., McDermott, E., \BBA\ Isozaki, H. \BBOP 2006\BBCP.
+\newblock \BBOQ Training Conditional Random Fields with Multivariate Evaluation
+  Measures.\BBCQ\
+\newblock In {\Bem Proceedings of the 21st International Conference on
+  Computational Linguistics and 44th Annual Meeting of the Association for
+  Computational Linguistics}, \mbox{\BPGS\ 217--224}, Sydney, Australia.
+  Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Tomanek \BBA\ Hahn}{Tomanek \BBA\
+  Hahn}{2009}]{tomanek-hahn:2009:ACLIJCNLP}
+Tomanek, K.\BBACOMMA\ \BBA\ Hahn, U. \BBOP 2009\BBCP.
+\newblock \BBOQ Semi-Supervised Active Learning for Sequence Labeling.\BBCQ\
+\newblock In {\Bem Proceedings of the Joint Conference of the 47th Annual
+  Meeting of the ACL and the 4th International Joint Conference on Natural
+  Language Processing of the AFNLP}, \mbox{\BPGS\ 1039--1047}, Suntec,
+  Singapore. Association for Computational Linguistics.
+
+\bibitem[\protect\BCAY{Yarowsky}{Yarowsky}{1995}]{Yarowsky:WSD1995}
+Yarowsky, D. \BBOP 1995\BBCP.
+\newblock \BBOQ Unsupervised Word Sense Disambiguation Rivaling Supervised
+  Methods.\BBCQ\
+\newblock In {\Bem Proceedings of the 33rd Annual Meeting of the Association
+  for Computational Linguistics (ACL 1995)}, \mbox{\BPGS\ 189--196}.
+
+\end{thebibliography}
+
+\begin{biography}
+
+\bioauthor{齋藤　邦子}{
+1996年東京大学理学部化学科卒業．
+1998年同大学院修士課程修了．同年日本電信電話株式会社入社．
+現在，NTTサイバースペース研究所研究主任．自然言語処理の
+研究・開発に従事．言語処理学会，情報処理学会，ACL各会員．}
+\bioauthor{今村　賢治}{
+1985年千葉大学工学部電気工学科卒業．博士（工学）．
+同年日本電信電話株式会社入社．
+2000年〜2006年ATR音声言語コミュニケーション研究所．
+2006年よりNTTサイバースペース研究所主任研究員．現在に至る．
+主として自然言語処理の研究・開発に従事．
+電子情報通信学会，情報処理学会，ACL各会員．}
+
+\end{biography}
+
+
+\biodate
+
+
+\end{document}

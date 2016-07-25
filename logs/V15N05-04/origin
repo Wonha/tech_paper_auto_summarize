@@ -1,0 +1,1291 @@
+    \documentclass[japanese]{jnlp_1.4}
+\usepackage{jnlpbbl_1.1}
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+\usepackage{hangcaption_jnlp}
+\usepackage{udline}
+\setulminsep{1.2ex}{0.2ex}
+\let\underline
+
+\usepackage{url}
+\usepackage{multirow}
+\usepackage{array}
+
+
+
+
+\Volume{15}
+\Number{5}
+\Month{October}
+\Year{2008}
+
+\received{2007}{12}{26}
+\revised{2008}{4}{11}
+\accepted{2008}{5}{11}
+
+\setcounter{page}{73}
+
+\newcommand{\revise}[1]{}
+
+    \newcommand{\dom}[1]{}
+
+
+
+
+
+
+\jtitle{基本語ドメイン辞書の構築と未知語ドメイン推定を用いた\\
+	ブログ自動分類法への応用}
+\jauthor{橋本　　力\affiref{Author_1} \and 黒橋　禎夫\affiref{Author_2}}
+\jabstract{
+言葉の意味処理にとってシソーラスは不可欠の資源である．
+シソーラスは，単語間の上位下位関係という，いわば縦の関連を
+表現するものである．
+我々は意味処理技術の深化を目指し，縦の関連に加えて，単語が使用され
+るドメインという，いわば横の関連を提案する．
+本研究では基本語を対象に，ドメイン辞書を半自動で構築した．
+本手法に必要なのは検索エンジンへのアクセスのみで，文書集合や高度
+に構造化された語彙資源等は必要ない．
+さらに，基本語ドメイン辞書の応用としてブログ自動分類を行った．
+各ブログ記事は，記事中の語にドメインとIDF値が付与され，最もIDF値の高い
+ドメインに分類される．
+基本語ドメイン辞書に無い未知語のドメインは，基本語ドメイン辞書，
+Wikipedia，検索エンジンを利用して，リアルタイムで推定する．
+結果として，ブログ分類正解率94.0\%(564/600)と，未知語ドメイン推定正解率
+76.6\% (383/500)が得られた．
+}
+\jkeywords{ドメイン, 辞書, ブログ, 文書分類, 未知語ドメイン推定}
+
+\etitle{Construction of Domain Dictionary for Fundamental Vocabulary and 
+	its Application to Automatic Blog Categorization with the Dynamic Estimation of \\
+	Unknown Words' Domains}
+\eauthor{Chikara Hashimoto\affiref{Author_1} \and Sadao Kurohashi\affiref{Author_2}} 
+\eabstract{
+For natural language understanding, it is essential to reveal semantic
+relations between words.
+To date, only the IS-A relation has been publicly available as a
+thesaurus.
+Toward deeper natural language understanding, we semi-automatically
+ constructed the domain dictionary that represents the domain relation
+ between Japanese fundamental words.
+Our method does not require a document collection.
+As a task-based evaluation of the domain dictionary,
+we performed blog categorization, where we assigned a domain for each
+word in a blog article and categorize it as the most dominant domain.
+In so doing, we dynamically estimated the domains of unknown words,
+i.e., those not listed in the domain dictionary.
+As a result, our blog categorization achieved the accuracy of 94.0\%
+(564/600).
+Also, the domain estimation technique for unknown words achieved the
+accuracy of 76.6\% (383/500).
+}
+\ekeywords{Domain, Lexicon, Blog, Text categorization, Unknown words' domain}
+
+\headauthor{橋本, 黒橋}
+\headtitle{基本語ドメイン辞書の構築と未知語ドメイン推定を用いたブログ自動分類法への応用}
+
+\affilabel{Author_1}{山形大学大学院理工学研究科}{
+	Graduate School of Science and Engineering, Yamagata University}
+\affilabel{Author_2}{京都大学大学院情報学研究科}{
+	Graduate School of Informatics, Kyoto University}
+
+
+
+\begin{document}
+\maketitle
+
+
+\section{はじめに}
+
+言葉の意味処理にとってシソーラスは不可欠の資源である．
+シソーラスは，単語間の上位下位関係という，いわば縦の関連を
+表現するものである．
+我々は意味処理技術の深化を目指し，縦の関連に加えて，単語が使用され
+るドメインという，いわば横の関連を提案する．
+例えば，単語が「教科書」「先生」ならドメインは\dom{教育・学習}であり，
+「庖丁」なら\dom{料理・食事}，「メス」なら\dom{健康・医学}である．
+本研究では，このようなドメイン情報を基本語約30,000語に付与し，基本語ドメ
+イン辞書として完成させた．
+
+ドメインを考慮することでより自然な単語分類が可能となる．
+例えば分類語彙表は，「教科書」は『文献・図書』，
+「先生」は『専門的・技術的職業』として区別するが，
+ドメイン上は両者とも\dom{教育・学習}に属する．
+また，分類語彙表は「庖丁」も「メス」も『刃物』として同一視するが，
+両者はドメインにおいて区別される．
+
+ドメイン情報は様々な自然言語処理タスクで利用されてきた．
+本研究では\S\ref{bunrui-method}で述べるように文書分類に応用するが，それ
+以外にも，文書フィルタリング
+\cite{Liddy:Paik:1993}，
+語義曖昧性解消 \cite{Rigau:Atserias:Agirre:1997,Tanaka:Bond:Baldwin:Fujita:Hashimoto:2007}，
+機械翻訳 \cite{Yoshimoto:Kinoshita:Shimazu:1997,Lange:Yang:1999}等で
+用いられてきた．
+
+本研究で開発した基本語ドメイン辞書構築手法は半自動のプロセスである．
+まず，人手で付与されたドメイン手掛かり語と
+各基本語の関連度をもとに，基本語にドメインを自動付与する．
+次に，自動ドメイン付与結果を人手で修正して完成させる．
+関連度計算には検索ヒット数を利用した．
+
+本研究で半自動の構築プロセスを採用したのは次の理由による．
+基本語の語彙情報は，多くの自然言語処理技術の根幹を形成するものであり，非
+常に高い正確さが要求される．
+しかし今日の技術では，全自動でそのような正確さを備えた語彙情報を獲得する
+のは困難である．
+一方で，全て人手で作業するのは，コスト的にも，一貫性と保守性の観点からも
+望ましくない．
+以上の理由により，高い精度の自動ドメイン付与結果を人手で修正する，という
+半自動プロセスを採用した\footnote{
+京都テキストコーパスも同様の理由から，高精度な構文解析器KNP 
+\cite{黒橋:長尾:1992}．
+による解析結果を人手で修正する，という手法を採用した．
+}
+
+このドメイン辞書は世界初のフリーの日本語ドメイン資源である．
+また，本手法に必要なのは検索エンジンへのアクセスのみで，文書集合や高度
+に構造化された語彙資源等は必要ない．
+
+さらに，基本語ドメイン辞書の応用としてブログ自動分類を行った．
+各ブログ記事は，記事中の語にドメインとIDF値が付与され，最もIDF値の高い
+ドメインに分類される．
+基本語ドメイン辞書に無い未知語のドメインは，基本語ドメイン辞書，
+Wikipedia，検索エンジンを利用して，リアルタイムで推定される．
+結果として，ブログ分類正解率94\%(564/600)と，未知語ドメイン推定正解率
+76.6\% (383/500)が得られた．
+
+なお，基本語ドメイン辞書に収録するのは基本語のみ\footnote{
+より正確には，JUMAN \cite{JumanManual:2005}に収録された内容語約30,000
+語である．
+}であり，
+専門用語等は含めない．
+
+以下，\S\ref{2issues}で基本語ドメイン辞書構築時の問題点を，
+\S\ref{domain-construction-method}では基本語ドメイン辞書構築手法を述べる．
+完成した基本語ドメイン辞書の詳細は\S\ref{dic-spec}で報告する．
+\S\ref{bunrui-method}では基本語ドメイン辞書のブログ分類への応用
+について述べ，
+\S\ref{unknown_domest}ではブログ分類時に用いられる未知語ドメイン推定につ
+いて述べる．
+その後，ブログ分類と未知語ドメイン推定の評価結果を\S\ref{eval}で報告する．
+\S\ref{related-work}で関連研究と比較した後，
+\S\ref{conclusion}で結論を述べる．
+
+
+
+\section{2つの問題 \label{2issues}}
+
+基本語ドメイン辞書構築には2つの問題がある．
+1つは世界を適切に分類するドメイン体系の設計であり，もう1つは
+文書集合を必要としない基本語ドメイン辞書構築技術の開発である．
+
+1つ目の問題は，人間の外界認識の様式を明らかにするという
+難問である．
+本研究ではこの問題には深く立ち入らず，
+表\ref{domain-table}にある，
+多くの人から合意が得られやすいと思われるシンプルなドメイン体系を採用した．
+このドメイン体系はOpen Directory Project (\url{http://www.dmoz.org})等の
+検索ディレクトリのカテゴリを参考にした．
+また，「人」や「青」のような特定のドメインに属さない
+語のために\dom{ドメイン無し}も用意した．
+
+
+\begin{table}[b]
+\caption{本研究のドメイン体系}
+\label{domain-table}
+\begin{center}
+\input{04table01.txt}
+\end{center}
+\end{table}
+
+
+もう1つの問題は，
+あるドメインと深く関わる単語集合を得ようとする場合，文書集合からの重要語
+抽出技術がその手法の第一候補と考えられるが，
+その種の手法が本研究には適用しにくいというものである．
+これは，特定の専門分野を対象とした場合に比べて，
+表\ref{domain-table}にあるような一般的・日常的な粒度のドメインの
+文書集合を集めることが困難なことに起因する．
+当初我々は，
+検索ディレクトリの登録ページをそのような文書集合として利用した．
+しかし，登録ページの多くはいわゆるトップページ（特定のWebサイトの「入口」
+にあたるページ）で，
+統計的指標でキーワードを同定するには文章量が十分ではなかった．
+文章量を増やすためトップページのリンクを辿ってみたが，
+そのトップページが属する1つのサイトから多くのページが収集されたため，
+ドメインのキーワードというより，そのサイトのキーワー
+ドというべき語が抽出された．
+他に，関連性の低い広告リンクを辿ってしまうという問題もある．
+
+そこで我々は，文書集合を必要としない基本語ドメイン辞書構築手法を開発した．
+次節でその手法について述べる．
+
+
+
+\section{基本語ドメイン辞書構築手法 \label{domain-construction-method}}
+
+本手法のポイントは，基本語にドメインを割り当てるヒントとして，
+文書集合ではなく，少数の手掛かり語集合を用いる点にある．
+本手法の流れは次の通りである（図\ref{association-figure}）．
+
+
+\begin{figure}[p]
+\begin{center}
+\includegraphics{15-5ia4f1.eps}
+\end{center}
+\caption{各ドメインへの基本語の割り当て}
+\label{association-figure}
+\end{figure}
+
+\begin{enumerate}
+ \item 各ドメインへの手掛かり語の付与（\S\ref{keyword-assignment}）
+ \item 各基本語へのドメインの割り当て（\S\ref{association}）
+ \item \dom{ドメイン無し}の割り当て（\S\ref{nodomain-identification}）
+ \item 人手による修正（\S\ref{manual-correction}）．
+\end{enumerate}
+
+ここで注意すべきは，以下で述べる構築手法は
+特定のドメイン体系に依存しないという点である．
+つまり，本研究では表\ref{domain-table}にある12ドメインを採用したが，
+異なるドメイン体系を採用しても以下の手法はそのまま適用可能である．
+
+
+\subsection{各ドメインへの手掛かり語の付与 \label{keyword-assignment}}
+
+表\ref{domain-table}のドメイン（\dom{ドメイン無し}以外）に20〜30語ずつ人
+手で手掛かり語を与える．
+手掛かり語はWeb高頻度語リストの上位から選ぶ．
+\revise{その際，判断に迷う語は無視し，当該ドメインへの所属が比較的明確な
+もののみを選ぶようにした．}
+\footnote{\revise{
+今回は著者1名がこの作業を行った．
+作業者間でどの程度判断がばらつくのか，そしてそのばらつきが辞
+書自動構築と後述するブログ分類にどのような影響を与えるのかは今後検討する
+必要がある．
+しかし，上記の作業仕様により，作業者が異なっても判断に大き
+なばらつきはないと予想している．}}\ 
+表\ref{ex_kw}に手掛かり語の例を挙げる．
+
+
+\begin{table}[t]
+\caption{手掛かり語の例}
+\label{ex_kw}
+\begin{center}
+\input{04table02.txt}
+\end{center}
+\end{table}
+
+本研究と異なるドメイン体系を採用した場合は，それに応じて，表\ref{ex_kw}
+とは異なる手掛かり語を独自に収集する必要がある．
+しかし，以下に述べるその後のプロセスは全く同じである．
+
+
+\subsection{各基本語へのドメインの割り当て \label{association}}
+
+基本語と（\dom{ドメイン無し}以外の）ドメインの間に関連度スコア（$A_d$スコ
+ア）を定義し，
+基本語を最も$A_d$スコアの高いドメインに割り当てる．
+$A_d$スコアとして，基本語とドメインの各手掛かり語の間に定義される
+関連度スコア（$A_k$スコア）の上位5つを合計したものを与える．
+本研究では，
+コーパスにおいてよく共起する語ほど関連度が高いという前提のもと，
+$A_k$スコアとして$\chi^2$に基づく指標を，コーパスとしてWebを採用する
+\footnote{我々が行った予備実験では，他に，相互情報量，Dice係数，Jaccard
+係数を試したが，$\chi^2$が最もよい結果を示した．
+これは\citeA{佐々木:佐藤:宇津呂:2006}の報告と一致する．}．
+共起頻度として，基本語と手掛かり語をクエリとした場合の検索エンジンヒット
+数を用いる\cite{佐々木:佐藤:宇津呂:2006}．
+結局，基本語$w$と手掛かり語$k$の間の$A_k$スコアは以下のようになる．
+$$A_k(w,k)=
+\frac{n(ad-bc)^{2}}{(a+b)(c+d)(a+c)(b+d)}$$
+ただし$n$は日本語Webページ総数で\footnote{
+我々は10,000,000,000を$n$とした．
+}，$a$から$d$はそれぞれ以下のようになる．
+\begin{center}
+\begin{tabular}{ll}
+$a = hits(w\ \&\ k)$ &
+$b = hits(w) - a$ \\
+$c = hits(k) - a$ &
+$d = n - (a + b + c)$
+\end{tabular}
+\end{center}
+$hits(q)$は$q$をクエリとした場合のヒット数である．
+この段階で，各基本語は（\dom{ドメイン無し}以外の）いずれかのドメインを割り
+当てられる．
+
+
+\subsection{\dom{ドメイン無し}の割り当て
+  \label{nodomain-identification}}
+
+割り当てられたドメインの$A_d$スコアが低い基本語には，そのドメインの
+代わりに\dom{ドメイン無し}を割り当てる．
+ここで$A_d$スコアが低いかどうかを決める閾値が必要となる．
+我々が行った予備調査によると，検索エンジンヒット数が多い基本語ほど閾値を
+高めに設定する必要がある．
+
+そこで，ヒット数に応じた適切な閾値を与える関数を次の手順で得た（図
+\ref{reassociation-nodomain}）．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{15-5ia4f2.eps}
+\end{center}
+\caption{\dom{ドメイン無し}の再割り当て：\textbf{1}から
+\textbf{4}まで}
+\label{reassociation-nodomain}
+\end{figure}
+
+\begin{enumerate}
+ \item 〈基本語，ヒット数，割り当てられたドメインの$A_d$〉の3つ組をヒッ
+ト数の降順に並べる\footnote{
+\S\ref{association}の段階でこれら3つ組が全て得
+られていることに注意．
+}．
+ \item 3つ組の集合を130のヒット数セグメントに分割する．
+ \item 各セグメントから，\dom{ドメイン無し}に属すべき基本語を含む3つ組
+とそれ以外の3つ組をそれぞれ5つ手作業で抽出する\footnote{
+通常，前者より後者の3つ組の方が$A_d$スコアが高い．
+}．
+ \item セグメントごとに，\dom{ドメイン無し}に属すべき基本語を含む3つ組
+とそれ以外の3つ組を分離する$A_d$スコアの値を同定する．
+この値が当該ヒット数セグメントにおける閾値となる．
+この段階で，（セグメントによって表された）ヒット数とその閾値のペア
+が130組得られる．
+ \item ヒット数と閾値の関係を最小二乗法により1次関数で近似する．
+この1次関数が
+ヒット数に応じた適切な閾値を与える
+関数である．
+\end{enumerate}
+
+
+\subsection{ドメイン割り当ての性能評価}
+
+\S\ref{keyword-assignment}から\S\ref{nodomain-identification}で述べた手
+法のドメイン割り当て正解率を測定した．
+\pagebreak
+ドメイン割り当て結果から基本語—ドメインのペアを380組抽出し，
+そのうち何\%が正解か調べた．
+比較のためベースラインも用意した．
+ベースラインは，全ての基本語を\dom{ドメイン無し}とした場合の正解率である．
+これは，予備調査の段階で，基本語の半分以上が\dom{ドメイン無し}と判定される
+ことがわかったためである．
+
+結果として，81.3\% (309/380)の正解率を得た．
+一方ベースラインの正解率は69.5\% (264/380)だった．
+
+
+\subsection{複数ドメインの割り当て}
+
+ある基本語は複数のドメインに属す．
+例えば「大学院」なら\dom{教育・学習}と\dom{科学・技術}の両方に属すものと考え
+られる．
+しかし，上述の手法は1語を1つのドメインにしか割り当てないように設計
+されている．
+本節では，1語に対し複数のドメインを割り当てることが可能な，上述の手法の拡張
+版について述べる．
+
+語を，$A_d$スコアが最も高いドメインだけでなく，以下の2つ
+の条件を満たすドメイン全てに割り当てる．
+
+\begin{enumerate}
+ \item そのドメインの$A_d$スコアが\S\ref{nodomain-identification}で述
+べた閾値以上である．
+ \item そのドメインの$A_d$スコアが最も高い$A_d$スコアに十分近い．
+\end{enumerate}
+
+2番目の条件は次のように定式化される．
+$$\frac{\textrm{最も高い$A_d$ $-$ そのドメインの$A_d$}}
+{\textrm{最も高い$A_d$}} < 0.01$$
+
+この手法により，基本語—ドメインの組は814組増えた．
+一方，基本語—ドメインの全ペアから392組抽出して正解率を調べたところ，
+正解率は78.6\% (308/392)に落ちることがわかった．
+
+
+\subsection{人手による修正 \label{manual-correction}}
+
+人手による修正では，その正解率の高さから，複数ドメイン版ではなく，単一ド
+メイン版の手法の結果を使用した．
+複数ドメインを割り当てるべき基本語には人手による修正で対応した．
+
+ドメイン割り当て結果を人手で修正するにあたって，指針をいくつか設けた．
+それらの中でも重要な，複数のドメインに属する語の扱いと，多義語の扱い，
+\dom{ドメイン無し}の判定基準
+について述べる．
+
+
+\paragraph{複数のドメインに属する語の扱い：}
+
+複数ドメインを割り当てるべき語は，それら複数のドメインに
+\textbf{同程度に}関連するもののみに限定した．
+これには，基本語ドメイン辞書をなるべくシンプルなものにするという狙いが
+ある．
+複数ドメインを割り当てた語には，「大学院」（\dom{教育・学習}と
+\dom{科学・技術}），「登山」（\dom{レクリエーション}と\dom{スポーツ}），
+「円高」（\dom{ビジネス}と\dom{政治}）などが含まれる．
+一方で，複数ドメインに属すると考えられるが，関連性が同程度では
+ないために単一ドメインと判定された語として，例えば「微分」や「ゴルフ」が
+ある．
+前者は\dom{教育・学習}のみとし，\dom{科学・技術}には含めなかった．
+後者は\dom{スポーツ}のみとし，\dom{レクリエーション}には含めなかった．
+
+
+\paragraph{多義語の扱い：}
+
+多義語には，各語義に対応するドメインを割り当てる．
+例えば，「ボール」には\dom{スポーツ}と\dom{料理・食事}が割り当てられる．
+
+\paragraph{\dom{ドメイン無し}の判定基準：}
+
+今回構築した基本語ドメイン辞書では，特定ドメインの割り当ては「保守的」に
+行われた．
+つまり，どのドメインに属するか意見が分かれそうな語，あるいは多くのドメ
+インに属すると考えられる語は，無理に特定のドメ
+インを割り当てるのではなく，
+\dom{ドメイン無し}と判定した．
+今回の構築では，属するドメインが4つまでなら
+それぞれのドメインを割り当てた．5つ以上のドメインに属すると考えら
+れる場合は\dom{ドメイン無し}にした．
+例えば「委員」や「組織」などが該当する．
+
+
+\section{基本語ドメイン辞書の詳細 \label{dic-spec}}
+
+表\ref{breakdown_domain-dictionary}は完成した基本語ドメイン辞書の語の内
+訳である．
+\dom{ドメイン無し}が63\%と大半を占めるのは，\S\ref{manual-correction}
+で述べた\dom{ドメイン無し}の判定基準に従ったためである．
+また，複数ドメインを割り当てられた語は787語 (26.2\%)だった．
+
+
+\begin{table}[b]
+\caption{基本語ドメイン情報の内訳}
+\label{breakdown_domain-dictionary}
+\input{04table03.txt}
+\end{table}
+
+完成した基本語ドメイン辞書は，JUMANに組み込んで，それとともに配布してい
+る．
+JUMANは下記のWebサイトで入手可できる．
+
+\begin{itemize}
+ \item \url{http://nlp.kuee.kyoto-u.ac.jp/nl-resource/juman.html}
+\end{itemize}
+
+JUMANで，例えば「研究室のゼミで先生と議論した．」を形態素解析す
+ると図\ref{juman-pic}のようになる．
+「研究」，「ゼミ」，「先生」は特定のドメインに属する語であり，
+基本語ドメイン辞書から当てはまるドメインが付与される．
+それ以外の語は\dom{ドメイン無し}の語である．
+
+\begin{figure}[t]
+\includegraphics{15-5ia4f3.eps}
+\caption{JUMAN解析結果中のドメイン情報}
+\label{juman-pic}
+\end{figure}
+
+
+\section{ブログ自動分類への応用 \label{bunrui-method}}
+
+基本語ドメイン辞書の評価の一環として，ブログ記事を，\dom{ドメイン無し}以
+外の12ドメインに分類する実験を行った．
+ブログ自動分類を取り上げた理由は，ブログが近年自然言語処理において注目を
+集めていることと，文書分類が基本語ドメイン辞書を最も直接的に適用できるタ
+スクであることの2点である．
+
+本研究では基本語ドメイン辞書を利用してブログ記事を分類する．
+その概略は，記事中の語にドメインを付与して，その結果，最も支配的なドメ
+インをその記事のドメインとする，というものである（図\ref{bunrui-syuhou}）．
+
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{15-5ia4f4.eps}
+\end{center}
+\caption{ブログ分類手法の全体像}
+\label{bunrui-syuhou}
+\end{figure}
+
+より具体的には次のようになる．
+
+\begin{enumerate}
+ \item 記事中の語を抽出する．
+ \item 各語にドメインとIDF値を付与する．
+ \item ドメインごとに，割り当てられた語のIDF値を合計．
+ \item IDF値合計が最も高いドメインを記事に割り当てる\footnote{今回の実験
+       では，IDF値合計が最も高いドメインが〈ドメイン無し〉の場合は2番目
+       のドメインを割り当てた．}．
+\end{enumerate}
+
+IDF値は次の定義に従う\footnote{我々は10,000,000,000を日本語Webページ総
+数とした．}．
+$$\textrm{語のIDF値}=log\frac{\textrm{日本語Webページ総数}}
+{\textrm{語のWebヒット数}}$$
+
+なお，今回実験に使用した基本語ドメイン辞書には，各基本語に対して，そのド
+メインだけでなくIDF値もあらかじめ付与しておいた．
+
+記事からの単語の抽出方法として，\S\ref{eval}で述べる評価実験では次の3通
+りを試みた．
+
+\begin{enumerate}
+\renewcommand{\labelenumi}{}
+ \item 基本語 
+ \item 基本語と未知語 
+ \item 基本語と未知語と複合名詞
+\end{enumerate}
+
+基本語は基本語ドメイン辞書にある語で，未知語とは，例えば「コンプライアン
+ス」などのように，基本語ドメイン辞書にない語である．
+複合名詞は「贈収賄／容疑」や「軍需／企業」などが該当する．
+本研究では同じ文節内にある名詞の連続を複合名詞として認識している．
+複合名詞は，未知語と同様，基本語ドメイン辞書に含まれていない．
+また，上記A.あるいはB.の場合，複合名詞は単語に分割され，
+その中の基本語のみが抽出される．
+例として，「コンプライアンスが叫ばれる中，贈収賄容疑をかけられた軍需商社
+と次官は$\cdots$」という内容の記事から，上の3通りの方法で語を抜き出した
+結果を図\ref{words-ext}に示す．
+
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{15-5ia4f5.eps}
+\end{center}
+\caption{記事からの3通りの語抽出}
+\label{words-ext}
+\end{figure}
+
+ブログ分類時に未知語あるいは未知語と複合名詞両方を用いる場合は，
+語抽出の段階で基本語とそれ以外にわける必要がある．
+これは，基本語は基本語ドメイン辞書からドメインとIDF値が与えられるのに対
+し，未知語と複合名詞は\S\ref{unknown_domest}で述べる方法により，
+動的にドメインとIDF値が推定されるためである．
+
+以下，未知語と複合名詞を区別せず，両者を合わせて「未知語」と呼ぶことにす
+る．
+両者を区別する必要がある場合は，前者を「単純未知語」，後者を「複合名詞未
+知語」と呼ぶ．
+
+
+
+\section{未知語ドメイン推定 \label{unknown_domest}}
+
+未知語（単純未知語と複合名詞未知語の両方）のドメインはWeb上の情報を利用
+して推定する．
+これは，Webに書かれていると考えられる，その未知語の世の中での解釈を利用
+するのが狙いである．
+Web上の情報として，より具体的には，Wikipediaの記事と，Web検索結果
+\footnote{本研究ではYahoo!JAPANを用いた．}のタイトルとスニペットを利用する．
+後述するように，未知語ドメイン推定においても基本語ドメイン辞書を活用する．
+
+未知語ドメイン推定は次の手順に従う（図\ref{unknown-domest-pic}）．
+
+\begin{figure}[b]
+\begin{center}
+\includegraphics{15-5ia4f6.eps}
+\end{center}
+\caption{未知語ドメイン推定手法の全体像}
+\label{unknown-domest-pic}
+\end{figure}
+
+\begin{enumerate}
+ \item 未知語をクエリとしてWeb検索を実行する．その際，検索結果から得られ
+       るWebヒット数をもとに，その未知語のIDF値を計算する．
+ \item 検索結果上位100件の中に，その未知語とエントリが完全一致する
+       Wikipedia記事があれば，その記事を取得して，記事中の
+       基本語を手掛かりにドメインを推定し，終了．
+     （\textbf{Wikipedia-strict法}）
+ \item もし未知語とエントリが完全一致するWikipedia記事が無ければ，検索結
+       果上位30件の中から何らかのWikipedia記事を探し，もしあれば，その記
+       事中の基本語を手掛かりにドメインを推定し，終了
+       \footnote{例えば未知語が「亀田兄弟」で，検索結果に「亀田兄弟」
+       とエントリが完全一致するWikipedia記事がない場合，検索結果上位30件
+       から何らかのWikipedia記事を探す．この例の場合，「亀田三兄弟」のエ
+       ントリのWikipedia記事が見つかるので，その記事を取得し，ドメイン推
+       定に利用する．}．
+     （\textbf{Wikipedia-loose法}）
+ \item Wikipedia記事が全く見つからなければ，検索結果から企業の広告サイト
+       等のタイトルとスニペットを除外し，その残りのタイトルとスニペット
+       にある基本語を手掛かりにドメインを推定し，終了．
+       （\textbf{Snippets法}）
+ \item 企業サイトを全て削除すると何も残らない場合もある．その場合，
+       未知語が基本語を構成素に持つ複合語なら，その構成語のドメインから
+       未知語のドメインを推定して終了．
+       （\textbf{Components法}）
+ \item 検索結果に，Wikipedia記事も，企業サイト以外のサイトも無く，
+       また，その未知語が基本語を構成素に持つ複合語でもない場合，
+       ドメイン推定不可能のメッセージを出力して終了．
+\end{enumerate}
+
+未知語ドメイン推定で用いられるWikipedia-strict法，Wikipedia-loose法，
+Snippets法，Components法について順に説明する．
+これらに共通するのは，手掛かりとなる記述（Wikipedia記事，検索結果のタイ
+トルとスニペット，複合語の構成語）にある基本語のドメインを調べ，最も支配
+的なドメインをその未知語のドメインとする，という発想である．
+
+\subsection{Wikipedia(-strict$|$-loose)法}
+
+Wikipedia-strict法とWikipedia-loose法の流れは次の通りである（図
+\ref{Wikipedia-pic}）．
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics{15-5ia4f7.eps}
+\end{center}
+\caption{Wikipedia(-strict$|$-loose)手法による未知語ドメイン推定}
+\label{Wikipedia-pic}
+\end{figure}
+
+\begin{enumerate}
+ \item 検索結果をもとにWikipedia記事を取得する．
+ \item 記事から基本語のみを抽出する．
+ \item 基本語ドメイン辞書を参照して，各基本語にドメインとIDF値を付与する．
+ \item IDF値合計が最も高いドメインを未知語に割り当てる．ただし，IDF値合計
+       が最も高いドメインが〈ドメイン無し〉の場合，次の条件のもと，2番目
+       にIDF値が高いドメインに割り当てる．
+       $$\frac{\textrm{2番目のドメインのIDF値}}{\textrm{〈ドメイン無し〉のIDF値}}>0.15$$
+\end{enumerate}
+
+ドメイン推定の所要時間は，Wikipedia-strict法，Wikipedia-loose法
+ともに約10秒である\footnote{
+使用した計算機はDell PowerEdge 830（Pentium Dプロセッサ 3.00~GHz，
+メモリ512~MB）である．
+}．
+
+
+\subsection{Snippets法}
+
+Snippets法の流れは次の通りである．
+\begin{enumerate}
+ \item 企業の広告サイト等のタイトルとスニペットを検索結果からあらかじめ
+       除外しておく．
+       \begin{itemize}
+	\item 次のリスト中の語がタイトルとスニペットに2回以上現れたら，
+	      それを企業サイトのものと判断する\footnote{このリストは，ブ
+	      ログ分類の予備実験におけるエラー分析をもとに作成した．}．
+	      \begin{quote}
+	       会社，株式，商品，販売，製品，価格，無料，市場，企業，ショッ
+	       プ，通販，事業，発売，サービス，法人，店舗，購入，採用，
+	       会員，業務，当社，営業，工業，ビジネス，広告，仕事，出荷，
+	       料金
+	      \end{quote}
+       \end{itemize}
+ \item 検索結果から基本語のみを抽出する．
+ \item 基本語ドメイン辞書を参照して，各基本語にドメインとIDF値を付与する．
+ \item IDF値合計が最も高いドメインを未知語に割り当てる．ただし，IDF値合計
+       が最も高いドメインが〈ドメイン無し〉の場合，次の条件のもと，2番目
+       にIDF値が高いドメインに割り当てる．
+       $$\frac{\textrm{2番目のドメインのIDF値}}{\textrm{〈ドメイン無し〉のIDF値}}>0.15$$
+\end{enumerate}
+
+あらかじめ企業サイトのタイトルとスニペットを除外するのは次の理由による．
+検索結果には企業の広告サイト等のタイトルとスニペットが含まれうるが，
+これが多くなると，未知語の本来のドメインとは関係なく\dom{ビジネス}と
+誤判定されてしまう．
+例えば「プロピレングリコール」という未知語は，本来\dom{科学・技術}に属す
+るべきだが，検索結果に医療あるいは工業関係の企業が多数現れるため\dom{ビ
+ジネス}と誤判定されてしまう．
+これを防ぐために企業サイトのタイトルとスニペットを除外しておく．
+
+ドメイン推定の所要時間は6秒程度である\footnote{
+これは，
+未知語が入力されてから，Wikipedia-strict法とWikipedia-loose法を経由した
+後，Snippets法によりドメインが出力されるまでの時間である．
+2つのWikipedia法の方が先に実行されるにも関わらず所要時間が長いのは，
+Snippets方が既に得られている検索結果を手掛かりとする一方，
+2つのWikipedia法では，新たにWebにアクセスし，Wikipedia記事を取得する手間
+がかかるためである．
+}．
+
+
+\subsection{Components法}
+
+Components法の流れは次の通りである．
+
+\begin{enumerate}
+ \item 未知語を構成する基本語を抽出する．
+ \item 基本語ドメイン辞書を参照して，各基本語にドメインとIDF値を付与する．
+ \item IDF値合計が最も高いドメインを未知語に割り当てる．ただし，IDF値合計
+       が最も高いドメインが〈ドメイン無し〉の場合，次の条件のもと，2番目
+       にIDF値が高いドメインに割り当てる．
+       $$\frac{\textrm{2番目のドメインのIDF値}}{\textrm{〈ドメイン無し〉のIDF値}}>0.15$$
+\end{enumerate}
+
+例えば未知語が「金融市場」の場合，その構成語である基本語「金融」と「市場」
+のドメインを手掛かりとして「金融市場」のドメインを得る．
+
+ドメイン推定の所要時間は約4秒である\footnote{
+これは，
+未知語が入力されてから，Wikipedia-strict法とWikipedia-loose法，Snippets
+法を経由した後，Components法によりドメインが出力されるまでの時間である．
+他の3つの手法よりも高速なのは，基本語抽出対象が他の手法よりもずっと小規
+模で，かつ，Wikipedia法のように新たにWebにアクセスする必要もないからであ
+る．
+}．
+
+
+\section{ブログ分類と未知語ドメイン推定の評価実験 \label{eval}}
+
+\S\ref{bunrui-method}の手法に基づいてブログ分類実験を行い，分類の正解率を調査し
+た．
+また，ブログ分類の際に行われた未知語ドメイン推定の結果についても正解率を
+調査した．
+
+
+\subsection{実験条件}
+
+\subsubsection{評価データ}
+
+\begin{table}[b]
+\caption{ドメインとYahoo!ブログカテゴリの対応関係}
+\label{domain-yahoo}
+\begin{center}
+\input{04table04.txt}
+\end{center}
+\end{table}
+
+分類対象のブログ記事は，Yahoo!ブログ (\url{http://blogs.yahoo.co.jp/})
+から，各ドメインにつき50記事ずつ，計600記事得た．
+Yahoo!ブログでは，記事が投稿時に著者によってカテゴリ（本研究のドメイ
+ンに相当するもの）に分類されている．
+本研究では，ドメインごとに対応するYahoo!ブログカテゴリを決めておいて，
+そのカテゴリからドメインごとに50記事ずつ集めた．
+今回の実験で使用したドメインとYahoo!ブログカテゴリの対応関係は
+表\ref{domain-yahoo}の通りである．
+これらのYahoo!ブログカテゴリは，本研究のドメインの定義とよくマッチし，か
+つ，なるべく広範な内容をカバーするように選定した\footnote{
+ただし，Yahoo!ブログには，明らかに分類がおかしい，あるいは
+Yahoo!ブログカテゴリ（ドメイン）の趣旨に合致しがたい記事も存在する．
+例えば，「科学」のYahoo!ブログカテゴリに，慰安旅行について書かれた記事が
+分類されていた．
+また，文章がなく，写真や画像だけの記事もある．
+そのような記事はあらかじめ人手でより適切な記事と入れ換えた．
+結果として，およそ3割の記事が入れ換えが必要だった．
+}．
+
+
+
+\subsubsection{評価方法}
+
+ブログ分類手法と未知語ドメイン推定手法それぞれに対し，
+正解率を測定した．
+
+ブログ分類手法の評価では，ブログ分類における未知語ドメイン推定の効果を調
+べるために，分類の手掛かりに利用する語として，「基本語のみ」，
+「基本語$+$単純未知語」，
+「基本語$+$全未知語（単純未知語と複合名詞未知語の両方）」の3通りを試した．
+さらに，IDF値合計がトップのものだけでなく，上位N位までに正解が含まれてい
+るかも調べた\footnote{ただし\dom{ドメイン無し}は除く．}．
+
+\revise{
+加えて，人手修正無しの基本語ドメイン辞書を用いた場合と，
+スコアにIDF値ではなくドメインごとの語数を用いた場合の
+ブログ分類結果も調査した．
+これらに関しては「基本語$+$全未知語」のみを試した．
+}
+
+未知語ドメイン推定手法の評価では，分類実験評価データ中の未知語約
+12,000語のドメイン推定結果から500件をサンプリングして正解率を調べた．
+複数ドメインに属すると考えられる語に関しては，そのうちの1つが推定されて
+いれば正解とした．
+また，未知語ドメイン推定で使用した各手法 (Wikipedia-strict，
+Wikipedia-loose，Snippets，Components) の使用頻度とそれぞれの正解率も
+調べた．
+
+
+\subsection{ブログ分類結果}
+
+\begin{table}[b]
+\caption{ブログ分類正解率}
+\label{bunrui-eval-result}
+\begin{center}
+\input{04table05.txt}
+\end{center}
+\end{table}
+
+ブログ分類の正解率は表\ref{bunrui-eval-result}の通りである．
+この結果は，分類手法が\S\ref{bunrui-method}にあるようなごくシンプルなも
+のでも，
+基本語を対象に分類のための手掛かり（本研究ではドメイン情報）をしっかり整
+備することで，
+高い精度でブログ分類が可能であることを示している．
+また，「基本語$+$単純未知語」が「基本語のみ」をわずかだが上回り，
+「基本語$+$全未知語」がその他2つを上回っていることが，
+未知語ドメイン推定がブログ分類に効果的であることを示している．
+
+
+分類間違いの大半は，記事に書かれているあまり重要でない周辺的な話題を誤っ
+て取り上げてしまったことに起因する．
+例えば，観光旅行に関するある記事では，その記事の著者が旅行の交通手段に何
+度か言及したため，本来\dom{レクリエーション}に分類されるべきところを，
+誤って\dom{交通}に分類した．
+他に，経営・業務システムを開発しているシステムエンジニアに関する
+記事が，本来\dom{科学・技術}に分類されるべきところを，誤って
+\dom{ビジネス}に分類されたケースがある．
+
+\revise{
+手作業修正していない基本語ドメイン辞書を用いた場合のブログ分類結果は表
+}
+\ref{bunrui-eval-result-autodic}
+\revise{
+の通りである．
+}
+\revise{
+手作業修正無しの辞書でも正解率が80\%を越えているが，これは本研究の基本語
+ドメイン辞書構築手法の精度の高さを示している．
+一方，手作業修正を加えた場合に比べたら上位1位で10\%以上正解率が下がった．
+これは，正確に手作業修正が行われたことを示しており，本研究の成果である基
+本語ドメイン辞書の言語資源としての完成度の高さを示している．
+}
+
+
+\begin{table}[b]
+\captionwidth=0.45\textwidth
+\begin{minipage}{0.45\textwidth}
+\hangcaption{ブログ分類正解率（手作業修正無しの辞書を用いた場合）}
+\label{bunrui-eval-result-autodic}
+\begin{center}
+\input{04table06.txt}
+\end{center}
+\end{minipage}
+\hfill
+\begin{minipage}{0.45\textwidth}
+\hangcaption{ブログ分類正解率（スコアとして語数を用いた場合）}
+\label{bunrui-eval-result-wordfreq}
+\begin{center}
+\input{04table07.txt}
+\end{center}
+\end{minipage}
+\end{table}
+
+\revise{
+本研究ではドメインごとのIDF値の合計をブログ分類時のスコアとして使用した
+が，より単純に，ドメインごとの語数を用いた場合は，表
+}
+\ref{bunrui-eval-result-wordfreq}
+\revise{
+のような結果になる．
+}
+\revise{
+IDF値合計を用いた場合を若干下回っているが，これは単純に語数を用いるより，
+IDF値で重み付けすることがより効果的であることを示している．
+}
+
+
+\subsection{未知語ドメイン推定結果}
+
+未知語ドメイン推定の正解率は76.6\% (383/500)だった．
+
+各手法 (Wikipedia-strict，Wikipedia-loose，Snippets，Components) の
+使用頻度と正解率は表\ref{domest-methods-results}の通りである．
+最も使用頻度の高いSnippets法の正解率が76\%と比較的高い．
+最も精度の高いWikipedia-strict法の使用頻度はそれほど高くないが，
+今後Wikipediaのエントリ数が増えるにしたがい使用頻度が高くなり，
+その結果，未知語ドメイン推定全体の正解率も高まることが期待できる．
+
+
+\begin{table}[t]
+\caption{未知語ドメイン推定各手法の使用頻度と正解率}
+\label{domest-methods-results}
+\begin{center}
+\input{04table08.txt}
+\end{center}
+\end{table}
+
+
+単純未知語のドメイン推定の成功例として，\dom{ビジネス}として正しく推定さ
+れた「デイトレ」（「デイトレード」の略）が挙げられる．
+他には，\dom{文化・芸術}として推定された「レオナルド・ディカプリオ」など
+がある．
+複合名詞未知語のドメイン推定成功例には，「支持率」や「運動野」などが含
+まれる．
+前者は，その構成語である「支持」も「率」もそれ単体では\dom{ドメイン無し}
+だが，全体としては\dom{政治}であるということが正しく推定された．
+同様に，後者は，その構成語である「運動」も「野」もそれ単体では
+\dom{ドメイン無し}だが，全体としては\dom{健康・医学}であるということが正
+しく推定された．
+
+失敗例のほとんどは，\dom{ドメイン無し}かそれ以外かの判断を誤ったものであ
+る．
+主なものは，都道府県名と市区町村名，あるいはありふれた人名であり，
+本来どちらも\dom{ドメイン無し}に属する．
+しかし，前者は，ほとんどの地方自治体が行政等に関するホームページを開設し
+ているため，Wikipedia法あるいはSnippets法により，\dom{政治}と誤判定され
+る．
+後者に関する誤りは，ほとんどの人名が何らかのドメインと関連づけられてしま
+うというWebの性質により引き起こされる．
+つまり，どんなありふれた人名でも，それをクエリとしてWeb検索すると，
+何らかの特定のドメインに関するWebサイトが検索されてしまう．
+
+
+
+\section{関連研究 \label{related-work}}
+
+\subsection{ドメイン資源の関連研究}
+
+上位下位関係に比べると，単語間のドメイン関係に関する研究は
+少ない．
+上位下位関係については，多くの言語資源（シソーラス）が構築され，また，
+その構築方法に関する研究も活発である．
+一方，ドメイン関係では，構築された言語資源も構築に関する方法論もわず
+かである\footnote{
+\citeA{Fellbaum:WordNet:1998}は，
+WordNet等の語彙資源におけるドメイン情報の欠落を
+Tennis Problemと呼んでいる．
+}．
+
+既存のドメイン資源として挙げられるのはHowNet
+\cite{HowNet:Dong:Dong:2006}とWordNet \cite{Fellbaum:WordNet:1998}，
+そしてLDOCE \cite{LDOCE:1987}である．
+HowNetでは，ECONOMY，INDUSTRY，AGRICULTURE，
+EDUCATION等，計32のドメインが想定されている．
+WordNetではsynset間にドメインにあたる情報が定義されている．
+例えば，\textit{forehand}，\textit{rally}，\textit{match}は
+\textit{tennis}に関連づけられている．
+人間向けの辞書としては，LDOCEがドメインにあた
+る情報（subjectコード）を単語に付与している．
+しかしながら，上記のようなドメイン資源は英語や中国語などのごく少数の言語
+でしか利用できない．
+
+多くの言語でドメイン情報が利用できるようになるために，効率的なドメイン資
+源の構築方法が求められる\footnote{
+日本語では\citeA{Yoshimoto:Kinoshita:Shimazu:1997}がドメイン資源を構築し
+ているが，一般に公開されてはいない．
+}．
+しかし，従来のドメイン資源構築手法のほとんどは，LDOCEやWordNetといった，
+高度に構造化された既存の語彙資源を利用しており，そのような高価な語彙資源
+が存在しない言語に対しては適用できない．
+例えば，\citeA{guthrie91subjectdependent}はLDOCEにあるドメイン情報を利用
+して単語間のドメイン関係を得ている．
+\citeA{Magnini:Cavaglia:2000}では，WordNetにあるドメイン情報を拡充するこ
+とを目的に，上位のsynsetに手作業でドメイン情報を与え，その後，自動で下位
+階層にドメイン情報を伝搬させている．
+\citeA{Agirre:Ansa:Martinez:Hovy:2001}では，WordNetの各synsetに対し，Web
+から集めた文書集合から，そのsynsetと同じドメインに属する語を抽出している．
+Webから文書集合を集める際，効果的なクエリを生成するため，WordNetの意味情
+報を活用している．
+\citeA{Chang:Huang:Ker:Yang:2002}は，WordNetとFar East Dictionaryに定義さ
+れているドメイン情報から「ドメインタグ」を定義し，それをWordNetに付与し
+ている．
+このように，既存の手法はWordNetやLDOCE等の語彙資源の存在を前提にしている
+ため，そのような資源の無い言語には適用できない．
+
+そこで，高度に構造化された語彙資源に頼らないドメイン資源構築手法が望まれ
+る．
+そのような手法の第一候補は，情報検索や専門用語抽出の分野で開発された重要
+語抽出手法
+\cite{Frantzi:Ananiadou:Tsujii:1998,Hisamitsu:Tsujii:2003,中川:森:湯本:2003}
+であろう．
+しかし，\S\ref{2issues}で述べた通り，本研究のように基本語を対象としたド
+メインの場合，重要語抽出の元となる文書集合を正確に収集するのが非常に困難
+である．
+一方，本研究のドメイン資源構築手法は，文書集合もWordNetのような高価な語
+彙資源も必要としない．
+また，本研究では表\ref{domain-table}にある12ドメインを採用してドメイン資
+源を構築したが，\S\ref{domain-construction-method}で述べたように，
+本研究の基本語ドメイン辞書構築手法は特定のドメイン体系に依存しない．
+
+以上を踏まえると，本研究のドメイン資源研究における貢献は次の2点である．
+
+\begin{itemize}
+ \item （一般に利用可能な）世界初の日本語ドメイン資源を構築した．
+ \item 文書集合もWordNetのような高価な語彙資源も必要としないドメイン資源
+       構築手法を開発した．
+\end{itemize}
+
+
+\subsection{文書分類の関連研究}
+
+従来の文書分類手法は，機械学習等の統計的手法を用いたものがほとんどである．
+例えば，$k$-最近隣法 \cite{yang99evaluation}，
+決定木 \cite{lewis94comparison}，
+ナイーブベイズ \cite{lewis98naive}，
+決定リスト \cite{li99text}，
+サポートベクトルマシン \cite{平:春野:2000}，
+ブースティング \cite{schapire00boostexter}を用いたものがある．
+これらのような統計的手法では，訓練データとして大量の文書集合をあらかじめ
+用意しなくてはならない．
+近年，少量の正解情報が付与されたデータと正解情報のない大量のデータから分
+類器を構築する研究 \cite{Abney:2007}も行われているが，その技術は発展途上
+と言える．
+
+一方，本研究の分類手法では，基本語のみを対象に分類の手掛かり（
+ドメイン情報）を整備しておくだけで済む．
+上述の通り，本研究の基本語ドメイン辞書を作るには，高価な語彙資源も文書集
+合も必要なく，Webへのアクセスさえ用意すればよい．
+また，\S\ref{domain-construction-method}で述べた通り，構築の過程は全自動
+ではなく手作業をわずかに要するが，その作業は軽微なものである．
+
+本研究の分類手法は我々が構築した基本語ドメイン辞書に基づいているた
+め，分類体系が表\ref{domain-table}にある12ドメインに固定されている．
+しかし，\S\ref{domain-construction-method}で述べた通り，基本語ドメイン辞
+書のドメイン体系はユーザが目的に応じて自由に選べるため，
+我々が使用した12ドメインとは異なる分類体系を使用する場合，
+その体系に合わせて基本語ドメイン辞書を作りなおせばよい．
+そのコストは上述の通り軽微なものである．
+また，文書分類が実際に用いられる現場では，分類体系が頻繁に変更されるとい
+うことは考えにくいため，いったん基本語ドメイン辞書を構築すればそれで済む．
+
+本研究の分類手法のもう一つの強みは，未知語への対応能力である．
+\S\ref{bunrui-method}で述べた通り，本手法では，記事中に未知語を発見する
+と，リアルタイムでその語のドメインを推定する．
+そしてその正解率も77\%と実用に耐えうるものであった．
+この能力は，ブログのような，新たな語が次々に生まれ出るようなジャンル
+の文書を分類する際に非常に有効である．
+一方，上に挙げた統計的手法で未知語に対応するには，訓練データの文書集合を
+集め直す必要があり，大変手間がかかる．
+しかもブログを対象とした場合，次々と未知語が現れるため，訓練データの更新
+を短い周期で行う必要がある．
+
+以上をまとめると，本研究の文書分類研究における貢献は次のようになる．
+
+\begin{itemize}
+ \item 機械学習（そして文書集合）を必要としない，未知語にも柔軟に対応で
+       きる文書分類手法を開発した．
+\end{itemize}
+
+
+\section{まとめ \label{conclusion}}
+
+本研究では，意味処理技術の深化を目指し，基本語ドメイン辞書を構築した．
+基本語ドメイン辞書では，基本語約30,000語に対し，表\ref{domain-table}
+にある12のドメインを付与してある．
+基本語ドメイン辞書構築では，ドメイン体系の設計と，語とドメインの関連付け
+の2つが問題となる．
+1つ目の問題に関しては，本研究では深く立ち入ることを避け，Web検索エンジ
+ンディレクトリを参考に12のドメインを採用した．
+2つ目の問題には，
+文書集合も
+WordNetのような語彙資源も前提としない半自動の構築手法を開発した．
+その手法を基本語約30,000語に適用した結果，81.3\%の語に正しいドメインを付
+与することができた．
+基本語ドメイン辞書の完成版はその結果を人手で修正して作成した．
+
+また，基本語ドメイン辞書をブログ分類タスクに応用した．
+その手法は，基本語ドメイン辞書と未知語ドメイン推定法を利用して，ブログ記
+事中の語にドメインを付与し，結果，最も支配的なドメインに分類する，という
+ごくシンプルなものである．
+文書分類研究で主流の機械学習を用いた手法と違い，大量の文書集合は用いない．
+にもかかわらず，基本語のみを利用した場合でも正解率89\%，未知語ドメイン推
+定を併用した場合で正解率94\%と良好な結果を得た．
+未知語ドメイン推定も，全体の正解率が77\%と実用に耐えうるものである．
+
+本研究の貢献をまとめると次のようになる．
+
+\begin{itemize}
+ \item （一般に利用可能な）世界初の日本語ドメイン資源を構築した．
+ \item 文書集合もWordNetのような高価な語彙資源も必要としないドメイン資源
+       構築手法を開発した．
+ \item 機械学習（そして文書集合）を必要としない，未知語にも柔軟に対応で
+       きる文書分類手法を開発した．
+\end{itemize}
+
+本研究では基本語ドメイン辞書を文書分類に応用したが，
+今後，訳語選択と語義曖昧性解消への適用を行う予定である．
+\citeA{Tanaka:Bond:Baldwin:Fujita:Hashimoto:2007}では，
+処理対象の語と同じ文内に存在する基本語のドメインを手掛かりの一部として
+利用して語義曖昧性解消を試みた．
+一方我々は，より広い文脈に存在する語，しかも基本語と未知語の両方のドメイ
+ンを合わせて利用することを考えている．
+
+
+\acknowledgment
+
+京都大学情報学研究科—NTTコミュニケーション科学基礎研究所共同研究ユニッ
+トのメンバーの方々に感謝申し上げます．
+
+
+\begin{thebibliography}{}
+
+\bibitem[\protect\BCAY{Abney}{Abney}{2007}]{Abney:2007}
+Abney, S. \BBOP 2007\BBCP.
+\newblock {\Bem Semisupervised Learning for Computational Linguistics}.
+\newblock Chapman \& Hall.
+
+\bibitem[\protect\BCAY{Agirre, Ansa, Martinez, \BBA\ Hovy}{Agirre
+  et~al.}{2001}]{Agirre:Ansa:Martinez:Hovy:2001}
+Agirre, E., Ansa, O., Martinez, D., \BBA\ Hovy, E. \BBOP 2001\BBCP.
+\newblock \BBOQ Enriching WordNet concepts with topic signatures\BBCQ\
+\newblock In {\Bem Proceedings of the SIGLEX Workshop on ``WordNet and Other
+  Lexical Resources: Applications, Extensions, and Customizations'' in
+  conjunction with NAACL}.
+
+\bibitem[\protect\BCAY{Chang, Huang, Ker, \BBA\ Yang}{Chang
+  et~al.}{2002}]{Chang:Huang:Ker:Yang:2002}
+Chang, E., Huang, C.-R., Ker, S.-J., \BBA\ Yang, C.-H. \BBOP 2002\BBCP.
+\newblock \BBOQ Induction of Classification from Lexicon Expansion: Assigninig
+  Domain Tags to WordNet Entries\BBCQ\
+\newblock In {\Bem Proceedings of COLING-2002 Workshop on SEMANET},
+  \mbox{\BPGS\ 1--7}\ Taipei.
+
+\bibitem[\protect\BCAY{Dong \BBA\ Dong}{Dong \BBA\
+  Dong}{2006}]{HowNet:Dong:Dong:2006}
+Dong, Z.\BBACOMMA\ \BBA\ Dong, Q. \BBOP 2006\BBCP.
+\newblock {\Bem HowNet and the Computation of Meaning}.
+\newblock World Scientific Pub Co Inc.
+
+\bibitem[\protect\BCAY{Fellbaum}{Fellbaum}{1998}]{Fellbaum:WordNet:1998}
+Fellbaum, C. \BBOP 1998\BBCP.
+\newblock {\Bem WordNet: An Electronic Lexical Database}.
+\newblock MIT Press.
+
+\bibitem[\protect\BCAY{Frantzi, Ananiadou, \BBA\ Tsujii}{Frantzi
+  et~al.}{1998}]{Frantzi:Ananiadou:Tsujii:1998}
+Frantzi, K.~T., Ananiadou, S., \BBA\ Tsujii, J. \BBOP 1998\BBCP.
+\newblock \BBOQ {T}he {C}-value/{NC}-value {M}ethod of {A}utomatic
+  {R}ecognition for {M}ulti-word {T}erms\BBCQ\
+\newblock In {\Bem Proceedings of the Research and Advanced Technology for
+  Digital Libraries: Second European Conference, ECDL'98}, \mbox{\BPGS\
+  585--604}.
+
+\bibitem[\protect\BCAY{Guthrie, Guthrie, Wilks, \BBA\ Aidinejad}{Guthrie
+  et~al.}{1991}]{guthrie91subjectdependent}
+Guthrie, J.~A., Guthrie, L., Wilks, Y., \BBA\ Aidinejad, H. \BBOP 1991\BBCP.
+\newblock \BBOQ {S}ubject-{D}ependent {C}o-{O}ccurence and {W}ord {S}ense
+  {D}isambiguation\BBCQ\
+\newblock In {\Bem Proceedings of the 29th Annual Meeting of the Association
+  for Computational Linguistics}, \mbox{\BPGS\ 146--152}.
+
+\bibitem[\protect\BCAY{Hisamitsu \BBA\ Tsujii}{Hisamitsu \BBA\
+  Tsujii}{2003}]{Hisamitsu:Tsujii:2003}
+Hisamitsu, T.\BBACOMMA\ \BBA\ Tsujii, J. \BBOP 2003\BBCP.
+\newblock \BBOQ Measuring {T}erm {R}epresentativeness\BBCQ\
+\newblock In {\Bem Information Extraction in the Web Era}, \mbox{\BPGS\
+  45--76}. Springer-Verlag.
+
+\bibitem[\protect\BCAY{Lange \BBA\ Yang}{Lange \BBA\
+  Yang}{1999}]{Lange:Yang:1999}
+Lange, E.~D.\BBACOMMA\ \BBA\ Yang, J. \BBOP 1999\BBCP.
+\newblock \BBOQ Automatic Domain Recognition for Machine Translation\BBCQ\
+\newblock In {\Bem mt-vii}, \mbox{\BPGS\ 641--645}\ Singapore.
+
+\bibitem[\protect\BCAY{Lewis}{Lewis}{1998}]{lewis98naive}
+Lewis, D.~D. \BBOP 1998\BBCP.
+\newblock \BBOQ Naive ({B}ayes) at forty: The independence assumption in
+      information retrieval\BBCQ\
+\newblock In N{\'{e}}dellec, C.\BBACOMMA\ \BBA\ Rouveirol, C.\BEDS, {\Bem
+  Proceedings of {ECML}-98, 10th European Conference on Machine Learning},
+  \mbox{\BPGS\ 4--15}\ Chemnitz, DE. Springer Verlag, Heidelberg, DE.
+
+\bibitem[\protect\BCAY{Lewis \BBA\ Ringuette}{Lewis \BBA\
+  Ringuette}{1994}]{lewis94comparison}
+Lewis, D.~D.\BBACOMMA\ \BBA\ Ringuette, M. \BBOP 1994\BBCP.
+\newblock \BBOQ A comparison of two learning algorithms for text
+  categorization\BBCQ\
+\newblock In {\Bem Proceedings of {SDAIR}-94, 3rd Annual Symposium on Document
+  Analysis and Information Retrieval}, \mbox{\BPGS\ 81--93}\ Las Vegas, US.
+
+\bibitem[\protect\BCAY{Li \BBA\ Yamanishi}{Li \BBA\ Yamanishi}{1999}]{li99text}
+Li, H.\BBACOMMA\ \BBA\ Yamanishi, K. \BBOP 1999\BBCP.
+\newblock \BBOQ Text classification using {ESC}-based stochastic decision
+  lists\BBCQ\
+\newblock In {\Bem Proceedings of {CIKM}-99, 8th {ACM} International Conference
+  on Information and Knowledge Management}, \mbox{\BPGS\ 122--130}\ Kansas
+  City, US. ACM Press, New York.
+
+\bibitem[\protect\BCAY{Liddy \BBA\ Paik}{Liddy \BBA\
+  Paik}{1993}]{Liddy:Paik:1993}
+Liddy, E.\BBACOMMA\ \BBA\ Paik, W. \BBOP 1993\BBCP.
+\newblock \BBOQ {D}ocument {F}iltering {U}sing {S}emantic {I}nformation from a
+  {M}achine {R}eadable {D}ictionary\BBCQ\
+\newblock In {\Bem Proceedings of the ACL Workshop on Very Large Corpora},
+  \mbox{\BPGS\ 20--29}.
+
+\bibitem[\protect\BCAY{Magnini \BBA\ Cavagli\`{a}}{Magnini \BBA\
+  Cavagli\`{a}}{2000}]{Magnini:Cavaglia:2000}
+Magnini, B.\BBACOMMA\ \BBA\ Cavagli\`{a}, G. \BBOP 2000\BBCP.
+\newblock \BBOQ Integrating Subject Field Codes into WordNet\BBCQ\
+\newblock In {\Bem Proceedings of LREC-2000}, \mbox{\BPGS\ 1413--1418}\ Athens.
+
+\bibitem[\protect\BCAY{Proctor}{Proctor}{1987}]{LDOCE:1987}
+Proctor, P. \BBOP 1987\BBCP.
+\newblock {\Bem Longman Dictionary of Contemporary English}.
+\newblock Longman Group.
+
+\bibitem[\protect\BCAY{Rigau, Atserias, \BBA\ Agirre}{Rigau
+  et~al.}{1997}]{Rigau:Atserias:Agirre:1997}
+Rigau, G., Atserias, J., \BBA\ Agirre, E. \BBOP 1997\BBCP.
+\newblock \BBOQ Combining Unsupervised Lexical Knowledge Methods for Word Sense
+  Disambiguation\BBCQ\
+\newblock In {\Bem Proceedings of joint EACL/ACL 97}\ Madrid.
+
+\bibitem[\protect\BCAY{Schapire \BBA\ Singer}{Schapire \BBA\
+  Singer}{2000}]{schapire00boostexter}
+Schapire, R.~E.\BBACOMMA\ \BBA\ Singer, Y. \BBOP 2000\BBCP.
+\newblock \BBOQ {BoosTexter}: {A Boosting-based System for Text
+  Categorization}\BBCQ\
+\newblock {\Bem Machine Learning}, {\Bbf 39}  (2/3), \mbox{\BPGS\ 135--168}.
+
+\bibitem[\protect\BCAY{Tanaka, Bond, Baldwin, Fujita, \BBA\ Hashimoto}{Tanaka
+  et~al.}{2007}]{Tanaka:Bond:Baldwin:Fujita:Hashimoto:2007}
+Tanaka, T., Bond, F., Baldwin, T., Fujita, S., \BBA\ Hashimoto, C. \BBOP
+  2007\BBCP.
+\newblock \BBOQ {Word Sense Disambiguation Incorporating Lexical and Structural
+  Semantic Information}\BBCQ\
+\newblock In {\Bem Proceedings of the 2007 Joint Conference on Empirical
+  Methods in Natural Language Processing and Computational Natural Language
+  Learning (EMNLP-CoNLL)}, \mbox{\BPGS\ 477--485}.
+
+\bibitem[\protect\BCAY{Yang}{Yang}{1999}]{yang99evaluation}
+Yang, Y. \BBOP 1999\BBCP.
+\newblock \BBOQ {A}n {E}valuation of {S}tatistical {A}pproaches to {T}ext
+  {C}ategorization\BBCQ\
+\newblock {\Bem Information Retrieval}, {\Bbf 1}  (1/2), \mbox{\BPGS\ 69--90}.
+
+\bibitem[\protect\BCAY{Yoshimoto, Kinoshita, \BBA\ Shimazu}{Yoshimoto
+  et~al.}{1997}]{Yoshimoto:Kinoshita:Shimazu:1997}
+Yoshimoto, Y., Kinoshita, S., \BBA\ Shimazu, M. \BBOP 1997\BBCP.
+\newblock \BBOQ Processing of Proper Nouns and Use of Estimated Subject Area
+  for Web Page Translation\BBCQ\
+\newblock In {\Bem tmi97}, \mbox{\BPGS\ 10--18}\ Santa Fe.
+
+\bibitem[\protect\BCAY{黒橋\JBA 長尾}{黒橋\JBA 長尾}{1992}]{黒橋:長尾:1992}
+黒橋禎夫\JBA 長尾真 \BBOP 1992\BBCP.
+\newblock \JBOQ 長い日本語文における並列構造の推定\JBCQ\
+\newblock \Jem{情報処理学会論文誌}, {\Bbf 33}  (8), \mbox{\BPGS\ 1022--1031}.
+
+\bibitem[\protect\BCAY{黒橋\JBA 河原}{黒橋\JBA 河原}{2005}]{JumanManual:2005}
+黒橋禎夫\JBA 河原大輔 \BBOP 2005\BBCP.
+\newblock \Jem{日本語形態素解析システムJUMAN version 5.1 使用説明書}.
+\newblock 京都大学大学院情報学研究科.
+
+\bibitem[\protect\BCAY{平\JBA 春野}{平\JBA 春野}{2000}]{平:春野:2000}
+平博順\JBA 春野雅彦 \BBOP 2000\BBCP.
+\newblock \JBOQ Support Vector Machineによるテキスト分類における属性選択\JBCQ\
+\newblock \Jem{情報処理学会論文誌}, {\Bbf 41}  (4), \mbox{\BPGS\ 1113--1123}.
+
+\bibitem[\protect\BCAY{佐々木\JBA 佐藤\JBA 宇津呂}{佐々木\Jetal
+  }{2006}]{佐々木:佐藤:宇津呂:2006}
+佐々木靖弘\JBA 佐藤理史\JBA 宇津呂武仁 \BBOP 2006\BBCP.
+\newblock \JBOQ 関連用語収集問題とその解法\JBCQ\
+\newblock \Jem{自然言語処理}, {\Bbf 13}  (3), \mbox{\BPGS\ 151--176}.
+
+\bibitem[\protect\BCAY{中川\JBA 森\JBA 湯本}{中川\Jetal
+  }{2003}]{中川:森:湯本:2003}
+中川裕志\JBA 森辰則\JBA 湯本紘彰 \BBOP 2003\BBCP.
+\newblock \JBOQ 出現頻度と連接頻度に基づく専門用語抽出\JBCQ\
+\newblock \Jem{自然言語処理}, {\Bbf 10}  (1), \mbox{\BPGS\ 27--45}.
+
+\end{thebibliography}
+
+\begin{biography}
+\bioauthor{橋本　　力}{
+1999年福島大学教育学部卒業．2001年北陸先端科学技術大学院大学博士前期課程
+修了．2005年神戸松蔭女子学院大学大学院博士後期課程修了．京都大学情報学研
+ 究科産学官連携研究員を経て，2007年山形大学大学院理工学研究科助教，現在
+ に至る．理論言語学，自然言語処理の研究に従事．
+}
+\bioauthor{黒橋　禎夫}{
+1989年京都大学工学部電気工学第二学科卒業．1994年同大学院博士課程終了．京
+ 都大学工学部助手，京都大学大学院情報学研究科講師，東京大学大学院情報理
+ 工学系研究科助教授を経て，2006年京都大学大学院情報学研究科教授，現在に至
+ る．自然言語処理，知識情報処理の研究に従事．
+}
+
+\end{biography}
+
+\biodate
+
+
+\end{document}
+
