@@ -2,13 +2,177 @@
 use warnings;
 use strict;
 use diagnostics;
-
+use utf8;
+use MeCab;
+binmode(STDERR, ":utf8");
+open STDERR, '>:encoding(UTF-8)', './monitors/log' || die "Cannot reopen STDERR: $!";
 #####
-# 1. traverse zero sized rel_study file
-# 2. seperate document to paragraph(devide by more than two return keys)
-# 3. calc how many sentence each paragraph has
-# 4. calc rel score of each paragraph
-# 5. print the highest scored paragraph to the input zero sized rel_study file
+# GET list of directory thah include zero sized rel_study
+# REPEAT with each zero sized rel_study file
+	# SEPERATE document into paragraph
+	# CALCULATE how many sentences each paragraph include.
+	# MECAB each paragraph
+	# GET rel score by keywor matching
+	# PRINT the highes scored paragraph into input zero sized rel_study file.
 #####
 
 
+### 1. traverse zero sized rel_study file
+my $z_rel_dir_aref = &traverse();
+print "@$z_rel_dir_aref\n";
+for my $z_rel_dir (@$z_rel_dir_aref) {
+print "$z_rel_dir\n";
+### 2. seperate document to paragraph(devide by more than two return keys)
+	my $path_z_rel_origin = $z_rel_dir."/origin";
+	my $origin_parags_ref = &read_list_paragraph (\$path_z_rel_origin);
+
+### 3. calc how many sentence each paragraph has
+	my $nums_sent_in_parag_ref = &count_sent_in_parag($origin_parags_ref);
+
+
+#do mecab
+=begin mecab
+my @term_hash_par_ar;
+my $term_hash_parag_ar_ref = \@term_hash_par_ar;
+&do_mecab_parag($term_hash_parag_ar_ref);
+#my $term_hash_parag_ar_ref = &do_mecab_parag(\@term_hash_par_ar);
+sub do_mecab_parag {
+	my ($term_arhash_ref) = @_;
+	my $model = new MeCab::Model( '' );
+	my $c = $model->createTagger();
+	for my $idx (0..$#$origin_parags_ref) {
+		for (my $m = $c->parseToNode($origin_parags_ref->[$idx]); $m; $m = $m->{next}) {
+			$term_arhash_ref->[$idx]->{$m->{surface}}++;
+		}
+	}
+#	return $term_arhash_ref;
+}
+for my $idx (0..$#$origin_parags_ref) {
+	print "$origin_parags_ref->[$idx]\n";
+	print "**********$nums_sent_in_parag_ref->[$idx]\n"; 
+	for my $key (keys $term_hash_parag_ar_ref->[$idx]) {
+		print "$key: $term_hash_parag_ar_ref->[$idx]->{$key}\n";
+	}
+}
+=end mecab
+=cut
+	my $model = new MeCab::Model( '' );
+	my $c = $model->createTagger();
+	my @term_hash_par_ar;
+	my $term_arhash_ref = \@term_hash_par_ar;
+	for my $idx (0..$#$origin_parags_ref) {
+		for (my $m = $c->parseToNode($origin_parags_ref->[$idx]); $m; $m = $m->{next}) {
+			$term_arhash_ref->[$idx]->{$m->{surface}}++;
+		}
+	}
+
+### keyword matching
+	my $rel_match_regex = qr/
+	cite|提案|比較|
+	研究|方法|手法|
+	我々|本(?:研究|手法|論文)|本稿|
+	これ(?:まで|ら)の(?:研究|手法|方法)|
+	しかし|一方|ただ|
+	違い|異なる|異なり|
+	(?:で|て)(?:は)?ない|いない|できない
+	/ux;
+	my @parag_score;
+	for my $idx (0..$#$origin_parags_ref) {
+		for my $key (keys %{$term_arhash_ref->[$idx]}) {
+			if ($key =~ $rel_match_regex) {
+				$parag_score[$idx] += (1 * $term_arhash_ref->[$idx]->{$key});
+			}
+		}
+	}
+
+### get score
+#for my $idx (0..$#$origin_parags_ref) {
+#{
+#no warnings;
+#$nums_sent_in_parag_ref->[$idx]++;
+#$parag_score[$idx] /= $nums_sent_in_parag_ref->[$idx];
+#}
+#}
+
+#for my $idx (0..$#$origin_parags_ref) {
+#print "$origin_parags_ref->[$idx]\n";
+#print "********** num of sent in thin parag : $nums_sent_in_parag_ref->[$idx]\n"; 
+#printf "********** score of this parag: %d\n", $parag_score[$idx];
+#for (keys $term_arhash_ref->[$idx]) {
+#printf "%s: %d\n", $_, $term_arhash_ref->[$idx]->{$_};
+#}
+#print "**********\n";
+#}
+
+### get highest score paragraph
+	my $highest_score_parag_idx = 0;
+	for my $idx (1..$#$origin_parags_ref) {
+		if ( $parag_score[$idx] > $parag_score[$highest_score_parag_idx] ) {
+			$highest_score_parag_idx = $idx;
+		}
+	}
+
+#for my $idx (0..$#$origin_parags_ref) {
+#print "$origin_parags_ref->[$idx]\n";
+#print "**********$nums_sent_in_parag_ref->[$idx]\n"; 
+#for (keys $term_arhash_ref->[$idx]) {
+#print "$_: $term_arhash_ref->[$idx]->{$_}\n";
+#}
+#}
+#print "^^^^^^^^^^$origin_parags_ref->[$highest_score_parag_idx]\n";
+
+### write file
+	my $path_write = $z_rel_dir.'/related_study'; 
+	open my $fh, '>:encoding(UTF-8)', $path_write or die "Can't open $path_write: $!";
+	print $fh $origin_parags_ref->[$highest_score_parag_idx];
+	print $fh "\nscore of this paragraph is $parag_score[$highest_score_parag_idx]\n"; 
+	close $fh;
+
+}
+sub traverse {
+	my @zero_rel_dir_a;
+
+	my $path_log = './logs';
+	opendir my $dh_log, $path_log || die "Cannot open $path_log: $!";
+
+	for my $log_entry (readdir $dh_log) {
+		next if $log_entry eq '.' or $log_entry eq '..';
+		$path_log = './logs/'.$log_entry;
+		opendir my $dh_log_entry, $path_log || die "Cannnot open $path_log: $!";
+
+		for my $file (readdir $dh_log_entry) {
+			next if $file eq '.' or $file eq '..';
+			next if $file ne 'related_study'; 
+			my $pth_rel = $path_log."/".$file;
+			next if !(-z $pth_rel); # filter non-zero sized related_study file
+			($pth_rel) = $pth_rel =~ /(.*)\/.*/;
+			push @zero_rel_dir_a, $pth_rel;
+		}
+		close $dh_log_entry;
+	}
+	close $dh_log;
+
+	return \@zero_rel_dir_a;
+}
+
+sub read_list_paragraph {
+	my ($path_ref) = @_;
+	open my $fh, '<:encoding(UTF-8)', $$path_ref or die "Cannot open $$path_ref: $!";
+	my $contents = join '', <$fh>;
+	close $fh;
+	my @paragraphs = split /(?:\n){2,}/, $contents;
+	return \@paragraphs;
+}
+
+sub count_sent_in_parag {
+	my ($parags) = @_;
+
+	my @nums_dots;
+	for my $parag (@$parags) {
+		my @tmps = $parag =~ /(．|。)/ug;
+		my $num_dots = @tmps;
+#		print "$parag\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!$num_dots\n";
+		push @nums_dots, $num_dots; 
+	}
+	return \@nums_dots;
+}
