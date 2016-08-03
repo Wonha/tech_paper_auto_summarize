@@ -5,130 +5,69 @@ use diagnostics;
 use utf8;
 use MeCab;
 binmode(STDERR, ":utf8");
-open STDERR, '>:encoding(UTF-8)', './monitors/log' || die "Cannot reopen STDERR: $!";
+binmode(STDOUT, ":utf8");
 #####
-# GET list of directory thah include zero sized rel_study
+# GET list of directory that include zero sized rel_study
 # REPEAT with each zero sized rel_study file
 	# SEPERATE document into paragraph
 	# CALCULATE how many sentences each paragraph include.
 	# MECAB each paragraph
-	# GET rel score by keywor matching
+	# GET rel score by keyword matching
 	# PRINT the highes scored paragraph into input zero sized rel_study file.
 #####
 
 
-### 1. traverse zero sized rel_study file
+### 1. traverse log dir to find dir includes zero sized rel_study file
 my $z_rel_dir_aref = &traverse();
-print "@$z_rel_dir_aref\n";
 for my $z_rel_dir (@$z_rel_dir_aref) {
-print "$z_rel_dir\n";
-### 2. seperate document to paragraph(devide by more than two return keys)
+
+	print "$z_rel_dir\n";
+### 2. read origin doc from disk and seperate to paragraph (seperator: '\n{2,}')
 	my $path_z_rel_origin = $z_rel_dir."/origin";
-	my $origin_parags_ref = &read_list_paragraph (\$path_z_rel_origin);
+	my $origin_parag_aref = &read_list_paragraph (\$path_z_rel_origin);
 
 ### 3. calc how many sentence each paragraph has
-	my $nums_sent_in_parag_ref = &count_sent_in_parag($origin_parags_ref);
+	my $nums_sent_aref = &count_sent_in_parag ($origin_parag_aref);
 
+### 4. execute mecab to get surface word's term frequency per each paragraph
+	my $term_freq_for_parag_aohref = &get_surface_term_freq ($origin_parag_aref);
 
-#do mecab
-=begin mecab
-my @term_hash_par_ar;
-my $term_hash_parag_ar_ref = \@term_hash_par_ar;
-&do_mecab_parag($term_hash_parag_ar_ref);
-#my $term_hash_parag_ar_ref = &do_mecab_parag(\@term_hash_par_ar);
-sub do_mecab_parag {
-	my ($term_arhash_ref) = @_;
-	my $model = new MeCab::Model( '' );
-	my $c = $model->createTagger();
-	for my $idx (0..$#$origin_parags_ref) {
-		for (my $m = $c->parseToNode($origin_parags_ref->[$idx]); $m; $m = $m->{next}) {
-			$term_arhash_ref->[$idx]->{$m->{surface}}++;
-		}
-	}
-#	return $term_arhash_ref;
-}
-for my $idx (0..$#$origin_parags_ref) {
-	print "$origin_parags_ref->[$idx]\n";
-	print "**********$nums_sent_in_parag_ref->[$idx]\n"; 
-	for my $key (keys $term_hash_parag_ar_ref->[$idx]) {
-		print "$key: $term_hash_parag_ar_ref->[$idx]->{$key}\n";
-	}
-}
-=end mecab
-=cut
-	my $model = new MeCab::Model( '' );
-	my $c = $model->createTagger();
-	my @term_hash_par_ar;
-	my $term_arhash_ref = \@term_hash_par_ar;
-	for my $idx (0..$#$origin_parags_ref) {
-		for (my $m = $c->parseToNode($origin_parags_ref->[$idx]); $m; $m = $m->{next}) {
-			$term_arhash_ref->[$idx]->{$m->{surface}}++;
-		}
-	}
+### 5. evaluate each pargraph's score by keyword matching to check whether appropriate for rel_study or not.
+	my $score_parag_aref = &get_parag_score_by_rel_keyword_matching ($origin_parag_aref, $term_freq_for_parag_aohref);
 
-### keyword matching
-	my $rel_match_regex = qr/
-	cite|提案|比較|
-	研究|方法|手法|
-	我々|本(?:研究|手法|論文)|本稿|
-	これ(?:まで|ら)の(?:研究|手法|方法)|
-	しかし|一方|ただ|
-	違い|異なる|異なり|
-	(?:で|て)(?:は)?ない|いない|できない
-	/ux;
-	my @parag_score;
-	for my $idx (0..$#$origin_parags_ref) {
-		for my $key (keys %{$term_arhash_ref->[$idx]}) {
-			if ($key =~ $rel_match_regex) {
-				$parag_score[$idx] += (1 * $term_arhash_ref->[$idx]->{$key});
-			}
-		}
-	}
+### 6. devide the score by number of sentences in the paragraph
+#	&devide_by_nums_sent ($score_parag_aref);
 
-### get score
-#for my $idx (0..$#$origin_parags_ref) {
-#{
-#no warnings;
-#$nums_sent_in_parag_ref->[$idx]++;
-#$parag_score[$idx] /= $nums_sent_in_parag_ref->[$idx];
-#}
-#}
-
-#for my $idx (0..$#$origin_parags_ref) {
-#print "$origin_parags_ref->[$idx]\n";
-#print "********** num of sent in thin parag : $nums_sent_in_parag_ref->[$idx]\n"; 
-#printf "********** score of this parag: %d\n", $parag_score[$idx];
-#for (keys $term_arhash_ref->[$idx]) {
-#printf "%s: %d\n", $_, $term_arhash_ref->[$idx]->{$_};
-#}
-#print "**********\n";
-#}
-
-### get highest score paragraph
+### 7. get the highest scored paragraph index
 	my $highest_score_parag_idx = 0;
-	for my $idx (1..$#$origin_parags_ref) {
-		if ( $parag_score[$idx] > $parag_score[$highest_score_parag_idx] ) {
+	for my $idx (1..$#$origin_parag_aref) {
+		if ( $score_parag_aref->[$idx] > $score_parag_aref->[$highest_score_parag_idx] ) {
 			$highest_score_parag_idx = $idx;
 		}
 	}
 
-#for my $idx (0..$#$origin_parags_ref) {
-#print "$origin_parags_ref->[$idx]\n";
-#print "**********$nums_sent_in_parag_ref->[$idx]\n"; 
-#for (keys $term_arhash_ref->[$idx]) {
-#print "$_: $term_arhash_ref->[$idx]->{$_}\n";
-#}
-#}
-#print "^^^^^^^^^^$origin_parags_ref->[$highest_score_parag_idx]\n";
-
-### write file
+### 8. write contents of the highest scored paragraph to cur zero sized rel_file. 
 	my $path_write = $z_rel_dir.'/related_study'; 
 	open my $fh, '>:encoding(UTF-8)', $path_write or die "Can't open $path_write: $!";
-	print $fh $origin_parags_ref->[$highest_score_parag_idx];
-	print $fh "\nscore of this paragraph is $parag_score[$highest_score_parag_idx]\n"; 
+	print $fh $origin_parag_aref->[$highest_score_parag_idx];
+	print $fh "\nscore of this paragraph is $score_parag_aref->[$highest_score_parag_idx]\n"; 
 	close $fh;
 
 }
+
+### print to STDOUT for debug
+#for my $idx (0..$#$origin_parag_aref) {
+#print "$origin_parag_aref->[$idx]\n";
+#print "********** num of sent in thin parag : $nums_sent_aref->[$idx]\n"; 
+#printf "********** score of this parag: %d\n", $score_parag_aref->[$idx];
+#for (keys $term_freq_for_parag_aohref->[$idx]) {
+#printf "%s: %d\n", $_, $term_freq_for_parag_aohref->[$idx]->{$_};
+#}
+#print "^^^^^^^^^^$origin_parag_aref->[$highest_score_parag_idx]\n";
+#print "**********\n";
+#}
+
+### take no parameters, return array reference whose elem is path of dir including zero sized rel_study file.
 sub traverse {
 	my @zero_rel_dir_a;
 
@@ -155,6 +94,7 @@ sub traverse {
 	return \@zero_rel_dir_a;
 }
 
+### take var reference for file path. return array reference that elem is token(paragraph).
 sub read_list_paragraph {
 	my ($path_ref) = @_;
 	open my $fh, '<:encoding(UTF-8)', $$path_ref or die "Cannot open $$path_ref: $!";
@@ -164,6 +104,7 @@ sub read_list_paragraph {
 	return \@paragraphs;
 }
 
+### take array reference of paragraphs. return array refernce of sentences numbers included in each paragraph
 sub count_sent_in_parag {
 	my ($parags) = @_;
 
@@ -176,3 +117,54 @@ sub count_sent_in_parag {
 	}
 	return \@nums_dots;
 }
+
+### take array reference of paragraphs. return array of hash reference where the hash indicates each surface frequency in paragraph.
+sub get_surface_term_freq {
+	my ($origin_parag_aref) = @_;
+
+	my $model = new MeCab::Model( '' );
+	my $c = $model->createTagger();
+	my @term_freq_for_parag_aoh; # array of ananomous hash where the hash indicates term frequency for 'surface word'. each index of array is parags in cur doc.
+	my $term_freq_for_parag_aohref = \@term_freq_for_parag_aoh;
+	for my $idx (0..$#$origin_parag_aref) {
+		for (my $m = $c->parseToNode($origin_parag_aref->[$idx]); $m; $m = $m->{next}) {
+			$term_freq_for_parag_aohref->[$idx]->{$m->{surface}}++;
+		}
+	}
+	return $term_freq_for_parag_aohref;
+}
+
+### take array reference of paragraphs, and term freq for paragraph aohref.
+sub get_parag_score_by_rel_keyword_matching {
+	my ($origin_parag_aref, $term_freq_for_parag_aohref) = @_;
+
+	my $rel_regex = qr/
+		cite|提案|比較|
+		研究|方法|手法|
+		我々|本(?:研究|手法|論文)|本稿|
+		これ(?:まで|ら)の(?:研究|手法|方法)|
+		しかし|一方|ただ|
+		違い|異なる|異なり|
+		(?:で|て)(?:は)?ない|いない|できない
+		/ux;
+	my @score_parag_a;
+	for my $idx (0..$#$origin_parag_aref) {
+		$score_parag_a[$idx] = 0;
+		for my $key (keys %{$term_freq_for_parag_aohref->[$idx]}) {
+			if ($key =~ $rel_regex) {
+				$score_parag_a[$idx] += (1 * $term_freq_for_parag_aohref->[$idx]->{$key});
+			}
+		}
+	}
+	return \@score_parag_a;
+}
+
+#sub devide_by_nums_sent {
+#for my $idx (0..$#$origin_parag_aref) {
+#{
+#no warnings;
+#$nums_sent_aref->[$idx]++;
+#$score_parag_aref->[$idx] /= $nums_sent_aref->[$idx];
+#}
+#}
+#}
