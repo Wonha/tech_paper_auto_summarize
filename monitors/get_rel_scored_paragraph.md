@@ -1,5 +1,8 @@
 # Get related study section score for each paragraph
 
+# kaizen
+- change regex \n{2,} to \r ( return character ) will probably fine.
+
 ## description
 get score for evaluta which paragraph is refering related study.
 

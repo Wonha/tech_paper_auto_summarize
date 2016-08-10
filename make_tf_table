@@ -4,7 +4,8 @@ use warnings;
 use diagnostics;
 use utf8;
 use MeCab;
-# use locale;
+use Encode;
+use locale;
 # use Unicode::Collate::Locale;
 # my $japan = Unicode::Collate::Locale->new( locale => 'ja_JP');
 
@@ -21,15 +22,22 @@ my $contents_origin_ref;
 my %tftable_hoa; 
 my $idx_doc_num = 0;
 
+my $word;
 my $pos;
+#my $word_filter_regex = qr/\$/u;
+my $word_filter_regex = qr[ ^(?:\ |\　|\!|\@|\#|\$|\%|\^|\&|\*|\(|\)|\-|\_|\=|\+|\\
+												|\||\`|\~|\[|\{|\]|\}|\;|\:|\'|\"|\,|\<|\.|\>|\/|\?
+												|\！|\＠|\＃|\＄|\％|\＾|\＆|\＊|\（|\）|\＿|\ー|\＝
+												|\＋|\￥|\｜|\｀|\〜|\、|\＜|\。|\＞|\・|\？|\；|\：|\’|\”|\「|\｛|\」|\｝|\．
+												)
+												]xu;
 
 ## except 'tf_table.md' from ./logs's file entry.
 my @path_has_origin_ar = grep {	$_ ne './logs/tf_table.md'} <@ARGV>;  
 my @name_has_origin_ar = map { /.*\/(.*)\//; } @path_has_origin_ar;
 
 ### OPEN output file
-open my $fh_output, '>', $path_output || die "Cannot open $path_output: $!";
-## do not set layer(encoding(UTF-8)) in order to MeCab's proper operation
+open my $fh_output, '>:encoding(UTF-8)', $path_output || die "Cannot open $path_output: $!";
 
 ### MAKE first and second line of markdown table format
 &make_first_two_lines($fh_output);
@@ -46,7 +54,7 @@ for my $path_cur_dir (@path_has_origin_ar) {
 }
 
 ### WRITE into output file
-&write_tf_table();
+&write_tf_table_file();
 
 close $fh_output;
 
@@ -57,6 +65,7 @@ close $fh_output;
 sub make_first_two_lines {
 	$fh_output = shift;
 	$" = ' | ';
+
 	print $fh_output "TF table | ";
 	print $fh_output "@name_has_origin_ar\n";
 	print $fh_output '--- ', ' | ---' x scalar @name_has_origin_ar, "\n";
@@ -72,30 +81,23 @@ sub read_origin {
 	return \$contents_origin;
 }
 
-#my $word_filter_regex = qr[ ^(?:\.|\/|\*|\_|\-| |\+|\%|\$|\#|\@|\!|\^|\&|\=|\`|\~|\,|\<|\>|\?|\'|\"|\;|\:|\{|\}) ]u;
 
 sub do_mecab {
 	my $model = new MeCab::Model( '' );
 	my $c = $model->createTagger();
 	for (my $m = $c->parseToNode($$contents_origin_ref); $m; $m = $m->{next}) {
+		$word = $m->{surface};
 		($pos) = split /,/, $m->{feature};
-		next if (ord($pos) == 231);
 
-		${$tftable_hoa{$m->{surface}}}[$idx_doc_num]++;
+		$word = decode('utf8',$word);
+    $pos = decode('utf8',$pos);
 
 ##### regex word filtering
-#		unless ( $m->{surface} =~ $word_filter_regex ) {
-#			${$tftable_hoa{$m->{surface}}}[$idx_doc_num]++;
-#		}
-#####
-
-##### use locale;
-#
-#		if (! ( $pos cmp '名詞' ) ) {
-#			${$tftable_hoa{$m->{surface}}}[$idx_doc_num]++;
-#			print ord($pos). chr('名詞'). "\n";
-#		}
-#####
+		unless ( $word =~ $word_filter_regex ) {
+			unless ( $word eq '') {
+				${$tftable_hoa{$word}}[$idx_doc_num]++;
+			}
+		}
 
 ##### use Unicode::Collate::Locale
 #
@@ -104,18 +106,20 @@ sub do_mecab {
 #			print $pos."\n";
 #		}
 #####
+
 	}
+
 	$idx_doc_num++;
 }
 
-sub write_tf_table {
+sub write_tf_table_file {
 	my $full_table;
 	for my $key (keys %tftable_hoa) {
 		my $line = $key . ' | ';
 		my $sub_line;
 ## set 0 for undef
 		for (0..($idx_doc_num-1)) {
-			${$tftable_hoa{$key}}[$_] = 0 if (not defined ${$tftable_hoa{$key}}[$_])
+			${$tftable_hoa{$key}}[$_] = 0  if (not defined ${$tftable_hoa{$key}}[$_])
 		}
 
 		$sub_line = join ' | ', @{$tftable_hoa{$key}};
@@ -123,5 +127,6 @@ sub write_tf_table {
 		$line .= "\n";
 		$full_table .= $line;
 	}
+
 	print $fh_output $full_table;
 }
