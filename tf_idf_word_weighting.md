@@ -1,4 +1,3 @@
-# newest version of this file is in ./tf\_idf\_word\_weighting.md
 # weighting each words
 - weighting each words per documents in order to get important words in that document.
 
@@ -8,7 +7,7 @@
 # process
 - file name : tf\_idf\_word\_weighting
 - input file: ./logs/tf\_table.md                                                  
-- output file: ./logs/[each doc dir]/tf\_idf.md                                     
+- output file: ./logs/[each doc dir]/tf\_idf\_weight                                     
 
 > READ first line of ./logs/tf\_table.md, assign to array file\_name\_arr     
 > READ and throw away second line                                             
