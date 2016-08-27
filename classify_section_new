@@ -1,0 +1,215 @@
+#!/usr/bin/perl
+use warnings;
+use strict;
+use diagnostics;
+use utf8;
+use File::Basename;
+binmode(STDOUT, ":utf8");
+binmode(STDERR, ":utf8");
+
+use constant { 
+	INTR => "はじめに|まえがき|序論|はしがき|背景",
+	RLTDSTDY => "関連研究|本課題",
+	PRPSDMTHD => "",
+	EXPRMNT => "実験|評価|評価実験|評定実験",
+	CNCLSN => "考察|結論|おわりに|終わりに|結び|むすび|まとめ|あとがき|む　す　び",
+};
+
+my @a_path_src = <@ARGV>;
+print "section_classify: number of input files: ".scalar @a_path_src."\n";
+
+my $switch_log = 1;
+my $num_done = 0;
+for my $path_src (@a_path_src) { 
+
+	my $basename_src = basename();
+
+# Making path for output.
+	my $dir_out = &init_path_output({
+				source => $basename_src,
+			});
+	my $pth_log = &init_log({
+				$dir_out
+			}) if ($switch_log);
+
+# Reading contents from src file.
+	my $whole_lines_src = &read_file($path_src);
+
+# Seperating contents by '\section{...}' token.
+	my(@heads_sec, @bodies_sec);
+	&seperate_sections($whole_lines_src, \@heads_sec, \@bodies_sec);
+
+# Classifying sections
+	my(@idxs_intr, @idxs_rltdstdy, @idxs_prpsdmthd, @idxs_exprmnt, @idxs_cnclsn);
+	&classify_sections(\@heads_sec, \@idxs_intr, \@idxs_rltdstdy, \@idxs_prpsdmthd, \@idxs_exprmnt, \@idxs_cnclsn);
+
+# make output files
+	&make_log_file($path_log, $path_src, \@heads_sec, \@idxs_intr, \@idxs_rltdstdy, \@idxs_prpsdmthd, \@idxs_exprmnt, \@idxs_cnclsn) if ($switch_log);
+	&make_section_file($path_output, \@heads_sec, \@bodies_sec, \@idxs_intr, \@idxs_rltdstdy, \@idxs_prpsdmthd, \@idxs_exprmnt, \@idxs_cnclsn, $whole_lines_src) if ($switch_section_file);
+	
+	$num_done++;
+	&output_stderr();
+}
+
+print "section_classify: number of processed files: $num_done\n";
+
+
+##### subroutines for classify processing #####
+sub read_file {
+	
+	my($path_source) = @_;
+
+	open my $fh, '<:encoding(UTF-8)', $path_source || die "Cannot open '$path_source': $!";
+	my $whole_lines_source = join '', <$fh>;
+	close $fh;
+
+#my ($path_copy) = $path_source =~ /.*\/(.*)/;
+#$path_copy = "./logs/".$path_copy."/origin";
+#open my $fh_copy, '>:encoding(UTF-8)', $path_copy || die "Cannot open '$path_copy': $!";
+#print $fh_copy $whole_lines_source;
+#print $whole_lines_source;
+#close $fh_copy;
+	
+	return $whole_lines_source;
+}
+
+sub seperate_sections {
+	
+	my($entire_lines_src, $ref_heads, $ref_bodies) = @_;
+
+	while ( $entire_lines_src =~ s/
+			\\section\ ?\{([^\n]+?)\}
+			(.*?)
+			((?:\\section\ ?\{(?:[^\n]+?)\})|(?:\\end\{document\})|(?:\\appendix))
+			/$3/sumx ) {
+		push @$ref_heads, $1;
+		push @$ref_bodies, $2;
+	}
+	
+}
+
+sub classify_sections {
+
+	my($ref_heads, $ref_intrs, $ref_rltdstdys, $ref_prpsdmthds, $ref_exprmnts, $ref_cnclsns) = @_;
+	my $last_idx_heads = scalar @$ref_heads - 1;
+
+	for my $idx (0..$last_idx_heads) {
+#=begin IF
+		if ( @$ref_heads[$idx] =~ /.*?(@{[INTR]}).*?/su ) {
+			push @$ref_intrs, $idx;
+		} elsif ( @$ref_heads[$idx] =~ /.*?(@{[RLTDSTDY]}).*?/su ) {
+			push @$ref_rltdstdys, $idx;
+		} elsif ( @$ref_heads[$idx] =~ /.*?(@{[EXPRMNT]}).*?/su ) { 
+			push @$ref_exprmnts, $idx;
+		} elsif ( @$ref_heads[$idx] =~ /.*?(@{[CNCLSN]}).*?/su ) {
+			push @$ref_cnclsns, $idx;
+		} else {
+			push @$ref_prpsdmthds, $idx;
+		}
+#=cut
+=begin GIVEN
+		{
+			use 5.010001;
+			given ( @$ref_heads[$idx] ) {
+					when ( /^(@{[INTR]}).*?/su ) { push @$intrs_ref, $idx }
+					when ( /^(@{[RLTDSTDY]}).*?/su ) { push @$ref_rltdstdys, $idx }
+					when ( /^(@{[EXPRMNT]}).*?/su ) { push @$ref_exprmnts, $idx }
+					when ( /^(@{[CNCLSN]}).*?/su ) { push @$ref_cnclsns, $idx }
+					default { push @$ref_prpsdmthds, $idx; }
+				}
+		}
+=cut
+	}
+}
+
+
+##### subroutines for output #####
+sub init_path_output {
+
+	my ($h_arg) = @_;
+	my $path_out = './logs';
+	if ( ! -e $path_out || (-e $path_out && (!-d $path_out))) {
+		mkdir $path_out, 0755 || warn "Cannot make $path_out: $!";
+	} else {
+	}
+
+# make directory './logs/(name of src file)'
+	my $pre_dot;
+#	$name_src_file =~ /(.*)\./ ? $pre_dot = $1 : $pre_dot = $name_src_file;
+	if ($name_src_file =~ /(.*)\./) {	$pre_dot = $1; }
+	else { $pre_dot = $name_src_file; }
+
+	$path_out .= "/$pre_dot";
+	if ( -e $path_out && -d $path_out) {
+		unlink glob "${path_out}* ${path_out}.*";
+		rmdir $path_out;
+	} else {
+	}
+	mkdir $path_out, 0755 || warn "Cannot make $path_out: $!";
+		
+	$path_out;
+}
+
+sub init_log_file {
+	
+	my ($path_out) = @_;
+
+	my $path_log_file = $path_out."/log_classify_section.md";
+	open STDERR, '>:encoding(UTF-8)', $path_log_file || die "Cannot reopen STDERR: $!";
+
+	$path_log_file;
+}
+
+sub make_log_file {
+
+	my ($path_log_file, $path_src_file, $ref_heads, $ref_intrs, $ref_rltdstdys, $ref_prpsdmthds, $ref_exprmnts, $ref_cnclsns) = @_;
+	print STDERR '構成要素'.' | '."節のタイトル"."\n";
+	print STDERR " --- | --- \n";
+	printf STDERR "序論 | @$ref_heads[$_]\n" for @$ref_intrs;
+	printf STDERR "関連研究 | @$ref_heads[$_]\n" for @$ref_rltdstdys;
+	printf STDERR "提案手法 | @$ref_heads[$_]\n" for @$ref_prpsdmthds;
+	printf STDERR "実験結果 | @$ref_heads[$_]\n" for @$ref_exprmnts;
+	printf STDERR "結論 | @$ref_heads[$_]\n" for @$ref_cnclsns;
+
+	print STDERR "\n論文に含まれた各節\n";
+	system "fgrep \\\\section $path_src_file >> $path_log_file";
+}
+
+sub make_section_file {
+
+	my ($path_out, $ref_heads, $ref_bodies, $ref_intrs, $ref_rltdstdys, $ref_prpsdmthds, $ref_exprmnts, $ref_cnclsns, $whole_lines) = @_;
+	my $fn_intrs = $path_out."/intro";
+	my $fn_rltdstdys = $path_out."/related_study";
+	my $fn_prpsdmthds = $path_out."/proposed_method";
+	my $fn_exprmnts = $path_out."/experiment";
+	my $fn_cnclsns = $path_out."/conclusion";
+	my $fn_copy = $path_out."/origin";
+
+	open my $fh_intrs, '>:encoding(UTF-8)', $fn_intrs || die "Cannot open $fn_intrs: $!"; 
+	open my $fh_rltdstdys, '>:encoding(UTF-8)', $fn_rltdstdys || die "Cannot open $fn_rltdstdys: $!";
+	open my $fh_prpsdmthds, '>:encoding(UTF-8)', $fn_prpsdmthds || die "Cannot open $fn_prpsdmthds: $!";
+	open my $fh_exprmnts, '>:encoding(UTF-8)', $fn_exprmnts || die "Cannot open $fn_exprmnts: $!";
+	open my $fh_cnclsns, '>:encoding(UTF-8)', $fn_cnclsns || die "Cannot open $fn_cnclsns: $!";
+	open my $fh_copy, '>:encoding(UTF-8)', $fn_copy || die "Cannot open $fn_copy: $!";
+
+	print $fh_intrs @$ref_heads[$_].@$ref_bodies[$_] for @$ref_intrs;	
+	print $fh_rltdstdys @$ref_heads[$_].@$ref_bodies[$_] for @$ref_rltdstdys;
+	print $fh_prpsdmthds @$ref_heads[$_].@$ref_bodies[$_] for @$ref_prpsdmthds;
+	print $fh_exprmnts @$ref_heads[$_].@$ref_bodies[$_] for @$ref_exprmnts;
+	print $fh_cnclsns @$ref_heads[$_].@$ref_bodies[$_] for @$ref_cnclsns;	
+	print $fh_copy $whole_lines;
+
+	close $fh_intrs;
+	close $fh_rltdstdys;
+	close $fh_prpsdmthds;	
+	close $fh_exprmnts;
+	close $fh_cnclsns;
+	close $fh_copy;
+}
+
+
+
+
+
+
+

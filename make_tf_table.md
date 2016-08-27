@@ -4,7 +4,7 @@
 - change regex by applying escape sequence.
 
 ## process
-name for program : make\_tf\_table.md  
+usage :./make\_tf\_table ./logs/V\*/   
 input file : ./log/\* (directory name)   
 output file : ./log/tf\_table.md
 

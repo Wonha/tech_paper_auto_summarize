@@ -1,5 +1,16 @@
 # Classify section
 ## Description:
+- classify input file into each section files. and also store original file, and log file into the new directory
+	Input:
+		List of path to source file.
+	Output:
+		1. Writing section files 
+			'./logs/[INPUT_FILE_NAME]/[CLASSIFIED_SECTION]'.
+		1. Writing original file
+			'./logs/[INPUT_FILE_NAME]/origin'.
+		3. Writing log file 
+			'./logs/[FILE_NAME]/'log_classify_section.md'.
+
 	PROCESS:
 		1. Read from src path from invoked vars.
 		2. Get src name from src path.
@@ -9,20 +20,10 @@
 		6. Classify sections.
 		7. Get the logs.
 
-	Input:
-		List of path to source file.
-	Output:
-		1. Writing files by section unit 
-			'./logs/[FILE_NAME]/[CLASSIFIED_SECTION]'.
-		2. Writing log file 
-			'./logs/[FILE_NAME]/[log_classify_section'.
-
 ## Usage
-
-
 In the base directory, 
 ```shell
-./section_classify [LIST OF PATH TO SOURCE FILE]
+./section_classify [LIST OF PATH TO INPUT FILE]
 ```
 
 		
