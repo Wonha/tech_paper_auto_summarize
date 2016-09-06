@@ -1,0 +1,87 @@
+#!/usr/bin/perl
+##### 
+# input : `./latex_corpus/NLP_LATEX_CORPUS/V*`(directory)
+# output : `./train_data/V*`(file)
+# usage : `./sep_test_data`
+#
+# process : 
+# 	1. get list of file in the corpus
+# 	1. filter non-japanese files
+# 	1. seprate test and develop data
+#####
+use strict;
+use warnings;
+use diagnostics;
+use File::Basename qw( basename );
+use File::Copy;
+
+my (@ar_rp_file_corpus, @ar_rp_file_jpn, @ar_rp_file_test, @ar_rp_file_dev);
+
+
+### get files from corpus
+@ar_rp_file_corpus = <./latex_corpus/NLP_LATEX_CORPUS/V*/V*>; # /
+
+
+### filter non-jpn files
+@ar_rp_file_jpn= grep {	&read_file($_) =~ /\\jabstract\{[^\}]+/; } @ar_rp_file_corpus;
+
+
+### seperate test & dev data
+@ar_rp_file_dev = grep {
+	basename($_) =~ /(\d\d)\./;
+#	$1%8 ? 1 : do { push @ar_rp_file_test, $_; 0 };
+	$1%8 or !(push @ar_rp_file_test, $_);
+} @ar_rp_file_jpn;
+
+push @ar_rp_file_test, pop @ar_rp_file_dev;
+push @ar_rp_file_test, pop @ar_rp_file_dev;
+
+
+&copy_file_from_corpus();
+&print_log();
+
+
+
+### input: path of file
+### output: contents of file with one scalar value
+sub read_file {
+	my $pth_file = shift;
+	local $/;
+	local $SIG{__WARN__} = sub { die $_[0]."[[$pth_file]]" }; # turn warning into the fetal error.
+	local @ARGV = ( $pth_file );
+	return <>;
+}
+
+
+### input: none
+### output: none
+sub copy_file_from_corpus {
+	for my $dir (qw! dev_data test_data !) {
+		(-e $dir && -d _) ?
+			do { unlink <$dir/*> or die "Cannot unlink: $!" if (<$dir/*>); } :
+			do { mkdir $dir, 0755 or die "Cannot create directory: $!"; };
+
+		($dir eq 'dev_data') ?
+			do { copy( $_, "$dir/" ) for (@ar_rp_file_dev) } :
+			do { copy( $_, "$dir/" ) for (@ar_rp_file_test) } ;
+	}
+}
+
+
+### input: none
+### output: none
+sub print_log {
+	local $" = "\n";
+	my $num_file_corpus = @ar_rp_file_corpus;
+	my $num_file_test = @ar_rp_file_test;
+	my $num_file_dev = @ar_rp_file_dev;
+	my $num_file_jpn = @ar_rp_file_jpn;
+
+	print <<END;
+number of files in the corpus : $num_file_corpus
+number of files in japanese   : $num_file_jpn
+numbers for development data  : $num_file_dev
+numbers for test data         : $num_file_test
+END
+	return;
+}
