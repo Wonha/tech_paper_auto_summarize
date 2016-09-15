@@ -1,12 +1,12 @@
 #!/usr/bin/perl
 use strict;
 
-
-use MeCab;
+use lib qw(extlib/lib/perl5);
+use Text::MeCab;
 
 my $sentence = "太郎はこの木を二郎を見た女性に渡した。{";
 
-my $model = new MeCab::Model( '' );
+my $model = new Text::MeCab::Model( '' );
 my $c = $model->createTagger();
 my %hash;
 
