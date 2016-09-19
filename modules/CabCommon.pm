@@ -1,4 +1,4 @@
-package TechAutoSum;
+package CabCommon;
 use strict;
 use warnings;
 
