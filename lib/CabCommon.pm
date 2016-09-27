@@ -1,6 +1,7 @@
 package CabCommon;
 use strict;
 use warnings;
+use v5.10; # using state
 use open IO=> ':encoding(utf8)';
 binmode STDIN, ':encoding(utf8)';
 binmode STDOUT, ':encoding(utf8)';
@@ -35,7 +36,6 @@ use constant { # make keyword list
 ### input: path to latex file
 ### output: section structure
 sub latex_to_section {
-
 ### cut head and tail
 	my $path_file = shift;
 	my @lines = ();
@@ -72,19 +72,12 @@ sub latex_to_section {
 #	print "@section_list";
 
 ### make structure
-### hierchy
-### 1. first array
-### 1. second hash
-### 1. etc
   my $struct;
 	my $tail_sent = -1;
 	my $tail_chunk = 0;
-### before structured data
-#	my $i = 0;
-###
 	for my $sec (@section_list) {
 		my @result;
-		if ( (not defined $struct->[1]{'type'}) &&$sec =~ s/\\jabstract\{/\{/o ) {
+		if ( (not defined $struct->[1]{'type'}) && ($sec =~ s/\\jabstract\{/\{/o) ) {
 			$tail_chunk++;
 			$struct->[$tail_chunk]{'type'} = "abstract";
 			$struct->[$tail_chunk]{'title'} = "abstract";
@@ -96,51 +89,34 @@ sub latex_to_section {
 			my @sent = &LatexToSentencelist($result[0]);
 			$struct->[0][$tail_sent++] = $_ for (@sent);
 #			print $struct->[0][$_]."\n" for (0..$#{$struct->[0]}); # for debug
-#
+
 			$struct->[$tail_chunk]{'end'} = --$tail_sent;
-		} elsif ( $sec =~ s/\\section\{/\{/o ) {
+		} elsif ( $sec =~ /\\section\{/o ) {
+			$tail_chunk++;
+			$struct->[$tail_chunk]{'type'} = _get_section_type();
+			$struct->[$tail_chunk]{'title'} = _get_section_title();
+			$struct->[$tail_chunk]{'start'} = ++$tail_sent;
+
+			my @sent = &LatexToSentencelist($sec);
+			$struct->[0][$tail_sent++] = $_ for (@sent);
+
+			$struct->[$tail_chunk]{'end'} = --$tail_sent;
+
 		} else {}
 	}
-
 	warn "$path_file: abstract not found" if ( not defined $struct->[1]{'type'} );
 
-	use Data::Dumper;
-#	print Dumper($struct);
 	return $struct;
-### before structured data
-#	my $i = 0;
-#	for my $sec (@section_list) {
-#		my @result;
-#		if ( $sec =~ s/\\jabstract\{/\{/o ) {
-#
-#			@result = extract_bracketed($sec, '{}');
-#			substr($result[0], 0, 1) = '';
-#			substr($result[0], -1, 1) = '';
-#			$structure->[$i][0] = 'abstract';
-#			my @sent = &LatexToSentencelist($result[0]);
-#			$structure->[$i++][1] = \@sent;
-#
-#		} elsif ( $sec =~ s/\\section\{/\{/o ) {
-#			@result = extract_bracketed($sec, '{}');
-#			substr($result[0], 0, 1) = '';
-#			substr($result[0], -1, 1) = '';
-#			$structure->[$i][0] = $result[0];
-#			my @sent = &LatexToSentencelist($result[1]);
-#			$structure->[$i++][1] = \@sent;
-#		} else {}
-#	}
-#
-#### for debug
-#	print "########################################################\n";
-#	print "########################################################\n";
-#	for my $i (0..$#$structure) {
-#		print "$structure->[$i][0]\n";
-#		print "--------------------------------------------------------\n";
-#		print "@{$structure->[$i][1]}\n";
-#		print "########################################################\n";
-#		print "########################################################\n";
-#	}
-###
+}
+
+sub _get_section_type {
+	state $num = 1;
+	return "section ".$num++;
+}
+
+sub _get_section_title {
+	state $num = 1;
+	return "section ".$num++;
 }
 
 ### input: 
