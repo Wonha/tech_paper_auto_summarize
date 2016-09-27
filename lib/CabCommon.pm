@@ -54,7 +54,7 @@ sub latex_to_section {
 		push(@lines, $_) if $flag;
 	}
 
-### make bundle
+### make chunk
 	my $section = '';
 	my @section_list = ();
 	my $structure;
@@ -76,37 +76,71 @@ sub latex_to_section {
 ### 1. first array
 ### 1. second hash
 ### 1. etc
-
-	my $i = 0;
+  my $struct;
+	my $tail_sent = -1;
+	my $tail_chunk = 0;
+### before structured data
+#	my $i = 0;
+###
 	for my $sec (@section_list) {
 		my @result;
-		if ( $sec =~ s/\\jabstract\{/\{/o ) {
-			@result = extract_bracketed($sec, '{}');
-			substr($result[0], 0, 1) = '';
-			substr($result[0], -1, 1) = '';
-			$structure->[$i][0] = 'abstract';
-			my @sent = &LatexToSentencelist($result[0]);
-			$structure->[$i++][1] = \@sent;
+		if ( (not defined $struct->[1]{'type'}) &&$sec =~ s/\\jabstract\{/\{/o ) {
+			$tail_chunk++;
+			$struct->[$tail_chunk]{'type'} = "abstract";
+			$struct->[$tail_chunk]{'title'} = "abstract";
+			$struct->[$tail_chunk]{'start'} = ++$tail_sent;
 
+			@result = extract_bracketed($sec, '{}'); # [0]: matched, [1]: remains
+			substr($result[0], 0, 1) = '';	 # omit { 
+			substr($result[0], -1, 1) = '';  # omit }
+			my @sent = &LatexToSentencelist($result[0]);
+			$struct->[0][$tail_sent++] = $_ for (@sent);
+#			print $struct->[0][$_]."\n" for (0..$#{$struct->[0]}); # for debug
+#
+			$struct->[$tail_chunk]{'end'} = --$tail_sent;
 		} elsif ( $sec =~ s/\\section\{/\{/o ) {
-			@result = extract_bracketed($sec, '{}');
-			substr($result[0], 0, 1) = '';
-			substr($result[0], -1, 1) = '';
-			$structure->[$i][0] = $result[0];
-			my @sent = &LatexToSentencelist($result[1]);
-			$structure->[$i++][1] = \@sent;
 		} else {}
 	}
-### for debug
-	print "########################################################\n";
-	print "########################################################\n";
-	for my $i (0..$#$structure) {
-		print "$structure->[$i][0]\n";
-		print "--------------------------------------------------------\n";
-		print "@{$structure->[$i][1]}\n";
-		print "########################################################\n";
-		print "########################################################\n";
-	}
+
+	warn "$path_file: abstract not found" if ( not defined $struct->[1]{'type'} );
+
+	use Data::Dumper;
+#	print Dumper($struct);
+	return $struct;
+### before structured data
+#	my $i = 0;
+#	for my $sec (@section_list) {
+#		my @result;
+#		if ( $sec =~ s/\\jabstract\{/\{/o ) {
+#
+#			@result = extract_bracketed($sec, '{}');
+#			substr($result[0], 0, 1) = '';
+#			substr($result[0], -1, 1) = '';
+#			$structure->[$i][0] = 'abstract';
+#			my @sent = &LatexToSentencelist($result[0]);
+#			$structure->[$i++][1] = \@sent;
+#
+#		} elsif ( $sec =~ s/\\section\{/\{/o ) {
+#			@result = extract_bracketed($sec, '{}');
+#			substr($result[0], 0, 1) = '';
+#			substr($result[0], -1, 1) = '';
+#			$structure->[$i][0] = $result[0];
+#			my @sent = &LatexToSentencelist($result[1]);
+#			$structure->[$i++][1] = \@sent;
+#		} else {}
+#	}
+#
+#### for debug
+#	print "########################################################\n";
+#	print "########################################################\n";
+#	for my $i (0..$#$structure) {
+#		print "$structure->[$i][0]\n";
+#		print "--------------------------------------------------------\n";
+#		print "@{$structure->[$i][1]}\n";
+#		print "########################################################\n";
+#		print "########################################################\n";
+#	}
+###
 }
 
 ### input: 
