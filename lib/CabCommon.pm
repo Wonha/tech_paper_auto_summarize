@@ -36,6 +36,7 @@ use constant { # make keyword list
 ### output: section structure
 sub latex_to_section {
 
+### cut head and tail
 	my $path_file = shift;
 	my @lines = ();
 	my $flag = 0;
@@ -53,6 +54,7 @@ sub latex_to_section {
 		push(@lines, $_) if $flag;
 	}
 
+### make bundle
 	my $section = '';
 	my @section_list = ();
 	my $structure;
@@ -65,8 +67,15 @@ sub latex_to_section {
 		$section .= $l;
 	}
 	push(@section_list, $section) if $section;
+### for debug
 #	local $" = "\n################################################################\n";
 #	print "@section_list";
+
+### make structure
+### hierchy
+### 1. first array
+### 1. second hash
+### 1. etc
 
 	my $i = 0;
 	for my $sec (@section_list) {
@@ -88,7 +97,7 @@ sub latex_to_section {
 			$structure->[$i++][1] = \@sent;
 		} else {}
 	}
-
+### for debug
 	print "########################################################\n";
 	print "########################################################\n";
 	for my $i (0..$#$structure) {
