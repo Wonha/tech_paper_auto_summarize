@@ -2,6 +2,7 @@ package CabCommon;
 use strict;
 use warnings;
 use v5.10; # using state
+use utf8;
 use open IO=> ':encoding(utf8)';
 binmode STDIN, ':encoding(utf8)';
 binmode STDOUT, ':encoding(utf8)';
@@ -59,7 +60,7 @@ sub latex_to_section {
 	my @section_list = ();
 	my $structure;
 	for my $l (@lines) {
-		if ($l =~ /\\section\{/o || $l =~ /\\jabstract\{/o) {
+		if ($l =~ /\\section\{/o || $l =~ /\\jabstract\{/o || $l =~ /\\subsection\{/o ) {
 			push(@section_list, $section) if $section;
 			$section = $l;
 			next;
@@ -75,12 +76,14 @@ sub latex_to_section {
   my $struct;
 	my $tail_sent = -1;
 	my $tail_chunk = 0;
+	my $tail_subsec = -1;
+	my $title;
 	for my $sec (@section_list) {
 		my @result;
 		if ( (not defined $struct->[1]{'type'}) && ($sec =~ s/\\jabstract\{/\{/o) ) {
 			$tail_chunk++;
-			$struct->[$tail_chunk]{'type'} = "abstract";
 			$struct->[$tail_chunk]{'title'} = "abstract";
+			$struct->[$tail_chunk]{'type'} = "abstract";
 			$struct->[$tail_chunk]{'start'} = ++$tail_sent;
 
 			@result = extract_bracketed($sec, '{}'); # [0]: matched, [1]: remains
@@ -88,20 +91,46 @@ sub latex_to_section {
 			substr($result[0], -1, 1) = '';  # omit }
 			my @sent = &LatexToSentencelist($result[0]);
 			$struct->[0][$tail_sent++] = $_ for (@sent);
-#			print $struct->[0][$_]."\n" for (0..$#{$struct->[0]}); # for debug
 
 			$struct->[$tail_chunk]{'end'} = --$tail_sent;
-		} elsif ( $sec =~ /\\section\{/o ) {
+
+		} elsif ( $sec =~ /\\section\{([\d\D]+?)\}/o ) {
 			$tail_chunk++;
-			$struct->[$tail_chunk]{'type'} = _get_section_type();
-			$struct->[$tail_chunk]{'title'} = _get_section_title();
+			$tail_subsec = -1;
+			$struct->[$tail_chunk]{'title'} = $title = $1;
+			$struct->[$tail_chunk]{'type'} = do {
+				if ( $title =~ /.*?(@{[TI_INTR]}).*?/ou ) {
+					'intro';
+				} elsif ($title =~ /.*?(@{[TI_RLTDSTDY]}).*?/ou) {
+					'related study';
+				} elsif ($title =~ /.*?(@{[TI_EXPRMNT]}).*?/ou ) {
+					'experiment result';
+				} elsif ($title =~ /.*?(@{[TI_CNCLSN]}).*?/ou ) {
+					'result';
+				} else {
+					'proposed method';
+				}
+			};
 			$struct->[$tail_chunk]{'start'} = ++$tail_sent;
+
+			my @sent = &LatexToSentencelist($sec);
+			$struct->[0][$tail_sent++] = "" if (!@sent);
+			$struct->[0][$tail_sent++] = $_ for (@sent);
+			$struct->[$tail_chunk]{'end'} = --$tail_sent;
+
+		} elsif ( $sec =~ /\\subsection\{([\d\D]+?)\}/o ) {
+			$tail_subsec++;
+			$struct->[$tail_chunk]{'subsec'}[$tail_subsec]{'title'} = $1;
+			$struct->[$tail_chunk]{'subsec'}[$tail_subsec]{'start'} = ++$tail_sent;
 
 			my @sent = &LatexToSentencelist($sec);
 			$struct->[0][$tail_sent++] = $_ for (@sent);
 
-			$struct->[$tail_chunk]{'end'} = --$tail_sent;
+			$struct->[$tail_chunk]{'subsec'}[$tail_subsec]{'end'} = --$tail_sent;
 
+##### update section's {end}
+#			$struct->[$tail_chunk]{'end'} = $struct->[$tail_chunk]{'subsec'}[$tail_subsec]{'end'};
+#####
 		} else {}
 	}
 	warn "$path_file: abstract not found" if ( not defined $struct->[1]{'type'} );
