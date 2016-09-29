@@ -23,7 +23,11 @@ our @EXPORT_OK = qw(
 	make_log_dir
 	latex_to_section
 	glue_entire_chunk
-	make_local_tf_markdown
+	make_local_tf
+	append_local_tf_score
+	check_classified_rate
+	dump_sec_file
+	make_global_tf
 );
 our %EXPORT_TAGS = (
 	all => \@EXPORT_OK,
@@ -38,16 +42,83 @@ use constant { # make keyword list
 	TI_CNCLSN     => "考察|結論|おわりに|終わりに|結び|むすび|まとめ|あとがき|む　す　び",
 };
 
-sub glue_entire_chunk {
-	my $sent_struct = shift;
-	my $all_sent;
-	$all_sent .= $$sent_struct[$_]{sent} for (0..$#{$sent_struct});
-	return \$all_sent;
+
+### input1   : doc structure
+### input2   : path to log directory for this file
+### output1  : create 5 classified file, and dump the contents of it
+sub dump_sec_file {
+	my ($struct, $log_dir) = @_;
+	my @file_name = ('abstract', 'intro', 'related_study', 'proposed_method', 'experiment_result', 'conclusion');
+
+	for (@file_name) {
+		my $out_path = File::Spec->catfile($log_dir, $_);
+		unlink $out_path if (-e $out_path);
+	}
+
+	for my $name (@file_name) {
+		my $out_path = File::Spec->catfile($log_dir, $name);
+		for my $i (1..$#$struct) {
+			if ($struct->[$i]{type} eq $name) {
+				open my $fh, '>>', $out_path or die "Can't open $out_path : $!";
+				for ($struct->[$i]{start}..$struct->[$i]{sec_end}) {
+					print $fh "$struct->[0][$_]{sent}\n";
+				}
+				close $fh;
+			}
+		}
+	}
 }
 
+
+### input1   : doc structure
+### input2   : output path
+sub check_classified_rate {
+	my ($log_dir) = @_;
+	
+	state $total = 0;
+	state $found_ab = 0;
+	state $found_intro = 0;
+	state $found_rel = 0;
+	state $found_prop = 0;
+	state $found_exp = 0;
+	state $found_con = 0;
+
+	$total++;
+	$found_ab++    if ( -e File::Spec->catfile($log_dir, 'abstract'));
+	$found_intro++ if ( -e File::Spec->catfile($log_dir, 'intro'));
+	$found_rel++   if ( -e File::Spec->catfile($log_dir, 'related_study'));
+	$found_prop++  if ( -e File::Spec->catfile($log_dir, 'proposed_method'));
+#	print "$log_dir\n" if (! (-e File::Spec->catfile($log_dir, 'proposed_method')));
+	$found_exp++   if ( -e File::Spec->catfile($log_dir, 'experiment_result'));
+	$found_con++   if ( -e File::Spec->catfile($log_dir, 'conclusion'));
+
+	open my $fh, '>', 'classified_rate.md' or die "Can't open 'classified_rate.md' : $!";
+	print $fh "\n構成要素 | 検出率\n";
+	print $fh " --- | ---\n";
+	printf $fh "%s%4s", "概要 | ", int ($found_ab/$total*100)."%\n";
+	printf $fh "%s%4s", "序論 | ", int ($found_intro/$total*100)."%\n";
+	printf $fh "%s%5s", "関連研究 | ", int ($found_rel/$total*100)."%\n";
+	printf $fh "%s%4s", "提案手法 | ", int ($found_prop/$total*100)."%\n";
+	printf $fh "%s%4s", "実験結果 | ", int ($found_exp/$total*100)."%\n";
+	printf $fh "%s%4s", "結論 | ", int ($found_con/$total*100)."%\n";
+	close $fh;
+}
+
+
+### input1  : 
 ### output1 : term frequency's hash reference
 ### output2 : local_tf_table with markdown format
-sub make_local_tf_markdown {
+sub make_global_tf {
+	state $global_tf;
+	
+}
+
+
+### input1  : chunk of entire sentence
+### input2  : paht to log directory for this document
+### output1 : term frequency's hash reference
+### output2 : local_tf_table with markdown format
+sub make_local_tf {
 	my ($all_sent_ref, $log_dir) = @_;
 	
 	my $local_tf = _analysis_morpheme($all_sent_ref);
@@ -56,6 +127,7 @@ sub make_local_tf_markdown {
 #	print "$key : $value\n" while( ($key, $value) = each %$local_tf );
 #####
 
+### dump to markdown file
 	my $out_path = File::Spec->catfile($log_dir, "local_tf.md");
 	push my @first_row, &basename($log_dir);
 	_create_markdown($local_tf, $out_path, "local term", \@first_row);
@@ -63,12 +135,60 @@ sub make_local_tf_markdown {
 	return $local_tf;
 }
 
-### input1  : 
-### output1 : term frequency's hash reference
-### output2 : local_tf_table with markdown format
-sub add_to_global_tf {
-	state $global_tf;
-	
+
+### input1  : reference to all_sent
+### input2  : local tf hash
+### output  : 'local_tf_score' key and it's value in all_sent elem
+sub append_local_tf_score {
+	my ($sent_struct, $tf) = @_;
+
+	my $term;
+	my %tf;
+	my $model = new MeCab::Model( '' );
+	my $c = $model->createTagger();
+	for my $i (0..$#$sent_struct) {
+		my $score = 0;
+		for (my $m = $c->parseToNode($sent_struct->[$i]{sent}); $m; $m = $m->{next}) {
+			$term = $m->{surface};
+			$term = decode('utf8',$term);
+
+### filtering special characters
+			if ( $term =~ /^\w+$/u ) {
+				unless ( $term eq '') {
+					$score += $tf->{$term} if (defined $tf->{term});
+				}
+			}
+		}
+		$sent_struct->[$i]{local_tf_score} = $score;
+	}
+}
+
+# merge append_local_tf_score, make_local_tf to this subroutine
+# pass argument 0/1 for making local tf, global tf table or not
+# get parameter as hash key/value, since the parameters are too many
+# change mecab to run for each sent, not entire chunk
+
+### input1  : scalar reference to chunk of entire sentence
+### output1 : morpheme frequency's hash reference
+sub _analysis_morpheme {
+	my ($all_sent_ref) = shift;
+
+	my $term;
+	my %tf;
+	my $model = new MeCab::Model( '' );
+	my $c = $model->createTagger();
+	for (my $m = $c->parseToNode($$all_sent_ref); $m; $m = $m->{next}) {
+		$term = $m->{surface};
+		$term = decode('utf8',$term);
+
+### filtering special character
+		if ( $term =~ /^\w+$/u ) {
+			unless ( $term eq '') {
+				$tf{$term}++;
+			}
+		}
+	}
+	return \%tf;
 }
 
 
@@ -97,28 +217,26 @@ sub _create_markdown {
 }
 
 
-### input1  : scalar reference referring sentence
-### output1 : morpheme frequency's hash reference
-sub _analysis_morpheme {
-	my ($all_sent_ref) = shift;
-
-	my $term;
-	my %tf;
-	my $model = new MeCab::Model( '' );
-	my $c = $model->createTagger();
-	for (my $m = $c->parseToNode($$all_sent_ref); $m; $m = $m->{next}) {
-		$term = $m->{surface};
-		$term = decode('utf8',$term);
-
-### filtering special character
-		if ( $term =~ /^\w+$/u ) {
-			unless ( $term eq '') {
-				$tf{$term}++;
-			}
-		}
-	}
-	return \%tf;
+### input : reference for sentence array
+### output: reference for all sent in one scalar
+sub glue_entire_chunk {
+	my $sent_struct = shift;
+	my $all_sent;
+	$all_sent .= $$sent_struct[$_]{sent} for (0..$#{$sent_struct});
+	return \$all_sent;
 }
+
+
+### input: path of file
+### output: contents of file on list or one scalar value
+sub read_all_line {
+	my $pth_file = shift;
+	local $SIG{__WARN__} = sub { die $_[0]."[[$pth_file]]" }; # turn warning into the fetal error.
+	local @ARGV = ( $pth_file );
+	return wantarray ? return <> : do { local $/; return <> };
+}
+
+
 ### input: path to latex file
 ### output: section structure
 sub latex_to_section {
@@ -178,6 +296,7 @@ sub latex_to_section {
 			$struct->[0][$tail_sent++]{'sent'} = $_ for (@sent);
 
 			$struct->[$tail_chunk]{'end'} = --$tail_sent;
+			$struct->[$tail_chunk]{'sec_end'} = $struct->[$tail_chunk]{end};
 
 		} elsif ( $sec =~ /\\section\{([\d\D]+?)\}/o ) {
 			$tail_chunk++;
@@ -187,13 +306,13 @@ sub latex_to_section {
 				if ( $title =~ /.*?(@{[TI_INTR]}).*?/ou ) {
 					'intro';
 				} elsif ($title =~ /.*?(@{[TI_RLTDSTDY]}).*?/ou) {
-					'related study';
+					'related_study';
 				} elsif ($title =~ /.*?(@{[TI_EXPRMNT]}).*?/ou ) {
-					'experiment result';
+					'experiment_result';
 				} elsif ($title =~ /.*?(@{[TI_CNCLSN]}).*?/ou ) {
-					'result';
+					'conclusion';
 				} else {
-					'proposed method';
+					'proposed_method';
 				}
 			};
 			$struct->[$tail_chunk]{'start'} = ++$tail_sent;
@@ -202,6 +321,7 @@ sub latex_to_section {
 			$struct->[0][$tail_sent++]{'sent'} = "" if (!@sent);
 			$struct->[0][$tail_sent++]{'sent'} = $_ for (@sent);
 			$struct->[$tail_chunk]{'end'} = --$tail_sent;
+			$struct->[$tail_chunk]{'sec_end'} = $struct->[$tail_chunk]{end};
 
 		} elsif ( $sec =~ /\\subsection\{([\d\D]+?)\}/o ) {
 			$tail_subsec++;
@@ -213,9 +333,7 @@ sub latex_to_section {
 
 			$struct->[$tail_chunk]{'subsec'}[$tail_subsec]{'end'} = --$tail_sent;
 
-##### update section's {end}
-#			$struct->[$tail_chunk]{'end'} = $struct->[$tail_chunk]{'subsec'}[$tail_subsec]{'end'};
-#####
+			$struct->[$tail_chunk]{'sec_end'} = $struct->[$tail_chunk]{'subsec'}[$tail_subsec]{'end'};
 		} else {}
 	}
 	warn "$path_file: abstract not found" if ( not defined $struct->[1]{'type'} );
@@ -245,15 +363,6 @@ sub make_log_dir {
 }
 
 
-### input: path of file
-### output: contents of file on list or one scalar value
-sub read_all_line {
-	my $pth_file = shift;
-	local $SIG{__WARN__} = sub { die $_[0]."[[$pth_file]]" }; # turn warning into the fetal error.
-	local @ARGV = ( $pth_file );
-	return wantarray ? return <> : do { local $/; return <> };
-}
-
 ### input: 
 ### output: keyword list in regex form
 sub get_keyword_list {
@@ -265,8 +374,6 @@ sub get_keyword_list {
 	elsif ($arg eq 'title_conclusion')        { return TI_CNCLSN; }
 	else                                      { return; }
 }
-
-
 
 
 
