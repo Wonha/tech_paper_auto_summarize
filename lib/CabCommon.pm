@@ -22,12 +22,12 @@ our @EXPORT_OK = qw(
 	read_all_line
 	make_log_dir
 	latex_to_section
+	dump_sec_file
+	check_classified_rate
 	glue_entire_chunk
 	make_local_tf
 	append_local_tf_score
-	check_classified_rate
-	dump_sec_file
-	make_global_tf
+	analysis_morpheme
 );
 our %EXPORT_TAGS = (
 	all => \@EXPORT_OK,
@@ -143,7 +143,7 @@ sub append_local_tf_score {
 	my ($sent_struct, $tf) = @_;
 
 	my $term;
-	my %tf;
+#my %tf;
 	my $model = new MeCab::Model( '' );
 	my $c = $model->createTagger();
 	for my $i (0..$#$sent_struct) {
@@ -155,13 +155,41 @@ sub append_local_tf_score {
 ### filtering special characters
 			if ( $term =~ /^\w+$/u ) {
 				unless ( $term eq '') {
-					$score += $tf->{$term} if (defined $tf->{term});
+					$score += $tf->{$term} if (defined $tf->{$term});
+					print $score;
 				}
 			}
 		}
 		$sent_struct->[$i]{local_tf_score} = $score;
 	}
 }
+
+
+
+sub analysis_morpheme {
+	my ($sent_struct, $log_dir) = @_;
+	my $term;
+	my %tf;
+
+	my $model = new MeCab::Model( '' );
+	my $c = $model->createTagger();
+
+	for my $i (0..$#$sent_struct) {
+		my $score = 0;
+		for (my $m = $c->parseToNode($sent_struct->[$i]{sent}); $m; $m = $m->{next}) {
+			$term = $m->{surface};
+			$term = decode('utf8',$term);
+			if ( ($term =~ /^\w+$/u) && ($term ne '') ) { # filetering special characters
+				$sent_struct->[$i]{morpheme}{$term}++;
+			}
+		}
+	}
+}
+
+
+
+
+
 
 # merge append_local_tf_score, make_local_tf to this subroutine
 # pass argument 0/1 for making local tf, global tf table or not
@@ -332,7 +360,6 @@ sub latex_to_section {
 			$struct->[0][$tail_sent++]{'sent'} = $_ for (@sent);
 
 			$struct->[$tail_chunk]{'subsec'}[$tail_subsec]{'end'} = --$tail_sent;
-
 			$struct->[$tail_chunk]{'sec_end'} = $struct->[$tail_chunk]{'subsec'}[$tail_subsec]{'end'};
 		} else {}
 	}
@@ -354,7 +381,7 @@ sub make_log_dir {
 
 	$logs = File::Spec->catfile($logs, (fileparse($cur_file, ('.tex')))[0]);
 	if ( -e -d $logs ) {
-		unlink glob "${logs}* ${logs}.*";
+		unlink glob "${logs}/* ${logs}/.*";
 		rmdir $logs;
 	} 
 	mkdir $logs, 0755 || warn "Cannot make $logs: $!";
