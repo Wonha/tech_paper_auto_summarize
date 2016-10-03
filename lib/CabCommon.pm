@@ -26,8 +26,8 @@ our @EXPORT_OK = qw(
 	check_classified_rate
 	glue_entire_chunk
 	make_local_tf
-	append_local_tf_score
 	analysis_morpheme
+	append_local_tf_score
 );
 our %EXPORT_TAGS = (
 	all => \@EXPORT_OK,
@@ -139,7 +139,7 @@ sub make_local_tf {
 ### input1  : reference to all_sent
 ### input2  : local tf hash
 ### output  : 'local_tf_score' key and it's value in all_sent elem
-sub append_local_tf_score {
+sub tmp_append_local_tf_score {
 	my ($sent_struct, $tf) = @_;
 
 	my $term;
@@ -188,6 +188,11 @@ sub analysis_morpheme {
 
 
 
+sub append_local_tf_score {
+	my ($sent_struct) = @_;
+
+	$sent_struct->[$i]{local_tf_score} += $sent_struct->[$i]{morpheme}{$_} for (keys %{$sent_struct->[$i]{morpheme}});
+}
 
 
 
