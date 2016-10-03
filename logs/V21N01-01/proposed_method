@@ -1,0 +1,124 @@
+先行研究では，優先順位の低い位置関係にある候補は参照されずに，解析が行われていた．
+この方法は，優先順位の高い位置関係にある項の同定の性能は上げることができるが，優先順位の低い位置関係にある候補の再現率は下げてしまうという問題点がある．
+また，優先順位の低い位置関係にある候補も参照してから最終的な決定を行った方が，全体的な解析性能が向上すると考える．
+そこで我々は，探索とトーナメントの2つのフェーズからなる，位置関係ごとに最尤候補を求めてから最終的な出力を決めるモデルを提案する．
+これは，「探索」・「分類」という2つのフェーズを持つ探索先行分類型モデル[CITE]に着想を得て，後半の分類フェーズをトーナメント式に置き換えたものである．
+なお，このモデルは格ごとに解析器を学習・使用する．
+はじめのフェーズでは任意の項同定モデルを用いてINTRA_D, INTRA_Z, INTERの最尤候補を選出する．
+それぞれ異なる素性やモデルを用いてもよい．
+モデルには，述語と探索対象の候補を入力として与え，探索対象の候補の中の1つを出力させる．
+次のフェーズでは探索フェーズで得られた3つの最尤候補を入力とし，そのうちの1つか``NO-ARG''を出力する．
+これにより，最尤候補のうちどれが正解項であるか，もしくは項を持たないかを判断する．
+このフェーズは\figref{fig:anap-tournament-model}に示したように(a)から(c)の3つの2値分類モデルで構成される．
+なお，予備実験にて異なる順序を試したが，文内最尤候補同士を(a)にて直接比較できるこの順序の性能が最も高かった．
+INTRA_DとINTRA_Zを比較して，よりその述語の項らしい方を選ぶ
+INTERと(a)で選出された候補を比較して，よりその述語の項らしい方を選ぶ
+(b)で選出された候補と``NO-ARG''を比較して，よりその述語の項らしい方を選ぶ
+(a)から(c)の分類器の学習事例には，Algorithm [REF_alg:train]で示すように探索フェーズで得られた最尤候補を用いる．
+提案手法は2つのモデルを参考にしている．
+1つ目は名詞句の照応解析における探索先行分類型モデル(selection-then-classification model) [CITE]である．
+このモデルは最初に，最尤先行詞を求める（彼らはこれを``探索''と呼んだ）．
+次に，その最尤先行詞を用いて，名詞句が実際に照応詞であるかどうかを判定する（彼らはこれを``分類''と呼んだ）．
+このモデルの利点は，照応性を持たない名詞句も学習事例の生成に使えることである．
+彼らは実験で，最尤先行詞を用いて照応性判定を行ったほうが，最尤先行詞を用いない場合よりも高い性能が出ること確かめた．
+提案手法も，位置関係ごとに最尤候補を求めた後，どの候補が実際に項であるのかを判定する．
+最尤候補の探索を先に行なうことで，位置関係ごとの最尤候補を学習事例の生成に用いることができる．
+2つ目はゼロ照応解析におけるトーナメントモデル[CITE]である．
+そのモデルは，全ての先行詞候補（実際には先行する全ての名詞句）のペアに対して，どちらがより先行詞らしいかの2値分類を繰り返す．
+トーナメントモデルの利点は候補間の関係性の素性を使うことができる点である．
+提案手法のトーナメントフェーズでも同様に，トーナメントモデルを用いて，位置関係ごとに選出された最尤候補のペアからどちらが正解項らしいかの2値分類を繰り返し，候補間の比較を行うことができる．
+[p]
+\Procedure{train}{predicate, gold_argument, candidates} \State gold_argument_type [MATH] getArgumentType(predicate, gold_argument)
+\Comment{正解項の位置関係を取得する}
+\State\Comment{位置関係ごとに最尤候補を取得する} \State most_likely_candidate_INTRA_D [MATH] getMostLikelyCandidate(predicate, candidates, INTRA_D) \State most_likely_candidate_INTRA_Z [MATH] getMostLikelyCandidate(predicate, candidates, INTRA_Z) \State most_likely_candidate_INTER [MATH] getMostLikelyCandidate(predicate, candidates, INTER)
+\If{gold_argument_type = NO_ARG} \State MakeExample(classifier_c, NO_ARG, predicate, most_likely_candidate_INTRA_D) \State MakeExample(classifier_c, NO_ARG, predicate, most_likely_candidate_INTRA_Z) \State MakeExample(classifier_c, NO_ARG, predicate, most_likely_candidate_INTER) \Statereturn \EndIf
+\State MakeExample(classifier_c, HAVE_ARG, predicate, gold_argument) \If{gold_argument_type = INTRA_D} \State MakeExample(classifier_a, INTRA_D, predicate, gold_argument,
+most_likely_candidate_INTRA_Z) \State MakeExample(classifier_b, INTRA, predicate, gold_argument, most_likely_candidate_INTER) \ElsIf{gold_argument_type = INTRA_Z} \State MakeExample(classifier_a, INTRA_Z, predicate, gold_argument,
+most_likely_candidate_INTRA_D) \State MakeExample(classifier_b, INTRA, predicate, gold_argument, most_likely_candidate_INTER) \ElsIf{gold_argument_type = INTER} \State MakeExample(classifier_b, INTER, predicate, gold_argument, most_likely_candidate_INTRA_D) \State MakeExample(classifier_b, INTER, predicate, gold_argument, most_likely_candidate_INTRA_Z) \EndIf\Statereturn \EndProcedure
+\Procedure{MakeExample}{classifier, label, predicate, candidate1, candidate2}
+\Comment{candidate2は省略できる} \State項候補candidate1, candidate2が照応関係にあれば事例は作成しない．
+\State述語predicateと項候補candidate1, candidate2に対して，素性集合[MATH]を取得する．
+\State学習器classifierに対して，[MATH]を用いて，labelをラベルとする学習事例を1つ作成する．
+\EndProcedure
+\tblref{tbl:result-ga}, [REF_tbl:result-wo], [REF_tbl:result-ni]にガ格・ヲ格・ニ格の実験結果を示す．
+[MATH], [MATH], [MATH], [MATH]はそれぞれPrecision, Recall, F値, F値のマクロ平均（INTRA_D, INTRA_Z, INTERのF値の算術平均）を示す．
+ALLのF値に関して，PPR[MATH]とPPRがIIDA2007と比較して有意差があるかどうかの検定をTakamuraによるスクリプトを用いてApproximate Randomization Test [CITE]を行った．
+0.05水準で有意であったものに，記号[MATH]を付記した．
+IIDA2005, IIDA2007, IIDA2007+のALLのF値を比較することで，システム全体の性能について論じる．
+ALLの性能を比較すると，ガ格の性能はIIDA2007[MATH]IIDA2005[MATH]IIDA2007+である．
+IIDA2007とIIDA2005の性能を比較すると，PrecisionはIIDA2007の方が高く，RecallはIIDA2005の方が高い．
+探索範囲を文内に限定することで，Precisionが上がることが分かる．
+IIDA2007のINTERのRecallは減少しているが，文間項よりも文内項の方が3倍以上多いため，システム全体の性能としては向上することが分かる．
+IIDA2005とIIDA2007+の性能を比較すると，INTRA_Dを優先的に探索することで，INTRA_DのPrecisionが上昇し，F値も上昇することが分かる．
+INTRA_ZのPrecisionも上昇するが，Recallは悪化し，INTRA_Zの分量が相当数あるため，全体としては性能が悪化することが分かる．
+ガ格と同様であるが，INTRA_Zの数は比較的少ないためINTRA_Dを優先的に探索しても，精度はガ格ほど悪化しない．
+ニ格の性能はガ格・ヲ格とは異なり，IIDA2007+[MATH]IIDA2007[MATH]IIDA2005である．
+この傾向は項の分布が影響している．
+ニ格は\tblref{tbl:corpus-arg-dist}によると全ての項のうち，全体の90%以上がINTRA_Dである．
+このため，INTRA_Dの探索を優先し，INTRA_DのRecallを上昇させることで，全体としての性能を上昇させることができる．
+決定的な解析では優先度の低い位置関係にある候補の再現率とF値が低下するため，優先順序をつけるほどマクロ平均は下がっていく．
+しかし，提案手法は全ての位置関係について最尤候補を比較するので，マクロ平均を大きく下げずにマイクロ平均（ALLのF値）も向上させることができている．
+PPRとPPR[MATH]のいずれも，IIDA2005・IIDA2007・IIDA2007[MATH]より性能が向上している．
+そのため，トーナメントフェーズで最尤候補を陽に比較する提案モデルは，決定的に項を同定していくモデルよりも効果があるといえる．
+また，PPRはPPR[MATH]と比較して，ガ格・ニ格では性能はほとんど変わないが，ヲ格ではINTRA_DのPrecisionが向上したため，全体の性能も向上していることが分かる．
+そのため，文内項もINTRA_DとINTRA_Zで，最尤候補の同定モデルを分けて陽に比較することで，さらに性能を向上することがあると分かる．
+ガ格において，提案手法は[CITE]と[CITE]の性能を上回っている．
+[CITE]は候補同士の比較をせず，[CITE]は優先順序を用いた決定的な解析を行なっており，それらが，提案手法と比べて性能が低い原因であると考える．
+ヲ格では，提案手法は[CITE]の性能を上回っており，[CITE]とも同程度の性能を達成している．
+しかしながら，ニ格では，[CITE]が最も性能が高い．
+[CITE]も，ガ格・ヲ格では[CITE]を上回る性能を発揮しているのにも関わらず，ニ格では[CITE]よりも性能が低い．
+この理由として，ニ格はINTRA_Dが最も多く，他の格の解析結果に依存することが挙げられる．
+一般に，1つの述語に対して異なる格で項を共有することはない．
+しかし，提案手法も[CITE]も各格で独立に解析を行なっており，他の格の解析結果の利用ができない．
+一方，[CITE]は「項を含む文節が述語を含む文節に,他の格の項を介して係っている」という関係をモデル化(ga_c, wo_c, ni_c)し，他の格の解析結果を利用して同時に解析を行なっている．
+そのため，INTRA_Dの解析性能が高いと考えられる．
+
+位置関係の優先順序を用いる決定的な解析モデルの中で，全体的な性能が最も高いIIDA2007と，優先順位を持たない提案モデル(PPR[MATH]・PPR)を比較すると，INTERのPrecisionが少し低下しているが，Recallは上昇し，F値も上昇している．
+ガ格の解析にて，IIDA2007・PPR[MATH]・PPRが解析に誤った事例の内訳を\tblref{tbl:confusion-matrix-ga}にConfusion Matrixで示した．
+PPR[MATH]やPPRでは，誤ってINTERを出力した事例が増えており（3列目を参照），一方で，誤って「項なし」と判断した事例が減っていることが分かる（4列目を参照）．
+IIDA2007は文間の候補を参照せずに，文内最尤候補が項らしいか否かを判定しなければならないが，PPR[MATH]やPPRは文内最尤候補と文間最尤候補を比較した上で，項として何が適切かを判断できるため，INTERのRecallを上昇させることができたと考える．
+そして，これが全体の性能に影響している．
+PPR[MATH]とPPRを比較すると，ガ格はINTRA_DとINTRA_ZのPrecisionとF値が上昇しており，ヲ格はINTRA_DのPrecisionとF値が，上昇している．
+PPRはINTRA_Dの最尤候補同定モデルとINTRA_Zの最尤候補同定モデルの2つの異なるモデルでINTRA_DとINTRA_Zの最尤候補を選んでから，陽にINTRA_DのINTRA_Zのどちらが項らしいかを比較することで，正解項を同定しやすくなっていると考えられる．
+これは，特に（候補数が増加する）長い文の中にある文内項の同定に効果があった．
+\enumsentence{一九五二年以来の不平等が続いている「日米航空協定」の平等化を実現するため、「政府[MATH]が米側に、米航空会社の新規路線開設を今後認めない強硬方針を通告していたことが、十三日明らかになった。
+}{ex-ok2}「認める」のガ格に対して，PPR[MATH]では誤って「方針」を項として出力したが，PPRは正しく「政府」を出力した．
+項構造解析に失敗した事例を分析したところ，誤り理由の上位3つは次のものであった．
+1つ目は，談話の理解が必要な場合である．
+以下の文で，「絡みつく」のニ格は「ユリカモメ」である．
+しかし，システムはニ格は項なしと判断してしまった．
+\enumsentence{東京・上野の不忍池で、無残な姿の鳥が目立つ。
+片足が切れたユリカモメ。
+釣り糸を引っ掛けて取れなくなって、そのうちに足を切断してしまうケースが多い。
+竹ぐしが右の首に突き刺さったユリカモメ[MATH]も。
+くしが十センチほど体の外にのぞく。
+水面に浮かんだゴム[MATH]が絡み付き、もがくうちに首まで入ってしまったらしい。
+}{error-1}「ユリカモメ」が話題の中心であることが捉えられなかったことが解析に失敗した理由として考えられる．
+今回の実験で，談話を捉えるために，Salient Reference Listを用いたが，「絡み付く」の解析時に「ユリカモメ」はListには無いため，うまくいかない．
+これを解析するためには，「ユリカモメは負傷している」「絡み付くは負傷に関する述語である」という知識のもとで，「ユリカモメが絡み付くのニ格である」という推論が必要となる．
+その知識を本文中から取得するには，「鳥」や2回出てくる「ユリカモメ」が照応関係にあるという知識も必要となることから，固有表現解析や共参照解析などと推論を用いた述語項構造解析を同時に行うことで互いに精度を高めあうことができると考える．
+2つ目は，格フレームなどの情報を使った格の同時解析が必要な場合である．
+次の文の「書く」のニ格は「日記」・ヲ格は「矛盾」とアノテートされているが，システムはニ格は「項なし」・ヲ格は「日記」と判断した．
+\enumsentence{日記[MATH]には、小説の読後感や将来への夢、希望などをつづるようになり、高校生になると、大学受験のこと、沖縄における政治の矛盾[MATH]なども書くようになった。
+}{error-2}一般に，「書く」のニ格に「日記」が来ることは少ない．
+しかし，京都大学格フレーム[CITE]のような格フレーム辞書を用いれば，「書く」は「日記」をニ格にとりうることがわかる．
+\tblref{tbl:kaku-case}に京都大学格フレームにおける「書く」の第1格フレームと第3格フレームを示した．
+この表は，それぞれの格フレームを構成する格がどのような項をどのくらい取るのかを，WEBコーパス内の頻度付きで表している．
+\tblref{tbl:kaku-case}より，ヲ格に``補文''（ここでは「沖縄における政治の矛盾」）をとれば，「問い」をニ格にとりうる，とわかる．
+3つ目は，一般の述語とは異なる扱いをすべき述語の場合である．
+NAISTテキストコーパスでは名詞述語『名詞句[MATH]コピュラ「だ」』も述語としてアノテーションされている．
+\enumsentence{欧州連合[MATH]が十五カ国に拡大して初の交渉となる。
+昨年は欧州市場での乗用車の売れ行き回復を受け、規制枠を若干上方修正したが、今年については「昨年の新車登録台数集計を踏まえて対応したい」と慎重姿勢だ。
+}{ex-c}しかしながら，名詞述語の振る舞いは他の述語とは明らかに異なり，同一の素性・モデルで項を同定するのは難しい．
+そのため，他の述語の解析モデルと分けるべきであると考える．
+実際に，PPRを，名詞述語とそれ以外の述語で単純に解析モデルを分けて学習・テストしたところ，\tblref{tbl:result-copula-ga}に示したようにガ格のALLのF値が77.59から77.75と0.16ポイント上昇した．
+大きな上昇がみられなかったのは，項と名詞述語の意味的関係を既存の素性ではうまく捉えられないためだと考える．
+名詞述語文の働きは様々で，「ラッセルは哲学者だ」のようにある事物がどのような範疇に属するのかを述べたり，「この部屋の温度は19度だ」のように記述を満たす値がどれなのかを述べたりする[CITE]．
+このような関係は\secref{sec:feature}での素性では捉えられない．
+そのため，京都大学名詞格フレーム[CITE]や日本語語彙大系[CITE]などの名詞間の関係を捉える知識を用いる必要があると考える．
+また，動詞にも一般動詞とは異なる振る舞いをする動詞「なる」の解析誤りも多かった．
+\enumsentence{山花氏らにとっては、社会党が離脱を認めるかどうか[MATH]が、最初の関門[MATH]となる。
+}{error-naru1} \enumsentence{長さ[MATH] 40メートル[MATH]にもなる3両編成の大型トラック、ロードトレインに便乗して大乾燥地帯を行く蛭子。
+}{error-naru2} \enumsentence{福井市の中心から足羽川を上流へ十キロたどると、そこ[MATH]はもうひなびた農村のたたずまい[MATH]となる。
+}{error-naru3}これらの事例の「なる」自体には意味はあまり持たず，ニ格が名詞述語相当の意味を持っているとも言える．
+そのため，名詞述語同様，解析モデルを分けるべきであると考える．
