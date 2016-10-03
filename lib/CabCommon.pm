@@ -19,13 +19,12 @@ use Latex2Text ':all';
 
 use Exporter 'import';
 our @EXPORT_OK = qw(
+	glue_entire_chunk
 	read_all_line
 	make_log_dir
-	latex_to_section
+	latex_to_section_structure
 	dump_sec_file
 	check_classified_rate
-	glue_entire_chunk
-	make_local_tf
 	analysis_morpheme
 	append_local_tf_score
 );
@@ -41,6 +40,92 @@ use constant { # make keyword list
 	TI_EXPRMNT    => "実験|評価|評価実験|評定実験",
 	TI_CNCLSN     => "考察|結論|おわりに|終わりに|結び|むすび|まとめ|あとがき|む　す　び",
 };
+
+
+### input : reference for sentence array
+### output: reference for all sent in one scalar
+sub glue_entire_chunk {
+	my $sent_struct = shift;
+	my $all_sent;
+	$all_sent .= $$sent_struct[$_]{sent} for (0..$#{$sent_struct});
+	return \$all_sent;
+}
+
+
+### input 1  : sent_struct
+### output 1 : a hash which takes 
+###           each morpheme in sentence i as a key,
+###           and it's appearence count in sentence i
+sub analysis_morpheme {
+	my ($sent_struct) = @_;
+	my $term;
+
+	my $model = new MeCab::Model( '' );
+	my $c = $model->createTagger();
+
+	for my $i (0..$#$sent_struct) {
+		my $score = 0;
+		for (my $m = $c->parseToNode($sent_struct->[$i]{sent}); $m; $m = $m->{next}) {
+			$term = $m->{surface};
+			$term = decode('utf8',$term);
+			if ( ($term =~ /^\w+$/u) && ($term ne '') ) { # filetering special characters
+				$sent_struct->[$i]{morpheme}{$term}++;
+			}
+		}
+	}
+}
+
+
+### input 1  : sent_struct
+### input 2  : log path for this file
+### output 1 : dump file of local tf hash in log path
+### output 2 : dump file of local tf in makrdown format in log path
+sub append_local_tf_score {
+	my ($sent_struct, $log_dir) = @_;
+	my %local_tf; 
+### make local term frequency hash
+	{
+		my ($key, $value);
+		for my $i (0..$#$sent_struct) {
+			while ( ($key, $value) = each %{$sent_struct->[$i]{morpheme}} ) {
+				$local_tf{$key} += $value;
+			}
+		}
+	}
+### calculate append local tf score for each sentence
+	for my $i (0..$#$sent_struct) {
+		$sent_struct->[$i]{local_tf_score} += $local_tf{$_} for (keys %{$sent_struct->[$i]{morpheme}});
+	}
+### dump to markdown file
+	my $out_path = File::Spec->catfile($log_dir, "local_tf.md");
+	push my @first_row, &basename($log_dir);
+	_create_markdown(\%local_tf, $out_path, "local term", \@first_row);
+}
+
+
+### input1  : reference of hash
+### input2  : path for output file
+### input3  : table name 
+### input4  : array reference of first row
+### output1 : markdown file
+sub _create_markdown {
+	my ($ref, $out_path, $table_name, $first_row) = @_;
+
+	open my $fh_out, '>', $out_path or die "Can't open $out_path: $!";
+### write first two line
+	{
+		local	$" = ' | ';
+		print $fh_out "$table_name | @$first_row\n";
+		print $fh_out '--- ', ' | ---' x scalar @$first_row, "\n";
+	}
+### write contents
+	my ($key, $value);
+	while ( ($key, $value) = each %$ref ) {
+		print $fh_out "$key | $value\n";
+	}
+
+	close $fh_out;
+}
 
 
 ### input1   : doc structure
@@ -105,161 +190,6 @@ sub check_classified_rate {
 }
 
 
-### input1  : 
-### output1 : term frequency's hash reference
-### output2 : local_tf_table with markdown format
-sub make_global_tf {
-	state $global_tf;
-	
-}
-
-
-### input1  : chunk of entire sentence
-### input2  : paht to log directory for this document
-### output1 : term frequency's hash reference
-### output2 : local_tf_table with markdown format
-sub make_local_tf {
-	my ($all_sent_ref, $log_dir) = @_;
-	
-	my $local_tf = _analysis_morpheme($all_sent_ref);
-##### debug
-#	my ($key, $value);
-#	print "$key : $value\n" while( ($key, $value) = each %$local_tf );
-#####
-
-### dump to markdown file
-	my $out_path = File::Spec->catfile($log_dir, "local_tf.md");
-	push my @first_row, &basename($log_dir);
-	_create_markdown($local_tf, $out_path, "local term", \@first_row);
-
-	return $local_tf;
-}
-
-
-### input1  : reference to all_sent
-### input2  : local tf hash
-### output  : 'local_tf_score' key and it's value in all_sent elem
-sub tmp_append_local_tf_score {
-	my ($sent_struct, $tf) = @_;
-
-	my $term;
-#my %tf;
-	my $model = new MeCab::Model( '' );
-	my $c = $model->createTagger();
-	for my $i (0..$#$sent_struct) {
-		my $score = 0;
-		for (my $m = $c->parseToNode($sent_struct->[$i]{sent}); $m; $m = $m->{next}) {
-			$term = $m->{surface};
-			$term = decode('utf8',$term);
-
-### filtering special characters
-			if ( $term =~ /^\w+$/u ) {
-				unless ( $term eq '') {
-					$score += $tf->{$term} if (defined $tf->{$term});
-					print $score;
-				}
-			}
-		}
-		$sent_struct->[$i]{local_tf_score} = $score;
-	}
-}
-
-
-
-sub analysis_morpheme {
-	my ($sent_struct, $log_dir) = @_;
-	my $term;
-	my %tf;
-
-	my $model = new MeCab::Model( '' );
-	my $c = $model->createTagger();
-
-	for my $i (0..$#$sent_struct) {
-		my $score = 0;
-		for (my $m = $c->parseToNode($sent_struct->[$i]{sent}); $m; $m = $m->{next}) {
-			$term = $m->{surface};
-			$term = decode('utf8',$term);
-			if ( ($term =~ /^\w+$/u) && ($term ne '') ) { # filetering special characters
-				$sent_struct->[$i]{morpheme}{$term}++;
-			}
-		}
-	}
-}
-
-
-
-sub append_local_tf_score {
-	my ($sent_struct) = @_;
-
-	$sent_struct->[$i]{local_tf_score} += $sent_struct->[$i]{morpheme}{$_} for (keys %{$sent_struct->[$i]{morpheme}});
-}
-
-
-
-# merge append_local_tf_score, make_local_tf to this subroutine
-# pass argument 0/1 for making local tf, global tf table or not
-# get parameter as hash key/value, since the parameters are too many
-# change mecab to run for each sent, not entire chunk
-
-### input1  : scalar reference to chunk of entire sentence
-### output1 : morpheme frequency's hash reference
-sub _analysis_morpheme {
-	my ($all_sent_ref) = shift;
-
-	my $term;
-	my %tf;
-	my $model = new MeCab::Model( '' );
-	my $c = $model->createTagger();
-	for (my $m = $c->parseToNode($$all_sent_ref); $m; $m = $m->{next}) {
-		$term = $m->{surface};
-		$term = decode('utf8',$term);
-
-### filtering special character
-		if ( $term =~ /^\w+$/u ) {
-			unless ( $term eq '') {
-				$tf{$term}++;
-			}
-		}
-	}
-	return \%tf;
-}
-
-
-### input1  : reference of hash
-### input2  : path for output file
-### input3  : table name 
-### input4  : array reference of first row
-### output1 : markdown file
-sub _create_markdown {
-	my ($ref, $out_path, $table_name, $first_row) = @_;
-
-	open my $fh_out, '>', $out_path or die "Can't open $out_path: $!";
-### write first two line
-	{
-		local	$" = ' | ';
-		print $fh_out "$table_name | @$first_row\n";
-		print $fh_out '--- ', ' | ---' x scalar @$first_row, "\n";
-	}
-### write contents
-	my ($key, $value);
-	while ( ($key, $value) = each %$ref ) {
-		print $fh_out "$key | $value\n";
-	}
-
-	close $fh_out;
-}
-
-
-### input : reference for sentence array
-### output: reference for all sent in one scalar
-sub glue_entire_chunk {
-	my $sent_struct = shift;
-	my $all_sent;
-	$all_sent .= $$sent_struct[$_]{sent} for (0..$#{$sent_struct});
-	return \$all_sent;
-}
-
-
 ### input: path of file
 ### output: contents of file on list or one scalar value
 sub read_all_line {
@@ -272,7 +202,7 @@ sub read_all_line {
 
 ### input: path to latex file
 ### output: section structure
-sub latex_to_section {
+sub latex_to_section_structure {
 ### cut head and tail
 	my $path_file = shift;
 	my @lines = ();
