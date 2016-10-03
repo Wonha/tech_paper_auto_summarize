@@ -22,12 +22,10 @@ our @EXPORT_OK = qw(
 	read_all_line
 	make_log_dir
 	latex_to_section
-	glue_entire_chunk
-	make_local_tf
-	append_local_tf_score
-	check_classified_rate
 	dump_sec_file
-	make_global_tf
+	check_classified_rate
+	glue_entire_chunk
+	analysis_morpheme
 );
 our %EXPORT_TAGS = (
 	all => \@EXPORT_OK,
@@ -51,7 +49,9 @@ sub dump_sec_file {
 	my @file_name = ('abstract', 'intro', 'related_study', 'proposed_method', 'experiment_result', 'conclusion');
 
 	for (@file_name) {
+		print $_."\n";
 		my $out_path = File::Spec->catfile($log_dir, $_);
+		print $out_path."\n";
 		unlink $out_path if (-e $out_path);
 	}
 
@@ -105,90 +105,44 @@ sub check_classified_rate {
 }
 
 
-### input1  : 
-### output1 : term frequency's hash reference
-### output2 : local_tf_table with markdown format
-sub make_global_tf {
-	state $global_tf;
-	
-}
 
-
-### input1  : chunk of entire sentence
-### input2  : paht to log directory for this document
-### output1 : term frequency's hash reference
-### output2 : local_tf_table with markdown format
-sub make_local_tf {
-	my ($all_sent_ref, $log_dir) = @_;
-	
-	my $local_tf = _analysis_morpheme($all_sent_ref);
-##### debug
-#	my ($key, $value);
-#	print "$key : $value\n" while( ($key, $value) = each %$local_tf );
-#####
-
-### dump to markdown file
-	my $out_path = File::Spec->catfile($log_dir, "local_tf.md");
-	push my @first_row, &basename($log_dir);
-	_create_markdown($local_tf, $out_path, "local term", \@first_row);
-
-	return $local_tf;
-}
-
-
-### input1  : reference to all_sent
-### input2  : local tf hash
-### output  : 'local_tf_score' key and it's value in all_sent elem
-sub append_local_tf_score {
-	my ($sent_struct, $tf) = @_;
+### sent_struct      : reference to all sent array
+### log_dir          : path to log directory of this file
+### local_tf_score   : calculate local tf score for each sent of this file or not
+### local_tf_dump    : dump tf table (markdown, dump) or not
+### tf_idf_score     : calculate tf_idf score for each sent of this file or not
+### tf_idf_dump      : dump tf idf table file or not
+sub analysis_morpheme {
+	my $arg_for = shift;
+	my $sent_struct = $arg_for->{sent_struct};
+	my $log_dir 		= $arg_for->{log_dir};
 
 	my $term;
-	my %tf;
+	my %local_tf;
+
 	my $model = new MeCab::Model( '' );
 	my $c = $model->createTagger();
-	for my $i (0..$#$sent_struct) {
-		my $score = 0;
+
+	for my $i (0..$#$sent_struct) { # for each sent i
+		my $local_tf_score = 0;
 		for (my $m = $c->parseToNode($sent_struct->[$i]{sent}); $m; $m = $m->{next}) {
 			$term = $m->{surface};
 			$term = decode('utf8',$term);
-
-### filtering special characters
-			if ( $term =~ /^\w+$/u ) {
-				unless ( $term eq '') {
-					$score += $tf->{$term} if (defined $tf->{term});
-				}
+			if ( ($term =~ /^\w+$/u) && ($term ne '') ) { # filtering special characters
+					$local_tf{$term}++;
+					$local_tf_score += $local_tf{$term} if (defined $local_tf{term});
 			}
 		}
-		$sent_struct->[$i]{local_tf_score} = $score;
+		$sent_struct->[$i]{local_tf_score} = $local_tf_score;
 	}
-}
 
-# merge append_local_tf_score, make_local_tf to this subroutine
-# pass argument 0/1 for making local tf, global tf table or not
-# get parameter as hash key/value, since the parameters are too many
-# change mecab to run for each sent, not entire chunk
-
-### input1  : scalar reference to chunk of entire sentence
-### output1 : morpheme frequency's hash reference
-sub _analysis_morpheme {
-	my ($all_sent_ref) = shift;
-
-	my $term;
-	my %tf;
-	my $model = new MeCab::Model( '' );
-	my $c = $model->createTagger();
-	for (my $m = $c->parseToNode($$all_sent_ref); $m; $m = $m->{next}) {
-		$term = $m->{surface};
-		$term = decode('utf8',$term);
-
-### filtering special character
-		if ( $term =~ /^\w+$/u ) {
-			unless ( $term eq '') {
-				$tf{$term}++;
-			}
-		}
+### dump to markdown file
+	if ( $arg_for->{local_tf_dump} ) {
+		my $out_path = File::Spec->catfile($log_dir, "local_tf.md");
+		push my @first_row, &basename($log_dir);
+		_create_markdown(\%local_tf, $out_path, "local term", \@first_row);
 	}
-	return \%tf;
+
 }
 
 
