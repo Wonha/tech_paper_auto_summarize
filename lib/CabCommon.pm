@@ -13,10 +13,10 @@ use Encode qw(decode);
 use File::Basename qw( fileparse basename );
 use File::Spec;
 use Text::Balanced qw( extract_bracketed );
+use Storable qw(nstore retrieve);
 
 use lib qw(lib);
 use Latex2Text ':all';
-
 use Exporter 'import';
 our @EXPORT_OK = qw(
 	glue_entire_chunk
@@ -26,7 +26,16 @@ our @EXPORT_OK = qw(
 	dump_sec_file
 	check_classified_rate
 	analysis_morpheme
-	append_local_tf_score
+	make_local_tf_table
+	dump_local_tf_table
+	calc_local_tf_score
+	dump_struct
+	get_log_dir
+	make_global_tf_table
+	dump_global_tf_table
+	make_tf_idf_table
+	dump_tf_idf_table
+	calc_tf_idf_score
 );
 our %EXPORT_TAGS = (
 	all => \@EXPORT_OK,
@@ -40,6 +49,116 @@ use constant { # make keyword list
 	TI_EXPRMNT    => "実験|評価|評価実験|評定実験",
 	TI_CNCLSN     => "考察|結論|おわりに|終わりに|結び|むすび|まとめ|あとがき|む　す　び",
 };
+
+
+sub dump_struct {
+	my ($struct, $log_dir) = @_;
+	my $out_path_marshall = File::Spec->catfile($log_dir, "struct");
+	nstore $struct, $out_path_marshall;
+}
+
+
+### input: current file path
+### output: path to log directory for this file
+sub get_log_dir {
+	my $cur_file = shift;
+	return File::Spec->catfile('./logs', (fileparse($cur_file, ('.tex')))[0]);
+}
+
+
+### input 1  : reference to the global tf hash
+### input 2  : reference to hash for document frequency
+### input 3  : log directory to current file
+### output 1 : global tf table into input 1
+### output 2 : document frequency table into input 2
+sub make_global_tf_table {
+	my ($global_tf, $doc_freq, $log_dir) = @_;
+
+	my $local_tf_path = File::Spec->catfile($log_dir, "local_tf");
+	my $local_tf = retrieve $local_tf_path;
+
+	for (keys %$local_tf) {
+		$global_tf->{$_} += $local_tf->{$_};
+		$doc_freq->{$_}++;
+	}
+}
+
+
+### input 1  : reference to the global tf hash
+### input 2  : path to log directory 
+### output 1 : dump global_tf into './logs/global_tf' in format of hash reference
+sub dump_global_tf_table {
+	my ($global_tf, $log_dir) = @_;
+	
+	my $out_path = File::Spec->catfile($log_dir, "global_tf");
+	nstore $global_tf, $out_path;
+### debug
+#	open my $fh, '>', 'global_tf_test' or die "Can't open tf_idf_test: $!";
+#	print $fh "$_ : $global_tf->{$_}\n" for (keys %$global_tf);
+#	close $fh;
+###
+}
+
+
+### input 1  : reference to tf idf table hash for this file
+### input 2  : reference to global tf table hash
+### input 3  : reference to document frequency hash
+### input 4  : total number of document 
+### input 5  : scalar for log directory
+### output 1 : tf idf table for this file into input 1
+sub make_tf_idf_table {
+	my ($tf_idf, $global_tf, $doc_freq, $doc_total, $log_dir) = @_;
+
+	my $local_tf_path = File::Spec->catfile($log_dir, "local_tf");
+	my $local_tf = retrieve $local_tf_path;
+
+	for (keys %$local_tf) {
+		$tf_idf->{$_} = $local_tf->{$_} * log ($doc_total / $doc_freq->{$_}) / log 10;
+	}
+}
+
+
+### input 1  : reference to tf idf table hash for this file
+### input 2  : path to log directory
+### output 1 : dump tf idf of this file into log directory
+sub dump_tf_idf_table {
+### debug dump V22N04-01
+#	my ($tf_idf, $log_dir, $doc_total, $doc_freq) = @_;
+###
+	my ($tf_idf, $log_dir) = @_;
+
+	my $out_path = File::Spec->catfile($log_dir, "tf_idf");
+	nstore $tf_idf, $out_path;
+
+	my $local_tf_path = File::Spec->catfile($log_dir, "local_tf");
+	my $local_tf = retrieve $local_tf_path;
+### debug dump V22N04-01
+#	my $out_path_debug = File::Spec->catfile($log_dir, "tf_idf_debug");
+#	open my $fh, '>', $out_path_debug or die "Can't open debug$!";
+#	for my $k (sort { $tf_idf->{$b} <=> $tf_idf->{$a} } keys %$tf_idf) {
+#		if ($log_dir eq 'logs/V22N04-01') {
+#			print $fh $k."\n";
+#			print $fh "local_tf    : $local_tf->{$k}\n";
+#			print $fh "doc_total   : $doc_total\n";
+#			print $fh "doc_freq    : $doc_freq->{$k}\n";
+#			print $fh "tf_idf      : $tf_idf->{$k}\n";
+#			print $fh "------------------------------\n";
+#		}
+#	}
+#	close $fh;
+###
+}
+
+sub calc_tf_idf_score {
+	my ($tf_idf, $log_dir) = @_;
+
+	my $struct_path = File::Spec->catfile($log_dir, "struct");
+	my $struct = retrieve $struct_path;
+
+	for my $i (0..$#{$struct->[0]}) {
+		$struct->[0][$i]{tf_idf_score} += $tf_idf->{$_} for (keys %{$struct->[0][$i]{morpheme}});
+	}
+}
 
 
 ### input : reference for sentence array
@@ -77,29 +196,49 @@ sub analysis_morpheme {
 
 
 ### input 1  : sent_struct
-### input 2  : log path for this file
-### output 1 : dump file of local tf hash in log path
-### output 2 : dump file of local tf in makrdown format in log path
-sub append_local_tf_score {
-	my ($sent_struct, $log_dir) = @_;
-	my %local_tf; 
+### input 2  : reference to local tf hash
+### output1 : reference to local tf hash
+sub make_local_tf_table {
+	my ($sent_struct, $local_tf) = @_;
 ### make local term frequency hash
 	{
 		my ($key, $value);
 		for my $i (0..$#$sent_struct) {
 			while ( ($key, $value) = each %{$sent_struct->[$i]{morpheme}} ) {
-				$local_tf{$key} += $value;
+				$local_tf->{$key} += $value;
 			}
 		}
 	}
-### calculate append local tf score for each sentence
+}
+
+
+### input 1  : sent_struct
+### output 1 : local_tf_score in sent struct
+sub calc_local_tf_score {
+	my ($sent_struct, $local_tf) = @_;
+
 	for my $i (0..$#$sent_struct) {
-		$sent_struct->[$i]{local_tf_score} += $local_tf{$_} for (keys %{$sent_struct->[$i]{morpheme}});
+		$sent_struct->[$i]{local_tf_score} += $local_tf->{$_} for (keys %{$sent_struct->[$i]{morpheme}});
 	}
-### dump to markdown file
-	my $out_path = File::Spec->catfile($log_dir, "local_tf.md");
+}
+
+
+### input 1  : sent_struct
+### input 2  : log path for this file
+### output 1 : dump local tf into local_tf.md
+### output 2 : dump local tf into local_tf in format of hash reference
+sub dump_local_tf_table {
+	my ($local_tf, $log_dir) = @_;
+
+### dump to file local_tf.md
+	my $out_path_md = File::Spec->catfile($log_dir, "local_tf.md");
 	push my @first_row, &basename($log_dir);
-	_create_markdown(\%local_tf, $out_path, "local term", \@first_row);
+	_create_markdown($local_tf, $out_path_md, "local term", \@first_row);
+
+### dump to file local_tf 
+	my $out_path_marshall = File::Spec->catfile($log_dir, "local_tf");
+	nstore $local_tf, $out_path_marshall;
+
 }
 
 
@@ -305,7 +444,7 @@ sub latex_to_section_structure {
 
 
 ### input: current file path
-### output: none
+### output: path to log directory for this file
 sub make_log_dir {
 	my $cur_file = shift;
 

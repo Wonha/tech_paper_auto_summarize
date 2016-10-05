@@ -12,6 +12,7 @@
 use strict;
 use warnings;
 use utf8;
+use v5.10; # using state
 use open IO=> ':encoding(utf8)';
 binmode STDIN, ':encoding(utf8)';
 binmode STDOUT, ':encoding(utf8)';
@@ -20,14 +21,17 @@ binmode STDERR, ':encoding(utf8)';
 use lib qw(lib);
 use Latex2Text;
 use CabCommon ':all';
+use Storable qw(freeze nstore);
 
 $#ARGV >= 0 || die "Usage: ./Cab [NAME OF LATEX SOURCE FILES]\n";
 
-##### Cab process
+##### Cab process start
 my @latex_files = <@ARGV>;
 print "number of input latex files: ".scalar @latex_files."\n";
 
 my $num_done = 0;
+### init log directory
+### make the structure of latex file, and local tf table and score
 for my $path_latex (@latex_files) {
 
 	my $log_dir = make_log_dir($path_latex);
@@ -38,6 +42,19 @@ for my $path_latex (@latex_files) {
 # &get_rel_scored_paragraph();
 # &check_classified_rate();
 
+	analysis_morpheme($struct->[0]);
+
+### local term frequency score
+	my %local_tf;
+	make_local_tf_table($struct->[0], \%local_tf);
+	dump_local_tf_table(\%local_tf, $log_dir);
+	calc_local_tf_score($struct->[0], \%local_tf);
+
+	dump_struct($struct, $log_dir);
+#	print "$path_latex local tf process success\n";
+	print $log_dir."\n";
+
+### DEBUG
 =begin DEBUG_STRUCT
 	use Data::Dumper;
 #	print Dumper($struct);
@@ -61,26 +78,38 @@ for my $path_latex (@latex_files) {
 =end DEBUB_STRUCT
 =cut
 
-	analysis_morpheme($struct->[0]);
-	append_local_tf_score($struct->[0], $log_dir);
-
-#	local_to_global_tf_table();
-
-#=begin DEBUG_LOCAL_TF_SCORE
+=begin DEBUG_LOCAL_TF_SCORE
 	for my $i (0..$#{$struct->[0]}) {
 		print "local tf score for sent [$i] = $struct->[0][$i]{local_tf_score}\n";
 	}
-#=end DEBUG_LOCAL_TF_SCORE
-#=cut
+=end DEBUG_LOCAL_TF_SCORE
+=cut
+}
 
-#	make_global_tf();
-# &weight_word_tf_idf();
+### make the global tf table, tf idf table for each file, calculate tf idf score
+{
+	my %global_tf;
+	my %doc_freq;
+	my $doc_total = scalar @latex_files;
+	make_global_tf_table(\%global_tf, \%doc_freq, get_log_dir($_)) for (@latex_files);
+	dump_global_tf_table(\%global_tf, './logs');
+
+	for my $path_latex (@latex_files) {
+		my $log_dir = get_log_dir($path_latex);
+
+		my %tf_idf;
+		make_tf_idf_table(\%tf_idf, \%global_tf, \%doc_freq, $doc_total, $log_dir);
+		dump_tf_idf_table(\%tf_idf, $log_dir);
+### debug dump V22N04-01
+#		dump_tf_idf_table(\%tf_idf, $log_dir, $doc_total, \%doc_freq); 
+###
+		calc_tf_idf_score(\%tf_idf, $log_dir);
+
+		$num_done++;
+	}
+}
+
 #	&summarize_section();
 #	&combine_section();
-
-	$num_done++;
-}
-print "\n";
 print "number of processed files: $num_done\n";
-
 
