@@ -29,6 +29,7 @@ our @EXPORT_OK = qw(
 	make_local_tf_table
 	dump_local_tf_table
 	calc_local_tf_score
+	dump_high_local_tf_sent
 	dump_struct
 	get_log_dir
 	make_global_tf_table
@@ -36,6 +37,7 @@ our @EXPORT_OK = qw(
 	make_tf_idf_table
 	dump_tf_idf_table
 	calc_tf_idf_score
+	dump_high_tf_idf_sent
 );
 our %EXPORT_TAGS = (
 	all => \@EXPORT_OK,
@@ -49,6 +51,92 @@ use constant { # make keyword list
 	TI_EXPRMNT    => "実験|評価|評価実験|評定実験",
 	TI_CNCLSN     => "考察|結論|おわりに|終わりに|結び|むすび|まとめ|あとがき|む　す　び",
 };
+
+
+sub dump_high_local_tf_sent {
+	my ($struct, $log_dir) = @_;
+
+	my $out_path = File::Spec->catfile($log_dir, "sum_local_tf");
+	open my $fh, '>', $out_path or die "Can't open $out_path: $!";
+
+	for my $i (1..$#$struct) {
+		my $start_idx = $struct->[$i]{start};	
+		my $end_idx = $struct->[$i]{end};	
+
+		my @sorted_idx = sort { 
+			$struct->[0][$b]{local_tf_score} <=> $struct->[0][$a]{local_tf_score} 
+		} $start_idx..$end_idx;
+
+		print $fh "================================================================\n";
+		print $fh "  [ type  : $struct->[$i]{type} ]\n";
+		print $fh "  [ title : $struct->[$i]{title} ]\n";
+		print $fh "$struct->[0][$sorted_idx[0]]{sent}";
+		print $fh "  [score $struct->[0][$sorted_idx[0]]{local_tf_score}]\n";
+
+		if ( defined $struct->[$i]{subsec} ) {
+			for my $j (0..$#{$struct->[$i]{subsec}}) {
+				my $start_idx = $struct->[$i]{subsec}[$j]{start};	
+				my $end_idx = $struct->[$i]{subsec}[$j]{end};	
+				my @sorted_idx = sort { 
+					$struct->[0][$b]{local_tf_score} <=> $struct->[0][$a]{local_tf_score} 
+				} $start_idx..$end_idx;
+
+				print $fh "------------------------------------------------------------\n";
+				print $fh "  [ title : $struct->[$i]{subsec}[$j]{title} ]\n";
+				print $fh "$struct->[0][$sorted_idx[0]]{sent}";
+				print $fh "  [score $struct->[0][$sorted_idx[0]]{local_tf_score}]\n";
+			}
+		}
+		print $fh "\n";
+	}
+	close $fh;
+}
+
+
+sub dump_high_tf_idf_sent {
+	my ($log_dir) = @_;
+	my $struct_path = File::Spec->catfile($log_dir, "struct");
+	my $struct = retrieve $struct_path;
+
+	my $out_path = File::Spec->catfile($log_dir, "sum_tf_idf");
+	open my $fh, '>', $out_path or die "Can't open $out_path: $!";
+
+	for my $i (1..$#$struct) {
+		my $start_idx = $struct->[$i]{start};	
+		my $end_idx = $struct->[$i]{end};	
+
+		my @sorted_idx = sort { 
+			$struct->[0][$b]{tf_idf_score} <=> $struct->[0][$a]{tf_idf_score} 
+		} $start_idx..$end_idx;
+#print "@sorted_idx\n";
+
+		print $fh "================================================================\n";
+		print $fh "  [ type  : $struct->[$i]{type} ]\n";
+		print $fh "  [ title : $struct->[$i]{title} ]\n";
+		print $fh "$struct->[0][$sorted_idx[0]]{sent}";
+		print $fh "  [score $struct->[0][$sorted_idx[0]]{tf_idf_score}]\n";
+
+		if ( defined $struct->[$i]{subsec} ) {
+			for my $j (0..$#{$struct->[$i]{subsec}}) {
+				my $start_idx = $struct->[$i]{subsec}[$j]{start};	
+				my $end_idx = $struct->[$i]{subsec}[$j]{end};	
+				my @sorted_idx = sort { 
+					$struct->[0][$b]{tf_idf_score} <=> $struct->[0][$a]{tf_idf_score} 
+				} $start_idx..$end_idx;
+
+				print $fh "------------------------------------------------------------\n";
+				print $fh "  [ title : $struct->[$i]{subsec}[$j]{title} ]\n";
+				print $fh "$struct->[0][$sorted_idx[0]]{sent}";
+				print $fh "  [score $struct->[0][$sorted_idx[0]]{tf_idf_score}]\n";
+				print $fh "..................................................\n";
+				print $fh "$struct->[0][$start_idx]{sent}";
+				print $fh "  [score $struct->[0][$start_idx]{tf_idf_score}]\n";
+			}
+		}
+		print $fh "\n";
+	}
+	close $fh;
+}
 
 
 sub dump_struct {
@@ -130,9 +218,9 @@ sub dump_tf_idf_table {
 	my $out_path = File::Spec->catfile($log_dir, "tf_idf");
 	nstore $tf_idf, $out_path;
 
-	my $local_tf_path = File::Spec->catfile($log_dir, "local_tf");
-	my $local_tf = retrieve $local_tf_path;
 ### debug dump V22N04-01
+#	my $local_tf_path = File::Spec->catfile($log_dir, "local_tf");
+#	my $local_tf = retrieve $local_tf_path;
 #	my $out_path_debug = File::Spec->catfile($log_dir, "tf_idf_debug");
 #	open my $fh, '>', $out_path_debug or die "Can't open debug$!";
 #	for my $k (sort { $tf_idf->{$b} <=> $tf_idf->{$a} } keys %$tf_idf) {
@@ -149,6 +237,7 @@ sub dump_tf_idf_table {
 ###
 }
 
+### output 1 : tf_idf_score to struct and store in file
 sub calc_tf_idf_score {
 	my ($tf_idf, $log_dir) = @_;
 
@@ -158,6 +247,8 @@ sub calc_tf_idf_score {
 	for my $i (0..$#{$struct->[0]}) {
 		$struct->[0][$i]{tf_idf_score} += $tf_idf->{$_} for (keys %{$struct->[0][$i]{morpheme}});
 	}
+
+	nstore $struct, $struct_path;
 }
 
 
