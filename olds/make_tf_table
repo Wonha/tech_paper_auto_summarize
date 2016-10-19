@@ -1,0 +1,133 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+use diagnostics;
+use utf8;
+use MeCab;
+use Encode;
+use locale;
+# use Unicode::Collate::Locale;
+# my $japan = Unicode::Collate::Locale->new( locale => 'ja_JP');
+
+# binmode(STDOUT, ":utf8"); # with MeCab, cannot redirect STDOUT STDERR this way
+# binmode(STDERR, ":utf8");
+
+### name for program : make_tf_table
+### input file : ./log/*/ (directory name)
+### output file : ./log/tf_table.md
+
+my $path_output = './logs/tf_table.md';
+my $contents_origin_ref;
+
+my %tftable_hoa; 
+my $idx_doc_num = 0;
+
+my $word;
+my $pos;
+#my $word_filter_regex = qr/\$/u;
+my $word_filter_regex = qr[ ^(?:\ |\　|\!|\@|\#|\$|\%|\^|\&|\*|\(|\)|\-|\_|\=|\+|\\
+												|\||\`|\~|\[|\{|\]|\}|\;|\:|\'|\"|\,|\<|\.|\>|\/|\?
+												|\！|\＠|\＃|\＄|\％|\＾|\＆|\＊|\（|\）|\＿|\ー|\＝
+												|\＋|\￥|\｜|\｀|\〜|\、|\＜|\。|\＞|\・|\？|\；|\：|\’|\”|\「|\｛|\」|\｝|\．
+												)
+												]xu;
+
+## except 'tf_table.md' from ./logs's file entry.
+my @path_has_origin_ar = grep {	$_ ne './logs/tf_table.md'} <@ARGV>;  
+my @name_has_origin_ar = map { /.*\/(.*)\//; } @path_has_origin_ar;
+
+### OPEN output file
+open my $fh_output, '>:encoding(UTF-8)', $path_output || die "Cannot open $path_output: $!";
+
+### MAKE first and second line of markdown table format
+&make_first_two_lines($fh_output);
+
+### TRAVERSE directory includes 'origin' file. 
+for my $path_cur_dir (@path_has_origin_ar) {
+	print "processing $path_cur_dir\n";
+
+### READ origin file
+	$contents_origin_ref = &read_origin($path_cur_dir);
+
+### DO MeCab, FILL HOA
+	&do_mecab();
+}
+
+### WRITE into output file
+&write_tf_table_file();
+
+close $fh_output;
+
+
+
+########### subroutines
+
+sub make_first_two_lines {
+	$fh_output = shift;
+	$" = ' | ';
+
+	print $fh_output "TF table | ";
+	print $fh_output "@name_has_origin_ar\n";
+	print $fh_output '--- ', ' | ---' x scalar @name_has_origin_ar, "\n";
+}
+
+sub read_origin {
+	my ($path_cur_dir) = @_;
+	my $path_origin = $path_cur_dir.'origin';
+	open my $fh_origin, '<:encoding(UTF-8)', $path_origin || die "Cannot open $path_origin: $!";
+	my $contents_origin = join '', <$fh_origin>;
+	close $fh_origin;
+
+	return \$contents_origin;
+}
+
+
+sub do_mecab {
+	my $model = new MeCab::Model( '' );
+	my $c = $model->createTagger();
+	for (my $m = $c->parseToNode($$contents_origin_ref); $m; $m = $m->{next}) {
+		$word = $m->{surface};
+		($pos) = split /,/, $m->{feature};
+
+		$word = decode('utf8',$word);
+    $pos = decode('utf8',$pos);
+
+##### regex word filtering
+#	unless ( $word =~ $word_filter_regex ) { # change regex
+		if ( $word =~ /^\w+$/u ) {
+			unless ( $word eq '') {
+				${$tftable_hoa{$word}}[$idx_doc_num]++;
+			}
+		}
+
+##### use Unicode::Collate::Locale
+#
+#		if ( $japan->cmp($pos,'名詞') ) {
+#			${$tftable_hoa{$m->{surface}}}[$idx_doc_num]++;
+#			print $pos."\n";
+#		}
+#####
+
+	}
+
+	$idx_doc_num++;
+}
+
+sub write_tf_table_file {
+	my $full_table;
+	for my $key (keys %tftable_hoa) {
+		my $line = $key . ' | ';
+		my $sub_line;
+## set 0 for undef
+		for (0..($idx_doc_num-1)) {
+			${$tftable_hoa{$key}}[$_] = 0  if (not defined ${$tftable_hoa{$key}}[$_])
+		}
+
+		$sub_line = join ' | ', @{$tftable_hoa{$key}};
+		$line .= $sub_line;
+		$line .= "\n";
+		$full_table .= $line;
+	}
+
+	print $fh_output $full_table;
+}

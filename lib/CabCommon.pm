@@ -390,7 +390,7 @@ sub dump_sec_file {
 ### input1   : doc structure
 ### input2   : output path
 sub check_classified_rate {
-	my ($log_dir) = @_;
+	my ($log_dir, $fh, $dump_flag) = @_;
 	
 	state $total = 0;
 	state $found_ab = 0;
@@ -400,25 +400,31 @@ sub check_classified_rate {
 	state $found_exp = 0;
 	state $found_con = 0;
 
-	$total++;
-	$found_ab++    if ( -e File::Spec->catfile($log_dir, 'abstract'));
-	$found_intro++ if ( -e File::Spec->catfile($log_dir, 'intro'));
-	$found_rel++   if ( -e File::Spec->catfile($log_dir, 'related_study'));
-	$found_prop++  if ( -e File::Spec->catfile($log_dir, 'proposed_method'));
-#	print "$log_dir\n" if (! (-e File::Spec->catfile($log_dir, 'proposed_method')));
-	$found_exp++   if ( -e File::Spec->catfile($log_dir, 'experiment_result'));
-	$found_con++   if ( -e File::Spec->catfile($log_dir, 'conclusion'));
-
-	open my $fh, '>', 'classified_rate.md' or die "Can't open 'classified_rate.md' : $!";
-	print $fh "\n構成要素 | 検出率\n";
-	print $fh " --- | ---\n";
-	printf $fh "%s%4s", "概要 | ", int ($found_ab/$total*100)."%\n";
-	printf $fh "%s%4s", "序論 | ", int ($found_intro/$total*100)."%\n";
-	printf $fh "%s%5s", "関連研究 | ", int ($found_rel/$total*100)."%\n";
-	printf $fh "%s%4s", "提案手法 | ", int ($found_prop/$total*100)."%\n";
-	printf $fh "%s%4s", "実験結果 | ", int ($found_exp/$total*100)."%\n";
-	printf $fh "%s%4s", "結論 | ", int ($found_con/$total*100)."%\n";
-	close $fh;
+	unless ($dump_flag) {
+		$total++;
+		$found_ab++    if ( -e File::Spec->catfile($log_dir, 'abstract'));
+		$found_intro++ if ( -e File::Spec->catfile($log_dir, 'intro'));
+		if ( -e File::Spec->catfile($log_dir, 'related_study')) {
+			$found_rel++;   
+			{ ### inspect rel study
+				my $base = &basename($log_dir);
+				print $fh "$base matched first rel study\n";
+			}
+		}
+		$found_prop++  if ( -e File::Spec->catfile($log_dir, 'proposed_method'));
+		$found_exp++   if ( -e File::Spec->catfile($log_dir, 'experiment_result'));
+		$found_con++   if ( -e File::Spec->catfile($log_dir, 'conclusion'));
+	} else {
+		print $fh "total: $total\n";
+		print $fh "\n構成要素 | 検出率\n";
+		print $fh " --- | ---\n";
+		printf $fh "%s%4s", "概要 | ", int ($found_ab/$total*100)."%\n";
+		printf $fh "%s%4s", "序論 | ", int ($found_intro/$total*100)."%\n";
+		printf $fh "%s%5s", "関連研究 | ", int ($found_rel/$total*100)."%\n";
+		printf $fh "%s%4s", "提案手法 | ", int ($found_prop/$total*100)."%\n";
+		printf $fh "%s%4s", "実験結果 | ", int ($found_exp/$total*100)."%\n";
+		printf $fh "%s%4s", "結論 | ", int ($found_con/$total*100)."%\n";
+	}
 }
 
 
@@ -529,8 +535,13 @@ sub latex_to_section_structure {
 			$struct->[$tail_chunk]{'subsec'}[$tail_subsec]{'end'} = --$tail_sent;
 			$struct->[$tail_chunk]{'sec_end'} = $struct->[$tail_chunk]{'subsec'}[$tail_subsec]{'end'};
 		} else {}
+
 	}
 	warn "$path_file: abstract not found" if ( not defined $struct->[1]{'type'} );
+
+### process for get related_study paragraph
+	$struct->[1]{'rel_parag_start'};
+	$struct->[1]{'rel_parag_end'};
 
 	return $struct;
 }
