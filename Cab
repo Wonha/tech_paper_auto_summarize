@@ -32,7 +32,7 @@ my $num_done = 0;
 
 
 ### init log directory
-### make the structure of latex file
+### make the structure of each section and subsection from latex file
 {
 	open my $fh, '>', 'classified_rate.md' or die "Can'topen'classified_rate.md': $!";
 	for my $path_latex (@latex_files) {
@@ -41,7 +41,7 @@ my $num_done = 0;
 		my $struct = latex_to_section_structure($path_latex);
 
 		dump_sec_file($struct, $log_dir);
-		analysis_morpheme($struct->[0]);
+		analysis_morpheme($struct->[0]); # mecab
 		dump_struct($struct, $log_dir);
 		check_classified_rate($log_dir, $fh, 0);
 	}
@@ -49,6 +49,46 @@ my $num_done = 0;
 	close $fh;
 # &get_rel_scored_paragraph();
 }
+
+
+### 2nd match for related_study
+{
+	for my $path_latex (@latex_files) {
+		my $log_dir = get_log_dir($path_latex);
+# if no 'related_study' file included in log, go next file
+		my $rel_file = File::Spec->catfile($log_dir, "related_study");
+		next if (-e $rel_file);
+### 2. read origin doc from disk and seperate to paragraph (seperator: '\n{2,}')
+		my $origin_file = File::Spec->catfile($log_dir, "origin");
+		my $parags = seperate_paragraph($origin_file);
+### 3. calc how many sentence each paragraph has
+		my $sent_nums = count_sent($parags);
+### 4. execute mecab to get surface word's term frequency per each paragraph
+		my $term_freq_for_parag_aohref = &get_surface_term_freq($parags);
+
+### 5. evaluate each pargraph's score by keyword matching to check whether appropriate for rel_study or not.
+#
+		my $score_parag_aref = &get_parag_score_by_rel_keyword_matching ($parags, $term_freq_for_parag_aohref);
+
+### 6. devide the score by number of sentences in the paragraph
+### 7. get the highest scored paragraph index
+		my $highest_score_parag_idx = 0;
+		for my $idx (1..$#$parags) {
+			if ( $score_parag_aref->[$idx] > $score_parag_aref->[$highest_score_parag_idx] ) {
+				$highest_score_parag_idx = $idx;
+			}
+		}
+### 8. write contents of the highest scored paragraph to cur zero sized rel_file. 
+		open my $fh, '>', $rel_file or die "Can't open $rel_file : $!";
+		print $fh $parags->[$highest_score_parag_idx-2]."\n\n";
+		print $fh $parags->[$highest_score_parag_idx-1]."\n\n";
+		print $fh $parags->[$highest_score_parag_idx];
+		print $fh "\nscore of this paragraph is $score_parag_aref->[$highest_score_parag_idx]\n"; 
+		close $fh;
+
+	}
+}
+
 
 ### make local term frequency table and calc the score
 for my $path_latex (@latex_files) {

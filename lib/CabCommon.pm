@@ -27,6 +27,11 @@ our @EXPORT_OK = qw(
 	check_classified_rate
 	analysis_morpheme
 
+	seperate_paragraph
+	count_sent
+	get_surface_term_freq
+	get_parag_score_by_rel_keyword_matching
+
 	make_local_tf_table
 	dump_local_tf_table
 	calc_local_tf_score
@@ -407,10 +412,14 @@ sub check_classified_rate {
 		if ( -e File::Spec->catfile($log_dir, 'related_study')) {
 			$found_rel++;   
 			{ ### inspect rel study
-				my $base = &basename($log_dir);
-				print $fh "$base matched first rel study\n";
+#				my $base = &basename($log_dir);
+#				print $fh "$base matched first rel study\n";
 			}
+		} else {
+			my $base = &basename($log_dir);
+			print $fh "$base unmatched first rel study\n";
 		}
+
 		$found_prop++  if ( -e File::Spec->catfile($log_dir, 'proposed_method'));
 		$found_exp++   if ( -e File::Spec->catfile($log_dir, 'experiment_result'));
 		$found_con++   if ( -e File::Spec->catfile($log_dir, 'conclusion'));
@@ -434,7 +443,7 @@ sub read_all_line {
 	my $pth_file = shift;
 	local $SIG{__WARN__} = sub { die $_[0]."[[$pth_file]]" }; # turn warning into the fetal error.
 	local @ARGV = ( $pth_file );
-	return wantarray ? return <> : do { local $/; return <> };
+	return wantarray ? return <> : do { local $/=''; return <> };
 }
 
 
@@ -445,7 +454,15 @@ sub latex_to_section_structure {
 	my $path_file = shift;
 	my @lines = ();
 	my $flag = 0;
-	for (read_all_line($path_file)) {
+	my @all_lines = read_all_line($path_file);
+
+	my $log_dir = get_log_dir($path_file);
+	my $out_path = File::Spec->catfile($log_dir, "origin");
+	open my $fh, '>', $out_path or die "Can't open $out_path: $!";
+	print $fh "@all_lines";
+	close $fh;
+
+	for (@all_lines) {
 		if (/\\begin\{document\}/o || /\\jabstract\{/o) {
 			$flag = 1;
 			push(@lines, $_);
@@ -580,6 +597,72 @@ sub get_keyword_list {
 	else                                      { return; }
 }
 
+### input 1  : var reference for file path
+### output 1 : array reference that elem is token(paragraph).
+sub seperate_paragraph {
+	my ($path_origin) = @_;
+
+	my $contents = read_all_line($path_origin);
+	my @paragraphs = split /(?:\n)(?:\h)*(?:\n){1,}/, $contents;
+#print scalar @paragraphs."\n";
+	return \@paragraphs;
+}
+
+### input 1  : array ref of paragraphs
+### output 1 : array ref of sentence numbers corresponding to arr for paragraphs
+sub count_sent {
+	my ($parags) = @_;
+
+	my @nums_dots;
+	for my $parag (@$parags) {
+		my @tmps = $parag =~ /(．|。)/ug;
+		my $num_dots = @tmps;
+		push @nums_dots, scalar @tmps; 
+	}
+	return \@nums_dots;
+}
+
+### input 1  : arr ref of paragraphs.
+### output 1 : arr of hash ref. hash indicates frequency of each term in paragraph.
+sub get_surface_term_freq {
+	my ($origin_parag_aref) = @_;
+
+	my $model = new MeCab::Model( '' );
+	my $c = $model->createTagger();
+	my @term_freq_for_parag_aoh; # array of ananomous hash where the hash indicates term frequency for 'surface word'. each index of array is parags in cur doc.
+	my $term_freq_for_parag_aohref = \@term_freq_for_parag_aoh;
+	for my $idx (0..$#$origin_parag_aref) {
+		for (my $m = $c->parseToNode($origin_parag_aref->[$idx]); $m; $m = $m->{next}) {
+			$term_freq_for_parag_aohref->[$idx]->{$m->{surface}}++;
+		}
+	}
+	return $term_freq_for_parag_aohref;
+}
+
+### input 1  : arr ref of paragraphs, and term freq for paragraph aohref.
+sub get_parag_score_by_rel_keyword_matching {
+	my ($origin_parag_aref, $term_freq_for_parag_aohref) = @_;
+
+	my $rel_regex = qr/
+		cite|提案|比較|
+		研究|方法|手法|
+		我々|本(?:研究|手法|論文)|本稿|
+		これ(?:まで|ら)の(?:研究|手法|方法)|
+		しかし|一方|ただ|
+		違い|異なる|異なり|
+		(?:で|て)(?:は)?ない|いない|できない
+		/ux;
+	my @score_parag_a;
+	for my $idx (0..$#$origin_parag_aref) {
+		$score_parag_a[$idx] = 0;
+		for my $key (keys %{$term_freq_for_parag_aohref->[$idx]}) {
+			if ($key =~ $rel_regex) {
+				$score_parag_a[$idx] += (1 * $term_freq_for_parag_aohref->[$idx]->{$key});
+			}
+		}
+	}
+	return \@score_parag_a;
+}
 
 
 1;
