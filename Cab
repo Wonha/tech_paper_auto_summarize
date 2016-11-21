@@ -4,24 +4,24 @@
 # ```
 # $ ./Cab [summarization rate] [list_of_source]
 # ```
-#
-# 1. Latex2Text
-# 1. classify_section
-#
 #####
 use strict;
 use warnings;
 use utf8;
 use v5.10; # using state
+
 use open IO=> ':encoding(utf8)';
 binmode STDIN, ':encoding(utf8)';
 binmode STDOUT, ':encoding(utf8)';
 binmode STDERR, ':encoding(utf8)';
 
 use lib qw(lib);
+use Storable qw(nstore retrieve);
+
 use Latex2Text ':all';
 use CabCommon ':all';
-use Storable qw(nstore retrieve);
+use LocalTF ':all';
+use GlobalTF ':all';
 
 $#ARGV >= 0 || die "Usage: ./Cab [NAME OF LATEX SOURCE FILES]\n";
 
@@ -34,7 +34,7 @@ my $num_done = 0;
 ### init log directory
 ### make the structure of each section and subsection from latex file
 {
-	open my $fh, '>', 'classified_rate.md' or die "Can'topen'classified_rate.md': $!";
+	open my $fh, '>', 'classified_rate.md' or die "Can't open'classified_rate.md': $!";
 	for my $path_latex (@latex_files) {
 
 		my $log_dir = make_log_dir($path_latex);
@@ -48,53 +48,6 @@ my $num_done = 0;
 	check_classified_rate('', $fh, 1);
 	close $fh;
 # &get_rel_scored_paragraph();
-}
-
-
-### 2nd match for related_study
-{
-	for my $path_latex (@latex_files) {
-		my $log_dir = get_log_dir($path_latex);
-# if no 'related_study' file included in log, go next file
-		my $rel_file = File::Spec->catfile($log_dir, "related_study");
-		next if (-e $rel_file);
-##########
-# if (-e $rel_file) {
-# 	tfidf + paragscore
-# } else {
-# 	paragscore + tfidf
-# }
-#
-### 2. read origin doc from disk and seperate to paragraph (seperator: '\n{2,}')
-		my $origin_file = File::Spec->catfile($log_dir, "origin");
-		my $parags = seperate_paragraph($origin_file);
-### 3. calc how many sentence each paragraph has
-		my $sent_nums = count_sent($parags);
-### 4. execute mecab to get surface word's term frequency per each paragraph
-		my $term_freq_for_parag_aohref = &get_surface_term_freq($parags);
-
-### 5. evaluate each pargraph's score by keyword matching to check whether appropriate for rel_study or not. (score in sigmoid)
-		my $score_parag_aref = &get_parag_score_by_rel_keyword_matching ($parags, $term_freq_for_parag_aohref);
-
-### 6. devide the score by number of sentences in the paragraph
-### 7. get the highest scored paragraph index
-		my $highest_score_parag_idx = 0;
-		for my $idx (1..$#$parags) {
-			if ( $score_parag_aref->[$idx] > $score_parag_aref->[$highest_score_parag_idx] ) {
-				$highest_score_parag_idx = $idx;
-			}
-		}
-### 8. write contents of the highest scored paragraph to cur zero sized rel_file. 
-		open my $fh, '>', $rel_file or die "Can't open $rel_file : $!";
-		my @tmp1 = &LatexToSentencelist($parags->[$highest_score_parag_idx-2]);
-		my @tmp2 = &LatexToSentencelist($parags->[$highest_score_parag_idx-1]);
-		my @tmp3 = &LatexToSentencelist($parags->[$highest_score_parag_idx]);
-		print $fh @tmp1,"\n\n";
-		print $fh @tmp2,"\n\n";
-		print $fh @tmp3,"\n\n";
-		print $fh "paragraph score: $score_parag_aref->[$highest_score_parag_idx]\n"; 
-		close $fh;
-	}
 }
 
 
@@ -163,6 +116,57 @@ for my $path_latex (@latex_files) {
 		calc_tf_idf_score(\%tf_idf, $log_dir); # score in sigmoid
 		dump_high_tf_idf_sent($log_dir);
 		$num_done++;
+	}
+}
+
+
+
+### 2nd match for related_study
+{
+	for my $path_latex (@latex_files) {
+		my $log_dir = get_log_dir($path_latex);
+# if no 'related_study' file included in log, go next file
+		my $rel_file = File::Spec->catfile($log_dir, "related_study");
+		if (-e $rel_file) {
+			next;
+		} else {
+##########
+# if (-e $rel_file) {
+# 	tfidf + paragscore
+# } else {
+# 	paragscore + tfidf
+# }
+#
+### 2. read origin doc from disk and seperate to paragraph (seperator: '\n{2,}')
+			my $origin_file = File::Spec->catfile($log_dir, "origin");
+			my $parags = seperate_paragraph($origin_file);
+### 3. calc how many sentence each paragraph has
+			my $sent_nums = count_sent($parags);
+### 4. execute mecab to get surface word's term frequency per each paragraph
+			my $term_freq_for_parag_aohref = &get_surface_term_freq($parags);
+
+### 5. evaluate each pargraph's score by keyword matching to check whether appropriate for rel_study or not. (score in sigmoid)
+			my $score_parag_aref = &get_parag_score_by_rel_keyword_matching ($parags, $term_freq_for_parag_aohref);
+
+### 6. devide the score by number of sentences in the paragraph
+### 7. get the highest scored paragraph index
+			my $highest_score_parag_idx = 0;
+			for my $idx (1..$#$parags) {
+				if ( $score_parag_aref->[$idx] > $score_parag_aref->[$highest_score_parag_idx] ) {
+					$highest_score_parag_idx = $idx;
+				}
+			}
+### 8. write contents of the highest scored paragraph to cur zero sized rel_file. 
+			open my $fh, '>', $rel_file or die "Can't open $rel_file : $!";
+			my @tmp1 = &LatexToSentencelist($parags->[$highest_score_parag_idx-2]);
+			my @tmp2 = &LatexToSentencelist($parags->[$highest_score_parag_idx-1]);
+			my @tmp3 = &LatexToSentencelist($parags->[$highest_score_parag_idx]);
+			print $fh @tmp1,"\n\n";
+			print $fh @tmp2,"\n\n";
+			print $fh @tmp3,"\n\n";
+			print $fh "paragraph score: $score_parag_aref->[$highest_score_parag_idx]\n"; 
+			close $fh;
+		}
 	}
 }
 

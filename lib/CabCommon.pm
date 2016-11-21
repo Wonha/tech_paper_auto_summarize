@@ -3,11 +3,13 @@ use strict;
 #use warnings;
 use v5.10; # using state
 use utf8;
+
 use open IO=> ':encoding(utf8)';
 binmode STDIN, ':encoding(utf8)';
 binmode STDOUT, ':encoding(utf8)';
 binmode STDERR, ':encoding(utf8)';
 
+use lib qw(lib);
 use MeCab;
 use Encode qw(decode);
 use File::Basename qw( fileparse basename );
@@ -15,37 +17,27 @@ use File::Spec;
 use Text::Balanced qw( extract_bracketed );
 use Storable qw(nstore retrieve);
 
-use lib qw(lib);
 use Latex2Text ':all';
+
 use Exporter 'import';
 our @EXPORT_OK = qw(
-	glue_entire_chunk
-	read_all_line
 	make_log_dir
 	latex_to_section_structure
 	dump_sec_file
-	check_classified_rate
 	analysis_morpheme
+	dump_struct
+	check_classified_rate
+	get_log_dir
 
 	seperate_paragraph
 	count_sent
 	get_surface_term_freq
 	get_parag_score_by_rel_keyword_matching
 
-	make_local_tf_table
-	dump_local_tf_table
-	calc_local_tf_score
-	dump_high_local_tf_sent
-
-	dump_struct
-	get_log_dir
-
-	make_global_tf_table
-	dump_global_tf_table
-	make_tf_idf_table
-	dump_tf_idf_table
-	calc_tf_idf_score
-	dump_high_tf_idf_sent
+	glue_entire_chunk
+	read_all_line
+	create_markdown
+	sigmoid
 );
 our %EXPORT_TAGS = (
 	all => \@EXPORT_OK,
@@ -59,110 +51,6 @@ use constant { # make keyword list
 	TI_EXPRMNT    => "実験|評価|評価実験|評定実験",
 	TI_CNCLSN     => "考察|結論|おわりに|終わりに|結び|むすび|まとめ|あとがき|む　す　び",
 };
-
-
-### output 1 : dumping high scored sent by local tf scoring into 'sum_local_tf'
-sub dump_high_local_tf_sent {
-	my ($struct, $log_dir) = @_;
-
-	my $out_path = File::Spec->catfile($log_dir, "sum_local_tf");
-	open my $fh, '>', $out_path or die "Can't open $out_path: $!";
-
-	for my $i (1..$#$struct) {
-		my $start_idx = $struct->[$i]{start};	
-		my $end_idx = $struct->[$i]{end};	
-
-		my @sorted_idx = sort { 
-			$struct->[0][$b]{local_tf_score} <=> $struct->[0][$a]{local_tf_score} 
-		} $start_idx..$end_idx;
-
-		print $fh "================================================================\n";
-		print $fh "[section type  : $struct->[$i]{type}]\n";
-		print $fh "[section title : $struct->[$i]{title}]\n";
-		print $fh "================================================================\n";
-		printf $fh "[%d] ", $struct->[0][$sorted_idx[0]]{local_tf_score};
-		print $fh "$struct->[0][$sorted_idx[0]]{sent}\n";
-
-		if ( defined $struct->[$i]{subsec} ) {
-			for my $j (0..$#{$struct->[$i]{subsec}}) {
-				my $start_idx = $struct->[$i]{subsec}[$j]{start};	
-				my $end_idx = $struct->[$i]{subsec}[$j]{end};	
-				my @sorted_idx = sort { 
-					$struct->[0][$b]{local_tf_score} <=> $struct->[0][$a]{local_tf_score} 
-				} $start_idx..$end_idx;
-
-				print $fh "-----------------------------------------------------\n";
-				print $fh "  [subsection title : $struct->[$i]{subsec}[$j]{title}]\n";
-				print $fh "-----------------------------------------------------\n";
-				printf $fh "  [%d] ", $struct->[0][$sorted_idx[0]]{local_tf_score};
-				print $fh "$struct->[0][$sorted_idx[0]]{sent}\n";
-			}
-		}
-		print $fh "\n";
-	}
-	close $fh;
-}
-
-
-### output 1 : dump high scored sent by tf idf scoring into 'sum_tf_idf'
-sub dump_high_tf_idf_sent {
-	my ($log_dir) = @_;
-	my $struct_path = File::Spec->catfile($log_dir, "struct");
-	my $struct = retrieve $struct_path;
-
-	my $out_path = File::Spec->catfile($log_dir, "sum_tf_idf");
-	open my $fh, '>', $out_path or die "Can't open $out_path: $!";
-
-	for my $i (1..$#$struct) {
-		my $start_idx = $struct->[$i]{start};	
-		my $end_idx = $struct->[$i]{end};	
-
-		my @sorted_idx = sort { 
-			$struct->[0][$b]{tf_idf_score} <=> $struct->[0][$a]{tf_idf_score} 
-		} $start_idx..$end_idx;
-#print "@sorted_idx\n";
-
-		print $fh "================================================================\n";
-		print $fh "[section type  : $struct->[$i]{type}]\n";
-		print $fh "[section title : $struct->[$i]{title}]\n";
-		print $fh "================================================================\n";
-		my @sorted_high_idx = sort { $a <=> $b } @sorted_idx[0..2]; 
-		for (0..$#sorted_high_idx) {  
-			shift @sorted_high_idx if (not defined $sorted_high_idx[$_])
-		}
-		for (@sorted_high_idx) {
-			printf $fh "[i:%d, score:%5.5f] ", $_, $struct->[0][$_]{tf_idf_score};
-			print $fh "$struct->[0][$_]{sent}\n";
-		}
-
-		if ( defined $struct->[$i]{subsec} ) {
-			for my $j (0..$#{$struct->[$i]{subsec}}) {
-				my $start_idx = $struct->[$i]{subsec}[$j]{start};	
-				my $end_idx = $struct->[$i]{subsec}[$j]{end};	
-				my @sorted_idx = sort { 
-					$struct->[0][$b]{tf_idf_score} <=> $struct->[0][$a]{tf_idf_score} 
-				} $start_idx..$end_idx;
-
-				print $fh "-----------------------------------------------------\n";
-				print $fh "  [subsection title : $struct->[$i]{subsec}[$j]{title}]\n";
-				print $fh "-----------------------------------------------------\n";
-				printf $fh "  [i:lead, score:%5.5f] ", $struct->[0][$start_idx]{tf_idf_score};
-				print $fh "$struct->[0][$start_idx]{sent}\n";
-				print $fh ".....\n";
-				my @sorted_high_idx = sort { $a <=> $b } @sorted_idx[0..2]; 
-				for (0..$#sorted_high_idx) {  
-					shift @sorted_high_idx if (not defined $sorted_high_idx[$_])
-				}
-				for (@sorted_high_idx) {
-					printf $fh "  [i:%d, score:%5.5f] ", $_, $struct->[0][$_]{tf_idf_score};
-					print $fh "$struct->[0][$_]{sent}\n";
-				}
-			}
-		}
-		print $fh "\n";
-	}
-	close $fh;
-}
 
 
 ### output 1 : dump struct into 'struct'
@@ -181,97 +69,6 @@ sub get_log_dir {
 }
 
 
-### input 1  : reference to the global tf hash
-### input 2  : reference to hash for document frequency
-### input 3  : log directory to current file
-### output 1 : global tf table into input 1
-### output 2 : document frequency table into input 2
-sub make_global_tf_table {
-	my ($global_tf, $doc_freq, $log_dir) = @_;
-
-	my $local_tf_path = File::Spec->catfile($log_dir, "local_tf");
-	my $local_tf = retrieve $local_tf_path;
-
-	for (keys %$local_tf) {
-		$global_tf->{$_} += $local_tf->{$_};
-		$doc_freq->{$_}++;
-	}
-}
-
-
-### input 1  : reference to the global tf hash
-### input 2  : path to log directory 
-### output 1 : dump global_tf into './logs/global_tf' in format of hash reference
-sub dump_global_tf_table {
-	my ($global_tf, $log_dir) = @_;
-	
-	my $out_path = File::Spec->catfile($log_dir, "global_tf");
-	nstore $global_tf, $out_path;
-### debug
-#	open my $fh, '>', 'global_tf_test' or die "Can't open tf_idf_test: $!";
-#	print $fh "$_ : $global_tf->{$_}\n" for (keys %$global_tf);
-#	close $fh;
-###
-}
-
-
-### input 1  : reference to tf idf table hash for this file
-### input 2  : reference to global tf table hash
-### input 3  : reference to document frequency hash
-### input 4  : total number of document 
-### input 5  : scalar for log directory
-### output 1 : tf idf table for this file into input 1
-sub make_tf_idf_table {
-	my ($tf_idf, $global_tf, $doc_freq, $doc_total, $log_dir) = @_;
-
-	my $local_tf_path = File::Spec->catfile($log_dir, "local_tf");
-	my $local_tf = retrieve $local_tf_path;
-
-	for (keys %$local_tf) {
-		$tf_idf->{$_} = $local_tf->{$_} * log ($doc_total / $doc_freq->{$_}) / log 10;
-	}
-}
-
-
-### input 1  : reference to tf idf table hash for this file
-### input 2  : path to log directory
-### output 1 : dump tf idf of this file into log directory
-sub dump_tf_idf_table {
-	my ($tf_idf, $log_dir) = @_;
-
-	my $out_path = File::Spec->catfile($log_dir, "tf_idf");
-	nstore $tf_idf, $out_path;
-}
-
-
-### output 1 : tf_idf_score to struct and store in file
-sub calc_tf_idf_score {
-	my ($tf_idf, $log_dir) = @_;
-
-	my $struct_path = File::Spec->catfile($log_dir, "struct");
-	my $struct = retrieve $struct_path;
-
-	for my $i (0..$#{$struct->[0]}) {
-		$struct->[0][$i]{tf_idf_score} += $tf_idf->{$_} for (keys %{$struct->[0][$i]{morpheme}});
-	}
-
-	for my $i (0..$#{$struct->[0]}) {
-		$struct->[0][$i]{tf_idf_score} = _sigmoid($struct->[0][$i]{tf_idf_score});
-	}
-
-	nstore $struct, $struct_path;
-}
-
-sub _sigmoid {
-	my $x = shift;
-#	my $e = 10**0.43429;
-	my $e = 1.003;
-	my $res = ((2/(1+$e**(-1*$x)))-1);
-	print "sigmoid value has been 1, input value was $x\n" if ($res >= 1);
-	return $res;
-}
-
-
 ### input : reference for sentence array
 ### output: reference for all sent in one scalar
 sub glue_entire_chunk {
@@ -279,6 +76,16 @@ sub glue_entire_chunk {
 	my $all_sent;
 	$all_sent .= $$sent_struct[$_]{sent} for (0..$#{$sent_struct});
 	return \$all_sent;
+}
+
+
+sub sigmoid {
+	my $x = shift;
+#	my $e = 10**0.43429;
+	my $e = 1.003;
+	my $res = ((2/(1+$e**(-1*$x)))-1);
+	print "sigmoid value has been 1, input value was $x\n" if ($res >= 1);
+	return $res;
 }
 
 
@@ -306,59 +113,12 @@ sub analysis_morpheme {
 }
 
 
-### input 1  : sent_struct
-### input 2  : reference to local tf hash
-### output1 : reference to local tf hash
-sub make_local_tf_table {
-	my ($sent_struct, $local_tf) = @_;
-### make local term frequency hash
-	{
-		my ($key, $value);
-		for my $i (0..$#$sent_struct) {
-			while ( ($key, $value) = each %{$sent_struct->[$i]{morpheme}} ) {
-				$local_tf->{$key} += $value;
-			}
-		}
-	}
-}
-
-
-### input 1  : sent_struct
-### output 1 : local_tf_score in sent struct
-sub calc_local_tf_score {
-	my ($sent_struct, $local_tf) = @_;
-
-	for my $i (0..$#$sent_struct) {
-		$sent_struct->[$i]{local_tf_score} += $local_tf->{$_} for (keys %{$sent_struct->[$i]{morpheme}});
-	}
-}
-
-
-### input 1  : sent_struct
-### input 2  : log path for this file
-### output 1 : dump local tf into local_tf.md
-### output 2 : dump local tf into local_tf in format of hash reference
-sub dump_local_tf_table {
-	my ($local_tf, $log_dir) = @_;
-
-### dump to file local_tf.md
-	my $out_path_md = File::Spec->catfile($log_dir, "local_tf.md");
-	push my @first_row, &basename($log_dir);
-	_create_markdown($local_tf, $out_path_md, "local term", \@first_row);
-
-### dump to file local_tf 
-	my $out_path_marshall = File::Spec->catfile($log_dir, "local_tf");
-	nstore $local_tf, $out_path_marshall;
-
-}
-
-
 ### input1  : reference of hash
 ### input2  : path for output file
 ### input3  : table name 
 ### input4  : array reference of first row
 ### output1 : markdown file
-sub _create_markdown {
+sub create_markdown {
 	my ($ref, $out_path, $table_name, $first_row) = @_;
 
 	open my $fh_out, '>', $out_path or die "Can't open $out_path: $!";
@@ -698,7 +458,7 @@ sub get_parag_score_by_rel_keyword_matching {
 			while ( $origin_parag_aref->[$idx] =~ /しかし|一方|ただ|違い|異なる|異なり|(?:で|て)(?:は)?ない|いない|できない|でき(?:る|た)/uxpg) {
 				$score_parag_a[$idx] += 2;
 			}
-		$score_parag_a[$idx] = _sigmoid($score_parag_a[$idx])+1;
+		$score_parag_a[$idx] = sigmoid($score_parag_a[$idx])+1;
 	}
 	return \@score_parag_a;
 }
