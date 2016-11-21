@@ -33,12 +33,21 @@ V22N02-02 | 0 | -
 // 관련연구에 관련된 내용은 추출했지만, 이 추출로는 요약을 만들수 없으므로 "2nd 패턴매칭으로 추출된것이 '관련연구와 관련된 내용'인가?" 는 0 임
 
 
+# title X 2nd O
+
 document name | 2nd pattern matching | paragraphs about 'related study' | right answer in the document | paragraphs including right answer
 --- | --- | --- | --- | ---
-V02N04-03 | 1 | 1 | 1 | 0
+V01N01-01 | 1 | 1 | 1 | 1
+V02N04-03 | 1 | 1 | 1 | 1
 V03N03-03 | 1 | 1 | 1 | 0
 V06N02-06 | 1 | 1 | 1 | 1
-V07N04-07 | 1 | 1 | 1 | 1
-V10N05-02 | 1 | 1 | 1 | 0
-V12N05-05 | 1 | 1 | 1 | 0
+V07N02-07 | 1 | 1 | 1 | 0
+V07N04-07 | 1 | 1 | 1 | 0
+V10N05-02 | 1 | 1 | 1 | 1
+V12N05-05 | 1 | 1 | 1 | 1
+V16N01-01 | 1 | 1 | 1 | 1
+
 V18N04-02 | 1 | 1 | 0 | -
+
+# title O 2nd O
+

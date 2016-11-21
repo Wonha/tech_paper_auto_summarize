@@ -265,9 +265,9 @@ sub calc_tf_idf_score {
 sub _sigmoid {
 	my $x = shift;
 #	my $e = 10**0.43429;
-	my $e = 1.004;
+	my $e = 1.003;
 	my $res = ((2/(1+$e**(-1*$x)))-1);
-	print "sigmoid value has been 1\n" if ($res == 1);
+	print "sigmoid value has been 1, input value was $x\n" if ($res >= 1);
 	return $res;
 }
 
@@ -645,11 +645,16 @@ sub get_surface_term_freq {
 
 	my $model = new MeCab::Model( '' );
 	my $c = $model->createTagger();
+	my $term;
 	my @term_freq_for_parag_aoh; # array of ananomous hash where the hash indicates term frequency for 'surface word'. each index of array is parags in cur doc.
 	my $term_freq_for_parag_aohref = \@term_freq_for_parag_aoh;
 	for my $idx (0..$#$origin_parag_aref) {
 		for (my $m = $c->parseToNode($origin_parag_aref->[$idx]); $m; $m = $m->{next}) {
-			$term_freq_for_parag_aohref->[$idx]->{$m->{surface}}++;
+			$term = $m->{surface};
+			$term = decode('utf8',$term);
+			if ( ($term =~ /^\w+$/u) && ($term ne '') ) { # filetering special characters
+				$term_freq_for_parag_aohref->[$idx]->{$term}++;
+			}
 		}
 	}
 	return $term_freq_for_parag_aohref;
@@ -659,24 +664,40 @@ sub get_surface_term_freq {
 sub get_parag_score_by_rel_keyword_matching {
 	my ($origin_parag_aref, $term_freq_for_parag_aohref) = @_;
 
-	my $rel_regex = qr/
-		cite|提案|比較|
-		研究|方法|手法|
-		我々|本(?:研究|手法|論文)|本稿|
+#	my $rel_regex = qr/
+#		我々|本(?:研究|手法|論文)|本稿|
+#		これ(?:まで|ら)の(?:研究|手法|方法)|
+#		cite|提案|比較|
+#		研究|方法|手法|
+#		しかし|一方|ただ|
+#		違い|異なる|異なり|
+#		(?:で|て)(?:は)?ない|いない|できない
+#		/ux;
+	my $rel_regex2 = qr/
 		これ(?:まで|ら)の(?:研究|手法|方法)|
+		cite|提案|比較|
+		研究|方法|手法
+		/uxpm;
+	my $rel_regex3 = qr/
 		しかし|一方|ただ|
 		違い|異なる|異なり|
 		(?:で|て)(?:は)?ない|いない|できない
-		/ux;
+		/uxpm;
 
 	my @score_parag_a;
 	for my $idx (0..$#$origin_parag_aref) {
 		$score_parag_a[$idx] = 0;
-		for my $key (keys %{$term_freq_for_parag_aohref->[$idx]}) {
-			if ($key =~ $rel_regex) {
-				$score_parag_a[$idx] += (1 * $term_freq_for_parag_aohref->[$idx]->{$key});
+#		for my $key (keys %{$term_freq_for_parag_aohref->[$idx]}) {
+			while ( $origin_parag_aref->[$idx] =~ /われわれ|我々|本(?:研究|手法|論文|稿)|特徴|具体/uxpg ) {
+				$score_parag_a[$idx] += 10; 
+#				print "$origin_parag_aref->[$idx]\n${^MATCH}\n\n";
+			}	
+			while ( $origin_parag_aref->[$idx] =~ /これ(?:まで|ら)の(?:研究|手法|方法)|cite|提案|比較|研究|方法|手法/uxpg) {
+				$score_parag_a[$idx] += 3;
+			}	
+			while ( $origin_parag_aref->[$idx] =~ /しかし|一方|ただ|違い|異なる|異なり|(?:で|て)(?:は)?ない|いない|できない|でき(?:る|た)/uxpg) {
+				$score_parag_a[$idx] += 2;
 			}
-		}
 		$score_parag_a[$idx] = _sigmoid($score_parag_a[$idx])+1;
 	}
 	return \@score_parag_a;
