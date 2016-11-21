@@ -131,7 +131,7 @@ sub dump_high_tf_idf_sent {
 			shift @sorted_high_idx if (not defined $sorted_high_idx[$_])
 		}
 		for (@sorted_high_idx) {
-			printf $fh "[i:%d, score:%d] ", $_, $struct->[0][$_]{tf_idf_score};
+			printf $fh "[i:%d, score:%5.5f] ", $_, $struct->[0][$_]{tf_idf_score};
 			print $fh "$struct->[0][$_]{sent}\n";
 		}
 
@@ -146,7 +146,7 @@ sub dump_high_tf_idf_sent {
 				print $fh "-----------------------------------------------------\n";
 				print $fh "  [subsection title : $struct->[$i]{subsec}[$j]{title}]\n";
 				print $fh "-----------------------------------------------------\n";
-				printf $fh "  [i:lead, %d] ", $struct->[0][$start_idx]{tf_idf_score};
+				printf $fh "  [i:lead, score:%5.5f] ", $struct->[0][$start_idx]{tf_idf_score};
 				print $fh "$struct->[0][$start_idx]{sent}\n";
 				print $fh ".....\n";
 				my @sorted_high_idx = sort { $a <=> $b } @sorted_idx[0..2]; 
@@ -154,7 +154,7 @@ sub dump_high_tf_idf_sent {
 					shift @sorted_high_idx if (not defined $sorted_high_idx[$_])
 				}
 				for (@sorted_high_idx) {
-					printf $fh "  [i:%d, score:%d] ", $_, $struct->[0][$_]{tf_idf_score};
+					printf $fh "  [i:%d, score:%5.5f] ", $_, $struct->[0][$_]{tf_idf_score};
 					print $fh "$struct->[0][$_]{sent}\n";
 				}
 			}
@@ -255,7 +255,20 @@ sub calc_tf_idf_score {
 		$struct->[0][$i]{tf_idf_score} += $tf_idf->{$_} for (keys %{$struct->[0][$i]{morpheme}});
 	}
 
+	for my $i (0..$#{$struct->[0]}) {
+		$struct->[0][$i]{tf_idf_score} = _sigmoid($struct->[0][$i]{tf_idf_score});
+	}
+
 	nstore $struct, $struct_path;
+}
+
+sub _sigmoid {
+	my $x = shift;
+#	my $e = 10**0.43429;
+	my $e = 1.004;
+	my $res = ((2/(1+$e**(-1*$x)))-1);
+	print "sigmoid value has been 1\n" if ($res == 1);
+	return $res;
 }
 
 
@@ -443,23 +456,25 @@ sub read_all_line {
 	my $pth_file = shift;
 	local $SIG{__WARN__} = sub { die $_[0]."[[$pth_file]]" }; # turn warning into the fetal error.
 	local @ARGV = ( $pth_file );
-	return wantarray ? return <> : do { local $/=''; return <> };
+	return wantarray ? return <> : do { local $/= undef ; return <> };
 }
 
 
-### input: path to latex file
-### output: section structure
+### input   : path to latex file
+### output1 : section structure
+### output2 : 'origin' file in log directory
 sub latex_to_section_structure {
 ### cut head and tail
 	my $path_file = shift;
 	my @lines = ();
 	my $flag = 0;
 	my @all_lines = read_all_line($path_file);
+#	print @all_lines;
 
 	my $log_dir = get_log_dir($path_file);
 	my $out_path = File::Spec->catfile($log_dir, "origin");
 	open my $fh, '>', $out_path or die "Can't open $out_path: $!";
-	print $fh "@all_lines";
+	print $fh @all_lines;
 	close $fh;
 
 	for (@all_lines) {
@@ -603,6 +618,7 @@ sub seperate_paragraph {
 	my ($path_origin) = @_;
 
 	my $contents = read_all_line($path_origin);
+#	print $contents;
 	my @paragraphs = split /(?:\n)(?:\h)*(?:\n){1,}/, $contents;
 #print scalar @paragraphs."\n";
 	return \@paragraphs;
@@ -652,6 +668,7 @@ sub get_parag_score_by_rel_keyword_matching {
 		違い|異なる|異なり|
 		(?:で|て)(?:は)?ない|いない|できない
 		/ux;
+
 	my @score_parag_a;
 	for my $idx (0..$#$origin_parag_aref) {
 		$score_parag_a[$idx] = 0;
@@ -660,6 +677,7 @@ sub get_parag_score_by_rel_keyword_matching {
 				$score_parag_a[$idx] += (1 * $term_freq_for_parag_aohref->[$idx]->{$key});
 			}
 		}
+		$score_parag_a[$idx] = _sigmoid($score_parag_a[$idx])+1;
 	}
 	return \@score_parag_a;
 }

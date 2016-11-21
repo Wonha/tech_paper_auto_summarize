@@ -19,7 +19,7 @@ binmode STDOUT, ':encoding(utf8)';
 binmode STDERR, ':encoding(utf8)';
 
 use lib qw(lib);
-use Latex2Text;
+use Latex2Text ':all';
 use CabCommon ':all';
 use Storable qw(nstore retrieve);
 
@@ -66,8 +66,7 @@ my $num_done = 0;
 ### 4. execute mecab to get surface word's term frequency per each paragraph
 		my $term_freq_for_parag_aohref = &get_surface_term_freq($parags);
 
-### 5. evaluate each pargraph's score by keyword matching to check whether appropriate for rel_study or not.
-#
+### 5. evaluate each pargraph's score by keyword matching to check whether appropriate for rel_study or not. (score in sigmoid)
 		my $score_parag_aref = &get_parag_score_by_rel_keyword_matching ($parags, $term_freq_for_parag_aohref);
 
 ### 6. devide the score by number of sentences in the paragraph
@@ -80,12 +79,14 @@ my $num_done = 0;
 		}
 ### 8. write contents of the highest scored paragraph to cur zero sized rel_file. 
 		open my $fh, '>', $rel_file or die "Can't open $rel_file : $!";
-		print $fh $parags->[$highest_score_parag_idx-2]."\n\n";
-		print $fh $parags->[$highest_score_parag_idx-1]."\n\n";
-		print $fh $parags->[$highest_score_parag_idx];
-		print $fh "\nscore of this paragraph is $score_parag_aref->[$highest_score_parag_idx]\n"; 
+		my @tmp1 = &LatexToSentencelist($parags->[$highest_score_parag_idx-2]);
+		my @tmp2 = &LatexToSentencelist($parags->[$highest_score_parag_idx-1]);
+		my @tmp3 = &LatexToSentencelist($parags->[$highest_score_parag_idx]);
+		print $fh @tmp1,"\n\n";
+		print $fh @tmp2,"\n\n";
+		print $fh @tmp3,"\n\n";
+		print $fh "paragraph score: $score_parag_aref->[$highest_score_parag_idx]\n"; 
 		close $fh;
-
 	}
 }
 
@@ -152,7 +153,7 @@ for my $path_latex (@latex_files) {
 		my %tf_idf;
 		make_tf_idf_table(\%tf_idf, \%global_tf, \%doc_freq, $doc_total, $log_dir);
 		dump_tf_idf_table(\%tf_idf, $log_dir);
-		calc_tf_idf_score(\%tf_idf, $log_dir);
+		calc_tf_idf_score(\%tf_idf, $log_dir); # score in sigmoid
 		dump_high_tf_idf_sent($log_dir);
 		$num_done++;
 	}
