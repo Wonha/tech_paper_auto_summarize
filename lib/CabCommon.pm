@@ -38,6 +38,7 @@ our @EXPORT_OK = qw(
 	read_all_line
 	create_markdown
 	sigmoid
+	debug_print_paragraphs
 );
 our %EXPORT_TAGS = (
 	all => \@EXPORT_OK,
@@ -233,9 +234,9 @@ sub latex_to_section_structure {
 
 	my $log_dir = get_log_dir($path_file);
 	my $out_path = File::Spec->catfile($log_dir, "origin");
-	open my $fh, '>', $out_path or die "Can't open $out_path: $!";
-	print $fh @all_lines;
-	close $fh;
+	open my $fh_origin, '>', $out_path or die "Can't open $out_path: $!";
+	print $fh_origin @all_lines;
+	close $fh_origin;
 
 	for (@all_lines) {
 		if (/\\begin\{document\}/o || /\\jabstract\{/o) {
@@ -285,8 +286,15 @@ sub latex_to_section_structure {
 			@result = extract_bracketed($sec, '{}'); # [0]: matched, [1]: remains
 			substr($result[0], 0, 1) = '';	 # omit { 
 			substr($result[0], -1, 1) = '';  # omit }
-			my @sent = &LatexToSentencelist($result[0]);
-			$struct->[0][$tail_sent++]{'sent'} = $_ for (@sent);
+			my @paragraphs = split /(?:\n)(?:\h)*(?:\n){1,}/, $result[0];
+			my $par_idx = 0;
+			for my $par (@paragraphs) {
+				my @sent = &LatexToSentencelist($par);
+				$struct->[$tail_chunk]{'parag'}[$par_idx++] = $tail_sent;
+#print "======================================================$tail_sent\n";
+#print "$par\n";
+				$struct->[0][$tail_sent++]{'sent'} = $_ for (@sent);
+			}
 
 			$struct->[$tail_chunk]{'end'} = --$tail_sent;
 			$struct->[$tail_chunk]{'sec_end'} = $struct->[$tail_chunk]{end};
@@ -310,9 +318,18 @@ sub latex_to_section_structure {
 			};
 			$struct->[$tail_chunk]{'start'} = ++$tail_sent;
 
-			my @sent = &LatexToSentencelist($sec);
-			$struct->[0][$tail_sent++]{'sent'} = "" if (!@sent);
-			$struct->[0][$tail_sent++]{'sent'} = $_ for (@sent);
+			my @paragraphs = split /(?:\n)(?:\h)*(?:\n){1,}/, $sec;
+			my $par_idx = 0;
+			for my $par (@paragraphs) {
+				my @sent = &LatexToSentencelist($par);
+				$struct->[$tail_chunk]{'parag'}[$par_idx++] = $tail_sent;
+#print "======================================================$tail_sent\n";
+#print "$par\n";
+				next if (!@sent);
+#$struct->[0][$tail_sent++]{'sent'} = "" if (!@sent);
+				$struct->[0][$tail_sent++]{'sent'} = $_ for (@sent);
+			}
+			
 			$struct->[$tail_chunk]{'end'} = --$tail_sent;
 			$struct->[$tail_chunk]{'sec_end'} = $struct->[$tail_chunk]{end};
 
@@ -321,8 +338,16 @@ sub latex_to_section_structure {
 			$struct->[$tail_chunk]{'subsec'}[$tail_subsec]{'title'} = $1;
 			$struct->[$tail_chunk]{'subsec'}[$tail_subsec]{'start'} = ++$tail_sent;
 
-			my @sent = &LatexToSentencelist($sec);
-			$struct->[0][$tail_sent++]{'sent'} = $_ for (@sent);
+			my @paragraphs = split /(?:\n)(?:\h)*(?:\n){1,}/, $sec;
+			my $par_idx = 0;
+			for my $par (@paragraphs) {
+				my @sent = &LatexToSentencelist($par);
+				$struct->[$tail_chunk]{'subsec'}[$tail_subsec]{'parag'}[$par_idx++] = $tail_sent;
+				next if (!@sent);
+#print "------------------------------------------------------$tail_sent\n";
+#print "$par\n";
+				$struct->[0][$tail_sent++]{'sent'} = $_ for (@sent);
+			}
 
 			$struct->[$tail_chunk]{'subsec'}[$tail_subsec]{'end'} = --$tail_sent;
 			$struct->[$tail_chunk]{'sec_end'} = $struct->[$tail_chunk]{'subsec'}[$tail_subsec]{'end'};
@@ -338,6 +363,70 @@ sub latex_to_section_structure {
 	return $struct;
 }
 
+sub debug_print_paragraphs {
+	my $struct = shift;
+### print by paragraphs
+	{
+		for my $n (1..$#$struct) {
+### get start and end position of paragraph in section
+print "=============================================\n";
+print "  [$struct->[$n]{title}] section\n";
+print "  start: $struct->[$n]{start}\n";
+print "  end: $struct->[$n]{end}\n";
+print "  parag: $struct->[$n]{parag}[$_]\n" for (0..$#{$struct->[$n]{parag}});
+print "=============================================\n";
+
+			for my $i (0..$#{$struct->[$n]{parag}}) {
+				if ( ($struct->[$n]{parag}[$i] == $struct->[$n]{parag}[$i+1]) && (defined $struct->[$n]{parag}[$i+1])) {
+					next;
+				}
+				my $par_start = $struct->[$n]{parag}[$i];
+				my $par_end = do {
+					if ( defined $struct->[$n]{parag}[$i+1] ) {
+						$struct->[$n]{parag}[++$i]-1;
+					} else {
+						$struct->[$n]{end};
+					}
+				};
+print "[start: $par_start, end: $par_end]\n";
+### print from start to end position
+				for my $m ($par_start..$par_end) {
+					print "$struct->[0][$m]{sent}\n";
+				}
+				print "\n\n";
+			}
+### get start and end position of paragraph in subsection
+			if ( defined $struct->[$n]{subsec} ) {
+				for my $sub (0..$#{$struct->[$n]{subsec}}) {
+print "---------------------------------------------\n";
+print "  title: [$struct->[$n]{subsec}[$sub]{title}]\n";
+print "---------------------------------------------\n";
+					for my $i (0..$#{$struct->[$n]{subsec}[$sub]{parag}}) {
+						if (($struct->[$n]{subsec}[$sub]{parag}[$i] == $struct->[$n]{subsec}[$sub]{parag}[$i+1]) && (defined $struct->[$n]{subsec}[$sub]{parag}[$i+1])) {
+							next;
+						}
+						my $par_start = $struct->[$n]{subsec}[$sub]{parag}[$i];
+						my $par_end = do {
+							if ( defined $struct->[$n]{subsec}[$sub]{parag}[$i+1] ) {
+								$struct->[$n]{subsec}[$sub]{parag}[++$i]-1;
+							} else {
+								$struct->[$n]{subsec}[$sub]{end};
+							}
+						};
+print "[start: $par_start, end: $par_end]\n";
+### print from start to end position
+						for my $m ($par_start..$par_end) {
+							print "$struct->[0][$m]{sent}\n";
+						}
+						print "\n\n";
+
+					}
+				}
+			}
+		}
+	}
+
+}
 
 ### input: current file path
 ### output: path to log directory for this file
