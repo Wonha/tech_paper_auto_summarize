@@ -91,10 +91,10 @@ sub dump_tf_idf_table {
 
 ### output 1 : tf_idf_score to struct and store in file
 sub calc_tf_idf_score {
-	my ($tf_idf, $log_dir) = @_;
+	my ($struct, $tf_idf, $log_dir) = @_;
 
-	my $struct_path = File::Spec->catfile($log_dir, "struct");
-	my $struct = retrieve $struct_path;
+#	my $struct_path = File::Spec->catfile($log_dir, "struct");
+#	my $struct = retrieve $struct_path;
 
 	for my $i (0..$#{$struct->[0]}) {
 		$struct->[0][$i]{tf_idf_score} += $tf_idf->{$_} for (keys %{$struct->[0][$i]{morpheme}});
@@ -104,17 +104,16 @@ sub calc_tf_idf_score {
 		$struct->[0][$i]{tf_idf_score} = sigmoid($struct->[0][$i]{tf_idf_score});
 	}
 
-	nstore $struct, $struct_path;
 }
 
 
 ### output 1 : dump high scored sent by tf idf scoring into 'sum_tf_idf'
 sub dump_high_tf_idf_sent {
-	my ($log_dir) = @_;
-	my $struct_path = File::Spec->catfile($log_dir, "struct");
-	my $struct = retrieve $struct_path;
+	my ($struct, $log_dir) = @_;
+#	my $struct_path = File::Spec->catfile($log_dir, "struct");
+#	my $struct = retrieve $struct_path;
 
-	my $out_path = File::Spec->catfile($log_dir, "sum_tf_idf");
+	my $out_path = File::Spec->catfile($log_dir, "high_tf_idf_sent");
 	open my $fh, '>', $out_path or die "Can't open $out_path: $!";
 
 	for my $i (1..$#$struct) {
@@ -167,3 +166,6 @@ sub dump_high_tf_idf_sent {
 	}
 	close $fh;
 }
+
+
+1;

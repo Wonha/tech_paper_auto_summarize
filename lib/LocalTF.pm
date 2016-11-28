@@ -20,6 +20,8 @@ our @EXPORT_OK = qw(
 	dump_local_tf_table
 	calc_local_tf_score
 	dump_high_local_tf_sent
+
+	debug_calc_local_tf_score
 );
 our %EXPORT_TAGS = (
 	all => \@EXPORT_OK,
@@ -73,11 +75,11 @@ sub calc_local_tf_score {
 }
 
 
-### output 1 : dumping high scored sent by local tf scoring into 'sum_local_tf'
+### output 1 : dumping high scored sent by local tf scoring into 'high_local_tf'
 sub dump_high_local_tf_sent {
 	my ($struct, $log_dir) = @_;
 
-	my $out_path = File::Spec->catfile($log_dir, "sum_local_tf");
+	my $out_path = File::Spec->catfile($log_dir, "high_local_tf_sent");
 	open my $fh, '>', $out_path or die "Can't open $out_path: $!";
 
 	for my $i (1..$#$struct) {
@@ -114,3 +116,14 @@ sub dump_high_local_tf_sent {
 	}
 	close $fh;
 }
+
+
+
+sub debug_calc_local_tf_score {
+	my $struct = shift;
+	for my $i (0..$#{$struct->[0]}) {
+		print "local tf score for sent [$i] = $struct->[0][$i]{local_tf_score}\n";
+	}
+}
+
+1;

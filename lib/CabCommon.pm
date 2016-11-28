@@ -28,17 +28,11 @@ our @EXPORT_OK = qw(
 	dump_struct
 	check_classified_rate
 	get_log_dir
-
-	seperate_paragraph
-	count_sent
-	get_surface_term_freq
-	get_parag_score_by_rel_keyword_matching
-
-	glue_entire_chunk
 	read_all_line
 	create_markdown
 	sigmoid
-	debug_print_paragraphs
+
+	glue_entire_chunk
 );
 our %EXPORT_TAGS = (
 	all => \@EXPORT_OK,
@@ -144,15 +138,16 @@ sub create_markdown {
 ### output1  : create 5 classified file, and dump the contents of it
 sub dump_sec_file {
 	my ($struct, $log_dir) = @_;
-	my @file_name = ('abstract', 'intro', 'related_study', 'proposed_method', 'experiment_result', 'conclusion');
+	my @sec_name = ('abstract', 'intro', 'related_study', 'proposed_method', 'experiment_result', 'conclusion');
 
-	for (@file_name) {
+	for (@sec_name) {
 		my $out_path = File::Spec->catfile($log_dir, $_);
 		unlink $out_path if (-e $out_path);
 	}
 
-	for my $name (@file_name) {
-		my $out_path = File::Spec->catfile($log_dir, $name);
+	for my $name (@sec_name) {
+		my $file_name = 'sec_'.$name;
+		my $out_path = File::Spec->catfile($log_dir, $file_name);
 		for my $i (1..$#$struct) {
 			if ($struct->[$i]{type} eq $name) {
 				open my $fh, '>>', $out_path or die "Can't open $out_path : $!";
@@ -222,7 +217,7 @@ sub read_all_line {
 
 
 ### input   : path to latex file
-### output1 : section structure
+### output1 : section/paragraph structure
 ### output2 : 'origin' file in log directory
 sub latex_to_section_structure {
 ### cut head and tail
@@ -299,7 +294,7 @@ sub latex_to_section_structure {
 			$struct->[$tail_chunk]{'end'} = --$tail_sent;
 			$struct->[$tail_chunk]{'sec_end'} = $struct->[$tail_chunk]{end};
 
-		} elsif ( $sec =~ /\\section\{([\d\D]+?)\}/o ) {
+		} elsif ( $sec =~ /\\section(?:\s)*?\{([\d\D]+?)\}/o ) {
 			$tail_chunk++;
 			$tail_subsec = -1;
 			$struct->[$tail_chunk]{'title'} = $title = $1;
@@ -333,7 +328,7 @@ sub latex_to_section_structure {
 			$struct->[$tail_chunk]{'end'} = --$tail_sent;
 			$struct->[$tail_chunk]{'sec_end'} = $struct->[$tail_chunk]{end};
 
-		} elsif ( $sec =~ /\\subsection\{([\d\D]+?)\}/o ) {
+		} elsif ( $sec =~ /\\subsection(?:\s)*?\{([\d\D]+?)\}/o ) {
 			$tail_subsec++;
 			$struct->[$tail_chunk]{'subsec'}[$tail_subsec]{'title'} = $1;
 			$struct->[$tail_chunk]{'subsec'}[$tail_subsec]{'start'} = ++$tail_sent;
@@ -363,6 +358,35 @@ sub latex_to_section_structure {
 	return $struct;
 }
 
+
+sub debug_print_sections {
+	my $struct = shift;
+	use Data::Dumper;
+#	print Dumper($struct);
+	for my $n (1..$#$struct) {
+		print "####################################################################\n";
+		print "  type: $struct->[$n]{type}\n";
+		print "  section title: $struct->[$n]{title}\n";
+		print "####################################################################\n";
+		print $struct->[0][$_]{sent}."\n" for ($struct->[$n]{start}..$struct->[$n]{end});
+		if ( defined $struct->[$n]{subsec} ) {
+			for my $i (0..$#{$struct->[$n]{subsec}}) {
+				print "-------------------------------------------------------\n";
+				print "  subsection title : $struct->[$n]{subsec}[$i]{title}\n";
+				print "-------------------------------------------------------\n";
+				for my $j ($struct->[$n]{subsec}[$i]{start}..$struct->[$n]{subsec}[$i]{end}) {
+					print $struct->[0][$j]{sent}."\n";
+				}
+			}
+		}
+	}
+
+
+}
+
+
+### input 1  : struct data structure
+### output 1 : print_paragraphs
 sub debug_print_paragraphs {
 	my $struct = shift;
 ### print by paragraphs
@@ -428,6 +452,7 @@ print "[start: $par_start, end: $par_end]\n";
 
 }
 
+
 ### input: current file path
 ### output: path to log directory for this file
 sub make_log_dir {
@@ -459,97 +484,6 @@ sub get_keyword_list {
 	elsif ($arg eq 'title_experiment_result') { return TI_EXPRMNT; }
 	elsif ($arg eq 'title_conclusion')        { return TI_CNCLSN; }
 	else                                      { return; }
-}
-
-### input 1  : var reference for file path
-### output 1 : array reference that elem is token(paragraph).
-sub seperate_paragraph {
-	my ($path_origin) = @_;
-
-	my $contents = read_all_line($path_origin);
-#	print $contents;
-	my @paragraphs = split /(?:\n)(?:\h)*(?:\n){1,}/, $contents;
-#print scalar @paragraphs."\n";
-	return \@paragraphs;
-}
-
-### input 1  : array ref of paragraphs
-### output 1 : array ref of sentence numbers corresponding to arr for paragraphs
-sub count_sent {
-	my ($parags) = @_;
-
-	my @nums_dots;
-	for my $parag (@$parags) {
-		my @tmps = $parag =~ /(．|。)/ug;
-		my $num_dots = @tmps;
-		push @nums_dots, scalar @tmps; 
-	}
-	return \@nums_dots;
-}
-
-### input 1  : arr ref of paragraphs.
-### output 1 : arr of hash ref. hash indicates frequency of each term in paragraph.
-sub get_surface_term_freq {
-	my ($origin_parag_aref) = @_;
-
-	my $model = new MeCab::Model( '' );
-	my $c = $model->createTagger();
-	my $term;
-	my @term_freq_for_parag_aoh; # array of ananomous hash where the hash indicates term frequency for 'surface word'. each index of array is parags in cur doc.
-	my $term_freq_for_parag_aohref = \@term_freq_for_parag_aoh;
-	for my $idx (0..$#$origin_parag_aref) {
-		for (my $m = $c->parseToNode($origin_parag_aref->[$idx]); $m; $m = $m->{next}) {
-			$term = $m->{surface};
-			$term = decode('utf8',$term);
-			if ( ($term =~ /^\w+$/u) && ($term ne '') ) { # filetering special characters
-				$term_freq_for_parag_aohref->[$idx]->{$term}++;
-			}
-		}
-	}
-	return $term_freq_for_parag_aohref;
-}
-
-### input 1  : arr ref of paragraphs, and term freq for paragraph aohref.
-sub get_parag_score_by_rel_keyword_matching {
-	my ($origin_parag_aref, $term_freq_for_parag_aohref) = @_;
-
-#	my $rel_regex = qr/
-#		我々|本(?:研究|手法|論文)|本稿|
-#		これ(?:まで|ら)の(?:研究|手法|方法)|
-#		cite|提案|比較|
-#		研究|方法|手法|
-#		しかし|一方|ただ|
-#		違い|異なる|異なり|
-#		(?:で|て)(?:は)?ない|いない|できない
-#		/ux;
-	my $rel_regex2 = qr/
-		これ(?:まで|ら)の(?:研究|手法|方法)|
-		cite|提案|比較|
-		研究|方法|手法
-		/uxpm;
-	my $rel_regex3 = qr/
-		しかし|一方|ただ|
-		違い|異なる|異なり|
-		(?:で|て)(?:は)?ない|いない|できない
-		/uxpm;
-
-	my @score_parag_a;
-	for my $idx (0..$#$origin_parag_aref) {
-		$score_parag_a[$idx] = 0;
-#		for my $key (keys %{$term_freq_for_parag_aohref->[$idx]}) {
-			while ( $origin_parag_aref->[$idx] =~ /われわれ|我々|本(?:研究|手法|論文|稿)|特徴|具体/uxpg ) {
-				$score_parag_a[$idx] += 10; 
-#				print "$origin_parag_aref->[$idx]\n${^MATCH}\n\n";
-			}	
-			while ( $origin_parag_aref->[$idx] =~ /これ(?:まで|ら)の(?:研究|手法|方法)|cite|提案|比較|研究|方法|手法/uxpg) {
-				$score_parag_a[$idx] += 3;
-			}	
-			while ( $origin_parag_aref->[$idx] =~ /しかし|一方|ただ|違い|異なる|異なり|(?:で|て)(?:は)?ない|いない|できない|でき(?:る|た)/uxpg) {
-				$score_parag_a[$idx] += 2;
-			}
-		$score_parag_a[$idx] = sigmoid($score_parag_a[$idx])+1;
-	}
-	return \@score_parag_a;
 }
 
 

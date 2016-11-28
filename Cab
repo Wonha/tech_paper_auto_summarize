@@ -22,6 +22,7 @@ use Latex2Text ':all';
 use CabCommon ':all';
 use LocalTF ':all';
 use GlobalTF ':all';
+use RelParagMatching ':all';
 
 $#ARGV >= 0 || die "Usage: ./Cab [NAME OF LATEX SOURCE FILES]\n";
 
@@ -40,7 +41,7 @@ my $num_done = 0;
 		my $log_dir = make_log_dir($path_latex);
 		my $struct = latex_to_section_structure($path_latex);
 
-		dump_sec_file($struct, $log_dir);
+#		dump_sec_file($struct, $log_dir);
 		analysis_morpheme($struct->[0]); # mecab
 		dump_struct($struct, $log_dir);
 		check_classified_rate($log_dir, $fh, 0);
@@ -52,55 +53,26 @@ my $num_done = 0;
 
 
 ### make local term frequency table and calc the score
-for my $path_latex (@latex_files) {
-	my $log_dir = get_log_dir($path_latex);
-	my $struct_path = File::Spec->catfile($log_dir, "struct");
-	my $struct = retrieve $struct_path;
-	my %local_tf;
+{
+	for my $path_latex (@latex_files) {
+		my $log_dir = get_log_dir($path_latex);
+		my $struct_path = File::Spec->catfile($log_dir, "struct");
+		my $struct = retrieve $struct_path;
+		my %local_tf;
 
-	make_local_tf_table($struct->[0], \%local_tf);
-	dump_local_tf_table(\%local_tf, $log_dir);
-	calc_local_tf_score($struct->[0], \%local_tf);
-	dump_high_local_tf_sent($struct, $log_dir);
+		make_local_tf_table($struct->[0], \%local_tf);
+		dump_local_tf_table(\%local_tf, $log_dir);
+		calc_local_tf_score($struct->[0], \%local_tf);
+#	debug_calc_local_tf_score($struct);
+		dump_high_local_tf_sent($struct, $log_dir);
 
-	dump_struct($struct, $log_dir);
+		dump_struct($struct, $log_dir);
 
-### DEBUG
-=begin DEBUG_STRUCT
-	use Data::Dumper;
-#	print Dumper($struct);
-	for my $n (1..$#$struct) {
-		print "####################################################################\n";
-		print "  type: $struct->[$n]{type}\n";
-		print "  section title: $struct->[$n]{title}\n";
-		print "####################################################################\n";
-		print $struct->[0][$_]{sent}."\n" for ($struct->[$n]{start}..$struct->[$n]{end});
-		if ( defined $struct->[$n]{subsec} ) {
-			for my $i (0..$#{$struct->[$n]{subsec}}) {
-				print "-------------------------------------------------------\n";
-				print "  subsection title : $struct->[$n]{subsec}[$i]{title}\n";
-				print "-------------------------------------------------------\n";
-				for my $j ($struct->[$n]{subsec}[$i]{start}..$struct->[$n]{subsec}[$i]{end}) {
-					print $struct->[0][$j]{sent}."\n";
-				}
-			}
-		}
 	}
-=end DEBUB_STRUCT
-=cut
-
-=begin DEBUG_LOCAL_TF_SCORE
-	for my $i (0..$#{$struct->[0]}) {
-		print "local tf score for sent [$i] = $struct->[0][$i]{local_tf_score}\n";
-	}
-=end DEBUG_LOCAL_TF_SCORE
-=cut
-
-#debug_print_paragraphs($struct);
 }
 
 
-### make the global tf table and tfidf table for each file, calc the tf idf score
+### make the global tf table(this table is unique within entire files) and tfidf table(this table is for each file), calc the tf idf score
 {
 	my %global_tf;
 	my %doc_freq;
@@ -111,68 +83,72 @@ for my $path_latex (@latex_files) {
 
 	for my $path_latex (@latex_files) {
 		my $log_dir = get_log_dir($path_latex);
+		my $struct_path = File::Spec->catfile($log_dir, "struct");
+		my $struct = retrieve $struct_path;
 
 		my %tf_idf;
 		make_tf_idf_table(\%tf_idf, \%global_tf, \%doc_freq, $doc_total, $log_dir);
 		dump_tf_idf_table(\%tf_idf, $log_dir);
-		calc_tf_idf_score(\%tf_idf, $log_dir); # score in sigmoid
-		dump_high_tf_idf_sent($log_dir);
+		calc_tf_idf_score($struct, \%tf_idf, $log_dir); # scoring with sigmoid
+#		debug_calc_tf_idf_score # empty
+		dump_high_tf_idf_sent($struct, $log_dir);
+
+		dump_struct($struct, $log_dir);
 		$num_done++;
 	}
 }
-
 
 
 ### 2nd match for related_study
 {
 	for my $path_latex (@latex_files) {
 		my $log_dir = get_log_dir($path_latex);
-# if no 'related_study' file included in log, go next file
+		my $struct_path = File::Spec->catfile($log_dir, "struct");
+		my $struct = retrieve $struct_path;
 		my $rel_file = File::Spec->catfile($log_dir, "related_study");
-		if (-e $rel_file) {
-			next;
-		} else {
-##########
-# if (-e $rel_file) {
-# 	tfidf + paragscore
-# } else {
-# 	paragscore + tfidf
-# }
-#
-### 2. read origin doc from disk and seperate to paragraph (seperator: '\n{2,}')
-			my $origin_file = File::Spec->catfile($log_dir, "origin");
-			my $parags = seperate_paragraph($origin_file);
-### 3. calc how many sentence each paragraph has
-			my $sent_nums = count_sent($parags);
-### 4. execute mecab to get surface word's term frequency per each paragraph
-			my $term_freq_for_parag_aohref = &get_surface_term_freq($parags);
 
-### 5. evaluate each pargraph's score by keyword matching to check whether appropriate for rel_study or not. (score in sigmoid)
-			my $score_parag_aref = &get_parag_score_by_rel_keyword_matching ($parags, $term_freq_for_parag_aohref);
-
-### 6. devide the score by number of sentences in the paragraph
-### 7. get the highest scored paragraph index
-			my $highest_score_parag_idx = 0;
-			for my $idx (1..$#$parags) {
-				if ( $score_parag_aref->[$idx] > $score_parag_aref->[$highest_score_parag_idx] ) {
-					$highest_score_parag_idx = $idx;
-				}
-			}
-### 8. write contents of the highest scored paragraph to cur zero sized rel_file. 
-			open my $fh, '>', $rel_file or die "Can't open $rel_file : $!";
-			my @tmp1 = &LatexToSentencelist($parags->[$highest_score_parag_idx-2]);
-			my @tmp2 = &LatexToSentencelist($parags->[$highest_score_parag_idx-1]);
-			my @tmp3 = &LatexToSentencelist($parags->[$highest_score_parag_idx]);
-			print $fh @tmp1,"\n\n";
-			print $fh @tmp2,"\n\n";
-			print $fh @tmp3,"\n\n";
-			print $fh "paragraph score: $score_parag_aref->[$highest_score_parag_idx]\n"; 
-			close $fh;
+# check wether 'related_study' section inspected or not
+		my $rel_flag = 0;
+		for my $n (1..$#$struct) {
+			$rel_flag = $n if ($struct->[$n]{type} eq 'related_study');
 		}
+
+		if ($rel_flag) { # if related_study inspected in 1st matching
+			print "[$path_latex] rel_title matched\n";
+
+			my ($parag_chunk, $both_end_idx) = bind_sec_to_parag($struct, $rel_flag);
+#			debug_bind_sec_to_parag($struct, $parag_chunk, $both_end_idx);
+			my $parag_score = get_score_by_pattern_matching_paragraph($parag_chunk);
+#			debug_get_score_by_pattern_matching_paragraph($parag_chunk, $parag_score);
+			my $parag_high_idx = get_highest_scored_paragraph($parag_score, $#$parag_chunk);
+#			debug_get_highest_scored_paragraph($parag_chunk, $parag_score, $parag_high_idx);
+			add_rel_score($struct, $rel_flag, $parag_score, $parag_high_idx);
+#			debug_add_rel_score($struct, $parag_score, $rel_flag, $parag_high_idx);
+
+		} else { # if related_study not inspected in 1st matching
+			print "[$path_latex] rel_title no matched\n";
+
+			my ($parag_chunk, $both_end_idx) = bind_sent_to_parag($struct);
+#			debug_bind_sent_to_parag($parag_chunk, $both_end_idx, $struct);
+			my $parag_score = get_score_by_pattern_matching_paragraph($parag_chunk);
+#			debug_get_score_by_pattern_matching_paragraph($parag_chunk, $parag_score);
+			my $parag_high_idx = get_highest_scored_paragraph($parag_score, $#$parag_chunk);
+#			debug_get_highest_scored_paragraph($parag_chunk, $parag_score, $parag_high_idx);
+
+			make_imitate_struct($struct, $parag_score, $both_end_idx, $parag_high_idx);
+#			debug_make_imitate_struct($struct, $parag_score, $parag_high_idx);
+
+#			dump_rel_paragraph($log_dir, $struct);
+#			debug_print_paragraphs($struct);
+# 		debug_print_sections($struct);
+		}
+		dump_struct($struct, $log_dir);
+		dump_sec_file($struct, $log_dir);
 	}
 }
 
-#	&summarize_section();
-#	&combine_section();
+
+### write the Cab file
+
 print "number of processed files: $num_done\n";
 
