@@ -32,6 +32,12 @@ our @EXPORT_OK = qw(
 	create_markdown
 	sigmoid
 
+	get_rel_summary
+
+	debug_paragraphs
+	debug_sections
+	debug_struct
+
 	glue_entire_chunk
 );
 our %EXPORT_TAGS = (
@@ -39,7 +45,7 @@ our %EXPORT_TAGS = (
 );
 
 use constant { # make keyword list
-	TI_INTR       => "はじめに|まえがき|序論|はしがき|背景",
+	TI_INTR       => "はじめに|まえがき|序論|はしがき|背景|緒論",
 	TI_RLTDSTDY   => "関連研究",
 #	TI_RLTDSTDY => "関連研究|本課題",
 	TI_PRPSDMTHD  => "",
@@ -210,7 +216,7 @@ sub check_classified_rate {
 ### output: contents of file on list or one scalar value
 sub read_all_line {
 	my $pth_file = shift;
-	local $SIG{__WARN__} = sub { die $_[0]."[[$pth_file]]" }; # turn warning into the fetal error.
+	local $SIG{__WARN__} = sub { warn $_[0]."[[$pth_file]]" }; # turn warning into the fetal error.
 	local @ARGV = ( $pth_file );
 	return wantarray ? return <> : do { local $/= undef ; return <> };
 }
@@ -294,7 +300,7 @@ sub latex_to_section_structure {
 			$struct->[$tail_chunk]{'end'} = --$tail_sent;
 			$struct->[$tail_chunk]{'sec_end'} = $struct->[$tail_chunk]{end};
 
-		} elsif ( $sec =~ /\\section(?:\s)*?\{([\d\D]+?)\}/o ) {
+		} elsif ( $sec =~ /\\section(?:\s|\*)*?\{([\d\D]+?)\}/o ) {
 			$tail_chunk++;
 			$tail_subsec = -1;
 			$struct->[$tail_chunk]{'title'} = $title = $1;
@@ -328,7 +334,7 @@ sub latex_to_section_structure {
 			$struct->[$tail_chunk]{'end'} = --$tail_sent;
 			$struct->[$tail_chunk]{'sec_end'} = $struct->[$tail_chunk]{end};
 
-		} elsif ( $sec =~ /\\subsection(?:\s)*?\{([\d\D]+?)\}/o ) {
+		} elsif ( $sec =~ /\\subsection(?:\s|\*)*?\{([\d\D]+?)\}/o ) {
 			$tail_subsec++;
 			$struct->[$tail_chunk]{'subsec'}[$tail_subsec]{'title'} = $1;
 			$struct->[$tail_chunk]{'subsec'}[$tail_subsec]{'start'} = ++$tail_sent;
@@ -359,7 +365,33 @@ sub latex_to_section_structure {
 }
 
 
-sub debug_print_sections {
+sub debug_struct {
+	my $struct = shift;
+	for my $n (1..$#$struct) {
+		print "\n##################################################################\n";
+		print "section in $n's index\n";
+		print "type    : $struct->[$n]{type}\n";
+		print "title   : $struct->[$n]{title}\n";
+		print "start   : $struct->[$n]{start}\n";
+		print "end     : $struct->[$n]{end}\n";
+		print "sec_end : $struct->[$n]{sec_end}\n";
+		print "parag   : @{$struct->[$n]{parag}}\n";
+
+		if ( defined $struct->[$n]{subsec} ) {
+			for my $i (0..$#{$struct->[$n]{subsec}}) {
+				print "-------------------------------------------------------\n";
+				print "subsection in $i's index\n";
+				print "title : $struct->[$n]{subsec}[$i]{title}\n";
+				print "start   : $struct->[$n]{subsec}[$i]{start}\n";
+				print "end     : $struct->[$n]{subsec}[$i]{end}\n";
+				print "parag   : @{$struct->[$n]{subsec}[$i]{parag}}\n";
+			}
+		}
+	}
+}
+
+
+sub debug_sections {
 	my $struct = shift;
 	use Data::Dumper;
 #	print Dumper($struct);
@@ -387,7 +419,7 @@ sub debug_print_sections {
 
 ### input 1  : struct data structure
 ### output 1 : print_paragraphs
-sub debug_print_paragraphs {
+sub debug_paragraphs {
 	my $struct = shift;
 ### print by paragraphs
 	{
@@ -484,6 +516,44 @@ sub get_keyword_list {
 	elsif ($arg eq 'title_experiment_result') { return TI_EXPRMNT; }
 	elsif ($arg eq 'title_conclusion')        { return TI_CNCLSN; }
 	else                                      { return; }
+}
+
+
+### input 1  : struct
+### input 2  : log directory
+### input 3  : number of sentence which includes to the Cab
+### output 1 : aref which contains elements of highest 'rel_score'ed '$sent_num' sentences index, which is ordered by precedent order for indexing
+sub get_rel_summary {
+	my ($struct, $log_dir, $sent_num) = @_;
+	my $rel_idx = 0;
+
+	for my $i (2..$#$struct) {
+		$rel_idx = $i if $struct->[$i]{type} eq 'related_study';
+	}
+
+#	print $log_dir."\n";
+#	print "$struct->[$rel_idx]{type} from $struct->[$rel_idx]{start} to $struct->[$rel_idx]{sec_end}\n";
+
+### get top ($sent_num) highest rel_score
+	my @ordered_high_rel_score_sent_idx = sort {
+		$struct->[0][$b]{rel_score} <=> $struct->[0][$a]{rel_score}
+	} $struct->[$rel_idx]{start}..$struct->[$rel_idx]{sec_end};
+
+### order ($sent_num) by sentence index
+	my $sent_sum_idx = $sent_num - 1;
+	my @ordered_precedent_sent_idx = do {
+		if (@ordered_high_rel_score_sent_idx <= $sent_num) {
+			sort { $a <=> $b } @ordered_high_rel_score_sent_idx;
+		}else {
+			sort { $a <=> $b } @ordered_high_rel_score_sent_idx[0..$sent_sum_idx];
+		}
+	};
+
+#	print "@ordered_high_rel_score_sent_idx\n";
+#	print "@ordered_precedent_sent_idx\n";
+#	print "$struct->[0][$_]{sent}\n" for ($struct->[$rel_idx]{start}..$struct->[$rel_idx]{sec_end});
+
+	return \@ordered_precedent_sent_idx;
 }
 
 

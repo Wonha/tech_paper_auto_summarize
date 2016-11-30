@@ -198,7 +198,6 @@ V10N04-02 unmatched first rel study
 V10N04-04 unmatched first rel study
 V10N04-05 unmatched first rel study
 V10N04-06 unmatched first rel study
-V10N04-07 unmatched first rel study
 V10N04-09 unmatched first rel study
 V10N04-10 unmatched first rel study
 V10N05-01 unmatched first rel study
@@ -417,7 +416,7 @@ V22N05-04 unmatched first rel study
 V23N01-01 unmatched first rel study
 V23N01-02 unmatched first rel study
 V23N01-03 unmatched first rel study
-total: 419
+total: 418
 
 構成要素 | 検出率
  --- | ---

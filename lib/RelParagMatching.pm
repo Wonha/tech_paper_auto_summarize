@@ -24,9 +24,6 @@ our @EXPORT_OK = qw(
 
 	dump_rel_paragraph
 
-	debug_print_paragraphs
-	debug_print_sections
-
 	debug_bind_sec_to_parag
 	debug_get_score_by_pattern_matching_paragraph
 	debug_get_highest_scored_paragraph
@@ -295,15 +292,30 @@ sub make_imitate_struct {
 	my ($struct, $parag_score, $both_end_idx, $parag_high_idx) = @_;
 
 	$struct->[$#$struct+1]{type} = 'related_study';
-	$struct->[$#$struct]{start} = do {
-		if ($parag_high_idx >= 2 ) {
-			$both_end_idx->[$parag_high_idx-2]{start}; 
-		} elsif ($parag_high_idx == 1 ) {
-			$both_end_idx->[$parag_high_idx-1]{start}; 
-		} else {
-		 $both_end_idx->[$parag_high_idx]{start}; 
-		}
-	};
+#	$struct->[$#$struct]{start} = do {
+#		if ($parag_high_idx >= 2 ) {
+#			$both_end_idx->[$parag_high_idx-2]{start}; 
+#		} elsif ($parag_high_idx == 1 ) {
+#			$both_end_idx->[$parag_high_idx-1]{start}; 
+#		} else {
+#		 $both_end_idx->[$parag_high_idx]{start}; 
+#		}
+#	};
+
+	if ($parag_high_idx >= 2 ) {
+		$struct->[$#$struct]{start} = $both_end_idx->[$parag_high_idx-2]{start}; 
+		push @{$struct->[$#$struct]{parag}}, $both_end_idx->[$parag_high_idx-2]{start};
+		push @{$struct->[$#$struct]{parag}}, $both_end_idx->[$parag_high_idx-1]{start};
+		push @{$struct->[$#$struct]{parag}}, $both_end_idx->[$parag_high_idx]{start};
+	} elsif ($parag_high_idx == 1 ) {
+		$struct->[$#$struct]{start} = $both_end_idx->[$parag_high_idx-1]{start}; 
+		push @{$struct->[$#$struct]{parag}}, $both_end_idx->[$parag_high_idx-1]{start};
+		push @{$struct->[$#$struct]{parag}}, $both_end_idx->[$parag_high_idx]{start};
+	} else {
+		$struct->[$#$struct]{start} = $both_end_idx->[$parag_high_idx]{start}; 
+		push @{$struct->[$#$struct]{parag}}, $both_end_idx->[$parag_high_idx]{start};
+	}
+
 	$struct->[$#$struct]{end} = $both_end_idx->[$parag_high_idx]{end}; 
 	$struct->[$#$struct]{sec_end} = $both_end_idx->[$parag_high_idx]{end}; 
 	$struct->[$#$struct]{title} = "related_study";
