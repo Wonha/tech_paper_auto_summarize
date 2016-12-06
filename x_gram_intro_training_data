@@ -1,0 +1,209 @@
+#!/usr/bin/perl
+
+use strict;
+use utf8;
+
+use open IO=> ':encoding(utf8)';
+binmode STDIN, ':encoding(utf8)';
+binmode STDOUT, ':encoding(utf8)';
+binmode STDERR, ':encoding(utf8)';
+
+use lib qw(lib);
+use MeCab;
+use Encode qw(decode);
+
+use Latex2Text ':all';
+use CabCommon ':all';
+
+
+$#ARGV >= 0 || die "Usage: ./Cab [NAME OF LATEX SOURCE FILES]\n";
+
+my @latex_files = <@ARGV>;
+print scalar @latex_files." input latex files\n";
+my $num_done;
+my $num_sent;
+my $num_checked;
+
+{
+	for my $path_latex (@latex_files) {
+		my $log_dir = get_log_dir($path_latex);
+
+		my $abs_path = File::Spec->catfile($log_dir, "sec_abstract");
+		my $int_path = File::Spec->catfile($log_dir, "sec_intro");
+
+		my @all_abs = read_all_line($abs_path);
+		my @all_int = read_all_line($int_path);
+		$num_sent += @all_int;
+
+### morpheme for abstract
+		my $morpheme_abs;
+		{
+			my $model = new MeCab::Model( '' );
+			my $c = $model->createTagger();
+			my $morpheme;
+			for my $i (0..$#all_abs) {
+				my $score = 0;
+				for (my $m = $c->parseToNode($all_abs[$i]); $m; $m = $m->{next}) {
+					$morpheme = $m->{surface};
+					$morpheme = decode('utf8',$morpheme);
+					if ( ($morpheme =~ /^\w+$/u) && ($morpheme ne '') ) { # filetering special characters
+						push @{$morpheme_abs->[$i]}, $morpheme;
+					} else {
+						push @{$morpheme_abs->[$i]}, '';
+					}
+				}
+			}
+		}
+#		{
+#			print "@{$morpheme_abs->[$_]}\n" for (0..$#all_abs);
+#			print "===================================================\n";
+#		}
+
+### morpheme for intro
+		my $morpheme_int;
+		{
+			my $model = new MeCab::Model( '' );
+			my $c = $model->createTagger();
+			my $morpheme;
+			for my $i (0..$#all_int) {
+				my $score = 0;
+				for (my $m = $c->parseToNode($all_int[$i]); $m; $m = $m->{next}) {
+					$morpheme = $m->{surface};
+					$morpheme = decode('utf8',$morpheme);
+					if ( ($morpheme =~ /^\w+$/u) && ($morpheme ne '') ) { # filetering special characters
+						push @{$morpheme_int->[$i]}, $morpheme;
+					} else {
+						push @{$morpheme_int->[$i]}, '';
+					}
+				}
+			}
+		}
+#		{
+#			print "@{$morpheme_int->[$_]}\n" for (0..$#all_int);
+#			print "===================================================\n";
+#		}
+
+### x-gram for abstract
+		my $x_gram_abs;
+		{
+			for my $i (0..$#$morpheme_abs) {
+				if (@{$morpheme_abs->[$i]} <= 2) {
+					push @{$x_gram_abs->[$i]}, '';
+					next;
+				}
+				push @{$x_gram_abs->[$i]}, $morpheme_abs->[$i][$_-2] ."-". $morpheme_abs->[$i][$_-1] ."-". $morpheme_abs->[$i][$_] for (2..$#{$morpheme_abs->[$i]});
+			}
+		}
+#		{
+#			for my $i (0..$#$x_gram_abs) {
+#				print "@{$x_gram_abs->[$i]}\n";
+#				print "---------------------------------------------------\n";
+#			}
+#			print "===================================================\n";
+#		}
+
+### x-gram for intro
+		my $x_gram_int;
+		{
+			for my $i (0..$#$morpheme_int) {
+				if (@{$morpheme_int->[$i]} <= 2) {
+					push @{$x_gram_int->[$i]}, '';
+					next;
+				}
+				push @{$x_gram_int->[$i]}, $morpheme_int->[$i][$_-2] ."-". $morpheme_int->[$i][$_-1] ."-". $morpheme_int->[$i][$_] for (2..$#{$morpheme_int->[$i]});
+			}
+		}
+#		{
+#			for my $i (0..$#$x_gram_int) {
+#				print "@{$x_gram_int->[$i]}\n";
+#				print "---------------------------------------------------\n";
+#			}
+#			print "===================================================\n";
+#		}
+
+### compare 
+		my $int_to_abs_score;
+		{
+# i and j is idx for int, see the document
+			for my $i (0..$#$x_gram_int) {
+				for my $j (0..$#{$x_gram_int->[$i]}) {
+# l and m is idx for abs, see the document
+					for my $l (0..$#$x_gram_abs) {
+						for my $m (0..$#{$x_gram_abs->[$l]}) {
+							if ($x_gram_abs->[$l][$m] eq $x_gram_int->[$i][$j]) {
+								$int_to_abs_score->[$i][$l]++;
+#### see which gram is matched, and where that gram is
+#								{
+#									print "int_i_j: ${i}_$j, abs_l_m: ${l}_$m $x_gram_abs->[$l][$m] and $x_gram_int->[$i][$j]\n";
+#								}
+							}
+						}
+					}
+				}
+			}
+		}
+#		{
+#			for my $i (0..$#$int_to_abs_score) {
+#				for my $l (0..$#{$int_to_abs_score->[$i]}) {
+#					print "i: $i, l: $l, score: $int_to_abs_score->[$i][$l]\n";
+#				}
+#			}
+#		}
+
+# score of intro i sent and abstract l sent will compared with threshold
+		my $threshold = 6;
+
+#### see the original sentence in abstract and intro section
+#		for my $i (0..$#$int_to_abs_score) {
+#			for my $l (0..$#{$int_to_abs_score->[$i]}) {
+#				if ($int_to_abs_score->[$i][$l] >= $threshold) {
+#					{
+#						print "int $i & abs $l is similar, score: $int_to_abs_score->[$i][$l]\n";
+#						print "$all_abs[$l]";
+#						print "$all_int[$i]";
+#						print "\n";
+#					}
+#				}
+#			}
+#		}
+
+		my $summary_flag_cnt = 0;
+
+### dump the result into the file
+		{
+			my $out_path = File::Spec->catfile($log_dir, 'intro_train');
+			unlink $out_path if (-e $out_path);
+			open my $fh_out, '>', $out_path or die "Can't open $out_path : $!";
+
+			for my $i (0..$#$int_to_abs_score) {
+				my $importance = 0;
+				my $summary_flag = 0;
+# score of intro i sent and all abstract sent will be added into importance
+				for my $l (0..$#{$int_to_abs_score->[$i]}) {
+					$importance += $int_to_abs_score->[$i][$l];
+				}
+				if ($importance > 10) {
+					$summary_flag = 1;
+					$summary_flag_cnt++;
+					$num_checked++;
+				}
+				print $fh_out "$summary_flag @{$morpheme_int->[$i]}\n";
+
+			}
+			close $fh_out;
+		}
+
+### dump the percentage
+		my $per = @all_int > 0 ? $summary_flag_cnt/@all_int*100 : 0;
+		printf "[$log_dir] %d\%\n", $per;
+#		print "\t".scalar @all_int." intro section sentence\n\t$summary_flag_cnt sentences checked\n";
+
+		$num_done++;
+	}
+}
+
+print "*****************************************************************************************\n";
+my $per = $num_sent > 0 ? $num_checked/$num_sent*100 : 0;
+printf "[$num_done input files done] %d\%\n", $per;
+print "\t$num_sent input sentences\n";
+print "\t$num_checked sentences checked\n";

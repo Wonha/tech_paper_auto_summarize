@@ -100,7 +100,6 @@ sub analysis_morpheme {
 
 	my $model = new MeCab::Model( '' );
 	my $c = $model->createTagger();
-
 	for my $i (0..$#$sent_struct) {
 		my $score = 0;
 		for (my $m = $c->parseToNode($sent_struct->[$i]{sent}); $m; $m = $m->{next}) {
