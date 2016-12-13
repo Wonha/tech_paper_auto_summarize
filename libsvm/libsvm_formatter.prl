@@ -1,0 +1,328 @@
+#!/usr/local/bin/perl
+
+# libsvm用のデータに変換する
+
+use strict;
+
+my $com = `basename $0`;	chop($com);
+my $usage = "Usage: $com [options] argument
+  --training-mode,-t	create training file
+    (use with -v,-o    / <O>.libsvm, <O>.cls, <O>.ftr are outputed)
+  --test-mode,-e	create test file
+    (use with -v,-m,-o / <O>.libsvm is outputed)
+  --restore-mode,-r	restore class name
+    (use 3 arguments: <svm-predict result> <vector file> <mapping file of class>)
+
+  --vector,-v <V>	vector file
+  --output,-o <O>	base file name of output files
+    <O>.libsvm = file for libSVM
+    <O>.cls = mapping file of class
+    <O>.ftr = mapping file of feature
+  --mapping,-m <M>	base file name of mapping files
+    <M>.cls = mapping file of class
+    <M>.ftr = mapping file of feature
+
+  --with-id, -i		accept vector file where 1st column is data ID
+  --no-weight		accept vector file without weight
+			(all weights are set to 1 in output)
+  --regression		create files for regression
+			(no conversion for class names)
+  --show-format		show format of files
+  --help|-h		this help
+";
+
+my $format_usage = "File Format
+[vector file]
+Class<\\t>Feature1:Weight1 Feature2:Weight2 ...
+Class<\\t>Feature1 Feature2 ...  (with --no-weight)
+Data_ID<\\t>Class<\\t>Feature1:Weight1 Feature2:Weight2 ... (with -i)
+
+[mapping file of class]
+Class_ID<\\t>Class
+
+[mapping file of feature]
+Feature_ID<\\t>Feature
+";
+
+my($training_mode,$test_mode,$restore_mode,
+   $vector_file,$basename_output,$basename_mapping,
+   $has_id_flag,$no_weight_flag,$regression_flag,$show_format_flag,$help_flag);
+my(@restore_opts,$restore_result_file,$restore_vector_file,$restore_class_file);
+use Getopt::Long;
+my $result = GetOptions(
+  'training-mode|t' => \$training_mode,
+  'test-mode|e' => \$test_mode,
+  'restore-mode|r' => \$restore_mode,
+  'vector|v=s' => \$vector_file,
+  'output|o=s' => \$basename_output,
+  'mapping|m=s' => \$basename_mapping,
+  'with-id|i' => \$has_id_flag,
+  'no-weight' => \$no_weight_flag,
+  'regression' => \$regression_flag,
+  'show-format' => \$show_format_flag,
+  'help|h' => \$help_flag
+);
+die "\n$usage" unless $result;
+die $usage if $help_flag;
+die $format_usage if $show_format_flag;
+
+my $cnt = 0;
+$cnt++ if $training_mode;
+$cnt++ if $test_mode;
+$cnt++ if $restore_mode;
+
+die "[ERROR] conflicting options -t,-e,-r\n$usage" if $cnt > 1;
+die "[ERROR] no mode option (-t,-e,-r) is given\n$usage" if $cnt == 0;
+
+if($training_mode || $test_mode){
+  die "[ERROR] --vector is not specified\n$usage" unless $vector_file;
+  die "[ERROR] --output is not specified\n$usage" unless $basename_output;
+}
+if($restore_mode){
+  die "[ERROR] 3 arguments are required with -r\n" unless $#ARGV == 2;
+  ($restore_result_file,$restore_vector_file,$restore_class_file) = @ARGV;
+}else{
+  $restore_mode = 0;
+}
+
+my $output_vector_file = $basename_output . '.libsvm';
+my $output_class_file = $basename_output . '.cls';
+my $output_feature_file = $basename_output . '.ftr';
+
+if($training_mode){
+  die "[ERROR] `$output_vector_file' already exist\n" if -e $output_vector_file;
+  die "[ERROR] `$output_feature_file' already exist\n" if -e $output_feature_file;
+  die "[ERROR] `$output_class_file' already exist\n"
+    if -e $output_class_file && $regression_flag == 0;
+}
+
+my($mapping_class_file,$mapping_feature_file);
+if($test_mode){
+  die "[ERROR] --mapping is not specified\n$usage" unless $basename_mapping;
+
+  unless($regression_flag){
+    $mapping_class_file = $basename_mapping . '.cls';
+    die "`$mapping_class_file' is not found\n" unless -f $mapping_class_file;
+  }
+
+  $mapping_feature_file = $basename_mapping . '.ftr';
+  die "`$mapping_feature_file' is not found\n" unless -f $mapping_feature_file;
+
+  die "[ERROR] `$output_vector_file' already exist\n" if -e $output_vector_file;
+}  
+
+### main routin
+
+my %FEATURE = ();
+my %CLASS = ();
+my $FeatureNumber = 0;
+my $ClassNumber = 0;
+
+if($restore_mode){
+  &restore_svm_predict_file;
+  exit;
+}
+
+if($test_mode){
+  $ClassNumber = 0;
+  unless($regression_flag){
+    open(CLS,$mapping_class_file)||die "cannot open `$mapping_class_file'\n";
+    while(<CLS>){
+      chop;
+      my($num,$class) = split(/\s+/);
+      $CLASS{$class} = $num;
+      $ClassNumber = $num if $ClassNumber < $num;
+    }
+    close(CLS);
+  }
+
+  $FeatureNumber = 0;
+  open(FTR,$mapping_feature_file)||die "cannot open `$mapping_feature_file'\n";
+  while(<FTR>){
+    chop;
+    my($num,$ftr) = split(/\s+/);
+    $FEATURE{$ftr} = $num;
+    $FeatureNumber = $num if $FeatureNumber < $num;
+  }
+  close(FTR);
+}
+
+open(VEC_IN,$vector_file)||die "cannot open `$vector_file'";
+open(VEC_OUT,">$output_vector_file")||die "cannot create `$output_vector_file'";
+my $line_no = 0;
+while(<VEC_IN>){
+  $line_no++;
+  chomp;
+  my(@data) = split(/\t/);
+  my $word_id = shift(@data) if $has_id_flag;
+  my $class = $data[0];
+  my $feature_str = $data[1];
+  
+  my $c_num;
+  if($regression_flag){
+    $c_num = $class;
+  }else{
+    $c_num = &class_num($class);
+    if($c_num == 0){
+      my $msg = sprintf "[ERROR] class `%s' is not defined at line %d%s.", $class, $line_no, ($has_id_flag ? " (ID=$word_id)" : '');
+      if($training_mode){
+        warn($msg." This line is removed\n");
+        next;
+      }
+      warn($msg."\n");
+      $c_num = $ClassNumber + 1;
+    }
+  }
+  my @ftr_list = ();
+  my $illegal_line_flag = 0;
+  foreach my $f (split(/ /,$feature_str)){
+    my $w;
+    if($no_weight_flag){
+      $w = 1;
+    }else{
+      if($f =~ /^(.+):([\d\.\-\+e]+)$/o){
+        $f = $1;
+        $w = $2;
+      }else{
+        $illegal_line_flag = 1;
+        last;
+      }
+    }
+    my $f_num = &feature_num($f);
+    push(@ftr_list, $f_num.':'.$w) unless $f_num == 0;
+  }
+  if($illegal_line_flag){
+    die(sprintf "[ERROR] illegal format at line %d%s\n"
+        , $line_no, ($has_id_flag ? " (ID=$word_id)" : ''));
+  }
+  if($#ftr_list < 0){
+    warn(sprintf "[Warning] no valid feature found at line %d%s\n"
+         , $line_no, ($has_id_flag ? " (ID=$word_id)" : ''));
+    printf VEC_OUT "%d \n", $c_num;
+  }else{
+    printf VEC_OUT "%d %s\n", $c_num, join(' ',sort by_ftr_id @ftr_list);
+  }
+}
+close(VEC_IN);
+close(VEC_OUT);
+
+if($training_mode){
+  # クラスファイルの出力
+  unless($regression_flag){
+    open(CLASS,">$output_class_file")||die "cannot create `$output_class_file'";
+    foreach my $c (sort by_class keys %CLASS){
+      printf CLASS "%d\t%s\n", $CLASS{$c}, $c;
+    }
+    close(CLASS);
+  }
+
+  # 素性ファイルの出力
+  open(FTR,">$output_feature_file")||die "cannot create `$output_feature_file'";
+  foreach my $f (sort by_ftr keys %FEATURE){
+    printf FTR "%d\t%s\n", $FEATURE{$f}, $f;
+  }
+  close(FTR);
+}
+
+### sub routin
+
+# 素性番号を返す、素性番号を登録
+sub feature_num {
+  my($ftr) = @_;
+
+  if($FeatureNumber == 0){
+    $FeatureNumber = 1;
+    $FEATURE{$ftr} = 1;
+    return(1);
+  }else{
+    if($FEATURE{$ftr} eq ''){
+      # テストファイル作成時には新規登録しない
+      return() if $test_mode;
+      $FeatureNumber++;
+      $FEATURE{$ftr} = $FeatureNumber;
+    }
+    return($FEATURE{$ftr});
+  }
+}
+
+# クラス番号を返す、クラス番号を登録
+sub class_num {
+  my($class) = @_;
+
+  if($ClassNumber == 0){
+    $ClassNumber = 1;
+    $CLASS{$class} = 1;
+    return(1);
+  }else{
+    if($CLASS{$class} eq ''){
+      # テストファイル作成時には新規登録しない
+      return() if $test_mode;
+      $ClassNumber++;
+      $CLASS{$class} = $ClassNumber
+    }
+    return($CLASS{$class});
+  }
+}
+
+sub restore_svm_predict_file {
+  my($result_class,$vector_line,$inst_id,$gold_sense,$predicted_sense,@array);
+
+  my %CLASS_NAME = ();
+  open(CLS,$restore_class_file)||die "cannot open `$restore_class_file'\n";
+  while(<CLS>){
+    chop;
+    my($num,$class) = split(/\s+/);
+    $CLASS_NAME{$num} = $class;
+  }
+  close(CLS);
+
+  open(RES,$restore_result_file)
+      ||die "[ERROR] canno open `$restore_result_file'\n";
+  open(VEC,$restore_vector_file)
+      ||die "[ERROR] canno open `$restore_vector_file'\n";
+
+  while(1){
+    if( eof(RES) ){
+      if( eof(VEC) ){
+	return;
+      }else{
+	die "[ERROR] line number mismach (result file < vector file)\n";
+      }
+    }elsif( eof(VEC) ){
+      die "[ERROR] line number mismach (result file > vector file)\n";
+    }
+
+    $result_class = <RES>;  chomp($result_class);
+    $vector_line = <VEC>;  chomp($vector_line);
+
+    @array = split(/\t/,$vector_line);
+    $inst_id = shift(@array) if $has_id_flag;
+    $gold_sense = shift(@array);
+
+    $predicted_sense = $CLASS_NAME{$result_class};
+    unless($predicted_sense){
+      warn "Undefined class id `$result_class'\n";
+      $predicted_sense = $result_class;
+    }
+
+    # (ID) 出力クラス 正解クラス の順
+    print $inst_id."\t" if $has_id_flag;
+    printf "%s\t%s\n", $predicted_sense, $gold_sense;
+  }
+}
+
+sub by_ftr {
+  $FEATURE{$a} <=> $FEATURE{$b};
+}
+
+sub by_class {
+  $CLASS{$a} <=> $CLASS{$b};
+}
+
+sub by_ftr_id {
+  my($a_f,$b_f,$a_v,$b_v);
+  ($a_f,$a_v) = split(/:/,$a);
+  ($b_f,$b_v) = split(/:/,$b);
+  $a <=> $b;
+}
+
