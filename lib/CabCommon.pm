@@ -97,18 +97,35 @@ sub sigmoid {
 sub analysis_morpheme {
 	my ($sent_struct) = @_;
 	my $term;
+	my $feature;
 
 	my $model = new MeCab::Model( '' );
 	my $c = $model->createTagger();
 	for my $i (0..$#$sent_struct) {
 		my $score = 0;
+		my $compound_noun = '';
+
 		for (my $m = $c->parseToNode($sent_struct->[$i]{sent}); $m; $m = $m->{next}) {
 			$term = $m->{surface};
 			$term = decode('utf8',$term);
+			$feature = $m->{feature};
+			$feature = decode('utf8',$feature);
+			my $pos = (split ',', $feature)[0];
+
 			if ( ($term =~ /^\w+$/u) && ($term ne '') ) { # filetering special characters
-				$sent_struct->[$i]{morpheme}{$term}++;
+				if ($pos eq '名詞') { # for chaining the compound noun
+					$compound_noun .= $term;
+				} else {
+					if ($compound_noun ne '') {
+						$sent_struct->[$i]{morpheme}{$compound_noun}++;
+						$compound_noun = '';
+					}
+					$sent_struct->[$i]{morpheme}{$term}++;
+				}
 			}
+
 		}
+
 	}
 }
 
