@@ -15,7 +15,7 @@ my $c = $model->createTagger();
 #print $c->parse($sentence);
 
 for (my $m = $c->parseToNode($sentence); $m; $m = $m->{next}) {
-#    printf("%s\t%s\n", $m->{surface}, $m->{feature});
+    printf("%s\t%s\n", $m->{surface}, $m->{feature});
 }
 
 my $lattice = new MeCab::Lattice();

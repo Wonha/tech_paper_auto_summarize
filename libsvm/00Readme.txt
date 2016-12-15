@@ -1,81 +1,81 @@
-libsvm �����ϥե������������륹����ץ�
+libsvm の入力ファイルを作成するスクリプト
 
-1.�����ǡ����ȥƥ��ȥǡ�������
+1.訓練データとテストデータを作る
 
-�ե����ޥåȤϰʲ����̤ꡣ
+フォーマットは以下の通り。
 
-  ���饹 <����> ����1:�Ť�1 ����2:�Ť�2 ... 
+  クラス <タブ> 素性1:重み1 素性2:重み2 ... 
 
-1�Ԥ�1�ĤΥǡ�����ɽ�魯��
-�֥��饹�פϥǡ�����ʬ�९�饹��ɽ�魯��
-�Ĥ�Ρ�����:�Ťߡפ���ϥǡ�����ɽ�魯�����٥��ȥ롣
-�֥��饹�פ�������פˤ�(���֤�:�ʳ���)Ǥ�դ�ʸ���󤬻Ȥ��롣
+1行は1つのデータを表わす。
+「クラス」はデータの分類クラスを表わす。
+残りの「素性:重み」の列はデータを表わす素性ベクトル。
+「クラス」や「素性」には(タブと:以外の)任意の文字列が使える。
 
 
-2.�����ǡ����� libsvm �Υե����ޥåȤ��Ѵ�����
+2.訓練データを libsvm のフォーマットに変換する
 
-libsvm �Ǥϡ����饹���������ֹ��ɽ�魯ɬ�פ����롣
-libsvm_formatter.prl ��Ȥ���
-�����ǡ����Υե������ libsvm �����ϥե����ޥåȤ�ľ����
+libsvm では、クラスや素性は番号で表わす必要がある。
+libsvm_formatter.prl を使い、
+訓練データのファイルを libsvm の入力フォーマットに直す。
 
-  (�¹���)
+  (実行例)
   ./libsvm_formatter.prl --training-mode -v sample.training.txt -o training
 
-  �ʲ���3�Ĥ����Ϥ����
-  training.libsvm �� libsvm �Υե����ޥåȤ��Ѵ����������ǡ���
-  training.cls    �ϥ��饹���ֹ���б��ط��ε�Ͽ
-  training.ftr    ���������ֹ���б��ط��ε�Ͽ
+  以下の3つが出力される
+  training.libsvm は libsvm のフォーマットに変換した訓練データ
+  training.cls    はクラスと番号の対応関係の記録
+  training.ftr    は素性と番号の対応関係の記録
 
 
-3.�ƥ��ȥǡ����� libsvm �Υե����ޥåȤ��Ѵ�����
+3.テストデータを libsvm のフォーマットに変換する
 
-�ƥ��ȥǡ�����Ʊ�ͤ˥��饹���������ֹ��ɽ�魯ɬ�פ����롣
-�������������Ϸ����ǡ����˽и�������ΤΤߤ�Ȥ���
-�����ǡ����˽и����ʤ������ϻ��Ѥ��ʤ���
-����Ū�ˤϡ�2.�Ǻ��������
-  ���饹���ֹ���б��ط��ε�Ͽ(training.cls)
-  �������ֹ���б��ط��ε�Ͽ(training.ftr)
-���ɤ߹��ߡ��������Ͽ����Ƥʤ����饹�����������롣
+テストデータも同様にクラスや素性は番号で表わす必要がある。
+ただし、素性は訓練データに出現したもののみを使い、
+訓練データに出現しない素性は使用しない。
+具体的には、2.で作成される
+  クラスと番号の対応関係の記録(training.cls)
+  素性と番号の対応関係の記録(training.ftr)
+を読み込み、これに登録されてないクラスや素性を除去する。
 
-  (�¹���)
+  (実行例)
   ./libsvm_formatter.prl --test-mode -v sample.test.txt -m training -o test 
 
-  test.libsvm �� libsvm �Υե����ޥåȤ��Ѵ������ƥ��ȥǡ���
+  test.libsvm は libsvm のフォーマットに変換したテストデータ
 
 
-[����] libsvm �λȤ���
+[参考] libsvm の使い方
 
-������
-  svm-train �Ȥ������ޥ�ɤ�Ȥ�
+・訓練
+  svm-train というコマンドを使う
 
-  (��)
+  (例)
   svm-train training.libsvm training.model
-  training.model ���ؽ����줿SVM
+  training.model が学習されたSVM
 
-���ƥ���
-  svm-predict �Ȥ������ޥ�ɤ�Ȥ�
+・テスト
+  svm-predict というコマンドを使う
 
-  (��)
+  (例)
   svm-predict test.libsvm training.model test.output
-  test.output ��SVM�ˤ�ä�ͽ¬���줿���饹
+  test.output がSVMによって予測されたクラス
 
-���ѥ�᥿Ĵ��
-  grid.py ��Ȥäƥѥ�᥿ c (cost) �� g (gamma) ���Ŭ������
+・パラメタ調整
+  grid.py を使ってパラメタ c (cost) と g (gamma) を最適化する
 
-  (��)
+  (例)
   /usr/local/libexec/libsvm/grid.py \
   -svmtrain /usr/local/bin/svm-train \
   -gnuplot /usr/local/bin/gnuplot \
   training.libsvm > training.grid
 
-  training.grid �ΰ��ֺǸ�ιԤ�
-    ��Ŭ�����줿c ��Ŭ�����줿g ����Ψ
-  ��3�Ĥο��������Ϥ���롣
-  svm-train �μ¹Ի��� -c �� -g ���ץ����ǥѥ�᥿����ꤹ�롣
+  training.grid の一番最後の行に
+    最適化されたc 最適化されたg 正解率
+  の3つの数字が出力される。
+  svm-train の実行時に -c と -g オプションでパラメタを指定する。
 
-  grid.py �μ¹Ԥˤ� gnuplot ��ɬ�ס�
-  gnuplot �����󥹥ȡ��뤵��Ƥ��ʤ��Ȥ��� nop.sh ����ꤹ�롣
+  grid.py の実行には gnuplot が必要。
+  gnuplot がインストールされていないときは nop.sh を指定する。
     /usr/local/libexec/libsvm/grid.py -gnuplot ./nop.sh ...
-  nop.sh �ϲ��⤷�ʤ����ߡ��Υ��ޥ�ɡ�
-  gnuplot �Ϻ�Ŭ�����ͻҤ򥰥�ե������ɽ�����뤿��˻Ȥ��Ƥ���
-  �����ʤΤǡ��ʤ��Ƥ�ѥ�᥿�κ�Ŭ��������˹Ԥ��롣
+  nop.sh は何もしないダミーのコマンド。
+  gnuplot は最適化の様子をグラフィカルに表示するために使われている
+  だけなので、なくてもパラメタの最適化は正常に行える。
