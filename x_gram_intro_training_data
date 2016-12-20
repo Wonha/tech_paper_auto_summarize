@@ -11,6 +11,7 @@ binmode STDERR, ':encoding(utf8)';
 use lib qw(lib);
 use MeCab;
 use Encode qw(decode);
+use File::Basename qw( dirname fileparse basename );
 
 use Latex2Text ':all';
 use CabCommon ':all';
@@ -26,6 +27,7 @@ my $summary_flag_cnt_global;
 
 
 {
+	init();
 	for my $path_latex (@latex_files) {
 		my $log_dir = get_log_dir($path_latex);
 
@@ -85,11 +87,11 @@ my $summary_flag_cnt_global;
 #			}
 #		}
 ### dump the result into the file
-		my $summary_flag_cnt = dump_train_data($log_dir, $int_to_abs_score, $threshold, $morpheme_int);
+		my $summary_flag_cnt = select_and_dump_train_data($log_dir, $int_to_abs_score, $threshold, $morpheme_int);
 
 ### dump the percentage
 		my $per = @all_int > 0 ? $summary_flag_cnt/@all_int*100 : 0;
-		printf "[$log_dir] %d\%\n", $per;
+#		printf "[$log_dir] %d\%\n", $per;
 #		print "\t".scalar @all_int." intro section sentence\n\t$summary_flag_cnt sentences checked\n";
 		$num_done++;
 	}
@@ -102,6 +104,11 @@ print "\t$num_sent input sentences\n";
 print "\t$summary_flag_cnt_global sentences checked\n";
 
 
+
+sub init {
+	my $out_path_global = File::Spec->catfile('./logs', 'intro_train');
+	unlink $out_path_global if (-e $out_path_global);
+}
 
 sub get_morpheme {
 	my ($all_sent) = shift;
@@ -120,6 +127,13 @@ sub get_morpheme {
 			$feature = decode('utf8',$feature);
 			my $pos = (split ',', $feature)[0];
 			if ( ($morpheme =~ /^\w+$/u) && ($morpheme ne '') ) { # filetering special characters
+				if (($pos ne '名詞') and ($pos ne '形容詞') and ($pos ne '動詞') and ($pos ne '副詞')) { # eliminate huzoku-go
+					if ($compound_noun ne '') {
+						push @{$morphemes->[$i]}, $compound_noun;
+						$compound_noun = '';
+					}
+					next;
+				} 
 				if ($pos eq '名詞') { # for chaining the compound noun
 					$compound_noun .= $morpheme;
 				} else {
@@ -215,13 +229,16 @@ sub dump_train_with_total_score	{
 	close $fh_out;
 }
 
-sub dump_train_data	{
+sub select_and_dump_train_data	{
 	my ($log_dir, $int_to_abs_score, $threshold, $morpheme_int) = @_;
 	my $summary_flag_cnt = 0;
 
-	my $out_path = File::Spec->catfile($log_dir, 'intro_train');
-	unlink $out_path if (-e $out_path);
-	open my $fh_out, '>', $out_path or die "Can't open $out_path : $!";
+	my $out_path_local = File::Spec->catfile($log_dir, 'intro_train');
+	my $out_path_global = File::Spec->catfile(dirname($log_dir), 'intro_train');
+
+	unlink $out_path_local if (-e $out_path_local);
+	open my $fh_out_local, '>', $out_path_local or die "Can't open $out_path_local : $!";
+	open my $fh_out_global, '>>', $out_path_global or die "Can't open $out_path_global: $!";
 
 	for my $i (0..$#$int_to_abs_score) {
 		my $summary_flag = 0;
@@ -232,8 +249,17 @@ sub dump_train_data	{
 				$summary_flag_cnt_global++;
 			}
 		}
-		print $fh_out "$summary_flag @{$morpheme_int->[$i]}\n";
+		my $ret = "$summary_flag\t@{$morpheme_int->[$i]}" =~ s/(?: )+/ /ugr;
+		$ret =~ s/\t(?: )+/\t/ug;
+		next if $ret =~ m/^\d\s*$/;
+		print $fh_out_local "$ret\n";
+		print $fh_out_global "$ret\n";
+
+#		print $fh_out_local "$summary_flag\t@{$morpheme_int->[$i]}\n";
+#		print $fh_out_global "$summary_flag\t@{$morpheme_int->[$i]}\n";
 	}
-	close $fh_out;
+	close $fh_out_local;
+	close $fh_out_global;
 	return $summary_flag_cnt;
 }
+
