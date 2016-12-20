@@ -44,6 +44,7 @@ our %EXPORT_TAGS = (
 	all => \@EXPORT_OK,
 );
 
+
 use constant { # make keyword list
 	TI_INTR       => "はじめに|まえがき|序論|はしがき|背景|緒論",
 	TI_RLTDSTDY   => "関連研究",
