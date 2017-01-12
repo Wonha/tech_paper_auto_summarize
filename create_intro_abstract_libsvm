@@ -1,0 +1,387 @@
+#!/usr/bin/perl
+
+use strict;
+use utf8;
+
+use open IO=> ':encoding(utf8)';
+binmode STDIN, ':encoding(utf8)';
+binmode STDOUT, ':encoding(utf8)';
+binmode STDERR, ':encoding(utf8)';
+
+use lib qw(lib);
+use MeCab;
+use Encode qw(decode);
+use File::Basename qw( dirname fileparse basename );
+
+use Latex2Text ':all';
+use CabCommon ':all';
+
+my @dev_test = qw/V01N01-01 V02N04-03 V03N03-03 V04N01-04 V04N04-01 V06N02-06 V06N05-03 V07N02-07 V07N04-07 V08N04-02 V09N04-04 V10N01-04 V10N05-02 V11N05-07 V12N05-05 V13N03-06 V14N02-01 V14N03-11 V14N05-05 V15N03-03 V16N01-01 V16N04-04 V17N01-11 V17N05-02 V18N04-02 V19N05-02 V20N03-03 V21N01-03 V21N03-03 V22N02-02 /;
+
+$#ARGV >= 0 || die "Usage: ./Cab [NAME OF LATEX SOURCE FILES]\n";
+
+my @latex_files = <@ARGV>;
+print scalar @latex_files." input latex files\n";
+my $num_done;
+my $num_sent;
+my $summary_flag_cnt_global;
+
+
+{
+	init();
+#EACHFILE:	for my $path_latex (@latex_files) {
+	for my $path_latex (@latex_files) {
+		my $log_dir = get_log_dir($path_latex);
+
+		my $abs_path = File::Spec->catfile($log_dir, "sec_abstract");
+		my $int_path = File::Spec->catfile($log_dir, "sec_intro");
+
+		my @all_abs = read_all_line($abs_path);
+		my @all_int = read_all_line($int_path);
+		$num_sent += @all_int;
+
+### morpheme for abstract/intro
+		my ($indep_abs, $indep_ancil_abs) = get_morpheme(\@all_abs);
+#		print "@{$indep_abs->[$_]}\n" for (0..$#all_abs);
+#		print "@{$indep_ancil_abs->[$_]}\n" for (0..$#all_abs);
+#		print "===================================================\n";
+		my ($indep_int, $indep_ancil_int) = get_morpheme(\@all_int);;
+#		print "@{$indep_int->[$_]}\n" for (0..$#all_int);
+#		print "@{$indep_ancil_int->[$_]}\n" for (0..$#all_int);
+#		print "===================================================\n";
+
+### x-gram for abstract
+#my $x_gram_abs = get_x_gram_struct($indep_ancil_abs);
+		my $tri_gram_abs = get_x_gram_struct(3, $indep_ancil_abs);
+		my $bi_gram_abs = get_x_gram_struct(2, $indep_ancil_abs);
+#		for my $i (0..$#$tri_gram_abs) {
+#			print "@{$tri_gram_abs->[$i]}\n";
+#			print "---------------------------------------------------\n";
+#		}
+#		print "===================================================\n";
+
+### x-gram for intro
+#my $x_gram_int = get_x_gram_struct($indep_ancil_int);
+		my $tri_gram_int = get_x_gram_struct(3, $indep_ancil_int);
+		my $bi_gram_int = get_x_gram_struct(2, $indep_ancil_int);
+#		for my $i (0..$#$tri_gram_int) {
+#			print "@{$tri_gram_int->[$i]}\n";
+#			print "---------------------------------------------------\n";
+#		}
+#		print "===================================================\n";
+
+### compare int and abs, then get score of it's result
+		my $int_to_abs_score = get_int_to_abs_score($tri_gram_abs, $tri_gram_int);
+#		for my $i (0..$#$int_to_abs_score) {
+#			for my $l (0..$#{$int_to_abs_score->[$i]}) {
+#				print "i: $i, l: $l, score: $int_to_abs_score->[$i][$l]\n";
+#			}
+#		}
+
+
+# score of intro i sent and abstract l sent will compared with threshold
+		my $threshold = 6;
+#### see the original sentence in abstract and intro section
+#		for my $i (0..$#$int_to_abs_score) {
+#			for my $l (0..$#{$int_to_abs_score->[$i]}) {
+#				if ($int_to_abs_score->[$i][$l] >= $threshold) {
+#					{
+#						print "int $i & abs $l is similar, score: $int_to_abs_score->[$i][$l]\n";
+#						print "$all_abs[$l]";
+#						print "$all_int[$i]";
+#						print "\n";
+#					}
+#				}
+#			}
+#		}
+### dump the result into the file
+### feature-selection is not applied in local train/dev-test data file
+		my $summary_flag_cnt = select_and_dump_train_data($log_dir, $int_to_abs_score, $threshold, $indep_int, $bi_gram_int, $tri_gram_int); # uni-gram, bi-gram, tri-gram feature
+#		my $summary_flag_cnt = select_and_dump_train_data($log_dir, $int_to_abs_score, $threshold, $indep_int); # only uni-gram feature
+
+### dump the percentage
+		my $per = @all_int > 0 ? $summary_flag_cnt/@all_int*100 : 0;
+#		printf "[$log_dir] %d\%\n", $per;
+#		print "\t".scalar @all_int." intro section sentence\n\t$summary_flag_cnt sentences checked\n";
+		$num_done++;
+	}
+	print "starting feature selection....\n";
+	feature_selection(\@latex_files);
+}
+
+print "*****************************************************************************************\n";
+my $per = $num_sent > 0 ? $summary_flag_cnt_global/$num_sent*100 : 0;
+printf "[$num_done input files done] %d\%\n", $per;
+print "\t$num_sent input sentences\n";
+print "\t$summary_flag_cnt_global sentences checked\n";
+
+sub feature_selection {
+	my ($latex_files) = @_;
+	my %num_feature_for;
+
+	for my $path_latex (@$latex_files) {
+		my $log_dir = get_log_dir($path_latex);
+		my $local_train_path = File::Spec->catfile($log_dir, "intro_train");
+
+### merge each local train file's features 
+		my @all_local_train = read_all_line($local_train_path);
+		for my $local_train_line (@all_local_train) {
+			my @tokens = split / /, $local_train_line;	
+			shift @tokens;
+			$num_feature_for{$_}++ for @tokens;
+		}
+	}
+
+### select feature
+	for my $key (keys %num_feature_for) {
+		delete $num_feature_for{$key} if $num_feature_for{$key} <= 1;
+	}
+
+### dump to global file
+	for my $path_latex (@$latex_files) {
+		my $log_dir = get_log_dir($path_latex);
+		my $local_train_path = File::Spec->catfile($log_dir, "intro_train");
+		my $out_path_global = File::Spec->catfile(dirname($log_dir), 'intro_train');
+		my $out_path_dev_test = File::Spec->catfile(dirname($log_dir), 'intro_dev_test');
+
+		open my $fh_out_global, '>>', $out_path_global or die "Can't open $out_path_global: $!";
+		open my $fh_out_dev_test, '>>', $out_path_dev_test or die "Can't open $out_path_dev_test: $!";
+
+### check the dev-test data
+		my $dir_name = basename($log_dir);
+		my $is_dev_test = 0;
+		for my $dev_test (@dev_test) {
+			if ($dev_test eq $dir_name) {
+				print $dev_test." will used for test\n";
+				$is_dev_test = 1;
+			}
+		}
+
+### select
+		my @all_local_train = read_all_line($local_train_path);
+		for my $local_train_line (@all_local_train) {
+			chomp $local_train_line;
+			my @tokens = split / /, $local_train_line;	
+			my $val = shift @tokens;
+			my @features = grep { exists $num_feature_for{$_}; } @tokens;
+			if ($is_dev_test) {
+				print $fh_out_dev_test "$val @features\n";
+			} else {
+				print $fh_out_global "$val @features\n";
+			}
+		}
+		close $fh_out_global;
+		close $fh_out_dev_test;
+	}
+}
+
+sub init {
+	my $out_path_global = File::Spec->catfile('./logs', 'intro_train');
+	my $out_path_dev_test = File::Spec->catfile('./logs', 'intro_dev_test');
+	unlink $out_path_global if (-e $out_path_global);
+	unlink $out_path_dev_test if (-e $out_path_dev_test);
+}
+
+sub get_morpheme {
+	my ($all_sent) = shift;
+
+	my $model = new MeCab::Model( '' );
+	my $c = $model->createTagger();
+	my $independent_words;
+	my $independent_ancillary_words;
+	my $morpheme;
+	my $feature;
+
+	for my $i (0..$#$all_sent) {
+		my $score = 0;
+		my $compound_noun = '';
+
+		for (my $m = $c->parseToNode($all_sent->[$i]); $m; $m = $m->{next}) {
+			$morpheme = $m->{surface};
+			$morpheme = decode('utf8',$morpheme);
+			$feature = $m->{feature};
+			$feature = decode('utf8',$feature);
+			my $pos = (split ',', $feature)[0];
+
+			if ( ($morpheme =~ /^\w+$/u) && ($morpheme ne '') ) { # filetering special characters
+if ($pos eq '名詞') { # for chaining the compound noun
+					$compound_noun .= $morpheme;
+				} else { 
+					if ($compound_noun ne '') {
+						push @{$independent_ancillary_words->[$i]}, $compound_noun;
+					}
+					push @{$independent_ancillary_words->[$i]}, $morpheme;
+
+					if (($pos ne '名詞') and ($pos ne '形容詞') and ($pos ne '動詞') and ($pos ne '副詞')) { # eliminate huzoku-go
+						if ($compound_noun ne '') {
+							push @{$independent_words->[$i]}, $compound_noun;
+							$compound_noun = '';
+						}
+						next;
+					} else {
+						if ($compound_noun ne '') {
+							push @{$independent_words->[$i]}, $compound_noun;
+							$compound_noun = '';
+						}
+						push @{$independent_words->[$i]}, $morpheme;
+					}
+				}
+
+#				if (($pos ne '名詞') and ($pos ne '形容詞') and ($pos ne '動詞') and ($pos ne '副詞')) { # eliminate huzoku-go
+#					if ($compound_noun ne '') {
+#						push @{$morphemes->[$i]}, $compound_noun;
+#						$compound_noun = '';
+#					}
+#					next;
+#				} 
+#				if ($pos eq '名詞') { # for chaining the compound noun
+#					$compound_noun .= $morpheme;
+#				} else {
+#					if ($compound_noun ne '') {
+#						push @{$morphemes->[$i]}, $compound_noun;
+#						$compound_noun = '';
+#					}
+#					push @{$morphemes->[$i]}, $morpheme;
+#				}
+			} else {
+				push @{$independent_ancillary_words->[$i]}, '';
+				push @{$independent_words->[$i]}, '';
+			}
+
+		}
+	}
+#	{
+#		print "@{$independent_words->[$_]}\n" for (0..$#$all_sent);
+#		print "++++++++++++++\n";
+#		print "@{$independent_ancillary_words->[$_]}\n" for (0..$#$all_sent);
+#		print "===================================================\n";
+#	}
+	return ($independent_words, $independent_ancillary_words);
+}
+
+sub get_x_gram_struct	{
+	my ($gram, $morphemes) = @_;
+	my $x_gram_struct;
+
+	if ($gram == 3) {
+		for my $i (0..$#$morphemes) {
+			if (@{$morphemes->[$i]} <= 2) {
+				push @{$x_gram_struct->[$i]}, '';
+				next;
+			}
+			push @{$x_gram_struct->[$i]}, $morphemes->[$i][$_-2] ."S". $morphemes->[$i][$_-1] ."S". $morphemes->[$i][$_] for (2..$#{$morphemes->[$i]});
+		}
+	} elsif ($gram == 2) {
+		for my $i (0..$#$morphemes) {
+			if (@{$morphemes->[$i]} <= 1) {
+				push @{$x_gram_struct->[$i]}, '';
+				next;
+			}
+			push @{$x_gram_struct->[$i]}, $morphemes->[$i][$_-1] ."S". $morphemes->[$i][$_] for (1..$#{$morphemes->[$i]});
+		}
+	}
+#	{
+#		for my $i (0..$#$x_gram_struct) {
+#			print "@{$x_gram_struct->[$i]}\n";
+#			print "---------------------------------------------------\n";
+#		}
+#		print "===================================================\n";
+#	}
+	return $x_gram_struct;
+}
+
+sub get_int_to_abs_score {
+	my ($x_gram_abs, $x_gram_int) = @_;
+	my $int_to_abs_score;
+# i and j is idx for int, see the document
+	for my $i (0..$#$x_gram_int) {
+		for my $j (0..$#{$x_gram_int->[$i]}) {
+# l and m is idx for abs, see the document
+			for my $l (0..$#$x_gram_abs) {
+				for my $m (0..$#{$x_gram_abs->[$l]}) {
+					if ($x_gram_abs->[$l][$m] eq $x_gram_int->[$i][$j]) {
+						$int_to_abs_score->[$i][$l]++;
+#### see which gram is matched, and where that gram is
+#						{
+#							print "int_i_j: ${i}_$j, abs_l_m: ${l}_$m $x_gram_abs->[$l][$m] and $x_gram_int->[$i][$j]\n";
+#						}
+					}
+				}
+			}
+		}
+	}
+#	{
+#		for my $i (0..$#$int_to_abs_score) {
+#			for my $l (0..$#{$int_to_abs_score->[$i]}) {
+#				print "i: $i, l: $l, score: $int_to_abs_score->[$i][$l]\n";
+#			}
+#		}
+#	}
+	return $int_to_abs_score;
+}
+
+sub dump_train_with_total_score	{
+	my ($log_dir, $int_to_abs_score, $threshold, $summary_flag_cnt, $morpheme_int) = @_;
+
+	my $out_path = File::Spec->catfile($log_dir, 'intro_train');
+	unlink $out_path if (-e $out_path);
+	open my $fh_out, '>', $out_path or die "Can't open $out_path : $!";
+
+	for my $i (0..$#$int_to_abs_score) {
+				my $importance = 0;
+		my $summary_flag = 0;
+# score of intro i sent and all abstract sent will be added into importance
+				for my $l (0..$#{$int_to_abs_score->[$i]}) {
+					$importance += $int_to_abs_score->[$i][$l];
+				}
+		if ($importance > 10) {
+			$summary_flag = 1;
+			$summary_flag_cnt++;
+			$summary_flag_cnt_global++;
+		}
+		print $fh_out "$summary_flag\t@{$morpheme_int->[$i]}\n";
+
+	}
+	close $fh_out;
+}
+
+sub select_and_dump_train_data {
+	my ($log_dir, $int_to_abs_score, $threshold, $morpheme_int, $bi_gram, $tri_gram) = @_;
+	my $summary_flag_cnt = 0;
+
+	my $out_path_local = File::Spec->catfile($log_dir, 'intro_train');
+
+	unlink $out_path_local if (-e $out_path_local);
+	open my $fh_out_local, '>', $out_path_local or die "Can't open $out_path_local : $!";
+
+### determine which line is worthy to extract
+	for my $i (0..$#$int_to_abs_score) {
+		my $summary_flag = 0;
+		for my $l (0..$#{$int_to_abs_score->[$i]}) {
+			if (($int_to_abs_score->[$i][$l] > $threshold) and !($summary_flag)) {
+				$summary_flag = 1;
+				$summary_flag_cnt++;
+				$summary_flag_cnt_global++;
+			}
+		}
+
+### set the output line
+		my %unique_filter_uni = map { $_, 1 } @{$morpheme_int->[$i]};
+		my %unique_filter_bi = map { $_, 1 } @{$bi_gram->[$i]};
+		my %unique_filter_tri = map { $_, 1 } @{$tri_gram->[$i]};
+		my @unique_filtered;
+		push @unique_filtered, $_ for keys %unique_filter_uni;
+		push @unique_filtered, $_ for keys %unique_filter_bi;
+		push @unique_filtered, $_ for keys %unique_filter_tri;
+		my $ret = "$summary_flag\t@unique_filtered" =~ s/(?: )+/ /ugr;
+		$ret =~ s/\t(?: )+/\t/ug;
+		next if $ret =~ m/^\d\s*$/;
+
+### determine the which output file to use
+		print $fh_out_local "$ret\n";
+	}
+
+	close $fh_out_local;
+	return $summary_flag_cnt;
+}
+
