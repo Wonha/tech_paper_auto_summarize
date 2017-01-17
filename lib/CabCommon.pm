@@ -37,6 +37,7 @@ our @EXPORT_OK = qw(
 	debug_paragraphs
 	debug_sections
 	debug_struct
+	debug_title
 
 	glue_entire_chunk
 );
@@ -404,6 +405,16 @@ sub debug_struct {
 				print "parag   : @{$struct->[$n]{subsec}[$i]{parag}}\n";
 			}
 		}
+	}
+}
+
+sub debug_title {
+	my $struct = shift;
+	print "\n##################################################################\n";
+	for my $n (1..$#$struct) {
+		print "type    : $struct->[$n]{type}\n";
+		print "title   : $struct->[$n]{title}\n";
+		print "\n##################################################################\n";
 	}
 }
 
