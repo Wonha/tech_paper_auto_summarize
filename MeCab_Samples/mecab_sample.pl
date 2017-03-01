@@ -7,7 +7,7 @@ use MeCab;
 
 print $MeCab::VERSION, "\n";
 
-my $sentence = "太郎はこの本を二郎を見た女性に渡した。";
+my $sentence = "この状況を鑑み，本稿では，自動要約における誤り分析の枠組みを提案する．";
 
 my $model = new MeCab::Model(join " ", @ARGV);
 my $c = $model->createTagger();

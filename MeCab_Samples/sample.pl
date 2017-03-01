@@ -3,7 +3,7 @@ use strict;
 
 use MeCab;
 
-my $sentence = "太郎はこの木を二郎を見た女性に渡した。{";
+my $sentence = "本稿では自動要約システムの誤り分析の枠組みを提案する";
 
 my $model = new Text::MeCab::Model( '' );
 my $c = $model->createTagger();

@@ -24,6 +24,7 @@ our @EXPORT_OK = qw(
 	make_log_dir
 	latex_to_section_structure
 	dump_sec_file
+    dump_rel_file
 	analysis_morpheme
 	dump_struct
 	check_classified_rate
@@ -156,6 +157,25 @@ sub create_markdown {
 	close $fh_out;
 }
 
+sub dump_rel_file {
+    my ($struct, $log_dir) = @_;
+    my $sec_name = "related_study";
+
+    my $out_path = File::Spec->catfile($log_dir, $_);
+    unlink $out_path if (-e $out_path);
+
+    my $file_name = 'sec_'.$sec_name;
+    $out_path = File::Spec->catfile($log_dir, $file_name);
+    for my $i (1..$#$struct) {
+        if ($struct->[$i]{type} eq $file_name) {
+            open my $fh, '>>', $out_path or die "Can't open $out_path : $!";
+            for ($struct->[$i]{start}..$struct->[$i]{sec_end}) {
+                print $fh "$struct->[0][$_]{sent}\n";
+            }
+            close $fh;
+        }
+    }
+}
 
 ### input1   : doc structure
 ### input2   : path to log directory for this file
@@ -200,9 +220,9 @@ sub check_classified_rate {
 
 	unless ($dump_flag) {
 		$total++;
-		$found_ab++    if ( -e File::Spec->catfile($log_dir, 'abstract'));
-		$found_intro++ if ( -e File::Spec->catfile($log_dir, 'intro'));
-		if ( -e File::Spec->catfile($log_dir, 'related_study')) {
+		$found_ab++    if ( -e File::Spec->catfile($log_dir, 'sec_abstract'));
+		$found_intro++ if ( -e File::Spec->catfile($log_dir, 'sec_intro'));
+		if ( -e File::Spec->catfile($log_dir, 'sec_related_study')) {
 			$found_rel++;   
 			{ ### inspect rel study
 #				my $base = &basename($log_dir);
@@ -213,15 +233,21 @@ sub check_classified_rate {
 			print $fh "$base unmatched first rel study\n";
 		}
 
-		$found_prop++  if ( -e File::Spec->catfile($log_dir, 'proposed_method'));
-		$found_exp++   if ( -e File::Spec->catfile($log_dir, 'experiment_result'));
-		$found_con++   if ( -e File::Spec->catfile($log_dir, 'conclusion'));
+		$found_prop++  if ( -e File::Spec->catfile($log_dir, 'sec_proposed_method'));
+		$found_exp++   if ( -e File::Spec->catfile($log_dir, 'sec_experiment_result'));
+		$found_con++   if ( -e File::Spec->catfile($log_dir, 'sec_conclusion'));
 	} else {
 		print $fh "total: $total\n";
-		print $fh "\n構成要素 | 検出率\n";
+		print $fh "ab: $found_ab\n";
+		print $fh "intro: $found_intro\n";
+		print $fh "rel: $found_rel\n";
+		print $fh "prop: $found_prop\n";
+		print $fh "exp: $found_exp\n";
+		print $fh "con: $found_con\n";
+		print $fh "\nセグメント | 検出率\n";
 		print $fh " --- | ---\n";
 		printf $fh "%s%4s", "概要 | ", int ($found_ab/$total*100)."%\n";
-		printf $fh "%s%4s", "序論 | ", int ($found_intro/$total*100)."%\n";
+		printf $fh "%s%4s", "はじめに | ", int ($found_intro/$total*100)."%\n";
 		printf $fh "%s%5s", "関連研究 | ", int ($found_rel/$total*100)."%\n";
 		printf $fh "%s%4s", "提案手法 | ", int ($found_prop/$total*100)."%\n";
 		printf $fh "%s%4s", "実験結果 | ", int ($found_exp/$total*100)."%\n";
@@ -386,23 +412,23 @@ sub latex_to_section_structure {
 sub debug_struct {
 	my $struct = shift;
 	for my $n (1..$#$struct) {
-		print "\n##################################################################\n";
-		print "section in $n's index\n";
-		print "type    : $struct->[$n]{type}\n";
-		print "title   : $struct->[$n]{title}\n";
-		print "start   : $struct->[$n]{start}\n";
-		print "end     : $struct->[$n]{end}\n";
-		print "sec_end : $struct->[$n]{sec_end}\n";
-		print "parag   : @{$struct->[$n]{parag}}\n";
+		print "##########################################################\n";
+        #   print "section in $n's index\n";
+		print "segment type     : $struct->[$n]{type}\n";
+		print "section title    : $struct->[$n]{title}\n";
+        #		print "start   : $struct->[$n]{start}\n";
+        #		print "end     : $struct->[$n]{end}\n";
+        #		print "sec_end : $struct->[$n]{sec_end}\n";
+       	print "paragraph index  : @{$struct->[$n]{parag}}\n";
 
 		if ( defined $struct->[$n]{subsec} ) {
 			for my $i (0..$#{$struct->[$n]{subsec}}) {
-				print "-------------------------------------------------------\n";
-				print "subsection in $i's index\n";
-				print "title : $struct->[$n]{subsec}[$i]{title}\n";
-				print "start   : $struct->[$n]{subsec}[$i]{start}\n";
-				print "end     : $struct->[$n]{subsec}[$i]{end}\n";
-				print "parag   : @{$struct->[$n]{subsec}[$i]{parag}}\n";
+				print "---------------------------------------------------------\n";
+                #	print "subsection in $i's index\n";
+				print "subsection title : $struct->[$n]{subsec}[$i]{title}\n";
+                #	print "start   : $struct->[$n]{subsec}[$i]{start}\n";
+				#	print "end     : $struct->[$n]{subsec}[$i]{end}\n";
+				print "paragraph index  : @{$struct->[$n]{subsec}[$i]{parag}}\n";
 			}
 		}
 	}
